@@ -31,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/sirupsen/logrus"
 )
 
 // Database is an intermediate write layer between the trie data structures and
@@ -486,8 +487,16 @@ func (db *Database) Dereference(root common.Hash) {
 	db.gcsize += storage - db.dirtiesSize
 	db.gctime += time.Since(start)
 
-	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+	log.WithFields(logrus.Fields{
+		"nodes":     nodes - len(db.dirties),
+		"size":      storage - db.dirtiesSize,
+		"time":      time.Since(start),
+		"gcnodes":   db.gcnodes,
+		"gcsize":    db.gcsize,
+		"gctime":    db.gctime,
+		"livenodes": len(db.dirties),
+		"livesize":  db.dirtiesSize,
+	}).Debug("Dereferenced trie from memory database")
 }
 
 // dereference is the private locked version of Dereference.
@@ -585,7 +594,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		// If we exceeded the ideal batch size, commit and reset
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Error("Failed to write flush list to disk", "err", err)
+				log.WithField("err", err).Error("Failed to write trie to disk")
 				return err
 			}
 			batch.Reset()
@@ -601,7 +610,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	}
 	// Flush out any remainder data from the last batch
 	if err := batch.Write(); err != nil {
-		log.Error("Failed to write flush list to disk", "err", err)
+		log.WithField("err", err).Error("Failed to write flush list to disk")
 		return err
 	}
 	// Write successful, clear out the flushed data
@@ -632,8 +641,16 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	db.flushsize += storage - db.dirtiesSize
 	db.flushtime += time.Since(start)
 
-	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
-		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+	log.WithFields(logrus.Fields{
+		"nodes":      nodes - len(db.dirties),
+		"size":       storage - db.dirtiesSize,
+		"time":       time.Since(start),
+		"flushnodes": db.flushnodes,
+		"flushsize":  db.flushsize,
+		"flushtime":  db.flushtime,
+		"livenodes":  len(db.dirties),
+		"livesize":   db.dirtiesSize,
+	}).Debug("Persisted nodes from memory database")
 
 	return nil
 }
@@ -667,12 +684,12 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 
 	uncacher := &cleaner{db}
 	if err := db.commit(node, batch, uncacher, callback); err != nil {
-		log.Error("Failed to commit trie from trie database", "err", err)
+		log.WithField("err", err).Error("Failed to commit trie from trie database")
 		return err
 	}
 	// Trie mostly committed to disk, flush any batch leftovers
 	if err := batch.Write(); err != nil {
-		log.Error("Failed to write trie to disk", "err", err)
+		log.WithField("err", err).Error("Failed to write trie to disk")
 		return err
 	}
 	// Uncache any leftovers in the last batch
@@ -802,15 +819,21 @@ func (db *Database) saveCache(dir string, threads int) error {
 	if db.cleans == nil {
 		return nil
 	}
-	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
+	log.WithFields(logrus.Fields{
+		"path":    dir,
+		"threads": threads,
+	}).Info("Writing clean trie cache to disk")
 
 	start := time.Now()
 	err := db.cleans.SaveToFileConcurrent(dir, threads)
 	if err != nil {
-		log.Error("Failed to persist clean trie cache", "error", err)
+		log.WithField("err", err).Error("Failed to persist clean trie cache")
 		return err
 	}
-	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.WithFields(logrus.Fields{
+		"path":    dir,
+		"elapsed": common.PrettyDuration(time.Since(start)),
+	}).Info("Persisted the clean trie cache")
 	return nil
 }
 

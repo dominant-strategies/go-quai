@@ -31,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -276,7 +277,11 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockNumberAndIndex(ctx context.Cont
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found", "number", blockNr, "hash", block.Hash(), "index", index)
+			log.WithFields(logrus.Fields{
+				"number": block.Number(s.b.NodeCtx()),
+				"hash":   block.Hash(),
+				"index":  index,
+			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -292,7 +297,11 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found", "number", block.Number(s.b.NodeCtx()), "hash", blockHash, "index", index)
+			log.WithFields(logrus.Fields{
+				"number": block.Number(s.b.NodeCtx()),
+				"hash":   blockHash,
+				"index":  index,
+			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -302,7 +311,11 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if pendBlock != nil && pendBlock.Hash() == blockHash {
 		uncles := pendBlock.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found in pending block", "number", block.Number(s.b.NodeCtx()), "hash", blockHash, "index", index)
+			log.WithFields(logrus.Fields{
+				"number": block.Number(s.b.NodeCtx()),
+				"hash":   blockHash,
+				"index":  index,
+			}).Debug("Requested uncle not found in pending block")
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -587,7 +600,10 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if block.Header() != nil {
 		s.b.EventMux().Post(core.NewMinedBlockEvent{Block: block})
 	}
-	log.Info("Retrieved mined block", "number", header.Number(s.b.NodeCtx()), "location", header.Location())
+	log.WithFields(logrus.Fields{
+		"number":   header.Number(s.b.NodeCtx()),
+		"location": header.Location(),
+	})
 
 	return nil
 }
@@ -666,7 +682,7 @@ type DomUpdate struct {
 func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
 	var domUpdate DomUpdate
 	if err := json.Unmarshal(raw, &domUpdate); err != nil {
-		log.Error("Error unmarshaling domUpdate in api", "err", err)
+		log.WithField("err", err).Error("Error unmarshaling domUpdate in api")
 		return
 	}
 

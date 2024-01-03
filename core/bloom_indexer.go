@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -42,18 +43,20 @@ type BloomIndexer struct {
 	gen     *bloombits.Generator // generator to rotate the bloom bits crating the bloom index
 	section uint64               // Section is the section number being processed currently
 	head    common.Hash          // Head is the hash of the last header processed
+	logger  *logrus.Logger
 }
 
 // NewBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for fast logs filtering.
-func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeCtx int) *ChainIndexer {
+func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeCtx int, logger *logrus.Logger) *ChainIndexer {
 	backend := &BloomIndexer{
-		db:   db,
-		size: size,
+		db:     db,
+		size:   size,
+		logger: logger,
 	}
 	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix))
 
-	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits", nodeCtx)
+	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits", nodeCtx, logger)
 }
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index

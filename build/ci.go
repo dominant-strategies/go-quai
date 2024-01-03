@@ -35,7 +35,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/dominant-strategies/go-quai/internal/build"
 	"log"
 	"os"
 	"os/exec"
@@ -43,6 +42,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/dominant-strategies/go-quai/internal/build"
 )
 
 var (

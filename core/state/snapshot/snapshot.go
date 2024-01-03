@@ -30,6 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -153,7 +154,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	}
 	if err != nil {
 		if rebuild {
-			log.Warn("Failed to load snapshot, regenerating", "err", err)
+			log.WithField("err", err).Warn("Failed to load snapshot, regenerating")
 			snap.Rebuild(root)
 			return snap, nil
 		}
@@ -233,7 +234,7 @@ func (t *Tree) Disable() {
 	// Note, we don't delete the sync progress
 
 	if err := batch.Write(); err != nil {
-		log.Fatal("Failed to disable snapshots", "err", err)
+		log.WithField("err", err).Fatal("Failed to disable snapshots")
 	}
 }
 
@@ -495,7 +496,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 				// crash and we'll detect and regenerate the snapshot.
 				if batch.ValueSize() > ethdb.IdealBatchSize {
 					if err := batch.Write(); err != nil {
-						log.Fatal("Failed to write storage deletions", "err", err)
+						log.WithField("err", err).Fatal("Failed to write storage deletions")
 					}
 					batch.Reset()
 				}
@@ -518,7 +519,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// the snapshot.
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Fatal("Failed to write storage deletions", "err", err)
+				log.WithField("err", err).Fatal("Failed to write storage deletions")
 			}
 			batch.Reset()
 		}
@@ -555,9 +556,12 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Flush all the updates in the single db operation. Ensure the
 	// disk layer transition is atomic.
 	if err := batch.Write(); err != nil {
-		log.Fatal("Failed to write leftover snapshot", "err", err)
+		log.WithField("err", err).Fatal("Failed to write leftover snapshot")
 	}
-	log.Debug("Journalled disk layer", "root", bottom.root, "complete", base.genMarker == nil)
+	log.WithFields(logrus.Fields{
+		"root":     bottom.root,
+		"complete": base.genMarker == nil,
+	}).Debug("Journalled disk layer")
 	res := &diskLayer{
 		root:       bottom.root,
 		cache:      base.cache,

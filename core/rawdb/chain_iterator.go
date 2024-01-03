@@ -27,6 +27,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/sirupsen/logrus"
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch
@@ -50,7 +51,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// freezerdb return N items (e.g up to 1000 items per go)
 		// That would require an API change in Ancients though
 		if h, err := db.Ancient(freezerHashTable, i); err != nil {
-			log.Fatal("Failed to init database from freezer", "err", err)
+			log.WithField("err", err).Fatal("Failed to init database from freezer")
 		} else {
 			hash = common.BytesToHash(h)
 		}
@@ -58,23 +59,31 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Fatal("Failed to write data to db", "err", err)
+				log.WithField("err", err).Fatal("Failed to write data to db")
 			}
 			batch.Reset()
 		}
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Initializing database from freezer", "total", frozen, "number", i, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.WithFields(logrus.Fields{
+				"total":   frozen,
+				"number":  i,
+				"hash":    hash,
+				"elapsed": common.PrettyDuration(time.Since(start)),
+			}).Info("Initializing database from freezer")
 			logged = time.Now()
 		}
 	}
 	if err := batch.Write(); err != nil {
-		log.Fatal("Failed to write data to db", "err", err)
+		log.WithField("err", err).Fatal("Failed to write data to db")
 	}
 	batch.Reset()
 
 	WriteHeadHeaderHash(db, hash)
-	log.Info("Initialized database from freezer", "blocks", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.WithFields(logrus.Fields{
+		"blocks":  frozen,
+		"elapsed": common.PrettyDuration(time.Since(start)),
+	}).Info("Initialized database from freezer")
 }
 
 type blockTxHashes struct {
@@ -137,7 +146,10 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		for data := range rlpCh {
 			var body types.Body
 			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
-				log.Warn("Failed to decode block body", "block", data.number, "error", err)
+				log.WithFields(logrus.Fields{
+					"block": data.number,
+					"err":   err,
+				}).Warn("Failed to decode block body")
 				return
 			}
 			var hashes []common.Hash
@@ -213,14 +225,20 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				WriteTxIndexTail(batch, lastNum) // Also write the tail here
 				if err := batch.Write(); err != nil {
-					log.Fatal("Failed writing batch to db", "error", err)
+					log.WithField("err", err).Fatal("Failed writing batch to db")
 					return
 				}
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.Info("Indexing transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.WithFields(logrus.Fields{
+					"blocks":  blocks,
+					"txs":     txs,
+					"tail":    lastNum,
+					"total":   to - from,
+					"elapsed": common.PrettyDuration(time.Since(start)),
+				}).Info("Indexing transactions")
 				logged = time.Now()
 			}
 		}
@@ -230,14 +248,24 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	// be flushed anyway.
 	WriteTxIndexTail(batch, lastNum)
 	if err := batch.Write(); err != nil {
-		log.Fatal("Failed writing batch to db", "error", err)
+		log.WithField("err", err).Fatal("Failed writing batch to db")
 		return
 	}
 	select {
 	case <-interrupt:
-		log.Debug("Transaction indexing interrupted", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
+		log.WithFields(logrus.Fields{
+			"blocks":  blocks,
+			"txs":     txs,
+			"tail":    lastNum,
+			"elapsed": common.PrettyDuration(time.Since(start)),
+		}).Debug("Transaction indexing interrupted")
 	default:
-		log.Info("Indexed transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
+		log.WithFields(logrus.Fields{
+			"blocks":  blocks,
+			"txs":     txs,
+			"tail":    lastNum,
+			"elapsed": common.PrettyDuration(time.Since(start)),
+		}).Debug("Indexed transactions")
 	}
 }
 
@@ -304,14 +332,19 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			if blocks%1000 == 0 {
 				WriteTxIndexTail(batch, nextNum)
 				if err := batch.Write(); err != nil {
-					log.Fatal("Failed writing batch to db", "error", err)
+					log.WithField("err", err).Fatal("Failed writing batch to db")
 					return
 				}
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.Info("Unindexing transactions", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.WithFields(logrus.Fields{
+					"blocks":  blocks,
+					"txs":     txs,
+					"total":   to - from,
+					"elapsed": common.PrettyDuration(time.Since(start)),
+				}).Info("Unindexing transactions")
 				logged = time.Now()
 			}
 		}
@@ -321,14 +354,24 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	// be flushed anyway.
 	WriteTxIndexTail(batch, nextNum)
 	if err := batch.Write(); err != nil {
-		log.Fatal("Failed writing batch to db", "error", err)
+		log.WithField("err", err).Fatal("Failed writing batch to db")
 		return
 	}
 	select {
 	case <-interrupt:
-		log.Debug("Transaction unindexing interrupted", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+		log.WithFields(logrus.Fields{
+			"blocks":  blocks,
+			"txs":     txs,
+			"total":   to - from,
+			"elapsed": common.PrettyDuration(time.Since(start)),
+		}).Debug("Transaction unindexing interrupted")
 	default:
-		log.Info("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+		log.WithFields(logrus.Fields{
+			"blocks":  blocks,
+			"txs":     txs,
+			"total":   to - from,
+			"elapsed": common.PrettyDuration(time.Since(start)),
+		}).Info("Unindexed transactions")
 	}
 }
 

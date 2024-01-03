@@ -24,9 +24,9 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -137,7 +137,14 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
-	log.Debug("times during validate state:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t5:", time5, "t6:", time6)
+	v.hc.logger.WithFields(logrus.Fields{
+		"t1": time1,
+		"t2": time2,
+		"t3": time3,
+		"t4": time4,
+		"t5": time5,
+		"t6": time6,
+	}).Debug("times during validate state")
 	return nil
 }
 

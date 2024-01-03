@@ -34,9 +34,9 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -154,11 +154,11 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nodeLocation common.Location) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, nodeLocation)
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *logrus.Logger) (*params.ChainConfig, common.Hash, error) {
+	return SetupGenesisBlockWithOverride(db, genesis, nodeLocation, logger)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *logrus.Logger) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -166,10 +166,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		if genesis == nil {
-			log.Info("Writing default main-net genesis block")
+			logger.Info("Writing default main-net genesis block")
 			genesis = DefaultGenesisBlock()
 		} else {
-			log.Info("Writing custom genesis block")
+			logger.Info("Writing custom genesis block")
 		}
 		block, err := genesis.Commit(db, nodeLocation)
 		if err != nil {
@@ -206,7 +206,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	newcfg := genesis.configOrDefault(stored)
 	storedcfg := rawdb.ReadChainConfig(db, stored)
 	if storedcfg == nil {
-		log.Warn("Found genesis block without chain config")
+		logger.Warn("Found genesis block without chain config")
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
 	}
@@ -441,17 +441,17 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	}
 }
 
-func ReadGenesisAlloc(filename string) map[string]GenesisAccount {
+func ReadGenesisAlloc(filename string, logger *logrus.Logger) map[string]GenesisAccount {
 	jsonFile, err := os.Open(filename)
 	if err != nil {
-		log.Error(err.Error())
+		logger.Error(err.Error())
 		return nil
 	}
 	defer jsonFile.Close()
 	// Read the file contents
 	byteValue, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
-		log.Error(err.Error())
+		logger.Error(err.Error())
 		return nil
 	}
 
@@ -459,7 +459,7 @@ func ReadGenesisAlloc(filename string) map[string]GenesisAccount {
 	var data map[string]GenesisAccount
 	err = json.Unmarshal(byteValue, &data)
 	if err != nil {
-		log.Error(err.Error())
+		logger.Error(err.Error())
 		return nil
 	}
 

@@ -29,6 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/sirupsen/logrus"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -159,7 +160,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			return err
 		}
 		args.Gas = &estimated
-		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
+		log.WithField("gas", args.Gas).Trace("Estimate gas usage automatically")
 	}
 	if args.ChainID == nil {
 		id := (*hexutil.Big)(b.ChainConfig().ChainID)
@@ -191,7 +192,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		gas = uint64(*args.Gas)
 	}
 	if globalGasCap != 0 && globalGasCap < gas {
-		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
+		log.WithFields(logrus.Fields{
+			"requested": gas,
+			"cap":       globalGasCap,
+		}).Warn("Caller gas above allowance, capping")
 		gas = globalGasCap
 	}
 	var (

@@ -27,6 +27,7 @@ import (
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/pelletier/go-toml/v2"
 	gopsutil "github.com/shirou/gopsutil/mem"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -733,7 +734,10 @@ func CreateAndBindFlag(flag Flag, cmd *cobra.Command) {
 	case *BigIntValue:
 		cmd.PersistentFlags().VarP(val, flag.GetName(), flag.GetAbbreviation(), flag.GetUsage())
 	default:
-		log.Error("Flag type not supported: " + flag.GetName() + ", " + fmt.Sprintf("%T", val))
+		log.WithFields(logrus.Fields{
+			"flag": flag.GetName(),
+			"type": fmt.Sprintf("%T", val),
+		}).Error("Flag type not supported")
 	}
 	viper.BindPFlag(flag.GetName(), cmd.PersistentFlags().Lookup(flag.GetName()))
 }
@@ -830,7 +834,7 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 }
 
 // setDomUrl sets the dominant chain websocket url.
-func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location) {
+func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *logrus.Logger) {
 	// only set the dom url if the node is not prime
 	if nodeLocation != nil {
 		if len(nodeLocation) == 1 {
@@ -839,7 +843,10 @@ func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location) {
 			cfg.DomUrl = "ws://127.0.0.1:8002"
 		}
 	}
-	log.Info("Node", "Location", nodeLocation, "domurl", cfg.DomUrl)
+	logger.WithFields(logrus.Fields{
+		"Location": nodeLocation,
+		"domUrl":   cfg.DomUrl,
+	}).Info("Node")
 }
 
 // setSubUrls sets the subordinate chain urls
@@ -960,7 +967,7 @@ func MakePasswordList() []string {
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
-func SetNodeConfig(cfg *node.Config, nodeLocation common.Location) {
+func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *logrus.Logger) {
 	setHTTP(cfg, nodeLocation)
 	setWS(cfg, nodeLocation)
 	setNodeUserIdent(cfg)
@@ -984,7 +991,7 @@ func SetNodeConfig(cfg *node.Config, nodeLocation common.Location) {
 		if dbEngine != "leveldb" && dbEngine != "pebble" {
 			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
 		}
-		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
+		logger.WithField("db.engine", dbEngine).Info("Using db engine")
 		cfg.DBEngine = dbEngine
 	}
 }
@@ -1214,7 +1221,7 @@ func CheckExclusive(args ...interface{}) {
 }
 
 // SetQuaiConfig applies quai-related command line flags to the config.
-func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location) {
+func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location, logger *logrus.Logger) {
 	// Avoid conflicting network flags
 	CheckExclusive(ColosseumFlag, DeveloperFlag, GardenFlag, OrchardFlag, LocalFlag, LighthouseFlag)
 	CheckExclusive(DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
@@ -1222,7 +1229,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 	if viper.GetString(GCModeFlag.Name) == "archive" && viper.GetUint64(TxLookupLimitFlag.Name) != 0 {
 		// TODO: see what this is supposed to do
 		viper.IsSet(TxLookupLimitFlag.Name)
-		log.Warn("Disable transaction unindexing for archive node")
+		logger.Warn("Disable transaction unindexing for archive node")
 	}
 
 	cfg.NodeLocation = nodeLocation
@@ -1244,7 +1251,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 	setWhitelist(cfg)
 
 	// set the dominant chain websocket url
-	setDomUrl(cfg, nodeLocation)
+	setDomUrl(cfg, nodeLocation, logger)
 
 	// set the subordinate chain websocket urls
 	setSubUrls(cfg, nodeLocation)
@@ -1259,12 +1266,18 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 	mem, err := gopsutil.VirtualMemory()
 	if err == nil {
 		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
-			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
+			logger.WithFields(logrus.Fields{
+				"available":   mem.Total / 1024 / 1024,
+				"addressable": 2 * 1024,
+			}).Warn("Lowering memory allowance on 32bit arch")
 			mem.Total = 2 * 1024 * 1024 * 1024
 		}
 		allowance := int(mem.Total / 1024 / 1024 / 3)
 		if cache := viper.GetInt(CacheFlag.Name); cache > allowance {
-			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
+			logger.WithFields(logrus.Fields{
+				"provided": cache,
+				"updated":  allowance,
+			}).Warn("Sanitizing cache to Go's GC limits")
 			viper.GetViper().Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
@@ -1272,7 +1285,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 	cache := viper.GetInt(CacheFlag.Name)
 	gogc := math.Max(20, math.Min(100, 100/(float64(cache)/1024)))
 
-	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
+	logger.WithField("gogc", int(gogc)).Debug("Sanitizing Go's GC trigger")
 	godebug.SetGCPercent(int(gogc))
 
 	if viper.IsSet(NetworkIdFlag.Name) {
@@ -1299,7 +1312,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 	cfg.Preimages = viper.GetBool(CachePreimagesFlag.Name)
 	if cfg.NoPruning && !cfg.Preimages {
 		cfg.Preimages = true
-		log.Info("Enabling recording of key preimages since archive mode is used")
+		logger.Info("Enabling recording of key preimages since archive mode is used")
 	}
 	if viper.IsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = viper.GetUint64(TxLookupLimitFlag.Name)
@@ -1335,9 +1348,9 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 		cfg.RPCGasCap = viper.GetUint64(RPCGlobalGasCapFlag.Name)
 	}
 	if cfg.RPCGasCap != 0 {
-		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
+		logger.WithField("cap", cfg.RPCGasCap).Info("Global gas cap enabled")
 	} else {
-		log.Info("Global gas cap disabled")
+		logger.Info("Global gas cap disabled")
 	}
 	if viper.IsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = viper.GetFloat64(RPCGlobalTxFeeCapFlag.Name)
@@ -1391,9 +1404,9 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 		cfg.Genesis.Nonce = viper.GetUint64(GenesisNonceFlag.Name)
 	}
 
-	log.Info("Setting genesis Location", "node", nodeLocation)
+	logger.WithField("node", cfg.Genesis.Config.Location).Info("Setting genesis Location")
 	cfg.Genesis.Config.Location = nodeLocation
-	log.Info("Location after setting", "genesis", cfg.Genesis.Config.Location)
+	logger.WithField("genesis", cfg.Genesis.Config.Location).Info("Location after setting")
 }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {

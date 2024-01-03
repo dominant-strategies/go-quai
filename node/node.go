@@ -29,16 +29,16 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/prometheus/tsdb/fileutil"
+	"github.com/sirupsen/logrus"
 )
 
 // Node is a container on which services can be registered.
 type Node struct {
 	eventmux      *event.TypeMux
 	config        *Config
-	log           log.Logger
+	logger        *logrus.Logger
 	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
 	stop          chan struct{}     // Channel to wait for termination notifications
 	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
@@ -61,7 +61,7 @@ const (
 )
 
 // New creates a new P2P node, ready for protocol registration.
-func New(conf *Config) (*Node, error) {
+func New(conf *Config, logger *logrus.Logger) (*Node, error) {
 	// Copy config and resolve the datadir so future changes to the current
 	// working directory don't affect the node.
 	confCopy := *conf
@@ -89,6 +89,7 @@ func New(conf *Config) (*Node, error) {
 		eventmux:      new(event.TypeMux),
 		stop:          make(chan struct{}),
 		databases:     make(map[*closeTrackingDB]struct{}),
+		logger:        logger,
 	}
 
 	// Acquire the instance directory lock.
@@ -105,8 +106,8 @@ func New(conf *Config) (*Node, error) {
 	}
 
 	// Configure RPC servers.
-	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+	node.http = newHTTPServer(node.logger, conf.HTTPTimeouts)
+	node.ws = newHTTPServer(node.logger, rpc.DefaultHTTPTimeouts)
 
 	return node, nil
 }
@@ -269,7 +270,7 @@ func (n *Node) closeDataDir() {
 	// Release instance directory lock.
 	if n.dirLock != nil {
 		if err := n.dirLock.Release(); err != nil {
-			n.log.Error("Can't release datadir lock", "err", err)
+			n.logger.WithField("err", err).Error("Can't release datadir lock")
 		}
 		n.dirLock = nil
 	}
@@ -469,7 +470,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 			Cache:     cache,
 			Handles:   handles,
 			ReadOnly:  readonly,
-		}, n.config.NodeLocation.Context())
+		}, n.config.NodeLocation.Context(), n.logger)
 	}
 
 	if err == nil {
@@ -502,7 +503,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 			Cache:             cache,
 			Handles:           handles,
 			ReadOnly:          readonly,
-		}, n.config.NodeLocation.Context())
+		}, n.config.NodeLocation.Context(), n.logger)
 	}
 
 	if err == nil {

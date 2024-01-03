@@ -58,48 +58,49 @@ func startCmdPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
-	log.Infof("Starting go-quai")
+	log.Info("Starting go-quai")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// create a new p2p node
 	node, err := node.NewNode(ctx)
 	if err != nil {
-		log.Fatalf("error creating node: %s", err)
+		log.WithField("error", err).Fatal("error creating node")
 	}
 
+	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
 	// create instance of consensus backend
-	consensus, err := utils.StartQuaiBackend()
+	consensus, err := utils.StartQuaiBackend(logLevel)
 	if err != nil {
-		log.Fatalf("error creating consensus backend: %s", err)
+		log.WithField("error", err).Fatal("error creating consensus backend")
 	}
 
 	// start the consensus backend
 	consensus.SetP2PNode(node)
 	if err := consensus.Start(); err != nil {
-		log.Fatalf("error starting consensus backend: %s", err)
+		log.WithField("error", err).Fatal("error starting consensus backend")
 	}
 
 	// start the p2p node
 	node.SetConsensusBackend(consensus)
 	if err := node.Start(); err != nil {
-		log.Fatalf("error starting node: %s", err)
+		log.WithField("error", err).Fatal("error starting node")
 	}
 
 	// subscribe to necessary protocol events
 	if err := node.StartGossipSub(ctx); err != nil {
-		log.Fatalf("error starting gossipsub: %s", err)
+		log.WithField("error", err).Fatal("error starting gossipsub")
 	}
 
 	// wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	log.Warnf("Received 'stop' signal, shutting down gracefully...")
+	log.Warn("Received 'stop' signal, shutting down gracefully...")
 	cancel()
 	if err := node.Stop(); err != nil {
 		panic(err)
 	}
-	log.Warnf("Node is offline")
+	log.Warn("Node is offline")
 	return nil
 }

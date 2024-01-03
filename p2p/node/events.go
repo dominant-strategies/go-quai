@@ -39,7 +39,7 @@ func (p *P2PNode) eventLoop() {
 				} else {
 					for _, addr := range e.Current {
 						addr := addr.Address.Encapsulate(p2pAddr)
-						log.Infof("Event: 'Local address udpdated': %s", addr)
+						log.Infof("Event: 'Local address updated': %s", addr)
 					}
 					// log removed addresses
 					for _, addr := range e.Removed {

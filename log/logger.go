@@ -1,16 +1,19 @@
 package log
 
 import (
-	"github.com/adrg/xdg"
+	"io"
+	"os"
+
+	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	// default log level
-	defaultLogLevel = "info"
+	defaultLogLevel = logrus.InfoLevel
 
 	// log file name
-	logFileName = "go-quai.log"
+	globalLogFileName = "global.log"
 	// default log directory
 	logDir = "nodelogs"
 	// default log file params
@@ -22,29 +25,82 @@ const (
 
 var (
 	// logger instance used by the application
-	logger Logger
+	logger *logrus.Logger
 
 	// TODO: consider refactoring to dinamically read the app name (i.e. "go-quai") ?
 	// default logfile path
-	defaultLogFilePath = xdg.DataHome + "/" + "go-quai" + "/" + logDir + "/" + logFileName
+	defaultLogFilePath = "./" + logDir + "/" + globalLogFileName
 )
 
 func init() {
-	entry := logrus.NewEntry(logrus.StandardLogger())
-	logger = &LogWrapper{
-		entry: entry,
-	}
-	ConfigureLogger(
-		WithLevel(defaultLogLevel),
-		WithOutput(ToStdOut(), ToLogFile(defaultLogFilePath)),
-	)
-	logger.Infof("Logger started. Writing logs to: %s", defaultLogFilePath)
+	logger = createStandardLogger(defaultLogFilePath, defaultLogLevel.String(), true)
 }
 
-func ConfigureLogger(opts ...Options) {
-	for _, opt := range opts {
-		opt(logger.(*LogWrapper))
+func SetGlobalLogger(logFilename string, logLevel string) {
+	// Change global logger's output
+	output := &lumberjack.Logger{
+		Filename:   logFilename,
+		MaxSize:    500, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, //days
 	}
+	logger.SetOutput(io.MultiWriter(output, os.Stdout))
+
+	// Change global logger's level
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		level = defaultLogLevel
+	}
+	logger.SetLevel(level)
+}
+
+func NewLogger(logFilename string, logLevel string) *logrus.Logger {
+	if logFilename == "" {
+		logFilename = defaultLogFilePath
+	}
+	shardLogger := createStandardLogger(logFilename, logLevel, false)
+	shardLogger.WithFields(logrus.Fields{
+		"path":  logFilename,
+		"level": logLevel,
+	}).Info("Shard logger started")
+	return shardLogger
+}
+
+func createStandardLogger(logFilename string, logLevel string, stdOut bool) *logrus.Logger {
+	logger := logrus.New()
+	output := &lumberjack.Logger{
+		Filename:   logFilename,
+		MaxSize:    500, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, //days
+	}
+
+	if stdOut {
+		logger.SetOutput(io.MultiWriter(output, os.Stdout))
+	} else {
+		logger.SetOutput(output)
+	}
+
+	logger.SetFormatter(&logrus.TextFormatter{
+		ForceColors:     true,
+		PadLevelText:    true,
+		FullTimestamp:   true,
+		TimestampFormat: "01-02|15:04:05.000",
+	})
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		level = defaultLogLevel
+	}
+	logger.SetLevel(level)
+	return logger
+}
+
+func WithField(key string, val interface{}) *logrus.Entry {
+	return logger.WithField(key, val)
+}
+
+func WithFields(fields logrus.Fields) *logrus.Entry {
+	return logger.WithFields(fields)
 }
 
 func Trace(keyvals ...interface{}) {
@@ -93,8 +149,4 @@ func Fatal(keyvals ...interface{}) {
 
 func Fatalf(msg string, args ...interface{}) {
 	logger.Fatalf(msg, args...)
-}
-
-func WithField(key string, val interface{}) Logger {
-	return logger.WithField(key, val)
 }

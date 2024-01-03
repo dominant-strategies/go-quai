@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -520,7 +521,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 	}
 	newconn, err := c.reconnectFunc(ctx)
 	if err != nil {
-		log.Trace("RPC client reconnect failed", "err", err)
+		log.WithField("err", err).Trace("RPC client reconnect failed")
 		return err
 	}
 	select {
@@ -569,13 +570,16 @@ func (c *Client) dispatch(codec ServerCodec) {
 			}
 
 		case err := <-c.readErr:
-			log.Debug("RPC connection read error", "err", err)
+			log.WithField("err", err).Debug("RPC connection read error")
 			conn.close(err, lastOp)
 			reading = false
 
 		// Reconnect:
 		case newcodec := <-c.reconnected:
-			log.Debug("RPC client reconnected", "reading", reading, "conn", newcodec.remoteAddr())
+			log.WithFields(logrus.Fields{
+				"reading": reading,
+				"conn":    newcodec.remoteAddr(),
+			}).Debug("RPC client reconnected")
 			if reading {
 				// Wait for the previous read loop to exit. This is a rare case which
 				// happens if this loop isn't notified in time after the connection breaks.

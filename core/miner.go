@@ -28,9 +28,9 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/sirupsen/logrus"
 )
 
 // Miner creates blocks and searches for proof-of-work values.
@@ -41,15 +41,16 @@ type Miner struct {
 	engine   consensus.Engine
 	startCh  chan common.Address
 	stopCh   chan struct{}
+	logger   *logrus.Logger
 }
 
-func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool, processingState bool) *Miner {
+func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool, processingState bool, logger *logrus.Logger) *Miner {
 	miner := &Miner{
 		hc:       hc,
 		engine:   engine,
 		startCh:  make(chan common.Address),
 		stopCh:   make(chan struct{}),
-		worker:   newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true, processingState),
+		worker:   newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true, processingState, logger),
 		coinbase: config.Etherbase,
 	}
 	go miner.update()
@@ -123,7 +124,10 @@ func (miner *Miner) MakeExtraData(extra []byte) []byte {
 		})
 	}
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
-		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
+		miner.logger.WithFields(logrus.Fields{
+			"extra": hexutil.Bytes(extra),
+			"limit": params.MaximumExtraDataSize,
+		}).Warn("Miner extra data exceed limit")
 		extra = nil
 	}
 	return extra

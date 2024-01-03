@@ -66,7 +66,7 @@ func newStateBloomWithSize(size uint64) (*stateBloom, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Initialized state bloom", "size", common.StorageSize(float64(bloom.M()/8)))
+	log.WithField("size", common.StorageSize(float64(size))).Info("Initialized state bloom")
 	return &stateBloom{bloom: bloom}, nil
 }
 

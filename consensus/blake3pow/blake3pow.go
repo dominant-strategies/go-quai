@@ -10,19 +10,13 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/sirupsen/logrus"
 )
 
 var (
 	// sharedBlake3pow is a full instance that can be shared between multiple users.
 	sharedBlake3pow *Blake3pow
 )
-
-func init() {
-	sharedConfig := Config{
-		PowMode: ModeNormal,
-	}
-	sharedBlake3pow = New(sharedConfig, nil, false)
-}
 
 // Mode defines the type and amount of PoW verification a blake3pow engine makes.
 type Mode uint
@@ -51,7 +45,7 @@ type Config struct {
 	// be block header JSON objects instead of work package arrays.
 	NotifyFull bool
 
-	Log *log.Logger `toml:"-"`
+	Log *logrus.Logger `toml:"-"`
 }
 
 // Blake3pow is a proof-of-work consensus engine using the blake3 hash algorithm
@@ -71,15 +65,18 @@ type Blake3pow struct {
 
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
+
+	logger *logrus.Logger
 }
 
 // New creates a full sized blake3pow PoW scheme and starts a background thread for
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
-func New(config Config, notify []string, noverify bool) *Blake3pow {
+func New(config Config, notify []string, noverify bool, logger *logrus.Logger) *Blake3pow {
 	blake3pow := &Blake3pow{
 		config: config,
 		update: make(chan struct{}),
+		logger: logger,
 	}
 	if config.PowMode == ModeShared {
 		blake3pow.shared = sharedBlake3pow
@@ -91,7 +88,7 @@ func New(config Config, notify []string, noverify bool) *Blake3pow {
 // NewTester creates a small sized blake3pow PoW scheme useful only for testing
 // purposes.
 func NewTester(notify []string, noverify bool) *Blake3pow {
-	return New(Config{PowMode: ModeTest}, notify, noverify)
+	return New(Config{PowMode: ModeTest}, notify, noverify, log.NewLogger("nodelogs/test-blake3pow.log", "info"))
 }
 
 // NewFaker creates a blake3pow consensus engine with a fake PoW scheme that accepts

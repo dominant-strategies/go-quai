@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 // DumpConfig is a set of options to control what portions of the statewill be
@@ -135,7 +136,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		start            = time.Now()
 		logged           = time.Now()
 	)
-	log.Info("Trie dumping started", "root", s.trie.Hash())
+	log.WithField("root", s.trie.Hash()).Info("Trie dumping started")
 	c.OnRoot(s.trie.Hash())
 
 	it := trie.NewIterator(s.trie.NodeIterator(conf.Start))
@@ -175,7 +176,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			for storageIt.Next() {
 				_, content, _, err := rlp.Split(storageIt.Value)
 				if err != nil {
-					log.Error("Failed to decode the value returned by iterator", "error", err)
+					log.WithField("err", err).Error("Failed to decode the value returned by iterator")
 					continue
 				}
 				account.Storage[common.BytesToHash(s.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(content)
@@ -184,8 +185,11 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		c.OnAccount(internal, account)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Trie dumping in progress", "at", it.Key, "accounts", accounts,
-				"elapsed", common.PrettyDuration(time.Since(start)))
+			log.WithFields(logrus.Fields{
+				"at":       it.Key,
+				"accounts": accounts,
+				"elapsed":  common.PrettyDuration(time.Since(start)),
+			}).Info("Trie dumping in progress")
 			logged = time.Now()
 		}
 		if conf.Max > 0 && accounts >= conf.Max {
@@ -196,10 +200,12 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		}
 	}
 	if missingPreimages > 0 {
-		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
+		log.WithField("missing", missingPreimages).Warn("Dump incomplete due to missing preimages")
 	}
-	log.Info("Trie dumping complete", "accounts", accounts,
-		"elapsed", common.PrettyDuration(time.Since(start)))
+	log.WithFields(logrus.Fields{
+		"accounts": accounts,
+		"elapsed":  common.PrettyDuration(time.Since(start)),
+	}).Info("Trie dumping complete")
 
 	return nextKey
 }

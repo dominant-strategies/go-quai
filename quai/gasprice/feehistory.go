@@ -27,8 +27,8 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -94,7 +94,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		return
 	}
 	if bf.block == nil || (bf.receipts == nil && len(bf.block.Transactions()) != 0) {
-		log.Error("Block or receipts are missing while reward percentiles are requested")
+		oracle.logger.Error("Block or receipts are missing while reward percentiles are requested")
 		return
 	}
 
@@ -207,7 +207,10 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 		return common.Big0, nil, nil, nil, nil // returning with no data and no error means there are no retrievable blocks
 	}
 	if blocks > maxFeeHistory {
-		log.Warn("Sanitizing fee history length", "requested", blocks, "truncated", maxFeeHistory)
+		oracle.logger.WithFields(logrus.Fields{
+			"requested": blocks,
+			"truncated": maxFeeHistory,
+		}).Warn("Sanitizing fee history length")
 		blocks = maxFeeHistory
 	}
 	for i, p := range rewardPercentiles {

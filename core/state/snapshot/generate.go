@@ -35,6 +35,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -106,7 +107,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 			}...)
 		}
 	}
-	log.Info(msg, ctx)
+	log.WithField("ctx", ctx).Info(msg)
 }
 
 // generateSnapshot regenerates a brand new snapshot based on an existing state
@@ -122,7 +123,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, genMarker, stats)
 	if err := batch.Write(); err != nil {
-		log.Fatal("Failed to write initialized state marker", "err", err)
+		log.WithField("err", err).Fatal("Failed to write initialized state marker")
 	}
 	base := &diskLayer{
 		diskdb:     diskdb,
@@ -134,7 +135,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		genAbort:   make(chan chan *generatorStats),
 	}
 	go base.generate(stats)
-	log.Debug("Start snapshot generation", "root", root)
+	log.WithField("root", root).Debug("Started snapshot generation")
 	return base
 }
 
@@ -167,7 +168,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 	default:
 		logstr = fmt.Sprintf("%#x:%#x", marker[:common.HashLength], marker[common.HashLength:])
 	}
-	log.Debug("Journalled generator progress", "progress", logstr)
+	log.WithField("progress", logstr).Debug("Journalled generator progress")
 	rawdb.WriteSnapshotGenerator(db, blob)
 }
 
@@ -251,7 +252,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 				// Here append the original value to ensure that the number of key and
 				// value are the same.
 				vals = append(vals, common.CopyBytes(iter.Value()))
-				log.Error("Failed to convert account state data", "err", err)
+				log.WithField("err", err).Error("Failed to convert account state data")
 			} else {
 				vals = append(vals, val)
 			}
@@ -288,7 +289,11 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 		origin = common.Hash{}.Bytes()
 	}
 	if err := tr.Prove(origin, 0, proof); err != nil {
-		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
+		log.WithFields(logrus.Fields{
+			"kind":   kind,
+			"origin": origin,
+			"err":    err,
+		}).Debug("Failed to prove range")
 		return &proofResult{
 			keys:     keys,
 			vals:     vals,
@@ -299,7 +304,11 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
-			log.Debug("Failed to prove range", "kind", kind, "last", last, "err", err)
+			log.WithFields(logrus.Fields{
+				"kind": kind,
+				"last": last,
+				"err":  err,
+			}).Debug("Failed to prove range")
 			return &proofResult{
 				keys:     keys,
 				vals:     vals,
@@ -350,7 +359,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
-		log.Trace("Proved state range", "last", hexutil.Encode(last))
+		log.WithField("last", hexutil.Encode(last)).Debug("Proved state range")
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -361,7 +370,10 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// Only abort the iteration when both database and trie are exhausted
 		return !result.diskMore && !result.trieMore, last, nil
 	}
-	log.Trace("Detected outdated state range", "last", hexutil.Encode(last), "err", result.proofErr)
+	log.WithFields(logrus.Fields{
+		"last": hexutil.Encode(last),
+		"err":  result.proofErr,
+	}).Trace("Detected outdated state range")
 
 	// We use the snap data to build up a cache which can be used by the
 	// main account trie as a primary lookup when resolving hashes
@@ -454,8 +466,15 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	}
 	internal += time.Since(istart)
 
-	log.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
-		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
+	log.WithFields(logrus.Fields{
+		"root":      root,
+		"last":      hexutil.Encode(last),
+		"count":     count,
+		"created":   created,
+		"updated":   updated,
+		"untouched": untouched,
+		"deleted":   deleted,
+	}).Debug("Regenerated state range")
 
 	// If there are either more trie items, or there are more snap items
 	// (in the next segment), then we need to keep working
@@ -539,7 +558,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			CodeHash []byte
 		}
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
-			log.Fatal("Invalid account encountered during snapshot creation", "err", err)
+			log.WithField("err", err).Fatal("Invalid account encountered during snapshot creation")
 		}
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
@@ -642,7 +661,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// generator anyway to mark the snapshot is complete.
 	journalProgress(batch, nil, stats)
 	if err := batch.Write(); err != nil {
-		log.Error("Failed to flush batch", "err", err)
+		log.WithField("err", err).Error("Failed to flush batch")
 
 		abort = <-dl.genAbort
 		abort <- stats
@@ -650,8 +669,12 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	}
 	batch.Reset()
 
-	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
-		"storage", stats.storage, "elapsed", common.PrettyDuration(time.Since(stats.start)))
+	log.WithFields(logrus.Fields{
+		"accounts": stats.accounts,
+		"slots":    stats.slots,
+		"storage":  stats.storage,
+		"elapsed":  common.PrettyDuration(time.Since(stats.start)),
+	}).Info("Generated state snapshot")
 
 	dl.lock.Lock()
 	dl.genMarker = nil

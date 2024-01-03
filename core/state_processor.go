@@ -34,10 +34,10 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -120,6 +120,7 @@ type StateProcessor struct {
 	snaps  *snapshot.Tree
 	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration // Accumulates canonical block processing for trie dumping
+	logger *logrus.Logger
 }
 
 // NewStateProcessor initialises a new StateProcessor.
@@ -146,6 +147,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		engine: engine,
 		triegc: prque.New(nil),
 		quit:   make(chan struct{}),
+		logger: hc.logger,
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
 
@@ -161,7 +163,10 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	// If periodic cache journal is required, spin it up.
 	if sp.cacheConfig.TrieCleanRejournal > 0 {
 		if sp.cacheConfig.TrieCleanRejournal < time.Minute {
-			log.Warn("Sanitizing invalid trie cache journal time", "provided", sp.cacheConfig.TrieCleanRejournal, "updated", time.Minute)
+			sp.logger.WithFields(logrus.Fields{
+				"provided": sp.cacheConfig.TrieCleanRejournal,
+				"updated":  time.Minute,
+			}).Warn("Sanitizing invalid trie cache journal time")
 			sp.cacheConfig.TrieCleanRejournal = time.Minute
 		}
 		triedb := sp.stateCache.TrieDB()
@@ -262,7 +267,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
 			}
 			prevZeroBal := prepareApplyETX(statedb, &etxEntry.ETX)
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etxEntry.ETX, usedGas, vmenv, &etxRLimit, &etxPLimit)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etxEntry.ETX, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 			statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 
 			if err != nil {
@@ -276,7 +281,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
 			startTimeTx := time.Now()
 
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit)
+			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -296,15 +301,34 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
 	time5 := common.PrettyDuration(time.Since(start))
 
-	log.Debug("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
-	log.Debug("Time taken in Process", "time1", time1, "time2", time2, "time3", time3, "time4", time4, "time5", time5)
+	p.logger.WithFields(logrus.Fields{
+		"signing time":       common.PrettyDuration(timeSign),
+		"prepare state time": common.PrettyDuration(timePrepare),
+		"etx time":           common.PrettyDuration(timeEtx),
+		"tx time":            common.PrettyDuration(timeTx),
+	}).Debug("Total Tx Processing Time")
 
-	log.Debug("Total Tx Processing Time", "signing time", common.PrettyDuration(timeSign), "senders cache time", common.PrettyDuration(timeSenders), "percent cached internal txs", fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100), "prepare state time", common.PrettyDuration(timePrepare), "etx time", common.PrettyDuration(timeEtx), "tx time", common.PrettyDuration(timeTx))
+	p.logger.WithFields(logrus.Fields{
+		"time1": time1,
+		"time2": time2,
+		"time3": time3,
+		"time4": time4,
+		"time5": time5,
+	}).Debug("Time taken in Process")
+
+	p.logger.WithFields(logrus.Fields{
+		"signing time":                common.PrettyDuration(timeSign),
+		"senders cache time":          common.PrettyDuration(timeSenders),
+		"percent cached internal txs": fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100),
+		"prepare state time":          common.PrettyDuration(timePrepare),
+		"etx time":                    common.PrettyDuration(timeEtx),
+		"tx time":                     common.PrettyDuration(timeTx),
+	}).Debug("Total Tx Processing Time")
 
 	return receipts, allLogs, statedb, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *logrus.Logger) (*types.Receipt, error) {
 	nodeLocation := config.Location
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
@@ -347,7 +371,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, Etxs: result.Etxs}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
-		log.Debug(result.Err.Error())
+		logger.WithField("err", result.Err).Debug("Transaction failed")
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
@@ -392,7 +416,10 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		return nil, err
 	}
 	if block.Hash() != blockHash {
-		log.Warn("Block hash changed after Processing the block", "old hash", blockHash, "new hash", block.Hash())
+		p.logger.WithFields(logrus.Fields{
+			"oldHash": blockHash,
+			"newHash": block.Hash(),
+		}).Warn("Block hash changed after Processing the block")
 	}
 	time3 := common.PrettyDuration(time.Since(start))
 	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
@@ -448,12 +475,16 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 				// diff sidechain. Suspend committing until this operation is completed.
 				header := p.hc.GetHeaderByNumber(chosen)
 				if header == nil {
-					log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
+					p.logger.WithField("number", chosen).Warn("Reorg in progress, trie commit postponed")
 				} else {
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
 					if chosen < lastWrite+TriesInMemory && p.gcproc >= 2*p.cacheConfig.TrieTimeLimit {
-						log.Info("State in memory for too long, committing", "time", p.gcproc, "allowance", p.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
+						p.logger.WithFields(logrus.Fields{
+							"time":      p.gcproc,
+							"allowance": p.cacheConfig.TrieTimeLimit,
+							"optimum":   float64(chosen-lastWrite) / TriesInMemory,
+						}).Warn("State in memory for too long, committing")
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root(), true, nil)
@@ -477,7 +508,21 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	rawdb.WriteEtxSet(batch, header.Hash(), header.NumberU64(nodeCtx), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
-	log.Debug("times during state processor apply:", "t1:", time1, "t2:", time2, "t3:", time3, "t4:", time4, "t4.5:", time4_5, "t5:", time5, "t6:", time6, "t7:", time7, "t8:", time8, "t9:", time9, "t10:", time10, "t11:", time11, "t12:", time12)
+	p.logger.WithFields(logrus.Fields{
+		"t1":   time1,
+		"t2":   time2,
+		"t3":   time3,
+		"t4":   time4,
+		"t4.5": time4_5,
+		"t5":   time5,
+		"t6":   time6,
+		"t7":   time7,
+		"t8":   time8,
+		"t9":   time9,
+		"t10":  time10,
+		"t11":  time11,
+		"t12":  time12,
+	}).Debug("times during state processor apply")
 	return logs, nil
 }
 
@@ -485,7 +530,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *logrus.Logger) (*types.Receipt, error) {
 	nodeCtx := config.Location.Context()
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
@@ -496,11 +541,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, tx)
-		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
+		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
 		statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit)
+	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
 }
 
 // GetVMConfig returns the block chain VM config.
@@ -685,7 +730,12 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		current := newHeads[i]
 		// Print progress logs if long enough time elapsed
 		if time.Since(logged) > 8*time.Second && report {
-			log.Info("Regenerating historical state", "block", current.NumberU64(nodeCtx)+1, "target", origin, "remaining", origin-current.NumberU64(nodeCtx)-1, "elapsed", time.Since(start))
+			p.logger.WithFields(logrus.Fields{
+				"block":     current.NumberU64(nodeCtx) + 1,
+				"target":    origin,
+				"remaining": origin - current.NumberU64(nodeCtx) - 1,
+				"elapsed":   time.Since(start),
+			}).Info("Regenerating historical state")
 			logged = time.Now()
 		}
 
@@ -722,7 +772,12 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	}
 	if report {
 		nodes, imgs := database.TrieDB().Size()
-		log.Info("Historical state regenerated", "block", current.NumberU64(nodeCtx), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
+		p.logger.WithFields(logrus.Fields{
+			"block":   current.NumberU64(nodeCtx),
+			"elapsed": time.Since(start),
+			"nodes":   nodes,
+			"preimgs": imgs,
+		}).Info("Historical state regenerated")
 	}
 	return statedb, nil
 }
@@ -777,7 +832,7 @@ func (p *StateProcessor) Stop() {
 	if p.snaps != nil {
 		var err error
 		if snapBase, err = p.snaps.Journal(p.hc.CurrentBlock().Root()); err != nil {
-			log.Error("Failed to journal state snapshot", "err", err)
+			p.logger.WithField("err", err).Error("Failed to journal state snapshot")
 		}
 	}
 	// Ensure the state of a recent block is also stored to disk before exiting.
@@ -792,23 +847,28 @@ func (p *StateProcessor) Stop() {
 			if number := p.hc.CurrentBlock().NumberU64(nodeCtx); number > offset {
 				recent := p.hc.GetBlockByNumber(number - offset)
 
-				log.Info("Writing cached state to disk", "block", recent.Number(nodeCtx), "hash", recent.Hash(), "root", recent.Root())
+				p.logger.WithFields(logrus.Fields{
+					"block": recent.NumberU64(nodeCtx),
+					"hash":  recent.Hash(),
+					"root":  recent.Root(),
+				}).Info("Writing cached state to disk")
+
 				if err := triedb.Commit(recent.Root(), true, nil); err != nil {
-					log.Error("Failed to commit recent state trie", "err", err)
+					p.logger.WithField("err", err).Error("Failed to commit recent state trie")
 				}
 			}
 		}
 		if snapBase != (common.Hash{}) {
-			log.Info("Writing snapshot state to disk", "root", snapBase)
+			p.logger.WithField("root", snapBase).Info("Writing snapshot state to disk")
 			if err := triedb.Commit(snapBase, true, nil); err != nil {
-				log.Error("Failed to commit recent state trie", "err", err)
+				p.logger.WithField("err", err).Error("Failed to commit snapshot state trie")
 			}
 		}
 		for !p.triegc.Empty() {
 			triedb.Dereference(p.triegc.PopItem().(common.Hash))
 		}
 		if size, _ := triedb.Size(); size != 0 {
-			log.Error("Dangling trie nodes after full cleanup")
+			p.logger.Error("Dangling trie nodes after full cleanup")
 		}
 	}
 	// Ensure all live cached entries be saved into disk, so that we can skip
@@ -818,7 +878,7 @@ func (p *StateProcessor) Stop() {
 		triedb.SaveCache(p.cacheConfig.TrieCleanJournal)
 	}
 	close(p.quit)
-	log.Info("State Processor stopped")
+	p.logger.Info("State Processor stopped")
 }
 
 func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {

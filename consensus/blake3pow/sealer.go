@@ -17,7 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -40,7 +40,10 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 		select {
 		case results <- header:
 		default:
-			log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", header.SealHash())
+			blake3pow.logger.WithFields(logrus.Fields{
+				"mode":     "fake",
+				"sealhash": header.SealHash(),
+			}).Warn("Sealing result is not read by miner")
 		}
 		return nil
 	}
@@ -91,14 +94,17 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 			select {
 			case results <- result:
 			default:
-				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", header.SealHash())
+				blake3pow.logger.WithFields(logrus.Fields{
+					"mode":     "local",
+					"sealhash": header.SealHash(),
+				}).Warn("Sealing result is not read by miner")
 			}
 			close(abort)
 		case <-blake3pow.update:
 			// Thread count was changed on user request, restart
 			close(abort)
 			if err := blake3pow.Seal(header, results, stop); err != nil {
-				log.Error("Failed to restart sealing after update", "err", err)
+				blake3pow.logger.WithField("err", err).Error("Failed to restart sealing after update")
 			}
 		}
 		// Wait for all miners to terminate and return the block
@@ -120,13 +126,13 @@ func (blake3pow *Blake3pow) mine(header *types.Header, id int, seed uint64, abor
 		nonce     = seed
 		powBuffer = new(big.Int)
 	)
-	log.Trace("Started blake3pow search for new nonces", "seed", seed)
+	blake3pow.logger.WithField("seed", seed).Trace("Started blake3pow search for new nonces")
 search:
 	for {
 		select {
 		case <-abort:
 			// Mining terminated, update stats and abort
-			log.Trace("Blake3pow nonce search aborted", "attempts", nonce-seed)
+			blake3pow.logger.WithField("attempts", nonce-seed).Trace("Blake3pow nonce search aborted")
 			break search
 
 		default:
@@ -145,9 +151,15 @@ search:
 				// Seal and return a block (if still needed)
 				select {
 				case found <- header:
-					log.Trace("Blake3pow nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
+					blake3pow.logger.WithFields(logrus.Fields{
+						"attempts": nonce - seed,
+						"nonce":    nonce,
+					}).Trace("Blake3pow nonce found and reported")
 				case <-abort:
-					log.Trace("Blake3pow nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
+					blake3pow.logger.WithFields(logrus.Fields{
+						"attempts": nonce - seed,
+						"nonce":    nonce,
+					}).Trace("Blake3pow nonce found but discarded")
 				}
 				break search
 			}
@@ -234,7 +246,7 @@ func startRemoteSealer(blake3pow *Blake3pow, urls []string, noverify bool) *remo
 
 func (s *remoteSealer) loop() {
 	defer func() {
-		log.Trace("Blake3pow remote sealer is exiting")
+		s.blake3pow.logger.Trace("Blake3pow remote sealer is exiting")
 		s.cancelNotify()
 		s.reqWG.Wait()
 		close(s.exitCh)
@@ -350,7 +362,7 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(json))
 	if err != nil {
-		log.Warn("Can't create remote miner notification", "err", err)
+		s.blake3pow.logger.WithField("err", err).Warn("Failed to create remote miner notification")
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, remoteSealerTimeout)
@@ -360,9 +372,13 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Warn("Failed to notify remote miner", "err", err)
+		s.blake3pow.logger.WithField("err", err).Warn("Failed to notify remote miner")
 	} else {
-		log.Trace("Notified remote miner", "miner", url, "hash", work[0], "target", work[2])
+		s.blake3pow.logger.WithFields(logrus.Fields{
+			"miner":  url,
+			"hash":   work[0],
+			"target": work[2],
+		}).Trace("Notified remote miner")
 		resp.Body.Close()
 	}
 }
@@ -372,14 +388,17 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 // any other error, like no pending work or stale mining result).
 func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) bool {
 	if s.currentHeader == nil {
-		log.Error("Pending work without block", "sealhash", sealhash)
+		s.blake3pow.logger.WithField("sealhash", sealhash).Warn("Pending work without block")
 		return false
 	}
 	nodeCtx := s.blake3pow.config.NodeLocation.Context()
 	// Make sure the work submitted is present
 	header := s.works[sealhash]
 	if header == nil {
-		log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64(nodeCtx))
+		s.blake3pow.logger.WithFields(logrus.Fields{
+			"sealhash":  sealhash,
+			"curnumber": s.currentHeader.NumberU64(nodeCtx),
+		}).Warn("Work submitted but none pending")
 		return false
 	}
 	// Verify the correctness of submitted result.
@@ -388,10 +407,13 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	start := time.Now()
 	// Make sure the result channel is assigned.
 	if s.results == nil {
-		log.Warn("Blake3pow result channel is empty, submitted mining result is rejected")
+		s.blake3pow.logger.Warn("Blake3pow result channel is empty, submitted mining result is rejected")
 		return false
 	}
-	log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
+	s.blake3pow.logger.WithFields(logrus.Fields{
+		"sealhash": sealhash,
+		"elapsed":  common.PrettyDuration(time.Since(start)),
+	}).Trace("Verified correct proof-of-work")
 
 	// Solutions seems to be valid, return to the miner and notify acceptance.
 	solution := header
@@ -400,14 +422,22 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	if solution.NumberU64(nodeCtx)+staleThreshold > s.currentHeader.NumberU64(nodeCtx) {
 		select {
 		case s.results <- solution:
-			log.Debug("Work submitted is acceptable", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
+			s.blake3pow.logger.WithFields(logrus.Fields{
+				"number":   solution.NumberU64(nodeCtx),
+				"sealhash": sealhash,
+				"hash":     solution.Hash(),
+			}).Trace("Work submitted is acceptable")
 			return true
 		default:
-			log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
+			s.blake3pow.logger.WithField("sealhash", sealhash).Warn("Sealing result is not read by miner")
 			return false
 		}
 	}
 	// The submitted block is too old to accept, drop it.
-	log.Warn("Work submitted is too old", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
+	s.blake3pow.logger.WithFields(logrus.Fields{
+		"number":   solution.NumberU64(nodeCtx),
+		"sealhash": sealhash,
+		"hash":     solution.Hash(),
+	}).Warn("Work submitted is too old")
 	return false
 }

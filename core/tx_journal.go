@@ -23,8 +23,8 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/sirupsen/logrus"
 )
 
 // errNoActiveJournal is returned if a transaction is attempted to be inserted
@@ -45,12 +45,14 @@ func (*devNull) Close() error                      { return nil }
 type txJournal struct {
 	path   string         // Filesystem path to store the transactions at
 	writer io.WriteCloser // Output stream to write new transactions into
+	logger *logrus.Logger
 }
 
 // newTxJournal creates a new transaction journal to
-func newTxJournal(path string) *txJournal {
+func newTxJournal(path string, logger *logrus.Logger) *txJournal {
 	return &txJournal{
-		path: path,
+		path:   path,
+		logger: logger,
 	}
 }
 
@@ -82,7 +84,7 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	loadBatch := func(txs types.Transactions) {
 		for _, err := range add(txs) {
 			if err != nil {
-				log.Debug("Failed to add journaled transaction", "err", err)
+				journal.logger.WithField("err", err).Debug("Failed to add journaled transaction")
 				dropped++
 			}
 		}
@@ -111,7 +113,10 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 			batch = batch[:0]
 		}
 	}
-	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
+	journal.logger.WithFields(logrus.Fields{
+		"transactions": total,
+		"dropped":      dropped,
+	}).Info("Loaded local transaction journal")
 
 	return failure
 }
@@ -163,7 +168,10 @@ func (journal *txJournal) rotate(all map[common.InternalAddress]types.Transactio
 		return err
 	}
 	journal.writer = sink
-	log.Info("Regenerated local transaction journal", "transactions", journaled, "accounts", len(all))
+	journal.logger.WithFields(logrus.Fields{
+		"transactions": journaled,
+		"accounts":     len(all),
+	}).Info("Regenerated local transaction journal")
 
 	return nil
 }

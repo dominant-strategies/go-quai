@@ -18,11 +18,11 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -72,11 +72,13 @@ type HeaderChain struct {
 	headermu      sync.RWMutex
 	heads         []*types.Header
 	slicesRunning []common.Location
+
+	logger *logrus.Logger
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, logger *logrus.Logger) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 	nodeCtx := chainConfig.Location.Context()
@@ -90,6 +92,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		slicesRunning:   slicesRunning,
 		fetchPEtxRollup: pEtxsRollupFetcher,
 		fetchPEtx:       pEtxsFetcher,
+		logger:          logger,
 	}
 
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
@@ -111,7 +114,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	if hc.genesisHeader.Hash() != chainConfig.GenesisHash {
 		return nil, fmt.Errorf("genesis block mismatch: have %x, want %x", hc.genesisHeader.Hash(), chainConfig.GenesisHash)
 	}
-	log.Info("Genesis", "Hash:", hc.genesisHeader.Hash())
+	hc.logger.WithField("Hash", hc.genesisHeader.Hash()).Info("Genesis")
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
@@ -191,7 +194,7 @@ func (hc *HeaderChain) GetPendingEtxs(hash common.Hash) (*types.PendingEtxs, err
 	} else if res := rawdb.ReadPendingEtxs(hc.headerDb, hash); res != nil {
 		pendingEtxs = *res
 	} else {
-		log.Trace("unable to find pending etxs for hash in manifest", "hash:", hash.String())
+		hc.logger.WithField("hash", hash.String()).Trace("Unable to find pending etxs for hash in manifest")
 		return nil, ErrPendingEtxNotFound
 	}
 	return &pendingEtxs, nil
@@ -205,7 +208,7 @@ func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash) (*types.PendingEtx
 	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash); res != nil {
 		rollups = *res
 	} else {
-		log.Trace("unable to find pending etxs rollups for hash in manifest", "hash:", hash.String())
+		hc.logger.WithField("hash", hash.String()).Trace("Unable to find pending etx rollups for hash in manifest")
 		return nil, ErrPendingEtxRollupNotFound
 	}
 	return &rollups, nil
@@ -220,7 +223,7 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 	} else if res := rawdb.ReadBloom(hc.headerDb, hash); res != nil {
 		bloom = *res
 	} else {
-		log.Debug("unable to find bloom for hash in database", "hash:", hash.String())
+		hc.logger.WithField("hash", hash.String()).Trace("Unable to find bloom for hash in manifest")
 		return nil, ErrBloomNotFound
 	}
 	return &bloom, nil
@@ -270,7 +273,12 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 // Append
 func (hc *HeaderChain) AppendHeader(header *types.Header) error {
 	nodeCtx := hc.NodeCtx()
-	log.Debug("HeaderChain Append:", "Header information: Hash:", header.Hash(), "header header hash:", header.Hash(), "Number:", header.NumberU64(nodeCtx), "Location:", header.Location, "Parent:", header.ParentHash(nodeCtx))
+	hc.logger.WithFields(logrus.Fields{
+		"Hash":     header.Hash(),
+		"Number":   header.NumberArray(),
+		"Location": header.Location,
+		"Parent":   header.ParentHash(nodeCtx),
+	}).Debug("Headerchain Append")
 
 	err := hc.engine.VerifyHeader(hc, header)
 	if err != nil {
@@ -306,7 +314,7 @@ func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Tran
 	if err != nil {
 		return err
 	}
-	log.Debug("Time taken to", "Append in bc", common.PrettyDuration(time.Since(blockappend)))
+	hc.logger.WithField("append block", common.PrettyDuration(time.Since(blockappend))).Debug("Time taken to")
 
 	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
@@ -329,7 +337,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
-	log.Info("Setting the current header", "Hash", head.Hash(), "Number", head.NumberArray())
+	hc.logger.WithFields(logrus.Fields{
+		"Hash":   head.Hash(),
+		"Number": head.NumberArray(),
+	}).Info("Setting the current header")
 	hc.currentHeader.Store(head)
 
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
@@ -453,10 +464,10 @@ func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
 
 func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
-		log.Info("PendingEtx is not valid")
+		hc.logger.Info("PendingEtx is not valid")
 		return ErrPendingEtxNotValid
 	}
-	log.Debug("Received pending ETXs", "block: ", pEtxs.Header.Hash())
+	hc.logger.WithField("block", pEtxs.Header.Hash()).Debug("Received pending ETXs")
 	// Only write the pending ETXs if we have not seen them before
 	if !hc.pendingEtxs.Contains(pEtxs.Header.Hash()) {
 		// Write to pending ETX database
@@ -498,7 +509,7 @@ func (hc *HeaderChain) loadLastState() error {
 		}
 	} else {
 		// Recover the current header
-		log.Warn("Recovering Current Header")
+		hc.logger.Warn("Recovering Current Header")
 		recoverdHeader := hc.RecoverCurrentHeader()
 		rawdb.WriteHeadBlockHash(hc.headerDb, recoverdHeader.Hash())
 		hc.currentHeader.Store(recoverdHeader)
@@ -534,7 +545,7 @@ func (hc *HeaderChain) Stop() {
 	if hc.NodeCtx() == common.ZONE_CTX && hc.ProcessingState() {
 		hc.bc.processor.Stop()
 	}
-	log.Info("headerchain stopped")
+	hc.logger.Info("headerchain stopped")
 }
 
 // Empty checks if the headerchain is empty.
@@ -703,7 +714,7 @@ func (hc *HeaderChain) RecoverCurrentHeader() *types.Header {
 		}
 	}
 	header := hc.GetHeaderByNumber(high)
-	log.Info("Header Recovered: ", "hash", header.Hash().String())
+	hc.logger.WithField("Hash", header.Hash().String()).Info("Header Recovered")
 
 	return header
 }
@@ -834,7 +845,7 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	if first > last {
 		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
 	}
-	log.Info("Exporting batch of blocks", "count", last-first+1)
+	hc.logger.WithField("count", last-first+1).Info("Exporting batch of blocks")
 
 	for nr := first; nr <= last; nr++ {
 		block := hc.GetBlockByNumber(nr)

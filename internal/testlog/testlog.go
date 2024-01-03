@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/sirupsen/logrus"
 )
 
 // Handler returns a log handler which logs to the unit test log of t.
@@ -39,13 +40,13 @@ func (h *handler) Log(r *log.Record) error {
 	return nil
 }
 
-// logger implements log.Logger such that all output goes to the unit test log via
+// logger implements logrus.Logger such that all output goes to the unit test log via
 // t.Logf(). All methods in between logger.Trace, logger.Debug, etc. are marked as test
 // helpers, so the file and line number in unit test output correspond to the call site
 // which emitted the log message.
 type logger struct {
 	t  *testing.T
-	l  log.Logger
+	l  *logrus.Logger
 	mu *sync.Mutex
 	h  *bufHandler
 }
@@ -61,10 +62,10 @@ func (h *bufHandler) Log(r *log.Record) error {
 }
 
 // Logger returns a logger which logs to the unit test log of t.
-func Logger(t *testing.T, level log.Lvl) log.Logger {
+func Logger(t *testing.T, level log.Lvl) *logrus.Logger {
 	l := &logger{
 		t:  t,
-		l:  log.New(),
+		l:  log.NewLogger(),
 		mu: new(sync.Mutex),
 		h:  &bufHandler{fmt: log.TerminalFormat(false)},
 	}
@@ -120,7 +121,7 @@ func (l *logger) Crit(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) New(ctx ...interface{}) log.Logger {
+func (l *logger) New(ctx ...interface{}) *logrus.Logger {
 	return &logger{l.t, l.l.New(ctx...), l.mu, l.h}
 }
 

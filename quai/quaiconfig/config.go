@@ -27,10 +27,10 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
+	"github.com/sirupsen/logrus"
 )
 
 type QuaistatsConfig struct {
@@ -177,15 +177,15 @@ type Config struct {
 }
 
 // CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.
-func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location, config *progpow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location, config *progpow.Config, notify []string, noverify bool, db ethdb.Database, logger *logrus.Logger) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case progpow.ModeFake:
-		log.Warn("Progpow used in fake mode")
+		logger.Warn("Progpow used in fake mode")
 	case progpow.ModeTest:
-		log.Warn("Progpow used in test mode")
+		logger.Warn("Progpow used in test mode")
 	case progpow.ModeShared:
-		log.Warn("Progpow used in shared mode")
+		logger.Warn("Progpow used in shared mode")
 	}
 	engine := progpow.New(progpow.Config{
 		PowMode:       config.PowMode,
@@ -194,21 +194,21 @@ func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location
 		NodeLocation:  nodeLocation,
 		GasCeil:       config.GasCeil,
 		MinDifficulty: config.MinDifficulty,
-	}, notify, noverify)
+	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
 }
 
 // CreateBlake3ConsensusEngine creates a progpow consensus engine for the given chain configuration.
-func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *blake3pow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *blake3pow.Config, notify []string, noverify bool, db ethdb.Database, logger *logrus.Logger) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case blake3pow.ModeFake:
-		log.Warn("Progpow used in fake mode")
+		logger.Warn("Progpow used in fake mode")
 	case blake3pow.ModeTest:
-		log.Warn("Progpow used in test mode")
+		logger.Warn("Progpow used in test mode")
 	case blake3pow.ModeShared:
-		log.Warn("Progpow used in shared mode")
+		logger.Warn("Progpow used in shared mode")
 	}
 	engine := blake3pow.New(blake3pow.Config{
 		PowMode:       config.PowMode,
@@ -217,7 +217,7 @@ func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location,
 		NodeLocation:  nodeLocation,
 		GasCeil:       config.GasCeil,
 		MinDifficulty: config.MinDifficulty,
-	}, notify, noverify)
+	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
 }

@@ -29,9 +29,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
 )
 
 // httpConfig is the JSON-RPC/HTTP configuration.
@@ -55,7 +55,7 @@ type rpcHandler struct {
 }
 
 type httpServer struct {
-	log      log.Logger
+	logger   *logrus.Logger
 	timeouts rpc.HTTPTimeouts
 	mux      http.ServeMux // registered handlers go here
 
@@ -80,8 +80,8 @@ type httpServer struct {
 	handlerNames map[string]string
 }
 
-func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
-	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
+func newHTTPServer(logger *logrus.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+	h := &httpServer{logger: logger, timeouts: timeouts, handlerNames: make(map[string]string)}
 
 	h.httpHandler.Store((*rpcHandler)(nil))
 	h.wsHandler.Store((*rpcHandler)(nil))
@@ -149,19 +149,19 @@ func (h *httpServer) start() error {
 		if h.wsConfig.prefix != "" {
 			url += h.wsConfig.prefix
 		}
-		log.Info("WebSocket enabled", "url", url)
+		h.logger.WithField("url", url).Info("Websocket enabled")
 	}
 	// if server is websocket only, return after logging
 	if !h.rpcAllowed() {
 		return nil
 	}
 	// Log http endpoint.
-	log.Info("HTTP server started",
-		"endpoint", listener.Addr(),
-		"prefix", h.httpConfig.prefix,
-		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
-		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
-	)
+	h.logger.WithFields(logrus.Fields{
+		"endpoint": listener.Addr(),
+		"prefix":   h.httpConfig.prefix,
+		"cors":     strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
+		"vhosts":   strings.Join(h.httpConfig.Vhosts, ","),
+	}).Info("HTTP endpoint started")
 
 	// Log all handlers mounted on server.
 	var paths []string
@@ -173,7 +173,10 @@ func (h *httpServer) start() error {
 	for _, path := range paths {
 		name := h.handlerNames[path]
 		if !logged[name] {
-			log.Info(name+" enabled", "url", "http://"+listener.Addr().String()+path)
+			h.logger.WithFields(logrus.Fields{
+				"handler": name,
+				"url":     "http://" + listener.Addr().String() + path,
+			}).Info("HTTP handler registered")
 			logged[name] = true
 		}
 	}
@@ -262,7 +265,7 @@ func (h *httpServer) doStop() {
 	}
 	h.server.Shutdown(context.Background())
 	h.listener.Close()
-	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
+	h.logger.WithField("endpoint", h.listener.Addr()).Info("HTTP server stopped")
 
 	// Clear out everything to allow re-configuring it later.
 	h.host, h.port, h.endpoint = "", 0, ""
@@ -280,7 +283,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv, false, h.logger); err != nil {
 		return err
 	}
 	h.httpConfig = config
@@ -312,7 +315,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv, false, h.logger); err != nil {
 		return err
 	}
 	h.wsConfig = config
@@ -472,9 +475,12 @@ func newGzipHandler(next http.Handler) http.Handler {
 
 // RegisterApis checks the given modules' availability, generates an allowlist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
+func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool, logger *logrus.Logger) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
-		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
+		logger.WithFields(logrus.Fields{
+			"unavailable": bad,
+			"available":   available,
+		}).Error("Unavailable modules in HTTP API list")
 	}
 	// Generate the allow list based on the allowed modules
 	allowList := make(map[string]bool)

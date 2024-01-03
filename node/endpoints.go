@@ -23,6 +23,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/sirupsen/logrus"
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.
@@ -70,15 +71,24 @@ func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available [
 // CheckTimeouts ensures that timeout values are meaningful
 func CheckTimeouts(timeouts *rpc.HTTPTimeouts) {
 	if timeouts.ReadTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadTimeout)
+		log.WithFields(logrus.Fields{
+			"provided": timeouts.ReadTimeout,
+			"updated":  rpc.DefaultHTTPTimeouts.ReadTimeout,
+		}).Warn("Sanitizing invalid HTTP read timeout")
 		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout
 	}
 	if timeouts.WriteTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", rpc.DefaultHTTPTimeouts.WriteTimeout)
+		log.WithFields(logrus.Fields{
+			"provided": timeouts.WriteTimeout,
+			"updated":  rpc.DefaultHTTPTimeouts.WriteTimeout,
+		}).Warn("Sanitizing invalid HTTP write timeout")
 		timeouts.WriteTimeout = rpc.DefaultHTTPTimeouts.WriteTimeout
 	}
 	if timeouts.IdleTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", rpc.DefaultHTTPTimeouts.IdleTimeout)
+		log.WithFields(logrus.Fields{
+			"provided": timeouts.IdleTimeout,
+			"updated":  rpc.DefaultHTTPTimeouts.IdleTimeout,
+		}).Warn("Sanitizing invalid HTTP idle timeout")
 		timeouts.IdleTimeout = rpc.DefaultHTTPTimeouts.IdleTimeout
 	}
 }

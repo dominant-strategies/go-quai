@@ -40,6 +40,7 @@ import (
 	"github.com/dominant-strategies/go-quai/quai/abi"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/sirupsen/logrus"
 )
 
 // PublicQuaiAPI_Deprecated provides an API to access Quai related information.
@@ -390,7 +391,11 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found", "number", blockNr, "hash", block.Hash(), "index", index)
+			log.WithFields(logrus.Fields{
+				"number": blockNr,
+				"hash":   block.Hash(),
+				"index":  index,
+			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -406,7 +411,11 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.Debug("Requested uncle not found", "number", block.Number(s.b.NodeCtx()), "hash", blockHash, "index", index)
+			log.WithFields(logrus.Fields{
+				"number": block.Number(s.b.NodeCtx()),
+				"hash":   block.Hash(),
+				"index":  index,
+			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -538,7 +547,9 @@ func (diff *StateOverride) Apply(state *state.StateDB, nodeLocation common.Locat
 }
 
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
-	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+	defer func(start time.Time) {
+		log.WithField("runtime", time.Since(start)).Debug("Executing EVM call finished")
+	}(time.Now())
 	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("doCall can only be called in zone chain")
@@ -721,14 +732,22 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			if transfer == nil {
 				transfer = new(hexutil.Big)
 			}
-			log.Debug("Gas estimation capped by limited funds", "original", hi, "balance", balance,
-				"sent", transfer.ToInt(), "maxFeePerGas", feeCap, "fundable", allowance)
+			log.WithFields(logrus.Fields{
+				"original": hi,
+				"balance":  balance,
+				"sent":     transfer.ToInt(),
+				"maxFee":   feeCap,
+				"fundable": allowance,
+			}).Debug("Gas estimation capped by limited funds")
 			hi = allowance.Uint64()
 		}
 	}
 	// Recap the highest gas allowance with specified gascap.
 	if gasCap != 0 && hi > gasCap {
-		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
+		log.WithFields(logrus.Fields{
+			"requested": hi,
+			"cap":       gasCap,
+		}).Warn("Caller gas above allowance, capping")
 		hi = gasCap
 	}
 	cap = hi
@@ -1181,7 +1200,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	for {
 		// Retrieve the current access list to expand
 		accessList := prevTracer.AccessList(nodeLocation)
-		log.Trace("Creating access list", "input", accessList)
+		log.WithField("accessList", accessList).Debug("Creating access list")
 
 		// If no gas amount was specified, each unique access list needs it's own
 		// gas calculation. This is quite expensive, but we need to be accurate
@@ -1433,9 +1452,21 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 	if tx.To() == nil {
 		addr := crypto.CreateAddress(from, tx.Nonce(), tx.Data(), nodeLocation)
-		log.Debug("Submitted contract creation", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "contract", addr.Hex(), "value", tx.Value())
+		log.WithFields(logrus.Fields{
+			"hash":     tx.Hash().Hex(),
+			"from":     from,
+			"nonce":    tx.Nonce(),
+			"contract": addr.Hex(),
+			"value":    tx.Value(),
+		}).Debug("Submitted contract creation")
 	} else {
-		log.Debug("Submitted transaction", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "recipient", tx.To(), "value", tx.Value())
+		log.WithFields(logrus.Fields{
+			"hash":      tx.Hash().Hex(),
+			"from":      from,
+			"nonce":     tx.Nonce(),
+			"recipient": tx.To(),
+			"value":     tx.Value(),
+		}).Debug("Submitted transaction")
 	}
 	return tx.Hash(), nil
 }
@@ -1519,9 +1550,9 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 // removing all unused slots and merging all keys.
 func (api *PrivateDebugAPI) ChaindbCompact() error {
 	for b := byte(0); b < 255; b++ {
-		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))
+		log.WithField("range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1)).Info("Compacting chain database")
 		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
-			log.Error("Database compaction failed", "err", err)
+			log.WithField("err", err).Error("Database compaction failed")
 			return err
 		}
 	}

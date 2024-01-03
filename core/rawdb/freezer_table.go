@@ -29,6 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/golang/snappy"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -241,7 +242,10 @@ func (t *freezerTable) repair() error {
 	for contentExp != contentSize {
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
-			log.Warn("Truncating dangling head", "indexed", common.StorageSize(contentExp), "stored", common.StorageSize(contentSize))
+			log.WithFields(logrus.Fields{
+				"indexed": common.StorageSize(contentExp),
+				"stored":  common.StorageSize(contentSize),
+			}).Warn("Truncating dangling head")
 			if err := truncateFreezerFile(t.head, contentExp); err != nil {
 				return err
 			}
@@ -249,7 +253,10 @@ func (t *freezerTable) repair() error {
 		}
 		// Truncate the index to point within the head file
 		if contentExp > contentSize {
-			log.Warn("Truncating dangling indexes", "indexed", common.StorageSize(contentExp), "stored", common.StorageSize(contentSize))
+			log.WithFields(logrus.Fields{
+				"indexed": common.StorageSize(contentExp),
+				"stored":  common.StorageSize(contentSize),
+			}).Warn("Truncating dangling indexes")
 			if err := truncateFreezerFile(t.index, offsetsSize-indexEntrySize); err != nil {
 				return err
 			}
@@ -291,7 +298,10 @@ func (t *freezerTable) repair() error {
 	if err := t.preopen(); err != nil {
 		return err
 	}
-	log.Debug("Chain freezer table opened", "items", t.items, "size", common.StorageSize(t.headBytes))
+	log.WithFields(logrus.Fields{
+		"items": t.items,
+		"size":  common.StorageSize(t.headBytes),
+	}).Debug("Chain freezer table opened")
 	return nil
 }
 

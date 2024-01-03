@@ -24,6 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/sirupsen/logrus"
 )
 
 // wipeSnapshot starts a goroutine to iterate over the entire key-value database
@@ -39,7 +40,7 @@ func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
 	wiper := make(chan struct{}, 1)
 	go func() {
 		if err := wipeContent(db); err != nil {
-			log.Error("Failed to wipe state snapshot", "err", err) // Database close will trigger this
+			log.WithField("err", err).Error("Failed to wipe state snapshot") // Database close will trigger this
 			return
 		}
 		close(wiper)
@@ -76,7 +77,7 @@ func wipeContent(db ethdb.KeyValueStore) error {
 	if err := db.Compact(rawdb.SnapshotStoragePrefix, end); err != nil {
 		return err
 	}
-	log.Info("Compacted snapshot area in database", "elapsed", common.PrettyDuration(time.Since(start)))
+	log.WithField("elapsed", common.PrettyDuration(time.Since(start))).Info("Compacted snapshot area in database")
 
 	return nil
 }
@@ -127,7 +128,11 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 			it = db.NewIterator(prefix, seekPos)
 
 			if time.Since(logged) > 8*time.Second && report {
-				log.Info("Deleting state snapshot leftovers", "kind", kind, "wiped", items, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.WithFields(logrus.Fields{
+					"kind":    kind,
+					"wiped":   items,
+					"elapsed": common.PrettyDuration(time.Since(start)),
+				}).Info("Deleting state snapshot leftovers")
 				logged = time.Now()
 			}
 		}
@@ -137,7 +142,11 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 		return err
 	}
 	if report {
-		log.Info("Deleted state snapshot leftovers", "kind", kind, "wiped", items, "elapsed", common.PrettyDuration(time.Since(start)))
+		log.WithFields(logrus.Fields{
+			"kind":    kind,
+			"wiped":   items,
+			"elapsed": common.PrettyDuration(time.Since(start)),
+		}).Info("Deleted state snapshot leftovers")
 	}
 	return nil
 }

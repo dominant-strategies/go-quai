@@ -15,9 +15,9 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 	"modernc.org/mathutil"
 )
 
@@ -338,7 +338,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 	nodeCtx := progpow.NodeLocation().Context()
 
 	if nodeCtx != common.ZONE_CTX {
-		log.Error("Cannot CalcDifficulty for", "context", nodeCtx)
+		progpow.logger.WithField("context", nodeCtx).Error("Cannot CalcDifficulty for non-zone context")
 		return nil
 	}
 
@@ -466,19 +466,19 @@ func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types
 // setting the final state on the header
 func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
-	accumulateRewards(chain.Config(), state, header, uncles)
+	accumulateRewards(chain.Config(), state, header, uncles, progpow.logger)
 	nodeLocation := progpow.NodeLocation()
 	nodeCtx := progpow.NodeLocation().Context()
 
 	if nodeCtx == common.ZONE_CTX && header.ParentHash(nodeCtx) == chain.Config().GenesisHash {
-		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_" + nodeLocation.Name() + ".json")
-		log.Info("Allocating genesis accounts", "num", len(alloc))
+		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_"+nodeLocation.Name()+".json", progpow.logger)
+		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 
 		for addressString, account := range alloc {
 			addr := common.HexToAddress(addressString, nodeLocation)
 			internal, err := addr.InternalAddress()
 			if err != nil {
-				log.Error("Provided address in genesis block is out of scope")
+				progpow.logger.Error("Provided address in genesis block is out of scope")
 			}
 			state.AddBalance(internal, account.Balance)
 			state.SetCode(internal, account.Code)
@@ -512,14 +512,14 @@ func (progpow *Progpow) NodeLocation() common.Location {
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, logger *logrus.Logger) {
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward(header)
 	nodeCtx := config.Location.Context()
 
 	coinbase, err := header.Coinbase().InternalAddress()
 	if err != nil {
-		log.Error("Block has out-of-scope coinbase, skipping block reward: " + header.Hash().String())
+		logger.WithField("hash", header.Hash().String()).Error("Block has out-of-scope coinbase, skipping block reward")
 		return
 	}
 
@@ -529,7 +529,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	for _, uncle := range uncles {
 		coinbase, err := uncle.Coinbase().InternalAddress()
 		if err != nil {
-			log.Error("Found uncle with out-of-scope coinbase, skipping reward: " + uncle.Hash().String())
+			logger.WithField("hash", uncle.Hash().String()).Error("Uncle has out-of-scope coinbase, skipping reward")
 			continue
 		}
 		r.Add(uncle.Number(nodeCtx), big8)

@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/sirupsen/logrus"
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.
@@ -46,10 +47,10 @@ func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
 func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 	enc, err := rlp.EncodeToBytes(version)
 	if err != nil {
-		log.Fatal("Failed to encode database version", "err", err)
+		log.WithField("err", err).Fatal("Failed to encode database version")
 	}
 	if err = db.Put(databaseVersionKey, enc); err != nil {
-		log.Fatal("Failed to store the database version", "err", err)
+		log.WithField("err", err).Fatal("Failed to store the database version")
 	}
 }
 
@@ -61,7 +62,10 @@ func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainCon
 	}
 	var config params.ChainConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		log.Error("Invalid chain config JSON", "hash", hash, "err", err)
+		log.WithFields(logrus.Fields{
+			"hash": hash,
+			"err":  err,
+		}).Error("Invalid chain config JSON")
 		return nil
 	}
 	return &config
@@ -74,10 +78,10 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		log.Fatal("Failed to JSON encode chain config", "err", err)
+		log.WithField("err", err).Fatal("Failed to JSON encode chain config")
 	}
 	if err := db.Put(configKey(hash), data); err != nil {
-		log.Fatal("Failed to store chain config", "err", err)
+		log.WithField("err", err).Fatal("Failed to store chain config")
 	}
 }
 
@@ -94,11 +98,11 @@ const crashesToKeep = 10
 // the previous data
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
-func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
+func PushUncleanShutdownMarker(db ethdb.KeyValueStore, logger *logrus.Logger) ([]uint64, uint64, error) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Warn("Error reading unclean shutdown markers", "error", err)
+		logger.WithField("err", err).Warn("Error reading unclean shutdown markers")
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
 		return nil, 0, err
 	}
@@ -115,7 +119,7 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 	// And save it again
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
-		log.Warn("Failed to write unclean-shutdown marker", "err", err)
+		logger.WithField("err", err).Warn("Failed to write unclean-shutdown marker")
 		return nil, 0, err
 	}
 	return previous, discarded, nil
@@ -126,15 +130,15 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Warn("Error reading unclean shutdown markers", "error", err)
+		log.WithField("err", err).Warn("Error reading unclean shutdown markers")
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
-		log.Error("Error decoding unclean shutdown markers", "error", err) // Should mos def _not_ happen
+		log.WithField("err", err).Error("Error decoding unclean shutdown markers") // Should mos def _not_ happen
 	}
 	if l := len(uncleanShutdowns.Recent); l > 0 {
 		uncleanShutdowns.Recent = uncleanShutdowns.Recent[:l-1]
 	}
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
-		log.Warn("Failed to clear unclean-shutdown marker", "err", err)
+		log.WithField("err", err).Warn("Failed to clear unclean-shutdown marker")
 	}
 }

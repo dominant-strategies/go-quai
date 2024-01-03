@@ -32,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 type revision struct {
@@ -536,7 +537,10 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 		}
 		data = new(Account)
 		if err := rlp.DecodeBytes(enc, data); err != nil {
-			log.Error("Failed to decode state object", "addr", addr, "err", err)
+			log.WithFields(logrus.Fields{
+				"addr": addr,
+				"err":  err,
+			}).Error("Failed to decode state object")
 			return nil
 		}
 	}
@@ -905,7 +909,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
-			log.Fatal("Failed to commit dirty codes", "error", err)
+			log.WithField("err", err).Fatal("Failed to commit dirty codes")
 		}
 	}
 	// Write the account trie changes, measuing the amount of wasted time
@@ -926,14 +930,22 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
-				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
+				log.WithFields(logrus.Fields{
+					"root":   root,
+					"parent": parent,
+					"err":    err,
+				}).Error("Failed to update snapshot tree")
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
 			if err := s.snaps.Cap(root, 128); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+				log.WithFields(logrus.Fields{
+					"root":   root,
+					"layers": 128,
+					"err":    err,
+				}).Warn("Failed to cap snapshot tree")
 			}
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil

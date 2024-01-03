@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"github.com/sirupsen/logrus"
 )
 
 // SyncBloom is a bloom filter used during fast sync to quickly decide if a trie
@@ -51,7 +52,7 @@ func NewSyncBloom(memory uint64, database ethdb.Iteratee) *SyncBloom {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create bloom: %v", err))
 	}
-	log.Info("Allocated fast sync bloom", "size", common.StorageSize(memory*1024*1024))
+	log.WithField("size", common.StorageSize(memory*1024*1024)).Info("Allocated fast sync bloom")
 
 	// Assemble the fast sync bloom and init it from previous sessions
 	b := &SyncBloom{
@@ -97,14 +98,22 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 			it.Release()
 			it = database.NewIterator(nil, key)
 
-			log.Info("Initializing state bloom", "items", b.bloom.N(), "errorrate", b.bloom.FalsePosititveProbability(), "elapsed", common.PrettyDuration(time.Since(start)))
+			log.WithFields(logrus.Fields{
+				"items":     b.bloom.N(),
+				"errorrate": b.bloom.FalsePosititveProbability(),
+				"elapsed":   common.PrettyDuration(time.Since(start)),
+			}).Info("Initializing state bloom")
 			swap = time.Now()
 		}
 	}
 	it.Release()
 
 	// Mark the bloom filter inited and return
-	log.Info("Initialized state bloom", "items", b.bloom.N(), "errorrate", b.bloom.FalsePosititveProbability(), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.WithFields(logrus.Fields{
+		"items":     b.bloom.N(),
+		"errorrate": b.bloom.FalsePosititveProbability(),
+		"elapsed":   common.PrettyDuration(time.Since(start)),
+	}).Info("Initialized state bloom")
 	atomic.StoreUint32(&b.inited, 1)
 }
 
@@ -118,7 +127,10 @@ func (b *SyncBloom) Close() error {
 		b.pend.Wait()
 
 		// Wipe the bloom, but mark it "uninited" just in case someone attempts an access
-		log.Info("Deallocated state bloom", "items", b.bloom.N(), "errorrate", b.bloom.FalsePosititveProbability())
+		log.WithFields(logrus.Fields{
+			"items":     b.bloom.N(),
+			"errorrate": b.bloom.FalsePosititveProbability(),
+		}).Info("Deallocating state bloom")
 
 		atomic.StoreUint32(&b.inited, 0)
 		b.bloom = nil

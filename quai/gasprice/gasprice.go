@@ -25,9 +25,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/sirupsen/logrus"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block
@@ -69,36 +69,53 @@ type Oracle struct {
 
 	checkBlocks, percentile           int
 	maxHeaderHistory, maxBlockHistory int
+
+	logger *logrus.Logger
 }
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
 // gasprice for newly created transaction.
-func NewOracle(backend OracleBackend, params Config) *Oracle {
+func NewOracle(backend OracleBackend, params Config, logger *logrus.Logger) *Oracle {
 	blocks := params.Blocks
 	if blocks < 1 {
 		blocks = 1
-		log.Warn("Sanitizing invalid gasprice oracle sample blocks", "provided", params.Blocks, "updated", blocks)
+		logger.WithFields(logrus.Fields{
+			"provided": params.Blocks,
+			"updated":  blocks,
+		}).Warn("Sanitizing invalid gasprice oracle sample blocks")
 	}
 	percent := params.Percentile
 	if percent < 0 {
 		percent = 0
-		log.Warn("Sanitizing invalid gasprice oracle sample percentile", "provided", params.Percentile, "updated", percent)
+		logger.WithFields(logrus.Fields{
+			"provided": params.Percentile,
+			"updated":  percent,
+		}).Warn("Sanitizing invalid gasprice oracle sample percentile")
 	}
 	if percent > 100 {
 		percent = 100
-		log.Warn("Sanitizing invalid gasprice oracle sample percentile", "provided", params.Percentile, "updated", percent)
+		logger.WithFields(logrus.Fields{
+			"provided": params.Percentile,
+			"updated":  percent,
+		}).Warn("Sanitizing invalid gasprice oracle sample percentile")
 	}
 	maxPrice := params.MaxPrice
 	if maxPrice == nil || maxPrice.Int64() <= 0 {
 		maxPrice = DefaultMaxPrice
-		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
+		logger.WithFields(logrus.Fields{
+			"provided": params.MaxPrice,
+			"updated":  maxPrice,
+		}).Warn("Sanitizing invalid gasprice oracle price cap")
 	}
 	ignorePrice := params.IgnorePrice
 	if ignorePrice == nil || ignorePrice.Int64() <= 0 {
 		ignorePrice = DefaultIgnorePrice
-		log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
+		logger.WithFields(logrus.Fields{
+			"provided": params.IgnorePrice,
+			"updated":  ignorePrice,
+		}).Warn("Sanitizing invalid gasprice oracle ignore price")
 	} else if ignorePrice.Int64() > 0 {
-		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
+		logger.WithField("threshold", ignorePrice).Info("Gasprice oracle is ignoring threshold set")
 	}
 	return &Oracle{
 		backend:          backend,
@@ -109,6 +126,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		percentile:       percent,
 		maxHeaderHistory: params.MaxHeaderHistory,
 		maxBlockHistory:  params.MaxBlockHistory,
+		logger:           logger,
 	}
 }
 

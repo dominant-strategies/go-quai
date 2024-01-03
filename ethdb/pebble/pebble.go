@@ -31,7 +31,7 @@ import (
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/log"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -55,7 +55,7 @@ type Database struct {
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 	closed   bool            // keep track of whether we're Closed
 
-	log log.Logger // Contextual logger tracking the database path
+	logger *logrus.Logger // Contextual logger tracking the database path
 
 	activeComp          int           // Current number of active compactions
 	compStartTime       time.Time     // The start time of the earliest currently-active compaction
@@ -99,7 +99,7 @@ func (d *Database) onWriteStallEnd() {
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, logger *logrus.Logger) (*Database, error) {
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -107,7 +107,10 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	if handles < minHandles {
 		handles = minHandles
 	}
-	log.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
+	logger.WithFields(logrus.Fields{
+		"cache":   common.StorageSize(cache * 1024 * 1024),
+		"handles": handles,
+	}).Info("Allocating cache and file handles")
 
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
@@ -124,6 +127,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db := &Database{
 		fn:       file,
 		quitChan: make(chan chan error),
+		logger:   logger,
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -194,7 +198,7 @@ func (d *Database) Close() error {
 		errc := make(chan error)
 		d.quitChan <- errc
 		if err := <-errc; err != nil {
-			d.log.Error("Metrics collection failed", "err", err)
+			d.logger.WithField("err", err).Error("Metrics collection failed")
 		}
 		d.quitChan = nil
 	}

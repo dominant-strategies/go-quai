@@ -33,7 +33,7 @@ func init() {
 func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	// set logger inmediately after parsing cobra flags
 	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
-	log.ConfigureLogger(log.WithLevel(logLevel))
+	log.SetGlobalLogger("", logLevel)
 	// set config path to read config file
 	configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
 	viper.SetConfigFile(configDir + constants.CONFIG_FILE_NAME)
@@ -58,12 +58,11 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	if saveConfigFile {
 		err := utils.SaveConfig()
 		if err != nil {
-			log.Errorf("error saving config file: %s . Skipping...", err)
+			log.WithField("error", err).Error("error saving config file. Skipping...")
 		} else {
-			log.Debugf("config file saved successfully")
+			log.Debug("config file saved successfully")
 		}
 	}
-
-	log.Tracef("config options loaded: %+v", viper.AllSettings())
+	log.WithField("options", viper.AllSettings()).Debug("config options loaded")
 	return nil
 }

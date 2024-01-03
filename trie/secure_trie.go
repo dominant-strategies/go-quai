@@ -17,8 +17,6 @@
 package trie
 
 import (
-	"fmt"
-
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -67,7 +65,7 @@ func NewSecure(root common.Hash, db *Database) (*SecureTrie, error) {
 func (t *SecureTrie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.WithField("err", err).Error("Unhandled trie error")
 	}
 	return res
 }
@@ -93,7 +91,7 @@ func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
 // stored in the trie.
 func (t *SecureTrie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.WithField("err", err).Error("Unhandled trie error")
 	}
 }
 
@@ -118,7 +116,7 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 // Delete removes any existing value for key from the trie.
 func (t *SecureTrie) Delete(key []byte) {
 	if err := t.TryDelete(key); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.WithField("err", err).Error("Unhandled trie error")
 	}
 }
 

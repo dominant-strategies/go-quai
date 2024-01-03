@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/sirupsen/logrus"
 )
 
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction
@@ -47,7 +48,11 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	// Finally try database v3 tx lookup format
 	var entry LegacyTxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
-		log.Error("Invalid transaction lookup entry RLP", "hash", hash, "blob", data, "err", err)
+		log.WithFields(logrus.Fields{
+			"hash": hash,
+			"blob": data,
+			"err":  err,
+		}).Error("Invalid transaction lookup entry RLP")
 		return nil
 	}
 	return &entry.BlockIndex
@@ -57,7 +62,7 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 // enabling hash based transaction and receipt lookups.
 func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, numberBytes []byte) {
 	if err := db.Put(txLookupKey(hash), numberBytes); err != nil {
-		log.Fatal("Failed to store transaction lookup entry", "err", err)
+		log.WithField("err", err).Fatal("Failed to store transaction lookup entry")
 	}
 }
 
@@ -82,7 +87,7 @@ func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block, no
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
 func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(txLookupKey(hash)); err != nil {
-		log.Fatal("Failed to delete transaction lookup entry", "err", err)
+		log.WithField("err", err).Fatal("Failed to delete transaction lookup entry")
 	}
 }
 
@@ -106,7 +111,10 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	}
 	body := ReadBody(db, blockHash, *blockNumber)
 	if body == nil {
-		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
+		log.WithFields(logrus.Fields{
+			"number": blockNumber,
+			"hash":   blockHash,
+		}).Error("Transaction referenced missing")
 		return nil, common.Hash{}, 0, 0
 	}
 	for txIndex, tx := range body.Transactions {
@@ -114,7 +122,11 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 			return tx, blockHash, *blockNumber, uint64(txIndex)
 		}
 	}
-	log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
+	log.WithFields(logrus.Fields{
+		"number": *blockNumber,
+		"hash":   blockHash,
+		"txhash": hash,
+	}).Error("Transaction not found")
 	return nil, common.Hash{}, 0, 0
 }
 
@@ -137,7 +149,11 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 			return receipt, blockHash, *blockNumber, uint64(receiptIndex)
 		}
 	}
-	log.Error("Receipt not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
+	log.WithFields(logrus.Fields{
+		"number": *blockNumber,
+		"hash":   blockHash,
+		"txhash": hash,
+	}).Error("Receipt not found")
 	return nil, common.Hash{}, 0, 0
 }
 
@@ -151,7 +167,7 @@ func ReadBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head commo
 // section and bit index.
 func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head common.Hash, bits []byte) {
 	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
-		log.Fatal("Failed to store bloom bits", "err", err)
+		log.WithField("err", err).Fatal("Failed to store bloom bits")
 	}
 }
 
@@ -172,6 +188,6 @@ func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
 		db.Delete(it.Key())
 	}
 	if it.Error() != nil {
-		log.Fatal("Failed to delete bloom bits", "err", it.Error())
+		log.WithField("err", it.Error()).Fatal("Failed to delete bloom bits")
 	}
 }

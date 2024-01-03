@@ -31,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/bitutil"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -177,7 +178,10 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 			case <-done:
 				return
 			case <-time.After(3 * time.Second):
-				log.Info("Generating ethash verification cache", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/4, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.WithFields(logrus.Fields{
+					"percentage": uint64(atomic.LoadUint32(&progress) * 100 / uint32(rows) / 4),
+					"elapsed":    common.PrettyDuration(time.Since(start)),
+				}).Info("Generating ethash verification cache")
 			}
 		}
 	}()
@@ -230,7 +234,10 @@ func generateCDag(cDag, cache []uint32, epoch uint64) {
 	}
 
 	elapsed := time.Since(start)
-	log.Debug("Generated progpow cDag", "elapsed", common.PrettyDuration(elapsed), "epoch", epoch)
+	log.WithFields(logrus.Fields{
+		"elapsed": common.PrettyDuration(elapsed),
+		"epoch":   epoch,
+	}).Debug("Generated progpow cDag")
 }
 
 // swap changes the byte order of the buffer assuming a uint32 representation.
@@ -343,7 +350,10 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 				copy(dataset[index*hashBytes:], item)
 
 				if status := atomic.AddUint32(&progress, 1); status%percent == 0 {
-					log.Info("Generating DAG in progress", "percentage", uint64(status*100)/(size/hashBytes), "elapsed", common.PrettyDuration(time.Since(start)))
+					log.WithFields(logrus.Fields{
+						"percentage": uint64(status * 100 / uint32(size/hashBytes)),
+						"elapsed":    common.PrettyDuration(time.Since(start)),
+					}).Info("Generating DAG in progress")
 				}
 			}
 		}(i)

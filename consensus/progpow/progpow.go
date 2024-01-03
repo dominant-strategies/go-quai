@@ -20,6 +20,7 @@ import (
 	"github.com/dominant-strategies/go-quai/rpc"
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/hashicorp/golang-lru/simplelru"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -32,13 +33,6 @@ var (
 )
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
-
-func init() {
-	sharedConfig := Config{
-		PowMode: ModeNormal,
-	}
-	sharedProgpow = New(sharedConfig, nil, false)
-}
 
 // isLittleEndian returns whether the local system is running in little or big
 // endian byte order.
@@ -186,23 +180,29 @@ type Progpow struct {
 
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
+
+	logger *logrus.Logger
 }
 
 // New creates a full sized progpow PoW scheme and starts a background thread for
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
-func New(config Config, notify []string, noverify bool) *Progpow {
+func New(config Config, notify []string, noverify bool, logger *logrus.Logger) *Progpow {
 	if config.CachesInMem <= 0 {
-		log.Warn("One ethash cache must always be in memory", "requested", config.CachesInMem)
+		logger.WithField("requested", config.CachesInMem).Warn("Invalid ethash caches in memory, defaulting to 1")
 		config.CachesInMem = 1
 	}
 	if config.CacheDir != "" && config.CachesOnDisk > 0 {
-		log.Info("Disk storage enabled for ethash caches", "dir", config.CacheDir, "count", config.CachesOnDisk)
+		logger.WithFields(logrus.Fields{
+			"dir":   config.CacheDir,
+			"count": config.CachesOnDisk,
+		}).Info("Disk storage enabled for ethash caches")
 	}
 	progpow := &Progpow{
 		config: config,
-		caches: newlru("cache", config.CachesInMem, newCache),
+		caches: newlru("cache", config.CachesInMem, newCache, logger),
 		update: make(chan struct{}),
+		logger: logger,
 	}
 	if config.PowMode == ModeShared {
 		progpow.shared = sharedProgpow
@@ -214,7 +214,7 @@ func New(config Config, notify []string, noverify bool) *Progpow {
 // NewTester creates a small sized progpow PoW scheme useful only for testing
 // purposes.
 func NewTester(notify []string, noverify bool) *Progpow {
-	return New(Config{PowMode: ModeTest}, notify, noverify)
+	return New(Config{PowMode: ModeTest}, notify, noverify, log.NewLogger("nodelogs/test-progpow.log", "info"))
 }
 
 // NewFaker creates a progpow consensus engine with a fake PoW scheme that accepts
@@ -291,18 +291,20 @@ type lru struct {
 	cache      *simplelru.LRU
 	future     uint64
 	futureItem interface{}
+
+	logger *logrus.Logger
 }
 
 // newlru create a new least-recently-used cache for either the verification caches
 // or the mining datasets.
-func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru {
+func newlru(what string, maxItems int, new func(epoch uint64) interface{}, logger *logrus.Logger) *lru {
 	if maxItems <= 0 {
 		maxItems = 1
 	}
 	cache, _ := simplelru.NewLRU(maxItems, func(key, value interface{}) {
-		log.Trace("Evicted ethash "+what, "epoch", key)
+		logger.WithField("epoch", key).Trace("Evicted ethash " + what)
 	})
-	return &lru{what: what, new: new, cache: cache}
+	return &lru{what: what, new: new, cache: cache, logger: logger}
 }
 
 // get retrieves or creates an item for the given epoch. The first return value is always
@@ -318,14 +320,14 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 		if lru.future > 0 && lru.future == epoch {
 			item = lru.futureItem
 		} else {
-			log.Trace("Requiring new ethash "+lru.what, "epoch", epoch)
+			lru.logger.WithField("epoch", epoch).Trace("Requiring new ethash " + lru.what)
 			item = lru.new(epoch)
 		}
 		lru.cache.Add(epoch, item)
 	}
 	// Update the 'future item' if epoch is larger than previously seen.
 	if epoch < maxEpoch-1 && lru.future < epoch+1 {
-		log.Trace("Requiring new future ethash "+lru.what, "epoch", epoch+1)
+		lru.logger.WithField("epoch", epoch+1).Trace("Requiring new future ethash " + lru.what)
 		future = lru.new(epoch + 1)
 		lru.future = epoch + 1
 		lru.futureItem = future
@@ -350,7 +352,7 @@ func newCache(epoch uint64) interface{} {
 }
 
 // generate ensures that the cache content is generated before use.
-func (c *cache) generate(dir string, limit int, lock bool, test bool) {
+func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *logrus.Logger) {
 	c.once.Do(func() {
 		size := cacheSize(c.epoch*epochLength + 1)
 		seed := seedHash(c.epoch*epochLength + 1)
@@ -380,17 +382,17 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 		var err error
 		c.dump, c.mmap, c.cache, err = memoryMap(path, lock)
 		if err == nil {
-			log.Debug("Loaded old ethash cache from disk")
+			logger.Debug("Loaded old ethash cache from disk")
 			c.cDag = make([]uint32, progpowCacheWords)
 			generateCDag(c.cDag, c.cache, c.epoch)
 			return
 		}
-		log.Debug("Failed to load old ethash cache", "err", err)
+		logger.WithField("err", err).Debug("Failed to load old ethash cache from disk")
 
 		// No previous cache available, create a new cache file to fill
 		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, lock, func(buffer []uint32) { generateCache(buffer, c.epoch, seed) })
 		if err != nil {
-			log.Error("Failed to generate mapped ethash cache", "err", err)
+			logger.WithField("err", err).Error("Failed to generate mapped ethash cache")
 
 			c.cache = make([]uint32, size/4)
 			generateCache(c.cache, c.epoch, seed)
@@ -424,12 +426,12 @@ func (progpow *Progpow) cache(block uint64) *cache {
 	current := currentI.(*cache)
 
 	// Wait for generation finish.
-	current.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == ModeTest)
+	current.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == ModeTest, progpow.logger)
 
 	// If we need a new future cache, now's a good time to regenerate it.
 	if futureI != nil {
 		future := futureI.(*cache)
-		go future.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == ModeTest)
+		go future.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == ModeTest, progpow.logger)
 	}
 	return current
 }

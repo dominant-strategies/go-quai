@@ -6,7 +6,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
@@ -37,18 +36,10 @@ func WithLevel(level string) Options {
 			lw.entry.Logger.SetLevel(l)
 		}
 		formatter := &logrus.TextFormatter{
-			FullTimestamp:          false,
-			DisableLevelTruncation: true,
-			ForceColors:            true,
-			PadLevelText:           false,
-			DisableColors:          false,
-		}
-
-		if l == logrus.DebugLevel || l == logrus.TraceLevel {
-			formatter.TimestampFormat = time.RFC3339
-			formatter.FullTimestamp = true
-			formatter.CallerPrettyfier = callerPrettyfier
-			lw.entry.Logger.SetReportCaller(true)
+			ForceColors:     true,
+			PadLevelText:    true,
+			FullTimestamp:   true,
+			TimestampFormat: "01-02|15:04:05.000",
 		}
 		lw.entry.Logger.SetFormatter(formatter)
 	}
@@ -71,10 +62,10 @@ func WithOutput(outputs ...io.Writer) Options {
 				hook := FileLogHook{
 					Writer: v,
 					Formatter: &logrus.TextFormatter{
-						TimestampFormat:  time.RFC3339,
-						CallerPrettyfier: callerPrettyfier,
-						DisableTimestamp: false,
-						FullTimestamp:    true,
+						ForceColors:     true,
+						PadLevelText:    true,
+						FullTimestamp:   true,
+						TimestampFormat: "01-02|15:04:05.000",
 					},
 				}
 				lw.entry.Logger.AddHook(&hook)

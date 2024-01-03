@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/sirupsen/logrus"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/shirou/gopsutil/cpu"
@@ -322,7 +323,7 @@ func (s *Service) Stop() error {
 func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Error("Stats process crashed", "error", r)
+			log.WithField("err", r).Error("Stats process crashed")
 			go s.loopBlocks(chainHeadCh)
 		}
 	}()
@@ -379,7 +380,7 @@ func (s *Service) loopSender(urlMap map[string]string) {
 				var err error
 				authJwt, err = s.login2(urlMap["login"])
 				if err != nil {
-					log.Warn("Stats login failed", "err", err)
+					log.WithField("err", err).Warn("Stats login failed")
 					errTimer.Reset(10 * time.Second)
 					continue
 				}
@@ -394,25 +395,25 @@ func (s *Service) loopSender(urlMap map[string]string) {
 					continue
 				case "nodeStats":
 					if errs[key] = s.reportNodeStats(url, 0, authJwt); errs[key] != nil {
-						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
 				case "blockTransactionStats":
 					if errs[key] = s.sendTransactionStats(url, authJwt); errs[key] != nil {
-						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
 				case "blockDetailStats":
 					if errs[key] = s.sendDetailStats(url, authJwt); errs[key] != nil {
-						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
 				case "blockAppendTime":
 					if errs[key] = s.sendAppendTimeStats(url, authJwt); errs[key] != nil {
-						log.Warn("Initial stats report failed for "+key, "err", errs[key])
+						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
@@ -434,7 +435,7 @@ func (s *Service) loopSender(urlMap map[string]string) {
 					nodeStatsMod ^= 1
 					if err = s.reportNodeStats(urlMap["nodeStats"], nodeStatsMod, authJwt); err != nil {
 						noErrs = false
-						log.Warn("nodeStats full stats report failed", "err", err)
+						log.WithField("err", err).Warn("nodeStats full stats report failed")
 					}
 				case <-s.statsReadyCh:
 					if url, ok := urlMap["blockTransactionStats"]; ok {
@@ -466,7 +467,12 @@ func (s *Service) initializeURLMap() map[string]string {
 
 func (s *Service) handleBlock(block *types.Block) {
 	// Cache Block
-	log.Trace("Handling block", "detailsQueueSize", s.detailStatsQueue.Size(), "appendTimeQueueSize", s.appendTimeStatsQueue.Size(), "transactionQueueSize", s.transactionStatsQueue.Size(), "blockNumber", block.NumberU64(s.backend.NodeCtx()))
+	log.WithFields(logrus.Fields{
+		"detailsQueueSize":     s.detailStatsQueue.Size(),
+		"appendTimeQueueSize":  s.appendTimeStatsQueue.Size(),
+		"transactionQueueSize": s.transactionStatsQueue.Size(),
+		"blockNumber":          block.NumberU64(s.backend.NodeCtx()),
+	}).Trace("Handling block")
 
 	s.cacheBlock(block)
 
@@ -508,19 +514,17 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 		return nil
 	}
 
-	log.Trace("Quai Stats Instance Dir", "path", s.instanceDir+"/../..")
-
 	// Don't send if dirSize < 1
 	// Get disk usage (as a percentage)
 	diskUsage, err := dirSize(s.instanceDir + "/../..")
 	if err != nil {
-		log.Warn("Error calculating directory sizes:", "error", err)
+		log.WithField("err", err).Warn("Error calculating directory sizes")
 		diskUsage = c_statsErrorValue
 	}
 
 	diskSize, err := diskTotalSize()
 	if err != nil {
-		log.Warn("Error calculating disk size:", "error", err)
+		log.WithField("err", err).Warn("Error calculating disk size")
 		diskUsage = c_statsErrorValue
 	}
 
@@ -534,7 +538,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	// Usage in your main function
 	ramUsage, err := getQuaiRAMUsage()
 	if err != nil {
-		log.Warn("Error getting Quai RAM usage:", "error", err)
+		log.WithField("err", err).Warn("Error getting Quai RAM usage")
 		return err
 	}
 	var ramUsagePercent, ramFreePercent, ramAvailablePercent float64
@@ -543,14 +547,14 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 		ramFreePercent = float64(vmStat.Free) / float64(vmStat.Total)
 		ramAvailablePercent = float64(vmStat.Available) / float64(vmStat.Total)
 	} else {
-		log.Warn("Error getting RAM stats:", "error", err)
+		log.WithField("err", err).Warn("Error getting RAM stats")
 		return err
 	}
 
 	// Get CPU usage
 	cpuUsageQuai, err := getQuaiCPUUsage()
 	if err != nil {
-		log.Warn("Error getting Quai CPU percent usage:", "error", err)
+		log.WithField("err", err).Warn("Error getting Quai CPU usage")
 		return err
 	} else {
 		cpuUsageQuai /= float64(100)
@@ -560,7 +564,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	if cpuUsageTotal, err := cpu.Percent(0, false); err == nil {
 		cpuFree = 1 - float32(cpuUsageTotal[0]/float64(100))
 	} else {
-		log.Warn("Error getting CPU free:", "error", err)
+		log.WithField("err", err).Warn("Error getting CPU free")
 		return err
 	}
 
@@ -587,7 +591,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 			}
 		}
 	} else {
-		log.Warn("Error getting MAC address:", err)
+		log.WithField("err", err).Warn("Error getting MAC address")
 		return err
 	}
 
@@ -597,9 +601,6 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 		hash := sha256.Sum256([]byte(macAddress))
 		hashedMAC = hex.EncodeToString(hash[:])
 	}
-
-	// Assemble the new node stats
-	log.Trace("Sending node details to quaistats")
 
 	document := map[string]interface{}{
 		"id": s.node,
@@ -624,14 +625,14 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 
 	jsonData, err := json.Marshal(document)
 	if err != nil {
-		log.Error("Failed to marshal node stats", "err", err)
+		log.WithField("err", err).Error("Failed to marshal node stats")
 		return err
 	}
 
 	// Create a new HTTP request
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Error("Failed to create new HTTP request", "err", err)
+		log.WithField("err", err).Error("Failed to create new HTTP request")
 		return err
 	}
 
@@ -642,7 +643,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	// Send the request using the default HTTP client
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Error("Failed to send node stats", "err", err)
+		log.WithField("err", err).Error("Failed to send node stats")
 		return err
 	}
 	defer resp.Body.Close()
@@ -650,13 +651,15 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	if resp.StatusCode != http.StatusOK {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Error("Failed to response body", "err", err)
+			log.WithField("err", err).Error("Failed to read response body")
 			return err
 		}
-		log.Error("Received non-OK response", "status", resp.Status, "body", string(body))
+		log.WithFields(logrus.Fields{
+			"status": resp.Status,
+			"body":   string(body),
+		}).Error("Received non-OK response")
 		return errors.New("Received non-OK response: " + resp.Status)
 	}
-	log.Trace("Successfully sent node stats to quaistats")
 	return nil
 }
 
@@ -680,7 +683,7 @@ func (s *Service) sendTransactionStats(url string, authJwt string) error {
 
 	err := s.report(url, "blockTransactionStats", statsBatch, authJwt)
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
-		log.Warn("Failed to send transaction stats, requeuing stats", "err", err)
+		log.WithField("err", err).Warn("Failed to send transaction stats, requeuing stats")
 		// Re-enqueue the failed stats from end to beginning
 		tempSlice := make([]interface{}, len(statsBatch))
 		for i, item := range statsBatch {
@@ -689,7 +692,7 @@ func (s *Service) sendTransactionStats(url string, authJwt string) error {
 		s.transactionStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
-		log.Warn("Failed to send transaction stats", "err", err)
+		log.WithField("err", err).Warn("Failed to send transaction stats")
 		return err
 	}
 	return nil
@@ -715,7 +718,7 @@ func (s *Service) sendDetailStats(url string, authJwt string) error {
 
 	err := s.report(url, "blockDetailStats", statsBatch, authJwt)
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
-		log.Warn("Failed to send detail stats, requeuing stats", "err", err)
+		log.WithField("err", err).Warn("Failed to send detail stats, requeuing stats")
 		// Re-enqueue the failed stats from end to beginning
 		tempSlice := make([]interface{}, len(statsBatch))
 		for i, item := range statsBatch {
@@ -724,7 +727,7 @@ func (s *Service) sendDetailStats(url string, authJwt string) error {
 		s.detailStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
-		log.Warn("Failed to send detail stats", "err", err)
+		log.WithField("err", err).Warn("Failed to send detail stats")
 		return err
 	}
 	return nil
@@ -751,7 +754,7 @@ func (s *Service) sendAppendTimeStats(url string, authJwt string) error {
 
 	err := s.report(url, "blockAppendTime", statsBatch, authJwt)
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
-		log.Warn("Failed to send append time stats, requeuing stats", "err", err)
+		log.WithField("err", err).Warn("Failed to send append time stats, requeuing stats")
 		// Re-enqueue the failed stats from end to beginning
 		tempSlice := make([]interface{}, len(statsBatch))
 		for i, item := range statsBatch {
@@ -760,7 +763,7 @@ func (s *Service) sendAppendTimeStats(url string, authJwt string) error {
 		s.appendTimeStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
-		log.Warn("Failed to send append time stats", "err", err)
+		log.WithField("err", err).Warn("Failed to send append time stats")
 		return err
 	}
 	return nil
@@ -777,7 +780,7 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 		return errors.New(dataType + " stats are nil")
 	}
 
-	log.Trace("Sending " + dataType + " stats to quaistats")
+	log.WithField("datatype", dataType).Trace("Sending stats to quaistats")
 
 	document := map[string]interface{}{
 		"id":     s.node,
@@ -786,13 +789,13 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 
 	jsonData, err := json.Marshal(document)
 	if err != nil {
-		log.Error("Failed to marshal "+dataType+" stats", "err", err)
+		log.WithField("err", err).Error("Failed to marshal " + dataType + " stats")
 		return err
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Error("Failed to create new request for "+dataType+" stats", "err", err)
+		log.WithField("err", err).Error("Failed to create new request for " + dataType + " stats")
 		return err
 	}
 
@@ -803,7 +806,7 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Error("Failed to send "+dataType+" stats", "err", err)
+		log.WithField("err", err).Error("Failed to send " + dataType + " stats")
 		return err
 	}
 	defer resp.Body.Close()
@@ -811,13 +814,16 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 	if resp.StatusCode != http.StatusOK {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Error("Failed to response body", "err", err)
+			log.WithField("err", err).Error("Failed to read response body")
 			return err
 		}
-		log.Error("Received non-OK response", "status", resp.Status, "body", string(body))
+		log.WithFields(logrus.Fields{
+			"status": resp.Status,
+			"body":   string(body),
+		}).Error("Received non-OK response")
 		return errors.New("Received non-OK response: " + resp.Status)
 	}
-	log.Trace("Successfully sent " + dataType + " stats to quaistats")
+	log.WithField("datatype", dataType).Trace("Successfully sent stats to quaistats")
 	return nil
 }
 
@@ -908,7 +914,7 @@ func (s *Service) login2(url string) (string, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Error("Failed to response body", "err", err)
+		log.WithField("err", err).Error("Failed to read response body")
 		return "", err
 	}
 
@@ -1057,7 +1063,7 @@ func (s *Service) calculateTPS(block *types.Block) *tps {
 			// If the parent block is not cached, get it from the full node backend and cache it
 			fullBlock, fullBlockOk := fullNodeBackend.BlockByHash(context.Background(), parentHash)
 			if fullBlockOk != nil {
-				log.Error("Error getting block hash", "hash", parentHash.String())
+				log.WithField("hash", parentHash.String()).Error("Error getting block from full node backend")
 				return &tps{}
 			}
 			currentBlock = s.cacheBlock(fullBlock)
@@ -1114,7 +1120,7 @@ func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendT
 	header := block.Header()
 	appendTime := block.GetAppendTime()
 
-	log.Info("Raw Block Append Time", "appendTime", appendTime.Microseconds())
+	log.WithField("appendTime", appendTime.Microseconds()).Info("Raw Block Append Time")
 
 	// Assemble and return the block stats
 	return &blockAppendTime{
@@ -1188,13 +1194,13 @@ func getQuaiRAMUsage() (uint64, error) {
 	var totalRam uint64
 
 	// Debug: log number of processes
-	log.Trace("Number of processes", "number", len(processes))
+	log.WithField("number", len(processes)).Trace("Number of processes")
 
 	for _, p := range processes {
 		cmdline, err := p.Cmdline()
 		if err != nil {
 			// Debug: log error
-			log.Trace("Error getting process cmdline", "error", err)
+			log.WithField("err", err).Trace("Error getting process cmdline")
 			continue
 		}
 

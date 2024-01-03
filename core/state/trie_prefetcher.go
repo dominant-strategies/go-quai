@@ -21,6 +21,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -224,7 +225,10 @@ func (sf *subfetcher) loop() {
 	// Start by opening the trie and stop processing if it fails
 	trie, err := sf.db.OpenTrie(sf.root)
 	if err != nil {
-		log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
+		log.WithFields(logrus.Fields{
+			"root": sf.root,
+			"err":  err,
+		}).Warn("Trie prefetcher failed opening trie")
 		return
 	}
 	sf.trie = trie

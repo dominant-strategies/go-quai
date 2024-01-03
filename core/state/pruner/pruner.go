@@ -37,6 +37,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -82,10 +83,11 @@ type Pruner struct {
 	trieCachePath string
 	headHeader    *types.Header
 	snaptree      *snapshot.Tree
+	logger        *logrus.Logger
 }
 
 // NewPruner creates the pruner instance.
-func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64) (*Pruner, error) {
+func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64, logger *logrus.Logger) (*Pruner, error) {
 	headBlock := rawdb.ReadHeadBlock(db)
 	if headBlock == nil {
 		return nil, errors.New("Failed to load head block")
@@ -96,7 +98,10 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 	}
 	// Sanitize the bloom filter size if it's too small.
 	if bloomSize < 256 {
-		log.Warn("Sanitizing bloomfilter size", "provided(MB)", bloomSize, "updated(MB)", 256)
+		logger.WithFields(logrus.Fields{
+			"provided": bloomSize,
+			"updated":  256,
+		}).Warn("Sanitizing bloomfilter size (MB)")
 		bloomSize = 256
 	}
 	stateBloom, err := newStateBloomWithSize(bloomSize)
@@ -110,6 +115,7 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 		trieCachePath: trieCachePath,
 		headHeader:    headBlock.Header(),
 		snaptree:      snaptree,
+		logger:        logger,
 	}, nil
 }
 
@@ -143,7 +149,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				checkKey = codeKey
 			}
 			if _, exist := middleStateRoots[common.BytesToHash(checkKey)]; exist {
-				log.Debug("Forcibly delete the middle state roots", "hash", common.BytesToHash(checkKey))
+				log.WithField("hash", common.BytesToHash(checkKey)).Debug("Forcibly delete the middle state roots")
 			} else {
 				if ok, err := stateBloom.Contain(checkKey); err != nil {
 					return err
@@ -164,8 +170,12 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				eta = time.Duration(left/speed) * time.Millisecond
 			}
 			if time.Since(logged) > 8*time.Second {
-				log.Info("Pruning state data", "nodes", count, "size", size,
-					"elapsed", common.PrettyDuration(time.Since(pstart)), "eta", common.PrettyDuration(eta))
+				log.WithFields(logrus.Fields{
+					"nodes":   count,
+					"size":    size,
+					"elapsed": common.PrettyDuration(time.Since(pstart)),
+					"eta":     common.PrettyDuration(eta),
+				}).Info("Pruning state data")
 				logged = time.Now()
 			}
 			// Recreate the iterator after every batch commit in order
@@ -184,7 +194,11 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		batch.Reset()
 	}
 	iter.Release()
-	log.Info("Pruned state data", "nodes", count, "size", size, "elapsed", common.PrettyDuration(time.Since(pstart)))
+	log.WithFields(logrus.Fields{
+		"nodes":   count,
+		"size":    size,
+		"elapsed": common.PrettyDuration(time.Since(pstart)),
+	}).Info("Pruned state data")
 
 	// Pruning is done, now drop the "useless" layers from the snapshot.
 	// Firstly, flushing the target layer into the disk. After that all
@@ -217,15 +231,21 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			if b == 0xf0 {
 				end = nil
 			}
-			log.Info("Compacting database", "range", fmt.Sprintf("%#x-%#x", start, end), "elapsed", common.PrettyDuration(time.Since(cstart)))
+			log.WithFields(logrus.Fields{
+				"range":   fmt.Sprintf("%#x-%#x", start, end),
+				"elapsed": common.PrettyDuration(time.Since(cstart)),
+			}).Info("Compacting database")
 			if err := maindb.Compact(start, end); err != nil {
-				log.Error("Database compaction failed", "error", err)
+				log.WithField("err", err).Error("Database compaction failed")
 				return err
 			}
 		}
-		log.Info("Database compaction finished", "elapsed", common.PrettyDuration(time.Since(cstart)))
+		log.WithField("elapsed", common.PrettyDuration(time.Since(cstart))).Info("Database compaction finished")
 	}
-	log.Info("State pruning successful", "pruned", size, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.WithFields(logrus.Fields{
+		"pruned":  size,
+		"elapsed": common.PrettyDuration(time.Since(start)),
+	}).Info("State pruning successful")
 	return nil
 }
 
@@ -283,7 +303,10 @@ func (p *Pruner) Prune(root common.Hash) error {
 			if blob := rawdb.ReadTrieNode(p.db, layers[i].Root()); len(blob) != 0 {
 				root = layers[i].Root()
 				found = true
-				log.Info("Selecting middle-layer as the pruning target", "root", root, "depth", i)
+				p.logger.WithFields(logrus.Fields{
+					"root":  root,
+					"depth": i,
+				}).Info("Selecting middle-layer as the pruning target")
 				break
 			}
 		}
@@ -295,9 +318,12 @@ func (p *Pruner) Prune(root common.Hash) error {
 		}
 	} else {
 		if len(layers) > 0 {
-			log.Info("Selecting bottom-most difflayer as the pruning target", "root", root, "height", p.headHeader.NumberU64(common.ZONE_CTX)-127)
+			p.logger.WithFields(logrus.Fields{
+				"root":   root,
+				"height": p.headHeader.NumberU64(common.ZONE_CTX) - 127,
+			}).Info("Selecting bottom-most difflayer as the pruning target")
 		} else {
-			log.Info("Selecting user-specified state as the pruning target", "root", root)
+			p.logger.WithField("root", root).Info("Selecting user-specified state as the pruning target")
 		}
 	}
 	// Before start the pruning, delete the clean trie cache first.
@@ -328,11 +354,11 @@ func (p *Pruner) Prune(root common.Hash) error {
 	}
 	filterName := bloomFilterName(p.datadir, root)
 
-	log.Info("Writing state bloom to disk", "name", filterName)
+	p.logger.WithField("name", filterName).Info("Writing state bloom to disk")
 	if err := p.stateBloom.Commit(filterName, filterName+stateBloomFileTempSuffix); err != nil {
 		return err
 	}
-	log.Info("State bloom filter committed", "name", filterName)
+	p.logger.WithField("name", filterName).Info("State bloom filter committed")
 	return prune(p.snaptree, root, p.db, p.stateBloom, filterName, middleRoots, start)
 }
 
@@ -371,7 +397,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	if err != nil {
 		return err
 	}
-	log.Info("Loaded state bloom filter", "path", stateBloomPath)
+	log.WithField("path", stateBloomPath).Info("Loaded state bloom filter")
 
 	// Before start the pruning, delete the clean trie cache first.
 	// It's necessary otherwise in the next restart we will hit the
@@ -503,5 +529,5 @@ func deleteCleanTrieCache(path string) {
 		return
 	}
 	os.RemoveAll(path)
-	log.Info("Deleted trie clean cache", "path", path)
+	log.WithField("path", path).Info("Deleted trie clean cache")
 }
