@@ -105,13 +105,6 @@ func (miner *Miner) StopMining() {
 	miner.Stop()
 }
 
-func (miner *Miner) Hashrate() uint64 {
-	if pow, ok := miner.engine.(consensus.PoW); ok {
-		return uint64(pow.Hashrate())
-	}
-	return 0
-}
-
 func (miner *Miner) SetExtra(extra []byte) error {
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("extra exceeds max length. %d > %v", len(extra), params.MaximumExtraDataSize)

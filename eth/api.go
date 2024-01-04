@@ -60,11 +60,6 @@ func (api *PublicQuaiAPI) Coinbase() (common.Address, error) {
 	return api.Etherbase()
 }
 
-// Hashrate returns the POW hashrate
-func (api *PublicQuaiAPI) Hashrate() hexutil.Uint64 {
-	return hexutil.Uint64(api.e.Core().Hashrate())
-}
-
 // PublicMinerAPI provides an API to control the miner.
 // It offers only methods that operate on data that pose no security risk when it is publicly accessible.
 type PublicMinerAPI struct {

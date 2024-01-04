@@ -35,8 +35,6 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 			log.Fatal("Failed to store trie preimage", "err", err)
 		}
 	}
-	preimageCounter.Inc(int64(len(preimages)))
-	preimageHitCounter.Inc(int64(len(preimages)))
 }
 
 // ReadCode retrieves the contract code of the provided code hash.

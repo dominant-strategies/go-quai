@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -50,10 +49,6 @@ const (
 	// minHandles is the minimum number of files handles to allocate to the open
 	// database files.
 	minHandles = 16
-
-	// metricsGatheringInterval specifies the interval to retrieve leveldb database
-	// compaction, io and pause stats to report to the user.
-	metricsGatheringInterval = 3 * time.Second
 )
 
 // Database is a persistent key-value store. Apart from basic data storage
@@ -62,20 +57,6 @@ const (
 type Database struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
-
-	compTimeMeter       metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter       metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter      metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter    metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter     metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge       metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter       metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter      metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge        metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge     metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge  metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
-	manualMemAllocGauge metrics.Gauge // Gauge to track the amount of memory that has been manually allocated (not a part of runtime/GC)
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -131,22 +112,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 		log:      log.Log,
 		quitChan: make(chan chan error),
 	}
-	ldb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
-	ldb.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
-	ldb.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
-	ldb.diskSizeGauge = metrics.NewRegisteredGauge(namespace+"disk/size", nil)
-	ldb.diskReadMeter = metrics.NewRegisteredMeter(namespace+"disk/read", nil)
-	ldb.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
-	ldb.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
-	ldb.writeDelayNMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/counter", nil)
-	ldb.memCompGauge = metrics.NewRegisteredGauge(namespace+"compact/memory", nil)
-	ldb.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
-	ldb.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
-	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
-	ldb.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
-	// Start up the metrics gathering and return
-	go ldb.meter(metricsGatheringInterval)
 	return ldb, nil
 }
 
@@ -323,19 +289,6 @@ func (db *Database) meter(refresh time.Duration) {
 				compactions[i%2][idx] += value
 			}
 		}
-		// Update all the requested meters
-		if db.diskSizeGauge != nil {
-			db.diskSizeGauge.Update(int64(compactions[i%2][0] * 1024 * 1024))
-		}
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1000 * 1000 * 1000))
-		}
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
-		}
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((compactions[i%2][3] - compactions[(i-1)%2][3]) * 1024 * 1024))
-		}
 		// Retrieve the write delay statistic
 		writedelay, err := db.db.GetProperty("leveldb.writedelay")
 		if err != nil {
@@ -359,12 +312,6 @@ func (db *Database) meter(refresh time.Duration) {
 			db.log.Error("Failed to parse delay duration", "err", err)
 			merr = err
 			continue
-		}
-		if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(delayN - delaystats[0])
-		}
-		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
 		}
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
@@ -399,12 +346,6 @@ func (db *Database) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
-		}
-		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
-		}
 		iostats[0], iostats[1] = nRead, nWrite
 
 		compCount, err := db.db.GetProperty("leveldb.compcount")
@@ -425,10 +366,6 @@ func (db *Database) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		db.memCompGauge.Update(int64(memComp))
-		db.level0CompGauge.Update(int64(level0Comp))
-		db.nonlevel0CompGauge.Update(int64(nonLevel0Comp))
-		db.seekCompGauge.Update(int64(seekComp))
 
 		// Sleep a bit, then repeat the stats collection
 		select {

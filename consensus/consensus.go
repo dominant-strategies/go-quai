@@ -119,10 +119,6 @@ type Engine interface {
 	// consensus rules that happen at finalization (e.g. block rewards).
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, manifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error)
 
-	// Hashrate returns the measured rate of the search invocations
-	// per second over the last minute.
-	Hashrate() float64
-
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//
@@ -165,7 +161,4 @@ func DifficultyToTarget(difficulty *big.Int) *big.Int {
 // PoW is a consensus engine based on proof-of-work.
 type PoW interface {
 	Engine
-
-	// Hashrate returns the current mining hashrate of a PoW consensus engine.
-	Hashrate() float64
 }

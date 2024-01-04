@@ -10,7 +10,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -59,11 +58,10 @@ type Blake3pow struct {
 	config Config
 
 	// Mining related fields
-	rand     *rand.Rand    // Properly seeded random source for nonces
-	threads  int           // Number of threads to mine on if mining
-	update   chan struct{} // Notification channel to update mining parameters
-	hashrate metrics.Meter // Meter tracking the average hashrate
-	remote   *remoteSealer
+	rand    *rand.Rand    // Properly seeded random source for nonces
+	threads int           // Number of threads to mine on if mining
+	update  chan struct{} // Notification channel to update mining parameters
+	remote  *remoteSealer
 
 	// The fields below are hooks for testing
 	shared    *Blake3pow    // Shared PoW verifier to avoid cache regeneration
@@ -82,9 +80,8 @@ func New(config Config, notify []string, noverify bool) *Blake3pow {
 		config.Log = &log.Log
 	}
 	blake3pow := &Blake3pow{
-		config:   config,
-		update:   make(chan struct{}),
-		hashrate: metrics.NewMeterForced(),
+		config: config,
+		update: make(chan struct{}),
 	}
 	if config.PowMode == ModeShared {
 		blake3pow.shared = sharedBlake3pow
@@ -196,51 +193,6 @@ func (blake3pow *Blake3pow) SetThreads(threads int) {
 		default:
 		}
 	}
-}
-
-// Hashrate implements PoW, returning the measured rate of the search invocations
-// per second over the last minute.
-// Note the returned hashrate includes local hashrate, but also includes the total
-// hashrate of all remote miner.
-func (blake3pow *Blake3pow) Hashrate() float64 {
-	// Short circuit if we are run the blake3pow in normal/test mode.
-	if blake3pow.config.PowMode != ModeNormal && blake3pow.config.PowMode != ModeTest {
-		return blake3pow.hashrate.Rate1()
-	}
-	var res = make(chan uint64, 1)
-
-	select {
-	case blake3pow.remote.fetchRateCh <- res:
-	case <-blake3pow.remote.exitCh:
-		// Return local hashrate only if blake3pow is stopped.
-		return blake3pow.hashrate.Rate1()
-	}
-
-	// Gather total submitted hash rate of remote sealers.
-	return blake3pow.hashrate.Rate1() + float64(<-res)
-}
-
-// SubmitHashrate can be used for remote miners to submit their hash rate.
-// This enables the node to report the combined hash rate of all miners
-// which submit work through this node.
-//
-// It accepts the miner hash rate and an identifier which must be unique
-// between nodes.
-func (blake3pow *Blake3pow) SubmitHashrate(rate hexutil.Uint64, id common.Hash) bool {
-	if blake3pow.remote == nil {
-		return false
-	}
-
-	var done = make(chan struct{}, 1)
-	select {
-	case blake3pow.remote.submitRateCh <- &hashrate{done: done, rate: uint64(rate), id: id}:
-	case <-blake3pow.remote.exitCh:
-		return false
-	}
-
-	// Block until hash rate submitted successfully.
-	<-done
-	return true
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.

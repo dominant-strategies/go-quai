@@ -836,7 +836,6 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	}
 	log.Info("Exporting batch of blocks", "count", last-first+1)
 
-	start, reported := time.Now(), time.Now()
 	for nr := first; nr <= last; nr++ {
 		block := hc.GetBlockByNumber(nr)
 		if block == nil {
@@ -844,10 +843,6 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 		}
 		if err := block.EncodeRLP(w); err != nil {
 			return err
-		}
-		if time.Since(reported) >= statsReportLimit {
-			log.Info("Exporting blocks", "exported", block.NumberU64()-first, "elapsed", common.PrettyDuration(time.Since(start)))
-			reported = time.Now()
 		}
 	}
 	return nil

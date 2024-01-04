@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -449,10 +448,6 @@ func (s *StateDB) Suicide(addr common.InternalAddress) bool {
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Track the amount of time wasted on updating the account from the trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
-	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
 
@@ -475,10 +470,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(obj *stateObject) {
-	// Track the amount of time wasted on deleting the account from the trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
-	}
 	// Delete the account from the trie
 	addr := obj.Address()
 	if err := s.trie.TryDelete(addr[:]); err != nil {
@@ -511,9 +502,6 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 		err  error
 	)
 	if s.snap != nil {
-		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
-		}
 		var acc *snapshot.Account
 		if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil {
 			if acc == nil {
@@ -535,9 +523,6 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 	}
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.snap == nil || err != nil {
-		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
-		}
 		enc, err := s.trie.TryGet(addr.Bytes())
 		if err != nil {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
@@ -870,10 +855,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if len(s.stateObjectsPending) > 0 {
 		s.stateObjectsPending = make(map[common.InternalAddress]struct{})
 	}
-	// Track the amount of time wasted on hashing the account trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
-	}
 	return s.trie.Hash()
 }
 
@@ -925,10 +906,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 	}
 	// Write the account trie changes, measuing the amount of wasted time
-	var start time.Time
-	if metrics.EnabledExpensive {
-		start = time.Now()
-	}
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account Account
@@ -941,14 +918,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		return nil
 	})
-	if metrics.EnabledExpensive {
-		s.AccountCommits += time.Since(start)
-	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
-		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
-		}
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {

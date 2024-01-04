@@ -923,13 +923,6 @@ func (c *Core) Miner() *Miner {
 	return c.sl.Miner()
 }
 
-func (c *Core) Hashrate() uint64 {
-	if pow, ok := c.sl.engine.(consensus.PoW); ok {
-		return uint64(pow.Hashrate())
-	}
-	return 0
-}
-
 func (c *Core) SetRecommitInterval(interval time.Duration) {
 	c.sl.miner.SetRecommitInterval(interval)
 }

@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/metrics"
 )
 
 // The fields below define the low level database schema prefixing.
@@ -116,9 +115,6 @@ var (
 
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
 	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
-
-	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
-	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 )
 
 const (

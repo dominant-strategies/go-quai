@@ -163,8 +163,6 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, cal
 		if len(blob) > 0 {
 			return
 		}
-		// False positive, bump fault meter
-		bloomFaultMeter.Mark(1)
 	}
 	// Assemble the new sub-trie sync request
 	req := &request{
@@ -205,8 +203,6 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 		if blob := rawdb.ReadCodeWithPrefix(s.database, hash); len(blob) > 0 {
 			return
 		}
-		// False positive, bump fault meter
-		bloomFaultMeter.Mark(1)
 	}
 	// Assemble the new sub-trie sync request
 	req := &request{
@@ -424,8 +420,6 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 				if blob := rawdb.ReadTrieNode(s.database, hash); len(blob) > 0 {
 					continue
 				}
-				// False positive, bump fault meter
-				bloomFaultMeter.Mark(1)
 			}
 			// Locally unknown node, schedule for retrieval
 			requests = append(requests, &request{

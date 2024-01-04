@@ -41,7 +41,6 @@ func init() {
 	for _, flag := range utils.RPCFlags {
 		utils.CreateAndBindFlag(flag, startCmd)
 	}
-
 }
 
 func startCmdPreRun(cmd *cobra.Command, args []string) error {

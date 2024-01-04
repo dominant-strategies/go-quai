@@ -127,14 +127,12 @@ search:
 		select {
 		case <-abort:
 			// Mining terminated, update stats and abort
-			progpow.hashrate.Mark(attempts)
 			break search
 
 		default:
 			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
 			attempts++
 			if (attempts % (1 << 15)) == 0 {
-				progpow.hashrate.Mark(attempts)
 				attempts = 0
 			}
 			powLight := func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
