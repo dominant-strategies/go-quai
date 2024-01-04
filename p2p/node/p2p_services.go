@@ -13,10 +13,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Opens a stream to the given peer and requests a block for the given hash.
+// Opens a stream to the given peer and requests a block for the given hash and slice.
 //
 // If a block is not found, an error is returned
-func (p *P2PNode) requestBlockFromPeer(hash types.Hash, peerID peer.ID) (*types.Block, error) {
+func (p *P2PNode) requestBlockFromPeer(hash types.Hash, slice types.SliceID, peerID peer.ID) (*types.Block, error) {
 	// Open a stream to the peer using a specific protocol for block requests
 	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
 	if err != nil {
@@ -25,7 +25,7 @@ func (p *P2PNode) requestBlockFromPeer(hash types.Hash, peerID peer.ID) (*types.
 	defer stream.Close()
 
 	// create a block request protobuf message
-	blockReq := pb.CreateProtoBlockRequest(hash)
+	blockReq := pb.CreateProtoBlockRequest(hash, slice)
 
 	// Marshal the block request into a byte array
 	blockReqBytes, err := pb.MarshalProtoMessage(blockReq)

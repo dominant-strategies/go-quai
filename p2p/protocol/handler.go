@@ -46,11 +46,15 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 				// TODO: handle error
 				return
 			}
+			// get the sliceID from the block request
+			protoSlice := blockReq.SliceId
+			slice := pb.ConvertFromProtoSlice(protoSlice)
+		
 			// check if we have the block in our cache
-			block := node.GetBlock(hash)
+			block := node.GetBlock(hash, slice)
 			if block == nil {
 				// TODO: handle block not found
-				log.Warnf("block not found in cache")
+				log.Warnf("block not found")
 				return
 			}
 			// convert the block to a protocol buffer and send it back to the peer

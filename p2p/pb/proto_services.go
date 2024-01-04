@@ -66,9 +66,38 @@ func MarshalBlock(block *types.Block) ([]byte, error) {
 	return data, nil
 }
 
+// Converts a custom go SliceID type (types.SliceID) to a protocol buffer SliceID type (pb.SliceID)
+func convertToProtoSlice(slice types.SliceID) *SliceID {
+	sliceContext := &Context{
+		Location: slice.Context.Location,
+		Level:   slice.Context.Level,
+	}
+	return &SliceID{
+		Context: sliceContext,
+		Region:  slice.Region,
+		Zone:    slice.Zone,
+	}
+	
+}
+
+// Converts a protocol buffer SliceID type (pb.SliceID) to a custom go SliceID type (types.SliceID)
+func ConvertFromProtoSlice(pbSlice *SliceID) types.SliceID {
+	sliceContext := types.Context{
+		Location: pbSlice.Context.Location,
+		Level:   pbSlice.Context.Level,
+	}
+	return types.SliceID{
+		Context: sliceContext,
+		Region:  pbSlice.Region,
+		Zone:    pbSlice.Zone,
+	}
+}
+
 // Creates a BlockRequest protocol buffer message
-func CreateProtoBlockRequest(hash types.Hash) *BlockRequest {
+func CreateProtoBlockRequest(hash types.Hash, slice types.SliceID) *BlockRequest {
+	pbSlice := convertToProtoSlice(slice)
 	return &BlockRequest{
-		Hash: hex.EncodeToString(hash[:]),
+		Hash:  hex.EncodeToString(hash[:]),
+		SliceId: pbSlice,
 	}
 }

@@ -23,6 +23,16 @@ message QuaiProtocolMessage {
     bytes data = 2; // Encoded payload specific to the action
 }
 
+message Context {
+    string location = 1;
+    uint32 level = 2;
+}
+
+message SliceID {
+    Context context = 1;
+    uint32 region = 2;
+    uint32 zone = 3;
+}
 
 // Define a block structure
 message Block {
@@ -51,7 +61,8 @@ message Transaction {
 
 // Request and response messages for block and transaction queries
 message BlockRequest {
-    string hash = 1;
+    SliceID sliceId = 1;
+    string hash = 2;
 }
 
 message BlockResponse {

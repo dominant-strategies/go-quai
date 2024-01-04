@@ -121,7 +121,7 @@ func (p *P2PNode) RequestBlock(hash types.Hash, slice types.SliceID) chan *types
 		// 2. If not, query the topic peers for the block
 		peers := p.topics[slice][p2p.C_blockTopicName].ListPeers()
 		for _, peerID := range peers {
-			block, err := p.requestBlockFromPeer(hash, peerID)
+			block, err := p.requestBlockFromPeer(hash, slice, peerID)
 			if err == nil {
 				log.Debugf("Received block %s from peer %s", block.Hash, peerID)
 				// add the block to the cache
@@ -146,7 +146,7 @@ func (p *P2PNode) RequestBlock(hash types.Hash, slice types.SliceID) chan *types
 			// query the DHT for peers in the slice
 			peerChan := p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery)
 			for peerInfo := range peerChan {
-				block, err := p.requestBlockFromPeer(hash, peerInfo.ID)
+				block, err := p.requestBlockFromPeer(hash, slice, peerInfo.ID)
 				if err == nil {
 					log.Debugf("Received block %s from peer %s", block.Hash, peerInfo.ID)
 					p.blockCache.Add(hash, block)
@@ -210,11 +210,12 @@ func (p *P2PNode) StartGossipSub(ctx context.Context) error {
 	return nil
 }
 
-// Checks if the cache has a block with the given hash. If the block is not found, returns nil.
-func (p *P2PNode) GetBlock(hash types.Hash) *types.Block {
+// Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
+// Returns nil if the block is not found.
+func (p *P2PNode) GetBlock(hash types.Hash, slice types.SliceID) *types.Block {
 	block, ok := p.blockCache.Get(hash)
-	if !ok {
-		return nil
+	if ok {
+		return block
 	}
-	return block
+	return p.consensus.LookupBlock(hash, slice)
 }
