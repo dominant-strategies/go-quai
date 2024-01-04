@@ -171,7 +171,7 @@ func (q *StatsQueue) Enqueue(item interface{}) {
 	defer q.mutex.Unlock()
 
 	if len(q.data) >= c_maxQueueSize {
-		q.Dequeue()
+		q.dequeue()
 	}
 
 	q.data = append(q.data, item)
@@ -185,6 +185,10 @@ func (q *StatsQueue) Dequeue() interface{} {
 		return nil
 	}
 
+	return q.dequeue()
+}
+
+func (q *StatsQueue) dequeue() interface{} {
 	item := q.data[0]
 	q.data = q.data[1:]
 	return item
@@ -195,8 +199,7 @@ func (q *StatsQueue) EnqueueFront(item interface{}) {
 	defer q.mutex.Unlock()
 
 	if len(q.data) >= c_maxQueueSize {
-		// Remove one item from the front (oldest item)
-		q.data = q.data[1:]
+		q.dequeue()
 	}
 
 	q.data = append([]interface{}{item}, q.data...)
