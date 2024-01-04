@@ -14,6 +14,7 @@ type QuaiP2PNode interface {
 	Connect(pi peer.AddrInfo) error
 	NewStream(peerID peer.ID, protocolID protocol.ID) (network.Stream, error)
 	Network() network.Network
-	// Checks if the cache has a block with the given hash. If the block is not found, returns nil.
-	GetBlock(hash types.Hash) *types.Block
+	// Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
+	// Returns nil if the block is not found.
+	GetBlock(hash types.Hash, slice types.SliceID) *types.Block
 }

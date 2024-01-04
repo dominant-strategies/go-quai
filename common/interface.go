@@ -20,6 +20,10 @@ type ConsensusAPI interface {
 	// Return true if this data should be relayed to peers. False if it should be ignored.
 	OnNewBlock(sourcePeer core.PeerID, block types.Block) bool
 	OnNewTransaction(sourcePeer core.PeerID, tx types.Transaction) bool
+
+	// Asks the consensus backend to lookup a block by hash and sliceID.
+	// If the block is found, it should be returned. Otherwise, nil should be returned.
+	LookupBlock(hash types.Hash, loc types.SliceID) *types.Block
 }
 
 // The networking backend will implement the following interface to enable consensus to communicate with other nodes.

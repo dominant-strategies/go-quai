@@ -58,3 +58,7 @@ func (qbe *QuaiBackend) SetRunningSlices(slices []types.Slice) {
 		qbe.runningSlices[slice.SliceID] = &slice
 	}
 }
+
+func (qbe *QuaiBackend) LookupBlock(hash types.Hash, slice types.SliceID) *types.Block {
+	panic("todo")
+}
