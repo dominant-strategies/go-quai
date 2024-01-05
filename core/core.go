@@ -78,6 +78,8 @@ type Core struct {
 	quit chan struct{} // core quit channel
 }
 
+type NewCoreFunction func(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error)
+
 func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Core, error) {
 	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
 	if err != nil {

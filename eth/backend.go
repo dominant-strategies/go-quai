@@ -89,176 +89,27 @@ type Quai struct {
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
 func New(stack *node.Node, config *ethconfig.Config) (*Quai, error) {
-	nodeCtx := common.NodeLocation.Context()
-	// Ensure configuration values are compatible and sane
-	if !config.SyncMode.IsValid() {
-		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
-	}
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
-	}
-	if config.NoPruning && config.TrieDirtyCache > 0 {
-		if config.SnapshotCache > 0 {
-			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
-			config.SnapshotCache += config.TrieDirtyCache * 2 / 5
-		} else {
-			config.TrieCleanCache += config.TrieDirtyCache
-		}
-		config.TrieDirtyCache = 0
-	}
-	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
-
-	// Assemble the Quai object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis)
-	if genesisErr != nil {
-		return nil, genesisErr
-	}
 
-	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
-		log.Error("Failed to recover state", "error", err)
-	}
-	eth := &Quai{
-		config:            config,
-		chainDb:           chainDb,
-		eventMux:          stack.EventMux(),
-		closeBloomHandler: make(chan struct{}),
-		networkID:         config.NetworkId,
-		gasPrice:          config.Miner.GasPrice,
-		etherbase:         config.Miner.Etherbase,
-		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		p2pServer:         stack.Server(),
-	}
-
-	if config.ConsensusEngine == "blake3" {
-		blake3Config := config.Blake3Pow
-		blake3Config.NotifyFull = config.Miner.NotifyFull
-		eth.engine = ethconfig.CreateBlake3ConsensusEngine(stack, chainConfig, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb)
-	} else {
-		// Transfer mining-related config to the progpow config.
-		progpowConfig := config.Progpow
-		progpowConfig.NotifyFull = config.Miner.NotifyFull
-		eth.engine = ethconfig.CreateProgpowConsensusEngine(stack, chainConfig, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
-	}
-	log.Info("Initialised chain configuration", "config", chainConfig)
-
-	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
-	var dbVer = "<nil>"
-	if bcVersion != nil {
-		dbVer = fmt.Sprintf("%d", *bcVersion)
-	}
-	log.Info("Initialising Quai protocol", "network", config.NetworkId, "dbversion", dbVer)
-
-	if !config.SkipBcVersionCheck {
-		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
-			return nil, fmt.Errorf("database version is v%d, Quai %s only supports v%d", *bcVersion, params.Version.Full(), core.BlockChainVersion)
-		} else if bcVersion == nil || *bcVersion < core.BlockChainVersion {
-			if bcVersion != nil { // only print warning on upgrade, not on init
-				log.Warn("Upgrade blockchain database version", "from", dbVer, "to", core.BlockChainVersion)
-			}
-			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
-		}
-	}
-	var (
-		vmConfig = vm.Config{
-			EnablePreimageRecording: config.EnablePreimageRecording,
-		}
-		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:      config.TrieCleanCache,
-			TrieCleanJournal:    stack.ResolvePath(config.TrieCleanCacheJournal),
-			TrieCleanRejournal:  config.TrieCleanCacheRejournal,
-			TrieCleanNoPrefetch: config.NoPrefetch,
-			TrieDirtyLimit:      config.TrieDirtyCache,
-			TrieTimeLimit:       config.TrieTimeout,
-			SnapshotLimit:       config.SnapshotCache,
-			Preimages:           config.Preimages,
-		}
-	)
-
-	if config.TxPool.Journal != "" {
-		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
-	}
-
-	eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	eth, err := newCommon(config, chainDb, stack, core.NewCore)
 	
 	if err != nil {
 		return nil, err
 	}
 
-	// Only index bloom if processing state
-	if eth.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
-		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms)
-		eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
-	}
-
-	// Permit the downloader to use the trie cache allowance during fast sync
-	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
-	if eth.handler, err = newHandler(&handlerConfig{
-		Database:      chainDb,
-		Core:          eth.core,
-		TxPool:        eth.core.TxPool(),
-		Network:       config.NetworkId,
-		Sync:          config.SyncMode,
-		BloomCache:    uint64(cacheLimit),
-		EventMux:      eth.eventMux,
-		Whitelist:     config.Whitelist,
-		SlicesRunning: config.SlicesRunning,
-	}); err != nil {
-		return nil, err
-	}
-
-	eth.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
-	// Gasprice oracle is only initiated in zone chains
-	if nodeCtx == common.ZONE_CTX && eth.core.ProcessingState() {
-		gpoParams := config.GPO
-		if gpoParams.Default == nil {
-			gpoParams.Default = config.Miner.GasPrice
-		}
-		eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
-	}
-
-	// Setup DNS discovery iterators.
-	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
-	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start the RPC service
-	eth.netRPCService = quaiapi.NewPublicNetAPI(eth.p2pServer, config.NetworkId)
-
-	// Register the backend on the node
-	stack.RegisterAPIs(eth.APIs())
-	stack.RegisterProtocols(eth.Protocols())
-	stack.RegisterLifecycle(eth)
-	// Check for unclean shutdown
-	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
-		log.Error("Could not update unclean-shutdown-marker list", "error", err)
-	} else {
-		if discards > 0 {
-			log.Warn("Old unclean shutdowns found", "count", discards)
-		}
-		for _, tstamp := range uncleanShutdowns {
-			t := time.Unix(int64(tstamp), 0)
-			log.Warn("Unclean shutdown detected", "booted", t,
-				"age", common.PrettyAge(t))
-		}
-	}
 	return eth, nil
 }
 
-// New creates a new Fake Quai object to be used on tests (including the
-// initialisation of the common Quai object)
-func NewFake(stack *node.Node, config *ethconfig.Config, chainDb ethdb.Database) (*Quai, error) {
-	nodeCtx := common.NodeLocation.Context()
+func newCommon(config *ethconfig.Config, chainDb ethdb.Database, stack *node.Node, coreFunction core.NewCoreFunction) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
+	
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
@@ -283,6 +134,7 @@ func NewFake(stack *node.Node, config *ethconfig.Config, chainDb ethdb.Database)
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
+
 	eth := &Quai{
 		config:            config,
 		chainDb:           chainDb,
@@ -324,6 +176,12 @@ func NewFake(stack *node.Node, config *ethconfig.Config, chainDb ethdb.Database)
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
+
+
+	if config.TxPool.Journal != "" {
+		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
+	}
+
 	var (
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
@@ -340,16 +198,14 @@ func NewFake(stack *node.Node, config *ethconfig.Config, chainDb ethdb.Database)
 		}
 	)
 
-	if config.TxPool.Journal != "" {
-		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
-	}
-
 	var err error
-	eth.core, err = core.NewFakeCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	eth.core, err = coreFunction(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+
 	if err != nil {
 		return nil, err
 	}
 
+	nodeCtx := common.NodeLocation.Context()
 	// Only index bloom if processing state
 	if eth.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
 		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms)
@@ -409,6 +265,20 @@ func NewFake(stack *node.Node, config *ethconfig.Config, chainDb ethdb.Database)
 				"age", common.PrettyAge(t))
 		}
 	}
+	
+	return eth, err
+}
+
+// New creates a new Fake Quai object to be used on tests (including the
+// initialisation of the common Quai object)
+func NewFake(stack *node.Node, config *ethconfig.Config, chainDb ethdb.Database) (*Quai, error) {
+
+	eth, err := newCommon(config, chainDb, stack, core.NewFakeCore)
+	
+	if err != nil {
+		return nil, err
+	}
+
 	return eth, nil
 }
 
