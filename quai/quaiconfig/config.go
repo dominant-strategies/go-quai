@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package ethconfig contains the configuration of the ETH and LES protocols.
-package ethconfig
+// Package quaiconfig contains the configuration of the ETH and LES protocols.
+package quaiconfig
 
 import (
 	"math/big"
@@ -26,11 +26,11 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quai/gasprice"
 )
 
 type QuaistatsConfig struct {
@@ -38,9 +38,9 @@ type QuaistatsConfig struct {
 }
 
 type QuaiConfig struct {
-	Quai     Config
-	Node     node.Config
-	Ethstats QuaistatsConfig
+	Quai      Config
+	Node      node.Config
+	Quaistats QuaistatsConfig
 }
 
 // FullNodeGPO contains default gasprice oracle settings for full node.

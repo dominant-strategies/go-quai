@@ -22,10 +22,10 @@ import (
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
+	"github.com/dominant-strategies/go-quai/quai"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -35,7 +35,7 @@ type P2PNode struct {
 	host.Host
 
 	// Backend for handling consensus data
-	consensus eth.ConsensusAPI
+	consensus quai.ConsensusAPI
 
 	// List of peers to introduce us to the network
 	bootpeers []peer.AddrInfo

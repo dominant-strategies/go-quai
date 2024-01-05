@@ -1,4 +1,4 @@
-package eth
+package quai
 
 import (
 	"github.com/dominant-strategies/go-quai/common"

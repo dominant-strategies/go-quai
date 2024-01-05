@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package quai implements the Quai protocol.
-package eth
+package quai
 
 import (
 	"fmt"
@@ -31,25 +31,25 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state/pruner"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
-	"github.com/dominant-strategies/go-quai/eth/ethconfig"
-	"github.com/dominant-strategies/go-quai/eth/filters"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quai/filters"
+	"github.com/dominant-strategies/go-quai/quai/gasprice"
+	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // Config contains the configuration options of the ETH protocol.
 // Deprecated: use ethconfig.Config instead.
-type Config = ethconfig.Config
+type Config = quaiconfig.Config
 
 // Quai implements the Quai full node service.
 type Quai struct {
-	config *ethconfig.Config
+	config *quaiconfig.Config
 
 	// Handlers
 	core *core.Core
@@ -74,11 +74,11 @@ type Quai struct {
 
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
-func New(stack *node.Node, config *ethconfig.Config, nodeCtx int) (*Quai, error) {
+func New(stack *node.Node, config *quaiconfig.Config, nodeCtx int) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
+		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", quaiconfig.Defaults.Miner.GasPrice)
+		config.Miner.GasPrice = new(big.Int).Set(quaiconfig.Defaults.Miner.GasPrice)
 	}
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
@@ -134,13 +134,13 @@ func New(stack *node.Node, config *ethconfig.Config, nodeCtx int) (*Quai, error)
 		blake3Config := config.Blake3Pow
 		blake3Config.NotifyFull = config.Miner.NotifyFull
 		blake3Config.NodeLocation = config.NodeLocation
-		quai.engine = ethconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb)
+		quai.engine = quaiconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb)
 	} else {
 		// Transfer mining-related config to the progpow config.
 		progpowConfig := config.Progpow
 		progpowConfig.NodeLocation = config.NodeLocation
 		progpowConfig.NotifyFull = config.Miner.NotifyFull
-		quai.engine = ethconfig.CreateProgpowConsensusEngine(stack, config.NodeLocation, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
+		quai.engine = quaiconfig.CreateProgpowConsensusEngine(stack, config.NodeLocation, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 

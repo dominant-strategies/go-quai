@@ -9,10 +9,10 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/quai"
 
 	"github.com/dominant-strategies/go-quai/common"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -94,7 +94,7 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-func (p *P2PNode) SetConsensusBackend(be eth.ConsensusAPI) {
+func (p *P2PNode) SetConsensusBackend(be quai.ConsensusAPI) {
 	p.consensus = be
 }
 

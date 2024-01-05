@@ -5,13 +5,12 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/vm"
-	"github.com/dominant-strategies/go-quai/eth"
-	quai "github.com/dominant-strategies/go-quai/eth"
-	"github.com/dominant-strategies/go-quai/eth/ethconfig"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quai"
+	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/dominant-strategies/go-quai/quaistats"
 	"github.com/spf13/viper"
 	"io"
@@ -52,7 +51,7 @@ func StartQuaiBackend() (*quai.QuaiBackend, error) {
 		stackZone.Wait()
 	}()
 
-	return &eth.QuaiBackend{}, nil
+	return &quai.QuaiBackend{}, nil
 }
 
 func StartNode(stack *node.Node) {
@@ -63,10 +62,10 @@ func StartNode(stack *node.Node) {
 }
 
 // makeConfigNode loads quai configuration and creates a blank node instance.
-func makeConfigNode(nodeLocation common.Location) (*node.Node, ethconfig.QuaiConfig) {
+func makeConfigNode(nodeLocation common.Location) (*node.Node, quaiconfig.QuaiConfig) {
 	// Load defaults.
-	cfg := ethconfig.QuaiConfig{
-		Quai: ethconfig.Defaults,
+	cfg := quaiconfig.QuaiConfig{
+		Quai: quaiconfig.Defaults,
 		Node: defaultNodeConfig(),
 	}
 
@@ -84,7 +83,7 @@ func makeConfigNode(nodeLocation common.Location) (*node.Node, ethconfig.QuaiCon
 
 	// TODO: Apply stats
 	if viper.IsSet(QuaiStatsURLFlag.Name) {
-		cfg.Ethstats.URL = viper.GetString(QuaiStatsURLFlag.Name)
+		cfg.Quaistats.URL = viper.GetString(QuaiStatsURLFlag.Name)
 	}
 
 	nodeCtx := nodeLocation.Context()
@@ -110,8 +109,8 @@ func makeFullNode(nodeLocation common.Location) *node.Node {
 	backend, _ := RegisterQuaiService(stack, cfg.Quai, cfg.Node.NodeLocation.Context())
 	sendfullstats := viper.GetBool(SendFullStatsFlag.Name)
 	// Add the Quai Stats daemon if requested.
-	if cfg.Ethstats.URL != "" {
-		RegisterQuaiStatsService(stack, backend, cfg.Ethstats.URL, sendfullstats)
+	if cfg.Quaistats.URL != "" {
+		RegisterQuaiStatsService(stack, backend, cfg.Quaistats.URL, sendfullstats)
 	}
 	return stack
 }
@@ -119,8 +118,8 @@ func makeFullNode(nodeLocation common.Location) *node.Node {
 // RegisterQuaiService adds a Quai client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterQuaiService(stack *node.Node, cfg ethconfig.Config, nodeCtx int) (quaiapi.Backend, error) {
-	backend, err := eth.New(stack, &cfg, nodeCtx)
+func RegisterQuaiService(stack *node.Node, cfg quaiconfig.Config, nodeCtx int) (quaiapi.Backend, error) {
+	backend, err := quai.New(stack, &cfg, nodeCtx)
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)
 	}

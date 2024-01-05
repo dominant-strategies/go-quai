@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package quai
 
 import (
 	"compress/gzip"
@@ -125,13 +125,13 @@ func (api *PrivateMinerAPI) SetRecommitInterval(interval int) {
 // PrivateAdminAPI is the collection of Quai full node-related APIs
 // exposed over the private admin endpoint.
 type PrivateAdminAPI struct {
-	eth *Quai
+	quai *Quai
 }
 
 // NewPrivateAdminAPI creates a new API definition for the full node private
 // admin methods of the Quai service.
-func NewPrivateAdminAPI(eth *Quai) *PrivateAdminAPI {
-	return &PrivateAdminAPI{eth: eth}
+func NewPrivateAdminAPI(quai *Quai) *PrivateAdminAPI {
+	return &PrivateAdminAPI{quai: quai}
 }
 
 // ExportChain exports the current blockchain into a local file,
@@ -141,7 +141,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 		return false, errors.New("last cannot be specified without first")
 	}
 	if first != nil && last == nil {
-		head := api.eth.Core().CurrentHeader().NumberU64(api.eth.core.NodeCtx())
+		head := api.quai.Core().CurrentHeader().NumberU64(api.quai.core.NodeCtx())
 		last = &head
 	}
 	if _, err := os.Stat(file); err == nil {
@@ -164,10 +164,10 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 
 	// Export the blockchain
 	if first != nil {
-		if err := api.eth.Core().ExportN(writer, *first, *last); err != nil {
+		if err := api.quai.Core().ExportN(writer, *first, *last); err != nil {
 			return false, err
 		}
-	} else if err := api.eth.Core().Export(writer); err != nil {
+	} else if err := api.quai.Core().Export(writer); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -218,12 +218,12 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 			break
 		}
 
-		if hasAllBlocks(api.eth.Core(), blocks) {
+		if hasAllBlocks(api.quai.Core(), blocks) {
 			blocks = blocks[:0]
 			continue
 		}
 		// Import the batch and reset the buffer
-		if _, err := api.eth.Core().InsertChain(blocks); err != nil {
+		if _, err := api.quai.Core().InsertChain(blocks); err != nil {
 			return false, fmt.Errorf("batch %d: failed to insert: %v", batch, err)
 		}
 		blocks = blocks[:0]
@@ -234,13 +234,13 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 // PublicDebugAPI is the collection of Quai full node APIs exposed
 // over the public debugging endpoint.
 type PublicDebugAPI struct {
-	eth *Quai
+	quai *Quai
 }
 
 // NewPublicDebugAPI creates a new API definition for the full node-
 // related public debug methods of the Quai service.
-func NewPublicDebugAPI(eth *Quai) *PublicDebugAPI {
-	return &PublicDebugAPI{eth: eth}
+func NewPublicDebugAPI(quai *Quai) *PublicDebugAPI {
+	return &PublicDebugAPI{quai: quai}
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
@@ -254,14 +254,14 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 	}
 	var block *types.Block
 	if blockNr == rpc.LatestBlockNumber {
-		block = api.eth.core.CurrentBlock()
+		block = api.quai.core.CurrentBlock()
 	} else {
-		block = api.eth.core.GetBlockByNumber(uint64(blockNr))
+		block = api.quai.core.GetBlockByNumber(uint64(blockNr))
 	}
 	if block == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.eth.core.StateAt(block.Root())
+	stateDb, err := api.quai.core.StateAt(block.Root())
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -271,18 +271,18 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 // PrivateDebugAPI is the collection of Quai full node APIs exposed over
 // the private debugging endpoint.
 type PrivateDebugAPI struct {
-	eth *Quai
+	quai *Quai
 }
 
 // NewPrivateDebugAPI creates a new API definition for the full node-related
 // private debug methods of the Quai service.
-func NewPrivateDebugAPI(eth *Quai) *PrivateDebugAPI {
-	return &PrivateDebugAPI{eth: eth}
+func NewPrivateDebugAPI(quai *Quai) *PrivateDebugAPI {
+	return &PrivateDebugAPI{quai: quai}
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
 func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
-	if preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); preimage != nil {
+	if preimage := rawdb.ReadPreimage(api.quai.ChainDb(), hash); preimage != nil {
 		return preimage, nil
 	}
 	return nil, errors.New("unknown preimage")
@@ -300,7 +300,7 @@ type BadBlockArgs struct {
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
 		err     error
-		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
+		blocks  = rawdb.ReadAllBadBlocks(api.quai.chainDb)
 		results = make([]*BadBlockArgs, 0, len(blocks))
 	)
 	for _, block := range blocks {
@@ -313,7 +313,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 		} else {
 			blockRlp = fmt.Sprintf("0x%x", rlpBytes)
 		}
-		if blockJSON, err = quaiapi.RPCMarshalBlock(block, true, true, api.eth.core.NodeLocation()); err != nil {
+		if blockJSON, err = quaiapi.RPCMarshalBlock(block, true, true, api.quai.core.NodeLocation()); err != nil {
 			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
 		results = append(results, &BadBlockArgs{
@@ -342,24 +342,24 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 		} else {
 			var block *types.Block
 			if number == rpc.LatestBlockNumber {
-				block = api.eth.core.CurrentBlock()
+				block = api.quai.core.CurrentBlock()
 			} else {
-				block = api.eth.core.GetBlockByNumber(uint64(number))
+				block = api.quai.core.GetBlockByNumber(uint64(number))
 			}
 			if block == nil {
 				return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.eth.core.StateAt(block.Root())
+			stateDb, err = api.quai.core.StateAt(block.Root())
 			if err != nil {
 				return state.IteratorDump{}, err
 			}
 		}
 	} else if hash, ok := blockNrOrHash.Hash(); ok {
-		block := api.eth.core.GetBlockByHash(hash)
+		block := api.quai.core.GetBlockByHash(hash)
 		if block == nil {
 			return state.IteratorDump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.eth.core.StateAt(block.Root())
+		stateDb, err = api.quai.core.StateAt(block.Root())
 		if err != nil {
 			return state.IteratorDump{}, err
 		}
@@ -396,11 +396,11 @@ type storageEntry struct {
 // StorageRangeAt returns the storage at the given block height and transaction index.
 func (api *PrivateDebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
 	// Retrieve the block
-	block := api.eth.core.GetBlockByHash(blockHash)
+	block := api.quai.core.GetBlockByHash(blockHash)
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %#x not found", blockHash)
 	}
-	_, _, statedb, err := api.eth.core.StateAtTransaction(block, txIndex, 0)
+	_, _, statedb, err := api.quai.core.StateAtTransaction(block, txIndex, 0)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
@@ -446,20 +446,20 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
 	var startBlock, endBlock *types.Block
 
-	startBlock = api.eth.core.GetBlockByNumber(startNum)
+	startBlock = api.quai.core.GetBlockByNumber(startNum)
 	if startBlock == nil {
 		return nil, fmt.Errorf("start block %x not found", startNum)
 	}
 
-	nodeCtx := api.eth.core.NodeCtx()
+	nodeCtx := api.quai.core.NodeCtx()
 	if endNum == nil {
 		endBlock = startBlock
-		startBlock = api.eth.core.GetBlockByHash(startBlock.ParentHash(nodeCtx))
+		startBlock = api.quai.core.GetBlockByHash(startBlock.ParentHash(nodeCtx))
 		if startBlock == nil {
 			return nil, fmt.Errorf("block %x has no parent", endBlock.Number(nodeCtx))
 		}
 	} else {
-		endBlock = api.eth.core.GetBlockByNumber(*endNum)
+		endBlock = api.quai.core.GetBlockByNumber(*endNum)
 		if endBlock == nil {
 			return nil, fmt.Errorf("end block %d not found", *endNum)
 		}
@@ -474,20 +474,20 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum 
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
 	var startBlock, endBlock *types.Block
-	startBlock = api.eth.core.GetBlockByHash(startHash)
+	startBlock = api.quai.core.GetBlockByHash(startHash)
 	if startBlock == nil {
 		return nil, fmt.Errorf("start block %x not found", startHash)
 	}
 
-	nodeCtx := api.eth.core.NodeCtx()
+	nodeCtx := api.quai.core.NodeCtx()
 	if endHash == nil {
 		endBlock = startBlock
-		startBlock = api.eth.core.GetBlockByHash(startBlock.ParentHash(nodeCtx))
+		startBlock = api.quai.core.GetBlockByHash(startBlock.ParentHash(nodeCtx))
 		if startBlock == nil {
 			return nil, fmt.Errorf("block %x has no parent", endBlock.Number(nodeCtx))
 		}
 	} else {
-		endBlock = api.eth.core.GetBlockByHash(*endHash)
+		endBlock = api.quai.core.GetBlockByHash(*endHash)
 		if endBlock == nil {
 			return nil, fmt.Errorf("end block %x not found", *endHash)
 		}
@@ -496,12 +496,12 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 }
 
 func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
-	nodeLocation := api.eth.core.NodeLocation()
-	nodeCtx := api.eth.core.NodeCtx()
+	nodeLocation := api.quai.core.NodeLocation()
+	nodeCtx := api.quai.core.NodeCtx()
 	if startBlock.NumberU64(nodeCtx) >= endBlock.NumberU64(nodeCtx) {
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.NumberU64(nodeCtx), endBlock.NumberU64(nodeCtx))
 	}
-	triedb := api.eth.Core().StateCache().TrieDB()
+	triedb := api.quai.Core().StateCache().TrieDB()
 
 	oldTrie, err := trie.NewSecure(startBlock.Root(), triedb)
 	if err != nil {

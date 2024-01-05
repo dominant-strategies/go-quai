@@ -19,12 +19,12 @@ import (
 	"github.com/dominant-strategies/go-quai/common/fdlimit"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
-	"github.com/dominant-strategies/go-quai/eth/ethconfig"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quai/gasprice"
+	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/pelletier/go-toml/v2"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/spf13/cobra"
@@ -324,7 +324,7 @@ var (
 
 	TxLookupLimitFlag = Flag{
 		Name:  "txlookuplimit",
-		Value: ethconfig.Defaults.TxLookupLimit,
+		Value: quaiconfig.Defaults.TxLookupLimit,
 		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)" + generateEnvDoc("txlookuplimit"),
 	}
 
@@ -362,37 +362,37 @@ var (
 	}
 	TxPoolPriceLimitFlag = Flag{
 		Name:  "txpool.pricelimit",
-		Value: ethconfig.Defaults.TxPool.PriceLimit,
+		Value: quaiconfig.Defaults.TxPool.PriceLimit,
 		Usage: "Minimum gas price limit to enforce for acceptance into the pool" + generateEnvDoc("txpool.pricelimit"),
 	}
 	TxPoolPriceBumpFlag = Flag{
 		Name:  "txpool.pricebump",
-		Value: ethconfig.Defaults.TxPool.PriceBump,
+		Value: quaiconfig.Defaults.TxPool.PriceBump,
 		Usage: "Price bump percentage to replace an already existing transaction" + generateEnvDoc("txpool.pricebump"),
 	}
 	TxPoolAccountSlotsFlag = Flag{
 		Name:  "txpool.accountslots",
-		Value: ethconfig.Defaults.TxPool.AccountSlots,
+		Value: quaiconfig.Defaults.TxPool.AccountSlots,
 		Usage: "Minimum number of executable transaction slots guaranteed per account" + generateEnvDoc("txpool.accountslots"),
 	}
 	TxPoolGlobalSlotsFlag = Flag{
 		Name:  "txpool.globalslots",
-		Value: ethconfig.Defaults.TxPool.GlobalSlots,
+		Value: quaiconfig.Defaults.TxPool.GlobalSlots,
 		Usage: "Maximum number of executable transaction slots for all accounts" + generateEnvDoc("txpool.globalslots"),
 	}
 	TxPoolAccountQueueFlag = Flag{
 		Name:  "txpool.accountqueue",
-		Value: ethconfig.Defaults.TxPool.AccountQueue,
+		Value: quaiconfig.Defaults.TxPool.AccountQueue,
 		Usage: "Maximum number of non-executable transaction slots permitted per account" + generateEnvDoc("txpool.accountqueue"),
 	}
 	TxPoolGlobalQueueFlag = Flag{
 		Name:  "txpool.globalqueue",
-		Value: ethconfig.Defaults.TxPool.GlobalQueue,
+		Value: quaiconfig.Defaults.TxPool.GlobalQueue,
 		Usage: "Maximum number of non-executable transaction slots for all accounts" + generateEnvDoc("txpool.globalqueue"),
 	}
 	TxPoolLifetimeFlag = Flag{
 		Name:  "txpool.lifetime",
-		Value: ethconfig.Defaults.TxPool.Lifetime,
+		Value: quaiconfig.Defaults.TxPool.Lifetime,
 		Usage: "Maximum amount of time non-executable transaction are queued" + generateEnvDoc("txpool.lifetime"),
 	}
 	CacheFlag = Flag{
@@ -412,12 +412,12 @@ var (
 	}
 	CacheTrieJournalFlag = Flag{
 		Name:  "cache.trie.journal",
-		Value: ethconfig.Defaults.TrieCleanCacheJournal,
+		Value: quaiconfig.Defaults.TrieCleanCacheJournal,
 		Usage: "Disk journal directory for trie cache to survive node restarts" + generateEnvDoc("cache.trie.journal"),
 	}
 	CacheTrieRejournalFlag = Flag{
 		Name:  "cache.trie.rejournal",
-		Value: ethconfig.Defaults.TrieCleanCacheRejournal,
+		Value: quaiconfig.Defaults.TrieCleanCacheRejournal,
 		Usage: "Time interval to regenerate the trie cache journal" + generateEnvDoc("cache.trie.rejournal"),
 	}
 	CacheGCFlag = Flag{
@@ -449,7 +449,7 @@ var (
 	// Miner settings
 	MinerGasPriceFlag = Flag{
 		Name:  "miner.gasprice",
-		Value: newBigIntValue(ethconfig.Defaults.Miner.GasPrice),
+		Value: newBigIntValue(quaiconfig.Defaults.Miner.GasPrice),
 		Usage: "Minimum gas price for mining a transaction" + generateEnvDoc("miner.gasprice"),
 	}
 	// Account settings
@@ -492,7 +492,7 @@ var (
 	}
 	RPCGlobalGasCapFlag = Flag{
 		Name:  "rpc.gascap",
-		Value: ethconfig.Defaults.RPCGasCap,
+		Value: quaiconfig.Defaults.RPCGasCap,
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)" + generateEnvDoc("vmdebug"),
 	}
 	QuaiStatsURLFlag = Flag{
@@ -570,33 +570,33 @@ var (
 	// Gas price oracle settings
 	GpoBlocksFlag = Flag{
 		Name:  "gpo.blocks",
-		Value: ethconfig.Defaults.GPO.Blocks,
+		Value: quaiconfig.Defaults.GPO.Blocks,
 		Usage: "Number of recent blocks to check for gas prices" + generateEnvDoc("gpo.blocks"),
 	}
 	GpoPercentileFlag = Flag{
 		Name:  "gpo.percentile",
-		Value: ethconfig.Defaults.GPO.Percentile,
+		Value: quaiconfig.Defaults.GPO.Percentile,
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices" + generateEnvDoc("gpo.percentile"),
 	}
 	GpoMaxGasPriceFlag = Flag{
 		Name:  "gpo.maxprice",
-		Value: ethconfig.Defaults.GPO.MaxPrice.Int64(),
+		Value: quaiconfig.Defaults.GPO.MaxPrice.Int64(),
 		Usage: "Maximum gas price will be recommended by gpo" + generateEnvDoc("gpo.maxprice"),
 	}
 	GpoIgnoreGasPriceFlag = Flag{
 		Name:  "gpo.ignoreprice",
-		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
+		Value: quaiconfig.Defaults.GPO.IgnorePrice.Int64(),
 		Usage: "Gas price below which gpo will ignore transactions" + generateEnvDoc("gpo.ignoreprice"),
 	}
 
 	DomUrl = Flag{
 		Name:  "dom.url",
-		Value: ethconfig.Defaults.DomUrl,
+		Value: quaiconfig.Defaults.DomUrl,
 		Usage: "Dominant chain websocket url" + generateEnvDoc("dom.url"),
 	}
 	SubUrls = Flag{
 		Name:  "sub.urls",
-		Value: ethconfig.Defaults.DomUrl,
+		Value: quaiconfig.Defaults.DomUrl,
 		Usage: "Subordinate chain websocket urls" + generateEnvDoc("sub.urls"),
 	}
 	CoinbaseAddressFlag = Flag{
@@ -830,7 +830,7 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 }
 
 // setDomUrl sets the dominant chain websocket url.
-func setDomUrl(cfg *ethconfig.Config, nodeLocation common.Location) {
+func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location) {
 	// only set the dom url if the node is not prime
 	if nodeLocation != nil {
 		if len(nodeLocation) == 1 {
@@ -843,7 +843,7 @@ func setDomUrl(cfg *ethconfig.Config, nodeLocation common.Location) {
 }
 
 // setSubUrls sets the subordinate chain urls
-func setSubUrls(cfg *ethconfig.Config, nodeLocation common.Location) {
+func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location) {
 	// only set the sub urls if its not the zone
 	if len(nodeLocation) != 2 {
 		if nodeLocation == nil {
@@ -856,7 +856,7 @@ func setSubUrls(cfg *ethconfig.Config, nodeLocation common.Location) {
 
 // setGasLimitCeil sets the gas limit ceils based on the network that is
 // running
-func setGasLimitCeil(cfg *ethconfig.Config) {
+func setGasLimitCeil(cfg *quaiconfig.Config) {
 	switch {
 	case viper.GetBool(ColosseumFlag.Name):
 		cfg.Miner.GasCeil = params.ColosseumGasCeil
@@ -881,7 +881,7 @@ func makeSubUrls() []string {
 }
 
 // setSlicesRunning sets the slices running flag
-func setSlicesRunning(cfg *ethconfig.Config) {
+func setSlicesRunning(cfg *quaiconfig.Config) {
 	slices := strings.Split(viper.GetString(SlicesRunningFlag.Name), ",")
 
 	// Sanity checks
@@ -924,7 +924,7 @@ func HexAddress(account string, nodeLocation common.Location) (common.Address, e
 
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func setEtherbase(cfg *ethconfig.Config) {
+func setEtherbase(cfg *quaiconfig.Config) {
 	coinbaseMap, err := ParseCoinbaseAddresses()
 	if err != nil {
 		log.Fatalf("error parsing coinbase addresses: %s", err)
@@ -1080,7 +1080,7 @@ func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
 	}
 }
 
-func setConsensusEngineConfig(cfg *ethconfig.Config) {
+func setConsensusEngineConfig(cfg *quaiconfig.Config) {
 	if cfg.ConsensusEngine == "blake3" {
 		// Override any default configs for hard coded networks.
 		switch {
@@ -1151,7 +1151,7 @@ func setConsensusEngineConfig(cfg *ethconfig.Config) {
 	}
 }
 
-func setWhitelist(cfg *ethconfig.Config) {
+func setWhitelist(cfg *quaiconfig.Config) {
 	whitelist := viper.GetString(WhitelistFlag.Name)
 	if whitelist == "" {
 		return
@@ -1213,8 +1213,8 @@ func CheckExclusive(args ...interface{}) {
 	}
 }
 
-// SetQuaiConfig applies eth-related command line flags to the config.
-func SetQuaiConfig(stack *node.Node, cfg *ethconfig.Config, nodeLocation common.Location) {
+// SetQuaiConfig applies quai-related command line flags to the config.
+func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location) {
 	// Avoid conflicting network flags
 	CheckExclusive(ColosseumFlag, DeveloperFlag, GardenFlag, OrchardFlag, LocalFlag, LighthouseFlag)
 	CheckExclusive(DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer

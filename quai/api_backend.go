@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package quai
 
 import (
 	"context"
@@ -29,71 +29,71 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
-	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
 	extRPCEnabled bool
-	eth           *Quai
+	quai          *Quai
 	gpo           *gasprice.Oracle
 }
 
 // ChainConfig returns the active chain configuration.
 func (b *QuaiAPIBackend) ChainConfig() *params.ChainConfig {
-	return b.eth.core.Config()
+	return b.quai.core.Config()
 }
 
 func (b *QuaiAPIBackend) TxPool() *core.TxPool {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
-	return b.eth.core.TxPool()
+	return b.quai.core.TxPool()
 }
 
 func (b *QuaiAPIBackend) NodeLocation() common.Location {
-	return b.eth.core.NodeLocation()
+	return b.quai.core.NodeLocation()
 }
 
 func (b *QuaiAPIBackend) NodeCtx() int {
-	return b.eth.core.NodeCtx()
+	return b.quai.core.NodeCtx()
 }
 
 func (b *QuaiAPIBackend) CurrentBlock() *types.Block {
-	return b.eth.core.CurrentBlock()
+	return b.quai.core.CurrentBlock()
 }
 
 // CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
 func (b *QuaiAPIBackend) CurrentLogEntropy() *big.Int {
-	return b.eth.core.CurrentLogEntropy()
+	return b.quai.core.CurrentLogEntropy()
 }
 
 // TotalLogS returns the total entropy reduction if the chain since genesis to the given header
 func (b *QuaiAPIBackend) TotalLogS(header *types.Header) *big.Int {
-	return b.eth.core.TotalLogS(header)
+	return b.quai.core.TotalLogS(header)
 }
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (b *QuaiAPIBackend) CalcOrder(header *types.Header) (*big.Int, int, error) {
-	return b.eth.core.CalcOrder(header)
+	return b.quai.core.CalcOrder(header)
 }
 
 func (b *QuaiAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.core.PendingBlock()
+		block := b.quai.core.PendingBlock()
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.core.CurrentBlock().Header(), nil
+		return b.quai.core.CurrentBlock().Header(), nil
 	}
-	return b.eth.core.GetHeaderByNumber(uint64(number)), nil
+	return b.quai.core.GetHeaderByNumber(uint64(number)), nil
 }
 
 func (b *QuaiAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -101,11 +101,11 @@ func (b *QuaiAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash
 		return b.HeaderByNumber(ctx, blockNr)
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		header := b.eth.core.GetHeaderByHash(hash)
+		header := b.quai.core.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
+		if blockNrOrHash.RequireCanonical && b.quai.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
 		return header, nil
@@ -114,20 +114,20 @@ func (b *QuaiAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash
 }
 
 func (b *QuaiAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return b.eth.core.GetHeaderByHash(hash), nil
+	return b.quai.core.GetHeaderByHash(hash), nil
 }
 
 func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.core.PendingBlock()
+		block := b.quai.core.PendingBlock()
 		return block, nil
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		number = rpc.BlockNumber(b.eth.core.CurrentHeader().NumberU64(b.NodeCtx()))
+		number = rpc.BlockNumber(b.quai.core.CurrentHeader().NumberU64(b.NodeCtx()))
 	}
-	block := b.eth.core.GetBlockByNumber(uint64(number))
+	block := b.quai.core.GetBlockByNumber(uint64(number))
 	if block != nil {
 		return block, nil
 	}
@@ -135,7 +135,7 @@ func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumb
 }
 
 func (b *QuaiAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.core.GetBlockByHash(hash), nil
+	return b.quai.core.GetBlockByHash(hash), nil
 }
 
 func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -143,14 +143,14 @@ func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash 
 		return b.BlockByNumber(ctx, blockNr)
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		header := b.eth.core.GetHeaderByHash(hash)
+		header := b.quai.core.GetHeaderByHash(hash)
 		if header == nil {
 			return nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
+		if blockNrOrHash.RequireCanonical && b.quai.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
-		block := b.eth.core.GetBlock(hash, header.NumberU64(b.NodeCtx()))
+		block := b.quai.core.GetBlock(hash, header.NumberU64(b.NodeCtx()))
 		if block == nil {
 			return nil, errors.New("header found, but block body is missing")
 		}
@@ -160,17 +160,17 @@ func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash 
 }
 
 func (b *QuaiAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return b.eth.core.PendingBlockAndReceipts()
+	return b.quai.core.PendingBlockAndReceipts()
 }
 
 func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil, errors.New("stateAndHeaderByNumber can only be called in zone chain")
 	}
 	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.eth.core.Pending()
+		block := b.quai.core.Pending()
 		return &state.StateDB{}, block.Header(), nil
 	}
 	// Otherwise resolve the block number and return its state
@@ -181,12 +181,12 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.eth.Core().StateAt(header.Root())
+	stateDb, err := b.quai.Core().StateAt(header.Root())
 	return stateDb, header, err
 }
 
 func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil, errors.New("stateAndHeaderByNumberOrHash can only be called in zone chain")
 	}
@@ -201,38 +201,38 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, block
 		if header == nil {
 			return nil, nil, errors.New("header for hash not found")
 		}
-		if blockNrOrHash.RequireCanonical && b.eth.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
+		if blockNrOrHash.RequireCanonical && b.quai.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
-		stateDb, err := b.eth.Core().StateAt(header.Root())
+		stateDb, err := b.quai.Core().StateAt(header.Root())
 		return stateDb, header, err
 	}
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getReceipts can only be called in zone chain")
 	}
-	return b.eth.core.GetReceiptsByHash(hash), nil
+	return b.quai.core.GetReceiptsByHash(hash), nil
 }
 
 // GetBloom returns the bloom for the given block hash
 func (b *QuaiAPIBackend) GetBloom(hash common.Hash) (*types.Bloom, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBloom can only be called in zone chain")
 	}
-	return b.eth.core.Slice().HeaderChain().GetBloom(hash)
+	return b.quai.core.Slice().HeaderChain().GetBloom(hash)
 }
 
 func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getLogs can only be called in zone chain")
 	}
-	receipts := b.eth.core.GetReceiptsByHash(hash)
+	receipts := b.quai.core.GetReceiptsByHash(hash)
 	if receipts == nil {
 		return nil, nil
 	}
@@ -245,68 +245,68 @@ func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 
 func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, vmError, errors.New("getEvm can only be called in zone chain")
 	}
 	if vmConfig == nil {
-		vmConfig = b.eth.core.GetVMConfig()
+		vmConfig = b.quai.core.GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(header, b.eth.Core(), nil)
-	return vm.NewEVM(context, txContext, state, b.eth.core.Config(), *vmConfig), vmError, nil
+	context := core.NewEVMBlockContext(header, b.quai.Core(), nil)
+	return vm.NewEVM(context, txContext, state, b.quai.core.Config(), *vmConfig), vmError, nil
 }
 
 func (b *QuaiAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
-	return b.eth.Core().SubscribeRemovedLogsEvent(ch)
+	return b.quai.Core().SubscribeRemovedLogsEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
-	return b.eth.core.SubscribePendingLogs(ch)
+	return b.quai.core.SubscribePendingLogs(ch)
 }
 
 func (b *QuaiAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	return b.eth.Core().SubscribeChainEvent(ch)
+	return b.quai.Core().SubscribeChainEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return b.eth.Core().SubscribeChainHeadEvent(ch)
+	return b.quai.Core().SubscribeChainHeadEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return b.eth.Core().SubscribeChainSideEvent(ch)
+	return b.quai.Core().SubscribeChainSideEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
-	return b.eth.Core().SubscribeLogsEvent(ch)
+	return b.quai.Core().SubscribeLogsEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return errors.New("sendTx can only be called in zone chain")
 	}
-	return b.eth.Core().AddLocal(signedTx)
+	return b.quai.Core().AddLocal(signedTx)
 }
 
 func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getPoolTransactions can only be called in zone chain")
 	}
-	pending, err := b.eth.core.TxPoolPending(false)
+	pending, err := b.quai.core.TxPoolPending(false)
 	if err != nil {
 		return nil, err
 	}
@@ -318,60 +318,60 @@ func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *QuaiAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
-	return b.eth.core.Get(hash)
+	return b.quai.core.Get(hash)
 }
 
 func (b *QuaiAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, common.Hash{}, 0, 0, errors.New("getTransaction can only be called in zone chain")
 	}
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
+	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.quai.ChainDb(), txHash)
 	return tx, blockHash, blockNumber, index, nil
 }
 
 func (b *QuaiAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("getPoolNonce can only be called in zone chain")
 	}
-	return b.eth.core.Nonce(addr), nil
+	return b.quai.core.Nonce(addr), nil
 }
 
 func (b *QuaiAPIBackend) Stats() (pending int, queued int) {
-	return b.eth.core.Stats()
+	return b.quai.core.Stats()
 }
 
 func (b *QuaiAPIBackend) TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil
 	}
-	return b.eth.core.Content()
+	return b.quai.core.Content()
 }
 
 func (b *QuaiAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil
 	}
-	return b.eth.core.ContentFrom(addr)
+	return b.quai.core.ContentFrom(addr)
 }
 
 func (b *QuaiAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
-	return b.eth.core.SubscribeNewTxsEvent(ch)
+	return b.quai.core.SubscribeNewTxsEvent(ch)
 }
 
 func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("suggestTipCap can only be called in zone chain")
 	}
@@ -383,11 +383,11 @@ func (b *QuaiAPIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlo
 }
 
 func (b *QuaiAPIBackend) ChainDb() ethdb.Database {
-	return b.eth.ChainDb()
+	return b.quai.ChainDb()
 }
 
 func (b *QuaiAPIBackend) EventMux() *event.TypeMux {
-	return b.eth.EventMux()
+	return b.quai.EventMux()
 }
 
 func (b *QuaiAPIBackend) ExtRPCEnabled() bool {
@@ -395,136 +395,136 @@ func (b *QuaiAPIBackend) ExtRPCEnabled() bool {
 }
 
 func (b *QuaiAPIBackend) RPCGasCap() uint64 {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0
 	}
-	return b.eth.config.RPCGasCap
+	return b.quai.config.RPCGasCap
 }
 
 func (b *QuaiAPIBackend) RPCTxFeeCap() float64 {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0
 	}
-	return b.eth.config.RPCTxFeeCap
+	return b.quai.config.RPCTxFeeCap
 }
 
 func (b *QuaiAPIBackend) BloomStatus() (uint64, uint64) {
-	sections, _, _ := b.eth.bloomIndexer.Sections()
+	sections, _, _ := b.quai.bloomIndexer.Sections()
 	return params.BloomBitsBlocks, sections
 }
 
 func (b *QuaiAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	for i := 0; i < bloomFilterThreads; i++ {
-		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
+		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.quai.bloomRequests)
 	}
 }
 
 func (b *QuaiAPIBackend) Engine() consensus.Engine {
-	return b.eth.engine
+	return b.quai.engine
 }
 
 func (b *QuaiAPIBackend) CurrentHeader() *types.Header {
-	return b.eth.core.CurrentHeader()
+	return b.quai.core.CurrentHeader()
 }
 
 func (b *QuaiAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("stateAtBlock can only be called in zone chain")
 	}
-	return b.eth.core.StateAtBlock(block, reexec, base, checkLive)
+	return b.quai.core.StateAtBlock(block, reexec, base, checkLive)
 }
 
 func (b *QuaiAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
-	nodeCtx := b.eth.core.NodeCtx()
+	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, vm.BlockContext{}, nil, errors.New("stateAtTransaction can only be called in zone chain")
 	}
-	return b.eth.core.StateAtTransaction(block, txIndex, reexec)
+	return b.quai.core.StateAtTransaction(block, txIndex, reexec)
 }
 
 func (b *QuaiAPIBackend) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
-	return b.eth.core.Append(header, manifest, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
+	return b.quai.core.Append(header, manifest, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 }
 
 func (b *QuaiAPIBackend) DownloadBlocksInManifest(hash common.Hash, manifest types.BlockManifest, entropy *big.Int) {
-	b.eth.core.DownloadBlocksInManifest(hash, manifest, entropy)
+	b.quai.core.DownloadBlocksInManifest(hash, manifest, entropy)
 }
 
 func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.Header) (*types.Block, error) {
-	return b.eth.core.ConstructLocalMinedBlock(header)
+	return b.quai.core.ConstructLocalMinedBlock(header)
 }
 
 func (b *QuaiAPIBackend) InsertBlock(ctx context.Context, block *types.Block) (int, error) {
-	return b.eth.core.InsertChain([]*types.Block{block})
+	return b.quai.core.InsertChain([]*types.Block{block})
 }
 
 func (b *QuaiAPIBackend) WriteBlock(block *types.Block) {
-	b.eth.core.WriteBlock(block)
+	b.quai.core.WriteBlock(block)
 }
 
 func (b *QuaiAPIBackend) PendingBlock() *types.Block {
-	return b.eth.core.PendingBlock()
+	return b.quai.core.PendingBlock()
 }
 
 func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int) {
-	b.eth.core.SubRelayPendingHeader(pendingHeader, newEntropy, location, subReorg, order)
+	b.quai.core.SubRelayPendingHeader(pendingHeader, newEntropy, location, subReorg, order)
 }
 
 func (b *QuaiAPIBackend) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location) {
-	b.eth.core.UpdateDom(oldTerminus, pendingHeader, location)
+	b.quai.core.UpdateDom(oldTerminus, pendingHeader, location)
 }
 
 func (b *QuaiAPIBackend) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int) {
-	b.eth.core.RequestDomToAppendOrFetch(hash, entropy, order)
+	b.quai.core.RequestDomToAppendOrFetch(hash, entropy, order)
 }
 
 func (b *QuaiAPIBackend) ProcessingState() bool {
-	return b.eth.core.ProcessingState()
+	return b.quai.core.ProcessingState()
 }
 
 func (b *QuaiAPIBackend) NewGenesisPendingHeader(pendingHeader *types.Header) {
-	b.eth.core.NewGenesisPendigHeader(pendingHeader)
+	b.quai.core.NewGenesisPendigHeader(pendingHeader)
 }
 
 func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
-	return b.eth.core.GetPendingHeader()
+	return b.quai.core.GetPendingHeader()
 }
 
 func (b *QuaiAPIBackend) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
-	return b.eth.core.GetManifest(blockHash)
+	return b.quai.core.GetManifest(blockHash)
 }
 
 func (b *QuaiAPIBackend) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
-	return b.eth.core.GetSubManifest(slice, blockHash)
+	return b.quai.core.GetSubManifest(slice, blockHash)
 }
 
 func (b *QuaiAPIBackend) AddPendingEtxs(pEtxs types.PendingEtxs) error {
-	return b.eth.core.AddPendingEtxs(pEtxs)
+	return b.quai.core.AddPendingEtxs(pEtxs)
 }
 
 func (b *QuaiAPIBackend) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
-	return b.eth.core.AddPendingEtxsRollup(pEtxsRollup)
+	return b.quai.core.AddPendingEtxsRollup(pEtxsRollup)
 }
 
 func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription {
-	return b.eth.core.SubscribePendingHeader(ch)
+	return b.quai.core.SubscribePendingHeader(ch)
 }
 
 func (b *QuaiAPIBackend) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error {
-	return b.eth.core.GenerateRecoveryPendingHeader(pendingHeader, checkpointHashes)
+	return b.quai.core.GenerateRecoveryPendingHeader(pendingHeader, checkpointHashes)
 }
 
 func (b *QuaiAPIBackend) GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
-	return b.eth.core.GetPendingEtxsRollupFromSub(hash, location)
+	return b.quai.core.GetPendingEtxsRollupFromSub(hash, location)
 }
 
 func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
-	return b.eth.core.GetPendingEtxsFromSub(hash, location)
+	return b.quai.core.GetPendingEtxsFromSub(hash, location)
 }
 
 func (b *QuaiAPIBackend) SetSyncTarget(header *types.Header) {
-	b.eth.core.SetSyncTarget(header)
+	b.quai.core.SetSyncTarget(header)
 }
