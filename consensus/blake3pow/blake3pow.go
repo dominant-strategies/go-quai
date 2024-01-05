@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -78,9 +77,6 @@ type Blake3pow struct {
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
 func New(config Config, notify []string, noverify bool) *Blake3pow {
-	if config.Log == nil {
-		config.Log = &log.Log
-	}
 	blake3pow := &Blake3pow{
 		config: config,
 		update: make(chan struct{}),
@@ -105,7 +101,6 @@ func NewFaker() *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     &log.Log,
 		},
 	}
 }
@@ -117,7 +112,6 @@ func NewFakeFailer(fail uint64) *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     &log.Log,
 		},
 		fakeFail: fail,
 	}
@@ -130,7 +124,6 @@ func NewFakeDelayer(delay time.Duration) *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     &log.Log,
 		},
 		fakeDelay: delay,
 	}
@@ -142,7 +135,6 @@ func NewFullFaker() *Blake3pow {
 	return &Blake3pow{
 		config: Config{
 			PowMode: ModeFullFake,
-			Log:     &log.Log,
 		},
 	}
 }

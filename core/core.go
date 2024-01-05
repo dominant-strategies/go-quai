@@ -459,9 +459,7 @@ func (c *Core) printStats() {
 	for _, hash := range c.appendQueue.Keys()[:math.Min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
 		if value, exist := c.appendQueue.Peek(hash); exist {
 			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
-			log.Lazy(func() string {
-				return "AppendQueue entry. Number: " + strconv.FormatUint(hashNumber.Number, 10) + ". Hash: " + hashNumber.Hash.String()
-			}, "debug")
+			log.Debug("AppendQueue entry. Number: " + strconv.FormatUint(hashNumber.Number, 10) + ". Hash: " + hashNumber.Hash.String())
 		}
 	}
 

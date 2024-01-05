@@ -4,21 +4,22 @@ import (
 	"encoding/hex"
 	"strconv"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/pkg/errors"
 )
 
 // Hash represents a 256 bit hash
 type Hash [32]byte
 
-func NewHashFromString(s string) (Hash, error) {
+func NewHashFromString(s string) (common.Hash, error) {
 	if len(s) != 64 { // 2 hex chars per byte
-		return Hash{}, errors.New("invalid string length for hash")
+		return common.Hash{}, errors.New("invalid string length for hash")
 	}
 	hashSlice, err := hex.DecodeString(s)
 	if err != nil {
-		return Hash{}, err
+		return common.Hash{}, err
 	}
-	var hash Hash
+	var hash common.Hash
 	copy(hash[:], hashSlice)
 	return hash, nil
 }
@@ -33,6 +34,10 @@ var (
 	REGION_CTX = Context{"region", 1}
 	ZONE_CTX   = Context{"zone", 2}
 )
+
+type Slice struct {
+	SliceID SliceID
+}
 
 type SliceID struct {
 	Context Context

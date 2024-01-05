@@ -15,7 +15,6 @@ import (
 	"unsafe"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -193,15 +192,12 @@ type Progpow struct {
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
 func New(config Config, notify []string, noverify bool) *Progpow {
-	if config.Log == nil {
-		config.Log = &log.Log
-	}
 	if config.CachesInMem <= 0 {
-		config.Log.Warn("One ethash cache must always be in memory", "requested", config.CachesInMem)
+		log.Warn("One ethash cache must always be in memory", "requested", config.CachesInMem)
 		config.CachesInMem = 1
 	}
 	if config.CacheDir != "" && config.CachesOnDisk > 0 {
-		config.Log.Info("Disk storage enabled for ethash caches", "dir", config.CacheDir, "count", config.CachesOnDisk)
+		log.Info("Disk storage enabled for ethash caches", "dir", config.CacheDir, "count", config.CachesOnDisk)
 	}
 	progpow := &Progpow{
 		config: config,
@@ -228,7 +224,6 @@ func NewFaker() *Progpow {
 	return &Progpow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     &log.Log,
 		},
 	}
 }
@@ -240,7 +235,6 @@ func NewFakeFailer(fail uint64) *Progpow {
 	return &Progpow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     &log.Log,
 		},
 		fakeFail: fail,
 	}
@@ -253,7 +247,6 @@ func NewFakeDelayer(delay time.Duration) *Progpow {
 	return &Progpow{
 		config: Config{
 			PowMode: ModeFake,
-			Log:     &log.Log,
 		},
 		fakeDelay: delay,
 	}
@@ -265,7 +258,6 @@ func NewFullFaker() *Progpow {
 	return &Progpow{
 		config: Config{
 			PowMode: ModeFullFake,
-			Log:     &log.Log,
 		},
 	}
 }
@@ -379,7 +371,6 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 			endian = ".be"
 		}
 		path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x%s", algorithmRevision, seed[:8], endian))
-		logger := log.New("epoch")
 
 		// We're about to mmap the file, ensure that the mapping is cleaned up when the
 		// cache becomes unused.
@@ -389,17 +380,17 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 		var err error
 		c.dump, c.mmap, c.cache, err = memoryMap(path, lock)
 		if err == nil {
-			logger.Debug("Loaded old ethash cache from disk")
+			log.Debug("Loaded old ethash cache from disk")
 			c.cDag = make([]uint32, progpowCacheWords)
 			generateCDag(c.cDag, c.cache, c.epoch)
 			return
 		}
-		logger.Debug("Failed to load old ethash cache", "err", err)
+		log.Debug("Failed to load old ethash cache", "err", err)
 
 		// No previous cache available, create a new cache file to fill
 		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, lock, func(buffer []uint32) { generateCache(buffer, c.epoch, seed) })
 		if err != nil {
-			logger.Error("Failed to generate mapped ethash cache", "err", err)
+			log.Error("Failed to generate mapped ethash cache", "err", err)
 
 			c.cache = make([]uint32, size/4)
 			generateCache(c.cache, c.epoch, seed)

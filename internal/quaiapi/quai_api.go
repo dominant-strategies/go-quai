@@ -92,30 +92,6 @@ func (s *PublicQuaiAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOr
 	return results, nil
 }
 
-// Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
-// yet received the latest block headers from its pears. In case it is synchronizing:
-// - startingBlock: block number this node started to synchronise from
-// - currentBlock:  block number this node is currently importing
-// - highestBlock:  block number of the highest block header this node has received from peers
-// - pulledStates:  number of state entries processed until now
-// - knownStates:   number of known state entries that still need to be pulled
-func (s *PublicQuaiAPI) Syncing() (interface{}, error) {
-	progress := s.b.SyncProgress()
-
-	// Return not syncing if the synchronisation already completed
-	if progress.CurrentBlock >= progress.HighestBlock {
-		return false, nil
-	}
-	// Otherwise gather the block sync stats
-	return map[string]interface{}{
-		"startingBlock": hexutil.Uint64(progress.StartingBlock),
-		"currentBlock":  hexutil.Uint64(progress.CurrentBlock),
-		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
-		"pulledStates":  hexutil.Uint64(progress.PulledStates),
-		"knownStates":   hexutil.Uint64(progress.KnownStates),
-	}, nil
-}
-
 // PublicBlockChainQuaiAPI provides an API to access the Quai blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainQuaiAPI struct {

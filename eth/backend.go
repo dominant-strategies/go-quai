@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package eth implements the Quai protocol.
+// Package quai implements the Quai protocol.
 package eth
 
 import (
 	"fmt"
 	"math/big"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -32,19 +31,14 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state/pruner"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
-	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/ethconfig"
 	"github.com/dominant-strategies/go-quai/eth/filters"
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
-	"github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
-	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/p2p/dnsdisc"
-	"github.com/dominant-strategies/go-quai/p2p/enode"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -58,10 +52,7 @@ type Quai struct {
 	config *ethconfig.Config
 
 	// Handlers
-	core               *core.Core
-	handler            *handler
-	ethDialCandidates  enode.Iterator
-	snapDialCandidates enode.Iterator
+	core *core.Core
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -78,11 +69,6 @@ type Quai struct {
 	gasPrice  *big.Int
 	etherbase common.Address
 
-	networkID     uint64
-	netRPCService *quaiapi.PublicNetAPI
-
-	p2pServer *p2p.Server
-
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
 
@@ -90,9 +76,6 @@ type Quai struct {
 // initialisation of the common Quai object)
 func New(stack *node.Node, config *ethconfig.Config, nodeCtx int) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
-	if !config.SyncMode.IsValid() {
-		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
-	}
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
@@ -118,32 +101,46 @@ func New(stack *node.Node, config *ethconfig.Config, nodeCtx int) (*Quai, error)
 		return nil, genesisErr
 	}
 
+	log.Warn("Memory location of chainConfig", "location", &chainConfig)
+
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
-	eth := &Quai{
+	quai := &Quai{
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		closeBloomHandler: make(chan struct{}),
-		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		p2pServer:         stack.Server(),
 	}
 
+	// Copy the chainConfig
+	newChainConfig := params.ChainConfig{
+		ChainID:         chainConfig.ChainID,
+		ConsensusEngine: chainConfig.ConsensusEngine,
+		Blake3Pow:       chainConfig.Blake3Pow,
+		Progpow:         chainConfig.Progpow,
+		GenesisHash:     chainConfig.GenesisHash,
+		Location:        chainConfig.Location,
+	}
+	chainConfig = &newChainConfig
+
+	log.Info("Chain Config", config.NodeLocation)
+	chainConfig.Location = config.NodeLocation // TODO: See why this is necessary
+	log.Info("Node", "Ctx", nodeCtx, "NodeLocation", config.NodeLocation, "genesis location", config.Genesis.Config.Location, "chain config", chainConfig.Location)
 	if config.ConsensusEngine == "blake3" {
 		blake3Config := config.Blake3Pow
 		blake3Config.NotifyFull = config.Miner.NotifyFull
-		blake3Config.NodeLocation = chainConfig.Location
-		eth.engine = ethconfig.CreateBlake3ConsensusEngine(stack, chainConfig, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb)
+		blake3Config.NodeLocation = config.NodeLocation
+		quai.engine = ethconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb)
 	} else {
 		// Transfer mining-related config to the progpow config.
 		progpowConfig := config.Progpow
-		progpowConfig.NodeLocation = chainConfig.Location
+		progpowConfig.NodeLocation = config.NodeLocation
 		progpowConfig.NotifyFull = config.Miner.NotifyFull
-		eth.engine = ethconfig.CreateProgpowConsensusEngine(stack, chainConfig, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
+		quai.engine = ethconfig.CreateProgpowConsensusEngine(stack, config.NodeLocation, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb)
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
@@ -185,57 +182,31 @@ func New(stack *node.Node, config *ethconfig.Config, nodeCtx int) (*Quai, error)
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 
-	eth.core, err = core.NewCore(chainDb, &config.Miner, eth.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, eth.config.SlicesRunning, eth.config.DomUrl, eth.config.SubUrls, eth.engine, cacheConfig, vmConfig, config.Genesis)
+	log.Info("Dom clietn", "url", quai.config.DomUrl)
+	quai.core, err = core.NewCore(chainDb, &config.Miner, quai.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, quai.config.SlicesRunning, quai.config.DomUrl, quai.config.SubUrls, quai.engine, cacheConfig, vmConfig, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
 
 	// Only index bloom if processing state
-	if eth.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
-		eth.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms, chainConfig.Location.Context())
-		eth.bloomIndexer.Start(eth.Core().Slice().HeaderChain())
+	if quai.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
+		quai.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms, chainConfig.Location.Context())
+		quai.bloomIndexer.Start(quai.Core().Slice().HeaderChain())
 	}
 
-	// Permit the downloader to use the trie cache allowance during fast sync
-	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
-	if eth.handler, err = newHandler(&handlerConfig{
-		Database:      chainDb,
-		Core:          eth.core,
-		TxPool:        eth.core.TxPool(),
-		Network:       config.NetworkId,
-		Sync:          config.SyncMode,
-		BloomCache:    uint64(cacheLimit),
-		EventMux:      eth.eventMux,
-		Whitelist:     config.Whitelist,
-		SlicesRunning: config.SlicesRunning,
-	}); err != nil {
-		return nil, err
-	}
-
-	eth.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
+	quai.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), quai, nil}
 	// Gasprice oracle is only initiated in zone chains
-	if nodeCtx == common.ZONE_CTX && eth.core.ProcessingState() {
+	if nodeCtx == common.ZONE_CTX && quai.core.ProcessingState() {
 		gpoParams := config.GPO
 		if gpoParams.Default == nil {
 			gpoParams.Default = config.Miner.GasPrice
 		}
-		eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
+		quai.APIBackend.gpo = gasprice.NewOracle(quai.APIBackend, gpoParams)
 	}
-
-	// Setup DNS discovery iterators.
-	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
-	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start the RPC service
-	eth.netRPCService = quaiapi.NewPublicNetAPI(eth.p2pServer, config.NetworkId)
 
 	// Register the backend on the node
-	stack.RegisterAPIs(eth.APIs())
-	stack.RegisterProtocols(eth.Protocols())
-	stack.RegisterLifecycle(eth)
+	stack.RegisterAPIs(quai.APIs())
+	stack.RegisterLifecycle(quai)
 	// Check for unclean shutdown
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
 		log.Error("Could not update unclean-shutdown-marker list", "error", err)
@@ -249,7 +220,7 @@ func New(stack *node.Node, config *ethconfig.Config, nodeCtx int) (*Quai, error)
 				"age", common.PrettyAge(t))
 		}
 	}
-	return eth, nil
+	return quai, nil
 }
 
 // APIs return the collection of RPC services the go-quai package offers.
@@ -271,11 +242,6 @@ func (s *Quai) APIs() []rpc.API {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicMinerAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
 		}, {
 			Namespace: "miner",
@@ -300,11 +266,6 @@ func (s *Quai) APIs() []rpc.API {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(s),
-		}, {
-			Namespace: "net",
-			Version:   "1.0",
-			Service:   s.netRPCService,
-			Public:    true,
 		},
 	}...)
 }
@@ -360,46 +321,29 @@ func (s *Quai) shouldPreserve(block *types.Block) bool {
 	return s.isLocalBlock(block.Header())
 }
 
-func (s *Quai) Core() *core.Core                   { return s.core }
-func (s *Quai) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Quai) Engine() consensus.Engine           { return s.engine }
-func (s *Quai) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Quai) IsListening() bool                  { return true } // Always listening
-func (s *Quai) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *Quai) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
-func (s *Quai) ArchiveMode() bool                  { return s.config.NoPruning }
-func (s *Quai) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
-
-// Protocols returns all the currently configured
-// network protocols to start.
-func (s *Quai) Protocols() []p2p.Protocol {
-	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
-	return protos
-}
+func (s *Quai) Core() *core.Core                 { return s.core }
+func (s *Quai) EventMux() *event.TypeMux         { return s.eventMux }
+func (s *Quai) Engine() consensus.Engine         { return s.engine }
+func (s *Quai) ChainDb() ethdb.Database          { return s.chainDb }
+func (s *Quai) IsListening() bool                { return true } // Always listening
+func (s *Quai) ArchiveMode() bool                { return s.config.NoPruning }
+func (s *Quai) BloomIndexer() *core.ChainIndexer { return s.bloomIndexer }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Quai protocol implementation.
 func (s *Quai) Start() error {
-	eth.StartENRUpdater(s.core, s.p2pServer.LocalNode())
 
 	if s.core.ProcessingState() && s.core.NodeCtx() == common.ZONE_CTX {
 		// Start the bloom bits servicing goroutines
 		s.startBloomHandlers(params.BloomBitsBlocks)
 	}
 
-	// Figure out a max peers count based on the server limits
-	maxPeers := s.p2pServer.MaxPeers
-	// Start the networking layer
-	s.handler.Start(maxPeers)
 	return nil
 }
 
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Quai protocol.
 func (s *Quai) Stop() error {
-	// Stop all the peer-related stuff first.
-	s.ethDialCandidates.Close()
-	s.handler.Stop()
 
 	if s.core.ProcessingState() && s.core.NodeCtx() == common.ZONE_CTX {
 		// Then stop everything else.

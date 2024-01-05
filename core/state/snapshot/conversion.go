@@ -203,7 +203,7 @@ func (stat *generateStats) report() {
 			}...)
 		}
 	}
-	log.Info("Iterating state snapshot", ctx...)
+	log.Info("Iterating state snapshot", ctx)
 }
 
 // reportDone prints the last log when the whole generation is finished.
@@ -217,7 +217,7 @@ func (stat *generateStats) reportDone() {
 		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
 	}
 	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
-	log.Info("Iterated snapshot", ctx...)
+	log.Info("Iterated snapshot", ctx)
 }
 
 // runReport periodically prints the progress information.

@@ -118,7 +118,9 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, 3)
 	if nodeCtx != common.ZONE_CTX {
-		sl.subClients = makeSubClients(subClientUrls)
+		go func() {
+			sl.subClients = makeSubClients(subClientUrls)
+		}()
 	}
 
 	// only set domClient if the chain is not Prime.
@@ -1179,6 +1181,11 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 // NewGenesisPendingHeader creates a pending header on the genesis block
 func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	nodeCtx := sl.NodeLocation().Context()
+
+	if nodeCtx == common.PRIME_CTX {
+		time.Sleep(10 * time.Second)
+	}
+
 	genesisHash := sl.config.GenesisHash
 	// Upate the local pending header
 	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(sl.hc.GetBlockByHash(genesisHash), false)

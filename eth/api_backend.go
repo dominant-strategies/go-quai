@@ -21,8 +21,6 @@ import (
 	"errors"
 	"math/big"
 
-	quai "github.com/dominant-strategies/go-quai"
-
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
@@ -31,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
-	"github.com/dominant-strategies/go-quai/eth/downloader"
 	"github.com/dominant-strategies/go-quai/eth/gasprice"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
@@ -373,10 +370,6 @@ func (b *QuaiAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.
 	return b.eth.core.SubscribeNewTxsEvent(ch)
 }
 
-func (b *QuaiAPIBackend) Downloader() *downloader.Downloader {
-	return b.eth.Downloader()
-}
-
 func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	nodeCtx := b.eth.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -450,10 +443,6 @@ func (b *QuaiAPIBackend) StateAtTransaction(ctx context.Context, block *types.Bl
 		return nil, vm.BlockContext{}, nil, errors.New("stateAtTransaction can only be called in zone chain")
 	}
 	return b.eth.core.StateAtTransaction(block, txIndex, reexec)
-}
-
-func (b *QuaiAPIBackend) SyncProgress() quai.SyncProgress {
-	return b.eth.Downloader().Progress()
 }
 
 func (b *QuaiAPIBackend) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {

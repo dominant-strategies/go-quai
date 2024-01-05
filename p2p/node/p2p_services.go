@@ -4,7 +4,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
@@ -16,7 +16,7 @@ import (
 // Opens a stream to the given peer and requests a block for the given hash and slice.
 //
 // If a block is not found, an error is returned
-func (p *P2PNode) requestBlockFromPeer(hash types.Hash, slice types.SliceID, peerID peer.ID) (*types.Block, error) {
+func (p *P2PNode) requestBlockFromPeer(hash common.Hash, slice types.SliceID, peerID peer.ID) (*types.Block, error) {
 	// Open a stream to the peer using a specific protocol for block requests
 	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
 	if err != nil {

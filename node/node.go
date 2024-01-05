@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/prometheus/tsdb/fileutil"
 )
@@ -42,7 +41,6 @@ type Node struct {
 	log           log.Logger
 	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
 	stop          chan struct{}     // Channel to wait for termination notifications
-	server        *p2p.Server       // Currently running P2P networking layer
 	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
 	state         int               // Tracks state of node lifecycle
 
@@ -75,9 +73,6 @@ func New(conf *Config) (*Node, error) {
 		}
 		conf.DataDir = absdatadir
 	}
-	if conf.Logger == nil {
-		conf.Logger = &log.Log
-	}
 
 	// Ensure that the instance name doesn't cause weird conflicts with
 	// other files in the data directory.
@@ -92,32 +87,13 @@ func New(conf *Config) (*Node, error) {
 		config:        conf,
 		inprocHandler: rpc.NewServer(),
 		eventmux:      new(event.TypeMux),
-		log:           *conf.Logger,
 		stop:          make(chan struct{}),
-		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
 	}
-
-	// Register built-in APIs.
-	node.rpcAPIs = append(node.rpcAPIs, node.apis()...)
 
 	// Acquire the instance directory lock.
 	if err := node.openDataDir(); err != nil {
 		return nil, err
-	}
-
-	// Initialize the p2p server. This creates the node key and discovery databases.
-	node.server.Config.PrivateKey = node.config.NodeKey()
-	node.server.Config.Name = node.config.NodeName()
-	node.server.Config.Logger = &node.log
-	if node.server.Config.StaticNodes == nil {
-		node.server.Config.StaticNodes = node.config.StaticNodes()
-	}
-	if node.server.Config.TrustedNodes == nil {
-		node.server.Config.TrustedNodes = node.config.TrustedNodes()
-	}
-	if node.server.Config.NodeDatabase == "" {
-		node.server.Config.NodeDatabase = node.config.NodeDB()
 	}
 
 	// Check HTTP/WS prefixes are valid.
@@ -233,16 +209,10 @@ func (n *Node) doClose(errs []error) error {
 
 // openEndpoints starts all network and RPC endpoints.
 func (n *Node) openEndpoints() error {
-	// start networking endpoints
-	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
-	if err := n.server.Start(); err != nil {
-		return convertFileLockError(err)
-	}
 	// start RPC endpoints
 	err := n.startRPC()
 	if err != nil {
 		n.stopRPC()
-		n.server.Stop()
 	}
 	return err
 }
@@ -269,9 +239,6 @@ func (n *Node) stopServices(running []Lifecycle) error {
 			failure.Services[reflect.TypeOf(running[i])] = err
 		}
 	}
-
-	// Stop p2p networking.
-	n.server.Stop()
 
 	if len(failure.Services) > 0 {
 		return failure
@@ -401,17 +368,6 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	n.lifecycles = append(n.lifecycles, lifecycle)
 }
 
-// RegisterProtocols adds backend's protocols to the node's p2p server.
-func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.state != initializingState {
-		panic("can't register protocols on running/stopped node")
-	}
-	n.server.Protocols = append(n.server.Protocols, protocols...)
-}
-
 // RegisterAPIs registers the APIs a service provides on the node.
 func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.lock.Lock()
@@ -458,16 +414,6 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 // Config returns the configuration of node.
 func (n *Node) Config() *Config {
 	return n.config
-}
-
-// Server retrieves the currently running P2P network layer. This method is meant
-// only to inspect fields of the currently running server. Callers should not
-// start or stop the returned server.
-func (n *Node) Server() *p2p.Server {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	return n.server
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.

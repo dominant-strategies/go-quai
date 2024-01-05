@@ -48,12 +48,9 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/eth/downloader"
-	ethproto "github.com/dominant-strategies/go-quai/eth/protocols/eth"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
-	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -99,7 +96,6 @@ type backend interface {
 	TotalLogS(header *types.Header) *big.Int
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	Stats() (pending int, queued int)
-	Downloader() *downloader.Downloader
 	ChainConfig() *params.ChainConfig
 	ProcessingState() bool
 	NodeCtx() int
@@ -118,7 +114,6 @@ type fullNodeBackend interface {
 // Service implements an Quai netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
-	server  *p2p.Server // Peer-to-peer server to retrieve networking infos
 	backend backend
 	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
@@ -285,7 +280,6 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string, 
 	quaistats := &Service{
 		backend:               backend,
 		engine:                engine,
-		server:                node.Server(),
 		node:                  parts[0],
 		pass:                  parts[1],
 		host:                  parts[2],
@@ -876,17 +870,6 @@ type AuthResponse struct {
 func (s *Service) login2(url string) (string, error) {
 	// Substitute with your actual service address and port
 
-	infos := s.server.NodeInfo()
-
-	var protocols []string
-	for _, proto := range s.server.Protocols {
-		protocols = append(protocols, fmt.Sprintf("%s/%d", proto.Name, proto.Version))
-	}
-	var network string
-	if info := infos.Protocols["eth"]; info != nil {
-		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
-	}
-
 	var secretUser string
 	if s.sendfullstats {
 		secretUser = "admin"
@@ -897,18 +880,14 @@ func (s *Service) login2(url string) (string, error) {
 	auth := &authMsg{
 		ID: s.node,
 		Info: nodeInfo{
-			Name:     s.node,
-			Node:     infos.Name,
-			Port:     infos.Ports.Listener,
-			Network:  network,
-			Protocol: strings.Join(protocols, ", "),
-			API:      "No",
-			Os:       runtime.GOOS,
-			OsVer:    runtime.GOARCH,
-			Client:   "0.1.1",
-			History:  true,
-			Chain:    s.backend.NodeLocation().Name(),
-			ChainID:  s.chainID.Uint64(),
+			Name:    s.node,
+			API:     "No",
+			Os:      runtime.GOOS,
+			OsVer:   runtime.GOARCH,
+			Client:  "0.1.1",
+			History: true,
+			Chain:   s.backend.NodeLocation().Name(),
+			ChainID: s.chainID.Uint64(),
 		},
 		Secret: loginSecret{
 			Name:     secretUser,

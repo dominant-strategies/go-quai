@@ -106,7 +106,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 			}...)
 		}
 	}
-	log.Info(msg, ctx...)
+	log.Info(msg, ctx)
 }
 
 // generateSnapshot regenerates a brand new snapshot based on an existing state
@@ -347,11 +347,10 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	if len(origin) > 0 {
 		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
 	}
-	logger := log.Log
 
 	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
-		logger.Trace("Proved state range", "last", hexutil.Encode(last))
+		log.Trace("Proved state range", "last", hexutil.Encode(last))
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -362,7 +361,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// Only abort the iteration when both database and trie are exhausted
 		return !result.diskMore && !result.trieMore, last, nil
 	}
-	logger.Trace("Detected outdated state range", "last", hexutil.Encode(last), "err", result.proofErr)
+	log.Trace("Detected outdated state range", "last", hexutil.Encode(last), "err", result.proofErr)
 
 	// We use the snap data to build up a cache which can be used by the
 	// main account trie as a primary lookup when resolving hashes
@@ -455,7 +454,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	}
 	internal += time.Since(istart)
 
-	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
+	log.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
 
 	// If there are either more trie items, or there are more snap items

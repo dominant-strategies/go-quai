@@ -37,7 +37,6 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/eth/abi"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -107,30 +106,6 @@ func (s *PublicQuaiAPI_Deprecated) FeeHistory(ctx context.Context, blockCount rp
 		}
 	}
 	return results, nil
-}
-
-// Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
-// yet received the latest block headers from its pears. In case it is synchronizing:
-// - startingBlock: block number this node started to synchronise from
-// - currentBlock:  block number this node is currently importing
-// - highestBlock:  block number of the highest block header this node has received from peers
-// - pulledStates:  number of state entries processed until now
-// - knownStates:   number of known state entries that still need to be pulled
-func (s *PublicQuaiAPI_Deprecated) Syncing() (interface{}, error) {
-	progress := s.b.Downloader().Progress()
-
-	// Return not syncing if the synchronisation already completed
-	if progress.CurrentBlock >= progress.HighestBlock {
-		return false, nil
-	}
-	// Otherwise gather the block sync stats
-	return map[string]interface{}{
-		"startingBlock": hexutil.Uint64(progress.StartingBlock),
-		"currentBlock":  hexutil.Uint64(progress.CurrentBlock),
-		"highestBlock":  hexutil.Uint64(progress.HighestBlock),
-		"pulledStates":  hexutil.Uint64(progress.PulledStates),
-		"knownStates":   hexutil.Uint64(progress.KnownStates),
-	}, nil
 }
 
 // PublicTxPoolAPI offers and API for the transaction pool. It only operates on data that is non confidential.
@@ -1555,23 +1530,12 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
-	net            *p2p.Server
 	networkVersion uint64
-}
-
-// NewPublicNetAPI creates a new net API instance.
-func NewPublicNetAPI(net *p2p.Server, networkVersion uint64) *PublicNetAPI {
-	return &PublicNetAPI{net, networkVersion}
 }
 
 // Listening returns an indication if the node is listening for network connections.
 func (s *PublicNetAPI) Listening() bool {
 	return true // always listening
-}
-
-// PeerCount returns the number of connected peers
-func (s *PublicNetAPI) PeerCount() hexutil.Uint {
-	return hexutil.Uint(s.net.PeerCount())
 }
 
 // Version returns the current Quai protocol version.

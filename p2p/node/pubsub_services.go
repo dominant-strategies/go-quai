@@ -27,7 +27,7 @@ func (p *P2PNode) handleBlocksSubscription(sub *pubsub.Subscription) {
 		}
 
 		// store the block in the cache
-		evicted := p.blockCache.Add(block.Hash, block)
+		evicted := p.blockCache.Add(block.Hash(), block)
 		if evicted {
 			// TODO: handle eviction
 			log.Warnf("block cache eviction occurred")

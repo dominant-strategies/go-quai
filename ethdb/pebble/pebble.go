@@ -123,7 +123,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	}
 	db := &Database{
 		fn:       file,
-		log:      log.Log,
 		quitChan: make(chan chan error),
 	}
 	opt := &pebble.Options{

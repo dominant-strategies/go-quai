@@ -95,7 +95,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	if options.ReadOnly {
 		logCtx = append(logCtx, "readonly", "true")
 	}
-	log.Info("Allocated cache and file handles", logCtx...)
+	log.Info("Allocated cache and file handles")
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)
@@ -109,7 +109,6 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	ldb := &Database{
 		fn:       file,
 		db:       db,
-		log:      log.Log,
 		quitChan: make(chan chan error),
 	}
 
@@ -120,8 +119,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 func configureOptions(customizeFn func(*opt.Options)) *opt.Options {
 	// Set default options
 	options := &opt.Options{
-		Filter:                 filter.NewBloomFilter(10),
-		DisableSeeksCompaction: true,
+		Filter: filter.NewBloomFilter(10),
 	}
 	// Allow caller to make custom modifications to the options
 	if customizeFn != nil {

@@ -2,7 +2,7 @@ package protocol
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/gogo/protobuf/proto"
@@ -49,7 +49,7 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			// get the sliceID from the block request
 			protoSlice := blockReq.SliceId
 			slice := pb.ConvertFromProtoSlice(protoSlice)
-		
+
 			// check if we have the block in our cache
 			block := node.GetBlock(hash, slice)
 			if block == nil {

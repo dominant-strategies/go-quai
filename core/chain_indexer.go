@@ -110,7 +110,6 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 		sectionSize: section,
 		confirmsReq: confirm,
 		throttling:  throttling,
-		log:         log.Log,
 	}
 	// Initialize database dependent fields and start the updater
 	c.loadValidSections()

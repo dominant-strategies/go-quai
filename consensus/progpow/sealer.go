@@ -17,6 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 const (
@@ -39,7 +40,7 @@ func (progpow *Progpow) Seal(header *types.Header, results chan<- *types.Header,
 		select {
 		case results <- header:
 		default:
-			progpow.config.Log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", header.SealHash())
+			log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", header.SealHash())
 		}
 		return nil
 	}
@@ -67,10 +68,6 @@ func (progpow *Progpow) Seal(header *types.Header, results chan<- *types.Header,
 	if threads < 0 {
 		threads = 0 // Allows disabling local mining without extra logic around local/remote
 	}
-	// Push new work to remote sealer
-	if progpow.remote != nil {
-		progpow.remote.workCh <- &sealTask{header: header, results: results}
-	}
 	var (
 		pend   sync.WaitGroup
 		locals = make(chan *types.Header)
@@ -94,14 +91,14 @@ func (progpow *Progpow) Seal(header *types.Header, results chan<- *types.Header,
 			select {
 			case results <- result:
 			default:
-				progpow.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", header.SealHash())
+				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", header.SealHash())
 			}
 			close(abort)
 		case <-progpow.update:
 			// Thread count was changed on user request, restart
 			close(abort)
 			if err := progpow.Seal(header, results, stop); err != nil {
-				progpow.config.Log.Error("Failed to restart sealing after update", "err", err)
+				log.Error("Failed to restart sealing after update", "err", err)
 			}
 		}
 		// Wait for all miners to terminate and return the block
@@ -241,7 +238,7 @@ func startRemoteSealer(progpow *Progpow, urls []string, noverify bool) *remoteSe
 
 func (s *remoteSealer) loop() {
 	defer func() {
-		s.progpow.config.Log.Trace("Progpow remote sealer is exiting")
+		log.Trace("Progpow remote sealer is exiting")
 		s.cancelNotify()
 		s.reqWG.Wait()
 		close(s.exitCh)
@@ -358,7 +355,7 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(json))
 	if err != nil {
-		s.progpow.config.Log.Warn("Can't create remote miner notification", "err", err)
+		log.Warn("Can't create remote miner notification", "err", err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, remoteSealerTimeout)
@@ -368,9 +365,9 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		s.progpow.config.Log.Warn("Failed to notify remote miner", "err", err)
+		log.Warn("Failed to notify remote miner", "err", err)
 	} else {
-		s.progpow.config.Log.Trace("Notified remote miner", "miner", url, "hash", work[0], "target", work[2])
+		log.Trace("Notified remote miner", "miner", url, "hash", work[0], "target", work[2])
 		resp.Body.Close()
 	}
 }
@@ -380,14 +377,14 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 // any other error, like no pending work or stale mining result).
 func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) bool {
 	if s.currentHeader == nil {
-		s.progpow.config.Log.Error("Pending work without block", "sealhash", sealhash)
+		log.Error("Pending work without block", "sealhash", sealhash)
 		return false
 	}
 	nodeCtx := s.progpow.config.NodeLocation.Context()
 	// Make sure the work submitted is present
 	header := s.works[sealhash]
 	if header == nil {
-		s.progpow.config.Log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64(nodeCtx))
+		log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", s.currentHeader.NumberU64(nodeCtx))
 		return false
 	}
 	// Verify the correctness of submitted result.
@@ -399,10 +396,10 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	}
 	// Make sure the result channel is assigned.
 	if s.results == nil {
-		s.progpow.config.Log.Warn("Progpow result channel is empty, submitted mining result is rejected")
+		log.Warn("Progpow result channel is empty, submitted mining result is rejected")
 		return false
 	}
-	s.progpow.config.Log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Solutions seems to be valid, return to the miner and notify acceptance.
 	solution := header
@@ -411,14 +408,14 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	if solution.NumberU64(nodeCtx)+staleThreshold > s.currentHeader.NumberU64(nodeCtx) {
 		select {
 		case s.results <- solution:
-			s.progpow.config.Log.Debug("Work submitted is acceptable", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
+			log.Debug("Work submitted is acceptable", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
 			return true
 		default:
-			s.progpow.config.Log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
+			log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
 			return false
 		}
 	}
 	// The submitted block is too old to accept, drop it.
-	s.progpow.config.Log.Warn("Work submitted is too old", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
+	log.Warn("Work submitted is too old", "number", solution.NumberU64(nodeCtx), "sealhash", sealhash, "hash", solution.Hash())
 	return false
 }

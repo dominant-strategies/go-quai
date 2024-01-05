@@ -1,14 +1,14 @@
-package quai
+package eth
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/p2p"
 )
 
 // QuaiBackend implements the quai consensus protocol
 type QuaiBackend struct {
-	p2p common.NetworkingAPI
+	p2p NetworkingAPI
 
 	runningSlices map[types.SliceID]*types.Slice
 }
@@ -19,7 +19,7 @@ func NewQuaiBackend() (*QuaiBackend, error) {
 }
 
 // Assign the p2p client interface to use for interacting with the p2p network
-func (qbe *QuaiBackend) SetP2PNode(api common.NetworkingAPI) {
+func (qbe *QuaiBackend) SetP2PNode(api NetworkingAPI) {
 	qbe.p2p = api
 }
 
@@ -59,6 +59,6 @@ func (qbe *QuaiBackend) SetRunningSlices(slices []types.Slice) {
 	}
 }
 
-func (qbe *QuaiBackend) LookupBlock(hash types.Hash, slice types.SliceID) *types.Block {
+func (qbe *QuaiBackend) LookupBlock(hash common.Hash, slice types.SliceID) *types.Block {
 	panic("todo")
 }

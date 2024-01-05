@@ -3,7 +3,8 @@ package pb
 import (
 	"encoding/hex"
 
-	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/gogo/protobuf/proto"
 )
 
@@ -27,7 +28,7 @@ func MarshalProtoMessage(pbMsg proto.Message) ([]byte, error) {
 // converts a custom go Block type (types.Block) to a protocol buffer Block type (pb.Block)
 func ConvertToProtoBlock(block types.Block) *Block {
 	return &Block{
-		Hash: hex.EncodeToString(block.Hash[:]),
+		Hash: hex.EncodeToString(block.Hash().Bytes()),
 		// ... map other fields
 	}
 
@@ -35,11 +36,10 @@ func ConvertToProtoBlock(block types.Block) *Block {
 
 // converts a protocol buffer Block type (pb.Block) to a custom go Block type (types.Block)
 func ConvertFromProtoBlock(pbBlock *Block) types.Block {
-	var hash types.Hash
+	var hash common.Hash
 	copy(hash[:], pbBlock.Hash)
 	// ... map other fields
 	return types.Block{
-		Hash: hash,
 		// ... map other fields
 	}
 }
@@ -70,21 +70,21 @@ func MarshalBlock(block *types.Block) ([]byte, error) {
 func convertToProtoSlice(slice types.SliceID) *SliceID {
 	sliceContext := &Context{
 		Location: slice.Context.Location,
-		Level:   slice.Context.Level,
+		Level:    slice.Context.Level,
 	}
 	return &SliceID{
 		Context: sliceContext,
 		Region:  slice.Region,
 		Zone:    slice.Zone,
 	}
-	
+
 }
 
 // Converts a protocol buffer SliceID type (pb.SliceID) to a custom go SliceID type (types.SliceID)
 func ConvertFromProtoSlice(pbSlice *SliceID) types.SliceID {
 	sliceContext := types.Context{
 		Location: pbSlice.Context.Location,
-		Level:   pbSlice.Context.Level,
+		Level:    pbSlice.Context.Level,
 	}
 	return types.SliceID{
 		Context: sliceContext,
@@ -94,10 +94,10 @@ func ConvertFromProtoSlice(pbSlice *SliceID) types.SliceID {
 }
 
 // Creates a BlockRequest protocol buffer message
-func CreateProtoBlockRequest(hash types.Hash, slice types.SliceID) *BlockRequest {
+func CreateProtoBlockRequest(hash common.Hash, slice types.SliceID) *BlockRequest {
 	pbSlice := convertToProtoSlice(slice)
 	return &BlockRequest{
-		Hash:  hex.EncodeToString(hash[:]),
+		Hash:    hex.EncodeToString(hash[:]),
 		SliceId: pbSlice,
 	}
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/quai"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/node"
 )
@@ -70,7 +69,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// create instance of consensus backend
-	consensus, err := quai.NewQuaiBackend()
+	consensus, err := utils.StartQuaiBackend()
 	if err != nil {
 		log.Fatalf("error creating consensus backend: %s", err)
 	}

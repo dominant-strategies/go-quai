@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
-	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -40,7 +39,7 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	viper.SetConfigFile(configDir + constants.CONFIG_FILE_NAME)
 	viper.SetConfigType("yaml")
 	// load config from file and environment variables
-	common.InitConfig()
+	utils.InitConfig()
 	// bind cobra flags to viper instance
 	err := viper.BindPFlags(cmd.Flags())
 	if err != nil {
@@ -57,7 +56,7 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	// save config file if SAVE_CONFIG_FILE flag is set to true
 	saveConfigFile := viper.GetBool(utils.SaveConfigFlag.Name)
 	if saveConfigFile {
-		err := common.SaveConfig()
+		err := utils.SaveConfig()
 		if err != nil {
 			log.Errorf("error saving config file: %s . Skipping...", err)
 		} else {

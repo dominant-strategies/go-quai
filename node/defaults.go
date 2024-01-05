@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -42,11 +41,7 @@ var DefaultConfig = Config{
 	HTTPTimeouts:     rpc.DefaultHTTPTimeouts,
 	WSPort:           DefaultWSPort,
 	WSModules:        []string{"net", "web3"},
-	P2P: p2p.Config{
-		ListenAddr: ":30303",
-		MaxPeers:   50,
-	},
-	DBEngine: "",
+	DBEngine:         "",
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other

@@ -21,7 +21,8 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/eth"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
@@ -34,7 +35,7 @@ type P2PNode struct {
 	host.Host
 
 	// Backend for handling consensus data
-	consensus common.ConsensusAPI
+	consensus eth.ConsensusAPI
 
 	// List of peers to introduce us to the network
 	bootpeers []peer.AddrInfo
@@ -53,9 +54,9 @@ type P2PNode struct {
 	topics map[types.SliceID]map[string]*pubsub.Topic
 
 	// cache of received blocks
-	blockCache *lru.Cache[types.Hash, *types.Block]
+	blockCache *lru.Cache[common.Hash, *types.Block]
 	// cache of received transactions
-	txCache *lru.Cache[types.Hash, *types.Transaction]
+	txCache *lru.Cache[common.Hash, *types.Transaction]
 
 	// runtime context
 	ctx context.Context
@@ -177,12 +178,12 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 	// Create a new LRU cache for blocks and transactions
 	const cacheSize = 10
-	blockCache, err := lru.New[types.Hash, *types.Block](cacheSize)
+	blockCache, err := lru.New[common.Hash, *types.Block](cacheSize)
 	if err != nil {
 		return nil, err
 	}
 
-	txCache, err := lru.New[types.Hash, *types.Transaction](cacheSize)
+	txCache, err := lru.New[common.Hash, *types.Transaction](cacheSize)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,8 @@
-package common
+package eth
 
 import (
-	"github.com/dominant-strategies/go-quai/consensus/types"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 
 	"github.com/libp2p/go-libp2p/core"
 )
@@ -23,7 +24,7 @@ type ConsensusAPI interface {
 
 	// Asks the consensus backend to lookup a block by hash and sliceID.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.
-	LookupBlock(hash types.Hash, loc types.SliceID) *types.Block
+	LookupBlock(hash common.Hash, loc types.SliceID) *types.Block
 }
 
 // The networking backend will implement the following interface to enable consensus to communicate with other nodes.
@@ -41,8 +42,8 @@ type NetworkingAPI interface {
 	// Methods to lookup specific data from the network. Each request method
 	// returns a result channel. If the result is found, it will be put into the
 	// channel. If the result is not found, the channel will be closed.
-	RequestBlock(hash types.Hash, loc types.SliceID) chan *types.Block
-	RequestTransaction(hash types.Hash, loc types.SliceID) chan *types.Transaction
+	RequestBlock(hash common.Hash, loc types.SliceID) chan *types.Block
+	RequestTransaction(hash common.Hash, loc types.SliceID) chan *types.Transaction
 
 	// Method to report a peer to the P2PClient as behaving maliciously
 	ReportBadPeer(peer core.PeerID)
