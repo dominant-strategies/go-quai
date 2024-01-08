@@ -86,39 +86,10 @@ type Slice struct {
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	nodeCtx := common.NodeLocation.Context()
-	sl := &Slice{
-		config:         chainConfig,
-		engine:         engine,
-		sliceDb:        db,
-		quit:           make(chan struct{}),
-		badHashesCache: make(map[common.Hash]bool),
-	}
+	sl, err := newSliceCommon(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
 
-	var err error
-	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
 	if err != nil {
 		return nil, err
-	}
-
-	sl.validator = NewBlockValidator(chainConfig, sl.hc, engine)
-
-	// tx pool is only used in zone
-	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
-		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
-		sl.hc.pool = sl.txPool
-	}
-	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState())
-
-	sl.phCache, _ = lru.New(c_phCacheSize)
-
-	sl.pEtxRetryCache, _ = lru.New(c_pEtxRetryThreshold)
-
-	sl.inboundEtxsCache, _ = lru.New(c_inboundEtxCacheSize)
-
-	// only set the subClients if the chain is not Zone
-	sl.subClients = make([]*quaiclient.Client, 3)
-	if nodeCtx != common.ZONE_CTX {
-		sl.subClients = makeSubClients(subClientUrls)
 	}
 
 	// only set domClient if the chain is not Prime.
@@ -128,20 +99,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 			}()
 	}
 
-	if err := sl.init(genesis); err != nil {
-		return nil, err
-	}
-
-	sl.CheckForBadHashAndRecover()
-
-	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
-		go sl.asyncPendingHeaderLoop()
-	}
-
 	return sl, nil
 }
 
-func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
+func newSliceCommon(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
 	nodeCtx := common.NodeLocation.Context()
 	sl := &Slice{
 		config:         chainConfig,
@@ -164,7 +125,6 @@ func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txL
 		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc)
 		sl.hc.pool = sl.txPool
 	}
-
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState())
 
 	sl.phCache, _ = lru.New(c_phCacheSize)
@@ -173,13 +133,6 @@ func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txL
 	sl.subClients = make([]*quaiclient.Client, 3)
 	if nodeCtx != common.ZONE_CTX {
 		sl.subClients = makeSubClients(subClientUrls)
-	}
-
-	// only set domClient if the chain is not Prime.
-	if nodeCtx != common.PRIME_CTX {
-			go func ()  {
-				sl.domClient = quaiclient.NewClient(&quaiclient.TestRpcClient{})
-			}()
 	}
 
 	if err := sl.init(genesis); err != nil {
@@ -191,6 +144,26 @@ func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txL
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
 		go sl.asyncPendingHeaderLoop()
 	}
+
+	return sl, nil
+}
+
+func NewFakeSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis) (*Slice, error) {
+	nodeCtx := common.NodeLocation.Context()
+
+	sl, err := newSliceCommon(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// only set domClient if the chain is not Prime.
+	if nodeCtx != common.PRIME_CTX {
+		go func ()  {
+			sl.domClient = quaiclient.NewClient(&quaiclient.TestRpcClient{})
+		}()
+	}
+
 
 	return sl, nil
 }
