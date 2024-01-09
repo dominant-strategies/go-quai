@@ -13,6 +13,7 @@ import (
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p/node"
 )
 
@@ -39,6 +40,11 @@ func init() {
 
 	// Create and bind all rpc flags to the start command
 	for _, flag := range utils.RPCFlags {
+		utils.CreateAndBindFlag(flag, startCmd)
+	}
+
+	// Create and bind all metrics flags to the start command
+	for _, flag := range utils.MetricsFlags {
 		utils.CreateAndBindFlag(flag, startCmd)
 	}
 }
@@ -92,6 +98,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// subscribe to necessary protocol events
 	if err := node.StartGossipSub(ctx); err != nil {
 		log.WithField("error", err).Fatal("error starting gossipsub")
+	}
+
+	if viper.IsSet(utils.MetricsEnabledFlag.Name) {
+		log.Info("Starting metrics")
+		metrics_config.EnableMetrics()
+		go metrics_config.StartProcessMetrics()
 	}
 
 	// wait for a SIGINT or SIGTERM signal

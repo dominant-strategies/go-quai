@@ -21,6 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
@@ -120,6 +121,13 @@ var RPCFlags = []Flag{
 	RPCGlobalGasCapFlag,
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
+}
+
+var MetricsFlags = []Flag{
+	MetricsEnabledFlag,
+	MetricsEnabledExpensiveFlag,
+	MetricsHTTPFlag,
+	MetricsPortFlag,
 }
 
 var (
@@ -305,7 +313,26 @@ var (
 		Value: xdg.DataHome,
 		Usage: "Document Root for HTTPClient file scheme" + generateEnvDoc("docroot"),
 	}
-
+	MetricsEnabledFlag = Flag{
+		Name:  "metrics",
+		Value: false,
+		Usage: "Enable metrics collection and reporting" + generateEnvDoc("metrics"),
+	}
+	MetricsEnabledExpensiveFlag = Flag{
+		Name:  "metrics.expensive",
+		Value: false,
+		Usage: "Enable expensive metrics collection and reporting" + generateEnvDoc("metrics.expensive"),
+	}
+	MetricsHTTPFlag = Flag{
+		Name:  "metrics.addr",
+		Value: metrics_config.DefaultConfig.HTTP,
+		Usage: "Enable stand-alone metrics HTTP server listening interface" + generateEnvDoc("metrics.addr"),
+	}
+	MetricsPortFlag = Flag{
+		Name:  "metrics.port",
+		Value: metrics_config.DefaultConfig.Port,
+		Usage: "Metrics HTTP server listening port" + generateEnvDoc("metrics.port"),
+	}
 	// ****************************************
 	// ** 								     **
 	// ** 	      PY FLAGS    				 **

@@ -42,6 +42,10 @@ const (
 	// minHandles is the minimum number of files handles to allocate to the open
 	// database files.
 	minHandles = 16
+
+	// metricsGatheringInterval specifies the interval to retrieve pebble database
+	// compaction, io and pause stats to report to the user.
+	metricsGatheringInterval = 3 * time.Second
 )
 
 // Database is a persistent key-value store based on the pebble storage engine.
@@ -180,7 +184,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool, l
 		return nil, err
 	}
 	db.db = innerDB
-
+	// Start up the metrics gathering and return
+	go db.meter(metricsGatheringInterval)
 	return db, nil
 }
 
@@ -349,6 +354,7 @@ func (d *Database) meter(refresh time.Duration) {
 			compRead  int64
 			nWrite    int64
 
+			metrics         = d.db.Metrics()
 			compTime        = d.compTime.Load()
 			writeDelayCount = d.writeDelayCount.Load()
 			writeDelayTime  = d.writeDelayTime.Load()
@@ -356,6 +362,15 @@ func (d *Database) meter(refresh time.Duration) {
 		writeDelayTimes[i%2] = writeDelayTime
 		writeDelayCounts[i%2] = writeDelayCount
 		compTimes[i%2] = compTime
+
+		for _, levelMetrics := range metrics.Levels {
+			nWrite += int64(levelMetrics.BytesCompacted)
+			nWrite += int64(levelMetrics.BytesFlushed)
+			compWrite += int64(levelMetrics.BytesCompacted)
+			compRead += int64(levelMetrics.BytesRead)
+		}
+
+		nWrite += int64(metrics.WAL.BytesWritten)
 
 		compWrites[i%2] = compWrite
 		compReads[i%2] = compRead

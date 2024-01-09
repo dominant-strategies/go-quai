@@ -30,8 +30,10 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
 
@@ -54,6 +56,29 @@ func (n *proofList) Put(key []byte, value []byte) error {
 
 func (n *proofList) Delete(key []byte) error {
 	panic("not supported")
+}
+
+var (
+	stateMetrics *prometheus.GaugeVec
+)
+
+func init() {
+	registerMetrics()
+}
+
+func registerMetrics() {
+	stateMetrics = metrics_config.NewGaugeVec("StateTimes", "Time spent doing state operations")
+	stateMetrics.WithLabelValues("AccountReads")
+	stateMetrics.WithLabelValues("AccountHashes")
+	stateMetrics.WithLabelValues("AccountUpdates")
+	stateMetrics.WithLabelValues("AccountCommits")
+	stateMetrics.WithLabelValues("StorageReads")
+	stateMetrics.WithLabelValues("StorageHashes")
+	stateMetrics.WithLabelValues("StorageUpdates")
+	stateMetrics.WithLabelValues("StorageCommits")
+	stateMetrics.WithLabelValues("SnapshotAccountReads")
+	stateMetrics.WithLabelValues("SnapshotStorageReads")
+	stateMetrics.WithLabelValues("SnapshotCommits")
 }
 
 // StateDB structs within the Quai protocol are used to store anything
@@ -452,6 +477,10 @@ func (s *StateDB) Suicide(addr common.InternalAddress) bool {
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
+	// Track the amount of time wasted on updating the account from the trie
+	if metrics_config.MetricsEnabled() {
+		defer func(start time.Time) { stateMetrics.WithLabelValues("AccountUpdates").Add(float64(time.Since(start))) }(time.Now())
+	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
 
@@ -474,6 +503,10 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(obj *stateObject) {
+	// Track the amount of time wasted on deleting the account from the trie
+	if metrics_config.MetricsEnabled() {
+		defer func(start time.Time) { stateMetrics.WithLabelValues("AccountUpdates").Add(float64(time.Since(start))) }(time.Now())
+	}
 	// Delete the account from the trie
 	addr := obj.Address()
 	if err := s.trie.TryDelete(addr[:]); err != nil {
@@ -506,6 +539,11 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 		err  error
 	)
 	if s.snap != nil {
+		if metrics_config.MetricsEnabled() {
+			defer func(start time.Time) {
+				stateMetrics.WithLabelValues("SnapshotAccountReads").Add(float64(time.Since(start)))
+			}(time.Now())
+		}
 		var acc *snapshot.Account
 		if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil {
 			if acc == nil {
@@ -527,6 +565,9 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 	}
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.snap == nil || err != nil {
+		if metrics_config.MetricsEnabled() {
+			defer func(start time.Time) { stateMetrics.WithLabelValues("AccountReads").Add(float64(time.Since(start))) }(time.Now())
+		}
 		enc, err := s.trie.TryGet(addr.Bytes())
 		if err != nil {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
@@ -862,6 +903,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if len(s.stateObjectsPending) > 0 {
 		s.stateObjectsPending = make(map[common.InternalAddress]struct{})
 	}
+	// Track the amount of time wasted on hashing the account trie
+	if metrics_config.MetricsEnabled() {
+		defer func(start time.Time) { stateMetrics.WithLabelValues("AccountHashes").Add(float64(time.Since(start))) }(time.Now())
+	}
 	return s.trie.Hash()
 }
 
@@ -913,6 +958,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 	}
 	// Write the account trie changes, measuing the amount of wasted time
+	var start time.Time
+	if metrics_config.MetricsEnabled() {
+		start = time.Now()
+	}
+	// Write the account trie changes, measuing the amount of wasted time
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account Account
@@ -925,8 +975,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		return nil
 	})
+	if metrics_config.MetricsEnabled() {
+		stateMetrics.WithLabelValues("AccountCommits").Add(float64(time.Since(start)))
+	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
+		if metrics_config.MetricsEnabled() {
+			defer func(start time.Time) { stateMetrics.WithLabelValues("SnapshotCommits").Add(float64(time.Since(start))) }(time.Now())
+		}
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {

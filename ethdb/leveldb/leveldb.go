@@ -49,6 +49,10 @@ const (
 	// minHandles is the minimum number of files handles to allocate to the open
 	// database files.
 	minHandles = 16
+
+	// metricsGatheringInterval specifies the interval to retrieve leveldb database
+	// compaction, io and pause stats to report to the user.
+	metricsGatheringInterval = 3 * time.Second
 )
 
 // Database is a persistent key-value store. Apart from basic data storage
@@ -113,6 +117,8 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 		logger:   logger,
 	}
 
+	// Start up the metrics gathering and return
+	go ldb.meter(metricsGatheringInterval)
 	return ldb, nil
 }
 
@@ -136,6 +142,11 @@ func (db *Database) Close() error {
 	defer db.quitLock.Unlock()
 
 	if db.quitChan != nil {
+		errc := make(chan error)
+		db.quitChan <- errc
+		if err := <-errc; err != nil {
+			db.logger.WithField("err", err).Error("Metrics collection failed")
+		}
 		db.quitChan = nil
 	}
 	return db.db.Close()

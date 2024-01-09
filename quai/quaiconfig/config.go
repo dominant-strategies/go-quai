@@ -27,6 +27,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
@@ -41,6 +42,7 @@ type QuaiConfig struct {
 	Quai      Config
 	Node      node.Config
 	Quaistats QuaistatsConfig
+	Metrics   metrics_config.Config
 }
 
 // FullNodeGPO contains default gasprice oracle settings for full node.

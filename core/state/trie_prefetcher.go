@@ -21,6 +21,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -56,6 +57,18 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 func (p *triePrefetcher) close() {
 	for _, fetcher := range p.fetchers {
 		fetcher.abort() // safe to do multiple times
+
+		if metrics_config.MetricsEnabled() {
+			if fetcher.root == p.root {
+				for _, key := range fetcher.used {
+					delete(fetcher.seen, string(key))
+				}
+			} else {
+				for _, key := range fetcher.used {
+					delete(fetcher.seen, string(key))
+				}
+			}
+		}
 	}
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil

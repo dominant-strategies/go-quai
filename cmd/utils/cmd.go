@@ -13,6 +13,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai"
@@ -73,8 +74,9 @@ func StartNode(stack *node.Node) {
 func makeConfigNode(nodeLocation common.Location, logger *logrus.Logger) (*node.Node, quaiconfig.QuaiConfig) {
 	// Load defaults.
 	cfg := quaiconfig.QuaiConfig{
-		Quai: quaiconfig.Defaults,
-		Node: defaultNodeConfig(),
+		Quai:    quaiconfig.Defaults,
+		Node:    defaultNodeConfig(),
+		Metrics: metrics_config.DefaultConfig,
 	}
 
 	// Apply flags.
