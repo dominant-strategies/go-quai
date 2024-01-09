@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -21,42 +23,41 @@ import (
 )
 
 // Create a new instance of the QuaiBackend consensus service
-func StartQuaiBackend(logLevel string) (*quai.QuaiBackend, error) {
-	var logger *logrus.Logger
-	// Make full node
-	go func() {
-		// Create the prime logger with the log file path
-		logger = log.NewLogger("nodelogs/prime.log", logLevel)
-		logger.Info("Starting Prime")
-		stackPrime := makeFullNode(nil, logger)
-		defer stackPrime.Close()
-		StartNode(stackPrime)
-		stackPrime.Wait()
-	}()
+func StartQuaiBackend(ctx context.Context, logLevel string, nodeWG *sync.WaitGroup) (*quai.QuaiBackend, error) {
+	startNode := func(logPath string, location common.Location) {
+		nodeWG.Add(1)
+		go func() {
+			defer nodeWG.Done()
+			logger := log.NewLogger(logPath, logLevel)
+			logger.Info("Starting Node at location", "location", location)
+			stack := makeFullNode(location, logger)
+			StartNode(stack)
+			// Create a channel to signal when stack.Wait() is done
+			done := make(chan struct{})
+			go func() {
+				stack.Wait()
+				close(done)
+			}()
 
+			select {
+			case <-done:
+				logger.Info("Node stopped normally")
+				stack.Close()
+				return
+			case <-ctx.Done():
+				logger.Info("Context cancelled, shutting down node")
+				stack.Close()
+				return
+			}
+		}()
+	}
+
+	// Start nodes in separate goroutines
+	startNode("nodelogs/prime.log", nil)
 	time.Sleep(2 * time.Second)
-
-	go func() {
-		// Create the prime logger with the log file path
-		logger = log.NewLogger("nodelogs/region-0.log", logLevel)
-		logger.Info("Starting Region")
-		stackRegion := makeFullNode(common.Location{0}, logger)
-		defer stackRegion.Close()
-		StartNode(stackRegion)
-		stackRegion.Wait()
-	}()
-
+	startNode("nodelogs/region-0.log", common.Location{0})
 	time.Sleep(2 * time.Second)
-
-	go func() {
-		// Create the prime logger with the log file path
-		logger = log.NewLogger("nodelogs/zone-0-0.log", logLevel)
-		log.Info("Starting Zone")
-		stackZone := makeFullNode(common.Location{0, 0}, logger)
-		defer stackZone.Close()
-		StartNode(stackZone)
-		stackZone.Wait()
-	}()
+	startNode("nodelogs/zone-0-0.log", common.Location{0, 0})
 
 	return &quai.QuaiBackend{}, nil
 }
