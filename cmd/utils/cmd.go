@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/vm"
@@ -24,14 +23,16 @@ import (
 )
 
 // Create a new instance of the QuaiBackend consensus service
-func StartQuaiBackend(ctx context.Context, logLevel string, nodeWG *sync.WaitGroup) (*quai.QuaiBackend, error) {
+func StartQuaiBackend(ctx context.Context, p2p quai.NetworkingAPI, logLevel string, nodeWG *sync.WaitGroup) (*quai.QuaiBackend, error) {
+	quaiBackend, _ := quai.NewQuaiBackend()
 	startNode := func(logPath string, location common.Location) {
 		nodeWG.Add(1)
 		go func() {
 			defer nodeWG.Done()
 			logger := log.NewLogger(logPath, logLevel)
 			logger.Info("Starting Node at location", "location", location)
-			stack := makeFullNode(location, logger)
+			stack, apiBackend := makeFullNode(p2p, location, logger)
+			quaiBackend.SetApiBackend(apiBackend, location)
 			StartNode(stack)
 			// Create a channel to signal when stack.Wait() is done
 			done := make(chan struct{})
@@ -55,12 +56,10 @@ func StartQuaiBackend(ctx context.Context, logLevel string, nodeWG *sync.WaitGro
 
 	// Start nodes in separate goroutines
 	startNode("nodelogs/prime.log", nil)
-	time.Sleep(2 * time.Second)
 	startNode("nodelogs/region-0.log", common.Location{0})
-	time.Sleep(2 * time.Second)
 	startNode("nodelogs/zone-0-0.log", common.Location{0, 0})
 
-	return &quai.QuaiBackend{}, nil
+	return quaiBackend, nil
 }
 
 func StartNode(stack *node.Node) {
@@ -114,22 +113,22 @@ func defaultNodeConfig() node.Config {
 }
 
 // makeFullNode loads quai configuration and creates the Quai backend.
-func makeFullNode(nodeLocation common.Location, logger *logrus.Logger) *node.Node {
+func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, logger *logrus.Logger) (*node.Node, quaiapi.Backend) {
 	stack, cfg := makeConfigNode(nodeLocation, logger)
-	backend, _ := RegisterQuaiService(stack, cfg.Quai, cfg.Node.NodeLocation.Context(), logger)
+	backend, _ := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), logger)
 	sendfullstats := viper.GetBool(SendFullStatsFlag.Name)
 	// Add the Quai Stats daemon if requested.
 	if cfg.Quaistats.URL != "" {
 		RegisterQuaiStatsService(stack, backend, cfg.Quaistats.URL, sendfullstats)
 	}
-	return stack
+	return stack, backend
 }
 
 // RegisterQuaiService adds a Quai client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterQuaiService(stack *node.Node, cfg quaiconfig.Config, nodeCtx int, logger *logrus.Logger) (quaiapi.Backend, error) {
-	backend, err := quai.New(stack, &cfg, nodeCtx, logger)
+func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, logger *logrus.Logger) (quaiapi.Backend, error) {
+	backend, err := quai.New(stack, p2p, &cfg, nodeCtx, logger)
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)
 	}

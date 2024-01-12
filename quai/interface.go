@@ -30,7 +30,6 @@ type NetworkingAPI interface {
 	// Stop the p2p node
 	Stop() error
 
-	// Method to subscribe to data from a given location. If the data-type is not supported, an error will be returned.
 	// Specify location and data type to subscribe to
 	Subscribe(common.Location, interface{}) error
 

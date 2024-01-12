@@ -78,15 +78,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
 	// create instance of consensus backend
 	var nodeWG sync.WaitGroup
-	consensus, err := utils.StartQuaiBackend(ctx, logLevel, &nodeWG)
+	consensus, err := utils.StartQuaiBackend(ctx, node, logLevel, &nodeWG)
 	if err != nil {
 		log.WithField("error", err).Fatal("error creating consensus backend")
-	}
-
-	// start the consensus backend
-	consensus.SetP2PNode(node)
-	if err := consensus.Start(); err != nil {
-		log.WithField("error", err).Fatal("error starting consensus backend")
 	}
 
 	// start the p2p node

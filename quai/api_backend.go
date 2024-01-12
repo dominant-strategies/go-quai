@@ -528,3 +528,10 @@ func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common
 func (b *QuaiAPIBackend) SetSyncTarget(header *types.Header) {
 	b.quai.core.SetSyncTarget(header)
 }
+
+// ///////////////////////////
+// /////// P2P ///////////////
+// ///////////////////////////
+func (b *QuaiAPIBackend) BroadcastBlock(block *types.Block, location common.Location) error {
+	return b.quai.p2p.Broadcast(location, block)
+}

@@ -113,6 +113,9 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
+
+	// P2P apis
+	BroadcastBlock(block *types.Block, location common.Location) error
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {
