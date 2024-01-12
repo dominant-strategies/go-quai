@@ -5,8 +5,27 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/gogo/protobuf/proto"
 )
+
+// converts a custom go Block type (types.Block) to a protocol buffer Block type (pb.Block)
+func MarshalData(data interface{}) []byte {
+	var bytes []byte
+	var err error
+	switch v := data.(type) {
+	case *types.Block:
+		bytes, err = MarshalBlock(v)
+	default:
+		return nil
+	}
+	if err != nil {
+		log.Errorf("Error marshalling data: ", err)
+		return nil
+	} else {
+		return bytes
+	}
+}
 
 // Unmarshals a serialized protobuf slice of bytes into a protocol buffer type
 func UnmarshalProtoMessage(data []byte, pbMsg proto.Message) error {

@@ -2,19 +2,38 @@ package pubsubManager
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
-	"google.golang.org/protobuf/proto"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-const BlockTopicName = "quai-blocks"
+var (
+	ErrUnsupportedType = errors.New("data type not supported")
+)
 
 type PubsubManager struct {
 	*pubsub.PubSub
-	ctx context.Context
+	ctx           context.Context
+	subscriptions map[string]*pubsub.Subscription
+	topics        map[string]*pubsub.Topic
+
+	// Callback function to handle received data
+	onReceived func(interface{})
+}
+
+// gets the name of the topic for the given type of data
+func TopicName(slice types.SliceID, data interface{}) (string, error) {
+	switch data.(type) {
+	case types.Block:
+		return slice.String() + "/blocks", nil
+	default:
+		return "", ErrUnsupportedType
+	}
 }
 
 // creates a new gossipsub instance
@@ -25,37 +44,88 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	if err != nil {
 		return nil, err
 	}
-	return &PubsubManager{ps, ctx}, nil
+	return &PubsubManager{
+		ps,
+		ctx,
+		make(map[string]*pubsub.Subscription),
+		make(map[string]*pubsub.Topic),
+		nil,
+	}, nil
 }
 
-// Broadcast a block to the network by publishing it to the block pubsub topic
-func (g *PubsubManager) BroadcastBlock(topic *pubsub.Topic, block types.Block) error {
-	// Convert block to protobuf format
-	protoBlock := pb.ConvertToProtoBlock(block)
+func (g *PubsubManager) Start(receiveCb func(interface{})) {
+	g.onReceived = receiveCb
+	go g.handleSubscriptions()
+}
 
-	// Serialize the protobuf block
-	blockData, err := proto.Marshal(protoBlock)
+// subscribe to broadcasts of the given type of data
+func (g *PubsubManager) Subscribe(slice types.SliceID, data interface{}) error {
+	// build topic name
+	topicName, err := TopicName(slice, data)
 	if err != nil {
 		return err
 	}
 
-	// Use the pubsub package to publish the block
-	return topic.Publish(g.ctx, blockData)
+	// join the topic
+	topic, err := g.Join(topicName)
+	if err != nil {
+		return err
+	}
+	g.topics[topicName] = topic
+
+	// subscribe to the topic
+	subscription, err := topic.Subscribe()
+	if err != nil {
+		return err
+	}
+	g.subscriptions[topicName] = subscription
+
+	return nil
 }
 
-// Subscribe to the block pubsub topic
-func (g *PubsubManager) SubscribeBlock() (*pubsub.Subscription, error) {
-	// join the block topic
-	blockTopic, err := g.Join(BlockTopicName)
+// broadcasts data to subscribing peers
+func (g *PubsubManager) Broadcast(slice types.SliceID, data interface{}) error {
+	topicName, err := TopicName(slice, data)
+	if err != nil {
+		return err
+	}
+	return g.topics[topicName].Publish(g.ctx, pb.MarshalData(data))
+}
+
+// lists our peers which provide the associated topic
+func (g *PubsubManager) PeersForTopic(slice types.SliceID, data interface{}) ([]peer.ID, error) {
+	topicName, err := TopicName(slice, data)
 	if err != nil {
 		return nil, err
 	}
+	return g.topics[topicName].ListPeers(), nil
+}
 
-	// subscribe to the block topic
-	sub, err := blockTopic.Subscribe()
-	if err != nil {
-		return nil, err
+// handles any data received on any of our subscribed topics
+func (g *PubsubManager) handleSubscriptions() {
+	for {
+		for _, sub := range g.subscriptions {
+			msg, err := sub.Next(g.ctx)
+			if err != nil {
+				// if context was cancelled, then we are shutting down
+				if g.ctx.Err() != nil {
+					return
+				}
+				log.Errorf("error getting next message from subscription: %s", err)
+				continue
+			}
+
+			// unmarshal the received data
+			block, err := pb.UnmarshalBlock(msg.Data)
+			if err != nil {
+				log.Errorf("error unmarshalling block: %s", err)
+				continue
+			}
+
+			// handle the received data
+			if g.onReceived != nil {
+				g.onReceived(block)
+			}
+		}
 	}
-
-	return sub, nil
 }

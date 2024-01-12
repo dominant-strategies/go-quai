@@ -35,9 +35,11 @@ type NetworkingAPI interface {
 	// Stop the p2p node
 	Stop() error
 
-	// Methods to broadcast data to the network
-	BroadcastBlock(types.SliceID, types.Block) error
-	BroadcastTransaction(tx types.Transaction) error
+	// Method to subscribe to data from a given location. If the data-type is not supported, an error will be returned.
+	Subscribe(types.SliceID, interface{}) error
+
+	// Method to broadcast data to the network
+	Broadcast(types.SliceID, interface{}) error
 
 	// Methods to lookup specific data from the network. Each request method
 	// returns a result channel. If the result is found, it will be put into the
