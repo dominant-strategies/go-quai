@@ -40,6 +40,16 @@ var (
 	Blake3PowLighthouseGenesisHash = common.HexToHash("0xaadedd7ed5a68a8885b54079e8193ae5be8f9b9bf4799ea9f1612bca835f33da")
 )
 
+// Different Network names
+const (
+	ColosseumName  = "colosseum"
+	GardenName     = "garden"
+	OrchardName    = "orchard"
+	LighthouseName = "lighthouse"
+	LocalName      = "local"
+	DevName        = "dev"
+)
+
 var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ProgpowColosseumChainConfig = &ChainConfig{

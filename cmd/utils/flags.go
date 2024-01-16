@@ -54,13 +54,7 @@ var NodeFlags = []Flag{
 	DBEngineFlag,
 	NetworkIdFlag,
 	SlicesRunningFlag,
-	ColosseumFlag,
-	GardenFlag,
-	OrchardFlag,
-	LighthouseFlag,
-	LocalFlag,
 	GenesisNonceFlag,
-	DeveloperFlag,
 	DevPeriodFlag,
 	IdentityFlag,
 	DocRootFlag,
@@ -93,7 +87,6 @@ var NodeFlags = []Flag{
 	MinerGasPriceFlag,
 	UnlockedAccountFlag,
 	PasswordFileFlag,
-	ExternalSignerFlag,
 	VMEnableDebugFlag,
 	InsecureUnlockAllowedFlag,
 	GpoBlocksFlag,
@@ -102,6 +95,7 @@ var NodeFlags = []Flag{
 	GpoIgnoreGasPriceFlag,
 	DomUrl,
 	SubUrls,
+	EnvironmentFlag,
 }
 
 var RPCFlags = []Flag{
@@ -201,6 +195,12 @@ var (
 		Usage:        "start the node as a solo node (will not reach out to bootstrap peers)" + generateEnvDoc("solo"),
 	}
 
+	EnvironmentFlag = Flag{
+		Name:  "environment",
+		Value: params.LocalName,
+		Usage: "environment to run in (local, colosseum, garden, orchard, lighthouse, dev)" + generateEnvDoc("environment"),
+	}
+
 	// ****************************************
 	// **                                    **
 	// **         GLOBAL FLAGS               **
@@ -262,41 +262,10 @@ var (
 		Usage: "All the slices that are running on this node" + generateEnvDoc("slices"),
 	}
 
-	ColosseumFlag = Flag{
-		Name:  "colosseum",
-		Value: false,
-		Usage: "Quai Colosseum testnet" + generateEnvDoc("colosseum"),
-	}
-
-	GardenFlag = Flag{
-		Name:  "garden",
-		Value: false,
-		Usage: "Garden network: pre-configured proof-of-work test network" + generateEnvDoc("garden"),
-	}
-	OrchardFlag = Flag{
-		Name:  "orchard",
-		Value: false,
-		Usage: "Orchard network: pre-configured proof-of-work test network" + generateEnvDoc("orchard"),
-	}
-	LighthouseFlag = Flag{
-		Name:  "lighthouse",
-		Value: false,
-		Usage: "Lighthouse network: pre-configured proof-of-work test network" + generateEnvDoc("lighthouse"),
-	}
-	LocalFlag = Flag{
-		Name:  "local",
-		Value: false,
-		Usage: "Local network: localhost proof-of-work node, will not attempt to connect to bootnode or any public network" + generateEnvDoc("local"),
-	}
 	GenesisNonceFlag = Flag{
 		Name:  "nonce",
 		Value: 0,
 		Usage: "Nonce to use for the genesis block (integer)" + generateEnvDoc("nonce"),
-	}
-	DeveloperFlag = Flag{
-		Name:  "dev",
-		Value: false,
-		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled" + generateEnvDoc("dev"),
 	}
 	DevPeriodFlag = Flag{
 		Name:  "dev.period",
@@ -497,11 +466,6 @@ var (
 		Name:  "keystore",
 		Value: "",
 		Usage: "Directory for the keystore (default = inside the datadir)",
-	}
-	ExternalSignerFlag = Flag{
-		Name:  "signer",
-		Value: "",
-		Usage: "External signer (url or path to ipc file)" + generateEnvDoc("signer"),
 	}
 
 	VMEnableDebugFlag = Flag{
@@ -891,18 +855,16 @@ func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location) {
 // setGasLimitCeil sets the gas limit ceils based on the network that is
 // running
 func setGasLimitCeil(cfg *quaiconfig.Config) {
-	switch {
-	case viper.GetBool(ColosseumFlag.Name):
+	switch viper.GetString(EnvironmentFlag.Name) {
+	case params.ColosseumName:
 		cfg.Miner.GasCeil = params.ColosseumGasCeil
-	case viper.GetBool(GardenFlag.Name):
+	case params.GardenName:
 		cfg.Miner.GasCeil = params.GardenGasCeil
-	case viper.GetBool(OrchardFlag.Name):
+	case params.OrchardName:
 		cfg.Miner.GasCeil = params.OrchardGasCeil
-	case viper.GetBool(LighthouseFlag.Name):
+	case params.LighthouseName:
 		cfg.Miner.GasCeil = params.LighthouseGasCeil
-	case viper.GetBool(LocalFlag.Name):
-		cfg.Miner.GasCeil = params.LocalGasCeil
-	case viper.GetBool(DeveloperFlag.Name):
+	case params.LocalName, params.DevName:
 		cfg.Miner.GasCeil = params.LocalGasCeil
 	default:
 		cfg.Miner.GasCeil = params.ColosseumGasCeil
@@ -1000,14 +962,10 @@ func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *logru
 	setNodeUserIdent(cfg)
 	setDataDir(cfg)
 
-	if viper.IsSet(ExternalSignerFlag.Name) {
-		cfg.ExternalSigner = viper.GetString(ExternalSignerFlag.Name)
-	}
-
 	if viper.IsSet(KeyStoreDirFlag.Name) {
 		cfg.KeyStoreDir = viper.GetString(KeyStoreDirFlag.Name)
 	}
-	if viper.IsSet(DeveloperFlag.Name) {
+	if viper.GetString(EnvironmentFlag.Name) == params.DevName {
 		cfg.UseLightweightKDF = true
 	}
 	if viper.IsSet(InsecureUnlockAllowedFlag.Name) {
@@ -1024,19 +982,20 @@ func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *logru
 }
 
 func setDataDir(cfg *node.Config) {
+	environment := viper.GetString(EnvironmentFlag.Name)
 	switch {
 	case viper.IsSet(DataDirFlag.Name):
 		cfg.DataDir = viper.GetString(DataDirFlag.Name)
-	case viper.GetBool(DeveloperFlag.Name):
+	case environment == params.DevName:
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case viper.GetBool(GardenFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "garden")
-	case viper.GetBool(OrchardFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "orchard")
-	case viper.GetBool(LighthouseFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "lighthouse")
-	case viper.GetBool(LocalFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "local")
+	case environment == params.GardenName && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.GardenName)
+	case environment == params.OrchardName && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.OrchardName)
+	case environment == params.LighthouseName && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.LighthouseName)
+	case environment == params.LocalName && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.LocalName)
 	}
 	// Set specific directory for node location within the hierarchy
 	switch cfg.NodeLocation.Context() {
@@ -1117,28 +1076,28 @@ func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
 func setConsensusEngineConfig(cfg *quaiconfig.Config) {
 	if cfg.ConsensusEngine == "blake3" {
 		// Override any default configs for hard coded networks.
-		switch {
-		case viper.GetBool(ColosseumFlag.Name):
+		switch viper.GetString(EnvironmentFlag.Name) {
+		case params.ColosseumName:
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.ColosseumGasCeil
 			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(GardenFlag.Name):
+		case params.GardenName:
 			cfg.Blake3Pow.DurationLimit = params.GardenDurationLimit
 			cfg.Blake3Pow.GasCeil = params.GardenGasCeil
 			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(OrchardFlag.Name):
+		case params.OrchardName:
 			cfg.Blake3Pow.DurationLimit = params.OrchardDurationLimit
 			cfg.Blake3Pow.GasCeil = params.OrchardGasCeil
 			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(LighthouseFlag.Name):
+		case params.LighthouseName:
 			cfg.Blake3Pow.DurationLimit = params.LighthouseDurationLimit
 			cfg.Blake3Pow.GasCeil = params.LighthouseGasCeil
 			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(LocalFlag.Name):
+		case params.LocalName:
 			cfg.Blake3Pow.DurationLimit = params.LocalDurationLimit
 			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
 			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(DeveloperFlag.Name):
+		case params.DevName:
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
 			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
@@ -1150,29 +1109,29 @@ func setConsensusEngineConfig(cfg *quaiconfig.Config) {
 		}
 	} else {
 		// Override any default configs for hard coded networks.
-		switch {
-		case viper.GetBool(ColosseumFlag.Name):
+		switch viper.GetString(EnvironmentFlag.Name) {
+		case params.ColosseumName:
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.ColosseumGasCeil
 			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(GardenFlag.Name):
+		case params.GardenName:
 			cfg.Progpow.DurationLimit = params.GardenDurationLimit
 			cfg.Progpow.GasCeil = params.GardenGasCeil
 			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(OrchardFlag.Name):
+		case params.OrchardName:
 			cfg.Progpow.DurationLimit = params.OrchardDurationLimit
 			cfg.Progpow.GasCeil = params.OrchardGasCeil
 			cfg.Progpow.GasCeil = params.ColosseumGasCeil
 			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(LighthouseFlag.Name):
+		case params.LighthouseName:
 			cfg.Progpow.DurationLimit = params.LighthouseDurationLimit
 			cfg.Progpow.GasCeil = params.LighthouseGasCeil
 			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(LocalFlag.Name):
+		case params.LocalName:
 			cfg.Progpow.DurationLimit = params.LocalDurationLimit
 			cfg.Progpow.GasCeil = params.LocalGasCeil
 			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
-		case viper.GetBool(DeveloperFlag.Name):
+		case params.DevName:
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.LocalGasCeil
 			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
@@ -1249,10 +1208,6 @@ func CheckExclusive(args ...interface{}) {
 
 // SetQuaiConfig applies quai-related command line flags to the config.
 func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location, logger *logrus.Logger) {
-	// Avoid conflicting network flags
-	CheckExclusive(ColosseumFlag, DeveloperFlag, GardenFlag, OrchardFlag, LocalFlag, LighthouseFlag)
-	CheckExclusive(DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
-
 	if viper.GetString(GCModeFlag.Name) == "archive" && viper.GetUint64(TxLookupLimitFlag.Name) != 0 {
 		// TODO: see what this is supposed to do
 		viper.IsSet(TxLookupLimitFlag.Name)
@@ -1383,33 +1338,33 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 		cfg.RPCTxFeeCap = viper.GetFloat64(RPCGlobalTxFeeCapFlag.Name)
 	}
 	// Override any default configs for hard coded networks.
-	switch {
-	case viper.GetBool(ColosseumFlag.Name):
+	switch viper.GetString(EnvironmentFlag.Name) {
+	case params.ColosseumName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
 		}
 		cfg.Genesis = core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine)
-	case viper.GetBool(GardenFlag.Name):
+	case params.GardenName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 2
 		}
 		cfg.Genesis = core.DefaultGardenGenesisBlock(cfg.ConsensusEngine)
-	case viper.GetBool(OrchardFlag.Name):
+	case params.OrchardName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine)
-	case viper.GetBool(LocalFlag.Name):
+	case params.LocalName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultLocalGenesisBlock(cfg.ConsensusEngine)
-	case viper.GetBool(LighthouseFlag.Name):
+	case params.LighthouseName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
 		cfg.Genesis = core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine)
-	case viper.GetBool(DeveloperFlag.Name):
+	case params.DevName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
 		}
@@ -1427,7 +1382,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
 	}
-	if !viper.GetBool(LocalFlag.Name) {
+	if viper.GetString(EnvironmentFlag.Name) != params.LocalName {
 		cfg.Genesis.Nonce = viper.GetUint64(GenesisNonceFlag.Name)
 	}
 
@@ -1472,18 +1427,18 @@ func MakeChainDatabase(stack *node.Node, readonly bool) ethdb.Database {
 
 func MakeGenesis() *core.Genesis {
 	var genesis *core.Genesis
-	switch {
-	case viper.GetBool(ColosseumFlag.Name):
+	switch viper.GetString(EnvironmentFlag.Name) {
+	case params.ColosseumName:
 		genesis = core.DefaultColosseumGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
-	case viper.GetBool(GardenFlag.Name):
+	case params.GardenName:
 		genesis = core.DefaultGardenGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
-	case viper.GetBool(OrchardFlag.Name):
+	case params.OrchardName:
 		genesis = core.DefaultOrchardGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
-	case viper.GetBool(LighthouseFlag.Name):
+	case params.LighthouseName:
 		genesis = core.DefaultLighthouseGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
-	case viper.GetBool(LocalFlag.Name):
+	case params.LocalName:
 		genesis = core.DefaultLocalGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
-	case viper.GetBool(DeveloperFlag.Name):
+	case params.DevName:
 		Fatalf("Developer chains are ephemeral")
 	}
 	return genesis
@@ -1503,4 +1458,18 @@ func MakeConsolePreloads() []string {
 		preloads = append(preloads, strings.TrimSpace(file))
 	}
 	return preloads
+}
+
+func IsValidEnvironment(env string) bool {
+	switch env {
+	case params.ColosseumName,
+		params.GardenName,
+		params.OrchardName,
+		params.LighthouseName,
+		params.LocalName,
+		params.DevName:
+		return true
+	default:
+		return false
+	}
 }

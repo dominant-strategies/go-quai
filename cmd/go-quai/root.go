@@ -53,6 +53,12 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Check that environment is local, colosseum, garden, lighthouse, dev, or orchard
+	environment := viper.GetString(utils.EnvironmentFlag.Name)
+	if !utils.IsValidEnvironment(environment) {
+		log.Fatalf("invalid environment: %s", environment)
+	}
+
 	// save config file if SAVE_CONFIG_FILE flag is set to true
 	saveConfigFile := viper.GetBool(utils.SaveConfigFlag.Name)
 	if saveConfigFile {
