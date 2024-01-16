@@ -1,10 +1,13 @@
 package protocol
 
 import (
+	"errors"
+	"io"
+
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
-	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
@@ -24,52 +27,96 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	for {
 		data, err := common.ReadMessageFromStream(stream)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				log.Debugf("stream closed by peer %s", stream.Conn().RemotePeer())
+				break
+			}
+
 			log.Errorf("error reading message from stream: %s", err)
-			return
+			// TODO: handle error
+			continue
 		}
-
-		var protoMessage proto.Message
-		err = pb.UnmarshalProtoMessage(data, protoMessage)
+		decodedType, loc, hash, err := pb.DecodeQuaiRequest(data)
 		if err != nil {
-			log.Errorf("error unmarshalling message: %s", err)
-			return
+			log.Errorf("error decoding quai request: %s", err)
+			// TODO: handle error
+			continue
 		}
 
-		switch msg := protoMessage.(type) {
-		case *pb.BlockRequest:
-			// get the hash from the block request
-			blockReq := msg
-			hash := common.HexToHash(blockReq.Hash)
-			// get the location from the block request
-			location := blockReq.Location
-
-			// check if we have the block in our cache
-			block := node.GetBlock(hash, []byte(location))
-			if block == nil {
-				// TODO: handle block not found
-				log.Warnf("block not found")
-				return
-			}
-			// convert the block to a protocol buffer and send it back to the peer
-			data, err := pb.MarshalBlock(block)
+		switch decodedType.(type) {
+		case *types.Block:
+			err = handleBlockRequest(loc, hash, stream, node)
 			if err != nil {
-				log.Errorf("error marshalling block: %s", err)
+				log.Errorf("error handling block request: %s", err)
 				// TODO: handle error
-				return
+				continue
 			}
-			err = common.WriteMessageToStream(stream, data)
+		case *types.Header:
+			err = handleHeaderRequest(loc, hash, stream, node)
 			if err != nil {
-				log.Errorf("error writing message to stream: %s", err)
+				log.Errorf("error handling header request: %s", err)
 				// TODO: handle error
-				return
+				continue
 			}
-			log.Debugf("Sent block %s to peer %s", block.Hash, stream.Conn().RemotePeer())
-
-		case *pb.QuaiProtocolMessage:
-			// TODO: handle quai protocol message
+		case *types.Transaction:
+			err = handleTransactionRequest(loc, hash, stream, node)
+			if err != nil {
+				log.Errorf("error handling transaction request: %s", err)
+				// TODO: handle error
+				continue
+			}
 		default:
-			log.Errorf("unknown message type received: %s", msg)
-			// TODO: handle unknown message type
+			log.Errorf("unsupported request data type: %T", decodedType)
+			// TODO: handle error
+			continue
+
 		}
 	}
+}
+
+// Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
+func handleBlockRequest(loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	// check if we have the block in our cache or database
+	block := node.GetBlock(hash, loc)
+	if block == nil {
+		log.Debugf("block not found")
+		// TODO: handle block not found
+	}
+	// create a Quai Message Response with the block
+	data, err := pb.EncodeQuaiResponse(block)
+	if err != nil {
+		return err
+	}
+	err = common.WriteMessageToStream(stream, data)
+	if err != nil {
+		return err
+	}
+	log.Debugf("Sent block %s to peer %s", block.Hash(), stream.Conn().RemotePeer())
+	return nil
+}
+
+// Seeks the header in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
+func handleHeaderRequest(loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	header := node.GetHeader(hash, loc)
+	if header == nil {
+		log.Debugf("header not found")
+		// TODO: handle header not found
+		return nil
+	}
+	log.Tracef("header found: %+v", header)
+	// create a Quai Message Response with the header
+	data, err := pb.EncodeQuaiResponse(header)
+	if err != nil {
+		return err
+	}
+	err = common.WriteMessageToStream(stream, data)
+	if err != nil {
+		return err
+	}
+	log.Debugf("Sent header %s to peer %s", header.Hash(), stream.Conn().RemotePeer())
+	return nil
+}
+
+func handleTransactionRequest(loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	panic("TODO: implement")
 }

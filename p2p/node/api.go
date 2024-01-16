@@ -208,6 +208,10 @@ func (p *P2PNode) GetBlock(hash common.Hash, location common.Location) *types.Bl
 	return p.consensus.LookupBlock(hash, location)
 }
 
+func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.Header {
+	panic("TODO: implement")
+}
+
 func (p *P2PNode) handleBroadcast(data interface{}) {
 	switch v := data.(type) {
 	case types.Block:
@@ -218,4 +222,3 @@ func (p *P2PNode) handleBroadcast(data interface{}) {
 		// TODO: ban the peer which sent it?
 	}
 }
-
