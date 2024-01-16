@@ -108,34 +108,32 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-// Request a block from the network for the specified location
-func (p *P2PNode) RequestBlock(hash common.Hash, location common.Location) chan *types.Block {
-	resultChan := make(chan *types.Block, 1)
+// Request a block from the network for the specified slice
+func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype interface{}) chan interface{} {
+	resultChan := make(chan interface{}, 1)
 	go func() {
 		defer close(resultChan)
-		var block *types.Block
-		// 1. Check if the block is in the local cache
-		block, ok := p.blockCache.Get(hash)
-		if ok {
-			log.Debugf("Block %s found in cache", hash)
-			resultChan <- block
+		// 1. Check if the data is in the local cache
+		if res, ok := p.cacheGet(hash, datatype); ok {
+			log.Debugf("data %s found in cache", hash)
+			resultChan <- res.(*types.Block)
 			return
 		}
-		// 2. If not, query the topic peers for the block
-		peers, err := p.pubsub.PeersForTopic(location, types.Block{})
+
+		// 2. If not, query the topic peers for the data
+		peers, err := p.pubsub.PeersForTopic(location, datatype)
 		if err != nil {
-			log.Errorf("Error requesting block: ", err)
+			log.Errorf("Error requesting data: ", err)
 			return
 		}
 		for _, peerID := range peers {
-			block, err := p.requestBlockFromPeer(hash, location, peerID)
-			if err == nil {
-				log.Debugf("Received block %s from peer %s", block.Hash, peerID)
-				// add the block to the cache
-				p.blockCache.Add(hash, block)
+			// TODO: need to spawn these requests in parallel. Currently, one peer's failure to respond blocks the entire loop. Probably better for requestFromPeer() to return a chan
+			if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
+				log.Debugf("Received %s from peer %s", hash, peerID)
+				// cache the response
+				p.cacheAdd(hash, recvd)
 				// send the block to the result channel
-				resultChan <- block
-				return
+				resultChan <- recvd
 			}
 		}
 
@@ -151,14 +149,16 @@ func (p *P2PNode) RequestBlock(hash common.Hash, location common.Location) chan 
 		for retries := 0; retries < maxDHTQueryRetries; retries++ {
 			log.Debugf("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
 			// query the DHT for peers in the slice
+			// TODO: need to find providers of a topic, not a shard
+			// TODO: need to add providers as gossip peers
 			peerChan := p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery)
 			for peerInfo := range peerChan {
-				block, err := p.requestBlockFromPeer(hash, location, peerInfo.ID)
-				if err == nil {
-					log.Debugf("Received block %s from peer %s", block.Hash, peerInfo.ID)
-					p.blockCache.Add(hash, block)
-					resultChan <- block
-					return
+				if recvd, err := p.requestFromPeer(peerInfo.ID, location, hash, datatype); err == nil {
+					log.Debugf("Received %s from peer %s", hash, peerInfo.ID)
+					// cache the response
+					p.cacheAdd(hash, recvd)
+					// send the block to the result channel
+					resultChan <- recvd
 				}
 			}
 			// if the block is not found, wait for a bit and try again
@@ -168,10 +168,6 @@ func (p *P2PNode) RequestBlock(hash common.Hash, location common.Location) chan 
 		log.Debugf("Block %s not found in slice %s", hash, location)
 	}()
 	return resultChan
-}
-
-func (p *P2PNode) RequestTransaction(hash common.Hash, loc common.Location) chan *types.Transaction {
-	panic("todo")
 }
 
 func (p *P2PNode) ReportBadPeer(peer p2p.PeerID) {
@@ -201,11 +197,11 @@ func (p *P2PNode) StartGossipSub(ctx context.Context) error {
 // Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
 // Returns nil if the block is not found.
 func (p *P2PNode) GetBlock(hash common.Hash, location common.Location) *types.Block {
-	block, ok := p.blockCache.Get(hash)
-	if ok {
-		return block
+	if res, ok := p.cacheGet(hash, &types.Block{}); ok {
+		return res.(*types.Block)
+	} else {
+		return p.consensus.LookupBlock(hash, location)
 	}
-	return p.consensus.LookupBlock(hash, location)
 }
 
 func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.Header {
@@ -215,7 +211,7 @@ func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.H
 func (p *P2PNode) handleBroadcast(data interface{}) {
 	switch v := data.(type) {
 	case types.Block:
-		p.blockCache.Add(v.Hash(), &v)
+		p.cacheAdd(v.Hash(), &v)
 	// TODO: send it to consensus
 	default:
 		log.Debugf("received unsupported block broadcast")

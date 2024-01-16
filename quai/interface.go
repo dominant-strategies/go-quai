@@ -31,17 +31,17 @@ type NetworkingAPI interface {
 	Stop() error
 
 	// Method to subscribe to data from a given location. If the data-type is not supported, an error will be returned.
+	// Specify location and data type to subscribe to
 	Subscribe(common.Location, interface{}) error
 
 	// Method to broadcast data to the network
+	// Specify location and the data to send
 	Broadcast(common.Location, interface{}) error
 
-	// Methods to lookup specific data from the network. Each request method
-	// returns a result channel. If the result is found, it will be put into the
-	// channel. If the result is not found, the channel will be closed.
-	RequestBlock(hash common.Hash, loc common.Location) chan *types.Block
-	RequestTransaction(hash common.Hash, loc common.Location) chan *types.Transaction
+	// Method to request data from the network
+	// Specify location, data hash, and data type to request
+	Request(common.Location, common.Hash, interface{}) chan interface{}
 
 	// Method to report a peer to the P2PClient as behaving maliciously
-	ReportBadPeer(peer core.PeerID)
+	ReportBadPeer(core.PeerID)
 }

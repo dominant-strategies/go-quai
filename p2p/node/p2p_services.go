@@ -1,21 +1,23 @@
 package node
 
 import (
+	"errors"
+
+	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multihash"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
-	"github.com/ipfs/go-cid"
-	"github.com/multiformats/go-multihash"
-	"github.com/pkg/errors"
 )
 
-// Opens a stream to the given peer and requests a block for the given hash and slice.
+// Opens a stream to the given peer and request some data for the given hash at the given location
 //
 // If a block is not found, an error is returned
-func (p *P2PNode) requestBlockFromPeer(hash common.Hash, location common.Location, peerID peer.ID) (*types.Block, error) {
+func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash common.Hash, datatype interface{}) (interface{}, error) {
 	// Open a stream to the peer using a specific protocol for block requests
 	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
 	if err != nil {
@@ -23,13 +25,13 @@ func (p *P2PNode) requestBlockFromPeer(hash common.Hash, location common.Locatio
 	}
 	defer stream.Close()
 
-	// Create a block request
-	blockReqBytes, err := pb.EncodeQuaiRequest(location, hash, &types.Block{})
+	// Create the corresponding data request
+	blockReqBytes, err := pb.EncodeQuaiRequest(location, hash, datatype)
 	if err != nil {
 		return nil, err
 	}
 
-	// Send the block request to the peer
+	// Send the request to the peer
 	err = common.WriteMessageToStream(stream, blockReqBytes)
 	if err != nil {
 		return nil, err
@@ -41,19 +43,26 @@ func (p *P2PNode) requestBlockFromPeer(hash common.Hash, location common.Locatio
 		return nil, err
 	}
 
-	// Unmarshal the response into a block
-	decoded, err := pb.DecodeQuaiResponse(blockResponseBytes)
+	// Unmarshal the response
+	recvd, err := pb.DecodeQuaiResponse(blockResponseBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if the response is a block
-	block, ok := decoded.(*types.Block)
-	if !ok {
-		return nil, errors.New("received response is not a block")
+	// Check the received data type & hash matches the request
+	switch datatype.(type) {
+	case *types.Block:
+		if block, ok := recvd.(*types.Block); ok && block.Hash() == hash {
+			return block, nil
+		}
+	default:
+		log.Warn("peer returned unexpected type")
 	}
 
-	return block, nil
+	// If this peer responded with an invalid response, report them for misbehaving.
+	p.ReportBadPeer(peerID)
+
+	return nil, errors.New("invalid response")
 }
 
 // Creates a Cid from a location to be used as DHT key

@@ -27,13 +27,13 @@ func MarshalProtoMessage(pbMsg proto.Message) ([]byte, error) {
 
 // EncodeRequestMessage creates a marshaled protobuf message for a Quai Request.
 // Returns the serialized protobuf message.
-func EncodeQuaiRequest(location common.Location, hash common.Hash, data interface{}) ([]byte, error) {
+func EncodeQuaiRequest(location common.Location, hash common.Hash, datatype interface{}) ([]byte, error) {
 	reqMsg := &QuaiRequestMessage{
 		Location: convertLocationToProto(location),
 		Hash:     convertHashToProto(hash),
 	}
 
-	switch d := data.(type) {
+	switch d := datatype.(type) {
 	case *types.Block:
 		reqMsg.Request = &QuaiRequestMessage_Block{Block: convertBlockToProto(d)}
 	case *types.Header:
@@ -41,7 +41,7 @@ func EncodeQuaiRequest(location common.Location, hash common.Hash, data interfac
 	case *types.Transaction:
 		reqMsg.Request = &QuaiRequestMessage_Transaction{Transaction: convertTransactionToProto(d)}
 	default:
-		return nil, errors.Errorf("unsupported request data type: %T", data)
+		return nil, errors.Errorf("unsupported request data type: %T", datatype)
 	}
 
 	return MarshalProtoMessage(reqMsg)
