@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/gogo/protobuf/proto"
@@ -40,18 +39,12 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 		case *pb.BlockRequest:
 			// get the hash from the block request
 			blockReq := msg
-			hash, err := types.NewHashFromString(blockReq.Hash)
-			if err != nil {
-				log.Errorf("error converting hash from string: %s", err)
-				// TODO: handle error
-				return
-			}
-			// get the sliceID from the block request
-			protoSlice := blockReq.SliceId
-			slice := pb.ConvertFromProtoSlice(protoSlice)
+			hash := common.HexToHash(blockReq.Hash)
+			// get the location from the block request
+			location := blockReq.Location
 
 			// check if we have the block in our cache
-			block := node.GetBlock(hash, slice)
+			block := node.GetBlock(hash, []byte(location))
 			if block == nil {
 				// TODO: handle block not found
 				log.Warnf("block not found")

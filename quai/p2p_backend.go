@@ -9,8 +9,6 @@ import (
 // QuaiBackend implements the quai consensus protocol
 type QuaiBackend struct {
 	p2p NetworkingAPI
-
-	runningSlices map[types.SliceID]*types.Slice
 }
 
 // Create a new instance of the QuaiBackend consensus service
@@ -38,27 +36,12 @@ func (qbe *QuaiBackend) OnNewTransaction(sourcePeer p2p.PeerID, tx types.Transac
 	panic("todo")
 }
 
-// Returns the current block height for the given sliceID
-func (qbe *QuaiBackend) GetHeight(slice types.SliceID) uint64 {
+// Returns the current block height for the given location
+func (qbe *QuaiBackend) GetHeight(location common.Location) uint64 {
 	// Example/mock implementation
 	panic("todo")
 }
 
-func (qbe *QuaiBackend) GetSlice(slice types.SliceID) *types.Slice {
-	return qbe.runningSlices[slice]
-}
-
-func (qbe *QuaiBackend) GetRunningSlices() map[types.SliceID]*types.Slice {
-	return qbe.runningSlices
-}
-
-func (qbe *QuaiBackend) SetRunningSlices(slices []types.Slice) {
-	qbe.runningSlices = make(map[types.SliceID]*types.Slice)
-	for _, slice := range slices {
-		qbe.runningSlices[slice.SliceID] = &slice
-	}
-}
-
-func (qbe *QuaiBackend) LookupBlock(hash common.Hash, slice types.SliceID) *types.Block {
+func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) *types.Block {
 	panic("todo")
 }

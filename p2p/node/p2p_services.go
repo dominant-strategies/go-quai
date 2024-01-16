@@ -16,7 +16,7 @@ import (
 // Opens a stream to the given peer and requests a block for the given hash and slice.
 //
 // If a block is not found, an error is returned
-func (p *P2PNode) requestBlockFromPeer(hash common.Hash, slice types.SliceID, peerID peer.ID) (*types.Block, error) {
+func (p *P2PNode) requestBlockFromPeer(hash common.Hash, location common.Location, peerID peer.ID) (*types.Block, error) {
 	// Open a stream to the peer using a specific protocol for block requests
 	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
 	if err != nil {
@@ -25,7 +25,7 @@ func (p *P2PNode) requestBlockFromPeer(hash common.Hash, slice types.SliceID, pe
 	defer stream.Close()
 
 	// create a block request protobuf message
-	blockReq := pb.CreateProtoBlockRequest(hash, slice)
+	blockReq := pb.CreateProtoBlockRequest(hash, location)
 
 	// Marshal the block request into a byte array
 	blockReqBytes, err := pb.MarshalProtoMessage(blockReq)
@@ -64,9 +64,9 @@ func (p *P2PNode) requestBlockFromPeer(hash common.Hash, slice types.SliceID, pe
 	return nil, errors.New("block not found")
 }
 
-// Creates a Cid from a slice ID to be used as DHT key
-func shardToCid(slice types.SliceID) cid.Cid {
-	sliceBytes := []byte(slice.String())
+// Creates a Cid from a location to be used as DHT key
+func locationToCid(location common.Location) cid.Cid {
+	sliceBytes := []byte(location.Name())
 
 	// create a multihash from the slice ID
 	mhash, _ := multihash.Encode(sliceBytes, multihash.SHA2_256)

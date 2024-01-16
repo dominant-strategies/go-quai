@@ -17,5 +17,5 @@ type QuaiP2PNode interface {
 	Network() network.Network
 	// Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
 	// Returns nil if the block is not found.
-	GetBlock(hash common.Hash, slice types.SliceID) *types.Block
+	GetBlock(hash common.Hash, location common.Location) *types.Block
 }

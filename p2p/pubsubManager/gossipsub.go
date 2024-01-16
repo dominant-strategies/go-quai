@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
@@ -27,10 +28,10 @@ type PubsubManager struct {
 }
 
 // gets the name of the topic for the given type of data
-func TopicName(slice types.SliceID, data interface{}) (string, error) {
+func TopicName(location common.Location, data interface{}) (string, error) {
 	switch data.(type) {
 	case types.Block:
-		return slice.String() + "/blocks", nil
+		return location.Name() + "/blocks", nil
 	default:
 		return "", ErrUnsupportedType
 	}
@@ -59,9 +60,9 @@ func (g *PubsubManager) Start(receiveCb func(interface{})) {
 }
 
 // subscribe to broadcasts of the given type of data
-func (g *PubsubManager) Subscribe(slice types.SliceID, data interface{}) error {
+func (g *PubsubManager) Subscribe(location common.Location, data interface{}) error {
 	// build topic name
-	topicName, err := TopicName(slice, data)
+	topicName, err := TopicName(location, data)
 	if err != nil {
 		return err
 	}
@@ -84,8 +85,8 @@ func (g *PubsubManager) Subscribe(slice types.SliceID, data interface{}) error {
 }
 
 // broadcasts data to subscribing peers
-func (g *PubsubManager) Broadcast(slice types.SliceID, data interface{}) error {
-	topicName, err := TopicName(slice, data)
+func (g *PubsubManager) Broadcast(location common.Location, data interface{}) error {
+	topicName, err := TopicName(location, data)
 	if err != nil {
 		return err
 	}
@@ -93,8 +94,8 @@ func (g *PubsubManager) Broadcast(slice types.SliceID, data interface{}) error {
 }
 
 // lists our peers which provide the associated topic
-func (g *PubsubManager) PeersForTopic(slice types.SliceID, data interface{}) ([]peer.ID, error) {
-	topicName, err := TopicName(slice, data)
+func (g *PubsubManager) PeersForTopic(location common.Location, data interface{}) ([]peer.ID, error) {
+	topicName, err := TopicName(location, data)
 	if err != nil {
 		return nil, err
 	}

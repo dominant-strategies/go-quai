@@ -56,12 +56,12 @@ func (p *P2PNode) Start() error {
 	return nil
 }
 
-func (p *P2PNode) Subscribe(slice types.SliceID, data interface{}) error {
-	return p.pubsub.Subscribe(slice, data)
+func (p *P2PNode) Subscribe(location common.Location, data interface{}) error {
+	return p.pubsub.Subscribe(location, data)
 }
 
-func (p *P2PNode) Broadcast(slice types.SliceID, data interface{}) error {
-	return p.pubsub.Broadcast(slice, data)
+func (p *P2PNode) Broadcast(location common.Location, data interface{}) error {
+	return p.pubsub.Broadcast(location, data)
 }
 
 func (p *P2PNode) SetConsensusBackend(be quai.ConsensusAPI) {
@@ -108,8 +108,8 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-// Request a block from the network for the specified slice
-func (p *P2PNode) RequestBlock(hash common.Hash, slice types.SliceID) chan *types.Block {
+// Request a block from the network for the specified location
+func (p *P2PNode) RequestBlock(hash common.Hash, location common.Location) chan *types.Block {
 	resultChan := make(chan *types.Block, 1)
 	go func() {
 		defer close(resultChan)
@@ -122,13 +122,13 @@ func (p *P2PNode) RequestBlock(hash common.Hash, slice types.SliceID) chan *type
 			return
 		}
 		// 2. If not, query the topic peers for the block
-		peers, err := p.pubsub.PeersForTopic(slice, types.Block{})
+		peers, err := p.pubsub.PeersForTopic(location, types.Block{})
 		if err != nil {
 			log.Errorf("Error requesting block: ", err)
 			return
 		}
 		for _, peerID := range peers {
-			block, err := p.requestBlockFromPeer(hash, slice, peerID)
+			block, err := p.requestBlockFromPeer(hash, location, peerID)
 			if err == nil {
 				log.Debugf("Received block %s from peer %s", block.Hash, peerID)
 				// add the block to the cache
@@ -146,14 +146,14 @@ func (p *P2PNode) RequestBlock(hash common.Hash, slice types.SliceID) chan *type
 			peersPerDHTQuery      = 10 // Number of peers to query per DHT attempt
 			dhtQueryRetryInterval = 5  // Time to wait between DHT query retries
 		)
-		// create a Cid from the slice ID
-		shardCid := shardToCid(slice)
+		// create a Cid from the slice location
+		shardCid := locationToCid(location)
 		for retries := 0; retries < maxDHTQueryRetries; retries++ {
 			log.Debugf("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
 			// query the DHT for peers in the slice
 			peerChan := p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery)
 			for peerInfo := range peerChan {
-				block, err := p.requestBlockFromPeer(hash, slice, peerInfo.ID)
+				block, err := p.requestBlockFromPeer(hash, location, peerInfo.ID)
 				if err == nil {
 					log.Debugf("Received block %s from peer %s", block.Hash, peerInfo.ID)
 					p.blockCache.Add(hash, block)
@@ -162,15 +162,15 @@ func (p *P2PNode) RequestBlock(hash common.Hash, slice types.SliceID) chan *type
 				}
 			}
 			// if the block is not found, wait for a bit and try again
-			log.Debugf("Block %s not found in slice %s. Retrying...", hash, slice)
+			log.Debugf("Block %s not found in slice %s. Retrying...", hash, location)
 			time.Sleep(dhtQueryRetryInterval * time.Second)
 		}
-		log.Debugf("Block %s not found in slice %s", hash, slice)
+		log.Debugf("Block %s not found in slice %s", hash, location)
 	}()
 	return resultChan
 }
 
-func (p *P2PNode) RequestTransaction(hash common.Hash, loc types.SliceID) chan *types.Transaction {
+func (p *P2PNode) RequestTransaction(hash common.Hash, loc common.Location) chan *types.Transaction {
 	panic("todo")
 }
 
@@ -200,12 +200,12 @@ func (p *P2PNode) StartGossipSub(ctx context.Context) error {
 
 // Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
 // Returns nil if the block is not found.
-func (p *P2PNode) GetBlock(hash common.Hash, slice types.SliceID) *types.Block {
+func (p *P2PNode) GetBlock(hash common.Hash, location common.Location) *types.Block {
 	block, ok := p.blockCache.Get(hash)
 	if ok {
 		return block
 	}
-	return p.consensus.LookupBlock(hash, slice)
+	return p.consensus.LookupBlock(hash, location)
 }
 
 func (p *P2PNode) handleBroadcast(data interface{}) {
@@ -218,3 +218,4 @@ func (p *P2PNode) handleBroadcast(data interface{}) {
 		// TODO: ban the peer which sent it?
 	}
 }
+
