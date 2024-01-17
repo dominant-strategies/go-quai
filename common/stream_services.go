@@ -2,9 +2,9 @@ package common
 
 import (
 	"io"
-	"net"
 	"time"
 
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
 )
@@ -12,51 +12,50 @@ import (
 const (
 	// timeout in seconds before a read/write operation on the stream is considered failed
 	// TODO: consider making this dynamic based on the network latency
-	STREAM_TIMEOUT = 10 * time.Second
+	C_STREAM_TIMEOUT = 10 * time.Second
+
+	// buffer size in bytes (1MB)
+	C_BUFFER_SIZE = 1024 * 1024
 )
 
 // Reads the message from the stream and returns a byte of data.
-// If the message is not received within STREAM_TIMEOUT, an error is returned.
 func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 	// Set a read deadline
-	err := stream.SetReadDeadline(time.Now().Add(STREAM_TIMEOUT))
+	err := stream.SetReadDeadline(time.Now().Add(C_STREAM_TIMEOUT))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to set read deadline")
 	}
 
-	// Read the message from the stream
-	msg, err := io.ReadAll(stream)
-	if err != nil {
-		if err == io.EOF {
-			// the stream is closed
-			return nil, errors.Wrap(err, "stream closed")
+	buffer := make([]byte, C_BUFFER_SIZE)
+	var data []byte
+	for {
+		n, err := stream.Read(buffer)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			log.Errorf("error reading message from stream: %s", err)
+			return nil, err
 		}
-		if err, ok := err.(net.Error); ok && err.Timeout() {
-			// read deadline exceeded
-			return nil, errors.Wrap(err, "read deadline exceeded")
-		}
-		// some other error
-		return nil, errors.Wrap(err, "failed to read message from stream")
+		data = append(data, buffer[:n]...)
 	}
 
-	return msg, nil
+	log.Tracef("succesfully read %d bytes from stream", len(data))
+
+	return data, nil
 }
 
 // Writes the message to the stream.
-// If the message is not written within STREAM_TIMEOUT, an error is returned.
 func WriteMessageToStream(stream network.Stream, msg []byte) error {
-	err := stream.SetWriteDeadline(time.Now().Add(STREAM_TIMEOUT))
+	err := stream.SetWriteDeadline(time.Now().Add(C_STREAM_TIMEOUT))
 	if err != nil {
 		return errors.Wrap(err, "failed to set write deadline")
 	}
-	_, err = stream.Write(msg)
+
+	b, err := stream.Write(msg)
 	if err != nil {
-		if err, ok := err.(net.Error); ok && err.Timeout() {
-			// write deadline exceeded
-			return errors.Wrap(err, "write deadline exceeded")
-		}
-		// some other error
 		return errors.Wrap(err, "failed to write message to stream")
 	}
+	log.Tracef("succesfully wrote %d bytes to stream", b)
 	return err
 }
