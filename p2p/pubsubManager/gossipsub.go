@@ -3,10 +3,8 @@ package pubsubManager
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -57,7 +55,6 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 
 func (g *PubsubManager) Start(receiveCb func(interface{})) {
 	g.onReceived = receiveCb
-	go g.handleSubscriptions()
 }
 
 // subscribe to broadcasts of the given type of data
@@ -82,6 +79,32 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	}
 	g.subscriptions[topicName] = subscription
 
+	go func(sub *pubsub.Subscription) {
+		log.Infof("waiting for next message on subscription: %s", sub.Topic())
+		msg, err := sub.Next(g.ctx)
+		if err != nil {
+			// if context was cancelled, then we are shutting down
+			if g.ctx.Err() != nil {
+				return
+			}
+			log.Errorf("error getting next message from subscription: %s", err)
+		}
+		log.Debugf("received message on topic: %s", *msg.Topic)
+
+		var data interface{}
+		// unmarshal the received data depending on the topic's type
+		err = pb.UnmarshalAndConvert(msg.Data, &data)
+		if err != nil {
+			log.Errorf("error unmarshalling data: %s", err)
+			return
+		}
+
+		// handle the received data
+		if g.onReceived != nil {
+			g.onReceived(data)
+		}
+	}(subscription)
+
 	return nil
 }
 
@@ -105,44 +128,4 @@ func (g *PubsubManager) PeersForTopic(location common.Location, datatype interfa
 		return nil, err
 	}
 	return g.topics[topicName].ListPeers(), nil
-}
-
-// handles any data received on any of our subscribed topics
-func (g *PubsubManager) handleSubscriptions() {
-	for {
-		for _, sub := range g.subscriptions {
-			msg, err := sub.Next(g.ctx)
-			if err != nil {
-				// if context was cancelled, then we are shutting down
-				if g.ctx.Err() != nil {
-					return
-				}
-				log.Errorf("error getting next message from subscription: %s", err)
-				continue
-			}
-
-			topic := msg.GetTopic()
-			log.Debugf("received message on topic: %s", topic)
-
-			// switch on the topic name to determine the type of data received
-			var data interface{}
-			switch {
-			case strings.Contains(topic, "blocks"):
-				data := new(types.Block)
-				err = pb.UnmarshalAndConvert(msg.Data, data)
-				if err != nil {
-					log.Errorf("error unmarshalling block: %s", err)
-					continue
-				}
-			default:
-				log.Errorf("unsupported topic: %s", topic)
-				continue
-			}
-
-			// handle the received data
-			if g.onReceived != nil {
-				g.onReceived(data)
-			}
-		}
-	}
 }
