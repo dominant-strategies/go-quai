@@ -305,7 +305,7 @@ func (c *ChainIndexer) updateLoop(nodeCtx int) {
 						return
 					default:
 					}
-					c.logger.WithField("err", err).Error("Section processing failed")
+					c.logger.WithField("err", err).Warn("Section processing failed")
 				}
 				c.lock.Lock()
 
