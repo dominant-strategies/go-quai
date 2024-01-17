@@ -480,6 +480,7 @@ var (
 	}
 	RPCGlobalTxFeeCapFlag = Flag{
 		Name:  "rpc.txfeecap",
+		Value: 0,
 		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
 	}
 	RPCGlobalGasCapFlag = Flag{
@@ -1027,7 +1028,7 @@ func setGPO(cfg *gasprice.Config) {
 }
 
 func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
-	if viper.IsSet(TxPoolLocalsFlag.Name) {
+	if viper.IsSet(TxPoolLocalsFlag.Name) && viper.GetString(TxPoolLocalsFlag.Name) != "" {
 		locals := strings.Split(viper.GetString(TxPoolLocalsFlag.Name), ",")
 		for _, account := range locals {
 			if trimmed := strings.TrimSpace(account); !common.IsHexAddress(trimmed) {
