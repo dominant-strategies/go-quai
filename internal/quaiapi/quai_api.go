@@ -276,7 +276,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockNumberAndIndex(ctx context.Cont
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(log.Fields{
+			s.b.Logger().WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   block.Hash(),
 				"index":  index,
@@ -296,7 +296,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(log.Fields{
+			s.b.Logger().WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   blockHash,
 				"index":  index,
@@ -310,7 +310,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if pendBlock != nil && pendBlock.Hash() == blockHash {
 		uncles := pendBlock.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(log.Fields{
+			s.b.Logger().WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   blockHash,
 				"index":  index,
@@ -582,7 +582,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	}
 	block, err := s.b.ConstructLocalMinedBlock(header)
 	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && nodeCtx < common.ZONE_CTX {
-		log.Info("filling sub manifest")
+		s.b.Logger().Info("filling sub manifest")
 		// If we just mined this block, and we have a subordinate chain, its possible
 		// the subordinate manifest in our block body is incorrect. If so, ask our sub
 		// for the correct manifest and reconstruct the block.
@@ -602,7 +602,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 			log.WithField("err", err).Error("Error broadcasting block")
 		}
 	}
-	log.WithFields(log.Fields{
+	s.b.Logger().WithFields(log.Fields{
 		"number":   header.Number(s.b.NodeCtx()),
 		"location": header.Location(),
 	})
@@ -684,7 +684,7 @@ type DomUpdate struct {
 func (s *PublicBlockChainQuaiAPI) UpdateDom(ctx context.Context, raw json.RawMessage) {
 	var domUpdate DomUpdate
 	if err := json.Unmarshal(raw, &domUpdate); err != nil {
-		log.WithField("err", err).Error("Error unmarshaling domUpdate in api")
+		s.b.Logger().WithField("err", err).Error("Error unmarshaling domUpdate in api")
 		return
 	}
 

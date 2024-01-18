@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
@@ -390,7 +391,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(log.Fields{
+			s.b.Logger().WithFields(log.Fields{
 				"number": blockNr,
 				"hash":   block.Hash(),
 				"index":  index,
@@ -410,7 +411,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(log.Fields{
+			s.b.Logger().WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   block.Hash(),
 				"index":  index,
@@ -547,7 +548,7 @@ func (diff *StateOverride) Apply(state *state.StateDB, nodeLocation common.Locat
 
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) {
-		log.WithField("runtime", time.Since(start)).Debug("Executing EVM call finished")
+		b.Logger().WithField("runtime", time.Since(start)).Debug("Executing EVM call finished")
 	}(time.Now())
 	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -731,7 +732,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			if transfer == nil {
 				transfer = new(hexutil.Big)
 			}
-			log.WithFields(log.Fields{
+			b.Logger().WithFields(log.Fields{
 				"original": hi,
 				"balance":  balance,
 				"sent":     transfer.ToInt(),
@@ -743,7 +744,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Recap the highest gas allowance with specified gascap.
 	if gasCap != 0 && hi > gasCap {
-		log.WithFields(log.Fields{
+		b.Logger().WithFields(log.Fields{
 			"requested": hi,
 			"cap":       gasCap,
 		}).Warn("Caller gas above allowance, capping")
@@ -1199,7 +1200,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	for {
 		// Retrieve the current access list to expand
 		accessList := prevTracer.AccessList(nodeLocation)
-		log.WithField("accessList", accessList).Debug("Creating access list")
+		b.Logger().WithField("accessList", accessList).Debug("Creating access list")
 
 		// If no gas amount was specified, each unique access list needs it's own
 		// gas calculation. This is quite expensive, but we need to be accurate
@@ -1451,7 +1452,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 	if tx.To() == nil {
 		addr := crypto.CreateAddress(from, tx.Nonce(), tx.Data(), nodeLocation)
-		log.WithFields(log.Fields{
+		b.Logger().WithFields(log.Fields{
 			"hash":     tx.Hash().Hex(),
 			"from":     from,
 			"nonce":    tx.Nonce(),
@@ -1459,7 +1460,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 			"value":    tx.Value(),
 		}).Debug("Submitted contract creation")
 	} else {
-		log.WithFields(log.Fields{
+		b.Logger().WithFields(log.Fields{
 			"hash":      tx.Hash().Hex(),
 			"from":      from,
 			"nonce":     tx.Nonce(),
@@ -1549,9 +1550,9 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 // removing all unused slots and merging all keys.
 func (api *PrivateDebugAPI) ChaindbCompact() error {
 	for b := byte(0); b < 255; b++ {
-		log.WithField("range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1)).Info("Compacting chain database")
+		api.b.Logger().WithField("range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1)).Info("Compacting chain database")
 		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
-			log.WithField("err", err).Error("Database compaction failed")
+			api.b.Logger().WithField("err", err).Error("Database compaction failed")
 			return err
 		}
 	}

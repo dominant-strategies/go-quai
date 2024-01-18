@@ -50,7 +50,6 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 
 	// set logger inmediately after parsing cobra flags
 	logLevel := viper.GetString(utils.LogLevelFlag.Name)
-	log.WithField("logLevel", logLevel).Info("setting global logger")
 	log.SetGlobalLogger("", logLevel)
 
 	// bind cobra flags to viper instance

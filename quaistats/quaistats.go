@@ -100,6 +100,7 @@ type backend interface {
 	ProcessingState() bool
 	NodeCtx() int
 	NodeLocation() common.Location
+	Logger() *log.Logger
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -311,21 +312,21 @@ func (s *Service) Start() error {
 	go s.loopBlocks(chainHeadCh)
 	go s.loopSender(s.initializeURLMap())
 
-	log.Info("Stats daemon started")
+	s.backend.Logger().Info("Stats daemon started")
 	return nil
 }
 
 // Stop implements node.Lifecycle, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
 	s.headSub.Unsubscribe()
-	log.Info("Stats daemon stopped")
+	s.backend.Logger().Info("Stats daemon stopped")
 	return nil
 }
 
 func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.WithField("err", r).Error("Stats process crashed")
+			s.backend.Logger().WithField("err", r).Error("Stats process crashed")
 			go s.loopBlocks(chainHeadCh)
 		}
 	}()
@@ -378,11 +379,11 @@ func (s *Service) loopSender(urlMap map[string]string) {
 			// If we don't have a JWT or it's expired, get a new one
 			isJwtExpiredResult, jwtIsExpiredErr := s.isJwtExpired(authJwt)
 			if authJwt == "" || isJwtExpiredResult || jwtIsExpiredErr != nil {
-				log.Info("Trying to login to quaistats")
+				s.backend.Logger().Info("Trying to login to quaistats")
 				var err error
 				authJwt, err = s.login2(urlMap["login"])
 				if err != nil {
-					log.WithField("err", err).Warn("Stats login failed")
+					s.backend.Logger().WithField("err", err).Warn("Stats login failed")
 					errTimer.Reset(10 * time.Second)
 					continue
 				}
@@ -397,25 +398,25 @@ func (s *Service) loopSender(urlMap map[string]string) {
 					continue
 				case "nodeStats":
 					if errs[key] = s.reportNodeStats(url, 0, authJwt); errs[key] != nil {
-						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
+						s.backend.Logger().WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
 				case "blockTransactionStats":
 					if errs[key] = s.sendTransactionStats(url, authJwt); errs[key] != nil {
-						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
+						s.backend.Logger().WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
 				case "blockDetailStats":
 					if errs[key] = s.sendDetailStats(url, authJwt); errs[key] != nil {
-						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
+						s.backend.Logger().WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
 				case "blockAppendTime":
 					if errs[key] = s.sendAppendTimeStats(url, authJwt); errs[key] != nil {
-						log.WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
+						s.backend.Logger().WithField("err", errs[key]).Warn("Initial stats report failed for " + key)
 						errTimer.Reset(0)
 						continue
 					}
@@ -437,28 +438,28 @@ func (s *Service) loopSender(urlMap map[string]string) {
 					nodeStatsMod ^= 1
 					if err = s.reportNodeStats(urlMap["nodeStats"], nodeStatsMod, authJwt); err != nil {
 						noErrs = false
-						log.WithField("err", err).Warn("nodeStats full stats report failed")
+						s.backend.Logger().WithField("err", err).Warn("nodeStats full stats report failed")
 					}
 				case <-s.statsReadyCh:
 					if url, ok := urlMap["blockTransactionStats"]; ok {
 						if err := s.sendTransactionStats(url, authJwt); err != nil {
 							noErrs = false
 							errTimer.Reset(0)
-							log.Warn("blockTransactionStats stats report failed", "err", err)
+							s.backend.Logger().Warn("blockTransactionStats stats report failed", "err", err)
 						}
 					}
 					if url, ok := urlMap["blockDetailStats"]; ok {
 						if err := s.sendDetailStats(url, authJwt); err != nil {
 							noErrs = false
 							errTimer.Reset(0)
-							log.Warn("blockDetailStats stats report failed", "err", err)
+							s.backend.Logger().Warn("blockDetailStats stats report failed", "err", err)
 						}
 					}
 					if url, ok := urlMap["blockAppendTime"]; ok {
 						if err := s.sendAppendTimeStats(url, authJwt); err != nil {
 							noErrs = false
 							errTimer.Reset(0)
-							log.Warn("blockAppendTime stats report failed", "err", err)
+							s.backend.Logger().Warn("blockAppendTime stats report failed", "err", err)
 						}
 					}
 				}
@@ -481,7 +482,7 @@ func (s *Service) initializeURLMap() map[string]string {
 
 func (s *Service) handleBlock(block *types.Block) {
 	// Cache Block
-	log.WithFields(log.Fields{
+	s.backend.Logger().WithFields(log.Fields{
 		"detailsQueueSize":     s.detailStatsQueue.Size(),
 		"appendTimeQueueSize":  s.appendTimeStatsQueue.Size(),
 		"transactionQueueSize": s.transactionStatsQueue.Size(),
@@ -516,7 +517,7 @@ func (s *Service) handleBlock(block *types.Block) {
 
 func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	if url == "" {
-		log.Warn("node stats url is empty")
+		s.backend.Logger().Warn("node stats url is empty")
 		return errors.New("node stats connection is empty")
 	}
 
@@ -524,7 +525,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	isPrime := strings.Contains(s.instanceDir, "prime")
 
 	if isRegion || isPrime {
-		log.Debug("Skipping node stats for region or prime. Filtered out on backend")
+		s.backend.Logger().Debug("Skipping node stats for region or prime. Filtered out on backend")
 		return nil
 	}
 
@@ -532,13 +533,13 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	// Get disk usage (as a percentage)
 	diskUsage, err := dirSize(s.instanceDir + "/../..")
 	if err != nil {
-		log.WithField("err", err).Warn("Error calculating directory sizes")
+		s.backend.Logger().WithField("err", err).Warn("Error calculating directory sizes")
 		diskUsage = c_statsErrorValue
 	}
 
 	diskSize, err := diskTotalSize()
 	if err != nil {
-		log.WithField("err", err).Warn("Error calculating disk size")
+		s.backend.Logger().WithField("err", err).Warn("Error calculating disk size")
 		diskUsage = c_statsErrorValue
 	}
 
@@ -546,13 +547,13 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	if diskSize > 0 {
 		diskUsagePercent = float64(diskUsage) / float64(diskSize)
 	} else {
-		log.Warn("Error calculating disk usage percent: disk size is 0")
+		s.backend.Logger().Warn("Error calculating disk usage percent: disk size is 0")
 	}
 
 	// Usage in your main function
 	ramUsage, err := getQuaiRAMUsage()
 	if err != nil {
-		log.WithField("err", err).Warn("Error getting Quai RAM usage")
+		s.backend.Logger().WithField("err", err).Warn("Error getting Quai RAM usage")
 		return err
 	}
 	var ramUsagePercent, ramFreePercent, ramAvailablePercent float64
@@ -561,14 +562,14 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 		ramFreePercent = float64(vmStat.Free) / float64(vmStat.Total)
 		ramAvailablePercent = float64(vmStat.Available) / float64(vmStat.Total)
 	} else {
-		log.WithField("err", err).Warn("Error getting RAM stats")
+		s.backend.Logger().WithField("err", err).Warn("Error getting RAM stats")
 		return err
 	}
 
 	// Get CPU usage
 	cpuUsageQuai, err := getQuaiCPUUsage()
 	if err != nil {
-		log.WithField("err", err).Warn("Error getting Quai CPU usage")
+		s.backend.Logger().WithField("err", err).Warn("Error getting Quai CPU usage")
 		return err
 	} else {
 		cpuUsageQuai /= float64(100)
@@ -578,14 +579,14 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	if cpuUsageTotal, err := cpu.Percent(0, false); err == nil {
 		cpuFree = 1 - float32(cpuUsageTotal[0]/float64(100))
 	} else {
-		log.WithField("err", err).Warn("Error getting CPU free")
+		s.backend.Logger().WithField("err", err).Warn("Error getting CPU free")
 		return err
 	}
 
 	currentHeader := s.backend.CurrentHeader()
 
 	if currentHeader == nil {
-		log.Warn("Current header is nil")
+		s.backend.Logger().Warn("Current header is nil")
 		return errors.New("current header is nil")
 	}
 	// Get current block number
@@ -605,7 +606,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 			}
 		}
 	} else {
-		log.WithField("err", err).Warn("Error getting MAC address")
+		s.backend.Logger().WithField("err", err).Warn("Error getting MAC address")
 		return err
 	}
 
@@ -639,14 +640,14 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 
 	jsonData, err := json.Marshal(document)
 	if err != nil {
-		log.WithField("err", err).Error("Failed to marshal node stats")
+		s.backend.Logger().WithField("err", err).Error("Failed to marshal node stats")
 		return err
 	}
 
 	// Create a new HTTP request
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.WithField("err", err).Error("Failed to create new HTTP request")
+		s.backend.Logger().WithField("err", err).Error("Failed to create new HTTP request")
 		return err
 	}
 
@@ -657,7 +658,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	// Send the request using the default HTTP client
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.WithField("err", err).Error("Failed to send node stats")
+		s.backend.Logger().WithField("err", err).Error("Failed to send node stats")
 		return err
 	}
 	defer resp.Body.Close()
@@ -665,10 +666,10 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 	if resp.StatusCode != http.StatusOK {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.WithField("err", err).Error("Failed to read response body")
+			s.backend.Logger().WithField("err", err).Error("Failed to read response body")
 			return err
 		}
-		log.WithFields(log.Fields{
+		s.backend.Logger().WithFields(log.Fields{
 			"status": resp.Status,
 			"body":   string(body),
 		}).Error("Received non-OK response")
@@ -697,7 +698,7 @@ func (s *Service) sendTransactionStats(url string, authJwt string) error {
 
 	err := s.report(url, "blockTransactionStats", statsBatch, authJwt)
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
-		log.WithField("err", err).Warn("Failed to send transaction stats, requeuing stats")
+		s.backend.Logger().WithField("err", err).Warn("Failed to send transaction stats, requeuing stats")
 		// Re-enqueue the failed stats from end to beginning
 		tempSlice := make([]interface{}, len(statsBatch))
 		for i, item := range statsBatch {
@@ -706,7 +707,7 @@ func (s *Service) sendTransactionStats(url string, authJwt string) error {
 		s.transactionStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
-		log.WithField("err", err).Warn("Failed to send transaction stats")
+		s.backend.Logger().WithField("err", err).Warn("Failed to send transaction stats")
 		return err
 	}
 	return nil
@@ -732,7 +733,7 @@ func (s *Service) sendDetailStats(url string, authJwt string) error {
 
 	err := s.report(url, "blockDetailStats", statsBatch, authJwt)
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
-		log.WithField("err", err).Warn("Failed to send detail stats, requeuing stats")
+		s.backend.Logger().WithField("err", err).Warn("Failed to send detail stats, requeuing stats")
 		// Re-enqueue the failed stats from end to beginning
 		tempSlice := make([]interface{}, len(statsBatch))
 		for i, item := range statsBatch {
@@ -741,7 +742,7 @@ func (s *Service) sendDetailStats(url string, authJwt string) error {
 		s.detailStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
-		log.WithField("err", err).Warn("Failed to send detail stats")
+		s.backend.Logger().WithField("err", err).Warn("Failed to send detail stats")
 		return err
 	}
 	return nil
@@ -768,7 +769,7 @@ func (s *Service) sendAppendTimeStats(url string, authJwt string) error {
 
 	err := s.report(url, "blockAppendTime", statsBatch, authJwt)
 	if err != nil && strings.Contains(err.Error(), "Received non-OK response") {
-		log.WithField("err", err).Warn("Failed to send append time stats, requeuing stats")
+		s.backend.Logger().WithField("err", err).Warn("Failed to send append time stats, requeuing stats")
 		// Re-enqueue the failed stats from end to beginning
 		tempSlice := make([]interface{}, len(statsBatch))
 		for i, item := range statsBatch {
@@ -777,7 +778,7 @@ func (s *Service) sendAppendTimeStats(url string, authJwt string) error {
 		s.appendTimeStatsQueue.EnqueueFrontBatch(tempSlice)
 		return err
 	} else if err != nil {
-		log.WithField("err", err).Warn("Failed to send append time stats")
+		s.backend.Logger().WithField("err", err).Warn("Failed to send append time stats")
 		return err
 	}
 	return nil
@@ -785,16 +786,16 @@ func (s *Service) sendAppendTimeStats(url string, authJwt string) error {
 
 func (s *Service) report(url string, dataType string, stats interface{}, authJwt string) error {
 	if url == "" {
-		log.Warn(dataType + " url is empty")
+		s.backend.Logger().Warn(dataType + " url is empty")
 		return errors.New(dataType + " url is empty")
 	}
 
 	if stats == nil {
-		log.Warn(dataType + " stats are nil")
+		s.backend.Logger().Warn(dataType + " stats are nil")
 		return errors.New(dataType + " stats are nil")
 	}
 
-	log.WithField("datatype", dataType).Trace("Sending stats to quaistats")
+	s.backend.Logger().WithField("datatype", dataType).Trace("Sending stats to quaistats")
 
 	document := map[string]interface{}{
 		"id":     s.node,
@@ -803,13 +804,13 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 
 	jsonData, err := json.Marshal(document)
 	if err != nil {
-		log.WithField("err", err).Error("Failed to marshal " + dataType + " stats")
+		s.backend.Logger().WithField("err", err).Error("Failed to marshal " + dataType + " stats")
 		return err
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.WithField("err", err).Error("Failed to create new request for " + dataType + " stats")
+		s.backend.Logger().WithField("err", err).Error("Failed to create new request for " + dataType + " stats")
 		return err
 	}
 
@@ -820,7 +821,7 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.WithField("err", err).Error("Failed to send " + dataType + " stats")
+		s.backend.Logger().WithField("err", err).Error("Failed to send " + dataType + " stats")
 		return err
 	}
 	defer resp.Body.Close()
@@ -828,16 +829,16 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 	if resp.StatusCode != http.StatusOK {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.WithField("err", err).Error("Failed to read response body")
+			s.backend.Logger().WithField("err", err).Error("Failed to read response body")
 			return err
 		}
-		log.WithFields(log.Fields{
+		s.backend.Logger().WithFields(log.Fields{
 			"status": resp.Status,
 			"body":   string(body),
 		}).Error("Received non-OK response")
 		return errors.New("Received non-OK response: " + resp.Status)
 	}
-	log.WithField("datatype", dataType).Trace("Successfully sent stats to quaistats")
+	s.backend.Logger().WithField("datatype", dataType).Trace("Successfully sent stats to quaistats")
 	return nil
 }
 
@@ -928,7 +929,7 @@ func (s *Service) login2(url string) (string, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.WithField("err", err).Error("Failed to read response body")
+		s.backend.Logger().WithField("err", err).Error("Failed to read response body")
 		return "", err
 	}
 
@@ -1077,7 +1078,7 @@ func (s *Service) calculateTPS(block *types.Block) *tps {
 			// If the parent block is not cached, get it from the full node backend and cache it
 			fullBlock, fullBlockOk := fullNodeBackend.BlockByHash(context.Background(), parentHash)
 			if fullBlockOk != nil {
-				log.WithField("hash", parentHash.String()).Error("Error getting block from full node backend")
+				s.backend.Logger().WithField("hash", parentHash.String()).Error("Error getting block from full node backend")
 				return &tps{}
 			}
 			currentBlock = s.cacheBlock(fullBlock)
@@ -1134,7 +1135,7 @@ func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendT
 	header := block.Header()
 	appendTime := block.GetAppendTime()
 
-	log.WithField("appendTime", appendTime.Microseconds()).Info("Raw Block Append Time")
+	s.backend.Logger().WithField("appendTime", appendTime.Microseconds()).Info("Raw Block Append Time")
 
 	// Assemble and return the block stats
 	return &blockAppendTime{
@@ -1207,14 +1208,9 @@ func getQuaiRAMUsage() (uint64, error) {
 
 	var totalRam uint64
 
-	// Debug: log number of processes
-	log.WithField("number", len(processes)).Trace("Number of processes")
-
 	for _, p := range processes {
 		cmdline, err := p.Cmdline()
 		if err != nil {
-			// Debug: log error
-			log.WithField("err", err).Trace("Error getting process cmdline")
 			continue
 		}
 

@@ -40,7 +40,20 @@ func init() {
 }
 
 func SetGlobalLogger(logFilename string, logLevel string) {
-	// Change global logger's output
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		level = defaultLogLevel
+	}
+	logger.SetLevel(level)
+
+	if logFilename == "" {
+		logger.WithFields(Fields{
+			"path":  defaultLogFilePath,
+			"level": level.String(),
+		}).Info("Global logger started")
+		return
+	}
+
 	output := &lumberjack.Logger{
 		Filename:   logFilename,
 		MaxSize:    500, // megabytes
@@ -49,12 +62,10 @@ func SetGlobalLogger(logFilename string, logLevel string) {
 	}
 	logger.SetOutput(io.MultiWriter(output, os.Stdout))
 
-	// Change global logger's level
-	level, err := logrus.ParseLevel(logLevel)
-	if err != nil {
-		level = defaultLogLevel
-	}
-	logger.SetLevel(level)
+	logger.WithFields(Fields{
+		"path":  logFilename,
+		"level": level.String(),
+	}).Info("Global logger started")
 }
 
 func NewLogger(logFilename string, logLevel string) *logrus.Logger {

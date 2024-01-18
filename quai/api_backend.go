@@ -31,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -527,6 +528,10 @@ func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common
 
 func (b *QuaiAPIBackend) SetSyncTarget(header *types.Header) {
 	b.quai.core.SetSyncTarget(header)
+}
+
+func (b *QuaiAPIBackend) Logger() *log.Logger {
+	return b.quai.logger
 }
 
 // ///////////////////////////

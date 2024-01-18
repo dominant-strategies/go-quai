@@ -17,7 +17,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/pelletier/go-toml/v2"
 	gopsutil "github.com/shirou/gopsutil/mem"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -828,7 +827,7 @@ func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *log
 			cfg.DomUrl = "ws://127.0.0.1:8002"
 		}
 	}
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"Location": nodeLocation,
 		"domUrl":   cfg.DomUrl,
 	}).Info("Node")
@@ -1236,7 +1235,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 	mem, err := gopsutil.VirtualMemory()
 	if err == nil {
 		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
-			logger.WithFields(logrus.Fields{
+			logger.WithFields(log.Fields{
 				"available":   mem.Total / 1024 / 1024,
 				"addressable": 2 * 1024,
 			}).Warn("Lowering memory allowance on 32bit arch")
@@ -1244,7 +1243,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 		}
 		allowance := int(mem.Total / 1024 / 1024 / 3)
 		if cache := viper.GetInt(CacheFlag.Name); cache > allowance {
-			logger.WithFields(logrus.Fields{
+			logger.WithFields(log.Fields{
 				"provided": cache,
 				"updated":  allowance,
 			}).Warn("Sanitizing cache to Go's GC limits")

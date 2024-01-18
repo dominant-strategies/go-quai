@@ -27,11 +27,12 @@ import (
 	"time"
 	"unsafe"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/bitutil"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -149,11 +150,15 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	defer func() {
 		elapsed := time.Since(start)
 
-		logFn := log.Debug
+		logEntry := log.WithFields(log.Fields{
+			"elapsed": common.PrettyDuration(elapsed),
+		})
+
 		if elapsed > 3*time.Second {
-			logFn = log.Info
+			logEntry.Info("Generating ethash verification cache")
+		} else {
+			logEntry.Debug("Generating ethash verification cache")
 		}
-		logFn("Generated ethash verification cache", "elapsed", common.PrettyDuration(elapsed))
 	}()
 	// Convert our destination slice to a byte buffer
 	header := *(*reflect.SliceHeader)(unsafe.Pointer(&dest))
@@ -301,11 +306,15 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	defer func() {
 		elapsed := time.Since(start)
 
-		logFn := log.Debug
+		logEntry := log.WithFields(log.Fields{
+			"elapsed": common.PrettyDuration(elapsed),
+		})
+
 		if elapsed > 3*time.Second {
-			logFn = log.Info
+			logEntry.Info("Generating ethash  verification cache")
+		} else {
+			logEntry.Debug("Generating ethash  verification cache")
 		}
-		logFn("Generated ethash verification cache", "elapsed", common.PrettyDuration(elapsed))
 	}()
 
 	// Figure out whether the bytes need to be swapped for the machine
