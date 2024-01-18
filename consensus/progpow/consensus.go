@@ -514,7 +514,7 @@ func (progpow *Progpow) NodeLocation() common.Location {
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, logger *log.Logger) {
 	// Select the correct block reward based on chain progression
-	blockReward := misc.CalculateReward(header)
+	blockReward := misc.CalculateRewardForQuai(header)
 	nodeCtx := config.Location.Context()
 
 	coinbase, err := header.Coinbase().InternalAddress()

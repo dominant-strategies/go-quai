@@ -329,8 +329,11 @@ func inboundEtxsKey(hash common.Hash) []byte {
 	return append(inboundEtxsPrefix, hash.Bytes()...)
 }
 
-func utxoKey(hash common.Hash) []byte {
-	return append(utxoPrefix, hash.Bytes()...)
+// This can be optimized via VLQ encoding as btcd has done
+func utxoKey(hash common.Hash, index uint32) []byte {
+	indexBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(indexBytes, index)
+	return append(utxoPrefix, append(indexBytes, hash.Bytes()...)...)
 }
 
 func spentUTXOsKey(hash common.Hash) []byte {

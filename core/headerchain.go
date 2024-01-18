@@ -1158,8 +1158,8 @@ func (hc *HeaderChain) SlicesRunning() []common.Location {
 	return hc.slicesRunning
 }
 
-func (hc *HeaderChain) GetUtxo(hash common.Hash) *types.UtxoEntry {
-	return nil
+func (hc *HeaderChain) GetUtxo(hash common.Hash, index uint32) *types.UtxoEntry {
+	return hc.bc.GetUtxo(hash, index)
 }
 
 // fetchUtxosMain fetches unspent transaction output data about the provided
@@ -1183,7 +1183,7 @@ func (hc *HeaderChain) FetchUtxosMain(view *types.UtxoViewpoint, outpoints []typ
 	// so other code can use the presence of an entry in the store as a way
 	// to unnecessarily avoid attempting to reload it from the database.
 	for i := range outpoints {
-		entry := hc.GetUtxo(outpoints[i].TxHash)
+		entry := hc.GetUtxo(outpoints[i].TxHash, outpoints[i].Index)
 		if entry == nil {
 			return nil
 		}
@@ -1201,7 +1201,7 @@ func (hc *HeaderChain) VerifyUTXOsForTx(tx *types.Transaction) error {
 		return errors.New("invalid tx type")
 	}
 	for _, txIn := range tx.TxIn() {
-		utxo := hc.GetUtxo(txIn.PreviousOutPoint.TxHash)
+		utxo := hc.GetUtxo(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
 			return errors.New("utxo not found")
 		}
@@ -1338,12 +1338,10 @@ func (hc *HeaderChain) WriteUtxoViewpoint(view *types.UtxoViewpoint) error {
 
 		// Remove the utxo entry if it is spent.
 		if entry.IsSpent() {
-			rawdb.DeleteUtxo(hc.bc.db, outpoint.TxHash)
+			rawdb.DeleteUtxo(hc.bc.db, outpoint.TxHash, outpoint.Index)
 			continue
 		}
-
-		fmt.Println("write utxo", outpoint.TxHash.Hex())
-		rawdb.WriteUtxo(hc.bc.db, outpoint.TxHash, entry)
+		rawdb.WriteUtxo(hc.bc.db, outpoint.TxHash, outpoint.Index, entry)
 	}
 
 	return nil
@@ -1381,7 +1379,8 @@ func (hc *HeaderChain) DeleteUtxoViewpoint(hash common.Hash) error {
 //
 // See the comment for NewBlockTemplate for more information about why the nil
 // address handling is useful.
-func createCoinbaseTx(parentHash common.Hash, addr common.Address) (*types.Transaction, error) {
+func createCoinbaseTx(header *types.Header) (*types.Transaction, error) {
+	parentHash := header.ParentHash(header.Location().Context())
 	in := types.TxIn{
 		// Coinbase transactions have no inputs, so previous outpoint is
 		// zero hash and max index.
@@ -1389,15 +1388,30 @@ func createCoinbaseTx(parentHash common.Hash, addr common.Address) (*types.Trans
 			types.MaxPrevOutIndex),
 	}
 
-	out := types.TxOut{
-		Value: 10000000,
-		// Value:    blockchain.CalcBlockSubsidy(nextBlockHeight, params),
-		Address: addr.Bytes(),
+	denominations := misc.CalculateRewardForQi(header)
+	fmt.Printf("denominations: %v\n", denominations)
+
+	outs := make([]types.TxOut, 0, len(denominations))
+
+	// Iterate over the denominations in descending order (by key)
+	for i := types.MaxDenomination; i >= 0; i-- {
+		// If the denomination count is zero, skip it
+		if denominations[uint8(i)] == 0 {
+			continue
+		}
+		for j := uint8(0); j < denominations[uint8(i)]; j++ {
+			// Create the output for the denomination
+			out := types.TxOut{
+				Denomination: uint8(i),
+				Address:      header.Coinbase().Bytes(),
+			}
+			outs = append(outs, out)
+		}
 	}
 
 	utxo := &types.QiTx{
 		TxIn:  []types.TxIn{in},
-		TxOut: []types.TxOut{out},
+		TxOut: outs,
 	}
 
 	tx := types.NewTx(utxo)
@@ -1449,10 +1463,10 @@ func (hc *HeaderChain) disconnectTransactions(view *types.UtxoViewpoint, block *
 			entry := view.Entries[prevOut]
 			if entry == nil {
 				entry = &types.UtxoEntry{
-					Amount:      txOut.Value,
-					Address:     txOut.Address,
-					BlockHeight: block.NumberU64(hc.NodeCtx()),
-					PackedFlags: packedFlags,
+					Denomination: txOut.Denomination,
+					Address:      txOut.Address,
+					BlockHeight:  block.NumberU64(hc.NodeCtx()),
+					PackedFlags:  packedFlags,
 				}
 
 				view.Entries[prevOut] = entry
@@ -1486,7 +1500,7 @@ func (hc *HeaderChain) disconnectTransactions(view *types.UtxoViewpoint, block *
 
 			// Restore the utxo using the stxo data from the spend
 			// journal and mark it as modified.
-			entry.Amount = stxo.Amount
+			entry.Denomination = stxo.Denomination
 			entry.Address = stxo.Address
 			entry.BlockHeight = stxo.Height
 			entry.PackedFlags = types.TfModified

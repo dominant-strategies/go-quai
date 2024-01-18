@@ -25,7 +25,7 @@ type WireQiTx struct {
 
 type QiTxWithMinerFee struct {
 	Tx       *Transaction
-	Fee      uint64
+	Fee      *big.Int
 	FeePerKB uint64
 }
 
