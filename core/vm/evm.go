@@ -46,9 +46,6 @@ type (
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, common.Address) {
-	if evm.Context.BlockNumber.Uint64() <= params.CarbonForkBlockNumber { // no precompiles before the fork
-		return nil, false, addr
-	}
 	if index, ok := TranslatedAddresses[addr.Bytes20()]; ok {
 		addr = PrecompiledAddresses[evm.chainConfig.Location.Name()][index]
 	}
@@ -511,8 +508,6 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	contractAddr = crypto.CreateAddress(caller.Address(), nonce, code, evm.chainConfig.Location)
 	if _, err := contractAddr.InternalAddress(); err == nil {
-		return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
-	} else if evm.Context.BlockNumber.Uint64() <= params.CarbonForkBlockNumber {
 		return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
 	}
 

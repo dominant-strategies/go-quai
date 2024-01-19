@@ -694,7 +694,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	if err == nil || err == ErrExecutionReverted {
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-	} else if err == common.ErrInvalidScope && interpreter.evm.Context.BlockNumber.Uint64() > params.CarbonForkBlockNumber {
+	} else if err == common.ErrInvalidScope {
 		return nil, err
 	}
 	scope.Contract.Gas += returnGas
@@ -711,10 +711,6 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20(), interpreter.evm.chainConfig.Location)
-	// Check if address is in proper context
-	if !common.IsInChainScope(toAddr.Bytes(), interpreter.evm.chainConfig.Location) && interpreter.evm.Context.BlockNumber.Uint64() <= params.CarbonForkBlockNumber {
-		return nil, common.ErrInvalidScope
-	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -735,7 +731,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	if err == nil || err == ErrExecutionReverted {
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-	} else if err == common.ErrInvalidScope && interpreter.evm.Context.BlockNumber.Uint64() > params.CarbonForkBlockNumber {
+	} else if err == common.ErrInvalidScope {
 		return nil, err
 	}
 	scope.Contract.Gas += returnGas
@@ -752,10 +748,6 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20(), interpreter.evm.chainConfig.Location)
-	// Check if address is in proper context
-	if !common.IsInChainScope(toAddr.Bytes(), interpreter.evm.chainConfig.Location) && interpreter.evm.Context.BlockNumber.Uint64() <= params.CarbonForkBlockNumber {
-		return nil, common.ErrInvalidScope
-	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -769,7 +761,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	if err == nil || err == ErrExecutionReverted {
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-	} else if err == common.ErrInvalidScope && interpreter.evm.Context.BlockNumber.Uint64() > params.CarbonForkBlockNumber {
+	} else if err == common.ErrInvalidScope {
 		return nil, err
 	}
 	scope.Contract.Gas += returnGas
@@ -786,10 +778,6 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	// Pop other call parameters.
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20(), interpreter.evm.chainConfig.Location)
-	// Check if address is in proper context
-	if !common.IsInChainScope(toAddr.Bytes(), interpreter.evm.chainConfig.Location) && interpreter.evm.Context.BlockNumber.Uint64() <= params.CarbonForkBlockNumber {
-		return nil, common.ErrInvalidScope
-	}
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
@@ -803,7 +791,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	if err == nil || err == ErrExecutionReverted {
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-	} else if err == common.ErrInvalidScope && interpreter.evm.Context.BlockNumber.Uint64() > params.CarbonForkBlockNumber {
+	} else if err == common.ErrInvalidScope {
 		return nil, err
 	}
 	scope.Contract.Gas += returnGas

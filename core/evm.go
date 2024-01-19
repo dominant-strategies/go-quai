@@ -24,7 +24,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -58,7 +57,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	}
 
 	timestamp := header.Time() // base case, should only be the case in genesis block or before forkBlock (in testnet)
-	if header.Number(chain.NodeCtx()).Uint64() != 0 && header.Number(chain.NodeCtx()).Uint64() > params.CarbonForkBlockNumber {
+	if header.Number(chain.NodeCtx()).Uint64() != 0 {
 		parent := chain.GetHeader(header.ParentHash(chain.NodeCtx()), header.Number(chain.NodeCtx()).Uint64()-1)
 		if parent != nil {
 			timestamp = parent.Time()
