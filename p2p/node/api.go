@@ -56,8 +56,8 @@ func (p *P2PNode) Start() error {
 	return nil
 }
 
-func (p *P2PNode) Subscribe(location common.Location, data interface{}) error {
-	return p.pubsub.Subscribe(location, data)
+func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) error {
+	return p.pubsub.Subscribe(location, datatype)
 }
 
 func (p *P2PNode) Broadcast(location common.Location, data interface{}) error {

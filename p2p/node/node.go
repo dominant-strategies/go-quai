@@ -194,8 +194,8 @@ func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
 }
 
 // Helper to access the corresponding data cache
-func (p *P2PNode) pickCache(data interface{}) *lru.Cache[common.Hash, interface{}] {
-	switch data.(type) {
+func (p *P2PNode) pickCache(datatype interface{}) *lru.Cache[common.Hash, interface{}] {
+	switch datatype.(type) {
 	case *types.Block:
 		return p.cache["blocks"]
 	default:
@@ -211,7 +211,7 @@ func (p *P2PNode) cacheAdd(hash common.Hash, data interface{}) {
 }
 
 // Get a datagram from the corresponding cache
-func (p *P2PNode) cacheGet(hash common.Hash, data interface{}) (interface{}, bool) {
-	cache := p.pickCache(data)
+func (p *P2PNode) cacheGet(hash common.Hash, datatype interface{}) (interface{}, bool) {
+	cache := p.pickCache(datatype)
 	return cache.Get(hash)
 }
