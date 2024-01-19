@@ -5,6 +5,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -24,3 +25,15 @@ func TopicName(location common.Location, data interface{}) (string, error) {
 	}
 }
 
+func getTopicType(topic string) string {
+	return topic[strings.LastIndex(topic, "/")+1:]
+}
+
+// lists our peers which provide the associated topic
+func (g *PubsubManager) PeersForTopic(location common.Location, data interface{}) ([]peer.ID, error) {
+	topicName, err := TopicName(location, data)
+	if err != nil {
+		return nil, err
+	}
+	return g.topics[topicName].ListPeers(), nil
+}

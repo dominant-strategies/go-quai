@@ -109,12 +109,3 @@ func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}
 	}
 	return g.topics[topicName].Publish(g.ctx, protoData)
 }
-
-// lists our peers which provide the associated topic
-func (g *PubsubManager) PeersForTopic(location common.Location, datatype interface{}) ([]peer.ID, error) {
-	topicName, err := TopicName(location, datatype)
-	if err != nil {
-		return nil, err
-	}
-	return g.topics[topicName].ListPeers(), nil
-}
