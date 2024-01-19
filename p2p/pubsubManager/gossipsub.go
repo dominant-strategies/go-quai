@@ -9,7 +9,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var (
@@ -24,16 +23,6 @@ type PubsubManager struct {
 
 	// Callback function to handle received data
 	onReceived func(interface{})
-}
-
-// gets the name of the topic for the given type of data
-func TopicName(location common.Location, datatype interface{}) (string, error) {
-	switch datatype.(type) {
-	case *types.Block:
-		return location.Name() + "/blocks", nil
-	default:
-		return "", ErrUnsupportedType
-	}
 }
 
 // creates a new gossipsub instance
