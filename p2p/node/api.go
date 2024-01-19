@@ -50,9 +50,6 @@ func (p *P2PNode) Start() error {
 	// Start the pubsub manager
 	p.pubsub.Start(p.handleBroadcast)
 
-	// Open data streams with connected Quai peers
-	go quaiprotocol.OpenPeerStreams(p)
-
 	return nil
 }
 
