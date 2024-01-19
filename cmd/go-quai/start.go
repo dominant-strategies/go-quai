@@ -89,11 +89,6 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.WithField("error", err).Fatal("error starting node")
 	}
 
-	// subscribe to necessary protocol events
-	if err := node.StartGossipSub(ctx); err != nil {
-		log.WithField("error", err).Fatal("error starting gossipsub")
-	}
-
 	if viper.IsSet(utils.MetricsEnabledFlag.Name) {
 		log.Info("Starting metrics")
 		metrics_config.EnableMetrics()

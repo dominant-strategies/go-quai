@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"time"
 
 	"github.com/pkg/errors"
@@ -187,11 +186,6 @@ func (p *P2PNode) NewStream(peerID peer.ID, protocolID protocol.ID) (network.Str
 // Connects to the given peer
 func (p *P2PNode) Connect(pi peer.AddrInfo) error {
 	return p.Host.Connect(p.ctx, pi)
-}
-
-// Start gossipsub protocol
-func (p *P2PNode) StartGossipSub(ctx context.Context) error {
-	return nil
 }
 
 // Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
