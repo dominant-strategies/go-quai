@@ -202,7 +202,7 @@ func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.H
 	panic("TODO: implement")
 }
 
-func (p *P2PNode) handleBroadcast(data interface{}) {
+func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, data interface{}) {
 	switch v := data.(type) {
 	case types.Block:
 		p.cacheAdd(v.Hash(), &v)
@@ -210,5 +210,11 @@ func (p *P2PNode) handleBroadcast(data interface{}) {
 	default:
 		log.Debugf("received unsupported block broadcast")
 		// TODO: ban the peer which sent it?
+		return
+	}
+
+	// If we made it here, pass the data on to the consensus backend
+	if p.consensus != nil {
+		p.consensus.OnNewBroadcast(sourcePeer, data)
 	}
 }

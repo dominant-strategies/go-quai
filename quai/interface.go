@@ -13,13 +13,13 @@ type ConsensusAPI interface {
 	GetHeight(common.Location) uint64
 
 	// Handle new data propagated from the gossip network. Should return quickly.
+	// Specify the peer which propagated the data to us, as well as the data itself.
 	// Return true if this data should be relayed to peers. False if it should be ignored.
-	OnNewBlock(sourcePeer core.PeerID, block types.Block) bool
-	OnNewTransaction(sourcePeer core.PeerID, tx types.Transaction) bool
+	OnNewBroadcast(core.PeerID, interface{}) bool
 
 	// Asks the consensus backend to lookup a block by hash and location.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.
-	LookupBlock(hash common.Hash, location common.Location) *types.Block
+	LookupBlock(common.Hash, common.Location) *types.Block
 }
 
 // The networking backend will implement the following interface to enable consensus to communicate with other nodes.

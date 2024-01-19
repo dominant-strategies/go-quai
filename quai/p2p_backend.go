@@ -4,7 +4,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 )
 
@@ -55,14 +54,8 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 	return nil
 }
 
-// Handle blocks received from the P2P client
-func (qbe *QuaiBackend) OnNewBlock(sourcePeer p2p.PeerID, block types.Block) bool {
-	log.Info("New Block Found", "Block", block)
-	panic("todo")
-}
-
-// Handle transactions received from the P2P client
-func (qbe *QuaiBackend) OnNewTransaction(sourcePeer p2p.PeerID, tx types.Transaction) bool {
+// Handle consensus data propagated to us from our peers
+func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}) bool {
 	panic("todo")
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var (
@@ -22,7 +23,7 @@ type PubsubManager struct {
 	topics        map[string]*pubsub.Topic
 
 	// Callback function to handle received data
-	onReceived func(interface{})
+	onReceived func(peer.ID, interface{})
 }
 
 // creates a new gossipsub instance
@@ -42,7 +43,7 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	}, nil
 }
 
-func (g *PubsubManager) Start(receiveCb func(interface{})) {
+func (g *PubsubManager) Start(receiveCb func(peer.ID, interface{})) {
 	g.onReceived = receiveCb
 }
 
@@ -90,7 +91,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 
 		// handle the received data
 		if g.onReceived != nil {
-			g.onReceived(data)
+			g.onReceived(msg.ReceivedFrom, data)
 		}
 	}(subscription)
 
