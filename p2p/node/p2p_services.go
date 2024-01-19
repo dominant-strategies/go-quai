@@ -21,6 +21,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 	// Open a stream to the peer using a specific protocol for block requests
 	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
 	if err != nil {
+		// TODO: should we report this peer for failure to participate?
 		return nil, err
 	}
 	defer stream.Close()
@@ -46,6 +47,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 	// Unmarshal the response
 	recvd, err := pb.DecodeQuaiResponse(blockResponseBytes)
 	if err != nil {
+		// TODO: should we report this peer for an invalid response?
 		return nil, err
 	}
 
@@ -61,7 +63,6 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 
 	// If this peer responded with an invalid response, report them for misbehaving.
 	p.ReportBadPeer(peerID)
-
 	return nil, errors.New("invalid response")
 }
 

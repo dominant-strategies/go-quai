@@ -127,14 +127,15 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 			return
 		}
 		for _, peerID := range peers {
-			// TODO: need to spawn these requests in parallel. Currently, one peer's failure to respond blocks the entire loop. Probably better for requestFromPeer() to return a chan
-			if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
-				log.Debugf("Received %s from peer %s", hash, peerID)
-				// cache the response
-				p.cacheAdd(hash, recvd)
-				// send the block to the result channel
-				resultChan <- recvd
-			}
+			go func() {
+				if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
+					log.Debugf("Received %s from peer %s", hash, peerID)
+					// cache the response
+					p.cacheAdd(hash, recvd)
+					// send the block to the result channel
+					resultChan <- recvd
+				}
+			}()
 		}
 
 		// 3. If block is not found, query the DHT for peers in the slice
@@ -150,18 +151,20 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 			log.Debugf("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
 			// query the DHT for peers in the slice
 			// TODO: need to find providers of a topic, not a shard
-			// TODO: need to add providers as gossip peers
-			peerChan := p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery)
-			for peerInfo := range peerChan {
-				if recvd, err := p.requestFromPeer(peerInfo.ID, location, hash, datatype); err == nil {
-					log.Debugf("Received %s from peer %s", hash, peerInfo.ID)
-					// cache the response
-					p.cacheAdd(hash, recvd)
-					// send the block to the result channel
-					resultChan <- recvd
-				}
+			for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
+				go func() {
+					// Ask peer and wait for response
+					if recvd, err := p.requestFromPeer(peer.ID, location, hash, datatype); err == nil {
+						log.Debugf("Received %s from peer %s", hash, peer.ID)
+						// cache the response
+						p.cacheAdd(hash, recvd)
+						// send the block to the result channel
+						resultChan <- recvd
+						// TODO: make sure gossipsub holds onto this good peer for future queries
+					}
+				}()
 			}
-			// if the block is not found, wait for a bit and try again
+			// if the data is not found, wait for a bit and try again
 			log.Debugf("Block %s not found in slice %s. Retrying...", hash, location)
 			time.Sleep(dhtQueryRetryInterval * time.Second)
 		}
