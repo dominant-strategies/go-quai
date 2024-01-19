@@ -3,6 +3,7 @@ package pubsubManager
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -90,7 +91,11 @@ func (g *PubsubManager) Broadcast(location common.Location, data interface{}) er
 	if err != nil {
 		return err
 	}
-	return g.topics[topicName].Publish(g.ctx, pb.MarshalData(data))
+	protoData, err := pb.ConvertAndMarshal(data)
+	if err != nil {
+		return err
+	}
+	return g.topics[topicName].Publish(g.ctx, protoData)
 }
 
 // lists our peers which provide the associated topic
@@ -116,16 +121,27 @@ func (g *PubsubManager) handleSubscriptions() {
 				continue
 			}
 
-			// unmarshal the received data
-			block, err := pb.UnmarshalBlock(msg.Data)
-			if err != nil {
-				log.Errorf("error unmarshalling block: %s", err)
+			topic := msg.GetTopic()
+			log.Debugf("received message on topic: %s", topic)
+
+			// switch on the topic name to determine the type of data received
+			var data interface{}
+			switch {
+			case strings.Contains(topic, "blocks"):
+				data := new(types.Block)
+				err = pb.UnmarshalAndConvert(msg.Data, data)
+				if err != nil {
+					log.Errorf("error unmarshalling block: %s", err)
+					continue
+				}
+			default:
+				log.Errorf("unsupported topic: %s", topic)
 				continue
 			}
 
 			// handle the received data
 			if g.onReceived != nil {
-				g.onReceived(block)
+				g.onReceived(data)
 			}
 		}
 	}

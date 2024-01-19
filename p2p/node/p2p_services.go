@@ -5,7 +5,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/ipfs/go-cid"
@@ -24,11 +23,8 @@ func (p *P2PNode) requestBlockFromPeer(hash common.Hash, location common.Locatio
 	}
 	defer stream.Close()
 
-	// create a block request protobuf message
-	blockReq := pb.CreateProtoBlockRequest(hash, location)
-
-	// Marshal the block request into a byte array
-	blockReqBytes, err := pb.MarshalProtoMessage(blockReq)
+	// Create a block request
+	blockReqBytes, err := pb.EncodeQuaiRequest(location, hash, &types.Block{})
 	if err != nil {
 		return nil, err
 	}
@@ -46,22 +42,18 @@ func (p *P2PNode) requestBlockFromPeer(hash common.Hash, location common.Locatio
 	}
 
 	// Unmarshal the response into a block
-	var pbBlockResponse pb.BlockResponse
-	err = pb.UnmarshalProtoMessage(blockResponseBytes, &pbBlockResponse)
+	decoded, err := pb.DecodeQuaiResponse(blockResponseBytes)
 	if err != nil {
-		log.Errorf("error unmarshalling block response: %s", err)
 		return nil, err
 	}
 
-	// check if the response contains a block
-	if pbBlockResponse.Found {
-		// convert the block to a custom go block type
-		block := pb.ConvertFromProtoBlock(pbBlockResponse.Block)
-		return &block, nil
+	// Check if the response is a block
+	block, ok := decoded.(*types.Block)
+	if !ok {
+		return nil, errors.New("received response is not a block")
 	}
 
-	// If the response does not contain a block, return an error
-	return nil, errors.New("block not found")
+	return block, nil
 }
 
 // Creates a Cid from a location to be used as DHT key
