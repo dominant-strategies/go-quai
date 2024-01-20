@@ -981,6 +981,10 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
+	TxIn             []types.TxIn      `json:"inputs,omitempty"`
+	TxOut            []types.TxOut     `json:"outputs,omitempty"`
+	UTXOSignature    hexutil.Bytes     `json:"utxoSignature,omitempty"`
+
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
 
@@ -998,14 +1002,27 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	if nodeCtx != common.ZONE_CTX {
 		return nil
 	}
+
+	var result *RPCTransaction
+	if tx.Type() == types.QiTxType {
+		sig := tx.GetSchnorrSignature().Serialize()
+		result = &RPCTransaction{
+			Type:          hexutil.Uint64(tx.Type()),
+			ChainID:       (*hexutil.Big)(tx.ChainId()),
+			Hash:          tx.Hash(),
+			TxIn:          tx.TxIn(),
+			TxOut:         tx.TxOut(),
+			UTXOSignature: hexutil.Bytes(sig),
+		}
+		return result
+	}
+
 	// Determine the signer. For replay-protected transactions, use the most permissive
 	// signer, because we assume that signers are backwards-compatible with old
 	// transactions. For non-protected transactions, the signer is used
 	// because the return value of ChainId is zero for those transactions.
-	var signer types.Signer
-	signer = types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
+	signer := types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
 	from, _ := types.Sender(signer, tx)
-	var result *RPCTransaction
 	switch tx.Type() {
 	case types.InternalTxType:
 		result = &RPCTransaction{
@@ -1440,7 +1457,6 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		if err := b.SendTx(ctx, tx); err != nil {
 			return common.Hash{}, err
 		}
-		return tx.Hash(), nil
 	} else {
 		// If the transaction fee cap is already specified, ensure the
 		// fee of the given transaction is _reasonable_.
@@ -1475,15 +1491,14 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 				"value":     tx.Value(),
 			}).Debug("Submitted transaction")
 		}
-		return tx.Hash(), nil
 	}
+	return tx.Hash(), nil
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
 	tx := new(types.Transaction)
-	fmt.Println(input)
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
 	}

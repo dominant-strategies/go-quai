@@ -78,7 +78,7 @@ func (tx *Transaction) SetInner(inner TxData) {
 
 // TxData is the underlying data of a transaction.
 //
-// This is implemented by InternalTx, ExternalTx, InternalToExternal, and UtxoTx.
+// This is implemented by InternalTx, ExternalTx, InternalToExternal, and QiTx.
 type TxData interface {
 	txType() byte // returns the type ID
 	copy() TxData // creates a deep copy and initializes all fields
@@ -354,8 +354,8 @@ func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 	w.WriteByte(tx.Type())
 	if tx.Type() == QiTxType {
 		// custom encode for schnorr signature
-		if utxoTx, ok := tx.inner.(*QiTx); ok {
-			return rlp.Encode(w, utxoTx.copyToWire())
+		if qiTx, ok := tx.inner.(*QiTx); ok {
+			return rlp.Encode(w, qiTx.copyToWire())
 		} else {
 			return errors.New("failed to encode utxo tx: improper type")
 		}

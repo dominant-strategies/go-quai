@@ -1209,12 +1209,10 @@ func (hc *HeaderChain) FetchUtxosMain(view *types.UtxoViewpoint, outpoints []typ
 	for i := range outpoints {
 		entry := hc.GetUtxo(outpoints[i].TxHash, outpoints[i].Index)
 		if entry == nil {
-			return nil
+			return fmt.Errorf("utxo not found")
 		}
 
 		view.AddEntry(outpoints, i, entry)
-
-		return nil
 	}
 
 	return nil
@@ -1416,8 +1414,6 @@ func createCoinbaseTxWithFees(header *types.Header, fees *big.Int) (*types.Trans
 	}
 
 	denominations := misc.CalculateRewardForQiWithFees(header, fees)
-	fmt.Printf("denominations: %v\n", denominations)
-
 	outs := make([]types.TxOut, 0, len(denominations))
 
 	// Iterate over the denominations in descending order (by key)
@@ -1442,7 +1438,6 @@ func createCoinbaseTxWithFees(header *types.Header, fees *big.Int) (*types.Trans
 	}
 
 	tx := types.NewTx(qiTx)
-	fmt.Println("coinbase tx", tx.Hash().Hex())
 	return tx, nil
 }
 

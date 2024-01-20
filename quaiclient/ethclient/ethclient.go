@@ -264,7 +264,7 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 	}
 	if json == nil {
 		return nil, quai.NotFound
-	} else if _, r, _ := json.tx.GetEcdsaSignatureValues(); r == nil && json.tx.Type() != types.ExternalTxType {
+	} else if _, r, _ := json.tx.GetEcdsaSignatureValues(); r == nil && json.tx.Type() != types.ExternalTxType && json.tx.Type() != types.QiTxType {
 		return nil, fmt.Errorf("server returned transaction without signature")
 	}
 	if json.From != nil && json.BlockHash != nil {

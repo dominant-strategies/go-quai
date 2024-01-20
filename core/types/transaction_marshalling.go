@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 )
@@ -115,6 +116,12 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.ETXGasTip = (*hexutil.Big)(tx.ETXGasTip)
 		enc.ETXData = (*hexutil.Bytes)(&tx.ETXData)
 		enc.ETXAccessList = &tx.ETXAccessList
+	case *QiTx:
+		sig := tx.Signature.Serialize()
+		enc.ChainID = (*hexutil.Big)(tx.ChainID)
+		enc.TxIn = tx.TxIn
+		enc.TxOut = tx.TxOut
+		enc.UTXOSignature = (*hexutil.Bytes)(&sig)
 	}
 	return json.Marshal(&enc)
 }
@@ -304,6 +311,19 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'etxAccessList' in internaltoExternal transaction")
 		}
 		itx.ETXAccessList = *dec.ETXAccessList
+
+	case QiTxType:
+		var qiTx QiTx
+		inner = &qiTx
+		qiTx.ChainID = (*big.Int)(dec.ChainID)
+		qiTx.TxIn = dec.TxIn
+		qiTx.TxOut = dec.TxOut
+
+		sig, err := schnorr.ParseSignature(*dec.UTXOSignature)
+		if err != nil {
+			return err
+		}
+		qiTx.Signature = sig
 
 	default:
 		return ErrTxTypeNotSupported

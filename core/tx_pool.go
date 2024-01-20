@@ -1112,7 +1112,6 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 	}
 	pool.chain.FetchUtxosMain(view, needed)
 	if err := view.VerifyTxSignature(tx, pool.signer); err != nil {
-		fmt.Println("err sig", err)
 		return types.ErrInvalidSchnorrSig
 	}
 	if err := types.CheckUTXOTransactionSanity(tx, pool.chainconfig.Location); err != nil {

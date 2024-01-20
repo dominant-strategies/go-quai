@@ -2,7 +2,6 @@ package types
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
@@ -279,8 +278,6 @@ func (view UtxoViewpoint) VerifyTxSignature(tx *Transaction, signer Signer) erro
 	} else {
 		finalKey = pubKeys[0]
 	}
-
-	fmt.Println("sig", common.Bytes2Hex(tx.GetSchnorrSignature().Serialize()))
 	txDigestHash := signer.Hash(tx)
 
 	if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
