@@ -354,10 +354,12 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
 }
-// SubscribePendingTransactions subscribes to notifications about the all pending transaction.
-func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (quai.Subscription, error) {
+
+// SubscribeFullPendingTransactions subscribes to new pending transactions.
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- *common.Hash) (quai.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
+
 
 // State Access
 
