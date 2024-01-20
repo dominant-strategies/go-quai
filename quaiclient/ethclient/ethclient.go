@@ -355,7 +355,7 @@ func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.H
 	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
 }
 // SubscribePendingTransactions subscribes to notifications about the all pending transaction.
-func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (quai.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
