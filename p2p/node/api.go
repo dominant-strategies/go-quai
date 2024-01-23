@@ -119,11 +119,11 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		// 2. If not, query the topic peers for the data
 		peers, err := p.pubsub.PeersForTopic(location, datatype)
 		if err != nil {
-			log.Errorf("Error requesting data: ", err)
+			log.Error("Error requesting data: ", err)
 			return
 		}
 		for _, peerID := range peers {
-			go func() {
+			go func(peerID p2p.PeerID) {
 				if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
 					log.Debugf("Received %s from peer %s", hash, peerID)
 					// cache the response
@@ -131,7 +131,7 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 					// send the block to the result channel
 					resultChan <- recvd
 				}
-			}()
+			}(peerID)
 		}
 
 		// 3. If block is not found, query the DHT for peers in the slice
@@ -170,7 +170,12 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 }
 
 func (p *P2PNode) ReportBadPeer(peer p2p.PeerID) {
-	panic("todo")
+	log.WithFields(log.Fields{
+		"peer": peer,
+	}).Warn("Reporting peer for misbehaving")
+
+	p.peerBlackList[peer] = struct{}{}
+	p.Host.Network().ClosePeer(peer)
 }
 
 // Returns the list of bootpeers

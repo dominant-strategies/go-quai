@@ -39,6 +39,9 @@ type P2PNode struct {
 	// List of peers to introduce us to the network
 	bootpeers []peer.AddrInfo
 
+	// Set of nodes to block connections to/from
+	peerBlackList map[peer.ID]struct{}
+
 	// TODO: Consolidate into network interface, and consensus interface
 	// DHT instance
 	dht *dual.DHT
@@ -75,6 +78,8 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		log.Fatalf("error creating libp2p connection manager: %s", err)
 		return nil, err
 	}
+
+	peerBlackList := make(map[peer.ID]struct{})
 
 	// Create the libp2p host
 	var dht *dual.DHT
@@ -119,6 +124,9 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		// Attempt to open a direct connection with relayed peers, using relay
 		// nodes to coordinate the holepunch.
 		libp2p.EnableHolePunching(),
+
+		// Create a connection gater that will reject connections from peers in the blocklist
+		libp2p.ConnectionGater(pubsubManager.NewConnGater(&peerBlackList)),
 
 		// Let this host use the DHT to find other hosts
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
@@ -172,7 +180,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		"blocks": func() *lru.Cache[common.Hash, interface{}] {
 			cache, err := lru.New[common.Hash, interface{}](10)
 			if err != nil {
-				log.Fatalf("error initializing cache;", err)
+				log.Fatal("error initializing cache;", err)
 			}
 			return cache
 		}(),
@@ -185,6 +193,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		dht:       dht,
 		pubsub:    ps,
 		cache:     cache,
+		peerBlackList: peerBlackList,
 	}, nil
 }
 
