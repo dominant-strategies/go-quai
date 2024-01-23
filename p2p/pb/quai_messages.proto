@@ -11,21 +11,23 @@ message GossipTransaction { Transaction transaction = 1; }
 
 // QuaiRequestMessage is the main 'envelope' for QuaiProtocol request messages
 message QuaiRequestMessage {
-    Location location = 1;
-    Hash hash = 2;
+    uint32 id = 1;
+    Location location = 2;
+    Hash hash = 3;
     oneof request {
-        Block block = 3;
-        Header header = 4;
-        Transaction transaction = 5;
+        Block block = 4;
+        Header header = 5;
+        Transaction transaction = 6;
     }
 }
 
 // QuaiResponseMessage is the main 'envelope' for QuaiProtocol response messages
 message QuaiResponseMessage {
+    uint32 id = 1;
     oneof response {
-        Block block = 1;
-        Header header = 2;
-        Transaction transaction = 3;
+        Block block = 2;
+        Header header = 3;
+        Transaction transaction = 4;
     }
 }
 

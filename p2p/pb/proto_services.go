@@ -27,107 +27,109 @@ func MarshalProtoMessage(pbMsg proto.Message) ([]byte, error) {
 
 // EncodeRequestMessage creates a marshaled protobuf message for a Quai Request.
 // Returns the serialized protobuf message.
-func EncodeQuaiRequest(location common.Location, hash common.Hash, datatype interface{}) ([]byte, error) {
-	reqMsg := &QuaiRequestMessage{
+func EncodeQuaiRequest(id uint32, location common.Location, hash common.Hash, datatype interface{}) ([]byte, error) {
+	reqMsg := QuaiRequestMessage{
+		Id:       id,
 		Location: convertLocationToProto(location),
 		Hash:     convertHashToProto(hash),
 	}
 
-	switch d := datatype.(type) {
+	switch datatype.(type) {
 	case *types.Block:
-		reqMsg.Request = &QuaiRequestMessage_Block{Block: convertBlockToProto(d)}
+		reqMsg.Request = &QuaiRequestMessage_Block{}
 	case *types.Header:
-		reqMsg.Request = &QuaiRequestMessage_Header{Header: convertHeaderToProto(d)}
+		reqMsg.Request = &QuaiRequestMessage_Header{}
 	case *types.Transaction:
-		reqMsg.Request = &QuaiRequestMessage_Transaction{Transaction: convertTransactionToProto(d)}
+		reqMsg.Request = &QuaiRequestMessage_Transaction{}
 	default:
 		return nil, errors.Errorf("unsupported request data type: %T", datatype)
 	}
 
-	return MarshalProtoMessage(reqMsg)
+	return MarshalProtoMessage(&reqMsg)
 }
 
 // DecodeRequestMessage unmarshals a protobuf message into a Quai Request.
-// Returns the decoded type, location, and hash.
-func DecodeQuaiRequest(data []byte) (interface{}, common.Location, common.Hash, error) {
-	var quaiMsg QuaiRequestMessage
-	err := UnmarshalProtoMessage(data, &quaiMsg)
+// Returns:
+//  1. The request ID
+//  2. The decoded type (i.e. *types.Header, *types.Block, etc)
+//  3. The location
+//  4. The hash
+//  5. An error
+func DecodeQuaiRequest(data []byte) (uint32, interface{}, common.Location, common.Hash, error) {
+	var reqMsg QuaiRequestMessage
+	err := UnmarshalProtoMessage(data, &reqMsg)
 	if err != nil {
-		return nil, common.Location{}, common.Hash{}, err
+		return 0, nil, common.Location{}, common.Hash{}, err
 	}
 
-	location := convertProtoToLocation(quaiMsg.Location)
-	hash := convertProtoToHash(quaiMsg.Hash)
+	location := convertProtoToLocation(reqMsg.Location)
+	hash := convertProtoToHash(reqMsg.Hash)
+	id := reqMsg.Id
 
-	switch quaiMsg.Request.(type) {
+	switch reqMsg.Request.(type) {
 	case *QuaiRequestMessage_Block:
-		protoBlock := quaiMsg.GetBlock()
-		block := convertProtoToBlock(protoBlock)
-		return block, location, hash, nil
+		return id, &types.Block{}, location, hash, nil
 	case *QuaiRequestMessage_Header:
-		protoHeader := quaiMsg.GetHeader()
-		header := convertProtoToHeader(protoHeader)
-		return header, location, hash, nil
+		return id, &types.Header{}, location, hash, nil
 	case *QuaiRequestMessage_Transaction:
-		protoTransaction := quaiMsg.GetTransaction()
-		transaction := convertProtoToTransaction(protoTransaction)
-		return transaction, location, hash, nil
+		return id, &types.Transaction{}, location, hash, nil
 	default:
-		return nil, common.Location{}, common.Hash{}, errors.Errorf("unsupported request type: %T", quaiMsg.Request)
+		return 0, nil, common.Location{}, common.Hash{}, errors.Errorf("unsupported request type: %T", reqMsg.Request)
 	}
 }
 
 // EncodeResponse creates a marshaled protobuf message for a Quai Response.
 // Returns the serialized protobuf message.
-func EncodeQuaiResponse(data interface{}) ([]byte, error) {
+func EncodeQuaiResponse(id uint32, data interface{}) ([]byte, error) {
 
-	var quaiMsg *QuaiResponseMessage
+	respMsg := QuaiResponseMessage{
+		Id: id,
+	}
 
 	switch data := data.(type) {
 	case *types.Block:
-		quaiMsg = &QuaiResponseMessage{
-			Response: &QuaiResponseMessage_Block{Block: convertBlockToProto(data)},
-		}
+		respMsg.Response = &QuaiResponseMessage_Block{Block: convertBlockToProto(data)}
 	case *types.Header:
-		quaiMsg = &QuaiResponseMessage{
-			Response: &QuaiResponseMessage_Header{Header: convertHeaderToProto(data)},
-		}
+		respMsg.Response = &QuaiResponseMessage_Header{Header: convertHeaderToProto(data)}
 	case *types.Transaction:
-		quaiMsg = &QuaiResponseMessage{
-			Response: &QuaiResponseMessage_Transaction{Transaction: convertTransactionToProto(data)},
-		}
+		respMsg.Response = &QuaiResponseMessage_Transaction{Transaction: convertTransactionToProto(data)}
 
 	default:
 		return nil, errors.Errorf("unsupported response data type: %T", data)
 	}
 
-	return MarshalProtoMessage(quaiMsg)
+	return MarshalProtoMessage(&respMsg)
 }
 
 // Unmarshals a serialized protobuf message into a Quai Response message.
-// Returns the decoded type (i.e. *types.Header, *types.Block, etc).
-func DecodeQuaiResponse(data []byte) (interface{}, error) {
-	var quaiMsg QuaiResponseMessage
-	err := UnmarshalProtoMessage(data, &quaiMsg)
+// Returns:
+//  1. The request ID
+//  2. The decoded type (i.e. *types.Header, *types.Block, etc)
+//  3. An error
+func DecodeQuaiResponse(data []byte) (uint32, interface{}, error) {
+	var respMsg QuaiResponseMessage
+	err := UnmarshalProtoMessage(data, &respMsg)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
-	switch quaiMsg.Response.(type) {
+	id := respMsg.Id
+
+	switch respMsg.Response.(type) {
 	case *QuaiResponseMessage_Block:
-		protoBlock := quaiMsg.GetBlock()
+		protoBlock := respMsg.GetBlock()
 		block := convertProtoToBlock(protoBlock)
-		return block, nil
+		return id, block, nil
 	case *QuaiResponseMessage_Header:
-		protoHeader := quaiMsg.GetHeader()
+		protoHeader := respMsg.GetHeader()
 		header := convertProtoToHeader(protoHeader)
-		return header, nil
+		return id, header, nil
 	case *QuaiResponseMessage_Transaction:
-		protoTransaction := quaiMsg.GetTransaction()
+		protoTransaction := respMsg.GetTransaction()
 		transaction := convertProtoToTransaction(protoTransaction)
-		return transaction, nil
+		return id, transaction, nil
 	default:
-		return nil, errors.Errorf("unsupported response type: %T", quaiMsg.Response)
+		return id, nil, errors.Errorf("unsupported response type: %T", respMsg.Response)
 	}
 }
 
