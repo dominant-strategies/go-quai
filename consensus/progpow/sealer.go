@@ -17,7 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/sirupsen/logrus"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 const (
@@ -40,7 +40,7 @@ func (progpow *Progpow) Seal(header *types.Header, results chan<- *types.Header,
 		select {
 		case results <- header:
 		default:
-			progpow.logger.WithFields(logrus.Fields{
+			progpow.logger.WithFields(log.Fields{
 				"mode":     "fake",
 				"sealhash": header.SealHash(),
 			}).Warn("Sealing result is not read by miner")
@@ -94,7 +94,7 @@ func (progpow *Progpow) Seal(header *types.Header, results chan<- *types.Header,
 			select {
 			case results <- result:
 			default:
-				progpow.logger.WithFields(logrus.Fields{
+				progpow.logger.WithFields(log.Fields{
 					"mode":     "local",
 					"sealhash": header.SealHash(),
 				}).Warn("Sealing result is not read by miner")
@@ -373,7 +373,7 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 	if err != nil {
 		s.progpow.logger.WithField("err", err).Warn("Failed to notify remote miner")
 	} else {
-		s.progpow.logger.WithFields(logrus.Fields{
+		s.progpow.logger.WithFields(log.Fields{
 			"miner":  url,
 			"hash":   work[0],
 			"target": work[2],
@@ -394,7 +394,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	// Make sure the work submitted is present
 	header := s.works[sealhash]
 	if header == nil {
-		s.progpow.logger.WithFields(logrus.Fields{
+		s.progpow.logger.WithFields(log.Fields{
 			"sealhash":  sealhash,
 			"curnumber": s.currentHeader.NumberU64(nodeCtx),
 		}).Warn("Work submitted but none pending")
@@ -412,7 +412,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 		s.progpow.logger.Warn("Progpow result channel is empty, submitted mining result is rejected")
 		return false
 	}
-	s.progpow.logger.WithFields(logrus.Fields{
+	s.progpow.logger.WithFields(log.Fields{
 		"sealhash": sealhash,
 		"elapsed":  common.PrettyDuration(time.Since(start)),
 	}).Trace("Verified correct proof-of-work")
@@ -424,14 +424,14 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	if solution.NumberU64(nodeCtx)+staleThreshold > s.currentHeader.NumberU64(nodeCtx) {
 		select {
 		case s.results <- solution:
-			s.progpow.logger.WithFields(logrus.Fields{
+			s.progpow.logger.WithFields(log.Fields{
 				"number":   solution.NumberU64(nodeCtx),
 				"sealhash": sealhash,
 				"hash":     solution.Hash(),
 			}).Trace("Work submitted is acceptable")
 			return true
 		default:
-			s.progpow.logger.WithFields(logrus.Fields{
+			s.progpow.logger.WithFields(log.Fields{
 				"mode":     "remote",
 				"sealhash": sealhash,
 			}).Warn("Sealing result is not read by miner")
@@ -439,7 +439,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 		}
 	}
 	// The submitted block is too old to accept, drop it.
-	s.progpow.logger.WithFields(logrus.Fields{
+	s.progpow.logger.WithFields(log.Fields{
 		"number":   solution.NumberU64(nodeCtx),
 		"sealhash": sealhash,
 		"hash":     solution.Hash(),

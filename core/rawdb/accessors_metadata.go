@@ -25,7 +25,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"github.com/sirupsen/logrus"
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.
@@ -62,7 +61,7 @@ func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainCon
 	}
 	var config params.ChainConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid chain config JSON")
@@ -98,7 +97,7 @@ const crashesToKeep = 10
 // the previous data
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
-func PushUncleanShutdownMarker(db ethdb.KeyValueStore, logger *logrus.Logger) ([]uint64, uint64, error) {
+func PushUncleanShutdownMarker(db ethdb.KeyValueStore, logger *log.Logger) ([]uint64, uint64, error) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {

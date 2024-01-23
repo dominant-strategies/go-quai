@@ -28,9 +28,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/prometheus/tsdb/fileutil"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -86,12 +86,12 @@ type freezer struct {
 	wg        sync.WaitGroup
 	closeOnce sync.Once
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 // newFreezer creates a chain freezer that moves ancient chain data into
 // append-only flat file containers.
-func newFreezer(datadir string, namespace string, readonly bool, logger *logrus.Logger) (*freezer, error) {
+func newFreezer(datadir string, namespace string, readonly bool, logger *log.Logger) (*freezer, error) {
 	// Create the initial freezer object
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
@@ -134,7 +134,7 @@ func newFreezer(datadir string, namespace string, readonly bool, logger *logrus.
 		lock.Release()
 		return nil, err
 	}
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"database": datadir,
 		"readonly": readonly,
 	}).Info("Opened ancient database")
@@ -215,7 +215,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 			if rerr != nil {
 				f.logger.WithField("err", rerr).Fatal("Failed to repair freezer")
 			}
-			f.logger.WithFields(logrus.Fields{
+			f.logger.WithFields(log.Fields{
 				"number": number,
 				"err":    err,
 			}).Error("Failed to append ancient")
@@ -223,7 +223,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 	}()
 	// Inject all the components into the relevant data tables
 	if err := f.tables[freezerHashTable].Append(f.frozen, hash[:]); err != nil {
-		f.logger.WithFields(logrus.Fields{
+		f.logger.WithFields(log.Fields{
 			"number": f.frozen,
 			"hash":   hash,
 			"err":    err,
@@ -231,7 +231,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 		return err
 	}
 	if err := f.tables[freezerHeaderTable].Append(f.frozen, header); err != nil {
-		f.logger.WithFields(logrus.Fields{
+		f.logger.WithFields(log.Fields{
 			"number": f.frozen,
 			"hash":   hash,
 			"err":    err,
@@ -239,7 +239,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 		return err
 	}
 	if err := f.tables[freezerBodiesTable].Append(f.frozen, body); err != nil {
-		f.logger.WithFields(logrus.Fields{
+		f.logger.WithFields(log.Fields{
 			"number": f.frozen,
 			"hash":   hash,
 			"err":    err,
@@ -247,7 +247,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 		return err
 	}
 	if err := f.tables[freezerReceiptTable].Append(f.frozen, receipts); err != nil {
-		f.logger.WithFields(logrus.Fields{
+		f.logger.WithFields(log.Fields{
 			"number": f.frozen,
 			"hash":   hash,
 			"err":    err,
@@ -255,7 +255,7 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 		return err
 	}
 	if err := f.tables[freezerEtxSetsTable].Append(f.frozen, etxSet); err != nil {
-		f.logger.WithFields(logrus.Fields{
+		f.logger.WithFields(log.Fields{
 			"number": f.frozen,
 			"hash":   hash,
 			"err":    err,
@@ -348,7 +348,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			continue
 
 		case *number < threshold:
-			f.logger.WithFields(logrus.Fields{
+			f.logger.WithFields(log.Fields{
 				"number":    *number,
 				"hash":      hash,
 				"threshold": threshold,
@@ -357,7 +357,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			continue
 
 		case *number-threshold <= f.frozen:
-			f.logger.WithFields(logrus.Fields{
+			f.logger.WithFields(log.Fields{
 				"number": *number,
 				"hash":   hash,
 				"frozen": f.frozen,
@@ -367,7 +367,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 		}
 		head := ReadHeader(nfdb, hash, *number)
 		if head == nil {
-			f.logger.WithFields(logrus.Fields{
+			f.logger.WithFields(log.Fields{
 				"number": *number,
 				"hash":   hash,
 			}).Error("Current full block header unavailable")
@@ -393,7 +393,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			}
 			header := ReadHeaderRLP(nfdb, hash, f.frozen)
 			if len(header) == 0 {
-				f.logger.WithFields(logrus.Fields{
+				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
 					"hash":   hash,
 				}).Error("Block header missing, can't freeze")
@@ -401,7 +401,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			}
 			body := ReadBodyRLP(nfdb, hash, f.frozen)
 			if len(body) == 0 {
-				f.logger.WithFields(logrus.Fields{
+				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
 					"hash":   hash,
 				}).Error("Block body missing, can't freeze")
@@ -409,7 +409,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			}
 			receipts := ReadReceiptsRLP(nfdb, hash, f.frozen)
 			if len(receipts) == 0 {
-				f.logger.WithFields(logrus.Fields{
+				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
 					"hash":   hash,
 				}).Error("Block receipts missing, can't freeze")
@@ -417,13 +417,13 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			}
 			etxSet := ReadEtxSetRLP(nfdb, hash, f.frozen)
 			if len(etxSet) == 0 {
-				f.logger.WithFields(logrus.Fields{
+				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
 					"hash":   hash,
 				}).Error("Total etxset missing, can't freeze")
 				break
 			}
-			f.logger.WithFields(logrus.Fields{
+			f.logger.WithFields(log.Fields{
 				"number": f.frozen,
 				"hash":   hash,
 			}).Trace("Deep froze ancient block")
@@ -458,7 +458,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			if number != 0 {
 				dangling = ReadAllHashes(db, number)
 				for _, hash := range dangling {
-					f.logger.WithFields(logrus.Fields{
+					f.logger.WithFields(log.Fields{
 						"number": number,
 						"hash":   hash,
 					}).Trace("Deleting side chain")
@@ -477,7 +477,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 			for len(dangling) > 0 {
 				drop := make(map[common.Hash]struct{})
 				for _, hash := range dangling {
-					f.logger.WithFields(logrus.Fields{
+					f.logger.WithFields(log.Fields{
 						"number": tip - 1,
 						"hash":   hash,
 					}).Trace("Deleting parent from freezer")
@@ -488,7 +488,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 					// Dig up the child and ensure it's dangling
 					child := ReadHeader(nfdb, children[i], tip)
 					if child == nil {
-						f.logger.WithFields(logrus.Fields{
+						f.logger.WithFields(log.Fields{
 							"number": tip,
 							"hash":   children[i],
 						}).Error("Missing dangling header")
@@ -500,7 +500,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 						continue
 					}
 					// Delete all block data associated with the child
-					f.logger.WithFields(logrus.Fields{
+					f.logger.WithFields(log.Fields{
 						"number": tip,
 						"hash":   children[i],
 						"parent": child.ParentHash(nodeCtx),

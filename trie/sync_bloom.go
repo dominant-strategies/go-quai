@@ -28,7 +28,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
-	"github.com/sirupsen/logrus"
 )
 
 // SyncBloom is a bloom filter used during fast sync to quickly decide if a trie
@@ -98,7 +97,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 			it.Release()
 			it = database.NewIterator(nil, key)
 
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"items":     b.bloom.N(),
 				"errorrate": b.bloom.FalsePosititveProbability(),
 				"elapsed":   common.PrettyDuration(time.Since(start)),
@@ -109,7 +108,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 	it.Release()
 
 	// Mark the bloom filter inited and return
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"items":     b.bloom.N(),
 		"errorrate": b.bloom.FalsePosititveProbability(),
 		"elapsed":   common.PrettyDuration(time.Since(start)),
@@ -127,7 +126,7 @@ func (b *SyncBloom) Close() error {
 		b.pend.Wait()
 
 		// Wipe the bloom, but mark it "uninited" just in case someone attempts an access
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"items":     b.bloom.N(),
 			"errorrate": b.bloom.FalsePosititveProbability(),
 		}).Info("Deallocating state bloom")

@@ -26,19 +26,20 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/prometheus/tsdb/fileutil"
+
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	log "github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/prometheus/tsdb/fileutil"
-	"github.com/sirupsen/logrus"
 )
 
 // Node is a container on which services can be registered.
 type Node struct {
 	eventmux      *event.TypeMux
 	config        *Config
-	logger        *logrus.Logger
+	logger        *log.Logger
 	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
 	stop          chan struct{}     // Channel to wait for termination notifications
 	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
@@ -61,7 +62,7 @@ const (
 )
 
 // New creates a new P2P node, ready for protocol registration.
-func New(conf *Config, logger *logrus.Logger) (*Node, error) {
+func New(conf *Config, logger *log.Logger) (*Node, error) {
 	// Copy config and resolve the datadir so future changes to the current
 	// working directory don't affect the node.
 	confCopy := *conf

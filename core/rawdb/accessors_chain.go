@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"github.com/sirupsen/logrus"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
@@ -290,7 +289,7 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 	}
 	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid block header RLP")
@@ -412,7 +411,7 @@ func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 	}
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid block body RLP")
@@ -441,7 +440,7 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.Body {
 	data, err := db.Get(pbBodyKey(hash))
 	if err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Failed to read block body")
@@ -452,7 +451,7 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.Body {
 	}
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid pending block body RLP")
@@ -711,7 +710,7 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Rec
 	// Convert the receipts from their storage form to their internal representation
 	storageReceipts := []*types.ReceiptForStorage{}
 	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid receipt array RLP")
@@ -739,14 +738,14 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 	}
 	body := ReadBody(db, hash, number)
 	if body == nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,
 		}).Error("Missing body but have receipt")
 		return nil
 	}
 	if err := receipts.DeriveFields(config, hash, number, body.Transactions); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,
 			"err":    err,
@@ -840,7 +839,7 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	}
 	receipts := []*receiptLogs{}
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid receipt array RLP")
@@ -849,14 +848,14 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 
 	body := ReadBody(db, hash, number)
 	if body == nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,
 		}).Error("Missing body but have receipt")
 		return nil
 	}
 	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,
 			"err":    err,
@@ -977,7 +976,7 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block, nodeCtx int) {
 	}
 	for _, b := range badBlocks {
 		if b.Header.NumberU64(nodeCtx) == block.NumberU64(nodeCtx) && b.Header.Hash() == block.Hash() {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"number": block.NumberU64(nodeCtx),
 				"hash":   block.Hash(),
 			}).Info("Skip duplicated bad block")
@@ -1113,7 +1112,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
 	}
 	var entries []EtxSetEntry
 	if err := rlp.Decode(bytes.NewReader(data), &entries); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid etx set RLP")
@@ -1172,7 +1171,7 @@ func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) *types.PendingEtxs {
 	}
 	pendingEtxs := types.PendingEtxs{}
 	if err := rlp.Decode(bytes.NewReader(data), &pendingEtxs); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid pending etxs RLP")
@@ -1206,7 +1205,7 @@ func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash) *types.PendingEtxs
 	}
 	pendingEtxsRollup := types.PendingEtxsRollup{}
 	if err := rlp.Decode(bytes.NewReader(data), &pendingEtxsRollup); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid pending etxs rollup rlp")
@@ -1242,7 +1241,7 @@ func ReadManifest(db ethdb.Reader, hash common.Hash) types.BlockManifest {
 	}
 	manifest := types.BlockManifest{}
 	if err := rlp.Decode(bytes.NewReader(data), &manifest); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid manifest RLP")
@@ -1294,7 +1293,7 @@ func ReadBloom(db ethdb.Reader, hash common.Hash) *types.Bloom {
 	}
 	bloom := types.Bloom{}
 	if err := rlp.Decode(bytes.NewReader(data), &bloom); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid bloom RLP")
@@ -1372,7 +1371,7 @@ func ReadInboundEtxs(db ethdb.Reader, hash common.Hash) types.Transactions {
 	}
 	inboundEtxs := types.Transactions{}
 	if err := rlp.Decode(bytes.NewReader(data), &inboundEtxs); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid inbound etxs RLP")

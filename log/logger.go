@@ -9,6 +9,7 @@ import (
 )
 
 type Fields = logrus.Fields
+type Logger = logrus.Logger
 
 const (
 	// default log level
@@ -61,7 +62,7 @@ func NewLogger(logFilename string, logLevel string) *logrus.Logger {
 		logFilename = defaultLogFilePath
 	}
 	shardLogger := createStandardLogger(logFilename, logLevel, false)
-	shardLogger.WithFields(logrus.Fields{
+	shardLogger.WithFields(Fields{
 		"path":  logFilename,
 		"level": logLevel,
 	}).Info("Shard logger started")
@@ -101,7 +102,7 @@ func WithField(key string, val interface{}) *logrus.Entry {
 	return logger.WithField(key, val)
 }
 
-func WithFields(fields logrus.Fields) *logrus.Entry {
+func WithFields(fields Fields) *logrus.Entry {
 	return logger.WithFields(fields)
 }
 

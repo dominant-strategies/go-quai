@@ -24,7 +24,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/sirupsen/logrus"
 )
 
 // wipeSnapshot starts a goroutine to iterate over the entire key-value database
@@ -128,7 +127,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 			it = db.NewIterator(prefix, seekPos)
 
 			if time.Since(logged) > 8*time.Second && report {
-				log.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"kind":    kind,
 					"wiped":   items,
 					"elapsed": common.PrettyDuration(time.Since(start)),
@@ -142,7 +141,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 		return err
 	}
 	if report {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"kind":    kind,
 			"wiped":   items,
 			"elapsed": common.PrettyDuration(time.Since(start)),

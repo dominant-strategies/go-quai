@@ -37,7 +37,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -83,11 +82,11 @@ type Pruner struct {
 	trieCachePath string
 	headHeader    *types.Header
 	snaptree      *snapshot.Tree
-	logger        *logrus.Logger
+	logger        *log.Logger
 }
 
 // NewPruner creates the pruner instance.
-func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64, logger *logrus.Logger) (*Pruner, error) {
+func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64, logger *log.Logger) (*Pruner, error) {
 	headBlock := rawdb.ReadHeadBlock(db)
 	if headBlock == nil {
 		return nil, errors.New("Failed to load head block")
@@ -98,7 +97,7 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 	}
 	// Sanitize the bloom filter size if it's too small.
 	if bloomSize < 256 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": bloomSize,
 			"updated":  256,
 		}).Warn("Sanitizing bloomfilter size (MB)")
@@ -170,7 +169,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				eta = time.Duration(left/speed) * time.Millisecond
 			}
 			if time.Since(logged) > 8*time.Second {
-				log.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"nodes":   count,
 					"size":    size,
 					"elapsed": common.PrettyDuration(time.Since(pstart)),
@@ -194,7 +193,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		batch.Reset()
 	}
 	iter.Release()
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"nodes":   count,
 		"size":    size,
 		"elapsed": common.PrettyDuration(time.Since(pstart)),
@@ -231,7 +230,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			if b == 0xf0 {
 				end = nil
 			}
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"range":   fmt.Sprintf("%#x-%#x", start, end),
 				"elapsed": common.PrettyDuration(time.Since(cstart)),
 			}).Info("Compacting database")
@@ -242,7 +241,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		}
 		log.WithField("elapsed", common.PrettyDuration(time.Since(cstart))).Info("Database compaction finished")
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"pruned":  size,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("State pruning successful")
@@ -303,7 +302,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 			if blob := rawdb.ReadTrieNode(p.db, layers[i].Root()); len(blob) != 0 {
 				root = layers[i].Root()
 				found = true
-				p.logger.WithFields(logrus.Fields{
+				p.logger.WithFields(log.Fields{
 					"root":  root,
 					"depth": i,
 				}).Info("Selecting middle-layer as the pruning target")
@@ -318,7 +317,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		}
 	} else {
 		if len(layers) > 0 {
-			p.logger.WithFields(logrus.Fields{
+			p.logger.WithFields(log.Fields{
 				"root":   root,
 				"height": p.headHeader.NumberU64(common.ZONE_CTX) - 127,
 			}).Info("Selecting bottom-most difflayer as the pruning target")

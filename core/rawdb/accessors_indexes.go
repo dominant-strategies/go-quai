@@ -26,7 +26,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"github.com/sirupsen/logrus"
 )
 
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction
@@ -48,7 +47,7 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	// Finally try database v3 tx lookup format
 	var entry LegacyTxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash": hash,
 			"blob": data,
 			"err":  err,
@@ -111,7 +110,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	}
 	body := ReadBody(db, blockHash, *blockNumber)
 	if body == nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"number": blockNumber,
 			"hash":   blockHash,
 		}).Error("Transaction referenced missing")
@@ -122,7 +121,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 			return tx, blockHash, *blockNumber, uint64(txIndex)
 		}
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"number": *blockNumber,
 		"hash":   blockHash,
 		"txhash": hash,
@@ -149,7 +148,7 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 			return receipt, blockHash, *blockNumber, uint64(receiptIndex)
 		}
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"number": *blockNumber,
 		"hash":   blockHash,
 		"txhash": hash,

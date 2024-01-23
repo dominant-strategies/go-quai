@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -277,7 +276,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockNumberAndIndex(ctx context.Cont
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   block.Hash(),
 				"index":  index,
@@ -297,7 +296,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   blockHash,
 				"index":  index,
@@ -311,7 +310,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 	if pendBlock != nil && pendBlock.Hash() == blockHash {
 		uncles := pendBlock.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   blockHash,
 				"index":  index,
@@ -603,7 +602,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 			log.WithField("err", err).Error("Error broadcasting block")
 		}
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"number":   header.Number(s.b.NodeCtx()),
 		"location": header.Location(),
 	})

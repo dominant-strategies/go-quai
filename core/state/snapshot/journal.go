@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 )
 
 const journalVersion uint64 = 0
@@ -88,7 +87,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// etc.), we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"diskroot": base.root,
 			"diffs":    "missing",
 		}).Warn("Loaded snapshot journal")
@@ -103,7 +102,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 		return base, generator, nil
 	}
 	if version != journalVersion {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"required": journalVersion,
 			"got":      version,
 		}).Warn("Discarded the snapshot journal with wrong version")
@@ -120,7 +119,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// It can happen that Quai crashes without persisting the latest
 	// diff journal.
 	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"diskroot": base.root,
 			"diffs":    "unmatched",
 		}).Warn("Loaded snapshot journal")
@@ -131,7 +130,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if err != nil {
 		return nil, journalGenerator{}, err
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"diskroot": base.root,
 		"diffhead": snapshot.Root(),
 	}).Debug("Loaded snapshot journal")
@@ -181,7 +180,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		// the disk layer is always higher than chain head. It can
 		// be eventually recovered when the chain head beyonds the
 		// disk layer.
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"snaproot":  head,
 			"chainroot": root,
 		}).Warn("Snapshot is not continuous with chain")
@@ -335,7 +334,7 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"root":   dl.root,
 		"parent": dl.parent.Root(),
 	}).Debug("Journalled diff layer")

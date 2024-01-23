@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build gofuzz
 // +build gofuzz
 
 package signify
@@ -22,12 +23,13 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/jedisct1/go-minisign"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 func Fuzz(data []byte) int {

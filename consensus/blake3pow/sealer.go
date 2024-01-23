@@ -17,7 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/sirupsen/logrus"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 const (
@@ -40,7 +40,7 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 		select {
 		case results <- header:
 		default:
-			blake3pow.logger.WithFields(logrus.Fields{
+			blake3pow.logger.WithFields(log.Fields{
 				"mode":     "fake",
 				"sealhash": header.SealHash(),
 			}).Warn("Sealing result is not read by miner")
@@ -94,7 +94,7 @@ func (blake3pow *Blake3pow) Seal(header *types.Header, results chan<- *types.Hea
 			select {
 			case results <- result:
 			default:
-				blake3pow.logger.WithFields(logrus.Fields{
+				blake3pow.logger.WithFields(log.Fields{
 					"mode":     "local",
 					"sealhash": header.SealHash(),
 				}).Warn("Sealing result is not read by miner")
@@ -151,12 +151,12 @@ search:
 				// Seal and return a block (if still needed)
 				select {
 				case found <- header:
-					blake3pow.logger.WithFields(logrus.Fields{
+					blake3pow.logger.WithFields(log.Fields{
 						"attempts": nonce - seed,
 						"nonce":    nonce,
 					}).Trace("Blake3pow nonce found and reported")
 				case <-abort:
-					blake3pow.logger.WithFields(logrus.Fields{
+					blake3pow.logger.WithFields(log.Fields{
 						"attempts": nonce - seed,
 						"nonce":    nonce,
 					}).Trace("Blake3pow nonce found but discarded")
@@ -374,7 +374,7 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 	if err != nil {
 		s.blake3pow.logger.WithField("err", err).Warn("Failed to notify remote miner")
 	} else {
-		s.blake3pow.logger.WithFields(logrus.Fields{
+		s.blake3pow.logger.WithFields(log.Fields{
 			"miner":  url,
 			"hash":   work[0],
 			"target": work[2],
@@ -395,7 +395,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	// Make sure the work submitted is present
 	header := s.works[sealhash]
 	if header == nil {
-		s.blake3pow.logger.WithFields(logrus.Fields{
+		s.blake3pow.logger.WithFields(log.Fields{
 			"sealhash":  sealhash,
 			"curnumber": s.currentHeader.NumberU64(nodeCtx),
 		}).Warn("Work submitted but none pending")
@@ -410,7 +410,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 		s.blake3pow.logger.Warn("Blake3pow result channel is empty, submitted mining result is rejected")
 		return false
 	}
-	s.blake3pow.logger.WithFields(logrus.Fields{
+	s.blake3pow.logger.WithFields(log.Fields{
 		"sealhash": sealhash,
 		"elapsed":  common.PrettyDuration(time.Since(start)),
 	}).Trace("Verified correct proof-of-work")
@@ -422,7 +422,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 	if solution.NumberU64(nodeCtx)+staleThreshold > s.currentHeader.NumberU64(nodeCtx) {
 		select {
 		case s.results <- solution:
-			s.blake3pow.logger.WithFields(logrus.Fields{
+			s.blake3pow.logger.WithFields(log.Fields{
 				"number":   solution.NumberU64(nodeCtx),
 				"sealhash": sealhash,
 				"hash":     solution.Hash(),
@@ -434,7 +434,7 @@ func (s *remoteSealer) submitWork(nonce types.BlockNonce, sealhash common.Hash) 
 		}
 	}
 	// The submitted block is too old to accept, drop it.
-	s.blake3pow.logger.WithFields(logrus.Fields{
+	s.blake3pow.logger.WithFields(log.Fields{
 		"number":   solution.NumberU64(nodeCtx),
 		"sealhash": sealhash,
 		"hash":     solution.Hash(),

@@ -40,7 +40,6 @@ import (
 	"github.com/dominant-strategies/go-quai/quai/abi"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/sirupsen/logrus"
 )
 
 // PublicQuaiAPI_Deprecated provides an API to access Quai related information.
@@ -391,7 +390,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"number": blockNr,
 				"hash":   block.Hash(),
 				"index":  index,
@@ -411,7 +410,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"number": block.Number(s.b.NodeCtx()),
 				"hash":   block.Hash(),
 				"index":  index,
@@ -732,7 +731,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			if transfer == nil {
 				transfer = new(hexutil.Big)
 			}
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"original": hi,
 				"balance":  balance,
 				"sent":     transfer.ToInt(),
@@ -744,7 +743,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Recap the highest gas allowance with specified gascap.
 	if gasCap != 0 && hi > gasCap {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"requested": hi,
 			"cap":       gasCap,
 		}).Warn("Caller gas above allowance, capping")
@@ -1452,7 +1451,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 	if tx.To() == nil {
 		addr := crypto.CreateAddress(from, tx.Nonce(), tx.Data(), nodeLocation)
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash":     tx.Hash().Hex(),
 			"from":     from,
 			"nonce":    tx.Nonce(),
@@ -1460,7 +1459,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 			"value":    tx.Value(),
 		}).Debug("Submitted contract creation")
 	} else {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"hash":      tx.Hash().Hex(),
 			"from":      from,
 			"nonce":     tx.Nonce(),

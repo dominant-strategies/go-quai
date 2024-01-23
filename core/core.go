@@ -21,11 +21,11 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hnlq715/golang-lru"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -77,10 +77,10 @@ type Core struct {
 
 	quit chan struct{} // core quit channel
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *logrus.Logger) (*Core, error) {
+func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Core, error) {
 	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis, logger)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			if !c.processingCache.Contains(block.Hash()) {
 				c.processingCache.Add(block.Hash(), 1)
 			} else {
-				c.logger.WithFields(logrus.Fields{
+				c.logger.WithFields(log.Fields{
 					"Number": block.Header().NumberArray(),
 					"Hash":   block.Hash(),
 				}).Info("Already processing block")
@@ -151,7 +151,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 					// Only send the pending Etxs to dom if valid, because in the case of running a slice, for the zones that the node doesn't run, it cannot have the etxs generated
 					if pendingEtx.IsValid(trie.NewStackTrie(nil)) {
 						if err := c.SendPendingEtxsToDom(pendingEtx); err != nil {
-							c.logger.WithFields(logrus.Fields{
+							c.logger.WithFields(log.Fields{
 								"blockHash": block.Hash(),
 								"err":       err,
 							}).Error("failed to send ETXs to domclient")
@@ -167,13 +167,13 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				err.Error() == ErrSubNotSyncedToDom.Error() ||
 				err.Error() == ErrDomClientNotUp.Error() {
 				if c.sl.CurrentInfo(block.Header()) {
-					c.logger.WithFields(logrus.Fields{
+					c.logger.WithFields(log.Fields{
 						"Number": block.Header().NumberArray(),
 						"Hash":   block.Hash(),
 						"err":    err,
 					}).Info("Cannot append yet.")
 				} else {
-					c.logger.WithFields(logrus.Fields{
+					c.logger.WithFields(log.Fields{
 						"loc":    c.NodeLocation().Name(),
 						"Number": block.Header().NumberArray(),
 						"Hash":   block.Hash(),
@@ -188,7 +188,7 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 				}
 				return idx, ErrPendingBlock
 			} else if err.Error() != ErrKnownBlock.Error() {
-				c.logger.WithFields(logrus.Fields{
+				c.logger.WithFields(log.Fields{
 					"Hash": block.Hash(),
 					"err":  err,
 				}).Info("Append failed.")
@@ -243,7 +243,7 @@ func (c *Core) procAppendQueue() {
 
 	c.serviceBlocks(hashNumberPriorityList)
 	if len(hashNumberPriorityList) > 0 {
-		c.logger.WithFields(logrus.Fields{
+		c.logger.WithFields(log.Fields{
 			"len":        len(hashNumberPriorityList),
 			"firstEntry": hashNumberPriorityList[0].Number,
 			"lastEntry":  hashNumberPriorityList[len(hashNumberPriorityList)-1].Number,
@@ -255,7 +255,7 @@ func (c *Core) procAppendQueue() {
 		c.procCounter = 0
 		c.serviceBlocks(hashNumberList)
 		if len(hashNumberList) > 0 {
-			c.logger.WithFields(logrus.Fields{
+			c.logger.WithFields(log.Fields{
 				"len":        len(hashNumberPriorityList),
 				"firstEntry": hashNumberPriorityList[0].Number,
 				"lastEntry":  hashNumberPriorityList[len(hashNumberPriorityList)-1].Number,
@@ -299,7 +299,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 				// If parent header is dom, send a signal to dom to request for the block if it doesnt have it
 				_, parentHeaderOrder, err := c.sl.engine.CalcOrder(parentBlock.Header())
 				if err != nil {
-					c.logger.WithFields(logrus.Fields{
+					c.logger.WithFields(log.Fields{
 						"Hash":   parentBlock.Hash(),
 						"Number": parentBlock.Header().NumberArray(),
 					}).Info("Error calculating the parent block order in serviceBlocks")
@@ -307,7 +307,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 				}
 				nodeCtx := c.NodeLocation().Context()
 				if parentHeaderOrder < nodeCtx && c.GetHeaderByHash(parentBlock.Hash()) == nil {
-					c.logger.WithFields(logrus.Fields{
+					c.logger.WithFields(log.Fields{
 						"Hash":  parentBlock.Hash(),
 						"Order": parentHeaderOrder,
 					}).Info("Requesting the dom to get the block if it doesnt have and try to append")
@@ -344,7 +344,7 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, ord
 		// If prime all you can do it to ask for the block
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
-			c.logger.WithFields(logrus.Fields{
+			c.logger.WithFields(log.Fields{
 				"Hash":  hash,
 				"Order": order,
 			}).Debug("Block sub asked doesnt exist in append queue, so request the peers for it")
@@ -363,7 +363,7 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, ord
 		}
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
-			c.logger.WithFields(logrus.Fields{
+			c.logger.WithFields(log.Fields{
 				"Hash":  hash,
 				"Order": order,
 			}).Debug("Block sub asked doesnt exist in append queue, so request the peers for it")
@@ -494,7 +494,7 @@ func (c *Core) startStatsTimer() {
 
 // printStats displays stats on syncing, latestHeight, etc.
 func (c *Core) printStats() {
-	c.logger.WithFields(logrus.Fields{
+	c.logger.WithFields(log.Fields{
 		"loc":              c.NodeLocation().Name(),
 		"len(appendQueue)": len(c.appendQueue.Keys()),
 	}).Info("Blocks waiting to be appended")
@@ -503,7 +503,7 @@ func (c *Core) printStats() {
 	for _, hash := range c.appendQueue.Keys()[:math.Min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
 		if value, exist := c.appendQueue.Peek(hash); exist {
 			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
-			c.logger.WithFields(logrus.Fields{
+			c.logger.WithFields(log.Fields{
 				"Number": strconv.FormatUint(hashNumber.Number, 10),
 				"Hash":   hashNumber.Hash.String(),
 			}).Debug("AppendQueue entry")

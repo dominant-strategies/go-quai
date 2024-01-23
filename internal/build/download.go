@@ -23,11 +23,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // ChecksumDB keeps file checksums.

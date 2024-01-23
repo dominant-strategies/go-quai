@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"github.com/sirupsen/logrus"
 )
 
 // Database is an intermediate write layer between the trie data structures and
@@ -487,7 +486,7 @@ func (db *Database) Dereference(root common.Hash) {
 	db.gcsize += storage - db.dirtiesSize
 	db.gctime += time.Since(start)
 
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"nodes":     nodes - len(db.dirties),
 		"size":      storage - db.dirtiesSize,
 		"time":      time.Since(start),
@@ -641,7 +640,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	db.flushsize += storage - db.dirtiesSize
 	db.flushtime += time.Since(start)
 
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"nodes":      nodes - len(db.dirties),
 		"size":       storage - db.dirtiesSize,
 		"time":       time.Since(start),
@@ -819,7 +818,7 @@ func (db *Database) saveCache(dir string, threads int) error {
 	if db.cleans == nil {
 		return nil
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"path":    dir,
 		"threads": threads,
 	}).Info("Writing clean trie cache to disk")
@@ -830,7 +829,7 @@ func (db *Database) saveCache(dir string, threads int) error {
 		log.WithField("err", err).Error("Failed to persist clean trie cache")
 		return err
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"path":    dir,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("Persisted the clean trie cache")

@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/spf13/viper"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
@@ -17,8 +19,6 @@ import (
 	"github.com/dominant-strategies/go-quai/quai"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/dominant-strategies/go-quai/quaistats"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 // Create a new instance of the QuaiBackend consensus service
@@ -69,7 +69,7 @@ func StartNode(stack *node.Node) {
 }
 
 // makeConfigNode loads quai configuration and creates a blank node instance.
-func makeConfigNode(nodeLocation common.Location, logger *logrus.Logger) (*node.Node, quaiconfig.QuaiConfig) {
+func makeConfigNode(nodeLocation common.Location, logger *log.Logger) (*node.Node, quaiconfig.QuaiConfig) {
 	// Load defaults.
 	cfg := quaiconfig.QuaiConfig{
 		Quai:    quaiconfig.Defaults,
@@ -107,7 +107,7 @@ func defaultNodeConfig() node.Config {
 }
 
 // makeFullNode loads quai configuration and creates the Quai backend.
-func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, logger *logrus.Logger) (*node.Node, quaiapi.Backend) {
+func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, logger *log.Logger) (*node.Node, quaiapi.Backend) {
 	stack, cfg := makeConfigNode(nodeLocation, logger)
 	backend, _ := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), logger)
 	sendfullstats := viper.GetBool(SendFullStatsFlag.Name)
@@ -121,7 +121,7 @@ func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, logger *
 // RegisterQuaiService adds a Quai client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, logger *logrus.Logger) (quaiapi.Backend, error) {
+func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, logger *log.Logger) (quaiapi.Backend, error) {
 	backend, err := quai.New(stack, p2p, &cfg, nodeCtx, logger)
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)

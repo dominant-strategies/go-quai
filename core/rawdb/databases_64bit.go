@@ -21,7 +21,7 @@ package rawdb
 import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/ethdb/pebble"
-	"github.com/sirupsen/logrus"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Pebble is unsuported on 32bit architecture
@@ -29,7 +29,7 @@ const PebbleEnabled = true
 
 // NewPebbleDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool, logger *logrus.Logger) (ethdb.Database, error) {
+func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger) (ethdb.Database, error) {
 	db, err := pebble.New(file, cache, handles, namespace, readonly, logger)
 	if err != nil {
 		return nil, err

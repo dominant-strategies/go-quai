@@ -35,7 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -289,7 +288,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 		origin = common.Hash{}.Bytes()
 	}
 	if err := tr.Prove(origin, 0, proof); err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"kind":   kind,
 			"origin": origin,
 			"err":    err,
@@ -304,7 +303,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"kind": kind,
 				"last": last,
 				"err":  err,
@@ -370,7 +369,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// Only abort the iteration when both database and trie are exhausted
 		return !result.diskMore && !result.trieMore, last, nil
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"last": hexutil.Encode(last),
 		"err":  result.proofErr,
 	}).Trace("Detected outdated state range")
@@ -466,7 +465,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	}
 	internal += time.Since(istart)
 
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"root":      root,
 		"last":      hexutil.Encode(last),
 		"count":     count,
@@ -669,7 +668,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	}
 	batch.Reset()
 
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"accounts": stats.accounts,
 		"slots":    stats.slots,
 		"storage":  stats.storage,

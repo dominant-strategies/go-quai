@@ -4,7 +4,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/sirupsen/logrus"
 )
 
 // The EtxSet maps an ETX hash to the ETX and block number in which it became available.
@@ -38,7 +37,7 @@ func (set *EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64, nod
 		availableAtBlock := entry.Height
 		etxExpirationHeight := availableAtBlock + params.EtxExpirationAge
 		if currentHeight > etxExpirationHeight {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"hash":                txHash,
 				"gasTipCap":           entry.ETX.GasTipCap(),
 				"gasFeeCap":           entry.ETX.GasFeeCap(),

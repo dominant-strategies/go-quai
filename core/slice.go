@@ -18,11 +18,11 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -82,10 +82,10 @@ type Slice struct {
 	reorgMu   sync.RWMutex
 
 	badHashesCache map[common.Hash]bool
-	logger         *logrus.Logger
+	logger         *log.Logger
 }
 
-func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *logrus.Logger) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
 	nodeCtx := chainConfig.Location.Context()
 	sl := &Slice{
 		config:         chainConfig,
@@ -159,14 +159,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	// Only print in Info level if block is c_startingPrintLimit behind or less
 	if sl.CurrentInfo(header) {
-		sl.logger.WithFields(logrus.Fields{
+		sl.logger.WithFields(log.Fields{
 			"number":      header.NumberArray(),
 			"hash":        header.Hash(),
 			"location":    header.Location(),
 			"parent hash": header.ParentHash(nodeCtx),
 		}).Info("Starting slice append")
 	} else {
-		sl.logger.WithFields(logrus.Fields{
+		sl.logger.WithFields(log.Fields{
 			"number":      header.NumberArray(),
 			"hash":        header.Hash(),
 			"location":    header.Location(),
@@ -205,7 +205,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if err != nil {
 		return nil, false, false, err
 	}
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"hash":    header.Hash(),
 		"number":  header.NumberArray(),
 		"termini": newTermini,
@@ -334,7 +334,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if subReorg || (sl.hc.CurrentHeader().NumberU64(nodeCtx) < block.NumberU64(nodeCtx)+c_currentStateComputeWindow) {
 			err := sl.hc.SetCurrentState(block.Header())
 			if err != nil {
-				sl.logger.WithFields(logrus.Fields{
+				sl.logger.WithFields(log.Fields{
 					"err":  err,
 					"Hash": block.Hash(),
 				}).Error("Error setting current state")
@@ -356,7 +356,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		if order == common.ZONE_CTX && pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()) != bestPh.Termini().DomTerminus(sl.NodeLocation()) {
 			updateDom = true
 		}
-		sl.logger.WithFields(logrus.Fields{
+		sl.logger.WithFields(log.Fields{
 			"NumberArray": pendingHeaderWithTermini.Header().NumberArray(),
 			"Number":      pendingHeaderWithTermini.Header().Number(nodeCtx),
 			"ParentHash":  pendingHeaderWithTermini.Header().ParentHash(nodeCtx),
@@ -383,7 +383,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), subReorg)
 
 	time10 := common.PrettyDuration(time.Since(start))
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"t0_1": time0_1,
 		"t0_2": time0_2,
 		"t1":   time1,
@@ -398,13 +398,13 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"t10":  time10,
 	}).Info("Times during append")
 
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"t6_1": time6_1,
 		"t6_2": time6_2,
 		"t6_3": time6_3,
 	}).Info("Times during sub append")
 
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"number":     block.Header().NumberArray(),
 		"hash":       block.Hash(),
 		"difficulty": block.Header().Difficulty(),
@@ -421,7 +421,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	if nodeCtx == common.ZONE_CTX {
 		if updateDom {
-			sl.logger.WithFields(logrus.Fields{
+			sl.logger.WithFields(log.Fields{
 				"oldTermini()": bestPh.Termini().DomTerminus(sl.NodeLocation()),
 				"newTermini()": pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()),
 				"location":     sl.NodeLocation(),
@@ -496,7 +496,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 		sl.logger.WithField("newTerminus does not exist", newDomTerminus).Warn("Update Dom")
 		return
 	}
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"NewDomTerminus": newDomTerminus,
 		"OldDomTerminus": oldDomTerminus,
 		"NewDomTermini":  newPh.Termini(),
@@ -509,7 +509,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 		if exists {
 			for _, i := range sl.randomRelayArray() {
 				if sl.subClients[i] != nil {
-					sl.logger.WithFields(logrus.Fields{
+					sl.logger.WithFields(log.Fields{
 						"parentHash": newPh.Header().ParentHash(nodeCtx),
 						"number":     newPh.Header().NumberArray(),
 						"newTermini": newPh.Termini().SubTerminiAtIndex(i),
@@ -523,7 +523,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 		return
 	} else {
 		// need to update dom
-		sl.logger.WithFields(logrus.Fields{
+		sl.logger.WithFields(log.Fields{
 			"oldDomTermini": oldDomTerminus,
 			"newDomTermini": newPh.Termini(),
 			"location":      location,
@@ -537,7 +537,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 			if exists {
 				for _, i := range sl.randomRelayArray() {
 					if sl.subClients[i] != nil {
-						sl.logger.WithFields(logrus.Fields{
+						sl.logger.WithFields(log.Fields{
 							"parentHash": newPh.Header().ParentHash(nodeCtx),
 							"number":     newPh.Header().NumberArray(),
 							"newTermini": newPh.Termini().SubTerminiAtIndex(i),
@@ -673,7 +673,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 		rollup, exists := sl.hc.subRollupCache.Get(block.Hash())
 		if exists && rollup != nil {
 			subRollup = rollup.(types.Transactions)
-			sl.logger.WithFields(logrus.Fields{
+			sl.logger.WithFields(log.Fields{
 				"Hash": block.Hash(),
 				"len":  len(subRollup),
 			}).Info("Found the rollup in cache")
@@ -737,7 +737,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	nodeCtx := sl.NodeCtx()
 	location := header.Location()
 
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"parent hash": header.ParentHash(nodeCtx),
 		"number":      header.NumberArray(),
 		"location":    header.Location(),
@@ -764,7 +764,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 	// Check for a graph cyclic reference
 	if domOrigin {
 		if termini.DomTerminus(nodeLocation) != domTerminus {
-			sl.logger.WithFields(logrus.Fields{
+			sl.logger.WithFields(log.Fields{
 				"block number": header.NumberArray(),
 				"hash":         header.Hash(),
 				"terminus":     domTerminus,
@@ -786,7 +786,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 // POEM compares externS to the currentHead S and returns true if externS is greater
 func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"currentS": common.BigBitsToBits(currentS),
 		"externS":  common.BigBitsToBits(externS),
 	}).Debug("POEM")
@@ -943,7 +943,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	var newPh *types.Header
 
 	if exists {
-		sl.logger.WithFields(logrus.Fields{
+		sl.logger.WithFields(log.Fields{
 			"hash":          hash,
 			"pendingHeader": cachedPendingHeaderWithTermini,
 			"termini":       cachedPendingHeaderWithTermini.Termini(),
@@ -991,7 +991,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if nodeCtx == common.ZONE_CTX && exists && sl.bestPhKey != localPendingHeader.Termini().DomTerminus(nodeLocation) && !sl.poem(newEntropy, bestPh.Header().ParentEntropy(nodeCtx)) {
-			sl.logger.WithFields(logrus.Fields{
+			sl.logger.WithFields(log.Fields{
 				"local dom terminus": localPendingHeader.Termini().DomTerminus(nodeLocation),
 				"Number":             combinedPendingHeader.NumberArray(),
 				"best ph key":        sl.bestPhKey,
@@ -1005,7 +1005,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		// Pick the head
 		if subReorg {
 			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
-				sl.logger.WithFields(logrus.Fields{
+				sl.logger.WithFields(log.Fields{
 					"NumberArray": combinedPendingHeader.NumberArray(),
 					"Number":      combinedPendingHeader.Number(nodeCtx),
 					"ParentHash":  combinedPendingHeader.ParentHash(nodeCtx),
@@ -1019,7 +1019,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 					// after mining this block since the state will already be computed
 					err := sl.hc.SetCurrentState(block.Header())
 					if err != nil {
-						sl.logger.WithFields(logrus.Fields{
+						sl.logger.WithFields(log.Fields{
 							"Hash": block.Hash(),
 							"err":  err,
 						}).Error("Error setting current state")
@@ -1031,7 +1031,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 						return err
 					}
 					combinedPendingHeader = types.CopyHeader(newPendingHeader.Header())
-					sl.logger.WithFields(logrus.Fields{
+					sl.logger.WithFields(log.Fields{
 						"NumberArray": combinedPendingHeader.NumberArray(),
 						"ParentHash":  combinedPendingHeader.ParentHash(nodeCtx),
 						"Terminus":    localPendingHeader.Termini().DomTerminus(nodeLocation),
@@ -1047,7 +1047,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 
 		return nil
 	}
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"hash":                hash,
 		"pendingHeaderNumber": pendingHeader.Header().NumberArray(),
 		"parentHash":          pendingHeader.Header().ParentHash(nodeCtx),
@@ -1124,7 +1124,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 
 	if subReorg || !exists {
 		sl.writePhCache(deepCopyPendingHeaderWithTermini.Termini().DomTerminus(nodeLocation), deepCopyPendingHeaderWithTermini)
-		sl.logger.WithFields(logrus.Fields{
+		sl.logger.WithFields(log.Fields{
 			"newterminus?": !exists,
 			"inSlice":      inSlice,
 			"Ph Number":    deepCopyPendingHeaderWithTermini.Header().NumberArray(),
@@ -1350,7 +1350,7 @@ func (sl *Slice) SubscribeMissingBlockEvent(ch chan<- types.BlockRequest) event.
 }
 
 // MakeDomClient creates the quaiclient for the given domurl
-func makeDomClient(domurl string, logger *logrus.Logger) *quaiclient.Client {
+func makeDomClient(domurl string, logger *log.Logger) *quaiclient.Client {
 	if domurl == "" {
 		logger.Fatal("dom client url is empty")
 	}
@@ -1362,13 +1362,13 @@ func makeDomClient(domurl string, logger *logrus.Logger) *quaiclient.Client {
 }
 
 // MakeSubClients creates the quaiclient for the given suburls
-func makeSubClients(suburls []string, logger *logrus.Logger) []*quaiclient.Client {
+func makeSubClients(suburls []string, logger *log.Logger) []*quaiclient.Client {
 	subClients := make([]*quaiclient.Client, 3)
 	for i, suburl := range suburls {
 		if suburl != "" {
 			subClient, err := quaiclient.Dial(suburl, logger)
 			if err != nil {
-				logger.WithFields(logrus.Fields{
+				logger.WithFields(log.Fields{
 					"index": i,
 					"err":   err,
 				}).Fatal("Error connecting to the subordinate go-quai client")
@@ -1458,7 +1458,7 @@ func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 		return ErrPendingEtxRollupNotValid
 	}
 	nodeCtx := sl.NodeLocation().Context()
-	sl.logger.WithFields(logrus.Fields{
+	sl.logger.WithFields(log.Fields{
 		"header": pEtxsRollup.Header.Hash(),
 		"len":    len(pEtxsRollup.Manifest),
 	}).Debug("Received pending ETXs Rollup")

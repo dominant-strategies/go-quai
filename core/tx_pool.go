@@ -31,9 +31,9 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/sirupsen/logrus"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
@@ -188,59 +188,59 @@ var DefaultTxPoolConfig = TxPoolConfig{
 
 // sanitize checks the provided user configurations and changes anything that's
 // unreasonable or unworkable.
-func (config *TxPoolConfig) sanitize(logger *logrus.Logger) TxPoolConfig {
+func (config *TxPoolConfig) sanitize(logger *log.Logger) TxPoolConfig {
 	conf := *config
 	if conf.Rejournal < time.Second {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.Rejournal,
 			"updated":  time.Second,
 		}).Warn("Sanitizing invalid txpool journal time")
 		conf.Rejournal = time.Second
 	}
 	if conf.PriceLimit < 1 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.PriceLimit,
 			"updated":  DefaultTxPoolConfig.PriceLimit,
 		}).Warn("Sanitizing invalid txpool price limit")
 		conf.PriceLimit = DefaultTxPoolConfig.PriceLimit
 	}
 	if conf.PriceBump < 1 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.PriceBump,
 			"updated":  DefaultTxPoolConfig.PriceBump,
 		}).Warn("Sanitizing invalid txpool price bump")
 		conf.PriceBump = DefaultTxPoolConfig.PriceBump
 	}
 	if conf.AccountSlots < 1 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.AccountSlots,
 			"updated":  DefaultTxPoolConfig.AccountSlots,
 		}).Warn("Sanitizing invalid txpool account slots")
 		conf.AccountSlots = DefaultTxPoolConfig.AccountSlots
 	}
 	if conf.GlobalSlots < 1 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.GlobalSlots,
 			"updated":  DefaultTxPoolConfig.GlobalSlots,
 		}).Warn("Sanitizing invalid txpool global slots")
 		conf.GlobalSlots = DefaultTxPoolConfig.GlobalSlots
 	}
 	if conf.AccountQueue < 1 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.AccountQueue,
 			"updated":  DefaultTxPoolConfig.AccountQueue,
 		}).Warn("Sanitizing invalid txpool account queue")
 		conf.AccountQueue = DefaultTxPoolConfig.AccountQueue
 	}
 	if conf.GlobalQueue < 1 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.GlobalQueue,
 			"updated":  DefaultTxPoolConfig.GlobalQueue,
 		}).Warn("Sanitizing invalid txpool global queue")
 		conf.GlobalQueue = DefaultTxPoolConfig.GlobalQueue
 	}
 	if conf.Lifetime < 1 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": conf.Lifetime,
 			"updated":  DefaultTxPoolConfig.Lifetime,
 		}).Warn("Sanitizing invalid txpool lifetime")
@@ -295,7 +295,7 @@ type TxPool struct {
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 type txpoolResetRequest struct {
@@ -309,7 +309,7 @@ type newSender struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, logger *logrus.Logger) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, logger *log.Logger) *TxPool {
 	// Pending pool metrics
 	pendingDiscardMeter.Set(0)
 	pendingReplaceMeter.Set(0)
@@ -430,7 +430,7 @@ func (pool *TxPool) loop() {
 			pool.mu.RLock()
 			pending, queued := pool.stats()
 			stales := pool.priced.stales
-			pool.logger.WithFields(logrus.Fields{
+			pool.logger.WithFields(log.Fields{
 				"Local Txs":  pool.localTxsCount,
 				"Remote Txs": pool.remoteTxsCount,
 			}).Info("Added Transactions in last Min", "Local Txs", pool.localTxsCount, "Remote Txs", pool.remoteTxsCount)
@@ -438,7 +438,7 @@ func (pool *TxPool) loop() {
 			pool.remoteTxsCount = 0
 			pool.mu.RUnlock()
 
-			pool.logger.WithFields(logrus.Fields{
+			pool.logger.WithFields(log.Fields{
 				"pending": pending,
 				"queued":  queued,
 				"stales":  stales,
@@ -610,7 +610,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 		if enforceTips && !pool.locals.contains(addr) {
 			for i, tx := range txs {
 				if tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-					pool.logger.WithFields(logrus.Fields{
+					pool.logger.WithFields(log.Fields{
 						"tx":           tx.Hash().String(),
 						"gasTipCap":    tx.GasTipCap().String(),
 						"poolGasPrice": pool.gasPrice.String(),
@@ -630,7 +630,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 		addr := entry.ETX.ETXSender()
 		tx := entry.ETX
 		if tx.ETXSender().Location(pool.chainconfig.Location).Equal(pool.chainconfig.Location) { // Sanity check
-			pool.logger.WithFields(logrus.Fields{
+			pool.logger.WithFields(log.Fields{
 				"tx":     tx.Hash().String(),
 				"sender": tx.ETXSender().String(),
 			}).Error("ETX sender is in our location!")
@@ -638,7 +638,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool, etxSet types.EtxSet) (map[co
 		}
 		// If the miner requests tip enforcement, cap the lists now
 		if enforceTips && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
-			pool.logger.WithFields(logrus.Fields{
+			pool.logger.WithFields(log.Fields{
 				"tx":           tx.Hash().String(),
 				"gasTipCap":    tx.GasTipCap().String(),
 				"poolGasPrice": pool.gasPrice.String(),
@@ -744,7 +744,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return err
 	}
 	if tx.Gas() < intrGas {
-		pool.logger.WithFields(logrus.Fields{
+		pool.logger.WithFields(log.Fields{
 			"gasSupplied": tx.Gas(),
 			"gasNeeded":   intrGas,
 			"tx":          tx,
@@ -786,7 +786,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx, isLocal); err != nil {
-		pool.logger.WithFields(logrus.Fields{
+		pool.logger.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Trace("Discarding invalid transaction")
@@ -797,7 +797,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
-			pool.logger.WithFields(logrus.Fields{
+			pool.logger.WithFields(log.Fields{
 				"hash":      hash,
 				"gasTipCap": tx.GasTipCap(),
 				"gasFeeCap": tx.GasFeeCap(),
@@ -818,7 +818,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
-			pool.logger.WithFields(logrus.Fields{
+			pool.logger.WithFields(log.Fields{
 				"hash":      tx.Hash(),
 				"gasTipCap": tx.GasTipCap(),
 				"gasFeeCap": tx.GasFeeCap(),
@@ -850,7 +850,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		pool.priced.Put(tx, isLocal)
 		pool.journalTx(internal, tx)
 		pool.queueTxEvent(tx)
-		pool.logger.WithFields(logrus.Fields{
+		pool.logger.WithFields(log.Fields{
 			"hash": hash,
 			"from": from,
 			"to":   tx.To(),
@@ -876,7 +876,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	}
 	pool.journalTx(internal, tx)
 	pool.queueTxEvent(tx)
-	pool.logger.WithFields(logrus.Fields{
+	pool.logger.WithFields(log.Fields{
 		"hash": hash,
 		"from": from,
 		"to":   tx.To(),
@@ -974,7 +974,7 @@ func (pool *TxPool) promoteTx(addr common.InternalAddress, hash common.Hash, tx 
 	// Successful promotion, bump the heartbeat
 	pool.beats[addr] = time.Now()
 	if list.Len()%100 == 0 {
-		pool.logger.WithFields(logrus.Fields{
+		pool.logger.WithFields(log.Fields{
 			"addr": addr,
 			"len":  list.Len(),
 		}).Info("Another 100 txs added to list")
@@ -1448,7 +1448,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				// there's nothing to add
 				if newNum >= oldNum {
 					// If we reorged to a same or higher number, then it's not a case of setHead
-					pool.logger.WithFields(logrus.Fields{
+					pool.logger.WithFields(log.Fields{
 						"old":    oldHead.Hash(),
 						"oldnum": oldNum,
 						"new":    newHead.Hash(),
@@ -1457,7 +1457,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 					return
 				}
 				// If the reorg ended up on a lower number, it's indicative of setHead being the cause
-				pool.logger.WithFields(logrus.Fields{
+				pool.logger.WithFields(log.Fields{
 					"old":    oldHead.Hash(),
 					"oldnum": oldNum,
 					"new":    newHead.Hash(),
@@ -1472,7 +1472,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				for rem.NumberU64(nodeCtx) > add.NumberU64(nodeCtx) {
 					discarded = append(discarded, rem.Transactions()...)
 					if rem = pool.chain.GetBlock(rem.ParentHash(nodeCtx), rem.NumberU64(nodeCtx)-1); rem == nil {
-						pool.logger.WithFields(logrus.Fields{
+						pool.logger.WithFields(log.Fields{
 							"block": oldHead.Number(nodeCtx),
 							"hash":  oldHead.Hash(),
 						}).Error("Unrooted old chain seen by tx pool")
@@ -1482,7 +1482,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				for add.NumberU64(nodeCtx) > rem.NumberU64(nodeCtx) {
 					included = append(included, add.Transactions()...)
 					if add = pool.chain.GetBlock(add.ParentHash(nodeCtx), add.NumberU64(nodeCtx)-1); add == nil {
-						pool.logger.WithFields(logrus.Fields{
+						pool.logger.WithFields(log.Fields{
 							"block": newHead.Number(nodeCtx),
 							"hash":  newHead.Hash(),
 						}).Error("Unrooted new chain seen by tx pool")
@@ -1492,7 +1492,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				for rem.Hash() != add.Hash() {
 					discarded = append(discarded, rem.Transactions()...)
 					if rem = pool.chain.GetBlock(rem.ParentHash(nodeCtx), rem.NumberU64(nodeCtx)-1); rem == nil {
-						pool.logger.WithFields(logrus.Fields{
+						pool.logger.WithFields(log.Fields{
 							"block": oldHead.Number(nodeCtx),
 							"hash":  oldHead.Hash(),
 						}).Error("Unrooted old chain seen by tx pool")
@@ -1500,7 +1500,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 					}
 					included = append(included, add.Transactions()...)
 					if add = pool.chain.GetBlock(add.ParentHash(nodeCtx), add.NumberU64(nodeCtx)-1); add == nil {
-						pool.logger.WithFields(logrus.Fields{
+						pool.logger.WithFields(log.Fields{
 							"block": newHead.Number(nodeCtx),
 							"hash":  newHead.Hash(),
 						}).Error("Unrooted new chain seen by tx pool")
@@ -1853,7 +1853,7 @@ func (pool *TxPool) sendersGoroutine() {
 					pool.senders.Delete(pool.senders.Oldest().Key) // FIFO
 				}
 			} else {
-				pool.logger.WithFields(logrus.Fields{
+				pool.logger.WithFields(log.Fields{
 					"tx":     tx.hash.String(),
 					"sender": tx.sender.String(),
 				}).Debug("Tx already seen in sender cache (reorg?)")
@@ -1926,7 +1926,7 @@ func (as *accountSet) add(addr common.InternalAddress) {
 }
 
 // addTx adds the sender of tx into the set.
-func (as *accountSet) addTx(tx *types.Transaction, logger *logrus.Logger) {
+func (as *accountSet) addTx(tx *types.Transaction, logger *log.Logger) {
 	if addr, err := types.Sender(as.signer, tx); err == nil {
 		internal, err := addr.InternalAddress()
 		if err != nil {
@@ -2083,7 +2083,7 @@ func (t *txLookup) Add(tx *types.Transaction, local bool) {
 }
 
 // Remove removes a transaction from the lookup.
-func (t *txLookup) Remove(hash common.Hash, logger *logrus.Logger) {
+func (t *txLookup) Remove(hash common.Hash, logger *log.Logger) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 

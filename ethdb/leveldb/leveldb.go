@@ -29,7 +29,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/sirupsen/logrus"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -65,12 +65,12 @@ type Database struct {
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
-	logger *logrus.Logger // Contextual logger tracking the database path
+	logger *log.Logger // Contextual logger tracking the database path
 }
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, logger *logrus.Logger) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger) (*Database, error) {
 	return NewCustom(file, namespace, func(options *opt.Options) {
 		// Ensure we have some minimal caching and file guarantees
 		if cache < minCache {
@@ -92,7 +92,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, l
 // NewCustom returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 // The customize function allows the caller to modify the leveldb options.
-func NewCustom(file string, namespace string, customize func(options *opt.Options), logger *logrus.Logger) (*Database, error) {
+func NewCustom(file string, namespace string, customize func(options *opt.Options), logger *log.Logger) (*Database, error) {
 	options := configureOptions(customize)
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
 	logCtx := []interface{}{"cache", common.StorageSize(usedCache), "handles", options.GetOpenFilesCacheCapacity()}

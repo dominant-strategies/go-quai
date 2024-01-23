@@ -20,7 +20,6 @@ import (
 	"github.com/dominant-strategies/go-quai/rpc"
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/hashicorp/golang-lru/simplelru"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -181,19 +180,19 @@ type Progpow struct {
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 // New creates a full sized progpow PoW scheme and starts a background thread for
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
-func New(config Config, notify []string, noverify bool, logger *logrus.Logger) *Progpow {
+func New(config Config, notify []string, noverify bool, logger *log.Logger) *Progpow {
 	if config.CachesInMem <= 0 {
 		logger.WithField("requested", config.CachesInMem).Warn("Invalid ethash caches in memory, defaulting to 1")
 		config.CachesInMem = 1
 	}
 	if config.CacheDir != "" && config.CachesOnDisk > 0 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"dir":   config.CacheDir,
 			"count": config.CachesOnDisk,
 		}).Info("Disk storage enabled for ethash caches")
@@ -292,12 +291,12 @@ type lru struct {
 	future     uint64
 	futureItem interface{}
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 // newlru create a new least-recently-used cache for either the verification caches
 // or the mining datasets.
-func newlru(what string, maxItems int, new func(epoch uint64) interface{}, logger *logrus.Logger) *lru {
+func newlru(what string, maxItems int, new func(epoch uint64) interface{}, logger *log.Logger) *lru {
 	if maxItems <= 0 {
 		maxItems = 1
 	}
@@ -352,7 +351,7 @@ func newCache(epoch uint64) interface{} {
 }
 
 // generate ensures that the cache content is generated before use.
-func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *logrus.Logger) {
+func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *log.Logger) {
 	c.once.Do(func() {
 		size := cacheSize(c.epoch*epochLength + 1)
 		seed := seedHash(c.epoch*epochLength + 1)

@@ -27,8 +27,8 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -207,7 +207,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 		return common.Big0, nil, nil, nil, nil // returning with no data and no error means there are no retrievable blocks
 	}
 	if blocks > maxFeeHistory {
-		oracle.logger.WithFields(logrus.Fields{
+		oracle.logger.WithFields(log.Fields{
 			"requested": blocks,
 			"truncated": maxFeeHistory,
 		}).Warn("Sanitizing fee history length")

@@ -34,13 +34,13 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/filters"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/sirupsen/logrus"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -73,15 +73,15 @@ type Quai struct {
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
-func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, logger *logrus.Logger) (*Quai, error) {
+func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, logger *log.Logger) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": config.Miner.GasPrice,
 			"updated":  quaiconfig.Defaults.Miner.GasPrice,
 		}).Warn("Sanitizing invalid miner gas price")
@@ -96,7 +96,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		}
 		config.TrieDirtyCache = 0
 	}
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"clean": common.StorageSize(config.TrieCleanCache) * 1024 * 1024,
 		"dirty": common.StorageSize(config.TrieDirtyCache) * 1024 * 1024,
 	}).Info("Allocated trie memory caches")
@@ -140,7 +140,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 
 	logger.WithField("chainConfig", config.NodeLocation).Info("Chain Config")
 	chainConfig.Location = config.NodeLocation // TODO: See why this is necessary
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"Ctx":          nodeCtx,
 		"NodeLocation": config.NodeLocation,
 		"Genesis":      config.Genesis.Config.Location,
@@ -166,7 +166,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
 
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"network":   config.NetworkId,
 		"dbversion": dbVer,
 	}).Info("Initialising Quai protocol")
@@ -176,7 +176,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 			return nil, fmt.Errorf("database version is v%d, Quai %s only supports v%d", *bcVersion, params.Version.Full(), core.BlockChainVersion)
 		} else if bcVersion == nil || *bcVersion < core.BlockChainVersion {
 			if bcVersion != nil { // only print warning on upgrade, not on init
-				logger.WithFields(logrus.Fields{
+				logger.WithFields(log.Fields{
 					"from": dbVer,
 					"to":   core.BlockChainVersion,
 				}).Warn("Upgrading database version")
@@ -244,7 +244,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		}
 		for _, tstamp := range uncleanShutdowns {
 			t := time.Unix(int64(tstamp), 0)
-			logger.WithFields(logrus.Fields{
+			logger.WithFields(log.Fields{
 				"booted": t,
 				"age":    common.PrettyAge(t),
 			}).Warn("Unclean shutdown detected")
@@ -325,7 +325,7 @@ func (s *Quai) Etherbase() (eb common.Address, err error) {
 func (s *Quai) isLocalBlock(header *types.Header) bool {
 	author, err := s.engine.Author(header)
 	if err != nil {
-		s.logger.WithFields(logrus.Fields{
+		s.logger.WithFields(log.Fields{
 			"number": header.NumberU64(s.core.NodeCtx()),
 			"hash":   header.Hash(),
 			"err":    err,

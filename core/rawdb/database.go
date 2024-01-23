@@ -29,8 +29,8 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/ethdb/leveldb"
 	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/olekukonko/tablewriter"
-	"github.com/sirupsen/logrus"
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
@@ -126,7 +126,7 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
 // value data store with a freezer moving immutable chain segments into cold
 // storage.
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool, nodeCtx int, logger *logrus.Logger) (ethdb.Database, error) {
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool, nodeCtx int, logger *log.Logger) (ethdb.Database, error) {
 	// Create the idle freezer instance
 	frdb, err := newFreezer(freezer, namespace, readonly, logger)
 	if err != nil {
@@ -217,7 +217,7 @@ func NewMemoryDatabaseWithCap(size int) ethdb.Database {
 
 // NewLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool, logger *logrus.Logger) (ethdb.Database, error) {
+func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger) (ethdb.Database, error) {
 	db, err := leveldb.New(file, cache, handles, namespace, readonly, logger)
 	if err != nil {
 		return nil, err
@@ -265,7 +265,7 @@ type OpenOptions struct {
 //	                   +----------------------------------------
 //	db is non-existent |  leveldb default  |  specified type
 //	db is existent     |  from db          |  specified type (if compatible)
-func openKeyValueDatabase(o OpenOptions, logger *logrus.Logger) (ethdb.Database, error) {
+func openKeyValueDatabase(o OpenOptions, logger *log.Logger) (ethdb.Database, error) {
 	existingDb := hasPreexistingDb(o.Directory)
 	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
 		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
@@ -291,7 +291,7 @@ func openKeyValueDatabase(o OpenOptions, logger *logrus.Logger) (ethdb.Database,
 // set on the provided OpenOptions.
 // The passed o.AncientDir indicates the path of root ancient directory where
 // the chain freezer can be opened.
-func Open(o OpenOptions, nodeCtx int, logger *logrus.Logger) (ethdb.Database, error) {
+func Open(o OpenOptions, nodeCtx int, logger *log.Logger) (ethdb.Database, error) {
 	kvdb, err := openKeyValueDatabase(o, logger)
 	if err != nil {
 		return nil, err
@@ -339,7 +339,7 @@ func (s *stat) Count() string {
 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
-func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *logrus.Logger) error {
+func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *log.Logger) error {
 	it := db.NewIterator(keyPrefix, keyStart)
 	defer it.Release()
 
@@ -447,7 +447,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *logr
 		}
 		count++
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-			logger.WithFields(logrus.Fields{
+			logger.WithFields(log.Fields{
 				"count":   count,
 				"elapsed": common.PrettyDuration(time.Since(start)),
 			}).Info("Inspecting database")
@@ -498,7 +498,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *logr
 	table.Render()
 
 	if unaccounted.size > 0 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"size":  unaccounted.size,
 			"count": unaccounted.count,
 		}).Warn("Database contains unaccounted data")

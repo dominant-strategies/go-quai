@@ -10,7 +10,6 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -45,7 +44,7 @@ type Config struct {
 	// be block header JSON objects instead of work package arrays.
 	NotifyFull bool
 
-	Log *logrus.Logger `toml:"-"`
+	Log *log.Logger `toml:"-"`
 }
 
 // Blake3pow is a proof-of-work consensus engine using the blake3 hash algorithm
@@ -66,13 +65,13 @@ type Blake3pow struct {
 	lock      sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 	closeOnce sync.Once  // Ensures exit channel will not be closed twice.
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 // New creates a full sized blake3pow PoW scheme and starts a background thread for
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
-func New(config Config, notify []string, noverify bool, logger *logrus.Logger) *Blake3pow {
+func New(config Config, notify []string, noverify bool, logger *log.Logger) *Blake3pow {
 	blake3pow := &Blake3pow{
 		config: config,
 		update: make(chan struct{}),

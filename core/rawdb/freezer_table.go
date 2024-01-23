@@ -29,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/golang/snappy"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -242,7 +241,7 @@ func (t *freezerTable) repair() error {
 	for contentExp != contentSize {
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"indexed": common.StorageSize(contentExp),
 				"stored":  common.StorageSize(contentSize),
 			}).Warn("Truncating dangling head")
@@ -253,7 +252,7 @@ func (t *freezerTable) repair() error {
 		}
 		// Truncate the index to point within the head file
 		if contentExp > contentSize {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"indexed": common.StorageSize(contentExp),
 				"stored":  common.StorageSize(contentSize),
 			}).Warn("Truncating dangling indexes")
@@ -298,7 +297,7 @@ func (t *freezerTable) repair() error {
 	if err := t.preopen(); err != nil {
 		return err
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"items": t.items,
 		"size":  common.StorageSize(t.headBytes),
 	}).Debug("Chain freezer table opened")

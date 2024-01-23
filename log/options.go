@@ -23,17 +23,17 @@ const (
 )
 
 // Options is a function type that can be used to configure the logger
-type Options func(*LogWrapper)
+type Options func(*Logger)
 
 // WithLevel configures the log level. If level is not specified, default to InfoLevel
 // If level is debug or trace, report caller is enabled
 func WithLevel(level string) Options {
-	return func(lw *LogWrapper) {
+	return func(logger *Logger) {
 		l, err := logrus.ParseLevel(level)
 		if err != nil {
-			lw.entry.Logger.SetLevel(logrus.InfoLevel)
+			logger.SetLevel(logrus.InfoLevel)
 		} else {
-			lw.entry.Logger.SetLevel(l)
+			logger.SetLevel(l)
 		}
 		formatter := &logrus.TextFormatter{
 			ForceColors:     true,
@@ -41,20 +41,20 @@ func WithLevel(level string) Options {
 			FullTimestamp:   true,
 			TimestampFormat: "01-02|15:04:05.000",
 		}
-		lw.entry.Logger.SetFormatter(formatter)
+		logger.SetFormatter(formatter)
 	}
 }
 
 // WithNullLogger sets the logger to discard all output
 func WithNullLogger() Options {
-	return func(lw *LogWrapper) {
-		lw.entry.Logger.SetOutput(io.Discard)
+	return func(logger *Logger) {
+		logger.SetOutput(io.Discard)
 	}
 }
 
 // WithOutput configures the output destination
 func WithOutput(outputs ...io.Writer) Options {
-	return func(lw *LogWrapper) {
+	return func(logger *Logger) {
 		for _, output := range outputs {
 			switch v := output.(type) {
 			// if output is a lumberjack logger, add a hook to write to file
@@ -68,9 +68,9 @@ func WithOutput(outputs ...io.Writer) Options {
 						TimestampFormat: "01-02|15:04:05.000",
 					},
 				}
-				lw.entry.Logger.AddHook(&hook)
+				logger.AddHook(&hook)
 			default:
-				lw.entry.Logger.SetOutput(output)
+				logger.SetOutput(output)
 			}
 		}
 	}

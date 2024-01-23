@@ -27,11 +27,11 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
-	"github.com/sirupsen/logrus"
 )
 
 type QuaistatsConfig struct {
@@ -179,7 +179,7 @@ type Config struct {
 }
 
 // CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.
-func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location, config *progpow.Config, notify []string, noverify bool, db ethdb.Database, logger *logrus.Logger) consensus.Engine {
+func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location, config *progpow.Config, notify []string, noverify bool, db ethdb.Database, logger *log.Logger) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case progpow.ModeFake:
@@ -202,7 +202,7 @@ func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location
 }
 
 // CreateBlake3ConsensusEngine creates a progpow consensus engine for the given chain configuration.
-func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *blake3pow.Config, notify []string, noverify bool, db ethdb.Database, logger *logrus.Logger) consensus.Engine {
+func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *blake3pow.Config, notify []string, noverify bool, db ethdb.Database, logger *log.Logger) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case blake3pow.ModeFake:

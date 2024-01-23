@@ -29,9 +29,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	log "github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/rs/cors"
-	"github.com/sirupsen/logrus"
 )
 
 // httpConfig is the JSON-RPC/HTTP configuration.
@@ -55,7 +55,7 @@ type rpcHandler struct {
 }
 
 type httpServer struct {
-	logger   *logrus.Logger
+	logger   *log.Logger
 	timeouts rpc.HTTPTimeouts
 	mux      http.ServeMux // registered handlers go here
 
@@ -80,7 +80,7 @@ type httpServer struct {
 	handlerNames map[string]string
 }
 
-func newHTTPServer(logger *logrus.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+func newHTTPServer(logger *log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	h := &httpServer{logger: logger, timeouts: timeouts, handlerNames: make(map[string]string)}
 
 	h.httpHandler.Store((*rpcHandler)(nil))
@@ -156,7 +156,7 @@ func (h *httpServer) start() error {
 		return nil
 	}
 	// Log http endpoint.
-	h.logger.WithFields(logrus.Fields{
+	h.logger.WithFields(log.Fields{
 		"endpoint": listener.Addr(),
 		"prefix":   h.httpConfig.prefix,
 		"cors":     strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
@@ -173,7 +173,7 @@ func (h *httpServer) start() error {
 	for _, path := range paths {
 		name := h.handlerNames[path]
 		if !logged[name] {
-			h.logger.WithFields(logrus.Fields{
+			h.logger.WithFields(log.Fields{
 				"handler": name,
 				"url":     "http://" + listener.Addr().String() + path,
 			}).Info("HTTP handler registered")
@@ -475,9 +475,9 @@ func newGzipHandler(next http.Handler) http.Handler {
 
 // RegisterApis checks the given modules' availability, generates an allowlist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool, logger *logrus.Logger) error {
+func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool, logger *log.Logger) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"unavailable": bad,
 			"available":   available,
 		}).Error("Unavailable modules in HTTP API list")

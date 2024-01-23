@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -581,7 +580,7 @@ func (c *Client) dispatch(codec ServerCodec) {
 
 		// Reconnect:
 		case newcodec := <-c.reconnected:
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"reading": reading,
 				"conn":    newcodec.remoteAddr(),
 			}).Debug("RPC client reconnected")

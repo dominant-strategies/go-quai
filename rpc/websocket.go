@@ -29,7 +29,6 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -139,7 +138,7 @@ func ruleAllowsOrigin(allowedOrigin string, browserOrigin string) bool {
 	)
 	allowedScheme, allowedHostname, allowedPort, err = parseOriginURL(allowedOrigin)
 	if err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"spec": allowedOrigin,
 			"err":  err,
 		}).Warn("Error parsing allowed origin specification")
@@ -147,7 +146,7 @@ func ruleAllowsOrigin(allowedOrigin string, browserOrigin string) bool {
 	}
 	browserScheme, browserHostname, browserPort, err = parseOriginURL(browserOrigin)
 	if err != nil {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"origin": browserOrigin,
 			"err":    err,
 		}).Warn("Error parsing browser 'Origin' field")

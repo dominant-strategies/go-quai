@@ -26,7 +26,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 )
 
 // DumpConfig is a set of options to control what portions of the statewill be
@@ -185,7 +184,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		c.OnAccount(internal, account)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"at":       it.Key,
 				"accounts": accounts,
 				"elapsed":  common.PrettyDuration(time.Since(start)),
@@ -202,7 +201,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	if missingPreimages > 0 {
 		log.WithField("missing", missingPreimages).Warn("Dump incomplete due to missing preimages")
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"accounts": accounts,
 		"elapsed":  common.PrettyDuration(time.Since(start)),
 	}).Info("Trie dumping complete")

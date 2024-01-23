@@ -29,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/sirupsen/logrus"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -192,7 +191,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		gas = uint64(*args.Gas)
 	}
 	if globalGasCap != 0 && globalGasCap < gas {
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"requested": gas,
 			"cap":       globalGasCap,
 		}).Warn("Caller gas above allowance, capping")

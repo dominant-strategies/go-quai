@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -558,7 +557,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	if err := batch.Write(); err != nil {
 		log.WithField("err", err).Fatal("Failed to write leftover snapshot")
 	}
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"root":     bottom.root,
 		"complete": base.genMarker == nil,
 	}).Debug("Journalled disk layer")

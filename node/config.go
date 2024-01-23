@@ -27,7 +27,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	log "github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -148,7 +147,7 @@ type Config struct {
 	WSExposeAll bool `toml:",omitempty"`
 
 	// Logger is a custom logger to use with the p2p.Server.
-	Logger *logrus.Logger `toml:",omitempty"`
+	Logger *log.Logger `toml:",omitempty"`
 
 	staticNodesWarning     bool
 	trustedNodesWarning    bool

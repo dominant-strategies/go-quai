@@ -28,7 +28,6 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -232,7 +231,7 @@ func Test_checkPath(t *testing.T) {
 func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsConfig) *httpServer {
 	t.Helper()
 
-	srv := newHTTPServer(test*logrus.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts)
+	srv := newHTTPServer(test*log.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts)
 	assert.NoError(t, srv.enableRPC(nil, *conf))
 	if ws {
 		assert.NoError(t, srv.enableWS(nil, *wsConf))

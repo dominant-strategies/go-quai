@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/sirupsen/logrus"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -59,7 +58,7 @@ type handler struct {
 	rootCtx        context.Context                // canceled by close()
 	cancelRoot     func()                         // cancel function for rootCtx
 	conn           jsonWriter                     // where responses will be sent
-	log            *logrus.Logger
+	log            *log.Logger
 	allowSubscribe bool
 
 	subLock    sync.Mutex
@@ -236,7 +235,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"reqid": idForLog{msg.ID},
 			"t":     time.Since(start),
 		}).Trace("Handled RPC response")

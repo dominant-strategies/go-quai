@@ -28,8 +28,8 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/sirupsen/logrus"
 )
 
 var exponentialBackoffCeilingSecs int64 = 60 // 1 minute
@@ -40,11 +40,11 @@ type Client struct {
 }
 
 // Dial connects a client to the given URL.
-func Dial(rawurl string, logger *logrus.Logger) (*Client, error) {
+func Dial(rawurl string, logger *log.Logger) (*Client, error) {
 	return DialContext(context.Background(), rawurl, logger)
 }
 
-func DialContext(ctx context.Context, rawurl string, logger *logrus.Logger) (*Client, error) {
+func DialContext(ctx context.Context, rawurl string, logger *log.Logger) (*Client, error) {
 	connectStatus := false
 	attempts := 0
 
@@ -65,7 +65,7 @@ func DialContext(ctx context.Context, rawurl string, logger *logrus.Logger) (*Cl
 		}
 
 		// should only get here if the ffmpeg record stream process dies
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"attempts": attempts,
 			"delay":    delaySecs,
 			"url":      rawurl,

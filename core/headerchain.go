@@ -18,11 +18,11 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -73,12 +73,12 @@ type HeaderChain struct {
 	heads         []*types.Header
 	slicesRunning []common.Location
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, logger *logrus.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, logger *log.Logger) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 	nodeCtx := chainConfig.Location.Context()
@@ -273,7 +273,7 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 // Append
 func (hc *HeaderChain) AppendHeader(header *types.Header) error {
 	nodeCtx := hc.NodeCtx()
-	hc.logger.WithFields(logrus.Fields{
+	hc.logger.WithFields(log.Fields{
 		"Hash":     header.Hash(),
 		"Number":   header.NumberArray(),
 		"Location": header.Location,
@@ -337,7 +337,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	// write the head block hash to the db
 	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
-	hc.logger.WithFields(logrus.Fields{
+	hc.logger.WithFields(log.Fields{
 		"Hash":   head.Hash(),
 		"Number": head.NumberArray(),
 	}).Info("Setting the current header")

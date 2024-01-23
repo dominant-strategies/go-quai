@@ -36,7 +36,6 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/sirupsen/logrus"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/shirou/gopsutil/cpu"
@@ -482,7 +481,7 @@ func (s *Service) initializeURLMap() map[string]string {
 
 func (s *Service) handleBlock(block *types.Block) {
 	// Cache Block
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"detailsQueueSize":     s.detailStatsQueue.Size(),
 		"appendTimeQueueSize":  s.appendTimeStatsQueue.Size(),
 		"transactionQueueSize": s.transactionStatsQueue.Size(),
@@ -669,7 +668,7 @@ func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
 			log.WithField("err", err).Error("Failed to read response body")
 			return err
 		}
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"status": resp.Status,
 			"body":   string(body),
 		}).Error("Received non-OK response")
@@ -832,7 +831,7 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 			log.WithField("err", err).Error("Failed to read response body")
 			return err
 		}
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"status": resp.Status,
 			"body":   string(body),
 		}).Error("Received non-OK response")

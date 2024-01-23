@@ -29,7 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
-	"github.com/sirupsen/logrus"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // ChainIndexerBackend defines the methods needed to process chain segments in
@@ -93,14 +93,14 @@ type ChainIndexer struct {
 
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
-	logger *logrus.Logger
+	logger *log.Logger
 	lock   sync.Mutex
 }
 
 // NewChainIndexer creates a new chain indexer to do background processing on
 // chain segments of a given size after certain number of confirmations passed.
 // The throttling parameter might be used to prevent database thrashing.
-func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string, nodeCtx int, logger *logrus.Logger) *ChainIndexer {
+func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string, nodeCtx int, logger *log.Logger) *ChainIndexer {
 	c := &ChainIndexer{
 		chainDb:     chainDb,
 		indexDb:     indexDb,
@@ -324,7 +324,7 @@ func (c *ChainIndexer) updateLoop(nodeCtx int) {
 					}
 				} else {
 					// If processing failed, don't retry until further notification
-					c.logger.WithFields(logrus.Fields{
+					c.logger.WithFields(log.Fields{
 						"section": section,
 						"error":   err,
 					}).Debug("Section processing failed")

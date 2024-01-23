@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"errors"
 	"io/ioutil"
-	"log"
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 var Version CachedVersion

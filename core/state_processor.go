@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -34,10 +36,9 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -119,7 +120,7 @@ type StateProcessor struct {
 	snaps  *snapshot.Tree
 	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration // Accumulates canonical block processing for trie dumping
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 // NewStateProcessor initialises a new StateProcessor.
@@ -162,7 +163,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	// If periodic cache journal is required, spin it up.
 	if sp.cacheConfig.TrieCleanRejournal > 0 {
 		if sp.cacheConfig.TrieCleanRejournal < time.Minute {
-			sp.logger.WithFields(logrus.Fields{
+			sp.logger.WithFields(log.Fields{
 				"provided": sp.cacheConfig.TrieCleanRejournal,
 				"updated":  time.Minute,
 			}).Warn("Sanitizing invalid trie cache journal time")
@@ -298,14 +299,14 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	p.engine.Finalize(p.hc, header, statedb, block.Transactions(), block.Uncles())
 	time5 := common.PrettyDuration(time.Since(start))
 
-	p.logger.WithFields(logrus.Fields{
+	p.logger.WithFields(log.Fields{
 		"signing time":       common.PrettyDuration(timeSign),
 		"prepare state time": common.PrettyDuration(timePrepare),
 		"etx time":           common.PrettyDuration(timeEtx),
 		"tx time":            common.PrettyDuration(timeTx),
 	}).Debug("Total Tx Processing Time")
 
-	p.logger.WithFields(logrus.Fields{
+	p.logger.WithFields(log.Fields{
 		"time1": time1,
 		"time2": time2,
 		"time3": time3,
@@ -313,7 +314,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		"time5": time5,
 	}).Debug("Time taken in Process")
 
-	p.logger.WithFields(logrus.Fields{
+	p.logger.WithFields(log.Fields{
 		"signing time":                common.PrettyDuration(timeSign),
 		"senders cache time":          common.PrettyDuration(timeSenders),
 		"percent cached internal txs": fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100),
@@ -325,7 +326,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	return receipts, allLogs, statedb, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *logrus.Logger) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
 	nodeLocation := config.Location
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
@@ -413,7 +414,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		return nil, err
 	}
 	if block.Hash() != blockHash {
-		p.logger.WithFields(logrus.Fields{
+		p.logger.WithFields(log.Fields{
 			"oldHash": blockHash,
 			"newHash": block.Hash(),
 		}).Warn("Block hash changed after Processing the block")
@@ -450,7 +451,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	rawdb.WriteEtxSet(batch, header.Hash(), header.NumberU64(nodeCtx), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
-	p.logger.WithFields(logrus.Fields{
+	p.logger.WithFields(log.Fields{
 		"t1":   time1,
 		"t2":   time2,
 		"t3":   time3,
@@ -472,7 +473,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *logrus.Logger) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
 	nodeCtx := config.Location.Context()
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
@@ -672,7 +673,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		current := newHeads[i]
 		// Print progress logs if long enough time elapsed
 		if time.Since(logged) > 8*time.Second && report {
-			p.logger.WithFields(logrus.Fields{
+			p.logger.WithFields(log.Fields{
 				"block":     current.NumberU64(nodeCtx) + 1,
 				"target":    origin,
 				"remaining": origin - current.NumberU64(nodeCtx) - 1,
@@ -714,7 +715,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	}
 	if report {
 		nodes, imgs := database.TrieDB().Size()
-		p.logger.WithFields(logrus.Fields{
+		p.logger.WithFields(log.Fields{
 			"block":   current.NumberU64(nodeCtx),
 			"elapsed": time.Since(start),
 			"nodes":   nodes,

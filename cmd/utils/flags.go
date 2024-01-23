@@ -719,7 +719,7 @@ func CreateAndBindFlag(flag Flag, cmd *cobra.Command) {
 	case *BigIntValue:
 		cmd.PersistentFlags().VarP(val, flag.GetName(), flag.GetAbbreviation(), flag.GetUsage())
 	default:
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"flag": flag.GetName(),
 			"type": fmt.Sprintf("%T", val),
 		}).Error("Flag type not supported")
@@ -819,7 +819,7 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 }
 
 // setDomUrl sets the dominant chain websocket url.
-func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *logrus.Logger) {
+func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *log.Logger) {
 	// only set the dom url if the node is not prime
 	if nodeLocation != nil {
 		if len(nodeLocation) == 1 {
@@ -950,7 +950,7 @@ func MakePasswordList() []string {
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
-func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *logrus.Logger) {
+func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *log.Logger) {
 	setHTTP(cfg, nodeLocation)
 	setWS(cfg, nodeLocation)
 	setNodeUserIdent(cfg)
@@ -1201,7 +1201,7 @@ func CheckExclusive(args ...interface{}) {
 }
 
 // SetQuaiConfig applies quai-related command line flags to the config.
-func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location, logger *logrus.Logger) {
+func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location, logger *log.Logger) {
 	cfg.NodeLocation = nodeLocation
 	// only set etherbase if its a zone chain
 	if len(nodeLocation) == 2 {

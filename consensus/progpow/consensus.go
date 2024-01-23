@@ -15,9 +15,9 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 	"modernc.org/mathutil"
 )
 
@@ -512,7 +512,7 @@ func (progpow *Progpow) NodeLocation() common.Location {
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, logger *logrus.Logger) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, logger *log.Logger) {
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward(header)
 	nodeCtx := config.Location.Context()

@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -31,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -388,7 +388,7 @@ func (loc Location) SubIndex(nodeLocation Location) int {
 //     that slice is zone-0-0
 func (loc Location) SubInSlice(slice Location) Location {
 	if len(slice) <= len(loc) {
-		log.Println("cannot determine sub location, because slice location is not deeper than self")
+		log.Info("cannot determine sub location, because slice location is not deeper than self")
 		return nil
 	}
 	subLoc := append(loc, slice[len(loc)])
@@ -428,7 +428,7 @@ func (loc Location) Name() string {
 	case ZONE_CTX:
 		return regionName + zoneNum
 	default:
-		log.Println("cannot name invalid location")
+		log.Info("cannot name invalid location")
 		return "invalid-location"
 	}
 }

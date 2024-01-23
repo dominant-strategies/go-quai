@@ -31,7 +31,7 @@ import (
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/sirupsen/logrus"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 const (
@@ -59,7 +59,7 @@ type Database struct {
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 	closed   bool            // keep track of whether we're Closed
 
-	logger *logrus.Logger // Contextual logger tracking the database path
+	logger *log.Logger // Contextual logger tracking the database path
 
 	activeComp          int           // Current number of active compactions
 	compStartTime       time.Time     // The start time of the earliest currently-active compaction
@@ -103,7 +103,7 @@ func (d *Database) onWriteStallEnd() {
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, logger *logrus.Logger) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger) (*Database, error) {
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -111,7 +111,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, l
 	if handles < minHandles {
 		handles = minHandles
 	}
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"cache":   common.StorageSize(cache * 1024 * 1024),
 		"handles": handles,
 	}).Info("Allocating cache and file handles")

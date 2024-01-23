@@ -19,11 +19,11 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 	expireLru "github.com/hnlq715/golang-lru"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -233,7 +233,7 @@ type worker struct {
 	newTaskHook  func(*task) // Method to call upon receiving a new sealing task.
 	fullTaskHook func()      // Method to call before pushing the full sealing task.
 
-	logger *logrus.Logger
+	logger *log.Logger
 }
 
 type RollingAverage struct {
@@ -258,7 +258,7 @@ func (ra *RollingAverage) Average() time.Duration {
 	return ra.sum / time.Duration(len(ra.durations))
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool, processingState bool, logger *logrus.Logger) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.Header) bool, init bool, processingState bool, logger *log.Logger) *worker {
 	worker := &worker{
 		config:                         config,
 		chainConfig:                    chainConfig,
@@ -289,7 +289,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"provided": recommit,
 			"updated":  minRecommitInterval,
 		}).Warn("Sanitizing miner recommit interval")
@@ -505,7 +505,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 			start := time.Now()
 			w.fillTransactions(interrupt, work, block)
 			w.fillTransactionsRollingAverage.Add(time.Since(start))
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"count":   len(work.txs),
 				"elapsed": common.PrettyDuration(time.Since(start)),
 				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
@@ -536,7 +536,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, start time.Time) {
 	work.uncleMu.RLock()
 	if w.CurrentInfo(block.Header()) {
-		w.logger.WithFields(logrus.Fields{
+		w.logger.WithFields(log.Fields{
 			"number":   block.Number(w.hc.NodeCtx()),
 			"sealhash": block.Header().SealHash(),
 			"uncles":   len(work.uncles),
@@ -547,7 +547,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, s
 			"elapsed":  common.PrettyDuration(time.Since(start)),
 		}).Info("Commit new sealing work")
 	} else {
-		w.logger.WithFields(logrus.Fields{
+		w.logger.WithFields(log.Fields{
 			"number":   block.Number(w.hc.NodeCtx()),
 			"sealhash": block.Header().SealHash(),
 			"uncles":   len(work.uncles),
@@ -648,7 +648,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		gasUsed := env.header.GasUsed()
 		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
 		if err != nil {
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"err":     err,
 				"tx":      tx.Hash().Hex(),
 				"block":   env.header.Number,
@@ -701,7 +701,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"have": env.gasPool,
 				"want": params.TxGas,
 			}).Trace("Not enough gas for further transactions")
@@ -734,7 +734,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		case errors.Is(err, ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"sender": from,
 				"nonce":  tx.Nonce(),
 			}).Trace("Skipping transaction with low nonce")
@@ -742,7 +742,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		case errors.Is(err, ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"sender": from,
 				"nonce":  tx.Nonce(),
 			}).Trace("Skipping account with high nonce")
@@ -756,7 +756,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		case errors.Is(err, ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"sender": from,
 				"type":   tx.Type(),
 			}).Error("Skipping unsupported transaction type")
@@ -764,7 +764,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		case strings.Contains(err.Error(), "emits too many cross"): // This is ErrEtxLimitReached with more info
 			// Pop the unsupported transaction without shifting in the next from the account
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"sender": from,
 				"err":    err,
 			}).Trace("Etx limit exceeded for current block")
@@ -773,7 +773,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"hash":   tx.Hash(),
 				"sender": from,
 				"err":    err,
@@ -882,7 +882,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 				}
 				env.uncleMu.RUnlock()
 				if err := w.commitUncle(env, uncle.Header()); err != nil {
-					w.logger.WithFields(logrus.Fields{
+					w.logger.WithFields(log.Fields{
 						"hash":   hash,
 						"reason": err,
 					}).Trace("Possible uncle rejected")
@@ -1012,7 +1012,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 			env.uncleMu.RLock()
-			w.logger.WithFields(logrus.Fields{
+			w.logger.WithFields(log.Fields{
 				"number":     block.Number(w.hc.NodeCtx()),
 				"sealhash":   block.Header().SealHash(),
 				"uncles":     len(env.uncles),

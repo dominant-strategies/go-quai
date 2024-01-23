@@ -27,7 +27,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"github.com/sirupsen/logrus"
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch
@@ -65,7 +64,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		}
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
-			log.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"total":   frozen,
 				"number":  i,
 				"hash":    hash,
@@ -80,7 +79,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 	batch.Reset()
 
 	WriteHeadHeaderHash(db, hash)
-	log.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"blocks":  frozen,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("Initialized database from freezer")
@@ -146,7 +145,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		for data := range rlpCh {
 			var body types.Body
 			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
-				log.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"block": data.number,
 					"err":   err,
 				}).Warn("Failed to decode block body")
@@ -232,7 +231,7 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"blocks":  blocks,
 					"txs":     txs,
 					"tail":    lastNum,
@@ -253,14 +252,14 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	}
 	select {
 	case <-interrupt:
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"tail":    lastNum,
 			"elapsed": common.PrettyDuration(time.Since(start)),
 		}).Debug("Transaction indexing interrupted")
 	default:
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"tail":    lastNum,
@@ -339,7 +338,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"blocks":  blocks,
 					"txs":     txs,
 					"total":   to - from,
@@ -359,14 +358,14 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	}
 	select {
 	case <-interrupt:
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"total":   to - from,
 			"elapsed": common.PrettyDuration(time.Since(start)),
 		}).Debug("Transaction unindexing interrupted")
 	default:
-		log.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"total":   to - from,

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+
 	"math/big"
 	"os"
 
@@ -34,9 +35,9 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/sirupsen/logrus"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -154,11 +155,11 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *logrus.Logger) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
 	return SetupGenesisBlockWithOverride(db, genesis, nodeLocation, logger)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *logrus.Logger) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -441,7 +442,7 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	}
 }
 
-func ReadGenesisAlloc(filename string, logger *logrus.Logger) map[string]GenesisAccount {
+func ReadGenesisAlloc(filename string, logger *log.Logger) map[string]GenesisAccount {
 	jsonFile, err := os.Open(filename)
 	if err != nil {
 		logger.Error(err.Error())
