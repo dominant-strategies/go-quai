@@ -70,28 +70,30 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	g.subscriptions[topicName] = subscription
 
 	go func(sub *pubsub.Subscription) {
-		log.Infof("waiting for next message on subscription: %s", sub.Topic())
-		msg, err := sub.Next(g.ctx)
-		if err != nil {
-			// if context was cancelled, then we are shutting down
-			if g.ctx.Err() != nil {
+		log.Debugf("waiting for first message on subscription: %s", sub.Topic())
+		for {
+			msg, err := sub.Next(g.ctx)
+			if err != nil {
+				// if context was cancelled, then we are shutting down
+				if g.ctx.Err() != nil {
+					return
+				}
+				log.Errorf("error getting next message from subscription: %s", err)
+			}
+			log.Tracef("received message on topic: %s", topicName)
+
+			var data interface{}
+			// unmarshal the received data depending on the topic's type
+			err = pb.UnmarshalAndConvert(msg.Data, &data)
+			if err != nil {
+				log.Errorf("error unmarshalling data: %s", err)
 				return
 			}
-			log.Errorf("error getting next message from subscription: %s", err)
-		}
-		log.Debugf("received message on topic: %s", *msg.Topic)
 
-		var data interface{}
-		// unmarshal the received data depending on the topic's type
-		err = pb.UnmarshalAndConvert(msg.Data, &data)
-		if err != nil {
-			log.Errorf("error unmarshalling data: %s", err)
-			return
-		}
-
-		// handle the received data
-		if g.onReceived != nil {
-			g.onReceived(msg.ReceivedFrom, data)
+			// handle the received data
+			if g.onReceived != nil {
+				g.onReceived(msg.ReceivedFrom, data)
+			}
 		}
 	}(subscription)
 
