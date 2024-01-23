@@ -8,6 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type Fields = logrus.Fields
+
 const (
 	// default log level
 	defaultLogLevel = logrus.InfoLevel
