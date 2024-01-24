@@ -25,6 +25,7 @@ help:
 mocks:
 	@echo "Generating mocks"
 	@ mockgen -package mocks -destination p2p/protocol/mocks/mockedQuaiP2PNode.go -source=p2p/protocol/interface.go QuaiP2PNode
+	@ mockgen -package mocks -destination common/mocks/mockedStream.go -source=common/mocks/stream.go Stream
 
 ## generate protobuf files
 protogen:
