@@ -209,22 +209,6 @@ func NewRange(l, h uint8) addrPrefixRange {
 	}
 }
 
-var (
-	locationToPrefixRange = make(map[string]addrPrefixRange)
-)
-
-func init() {
-	locationToPrefixRange["cyprus1"] = NewRange(0, 29)
-	locationToPrefixRange["cyprus2"] = NewRange(30, 58)
-	locationToPrefixRange["cyprus3"] = NewRange(59, 87)
-	locationToPrefixRange["paxos1"] = NewRange(88, 115)
-	locationToPrefixRange["paxos2"] = NewRange(116, 143)
-	locationToPrefixRange["paxos3"] = NewRange(144, 171)
-	locationToPrefixRange["hydra1"] = NewRange(172, 199)
-	locationToPrefixRange["hydra2"] = NewRange(200, 227)
-	locationToPrefixRange["hydra3"] = NewRange(228, 255)
-}
-
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress InternalAddress
 
@@ -310,6 +294,18 @@ func (ma *MixedcaseAddress) Original() string {
 // region[0] = [0]
 // zone[1,2] = [1, 2]
 type Location []byte
+
+// Implements the shard topology defined in QIP2
+func LocationFromAddressBytes(addr []byte) Location {
+	region := addr[0] & 0xF0 // bits[0..3]
+	zone := addr[0] & 0x0F   // bits[4..7]
+	return []byte{region, zone}
+}
+
+// Constructs the byte prefix from the location type
+func (loc Location) BytePrefix() byte {
+	return loc[0]<<4 + loc[1]
+}
 
 func (loc Location) Region() int {
 	if len(loc) >= 1 {
@@ -460,18 +456,13 @@ func (loc Location) CommonDom(cmp Location) Location {
 	return common
 }
 
+// Determines if the given address belongs to the location
 func (l Location) ContainsAddress(a Address) bool {
-	// ContainAddress can only be called for a zone chain
 	if l.Context() != ZONE_CTX {
 		return false
+	} else {
+		return l.BytePrefix() == a.Bytes()[0]
 	}
-	prefix := a.Bytes()[0]
-	prefixRange, ok := locationToPrefixRange[l.Name()]
-	if !ok {
-		log.Fatal("unable to get address prefix range for location")
-	}
-	// Ranges are fully inclusive
-	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
 }
 
 func (l Location) RPCMarshal() []hexutil.Uint64 {
@@ -489,16 +480,11 @@ func IsInChainScope(b []byte, nodeLocation Location) bool {
 	if nodeCtx != ZONE_CTX {
 		return false
 	}
+	// TODO: this shouldn't happen. The zero address should not be special. Each chain may use its own zero address.
 	if BytesToHash(b) == ZeroAddr.Hash() {
 		return true
 	}
-	prefix := b[0]
-	prefixRange, ok := locationToPrefixRange[nodeLocation.Name()]
-	if !ok {
-		log.Fatal("unable to get address prefix range for location")
-	}
-	// Ranges are fully inclusive
-	return uint8(prefix) >= prefixRange.lo && uint8(prefix) <= prefixRange.hi
+	return b[0] == nodeLocation.BytePrefix()
 }
 
 func OrderToString(order int) string {
