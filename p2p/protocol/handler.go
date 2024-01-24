@@ -36,30 +36,31 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			// TODO: handle error
 			continue
 		}
-		decodedType, loc, hash, err := pb.DecodeQuaiRequest(data)
+		id, decodedType, loc, hash, err := pb.DecodeQuaiRequest(data)
 		if err != nil {
 			log.Errorf("error decoding quai request: %s", err)
 			// TODO: handle error
 			continue
 		}
+		log.Debugf("Received request id: %d for %T, location %v hash %s from peer %s", id, decodedType, loc, hash, stream.Conn().RemotePeer())
 
 		switch decodedType.(type) {
 		case *types.Block:
-			err = handleBlockRequest(loc, hash, stream, node)
+			err = handleBlockRequest(id, loc, hash, stream, node)
 			if err != nil {
 				log.Errorf("error handling block request: %s", err)
 				// TODO: handle error
 				continue
 			}
 		case *types.Header:
-			err = handleHeaderRequest(loc, hash, stream, node)
+			err = handleHeaderRequest(id, loc, hash, stream, node)
 			if err != nil {
 				log.Errorf("error handling header request: %s", err)
 				// TODO: handle error
 				continue
 			}
 		case *types.Transaction:
-			err = handleTransactionRequest(loc, hash, stream, node)
+			err = handleTransactionRequest(id, loc, hash, stream, node)
 			if err != nil {
 				log.Errorf("error handling transaction request: %s", err)
 				// TODO: handle error
@@ -72,18 +73,20 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 
 		}
 	}
+	log.Tracef("Exiting Quai Protocol Handler")
 }
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
-func handleBlockRequest(loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
 	// check if we have the block in our cache or database
 	block := node.GetBlock(hash, loc)
 	if block == nil {
 		log.Debugf("block not found")
 		// TODO: handle block not found
 	}
+	log.Debugf("block found %s", block.Hash())
 	// create a Quai Message Response with the block
-	data, err := pb.EncodeQuaiResponse(block)
+	data, err := pb.EncodeQuaiResponse(id, block)
 	if err != nil {
 		return err
 	}
@@ -96,16 +99,16 @@ func handleBlockRequest(loc common.Location, hash common.Hash, stream network.St
 }
 
 // Seeks the header in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
-func handleHeaderRequest(loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+func handleHeaderRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
 	header := node.GetHeader(hash, loc)
 	if header == nil {
 		log.Debugf("header not found")
 		// TODO: handle header not found
 		return nil
 	}
-	log.Tracef("header found: %+v", header)
+	log.Debugf("header found %s", header.Hash())
 	// create a Quai Message Response with the header
-	data, err := pb.EncodeQuaiResponse(header)
+	data, err := pb.EncodeQuaiResponse(id, header)
 	if err != nil {
 		return err
 	}
@@ -117,6 +120,6 @@ func handleHeaderRequest(loc common.Location, hash common.Hash, stream network.S
 	return nil
 }
 
-func handleTransactionRequest(loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+func handleTransactionRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
 	panic("TODO: implement")
 }

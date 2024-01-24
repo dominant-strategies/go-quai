@@ -15,10 +15,7 @@ import (
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
-//
-// If a block is not found, an error is returned
 func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash common.Hash, datatype interface{}) (interface{}, error) {
-	// Open a stream to the peer using a specific protocol for block requests
 	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
 	if err != nil {
 		// TODO: should we report this peer for failure to participate?
@@ -26,36 +23,59 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 	}
 	defer stream.Close()
 
+	// Get a new request ID
+	id := protocol.GetRequestIDManager().GenerateRequestID()
+
 	// Create the corresponding data request
-	blockReqBytes, err := pb.EncodeQuaiRequest(location, hash, datatype)
+	requestBytes, err := pb.EncodeQuaiRequest(id, location, hash, datatype)
 	if err != nil {
 		return nil, err
 	}
 
 	// Send the request to the peer
-	err = common.WriteMessageToStream(stream, blockReqBytes)
+	err = common.WriteMessageToStream(stream, requestBytes)
 	if err != nil {
 		return nil, err
 	}
 
+	// Add request ID to the map of pending requests
+	protocol.GetRequestIDManager().AddRequestID(id)
+
 	// Read the response from the peer
-	blockResponseBytes, err := common.ReadMessageFromStream(stream)
+	responseBytes, err := common.ReadMessageFromStream(stream)
 	if err != nil {
 		return nil, err
 	}
 
 	// Unmarshal the response
-	recvd, err := pb.DecodeQuaiResponse(blockResponseBytes)
+	recvdID, recvdType, err := pb.DecodeQuaiResponse(responseBytes)
 	if err != nil {
 		// TODO: should we report this peer for an invalid response?
 		return nil, err
 	}
 
+	// Check the received request ID matches the request
+	if recvdID != id {
+		log.Warn("peer returned unexpected request ID")
+		panic("TODO: implement")
+	}
+
+	// Remove request ID from the map of pending requests
+	protocol.GetRequestIDManager().RemoveRequestID(id)
+
 	// Check the received data type & hash matches the request
 	switch datatype.(type) {
 	case *types.Block:
-		if block, ok := recvd.(*types.Block); ok && block.Hash() == hash {
+		if block, ok := recvdType.(*types.Block); ok && block.Hash() == hash {
 			return block, nil
+		}
+	case *types.Header:
+		if header, ok := recvdType.(*types.Header); ok && header.Hash() == hash {
+			return header, nil
+		}
+	case *types.Transaction:
+		if tx, ok := recvdType.(*types.Transaction); ok && tx.Hash() == hash {
+			return tx, nil
 		}
 	default:
 		log.Warn("peer returned unexpected type")
