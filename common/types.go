@@ -297,8 +297,8 @@ type Location []byte
 
 // Implements the shard topology defined in QIP2
 func LocationFromAddressBytes(addr []byte) Location {
-	region := addr[0] & 0xF0 // bits[0..3]
-	zone := addr[0] & 0x0F   // bits[4..7]
+	region := (addr[0] & 0xF0) >> 4 // bits[0..3]
+	zone := addr[0] & 0x0F          // bits[4..7]
 	return []byte{region, zone}
 }
 
