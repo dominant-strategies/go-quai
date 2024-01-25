@@ -14,6 +14,11 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	gopsutil "github.com/shirou/gopsutil/mem"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/common/fdlimit"
@@ -26,11 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
-	"github.com/pelletier/go-toml/v2"
-	gopsutil "github.com/shirou/gopsutil/mem"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var GlobalFlags = []Flag{ConfigDirFlag, DataDirFlag,
@@ -607,100 +607,41 @@ It handles three scenarios:
     If the user specifies a file path, the function expects a TOML file containing the coinbase addresses.
     The file should have a 'coinbases' section with shard-address mappings.
     Example:
-    Command: --coinbases /path/to/coinbases.toml
-    TOML Content:
-    [coinbases]
-    "00" = "0xAddress00"
-    "01" = "0xAddress01"
-    ...
-
- 2. Direct String Input:
-    If the user doesn't specify a file path but provides a string, the function expects a string in the format 'shard=address'.
-    Each shard-address pair should be separated by a comma.
-    Example:
-    Command: --coinbases "00=0xAddress00,01=0xAddress01"
-
- 3. Default Config File:
-    If no input is provided for the coinbase flag, the function falls back to the config file specified by the 'config-dir' flag.
-    Example:
-    In Config TOML:
-    ...
-    [coinbases]
-    "00" = "0xDefaultAddress00"
-    "01" = "0xDefaultAddress01"
-    ...
+    Command: --coinbases "0x00Address0, 0x01Address1, 0x02Address2, ..."
 
 The function reads the coinbase addresses and performs necessary validation as per the above scenarios.
 */
 func ParseCoinbaseAddresses() (map[string]string, error) {
 	coinbaseInput := viper.GetString("coinbases")
-	coinbaseConfig := struct {
-		Coinbases map[string]string `toml:"coinbases"`
-	}{
-		Coinbases: make(map[string]string),
+	coinbases := make(map[string]string)
+
+	if coinbaseInput == "" {
+		log.Info("No coinbase addresses provided")
+		return coinbases, nil
 	}
 
-	// Scenario 1: User specifies a file path
-	if _, err := os.Stat(coinbaseInput); err == nil {
-		fileContent, err := os.ReadFile(coinbaseInput)
-		if err != nil {
-			log.Fatalf("Failed to read coinbase file: %s", err)
-			return nil, err
+	for _, coinbase := range strings.Split(coinbaseInput, ",") {
+		coinbase = strings.TrimSpace(coinbase)
+		address := common.FromHex(coinbase)
+		location := common.LocationFromAddressBytes(address)
+		if _, exists := coinbases[location.Name()]; exists {
+			log.WithField("shard", location.Name()).Fatalf("Duplicate coinbase address for shard")
 		}
-		if err := toml.Unmarshal(fileContent, &coinbaseConfig); err != nil {
-			log.Fatalf("Invalid TOML in coinbase file: %s", err)
-			return nil, err
+		if err := isValidAddress(coinbase); err != nil {
+			log.WithField("err", err).Fatalf("Error parsing coinbase addresses")
 		}
-	} else if coinbaseInput != "" {
-		// Scenario 2: User provides direct string input
-		for _, coinbase := range strings.Split(coinbaseInput, ",") {
-			parts := strings.Split(strings.TrimSpace(coinbase), "=")
-			if len(parts) == 2 {
-				coinbaseConfig.Coinbases[parts[0]] = parts[1]
-			} else {
-				log.Fatalf("Invalid coinbase format: %s", coinbase)
-				return nil, fmt.Errorf("invalid coinbase format: %s", coinbase)
-			}
-		}
-	} else {
-		// Scenario 3: Fallback to default config file
-		log.Info("No coinbases specified, falling back to node config file")
-		defaultConfigPath := viper.GetString("config-dir") + "config.toml"
-		if defaultConfigPath != "" {
-			configFileContent, err := os.ReadFile(defaultConfigPath)
-			if err != nil {
-				log.Fatalf("Failed to read config file: %s", err)
-				return nil, err
-			}
-			if err := toml.Unmarshal(configFileContent, &coinbaseConfig); err != nil {
-				log.Fatalf("Invalid TOML in config file: %s", err)
-				return nil, err
-			}
-		}
+		coinbases[location.Name()] = coinbase
 	}
 
-	if len(coinbaseConfig.Coinbases) == 0 {
-		log.Fatalf("No coinbase addresses provided")
-		return nil, fmt.Errorf("no coinbase addresses provided")
-	}
+	log.Infof("Coinbase Addresses: %v", coinbases)
 
-	// Validates all addresses in coinbaseMap
-	for shard, address := range coinbaseConfig.Coinbases {
-		if err := isValidAddress(address, shard); err != nil {
-			return nil, err
-		}
-	}
-
-	log.Infof("Coinbase Addresses: %v", coinbaseConfig.Coinbases)
-
-	return coinbaseConfig.Coinbases, nil
+	return coinbases, nil
 }
 
-func isValidAddress(address string, shard string) error {
+func isValidAddress(address string) error {
 	re := regexp.MustCompile(`^(0x)?[0-9a-fA-F]{40}$`)
 	if !re.MatchString(address) {
-		log.Fatalf("Invalid Ethereum address: %s", address)
-		return fmt.Errorf("invalid Ethereum address: %s", address)
+		return fmt.Errorf("invalid address: %s", address)
 	}
 	return nil
 }
@@ -927,7 +868,7 @@ func setEtherbase(cfg *quaiconfig.Config) {
 		log.Fatalf("error parsing coinbase addresses: %s", err)
 	}
 	// TODO: Have to handle more shards in the future
-	etherbase := coinbaseMap["00"]
+	etherbase := coinbaseMap[cfg.NodeLocation.Name()]
 	// Convert the etherbase into an address and configure it
 	if etherbase != "" {
 		account, err := HexAddress(etherbase, cfg.NodeLocation)
