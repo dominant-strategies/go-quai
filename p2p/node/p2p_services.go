@@ -82,7 +82,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 	}
 
 	// If this peer responded with an invalid response, report them for misbehaving.
-	p.ReportBadPeer(peerID)
+	p.DemotePeer(peerID)
 	return nil, errors.New("invalid response")
 }
 

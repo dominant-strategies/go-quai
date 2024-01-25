@@ -3,7 +3,9 @@ package peerManager
 import (
 	"net"
 
+	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/ipfs/go-datastore"
+	"github.com/libp2p/go-libp2p/core"
 	basicConnGater "github.com/libp2p/go-libp2p/p2p/net/conngater"
 	basicConnMgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
 
@@ -25,6 +27,11 @@ type PeerManager interface {
 	UnblockAddr(ip net.IP) error
 	UnblockPeer(p peer.ID) error
 	UnblockSubnet(ipnet *net.IPNet) error
+
+	PromotePeer(core.PeerID)
+	DemotePeer(core.PeerID)
+	ProtectPeer(core.PeerID)
+	BanPeer(core.PeerID)
 }
 
 type BasicPeerManager struct {
@@ -47,4 +54,20 @@ func NewManager(low int, high int, datastore datastore.Datastore) (*BasicPeerMan
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
 	}, nil
+}
+
+func (pm *BasicPeerManager) PromotePeer(peer p2p.PeerID) {
+	pm.TagPeer(peer, "reward", 1)
+}
+
+func (pm *BasicPeerManager) DemotePeer(peer p2p.PeerID) {
+	pm.TagPeer(peer, "punishment", 1)
+}
+
+func (pm *BasicPeerManager) ProtectPeer(peer p2p.PeerID) {
+	pm.Protect(peer, "gen_protection")
+}
+
+func (pm *BasicPeerManager) BanPeer(peer p2p.PeerID) {
+	pm.BlockPeer(peer)
 }

@@ -41,6 +41,13 @@ type NetworkingAPI interface {
 	// Specify location, data hash, and data type to request
 	Request(common.Location, common.Hash, interface{}) chan interface{}
 
-	// Method to report a peer to the P2PClient as behaving maliciously
-	ReportBadPeer(core.PeerID)
+	// Methods to report a peer to the P2PClient as behaving maliciously
+	// Promote and Demote record the peer's behavior in the peer manager
+	PromotePeer(core.PeerID)
+	DemotePeer(core.PeerID)
+
+	// Protects the peer's connection from being pruned
+	ProtectPeer(core.PeerID)
+	// Ban will close the connection and prevent future connections with this peer
+	BanPeer(core.PeerID)
 }
