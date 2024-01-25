@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
-	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
@@ -22,6 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
 	"github.com/dominant-strategies/go-quai/quai"
@@ -39,15 +39,15 @@ type P2PNode struct {
 	// List of peers to introduce us to the network
 	bootpeers []peer.AddrInfo
 
-	// Set of nodes to block connections to/from
-	peerBlackList map[peer.ID]struct{}
-
 	// TODO: Consolidate into network interface, and consensus interface
 	// DHT instance
 	dht *dual.DHT
 
 	// Gossipsub instance
 	pubsub *pubsubManager.PubsubManager
+
+	// Peer management instance
+	peerManager peerManager.PeerManager
 
 	// Caches for each type of data we may receive
 	cache map[string]*lru.Cache[common.Hash, interface{}]
@@ -69,17 +69,16 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
-	// Define a connection manager
-	connectionManager, err := connmgr.NewConnManager(
+	// Peer manager handles both connection management and connection gating
+	peerMgr, err := peerManager.NewManager(
 		viper.GetInt(utils.MaxPeersFlag.Name),   // LowWater
 		2*viper.GetInt(utils.MaxPeersFlag.Name), // HighWater
+		nil,
 	)
 	if err != nil {
 		log.Fatalf("error creating libp2p connection manager: %s", err)
 		return nil, err
 	}
-
-	peerBlackList := make(map[peer.ID]struct{})
 
 	// Create the libp2p host
 	var dht *dual.DHT
@@ -97,10 +96,6 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 		// support Noise connections
 		libp2p.Security(noise.ID, noise.New),
-
-		// Let's prevent our peer from having too many
-		// connections by attaching a connection manager.
-		libp2p.ConnectionManager(connectionManager),
 
 		// Optionally attempt to configure network port mapping with UPnP
 		func() libp2p.Option {
@@ -125,8 +120,11 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		// nodes to coordinate the holepunch.
 		libp2p.EnableHolePunching(),
 
-		// Create a connection gater that will reject connections from peers in the blocklist
-		libp2p.ConnectionGater(pubsubManager.NewConnGater(&peerBlackList)),
+		// Connection manager will tag and prioritize peers
+		libp2p.ConnectionManager(peerMgr),
+
+		// Connection gater will prevent connections to blacklisted peers
+		libp2p.ConnectionGater(peerMgr),
 
 		// Let this host use the DHT to find other hosts
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
@@ -187,13 +185,13 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	}
 
 	return &P2PNode{
-		ctx:       ctx,
-		Host:      host,
-		bootpeers: bootpeers,
-		dht:       dht,
-		pubsub:    ps,
-		cache:     cache,
-		peerBlackList: peerBlackList,
+		ctx:         ctx,
+		Host:        host,
+		bootpeers:   bootpeers,
+		dht:         dht,
+		pubsub:      ps,
+		peerManager: peerMgr,
+		cache:       cache,
 	}, nil
 }
 

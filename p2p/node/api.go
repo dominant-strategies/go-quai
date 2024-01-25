@@ -174,7 +174,7 @@ func (p *P2PNode) ReportBadPeer(peer p2p.PeerID) {
 		"peer": peer,
 	}).Warn("Reporting peer for misbehaving")
 
-	p.peerBlackList[peer] = struct{}{}
+	p.peerManager.BlockPeer(peer)
 	p.Host.Network().ClosePeer(peer)
 }
 
