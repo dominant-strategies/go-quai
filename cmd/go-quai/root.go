@@ -31,15 +31,28 @@ func init() {
 }
 
 func rootCmdPreRun(cmd *cobra.Command, args []string) error {
-	// set logger inmediately after parsing cobra flags
-	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
-	log.SetGlobalLogger("", logLevel)
 	// set config path to read config file
 	configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
 	viper.SetConfigFile(configDir + constants.CONFIG_FILE_NAME)
-	viper.SetConfigType("yaml")
+	viper.SetConfigType(constants.CONFIG_FILE_TYPE)
+
+	// Write default config file if it does not exist
+	if _, err := os.Stat(configDir + constants.CONFIG_FILE_NAME); os.IsNotExist(err) {
+		err := utils.WriteDefaultConfigFile(configDir+constants.CONFIG_FILE_NAME, constants.CONFIG_FILE_TYPE)
+		if err != nil {
+			return err
+		}
+		log.WithField("path", configDir+constants.CONFIG_FILE_NAME).Info("Default config file created")
+	}
+
 	// load config from file and environment variables
 	utils.InitConfig()
+
+	// set logger inmediately after parsing cobra flags
+	logLevel := viper.GetString(utils.LogLevelFlag.Name)
+	log.WithField("logLevel", logLevel).Info("setting global logger")
+	log.SetGlobalLogger("", logLevel)
+
 	// bind cobra flags to viper instance
 	err := viper.BindPFlags(cmd.Flags())
 	if err != nil {
@@ -59,16 +72,6 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 		log.Fatalf("invalid environment: %s", environment)
 	}
 
-	// save config file if SAVE_CONFIG_FILE flag is set to true
-	saveConfigFile := viper.GetBool(utils.SaveConfigFlag.Name)
-	if saveConfigFile {
-		err := utils.SaveConfig()
-		if err != nil {
-			log.WithField("error", err).Error("error saving config file. Skipping...")
-		} else {
-			log.Debug("config file saved successfully")
-		}
-	}
 	log.WithField("options", viper.AllSettings()).Debug("config options loaded")
 	return nil
 }

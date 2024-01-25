@@ -38,6 +38,10 @@ func init() {
 		utils.CreateAndBindFlag(flag, startCmd)
 	}
 
+	for _, flag := range utils.TXPoolFlags {
+		utils.CreateAndBindFlag(flag, startCmd)
+	}
+
 	// Create and bind all rpc flags to the start command
 	for _, flag := range utils.RPCFlags {
 		utils.CreateAndBindFlag(flag, startCmd)

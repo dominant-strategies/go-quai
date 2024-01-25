@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -14,10 +15,12 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/pelletier/go-toml/v2"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/constants"
@@ -33,10 +36,19 @@ import (
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 )
 
-var GlobalFlags = []Flag{ConfigDirFlag, DataDirFlag,
+const (
+	c_GlobalFlagPrefix  = "global."
+	c_NodeFlagPrefix    = "node."
+	c_TXPoolPrefix      = "txpool."
+	c_RPCFlagPrefix     = "rpc."
+	c_MetricsFlagPrefix = "metrics."
+)
+
+var GlobalFlags = []Flag{
+	ConfigDirFlag,
+	DataDirFlag,
 	AncientDirFlag,
 	LogLevelFlag,
-	SaveConfigFlag,
 }
 
 var NodeFlags = []Flag{
@@ -50,7 +62,6 @@ var NodeFlags = []Flag{
 	MaxPeersFlag,
 	LocationFlag,
 	SoloFlag,
-	CoinbaseAddressFlag,
 	DBEngineFlag,
 	NetworkIdFlag,
 	SlicesRunningFlag,
@@ -63,17 +74,6 @@ var NodeFlags = []Flag{
 	TxLookupLimitFlag,
 	WhitelistFlag,
 	BloomFilterSizeFlag,
-	TxPoolLocalsFlag,
-	TxPoolNoLocalsFlag,
-	TxPoolJournalFlag,
-	TxPoolRejournalFlag,
-	TxPoolPriceLimitFlag,
-	TxPoolPriceBumpFlag,
-	TxPoolAccountSlotsFlag,
-	TxPoolGlobalSlotsFlag,
-	TxPoolAccountQueueFlag,
-	TxPoolGlobalQueueFlag,
-	TxPoolLifetimeFlag,
 	CacheFlag,
 	CacheDatabaseFlag,
 	CacheTrieFlag,
@@ -95,7 +95,24 @@ var NodeFlags = []Flag{
 	GpoIgnoreGasPriceFlag,
 	DomUrl,
 	SubUrls,
+	CoinbaseAddressFlag,
 	EnvironmentFlag,
+	QuaiStatsURLFlag,
+	SendFullStatsFlag,
+}
+
+var TXPoolFlags = []Flag{
+	TxPoolLocalsFlag,
+	TxPoolNoLocalsFlag,
+	TxPoolJournalFlag,
+	TxPoolRejournalFlag,
+	TxPoolPriceLimitFlag,
+	TxPoolPriceBumpFlag,
+	TxPoolAccountSlotsFlag,
+	TxPoolGlobalSlotsFlag,
+	TxPoolAccountQueueFlag,
+	TxPoolGlobalQueueFlag,
+	TxPoolLifetimeFlag,
 }
 
 var RPCFlags = []Flag{
@@ -113,8 +130,6 @@ var RPCFlags = []Flag{
 	PreloadJSFlag,
 	RPCGlobalTxFeeCapFlag,
 	RPCGlobalGasCapFlag,
-	QuaiStatsURLFlag,
-	SendFullStatsFlag,
 }
 
 var MetricsFlags = []Flag{
@@ -127,475 +142,519 @@ var MetricsFlags = []Flag{
 var (
 	// ****************************************
 	// **                                    **
-	// **         LOCAL FLAGS                **
-	// **                                    **
-	// ****************************************
-	IPAddrFlag = Flag{
-		Name:         "ipaddr",
-		Abbreviation: "i",
-		Value:        "0.0.0.0",
-		Usage:        "ip address to listen on" + generateEnvDoc("ipaddr"),
-	}
-
-	P2PPortFlag = Flag{
-		Name:         "port",
-		Abbreviation: "p",
-		Value:        "4001",
-		Usage:        "p2p port to listen on" + generateEnvDoc("port"),
-	}
-
-	BootNodeFlag = Flag{
-		Name:         "bootnode",
-		Abbreviation: "b",
-		Value:        false,
-		Usage:        "start the node as a boot node (no static peers required)" + generateEnvDoc("bootnode"),
-	}
-
-	BootPeersFlag = Flag{
-		Name:  "bootpeers",
-		Value: []string{},
-		Usage: "list of bootstrap peers. Syntax: <multiaddress1>,<multiaddress2>,..." + generateEnvDoc("bootpeers"),
-	}
-
-	PortMapFlag = Flag{
-		Name:  "portmap",
-		Value: true,
-		Usage: "enable NAT portmap" + generateEnvDoc("portmap"),
-	}
-
-	KeyFileFlag = Flag{
-		Name:         "private.key",
-		Abbreviation: "k",
-		Value:        "",
-		Usage:        "file containing node private key" + generateEnvDoc("keyfile"),
-	}
-
-	MinPeersFlag = Flag{
-		Name:  "min-peers",
-		Value: "5",
-		Usage: "minimum number of peers to maintain connectivity with" + generateEnvDoc("min-peers"),
-	}
-
-	MaxPeersFlag = Flag{
-		Name:  "max-peers",
-		Value: "50",
-		Usage: "maximum number of peers to maintain connectivity with" + generateEnvDoc("max-peers"),
-	}
-
-	LocationFlag = Flag{
-		Name:  "location",
-		Value: "",
-		Usage: "region and zone location" + generateEnvDoc("location"),
-	}
-
-	SoloFlag = Flag{
-		Name:         "solo",
-		Abbreviation: "s",
-		Value:        false,
-		Usage:        "start the node as a solo node (will not reach out to bootstrap peers)" + generateEnvDoc("solo"),
-	}
-
-	EnvironmentFlag = Flag{
-		Name:  "environment",
-		Value: params.LocalName,
-		Usage: "environment to run in (local, colosseum, garden, orchard, lighthouse, dev)" + generateEnvDoc("environment"),
-	}
-
-	// ****************************************
-	// **                                    **
 	// **         GLOBAL FLAGS               **
 	// **                                    **
 	// ****************************************
 	ConfigDirFlag = Flag{
-		Name:         "config-dir",
+		Name:         c_GlobalFlagPrefix + "config-dir",
 		Abbreviation: "c",
 		Value:        xdg.ConfigHome + "/" + constants.APP_NAME + "/",
-		Usage:        "config directory" + generateEnvDoc("config-dir"),
+		Usage:        "config directory" + generateEnvDoc(c_GlobalFlagPrefix+"config-dir"),
 	}
 
 	DataDirFlag = Flag{
-		Name:         "data-dir",
+		Name:         c_GlobalFlagPrefix + "data-dir",
 		Abbreviation: "d",
 		Value:        xdg.DataHome + "/" + constants.APP_NAME + "/",
-		Usage:        "data directory" + generateEnvDoc("data-dir"),
+		Usage:        "data directory" + generateEnvDoc(c_GlobalFlagPrefix+"data-dir"),
 	}
 
 	AncientDirFlag = Flag{
-		Name:  "datadir.ancient",
+		Name:  c_GlobalFlagPrefix + "datadir-ancient",
 		Value: "",
-		Usage: "Data directory for ancient chain segments (default = inside chaindata)" + generateEnvDoc("datadir.ancient"),
+		Usage: "Data directory for ancient chain segments (default = inside chaindata)" + generateEnvDoc(c_GlobalFlagPrefix+"datadir-ancient"),
 	}
 
 	LogLevelFlag = Flag{
-		Name:         "log-level",
+		Name:         c_GlobalFlagPrefix + "log-level",
 		Abbreviation: "l",
 		Value:        "info",
-		Usage:        "log level (trace, debug, info, warn, error, fatal, panic)" + generateEnvDoc("log-level"),
+		Usage:        "log level (trace, debug, info, warn, error, fatal, panic)" + generateEnvDoc(c_GlobalFlagPrefix+"log-level"),
+	}
+)
+
+var (
+	// ****************************************
+	// **                                    **
+	// **         NODE FLAGS                 **
+	// **                                    **
+	// ****************************************
+	IPAddrFlag = Flag{
+		Name:         c_NodeFlagPrefix + "ipaddr",
+		Abbreviation: "i",
+		Value:        "0.0.0.0",
+		Usage:        "ip address to listen on" + generateEnvDoc(c_NodeFlagPrefix+"ipaddr"),
 	}
 
-	SaveConfigFlag = Flag{
-		Name:         "save-config",
-		Abbreviation: "S",
-		Value:        false,
-		Usage:        "save/update config file with current config parameters" + generateEnvDoc("save-config"),
+	P2PPortFlag = Flag{
+		Name:         c_NodeFlagPrefix + "port",
+		Abbreviation: "p",
+		Value:        "4001",
+		Usage:        "p2p port to listen on" + generateEnvDoc(c_NodeFlagPrefix+"port"),
 	}
-	// ****************************************
-	// ** 								     **
-	// ** 	      IMPORTED FLAGS    		 **
-	// ** 								     **
-	// ****************************************
+
+	BootNodeFlag = Flag{
+		Name:         c_NodeFlagPrefix + "bootnode",
+		Abbreviation: "b",
+		Value:        false,
+		Usage:        "start the node as a boot node (no static peers required)" + generateEnvDoc(c_NodeFlagPrefix+"bootnode"),
+	}
+
+	BootPeersFlag = Flag{
+		Name:  c_NodeFlagPrefix + "bootpeers",
+		Value: []string{},
+		Usage: "list of bootstrap peers. Syntax: <multiaddress1>,<multiaddress2>,..." + generateEnvDoc(c_NodeFlagPrefix+"bootpeers"),
+	}
+
+	PortMapFlag = Flag{
+		Name:  c_NodeFlagPrefix + "portmap",
+		Value: true,
+		Usage: "enable NAT portmap" + generateEnvDoc(c_NodeFlagPrefix+"portmap"),
+	}
+
+	KeyFileFlag = Flag{
+		Name:         c_NodeFlagPrefix + "private-key",
+		Abbreviation: "k",
+		Value:        "",
+		Usage:        "file containing node private key" + generateEnvDoc(c_NodeFlagPrefix+"private-key"),
+	}
+
+	MinPeersFlag = Flag{
+		Name:  c_NodeFlagPrefix + "min-peers",
+		Value: "5",
+		Usage: "minimum number of peers to maintain connectivity with" + generateEnvDoc(c_NodeFlagPrefix+"min-peers"),
+	}
+
+	MaxPeersFlag = Flag{
+		Name:  c_NodeFlagPrefix + "max-peers",
+		Value: "50",
+		Usage: "maximum number of peers to maintain connectivity with" + generateEnvDoc(c_NodeFlagPrefix+"max-peers"),
+	}
+
+	LocationFlag = Flag{
+		Name:  c_NodeFlagPrefix + "location",
+		Value: "",
+		Usage: "region and zone location" + generateEnvDoc(c_NodeFlagPrefix+"location"),
+	}
+
+	SoloFlag = Flag{
+		Name:         c_NodeFlagPrefix + "solo",
+		Abbreviation: "s",
+		Value:        false,
+		Usage:        "start the node as a solo node (will not reach out to bootstrap peers)" + generateEnvDoc(c_NodeFlagPrefix+"solo"),
+	}
+
 	DBEngineFlag = Flag{
-		Name:  "db.engine",
+		Name:  c_NodeFlagPrefix + "db-engine",
 		Value: "leveldb",
-		Usage: "Backing database implementation to use ('leveldb' or 'pebble')" + generateEnvDoc("db.engine"),
+		Usage: "Backing database implementation to use ('leveldb' or 'pebble')" + generateEnvDoc(c_NodeFlagPrefix+"db-engine"),
 	}
 
 	NetworkIdFlag = Flag{
-		Name:  "networkid",
+		Name:  c_NodeFlagPrefix + "networkid",
 		Value: 1,
-		Usage: "Explicitly set network id (integer)(For testnets: use --garden)" + generateEnvDoc("networkid"),
+		Usage: "Explicitly set network id (integer)(For testnets: use --garden)" + generateEnvDoc(c_NodeFlagPrefix+"networkid"),
 	}
 
 	SlicesRunningFlag = Flag{
-		Name:  "slices",
+		Name:  c_NodeFlagPrefix + "slices",
 		Value: "",
-		Usage: "All the slices that are running on this node" + generateEnvDoc("slices"),
+		Usage: "All the slices that are running on this node" + generateEnvDoc(c_NodeFlagPrefix+"slices"),
 	}
 
 	GenesisNonceFlag = Flag{
-		Name:  "nonce",
+		Name:  c_NodeFlagPrefix + "nonce",
 		Value: 0,
-		Usage: "Nonce to use for the genesis block (integer)" + generateEnvDoc("nonce"),
+		Usage: "Nonce to use for the genesis block (integer)" + generateEnvDoc(c_NodeFlagPrefix+"nonce"),
 	}
+
 	DevPeriodFlag = Flag{
-		Name:  "dev.period",
+		Name:  c_NodeFlagPrefix + "dev-period",
 		Value: 0,
-		Usage: "Block period to use for the dev network (integer) (0 = mine only if transaction pending)" + generateEnvDoc("dev.period"),
+		Usage: "Block period to use for the dev network (integer) (0 = mine only if transaction pending)" + generateEnvDoc(c_NodeFlagPrefix+"dev-period"),
 	}
+
 	IdentityFlag = Flag{
-		Name:  "identity",
+		Name:  c_NodeFlagPrefix + "identity",
 		Value: "",
-		Usage: "Custom node name" + generateEnvDoc("identity"),
+		Usage: "Custom node name" + generateEnvDoc(c_NodeFlagPrefix+"identity"),
 	}
+
 	DocRootFlag = Flag{
-		Name:  "docroot",
+		Name:  c_NodeFlagPrefix + "docroot",
 		Value: xdg.DataHome,
-		Usage: "Document Root for HTTPClient file scheme" + generateEnvDoc("docroot"),
+		Usage: "Document Root for HTTPClient file scheme" + generateEnvDoc(c_NodeFlagPrefix+"docroot"),
 	}
-	MetricsEnabledFlag = Flag{
-		Name:  "metrics",
-		Value: false,
-		Usage: "Enable metrics collection and reporting" + generateEnvDoc("metrics"),
-	}
-	MetricsEnabledExpensiveFlag = Flag{
-		Name:  "metrics.expensive",
-		Value: false,
-		Usage: "Enable expensive metrics collection and reporting" + generateEnvDoc("metrics.expensive"),
-	}
-	MetricsHTTPFlag = Flag{
-		Name:  "metrics.addr",
-		Value: metrics_config.DefaultConfig.HTTP,
-		Usage: "Enable stand-alone metrics HTTP server listening interface" + generateEnvDoc("metrics.addr"),
-	}
-	MetricsPortFlag = Flag{
-		Name:  "metrics.port",
-		Value: metrics_config.DefaultConfig.Port,
-		Usage: "Metrics HTTP server listening port" + generateEnvDoc("metrics.port"),
-	}
-	// ****************************************
-	// ** 								     **
-	// ** 	      PY FLAGS    				 **
-	// ** 								     **
-	// ****************************************
+
 	GCModeFlag = Flag{
-		Name:  "gcmode",
+		Name:  c_NodeFlagPrefix + "gcmode",
 		Value: "full",
-		Usage: `Blockchain garbage collection mode ("full", "archive")` + generateEnvDoc("gcmode"),
+		Usage: `Blockchain garbage collection mode ("full", "archive")` + generateEnvDoc(c_NodeFlagPrefix+"gcmode"),
 	}
 
 	SnapshotFlag = Flag{
-		Name:  "snapshot",
+		Name:  c_NodeFlagPrefix + "snapshot",
 		Value: true,
-		Usage: `Enables snapshot-database mode (default = true)` + generateEnvDoc("snapshot"),
+		Usage: `Enables snapshot-database mode (default = true)` + generateEnvDoc(c_NodeFlagPrefix+"snapshot"),
 	}
 
 	TxLookupLimitFlag = Flag{
-		Name:  "txlookuplimit",
+		Name:  c_NodeFlagPrefix + "txlookuplimit",
 		Value: quaiconfig.Defaults.TxLookupLimit,
-		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)" + generateEnvDoc("txlookuplimit"),
+		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)" + generateEnvDoc(c_NodeFlagPrefix+"txlookuplimit"),
 	}
 
 	WhitelistFlag = Flag{
-		Name:  "whitelist",
+		Name:  c_NodeFlagPrefix + "whitelist",
 		Value: "",
-		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)" + generateEnvDoc("whitelist"),
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)" + generateEnvDoc(c_NodeFlagPrefix+"whitelist"),
 	}
 
 	BloomFilterSizeFlag = Flag{
-		Name:  "bloomfilter.size",
+		Name:  c_NodeFlagPrefix + "bloomfilter-size",
 		Value: 2048,
-		Usage: "Megabytes of memory allocated to bloom-filter for pruning" + generateEnvDoc("bloomfilter.size"),
+		Usage: "Megabytes of memory allocated to bloom-filter for pruning" + generateEnvDoc(c_NodeFlagPrefix+"bloomfilter-size"),
 	}
-	// Transaction pool settings
+
 	TxPoolLocalsFlag = Flag{
-		Name:  "txpool.locals",
+		Name:  c_TXPoolPrefix + "locals",
 		Value: "",
-		Usage: "Comma separated accounts to treat as locals (no flush, priority inclusion)" + generateEnvDoc("txpool.locals"),
+		Usage: "Comma separated accounts to treat as locals (no flush, priority inclusion)" + generateEnvDoc(c_TXPoolPrefix+"locals"),
 	}
+
 	TxPoolNoLocalsFlag = Flag{
-		Name:  "txpool.nolocals",
+		Name:  c_TXPoolPrefix + "nolocals",
 		Value: false,
-		Usage: "Disables price exemptions for locally submitted transactions" + generateEnvDoc("txpool.nolocals"),
+		Usage: "Disables price exemptions for locally submitted transactions" + generateEnvDoc(c_TXPoolPrefix+"nolocals"),
 	}
+
 	TxPoolJournalFlag = Flag{
-		Name:  "txpool.journal",
+		Name:  c_TXPoolPrefix + "journal",
 		Value: core.DefaultTxPoolConfig.Journal,
-		Usage: "Disk journal for local transaction to survive node restarts" + generateEnvDoc("txpool.journal"),
+		Usage: "Disk journal for local transaction to survive node restarts" + generateEnvDoc(c_TXPoolPrefix+"journal"),
 	}
+
 	TxPoolRejournalFlag = Flag{
-		Name:  "txpool.rejournal",
+		Name:  c_TXPoolPrefix + "rejournal",
 		Value: core.DefaultTxPoolConfig.Rejournal,
-		Usage: "Time interval to regenerate the local transaction journal" + generateEnvDoc("txpool.rejournal"),
+		Usage: "Time interval to regenerate the local transaction journal" + generateEnvDoc(c_TXPoolPrefix+"rejournal"),
 	}
+
 	TxPoolPriceLimitFlag = Flag{
-		Name:  "txpool.pricelimit",
+		Name:  c_TXPoolPrefix + "pricelimit",
 		Value: quaiconfig.Defaults.TxPool.PriceLimit,
-		Usage: "Minimum gas price limit to enforce for acceptance into the pool" + generateEnvDoc("txpool.pricelimit"),
+		Usage: "Minimum gas price limit to enforce for acceptance into the pool" + generateEnvDoc(c_TXPoolPrefix+"pricelimit"),
 	}
+
 	TxPoolPriceBumpFlag = Flag{
-		Name:  "txpool.pricebump",
+		Name:  c_TXPoolPrefix + "pricebump",
 		Value: quaiconfig.Defaults.TxPool.PriceBump,
-		Usage: "Price bump percentage to replace an already existing transaction" + generateEnvDoc("txpool.pricebump"),
+		Usage: "Price bump percentage to replace an already existing transaction" + generateEnvDoc(c_TXPoolPrefix+"pricebump"),
 	}
+
 	TxPoolAccountSlotsFlag = Flag{
-		Name:  "txpool.accountslots",
+		Name:  c_TXPoolPrefix + "accountslots",
 		Value: quaiconfig.Defaults.TxPool.AccountSlots,
-		Usage: "Minimum number of executable transaction slots guaranteed per account" + generateEnvDoc("txpool.accountslots"),
+		Usage: "Minimum number of executable transaction slots guaranteed per account" + generateEnvDoc(c_TXPoolPrefix+"accountslots"),
 	}
+
 	TxPoolGlobalSlotsFlag = Flag{
-		Name:  "txpool.globalslots",
+		Name:  c_TXPoolPrefix + "globalslots",
 		Value: quaiconfig.Defaults.TxPool.GlobalSlots,
-		Usage: "Maximum number of executable transaction slots for all accounts" + generateEnvDoc("txpool.globalslots"),
+		Usage: "Maximum number of executable transaction slots for all accounts" + generateEnvDoc(c_TXPoolPrefix+"globalslots"),
 	}
+
 	TxPoolAccountQueueFlag = Flag{
-		Name:  "txpool.accountqueue",
+		Name:  c_TXPoolPrefix + "accountqueue",
 		Value: quaiconfig.Defaults.TxPool.AccountQueue,
-		Usage: "Maximum number of non-executable transaction slots permitted per account" + generateEnvDoc("txpool.accountqueue"),
+		Usage: "Maximum number of non-executable transaction slots permitted per account" + generateEnvDoc(c_TXPoolPrefix+"accountqueue"),
 	}
+
 	TxPoolGlobalQueueFlag = Flag{
-		Name:  "txpool.globalqueue",
+		Name:  c_TXPoolPrefix + "globalqueue",
 		Value: quaiconfig.Defaults.TxPool.GlobalQueue,
-		Usage: "Maximum number of non-executable transaction slots for all accounts" + generateEnvDoc("txpool.globalqueue"),
+		Usage: "Maximum number of non-executable transaction slots for all accounts" + generateEnvDoc(c_TXPoolPrefix+"globalqueue"),
 	}
+
 	TxPoolLifetimeFlag = Flag{
-		Name:  "txpool.lifetime",
+		Name:  c_TXPoolPrefix + "lifetime",
 		Value: quaiconfig.Defaults.TxPool.Lifetime,
-		Usage: "Maximum amount of time non-executable transaction are queued" + generateEnvDoc("txpool.lifetime"),
+		Usage: "Maximum amount of time non-executable transaction are queued" + generateEnvDoc(c_TXPoolPrefix+"lifetime"),
 	}
+
 	CacheFlag = Flag{
-		Name:  "cache",
+		Name:  c_NodeFlagPrefix + "cache",
 		Value: 1024,
-		Usage: "Megabytes of memory allocated to internal caching (default = 4096 quai full node, 128 light mode)" + generateEnvDoc("cache"),
+		Usage: "Megabytes of memory allocated to internal caching (default = 4096 quai full node, 128 light mode)" + generateEnvDoc(c_NodeFlagPrefix+"cache"),
 	}
+
 	CacheDatabaseFlag = Flag{
-		Name:  "cache.database",
+		Name:  c_NodeFlagPrefix + "cache-database",
 		Value: 50,
-		Usage: "Percentage of cache memory allowance to use for database io" + generateEnvDoc("cache.database"),
+		Usage: "Percentage of cache memory allowance to use for database io" + generateEnvDoc(c_NodeFlagPrefix+"cache-database"),
 	}
+
 	CacheTrieFlag = Flag{
-		Name:  "cache.trie",
+		Name:  c_NodeFlagPrefix + "cache-trie",
 		Value: 15,
-		Usage: "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)" + generateEnvDoc("cache.trie"),
+		Usage: "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)" + generateEnvDoc(c_NodeFlagPrefix+"cache-trie"),
 	}
+
 	CacheTrieJournalFlag = Flag{
-		Name:  "cache.trie.journal",
+		Name:  c_NodeFlagPrefix + "cache-trie-journal",
 		Value: quaiconfig.Defaults.TrieCleanCacheJournal,
-		Usage: "Disk journal directory for trie cache to survive node restarts" + generateEnvDoc("cache.trie.journal"),
+		Usage: "Disk journal directory for trie cache to survive node restarts" + generateEnvDoc(c_NodeFlagPrefix+"cache-trie-journal"),
 	}
+
 	CacheTrieRejournalFlag = Flag{
-		Name:  "cache.trie.rejournal",
+		Name:  c_NodeFlagPrefix + "cache-trie-rejournal",
 		Value: quaiconfig.Defaults.TrieCleanCacheRejournal,
-		Usage: "Time interval to regenerate the trie cache journal" + generateEnvDoc("cache.trie.rejournal"),
+		Usage: "Time interval to regenerate the trie cache journal" + generateEnvDoc(c_NodeFlagPrefix+"cache-trie-rejournal"),
 	}
+
 	CacheGCFlag = Flag{
-		Name:  "cache.gc",
+		Name:  c_NodeFlagPrefix + "cache-gc",
 		Value: 25,
-		Usage: "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)" + generateEnvDoc("cache.gc"),
+		Usage: "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)" + generateEnvDoc(c_NodeFlagPrefix+"cache-gc"),
 	}
+
 	CacheSnapshotFlag = Flag{
-		Name:  "cache.snapshot",
+		Name:  c_NodeFlagPrefix + "cache-snapshot",
 		Value: 10,
-		Usage: "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)" + generateEnvDoc("cache.snapshot"),
+		Usage: "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)" + generateEnvDoc(c_NodeFlagPrefix+"cache-snapshot"),
 	}
+
 	CacheNoPrefetchFlag = Flag{
-		Name:  "cache.noprefetch",
+		Name:  c_NodeFlagPrefix + "cache-noprefetch",
 		Value: false,
-		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)" + generateEnvDoc("cache.noprefetch"),
+		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)" + generateEnvDoc(c_NodeFlagPrefix+"cache-noprefetch"),
 	}
+
 	CachePreimagesFlag = Flag{
-		Name:  "cache.preimages",
+		Name:  c_NodeFlagPrefix + "cache-preimages",
 		Value: false,
-		Usage: "Enable recording the SHA3/keccak preimages of trie keys" + generateEnvDoc("cache.preimages"),
+		Usage: "Enable recording the SHA3/keccak preimages of trie keys" + generateEnvDoc(c_NodeFlagPrefix+"cache-preimages"),
 	}
-	// Consensus settings
+
 	ConsensusEngineFlag = Flag{
-		Name:  "consensus.engine",
+		Name:  c_NodeFlagPrefix + "consensus-engine",
 		Value: "progpow",
-		Usage: "Consensus engine that the blockchain will run and verify blocks using" + generateEnvDoc("consensus.engine"),
+		Usage: "Consensus engine that the blockchain will run and verify blocks using" + generateEnvDoc(c_NodeFlagPrefix+"consensus-engine"),
 	}
-	// Miner settings
+
 	MinerGasPriceFlag = Flag{
-		Name:  "miner.gasprice",
+		Name:  c_NodeFlagPrefix + "miner-gasprice",
 		Value: newBigIntValue(quaiconfig.Defaults.Miner.GasPrice),
-		Usage: "Minimum gas price for mining a transaction" + generateEnvDoc("miner.gasprice"),
+		Usage: "Minimum gas price for mining a transaction" + generateEnvDoc(c_NodeFlagPrefix+"miner-gasprice"),
 	}
-	// Account settings
+
 	UnlockedAccountFlag = Flag{
-		Name:  "unlock",
+		Name:  c_NodeFlagPrefix + "unlock",
 		Value: "",
-		Usage: "Comma separated list of accounts to unlock" + generateEnvDoc("unlock"),
+		Usage: "Comma separated list of accounts to unlock" + generateEnvDoc(c_NodeFlagPrefix+"unlock"),
 	}
 
 	PasswordFileFlag = Flag{
-		Name:  "password",
+		Name:  c_NodeFlagPrefix + "password",
 		Value: "",
-		Usage: "Password file to use for non-interactive password input" + generateEnvDoc("password"),
+		Usage: "Password file to use for non-interactive password input" + generateEnvDoc(c_NodeFlagPrefix+"password"),
 	}
 
 	KeyStoreDirFlag = Flag{
-		Name:  "keystore",
+		Name:  c_NodeFlagPrefix + "keystore",
 		Value: "",
 		Usage: "Directory for the keystore (default = inside the datadir)",
 	}
 
 	VMEnableDebugFlag = Flag{
-		Name:  "vmdebug",
+		Name:  c_NodeFlagPrefix + "vmdebug",
 		Value: false,
-		Usage: "Record information useful for VM and contract debugging" + generateEnvDoc("vmdebug"),
-	}
-	InsecureUnlockAllowedFlag = Flag{
-		Name:  "allow-insecure-unlock",
-		Value: false,
-		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http" + generateEnvDoc("allow-insecure-unlock"),
-	}
-	RPCGlobalTxFeeCapFlag = Flag{
-		Name:  "rpc.txfeecap",
-		Value: 0,
-		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
-	}
-	RPCGlobalGasCapFlag = Flag{
-		Name:  "rpc.gascap",
-		Value: quaiconfig.Defaults.RPCGasCap,
-		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)" + generateEnvDoc("vmdebug"),
-	}
-	QuaiStatsURLFlag = Flag{
-		Name:  "quaistats",
-		Value: "",
-		Usage: "Reporting URL of a quaistats service (nodename:secret@host:port)" + generateEnvDoc("quaistats"),
-	}
-	SendFullStatsFlag = Flag{
-		Name:  "sendfullstats",
-		Value: false,
-		Usage: "Send full stats boolean flag for quaistats" + generateEnvDoc("sendfullstats"),
-	}
-	// RPC settings
-	HTTPEnabledFlag = Flag{
-		Name:  "http",
-		Value: false,
-		Usage: "Enable the HTTP-RPC server" + generateEnvDoc("http"),
-	}
-	HTTPListenAddrFlag = Flag{
-		Name:  "http.addr",
-		Value: node.DefaultHTTPHost,
-		Usage: "HTTP-RPC server listening interface" + generateEnvDoc("http.addr"),
-	}
-	HTTPCORSDomainFlag = Flag{
-		Name:  "http.corsdomain",
-		Value: "",
-		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)" + generateEnvDoc("http.corsdomain"),
-	}
-	HTTPVirtualHostsFlag = Flag{
-		Name:  "http.vhosts",
-		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard." + generateEnvDoc("http"),
-	}
-	HTTPApiFlag = Flag{
-		Name:  "http.api",
-		Value: "",
-		Usage: "API's offered over the HTTP-RPC interface" + generateEnvDoc("http"),
-	}
-	HTTPPathPrefixFlag = Flag{
-		Name:  "http.rpcprefix",
-		Value: "",
-		Usage: "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths." + generateEnvDoc("http"),
+		Usage: "Record information useful for VM and contract debugging" + generateEnvDoc(c_NodeFlagPrefix+"vmdebug"),
 	}
 
-	WSEnabledFlag = Flag{
-		Name:  "ws",
+	InsecureUnlockAllowedFlag = Flag{
+		Name:  c_NodeFlagPrefix + "allow-insecure-unlock",
 		Value: false,
-		Usage: "Enable the WS-RPC server" + generateEnvDoc("ws"),
+		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http" + generateEnvDoc(c_NodeFlagPrefix+"allow-insecure-unlock"),
 	}
-	WSListenAddrFlag = Flag{
-		Name:  "ws.addr",
-		Value: node.DefaultWSHost,
-		Usage: "WS-RPC server listening interface" + generateEnvDoc("ws"),
-	}
-	WSApiFlag = Flag{
-		Name:  "ws.api",
-		Value: "",
-		Usage: "API's offered over the WS-RPC interface" + generateEnvDoc("ws"),
-	}
-	WSAllowedOriginsFlag = Flag{
-		Name:  "ws.origins",
-		Value: "",
-		Usage: "Origins from which to accept websockets requests" + generateEnvDoc("ws"),
-	}
-	WSPathPrefixFlag = Flag{
-		Name:  "ws.rpcprefix",
-		Value: "",
-		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths." + generateEnvDoc("ws"),
-	}
-	PreloadJSFlag = Flag{
-		Name:  "preload",
-		Value: "",
-		Usage: "Comma separated list of JavaScript files to preload into the console" + generateEnvDoc("preload"),
-	}
-	// Gas price oracle settings
+
 	GpoBlocksFlag = Flag{
-		Name:  "gpo.blocks",
+		Name:  c_NodeFlagPrefix + "gpo-blocks",
 		Value: quaiconfig.Defaults.GPO.Blocks,
-		Usage: "Number of recent blocks to check for gas prices" + generateEnvDoc("gpo.blocks"),
+		Usage: "Number of recent blocks to check for gas prices" + generateEnvDoc(c_NodeFlagPrefix+"gpo-blocks"),
 	}
+
 	GpoPercentileFlag = Flag{
-		Name:  "gpo.percentile",
+		Name:  c_NodeFlagPrefix + "gpo-percentile",
 		Value: quaiconfig.Defaults.GPO.Percentile,
-		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices" + generateEnvDoc("gpo.percentile"),
+		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices" + generateEnvDoc(c_NodeFlagPrefix+"gpo-percentile"),
 	}
+
 	GpoMaxGasPriceFlag = Flag{
-		Name:  "gpo.maxprice",
+		Name:  c_NodeFlagPrefix + "gpo-maxprice",
 		Value: quaiconfig.Defaults.GPO.MaxPrice.Int64(),
-		Usage: "Maximum gas price will be recommended by gpo" + generateEnvDoc("gpo.maxprice"),
+		Usage: "Maximum gas price will be recommended by gpo" + generateEnvDoc(c_NodeFlagPrefix+"gpo-maxprice"),
 	}
+
 	GpoIgnoreGasPriceFlag = Flag{
-		Name:  "gpo.ignoreprice",
+		Name:  c_NodeFlagPrefix + "gpo-ignoreprice",
 		Value: quaiconfig.Defaults.GPO.IgnorePrice.Int64(),
-		Usage: "Gas price below which gpo will ignore transactions" + generateEnvDoc("gpo.ignoreprice"),
+		Usage: "Gas price below which gpo will ignore transactions" + generateEnvDoc(c_NodeFlagPrefix+"gpo-ignoreprice"),
 	}
 
 	DomUrl = Flag{
-		Name:  "dom.url",
+		Name:  c_NodeFlagPrefix + "dom-url",
 		Value: quaiconfig.Defaults.DomUrl,
-		Usage: "Dominant chain websocket url" + generateEnvDoc("dom.url"),
+		Usage: "Dominant chain websocket url" + generateEnvDoc(c_NodeFlagPrefix+"dom-url"),
 	}
+
 	SubUrls = Flag{
-		Name:  "sub.urls",
+		Name:  c_NodeFlagPrefix + "sub-urls",
 		Value: quaiconfig.Defaults.DomUrl,
-		Usage: "Subordinate chain websocket urls" + generateEnvDoc("sub.urls"),
+		Usage: "Subordinate chain websocket urls" + generateEnvDoc(c_NodeFlagPrefix+"sub-urls"),
 	}
+
 	CoinbaseAddressFlag = Flag{
-		Name:  "coinbases",
+		Name:  c_NodeFlagPrefix + "coinbases",
 		Value: "",
-		Usage: "Input TOML string or path to TOML file" + generateEnvDoc("coinbase"),
+		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"coinbases"),
+	}
+
+	EnvironmentFlag = Flag{
+		Name:  c_NodeFlagPrefix + "environment",
+		Value: params.LocalName,
+		Usage: "environment to run in (local, colosseum, garden, orchard, lighthouse, dev)" + generateEnvDoc(c_NodeFlagPrefix+"environment"),
+	}
+
+	QuaiStatsURLFlag = Flag{
+		Name:  c_NodeFlagPrefix + "quaistats",
+		Value: "",
+		Usage: "Reporting URL of a quaistats service (nodename:secret@host:port)" + generateEnvDoc(c_NodeFlagPrefix+"quaistats"),
+	}
+
+	SendFullStatsFlag = Flag{
+		Name:  c_NodeFlagPrefix + "sendfullstats",
+		Value: false,
+		Usage: "Send full stats boolean flag for quaistats" + generateEnvDoc(c_NodeFlagPrefix+"sendfullstats"),
+	}
+)
+
+var (
+	// ****************************************
+	// **                                    **
+	// ** 	      RPC FLAGS                  **
+	// **                                    **
+	// ****************************************
+	HTTPEnabledFlag = Flag{
+		Name:  c_RPCFlagPrefix + "http",
+		Value: false,
+		Usage: "Enable the HTTP-RPC server" + generateEnvDoc(c_RPCFlagPrefix+"http"),
+	}
+
+	HTTPListenAddrFlag = Flag{
+		Name:  c_RPCFlagPrefix + "http-addr",
+		Value: node.DefaultHTTPHost,
+		Usage: "HTTP-RPC server listening interface" + generateEnvDoc(c_RPCFlagPrefix+"http-addr"),
+	}
+
+	HTTPCORSDomainFlag = Flag{
+		Name:  c_RPCFlagPrefix + "http-corsdomain",
+		Value: "",
+		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)" + generateEnvDoc(c_RPCFlagPrefix+"http-corsdomain"),
+	}
+
+	HTTPVirtualHostsFlag = Flag{
+		Name:  c_RPCFlagPrefix + "http-vhosts",
+		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard." + generateEnvDoc(c_RPCFlagPrefix+"http-vhosts"),
+	}
+
+	HTTPApiFlag = Flag{
+		Name:  c_RPCFlagPrefix + "http-api",
+		Value: "",
+		Usage: "API's offered over the HTTP-RPC interface" + generateEnvDoc(c_RPCFlagPrefix+"http-api"),
+	}
+
+	HTTPPathPrefixFlag = Flag{
+		Name:  c_RPCFlagPrefix + "http-rpcprefix",
+		Value: "",
+		Usage: "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths." + generateEnvDoc(c_RPCFlagPrefix+"http-rpcprefix"),
+	}
+
+	WSEnabledFlag = Flag{
+		Name:  c_RPCFlagPrefix + "ws",
+		Value: false,
+		Usage: "Enable the WS-RPC server" + generateEnvDoc(c_RPCFlagPrefix+"ws"),
+	}
+
+	WSListenAddrFlag = Flag{
+		Name:  c_RPCFlagPrefix + "ws-addr",
+		Value: node.DefaultWSHost,
+		Usage: "WS-RPC server listening interface" + generateEnvDoc(c_RPCFlagPrefix+"ws-addr"),
+	}
+
+	WSApiFlag = Flag{
+		Name:  c_RPCFlagPrefix + "ws-api",
+		Value: "",
+		Usage: "API's offered over the WS-RPC interface" + generateEnvDoc(c_RPCFlagPrefix+"ws-api"),
+	}
+
+	WSAllowedOriginsFlag = Flag{
+		Name:  c_RPCFlagPrefix + "ws-origins",
+		Value: "",
+		Usage: "Origins from which to accept websockets requests" + generateEnvDoc(c_RPCFlagPrefix+"ws-origins"),
+	}
+
+	WSPathPrefixFlag = Flag{
+		Name:  c_RPCFlagPrefix + "ws-rpcprefix",
+		Value: "",
+		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths." + generateEnvDoc(c_RPCFlagPrefix+"ws-rpcprefix"),
+	}
+
+	PreloadJSFlag = Flag{
+		Name:  c_RPCFlagPrefix + "preload",
+		Value: "",
+		Usage: "Comma separated list of JavaScript files to preload into the console" + generateEnvDoc(c_RPCFlagPrefix+"preload"),
+	}
+
+	RPCGlobalTxFeeCapFlag = Flag{
+		Name:  c_RPCFlagPrefix + "txfeecap",
+		Value: 0,
+		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
+	}
+
+	RPCGlobalGasCapFlag = Flag{
+		Name:  c_RPCFlagPrefix + "gascap",
+		Value: quaiconfig.Defaults.RPCGasCap,
+		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)" + generateEnvDoc(c_RPCFlagPrefix+"gascap"),
+	}
+)
+
+var (
+	// ****************************************
+	// **                                    **
+	// **         METRICS FLAGS              **
+	// **                                    **
+	// ****************************************
+	MetricsEnabledFlag = Flag{
+		Name:  c_MetricsFlagPrefix + "enabled",
+		Value: false,
+		Usage: "Enable metrics collection and reporting" + generateEnvDoc(c_MetricsFlagPrefix+"enabled"),
+	}
+	MetricsEnabledExpensiveFlag = Flag{
+		Name:  c_MetricsFlagPrefix + "metrics-expensive",
+		Value: false,
+		Usage: "Enable expensive metrics collection and reporting" + generateEnvDoc(c_MetricsFlagPrefix+"metrics-expensive"),
+	}
+	MetricsHTTPFlag = Flag{
+		Name:  c_MetricsFlagPrefix + "metrics-addr",
+		Value: metrics_config.DefaultConfig.HTTP,
+		Usage: "Enable stand-alone metrics HTTP server listening interface" + generateEnvDoc(c_MetricsFlagPrefix+"metrics-addr"),
+	}
+	MetricsPortFlag = Flag{
+		Name:  c_MetricsFlagPrefix + "metrics-port",
+		Value: metrics_config.DefaultConfig.Port,
+		Usage: "Metrics HTTP server listening port" + generateEnvDoc(c_MetricsFlagPrefix+"metrics-port"),
 	}
 )
 
@@ -612,7 +671,7 @@ It handles three scenarios:
 The function reads the coinbase addresses and performs necessary validation as per the above scenarios.
 */
 func ParseCoinbaseAddresses() (map[string]string, error) {
-	coinbaseInput := viper.GetString("coinbases")
+	coinbaseInput := viper.GetString(CoinbaseAddressFlag.Name)
 	coinbases := make(map[string]string)
 
 	if coinbaseInput == "" {
@@ -823,7 +882,7 @@ func setSlicesRunning(cfg *quaiconfig.Config) {
 	slices := strings.Split(viper.GetString(SlicesRunningFlag.Name), ",")
 
 	// Sanity checks
-	if len(slices) == 0 {
+	if slices[0] == "" {
 		Fatalf("no slices are specified")
 	}
 	if len(slices) > common.NumRegionsInPrime*common.NumZonesInRegion {
@@ -916,9 +975,9 @@ func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *logru
 	if viper.IsSet(DBEngineFlag.Name) {
 		dbEngine := viper.GetString(DBEngineFlag.Name)
 		if dbEngine != "leveldb" && dbEngine != "pebble" {
-			Fatalf("Invalid choice for db.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
+			Fatalf("Invalid choice for db-engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
 		}
-		logger.WithField("db.engine", dbEngine).Info("Using db engine")
+		logger.WithField("db-engine", dbEngine).Info("Using db engine")
 		cfg.DBEngine = dbEngine
 	}
 }
@@ -1414,4 +1473,86 @@ func IsValidEnvironment(env string) bool {
 	default:
 		return false
 	}
+}
+
+var configData = make(map[string]map[string]interface{})
+
+func addFlagsToCategory(flags []Flag) {
+	for _, flag := range flags {
+		split := strings.Split(flag.Name, ".")
+
+		if split[1] == "config-dir" {
+			continue
+		}
+		key := split[0]
+
+		if len(split) == 3 {
+			key = split[0] + "." + split[1]
+		}
+
+		if configData[key] == nil {
+			configData[key] = make(map[string]interface{})
+		}
+
+		if val, ok := flag.Value.(*BigIntValue); ok {
+			configData[key][split[len(split)-1]] = val.String()
+		} else {
+			configData[key][split[len(split)-1]] = flag.Value
+		}
+	}
+}
+
+// Write a function to write the default values of each flag to a file
+func WriteDefaultConfigFile(configPath string, configType string) error {
+	if configPath == "" {
+		log.Fatalf("No config file path provided")
+	}
+
+	// Check if file exists, create if it doesn't
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		file, err := os.Create(configPath)
+		if err != nil {
+			log.Fatalf("Failed to create config file: %s", err)
+		}
+		file.Close()
+	}
+
+	// Open the file
+	f, err := os.OpenFile(configPath, os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open config file: %s", err)
+	}
+	defer f.Close()
+
+	addFlagsToCategory(GlobalFlags)
+	addFlagsToCategory(NodeFlags)
+	addFlagsToCategory(TXPoolFlags)
+	addFlagsToCategory(RPCFlags)
+	addFlagsToCategory(MetricsFlags)
+
+	var output []byte
+	var marshalErr error
+
+	// Marshal data into the specified format
+	switch strings.ToLower(configType) {
+	case "json":
+		output, marshalErr = json.MarshalIndent(configData, "", "  ")
+	case "toml":
+		output, marshalErr = toml.Marshal(configData)
+	case "yaml":
+		output, marshalErr = yaml.Marshal(configData)
+	default:
+		log.Fatalf("Unsupported config type: %s", configType)
+	}
+
+	if marshalErr != nil {
+		log.Fatalf("Failed to marshal config data: %s", marshalErr)
+	}
+
+	// Write to the file
+	if _, err := f.Write(output); err != nil {
+		log.Fatalf("Failed to write to config file: %s", err)
+	}
+
+	return nil
 }
