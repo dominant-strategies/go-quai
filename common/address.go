@@ -149,7 +149,7 @@ func (a Address) Format(s fmt.State, c rune) {
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
 	if a.inner == nil {
-		return hexutil.Bytes(ZeroInternal[:]).MarshalText()
+		return hexutil.Bytes(ZeroExternal[:]).MarshalText()
 	}
 	return a.inner.MarshalText()
 }
@@ -167,7 +167,7 @@ func (a *Address) UnmarshalText(input []byte) error {
 // MarshalJSON marshals a subscription as its ID.
 func (a *Address) MarshalJSON() ([]byte, error) {
 	if a.inner == nil {
-		return json.Marshal(ZeroAddr)
+		return json.Marshal(Zero)
 	}
 	return json.Marshal(a.inner)
 }
@@ -177,7 +177,7 @@ func (a *Address) UnmarshalJSON(input []byte) error {
 	var temp [AddressLength]byte
 	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, temp[:]); err != nil {
 		if len(input) == 0 {
-			a.inner = Bytes20ToAddress(ZeroInternal).inner
+			a.inner = Bytes20ToAddress(ZeroExternal).inner
 			return nil
 		}
 		return err

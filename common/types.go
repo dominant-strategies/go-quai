@@ -54,14 +54,27 @@ const (
 
 var (
 	// Default to prime node, but changed at startup by config.
-	NodeLocation = Location{}
+	NodeLocation                             = Location{}
+	ZeroAddresses map[string]InternalAddress = make(map[string]InternalAddress)
+
+	// Chain specific "zero" addresses (taken from precompiles in contracts.go)
+	// The "zero" address is just the address that ETXs are spent from in the destination
+	ZeroCyprus1 = InternalAddress{0x1, 0x4} // 0x1400000000000000000000000000000000000000
+	ZeroCyprus2 = InternalAddress{0x2, 0x0} // 0x2000000000000000000000000000000000000000
+	ZeroCyprus3 = InternalAddress{0x3, 0xE} // 0x3E00000000000000000000000000000000000000
+	ZeroPaxos1  = InternalAddress{0x5, 0xA} // 0x5A00000000000000000000000000000000000000
+	ZeroPaxos2  = InternalAddress{0x7, 0x8} // 0x7800000000000000000000000000000000000000
+	ZeroPaxos3  = InternalAddress{0x9, 0x6} // 0x9600000000000000000000000000000000000000
+	ZeroHydra1  = InternalAddress{0xB, 0x4} // 0xB400000000000000000000000000000000000000
+	ZeroHydra2  = InternalAddress{0xD, 0x2} // 0xD200000000000000000000000000000000000000
+	ZeroHydra3  = InternalAddress{0xF, 0x0} // 0xF000000000000000000000000000000000000000
 )
 
 var (
 	hashT = reflect.TypeOf(Hash{})
 	// The zero address (0x0)
-	ZeroInternal    = InternalAddress{}
-	ZeroAddr        = Address{&ZeroInternal}
+	ZeroExternal    = ExternalAddress{}
+	Zero            = Address{&ZeroExternal} // For utility purposes only. It is out-of-scope for state purposes.
 	ErrInvalidScope = errors.New("address is not in scope")
 )
 
@@ -228,6 +241,16 @@ func init() {
 	locationToPrefixRange["hydra1"] = NewRange(172, 199)
 	locationToPrefixRange["hydra2"] = NewRange(200, 227)
 	locationToPrefixRange["hydra3"] = NewRange(228, 255)
+
+	ZeroAddresses["cyprus1"] = ZeroCyprus1 // taken from precompile addresses (contracts.go)
+	ZeroAddresses["cyprus2"] = ZeroCyprus2
+	ZeroAddresses["cyprus3"] = ZeroCyprus3
+	ZeroAddresses["paxos1"] = ZeroPaxos1
+	ZeroAddresses["paxos2"] = ZeroPaxos2
+	ZeroAddresses["paxos3"] = ZeroPaxos3
+	ZeroAddresses["hydra1"] = ZeroHydra1
+	ZeroAddresses["hydra2"] = ZeroHydra2
+	ZeroAddresses["hydra3"] = ZeroHydra3
 }
 
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
@@ -494,7 +517,7 @@ func IsInChainScope(b []byte) bool {
 	if nodeCtx != ZONE_CTX {
 		return false
 	}
-	if BytesToHash(b) == ZeroAddr.Hash() {
+	if BytesToHash(b) == ZeroAddr().Hash() {
 		return true
 	}
 	prefix := b[0]
@@ -517,4 +540,13 @@ func OrderToString(order int) string {
 	default:
 		return "Invalid"
 	}
+}
+
+func ZeroAddr() Address {
+	internal := ZeroAddresses[NodeLocation.Name()] // this is a copy operation. An optimization could be to just store the pointer globally and return it instead of copying to a new one.
+	return Address{&internal}
+}
+
+func ZeroInternal() InternalAddress {
+	return ZeroAddresses[NodeLocation.Name()]
 }

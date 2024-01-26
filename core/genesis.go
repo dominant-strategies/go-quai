@@ -266,7 +266,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	head.SetTime(g.Timestamp)
 	head.SetExtra(g.ExtraData)
 	head.SetDifficulty(g.Difficulty)
-	head.SetCoinbase(common.ZeroAddr)
+	head.SetCoinbase(common.ZeroAddr())
 	head.SetGasLimit(g.GasLimit)
 	head.SetGasUsed(0)
 	head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))

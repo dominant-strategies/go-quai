@@ -46,7 +46,7 @@ func (s *senderFromServer) Equal(other types.Signer) bool {
 
 func (s *senderFromServer) Sender(tx *types.Transaction) (common.Address, error) {
 	if s.blockhash == (common.Hash{}) {
-		return common.ZeroAddr, errNotCached
+		return common.Zero, errNotCached
 	}
 	return s.addr, nil
 }

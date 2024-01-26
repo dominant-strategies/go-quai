@@ -265,10 +265,10 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 		From common.Address
 	}
 	if err = ec.c.CallContext(ctx, &meta, "eth_getTransactionByBlockHashAndIndex", block, hexutil.Uint64(index)); err != nil {
-		return common.ZeroAddr, err
+		return common.Zero, err
 	}
 	if meta.Hash == (common.Hash{}) || meta.Hash != tx.Hash() {
-		return common.ZeroAddr, errors.New("wrong inclusion block/index")
+		return common.Zero, errors.New("wrong inclusion block/index")
 	}
 	return meta.From, nil
 }

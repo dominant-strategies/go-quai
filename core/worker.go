@@ -479,7 +479,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	start := time.Now()
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
-	if w.coinbase.Equal(common.ZeroAddr) {
+	if w.coinbase.Equal(common.Zero) {
 		log.Error("Refusing to mine without etherbase")
 		return nil, errors.New("etherbase not found")
 	}
@@ -810,7 +810,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		header.SetExtra(w.extra)
 		header.SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent.Header()))
 		if w.isRunning() {
-			if w.coinbase.Equal(common.ZeroAddr) {
+			if w.coinbase.Equal(common.Zero) {
 				log.Error("Refusing to mine without etherbase")
 				return nil, errors.New("refusing to mine without etherbase")
 			}
