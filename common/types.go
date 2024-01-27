@@ -55,8 +55,8 @@ const (
 var (
 	hashT = reflect.TypeOf(Hash{})
 	// The zero address (0x0)
-	ZeroInternal    = InternalAddress{}
-	ZeroAddr        = Address{&ZeroInternal}
+	ZeroExternal    = ExternalAddress{}
+	Zero            = Address{&ZeroExternal} // For utility purposes only. It is out-of-scope for state purposes.
 	ErrInvalidScope = errors.New("address is not in scope")
 )
 
@@ -509,8 +509,7 @@ func IsInChainScope(b []byte, nodeLocation Location) bool {
 	if nodeCtx != ZONE_CTX {
 		return false
 	}
-	// TODO: this shouldn't happen. The zero address should not be special. Each chain may use its own zero address.
-	if BytesToHash(b) == ZeroAddr.Hash() {
+	if BytesToHash(b) == ZeroAddress(nodeLocation).Hash() {
 		return true
 	}
 	return b[0] == nodeLocation.BytePrefix()
@@ -527,4 +526,13 @@ func OrderToString(order int) string {
 	default:
 		return "Invalid"
 	}
+}
+
+func ZeroInternal(nodeLocation Location) InternalAddress {
+	return InternalAddress{nodeLocation.BytePrefix()}
+}
+
+func ZeroAddress(nodeLocation Location) Address {
+	internal := InternalAddress{nodeLocation.BytePrefix()}
+	return Address{&internal}
 }

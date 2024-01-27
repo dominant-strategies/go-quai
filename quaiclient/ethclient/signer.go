@@ -46,7 +46,7 @@ func (s *senderFromServer) Equal(other types.Signer) bool {
 
 func (s *senderFromServer) Sender(tx *types.Transaction) (common.Address, error) {
 	if s.blockhash == (common.Hash{}) {
-		return common.ZeroAddr, errNotCached
+		return common.Zero, errNotCached
 	}
 	return s.addr, nil
 }
@@ -58,5 +58,9 @@ func (s *senderFromServer) Hash(tx *types.Transaction) common.Hash {
 	panic("can't sign with senderFromServer")
 }
 func (s *senderFromServer) SignatureValues(tx *types.Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	panic("can't sign with senderFromServer")
+}
+
+func (s *senderFromServer) Location() common.Location {
 	panic("can't sign with senderFromServer")
 }

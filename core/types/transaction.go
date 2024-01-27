@@ -913,7 +913,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	}
 	var err error
 	if tx.Type() == ExternalTxType {
-		msg.from = common.ZeroAddr
+		msg.from = common.ZeroAddress(s.Location())
 		msg.etxsender, err = Sender(s, tx)
 		msg.checkNonce = false
 	} else {
@@ -950,7 +950,7 @@ func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *c
 	}
 	var err error
 	if tx.Type() == ExternalTxType {
-		msg.from = common.ZeroAddr
+		msg.from = common.ZeroAddress(s.Location())
 		msg.etxsender, err = Sender(s, tx)
 		msg.checkNonce = false
 	} else {

@@ -27,6 +27,8 @@ import (
 	"testing"
 )
 
+var nodeLocation = Location{1, 1}
+
 func TestBytesConversion(t *testing.T) {
 	bytes := []byte{5}
 	hash := BytesToHash(bytes)
@@ -139,7 +141,7 @@ func TestAddressHexChecksum(t *testing.T) {
 		{"0x000000000000000000000000000000000000000a", "0x000000000000000000000000000000000000000A"},
 	}
 	for i, test := range tests {
-		output := HexToAddress(test.Input).Hex()
+		output := HexToAddress(test.Input, nodeLocation).Hex()
 		if output != test.Output {
 			t.Errorf("test #%d: failed to match when it should (%s != %s)", i, output, test.Output)
 		}
@@ -147,7 +149,7 @@ func TestAddressHexChecksum(t *testing.T) {
 }
 
 func BenchmarkAddressHex(b *testing.B) {
-	testAddr := HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
+	testAddr := HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", nodeLocation)
 	for n := 0; n < b.N; n++ {
 		testAddr.Hex()
 	}
@@ -343,7 +345,7 @@ func TestAddress_Value(t *testing.T) {
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
-	usedA := BytesToAddress(b);
+	usedA := BytesToAddress(b, nodeLocation)
 	tests := []struct {
 		name    string
 		a       Address
@@ -377,7 +379,7 @@ func TestAddress_Format(t *testing.T) {
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
 
-	addr := BytesToAddress(b)
+	addr := BytesToAddress(b, nodeLocation)
 	tests := []struct {
 		name string
 		out  string
@@ -531,5 +533,16 @@ func TestHash_Format(t *testing.T) {
 				t.Errorf("%s does not render as expected:\n got %s\nwant %s", tt.name, tt.out, tt.want)
 			}
 		})
+	}
+}
+
+func TestZeroAddress(t *testing.T) {
+	t.Log(ZeroAddress(nodeLocation).String())
+	internal, err := ZeroAddress(nodeLocation).InternalAddress()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if internal.String() != "0x1100000000000000000000000000000000000000" {
+		t.Fatal("wrong internal address, expected 0x1100000000000000000000000000000000000000")
 	}
 }

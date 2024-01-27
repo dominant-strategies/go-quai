@@ -192,7 +192,7 @@ func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, erro
 // to returns the recipient of the message.
 func (st *StateTransition) to() common.Address {
 	if st.msg == nil || st.msg.To() == nil /* contract creation */ {
-		return common.ZeroAddr
+		return common.ZeroAddress(st.evm.ChainConfig().Location)
 	}
 	return *st.msg.To()
 }
@@ -299,7 +299,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
-	contractCreation := msg.To() == nil
+	contractCreation := msg.To() == nil // for ETX contract creation, perhaps we should compare the "to" to the contextual zero-address (only in the ETX case)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation)

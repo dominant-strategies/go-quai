@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -37,12 +38,14 @@ type AddressData interface {
 	setBytes(b []byte)
 }
 
+var ErrNilInner = errors.New("Address has nil inner")
+
 func (a Address) InternalAddress() (InternalAddress, error) {
 	if a.inner == nil {
-		return InternalAddress{}, nil
+		return InternalAddress{}, ErrNilInner
 	}
 	internal, ok := a.inner.(*InternalAddress)
-	if !ok {
+	if !ok || internal == nil {
 		return InternalAddress{}, ErrInvalidScope
 	}
 	return *internal, nil
@@ -82,7 +85,7 @@ func NewAddressFromData(inner AddressData) Address {
 // EncodeRLP serializes b into the Quai RLP block format.
 func (a Address) EncodeRLP(w io.Writer) error {
 	if a.inner == nil {
-		a.inner = &InternalAddress{}
+		return ErrNilInner
 	}
 	return rlp.Encode(w, a.inner)
 }
@@ -100,7 +103,7 @@ func (a *Address) DecodeRLP(s *rlp.Stream) error {
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte {
 	if a.inner == nil {
-		return []byte{}
+		panic("Address has nil inner")
 	}
 	return a.inner.Bytes()
 }
@@ -108,7 +111,7 @@ func (a Address) Bytes() []byte {
 // Bytes20 gets the bytes20 representation of the underlying address.
 func (a Address) Bytes20() (addr AddressBytes) {
 	if a.inner == nil {
-		return AddressBytes{}
+		panic("Address has nil inner")
 	}
 	copy(addr[:], a.Bytes()[:]) // this is not very performant
 	return addr
@@ -117,7 +120,7 @@ func (a Address) Bytes20() (addr AddressBytes) {
 // Hash converts an address to a hash by left-padding it with zeros.
 func (a Address) Hash() Hash {
 	if a.inner == nil {
-		return Hash{}
+		panic("Address has nil inner")
 	}
 	return a.inner.Hash()
 }
@@ -125,7 +128,7 @@ func (a Address) Hash() Hash {
 // Hex returns a hex string representation of the address.
 func (a Address) Hex() string {
 	if a.inner == nil {
-		return string([]byte{})
+		panic("Address has nil inner")
 	}
 	return a.inner.Hex()
 }
@@ -133,7 +136,7 @@ func (a Address) Hex() string {
 // String implements fmt.Stringer.
 func (a Address) String() string {
 	if a.inner == nil {
-		return string([]byte{})
+		panic("Address has nil inner")
 	}
 	return a.inner.String()
 }
@@ -149,7 +152,7 @@ func (a Address) Format(s fmt.State, c rune) {
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
 	if a.inner == nil {
-		return hexutil.Bytes(ZeroInternal[:]).MarshalText()
+		return nil, ErrNilInner
 	}
 	return a.inner.MarshalText()
 }
@@ -167,7 +170,7 @@ func (a *Address) UnmarshalText(input []byte) error {
 // MarshalJSON marshals a subscription as its ID.
 func (a *Address) MarshalJSON() ([]byte, error) {
 	if a.inner == nil {
-		return json.Marshal(ZeroAddr)
+		return nil, ErrNilInner
 	}
 	return json.Marshal(a.inner)
 }
@@ -177,7 +180,7 @@ func (a *Address) UnmarshalJSON(input []byte) error {
 	var temp [AddressLength]byte
 	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, temp[:]); err != nil {
 		if len(input) == 0 {
-			a.inner = Bytes20ToAddress(ZeroInternal, Location{0, 0}).inner
+			a.inner = Bytes20ToAddress(ZeroExternal, Location{0, 0}).inner
 			return nil
 		}
 		return err
@@ -204,7 +207,7 @@ func (a *Address) Scan(src interface{}, args ...Location) error {
 // Value implements valuer for database/sql.
 func (a Address) Value() (driver.Value, error) {
 	if a.inner == nil {
-		return []byte{}, nil
+		return nil, ErrNilInner
 	}
 	return a.inner.Value()
 }
@@ -212,7 +215,7 @@ func (a Address) Value() (driver.Value, error) {
 // Location looks up the chain location which contains this address
 func (a Address) Location(nodeLocation Location) *Location {
 	if a.inner == nil {
-		return &nodeLocation
+		panic("Address has nil inner")
 	}
 	return a.inner.Location(nodeLocation)
 }

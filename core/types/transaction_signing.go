@@ -118,7 +118,7 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 
 	addr, err := signer.Sender(tx)
 	if err != nil {
-		return common.ZeroAddr, err
+		return common.Zero, err
 	}
 	tx.from.Store(sigCache{signer: signer, from: addr})
 	return addr, nil
@@ -142,6 +142,8 @@ type Signer interface {
 
 	// Equal returns true if the given signer is the same as the receiver.
 	Equal(Signer) bool
+
+	Location() common.Location
 }
 
 // SignerV1 is the mainnet launch version of the signer module. Future versions may be
@@ -172,7 +174,7 @@ func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 	// id, add 27 to become equivalent to unprotected signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))
 	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.ZeroAddr, ErrInvalidChainId
+		return common.Zero, ErrInvalidChainId
 	}
 	return recoverPlain(s.Hash(tx), R, S, V, s.nodeLocation)
 }
@@ -247,6 +249,10 @@ func (s SignerV1) ChainID() *big.Int {
 	return s.chainId
 }
 
+func (s SignerV1) Location() common.Location {
+	return s.nodeLocation
+}
+
 func decodeSignature(sig []byte) (r, s, v *big.Int) {
 	if len(sig) != crypto.SignatureLength {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want %d", len(sig), crypto.SignatureLength))
@@ -259,7 +265,7 @@ func decodeSignature(sig []byte) (r, s, v *big.Int) {
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, nodeLocation common.Location) (common.Address, error) {
 	if Vb.BitLen() > 8 {
-		return common.ZeroAddr, ErrInvalidSig
+		return common.Zero, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
 	if !crypto.ValidateSignatureValues(V, R, S) {
@@ -274,10 +280,10 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, nodeLocation common.Lo
 	// recover the public key from the signature
 	pub, err := crypto.Ecrecover(sighash[:], sig)
 	if err != nil {
-		return common.ZeroAddr, err
+		return common.Zero, err
 	}
 	if len(pub) == 0 || pub[0] != 4 {
-		return common.ZeroAddr, errors.New("invalid public key")
+		return common.Zero, errors.New("invalid public key")
 	}
 	addr := common.BytesToAddress(crypto.Keccak256(pub[1:])[12:], nodeLocation)
 	return addr, nil

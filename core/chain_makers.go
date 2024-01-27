@@ -102,7 +102,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction, etxRLimit, etxPLimit *int) {
 // the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(hc *HeaderChain, tx *types.Transaction, etxRLimit, etxPLimit *int) {
 	if b.gasPool == nil {
-		b.SetCoinbase(common.Address{})
+		b.SetCoinbase(common.ZeroAddress(hc.config.Location))
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
 	coinbase := b.header.Coinbase()

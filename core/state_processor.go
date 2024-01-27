@@ -265,9 +265,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			if !exists { // Verify that the ETX exists in the set
 				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
 			}
-			prevZeroBal := prepareApplyETX(statedb, &etxEntry.ETX)
+			prevZeroBal := prepareApplyETX(statedb, &etxEntry.ETX, nodeLocation)
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etxEntry.ETX, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
-			statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
+			statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, etxEntry.ETX.Hash().Hex(), err)
@@ -483,9 +483,9 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
-		prevZeroBal := prepareApplyETX(statedb, tx)
+		prevZeroBal := prepareApplyETX(statedb, tx, config.Location)
 		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
-		statedb.SetBalance(common.ZeroInternal, prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
+		statedb.SetBalance(common.ZeroInternal(config.Location), prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
@@ -779,11 +779,11 @@ func (p *StateProcessor) Stop() {
 	p.logger.Info("State Processor stopped")
 }
 
-func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction) *big.Int {
-	prevZeroBal := statedb.GetBalance(common.ZeroInternal)   // Get current zero address balance
-	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap()) // Add gas price cap to miner tip cap
-	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                // Multiply gas price by gas limit (may need to check for int64 overflow)
-	total := big.NewInt(0).Add(fee, tx.Value())              // Add gas fee to value
-	statedb.SetBalance(common.ZeroInternal, total)           // Use zero address at temp placeholder and set it to gas fee plus value
+func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction, nodeLocation common.Location) *big.Int {
+	prevZeroBal := statedb.GetBalance(common.ZeroInternal(nodeLocation)) // Get current zero address balance
+	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap())             // Add gas price cap to miner tip cap
+	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                            // Multiply gas price by gas limit (may need to check for int64 overflow)
+	total := big.NewInt(0).Add(fee, tx.Value())                          // Add gas fee to value
+	statedb.SetBalance(common.ZeroInternal(nodeLocation), total)         // Use zero address at temp placeholder and set it to gas fee plus value
 	return prevZeroBal
 }

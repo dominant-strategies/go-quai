@@ -404,7 +404,7 @@ func (c *codeAndHash) Hash() common.Hash {
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address) ([]byte, common.Address, uint64, error) {
 	internalCallerAddr, err := caller.Address().InternalAddress()
 	if err != nil {
-		return nil, common.ZeroAddr, 0, err
+		return nil, common.Zero, 0, err
 	}
 	nonce := evm.StateDB.GetNonce(internalCallerAddr)
 	evm.StateDB.SetNonce(internalCallerAddr, nonce+1)
@@ -412,15 +412,15 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, common.ZeroAddr, gas, ErrDepth
+		return nil, common.Zero, gas, ErrDepth
 	}
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, common.ZeroAddr, gas, ErrInsufficientBalance
+		return nil, common.Zero, gas, ErrInsufficientBalance
 	}
 
 	internalContractAddr, err := address.InternalAddress()
 	if err != nil {
-		return nil, common.ZeroAddr, 0, err
+		return nil, common.Zero, 0, err
 	}
 
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
@@ -430,7 +430,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(internalContractAddr)
 	if evm.StateDB.GetNonce(internalContractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
-		return nil, common.ZeroAddr, 0, ErrContractAddressCollision
+		return nil, common.Zero, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
@@ -439,7 +439,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	evm.StateDB.SetNonce(internalContractAddr, 1)
 
 	if err := evm.Context.Transfer(evm.StateDB, caller.Address(), address, value); err != nil {
-		return nil, common.ZeroAddr, 0, err
+		return nil, common.Zero, 0, err
 	}
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
@@ -501,7 +501,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	internalAddr, err := caller.Address().InternalAddress()
 	if err != nil {
-		return nil, common.ZeroAddr, 0, err
+		return nil, common.Zero, 0, err
 	}
 
 	nonce := evm.StateDB.GetNonce(internalAddr)
@@ -514,13 +514,13 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// Calculate the gas required for the keccak256 computation of the input data.
 	gasCost, err := calculateKeccakGas(code)
 	if err != nil {
-		return nil, common.ZeroAddr, 0, err
+		return nil, common.Zero, 0, err
 	}
 
 	// attempt to grind the address
 	contractAddr, remainingGas, err := evm.attemptGrindContractCreation(caller, nonce, gas, gasCost, code)
 	if err != nil {
-		return nil, common.ZeroAddr, 0, err
+		return nil, common.Zero, 0, err
 	}
 
 	gas = remainingGas
@@ -552,7 +552,7 @@ func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, g
 
 		// Check if there is enough gas left to continue.
 		if gas < uint64(gasCost) {
-			return common.ZeroAddr, 0, fmt.Errorf("out of gas grinding contract address for %v", caller.Address().Hex())
+			return common.Zero, 0, fmt.Errorf("out of gas grinding contract address for %v", caller.Address().Hex())
 		}
 
 		// Subtract the gas cost for each attempt.
@@ -570,7 +570,7 @@ func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, g
 		}
 	}
 	// Return an error if a valid address could not be found after the maximum number of attempts.
-	return common.ZeroAddr, 0, fmt.Errorf("exceeded number of attempts grinding address %v", caller.Address().Hex())
+	return common.Zero, 0, fmt.Errorf("exceeded number of attempts grinding address %v", caller.Address().Hex())
 }
 
 // Create2 creates a new contract using code as deployment code.

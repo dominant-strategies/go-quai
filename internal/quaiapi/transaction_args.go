@@ -54,9 +54,9 @@ type TransactionArgs struct {
 }
 
 // from retrieves the transaction sender address.
-func (arg *TransactionArgs) from() common.Address {
+func (arg *TransactionArgs) from(nodeLocation common.Location) common.Address {
 	if arg.From == nil {
-		return common.ZeroAddr
+		return common.ZeroAddress(nodeLocation)
 	}
 	return *arg.From
 }
@@ -127,7 +127,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		args.Value = new(hexutil.Big)
 	}
 	if args.Nonce == nil {
-		nonce, err := b.GetPoolNonce(ctx, args.from())
+		nonce, err := b.GetPoolNonce(ctx, args.from(b.NodeLocation()))
 		if err != nil {
 			return err
 		}
@@ -171,8 +171,8 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 // ToMessage converts th transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, nodeCtx int) (types.Message, error) {
-	if nodeCtx != common.ZONE_CTX {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, nodeLocation common.Location) (types.Message, error) {
+	if nodeLocation.Context() != common.ZONE_CTX {
 		return types.Message{}, errors.New("toMessage can only called in zone chain")
 	}
 	// Reject invalid combinations of fee styles
@@ -180,7 +180,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		return types.Message{}, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// Set sender address or use zero address if none specified.
-	addr := args.from()
+	addr := args.from(nodeLocation)
 
 	// Set default gas & gas price if none were set
 	gas := globalGasCap

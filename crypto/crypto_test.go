@@ -19,6 +19,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"encoding/hex"
 	"io/ioutil"
 	"math/big"
@@ -32,6 +33,7 @@ import (
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
 var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
+var nodeLocation = common.Location{0, 0}
 
 // These tests are sanity checks.
 // They should ensure that we don't e.g. use Sha3-224 instead of Sha3-256
@@ -94,7 +96,7 @@ func TestUnmarshalPubkey(t *testing.T) {
 
 func TestSign(t *testing.T) {
 	key, _ := HexToECDSA(testPrivHex)
-	addr := common.HexToAddress(testAddrHex)
+	addr := common.HexToAddress(testAddrHex, nodeLocation)
 
 	msg := Keccak256([]byte("foo"))
 	sig, err := Sign(msg, key)
@@ -106,7 +108,7 @@ func TestSign(t *testing.T) {
 		t.Errorf("ECRecover error: %s", err)
 	}
 	pubKey, _ := UnmarshalPubkey(recoveredPub)
-	recoveredAddr := PubkeyToAddress(*pubKey)
+	recoveredAddr := PubkeyToAddress(*pubKey, nodeLocation)
 	if !addr.Equal(recoveredAddr) {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr)
 	}
@@ -116,7 +118,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Errorf("ECRecover error: %s", err)
 	}
-	recoveredAddr2 := PubkeyToAddress(*recoveredPub2)
+	recoveredAddr2 := PubkeyToAddress(*recoveredPub2, nodeLocation)
 	if !addr.Equal(recoveredAddr2) {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr2)
 	}
@@ -133,18 +135,18 @@ func TestInvalidSign(t *testing.T) {
 
 func TestNewContractAddress(t *testing.T) {
 	key, _ := HexToECDSA(testPrivHex)
-	addr := common.HexToAddress(testAddrHex)
-	genAddr := PubkeyToAddress(key.PublicKey)
+	addr := common.HexToAddress(testAddrHex, nodeLocation)
+	genAddr := PubkeyToAddress(key.PublicKey, nodeLocation)
 	// sanity check before using addr to create contract address
 	checkAddr(t, genAddr, addr)
 
-	caddr0 := CreateAddress(addr, 0, []byte{})
-	caddr1 := CreateAddress(addr, 1, []byte{})
-	caddr2 := CreateAddress(addr, 2, []byte{})
+	caddr0 := CreateAddress(addr, 0, []byte{}, nodeLocation)
+	caddr1 := CreateAddress(addr, 1, []byte{}, nodeLocation)
+	caddr2 := CreateAddress(addr, 2, []byte{}, nodeLocation)
 
-	checkAddr(t, common.HexToAddress("30263b910ca0cbef50074e481948ae8f874c572c"), caddr0)
-	checkAddr(t, common.HexToAddress("70d2bda1ce21c19581734aa7e4b09e5b103b2fbb"), caddr1)
-	checkAddr(t, common.HexToAddress("d2e000cd536ab443658780b4bafc9cd37bd19e72"), caddr2)
+	checkAddr(t, common.HexToAddress("30263b910ca0cbef50074e481948ae8f874c572c", nodeLocation), caddr0)
+	checkAddr(t, common.HexToAddress("70d2bda1ce21c19581734aa7e4b09e5b103b2fbb", nodeLocation), caddr1)
+	checkAddr(t, common.HexToAddress("d2e000cd536ab443658780b4bafc9cd37bd19e72", nodeLocation), caddr2)
 }
 
 func TestLoadECDSA(t *testing.T) {
@@ -298,4 +300,21 @@ func TestPythonIntegration(t *testing.T) {
 
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)
+}
+
+func TestGenerateAddress(t *testing.T) {
+	found := false
+	for !found {
+		privKey, err := ecdsa.GenerateKey(S256(), rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		addr := PubkeyToAddress(privKey.PublicKey, nodeLocation)
+		if internal, err := addr.InternalAddress(); err == nil {
+			t.Log(internal.String())
+			t.Log(hex.EncodeToString(FromECDSA(privKey)))
+			found = true
+			break
+		}
+	}
 }
