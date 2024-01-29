@@ -33,7 +33,14 @@ type PeerManager interface {
 	// Decreases the peer's liveliness score
 	MarkLatentPeer(core.PeerID)
 
+	// Increases the peer's liveliness score. Not exposed outside of NetworkingAPI
+	MarkResponsivePeer(core.PeerID)
+	// Decreases the peer's liveliness score. Not exposed outside of NetworkingAPI
+	MarkUnresponsivePeer(core.PeerID)
+
+	// Protects the peer's connection from being disconnected
 	ProtectPeer(core.PeerID)
+	// Bans the peer's connection from being re-established
 	BanPeer(core.PeerID)
 }
 
@@ -67,8 +74,12 @@ func (pm *BasicPeerManager) MarkLatentPeer(peer p2p.PeerID) {
 	pm.TagPeer(peer, "latency_reports", 1)
 }
 
-func (pm *BasicPeerManager) DemotePeer(peer p2p.PeerID) {
-	pm.TagPeer(peer, "punishment", 1)
+func (pm *BasicPeerManager) MarkResponsivePeer(peer p2p.PeerID) {
+	pm.TagPeer(peer, "responses_served", 1)
+}
+
+func (pm *BasicPeerManager) MarkUnresponsivePeer(peer p2p.PeerID) {
+	pm.TagPeer(peer, "responses_missed", 1)
 }
 
 func (pm *BasicPeerManager) ProtectPeer(peer p2p.PeerID) {
