@@ -42,9 +42,10 @@ type NetworkingAPI interface {
 	Request(common.Location, common.Hash, interface{}) chan interface{}
 
 	// Methods to report a peer to the P2PClient as behaving maliciously
-	// Promote and Demote record the peer's behavior in the peer manager
-	PromotePeer(core.PeerID)
-	DemotePeer(core.PeerID)
+	// Should be called whenever a peer sends us data that is acceptably lively
+	MarkLivelyPeer(core.PeerID)
+	// Should be called whenever a peer sends us data that is stale or latent
+	MarkLatentPeer(core.PeerID)
 
 	// Protects the peer's connection from being pruned
 	ProtectPeer(core.PeerID)

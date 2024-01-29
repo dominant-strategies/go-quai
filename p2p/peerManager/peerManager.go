@@ -28,8 +28,11 @@ type PeerManager interface {
 	UnblockPeer(p peer.ID) error
 	UnblockSubnet(ipnet *net.IPNet) error
 
-	PromotePeer(core.PeerID)
-	DemotePeer(core.PeerID)
+	// Increases the peer's liveliness score
+	MarkLivelyPeer(core.PeerID)
+	// Decreases the peer's liveliness score
+	MarkLatentPeer(core.PeerID)
+
 	ProtectPeer(core.PeerID)
 	BanPeer(core.PeerID)
 }
@@ -56,8 +59,12 @@ func NewManager(low int, high int, datastore datastore.Datastore) (*BasicPeerMan
 	}, nil
 }
 
-func (pm *BasicPeerManager) PromotePeer(peer p2p.PeerID) {
-	pm.TagPeer(peer, "reward", 1)
+func (pm *BasicPeerManager) MarkLivelyPeer(peer p2p.PeerID) {
+	pm.TagPeer(peer, "liveness_reports", 1)
+}
+
+func (pm *BasicPeerManager) MarkLatentPeer(peer p2p.PeerID) {
+	pm.TagPeer(peer, "latency_reports", 1)
 }
 
 func (pm *BasicPeerManager) DemotePeer(peer p2p.PeerID) {

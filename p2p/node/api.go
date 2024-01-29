@@ -169,20 +169,20 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 	return resultChan
 }
 
-func (p *P2PNode) PromotePeer(peer p2p.PeerID) {
+func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID) {
 	log.WithFields(log.Fields{
 		"peer": peer,
 	}).Debug("Recording well-behaving peer")
 
-	p.peerManager.PromotePeer(peer)
+	p.peerManager.MarkLivelyPeer(peer)
 }
 
-func (p *P2PNode) DemotePeer(peer p2p.PeerID) {
+func (p *P2PNode) MarkLatentPeer(peer p2p.PeerID) {
 	log.WithFields(log.Fields{
 		"peer": peer,
 	}).Debug("Recording misbehaving peer")
 
-	p.peerManager.DemotePeer(peer)
+	p.peerManager.MarkLatentPeer(peer)
 }
 
 func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {
