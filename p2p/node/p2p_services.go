@@ -81,8 +81,8 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 		log.Warn("peer returned unexpected type")
 	}
 
-	// If this peer responded with an invalid response, report them for misbehaving.
-	p.DemotePeer(peerID)
+	// If this peer responded with an invalid response, ban them for misbehaving.
+	p.BanPeer(peerID)
 	return nil, errors.New("invalid response")
 }
 
