@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hnlq715/golang-lru"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -25,7 +27,6 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	lru "github.com/hnlq715/golang-lru"
 )
 
 const (
@@ -256,10 +257,10 @@ func (c *Core) procAppendQueue() {
 		c.serviceBlocks(hashNumberList)
 		if len(hashNumberList) > 0 {
 			c.logger.WithFields(log.Fields{
-				"len":        len(hashNumberPriorityList),
-				"firstEntry": hashNumberPriorityList[0].Number,
-				"lastEntry":  hashNumberPriorityList[len(hashNumberPriorityList)-1].Number,
-			}).Info("Size of hashNumberPriorityList")
+				"len":        len(hashNumberList),
+				"firstEntry": hashNumberList[0].Number,
+				"lastEntry":  hashNumberList[len(hashNumberList)-1].Number,
+			}).Info("Size of hashNumberList")
 		}
 	}
 	c.procCounter++
