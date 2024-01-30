@@ -357,13 +357,13 @@ func (loc Location) HasZone() bool {
 
 func (loc Location) AssertValid() {
 	if !loc.HasRegion() && loc.HasZone() {
-		log.Fatal("cannot specify zone without also specifying region.")
+		log.Global.Fatal("cannot specify zone without also specifying region.")
 	}
 	if loc.Region() >= NumRegionsInPrime {
-		log.Fatal("region index is not valid.")
+		log.Global.Fatal("region index is not valid.")
 	}
 	if loc.Zone() >= NumZonesInRegion {
-		log.Fatal("zone index is not valid.")
+		log.Global.Fatal("zone index is not valid.")
 	}
 }
 
@@ -412,7 +412,7 @@ func (loc Location) SubIndex(nodeLocation Location) int {
 //     that slice is zone-0-0
 func (loc Location) SubInSlice(slice Location) Location {
 	if len(slice) <= len(loc) {
-		log.Info("cannot determine sub location, because slice location is not deeper than self")
+		log.Global.Info("cannot determine sub location, because slice location is not deeper than self")
 		return nil
 	}
 	subLoc := append(loc, slice[len(loc)])
@@ -452,7 +452,7 @@ func (loc Location) Name() string {
 	case ZONE_CTX:
 		return regionName + zoneNum
 	default:
-		log.Info("cannot name invalid location")
+		log.Global.Info("cannot name invalid location")
 		return "invalid-location"
 	}
 }

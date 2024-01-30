@@ -63,21 +63,21 @@ func startCmdPreRun(cmd *cobra.Command, args []string) error {
 
 	// if no bootstrap peers are provided, use the default ones defined in config/bootnodes.go
 	if bootstrapPeers := viper.GetStringSlice(utils.BootPeersFlag.Name); len(bootstrapPeers) == 0 {
-		log.Debugf("no bootstrap peers provided. Using default ones: %v", common.BootstrapPeers)
+		log.Global.Debugf("no bootstrap peers provided. Using default ones: %v", common.BootstrapPeers)
 		viper.Set(utils.BootPeersFlag.Name, common.BootstrapPeers)
 	}
 	return nil
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
-	log.Info("Starting go-quai")
+	log.Global.Info("Starting go-quai")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// create a new p2p node
 	node, err := node.NewNode(ctx)
 	if err != nil {
-		log.WithField("error", err).Fatal("error creating node")
+		log.Global.WithField("error", err).Fatal("error creating node")
 	}
 
 	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
@@ -85,17 +85,17 @@ func runStart(cmd *cobra.Command, args []string) error {
 	var nodeWG sync.WaitGroup
 	consensus, err := utils.StartQuaiBackend(ctx, node, logLevel, &nodeWG)
 	if err != nil {
-		log.WithField("error", err).Fatal("error creating consensus backend")
+		log.Global.WithField("error", err).Fatal("error creating consensus backend")
 	}
 
 	// start the p2p node
 	node.SetConsensusBackend(consensus)
 	if err := node.Start(); err != nil {
-		log.WithField("error", err).Fatal("error starting node")
+		log.Global.WithField("error", err).Fatal("error starting node")
 	}
 
 	if viper.IsSet(utils.MetricsEnabledFlag.Name) {
-		log.Info("Starting metrics")
+		log.Global.Info("Starting metrics")
 		metrics_config.EnableMetrics()
 		go metrics_config.StartProcessMetrics()
 	}
@@ -104,12 +104,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	log.Warn("Received 'stop' signal, shutting down gracefully...")
+	log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
 	cancel()
 	nodeWG.Wait()
 	if err := node.Stop(); err != nil {
 		panic(err)
 	}
-	log.Warn("Node is offline")
+	log.Global.Warn("Node is offline")
 	return nil
 }

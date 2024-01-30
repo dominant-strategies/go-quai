@@ -26,9 +26,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/golang/snappy"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/golang/snappy"
 )
 
 var (
@@ -241,7 +242,7 @@ func (t *freezerTable) repair() error {
 	for contentExp != contentSize {
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"indexed": common.StorageSize(contentExp),
 				"stored":  common.StorageSize(contentSize),
 			}).Warn("Truncating dangling head")
@@ -252,7 +253,7 @@ func (t *freezerTable) repair() error {
 		}
 		// Truncate the index to point within the head file
 		if contentExp > contentSize {
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"indexed": common.StorageSize(contentExp),
 				"stored":  common.StorageSize(contentSize),
 			}).Warn("Truncating dangling indexes")
@@ -297,7 +298,7 @@ func (t *freezerTable) repair() error {
 	if err := t.preopen(); err != nil {
 		return err
 	}
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"items": t.items,
 		"size":  common.StorageSize(t.headBytes),
 	}).Debug("Chain freezer table opened")
@@ -333,9 +334,9 @@ func (t *freezerTable) truncate(items uint64) error {
 		return nil
 	}
 	// Something's out of sync, truncate the table's offset index
-	logger := log.Debug
+	logger := log.Global.Debug
 	if existing > items+1 {
-		logger = log.Warn // Only loud warn if we delete multiple items
+		logger = log.Global.Warn // Only loud warn if we delete multiple items
 	}
 	logger("Truncating freezer table", "items", existing, "limit", items)
 	if err := truncateFreezerFile(t.index, int64(items+1)*indexEntrySize); err != nil {

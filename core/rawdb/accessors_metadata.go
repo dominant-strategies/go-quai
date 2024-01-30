@@ -46,10 +46,10 @@ func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
 func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 	enc, err := rlp.EncodeToBytes(version)
 	if err != nil {
-		log.WithField("err", err).Fatal("Failed to encode database version")
+		log.Global.WithField("err", err).Fatal("Failed to encode database version")
 	}
 	if err = db.Put(databaseVersionKey, enc); err != nil {
-		log.WithField("err", err).Fatal("Failed to store the database version")
+		log.Global.WithField("err", err).Fatal("Failed to store the database version")
 	}
 }
 
@@ -61,7 +61,7 @@ func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainCon
 	}
 	var config params.ChainConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid chain config JSON")
@@ -77,10 +77,10 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		log.WithField("err", err).Fatal("Failed to JSON encode chain config")
+		log.Global.WithField("err", err).Fatal("Failed to JSON encode chain config")
 	}
 	if err := db.Put(configKey(hash), data); err != nil {
-		log.WithField("err", err).Fatal("Failed to store chain config")
+		log.Global.WithField("err", err).Fatal("Failed to store chain config")
 	}
 }
 
@@ -129,15 +129,15 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	var uncleanShutdowns crashList
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.WithField("err", err).Warn("Error reading unclean shutdown markers")
+		log.Global.WithField("err", err).Warn("Error reading unclean shutdown markers")
 	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
-		log.WithField("err", err).Error("Error decoding unclean shutdown markers") // Should mos def _not_ happen
+		log.Global.WithField("err", err).Error("Error decoding unclean shutdown markers") // Should mos def _not_ happen
 	}
 	if l := len(uncleanShutdowns.Recent); l > 0 {
 		uncleanShutdowns.Recent = uncleanShutdowns.Recent[:l-1]
 	}
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
-		log.WithField("err", err).Warn("Failed to clear unclean-shutdown marker")
+		log.Global.WithField("err", err).Warn("Failed to clear unclean-shutdown marker")
 	}
 }

@@ -203,7 +203,7 @@ func (stat *generateStats) report() {
 			}...)
 		}
 	}
-	log.WithField("ctx", ctx).Info("Iterating state snapshot")
+	log.Global.WithField("ctx", ctx).Info("Iterating state snapshot")
 }
 
 // reportDone prints the last log when the whole generation is finished.
@@ -217,7 +217,7 @@ func (stat *generateStats) reportDone() {
 		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
 	}
 	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
-	log.WithField("ctx", ctx).Info("Iterated snapshot")
+	log.Global.WithField("ctx", ctx).Info("Iterated snapshot")
 }
 
 // runReport periodically prints the progress information.

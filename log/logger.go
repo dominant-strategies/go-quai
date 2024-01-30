@@ -28,7 +28,7 @@ const (
 
 var (
 	// logger instance used by the application
-	logger *logrus.Logger
+	Global *logrus.Logger
 
 	// TODO: consider refactoring to dinamically read the app name (i.e. "go-quai") ?
 	// default logfile path
@@ -36,7 +36,7 @@ var (
 )
 
 func init() {
-	logger = createStandardLogger(defaultLogFilePath, defaultLogLevel.String(), true)
+	Global = createStandardLogger(defaultLogFilePath, defaultLogLevel.String(), true)
 }
 
 func SetGlobalLogger(logFilename string, logLevel string) {
@@ -44,10 +44,10 @@ func SetGlobalLogger(logFilename string, logLevel string) {
 	if err != nil {
 		level = defaultLogLevel
 	}
-	logger.SetLevel(level)
+	Global.SetLevel(level)
 
 	if logFilename == "" {
-		logger.WithFields(Fields{
+		Global.WithFields(Fields{
 			"path":  defaultLogFilePath,
 			"level": level.String(),
 		}).Info("Global logger started")
@@ -60,9 +60,9 @@ func SetGlobalLogger(logFilename string, logLevel string) {
 		MaxBackups: 3,
 		MaxAge:     28, //days
 	}
-	logger.SetOutput(io.MultiWriter(output, os.Stdout))
+	Global.SetOutput(io.MultiWriter(output, os.Stdout))
 
-	logger.WithFields(Fields{
+	Global.WithFields(Fields{
 		"path":  logFilename,
 		"level": level.String(),
 	}).Info("Global logger started")
@@ -107,60 +107,4 @@ func createStandardLogger(logFilename string, logLevel string, stdOut bool) *log
 	}
 	logger.SetLevel(level)
 	return logger
-}
-
-func WithField(key string, val interface{}) *logrus.Entry {
-	return logger.WithField(key, val)
-}
-
-func WithFields(fields Fields) *logrus.Entry {
-	return logger.WithFields(fields)
-}
-
-func Trace(keyvals ...interface{}) {
-	logger.Trace(keyvals...)
-}
-
-func Tracef(msg string, args ...interface{}) {
-	logger.Tracef(msg, args...)
-}
-
-func Debug(keyvals ...interface{}) {
-	logger.Debug(keyvals...)
-}
-
-func Debugf(msg string, args ...interface{}) {
-	logger.Debugf(msg, args...)
-}
-
-func Info(keyvals ...interface{}) {
-	logger.Info(keyvals...)
-}
-
-func Infof(msg string, args ...interface{}) {
-	logger.Infof(msg, args...)
-}
-
-func Warn(keyvals ...interface{}) {
-	logger.Warn(keyvals...)
-}
-
-func Warnf(msg string, args ...interface{}) {
-	logger.Warnf(msg, args...)
-}
-
-func Error(keyvals ...interface{}) {
-	logger.Error(keyvals...)
-}
-
-func Errorf(msg string, args ...interface{}) {
-	logger.Errorf(msg, args...)
-}
-
-func Fatal(keyvals ...interface{}) {
-	logger.Fatal(keyvals...)
-}
-
-func Fatalf(msg string, args ...interface{}) {
-	logger.Fatalf(msg, args...)
 }

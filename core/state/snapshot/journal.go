@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -87,7 +88,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// etc.), we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"diskroot": base.root,
 			"diffs":    "missing",
 		}).Warn("Loaded snapshot journal")
@@ -98,11 +99,11 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// Firstly, resolve the first element as the journal version
 	version, err := r.Uint()
 	if err != nil {
-		log.WithField("err", err).Warn("Failed to resolve the journal version")
+		log.Global.WithField("err", err).Warn("Failed to resolve the journal version")
 		return base, generator, nil
 	}
 	if version != journalVersion {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"required": journalVersion,
 			"got":      version,
 		}).Warn("Discarded the snapshot journal with wrong version")
@@ -119,7 +120,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// It can happen that Quai crashes without persisting the latest
 	// diff journal.
 	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"diskroot": base.root,
 			"diffs":    "unmatched",
 		}).Warn("Loaded snapshot journal")
@@ -130,7 +131,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if err != nil {
 		return nil, journalGenerator{}, err
 	}
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"diskroot": base.root,
 		"diffhead": snapshot.Root(),
 	}).Debug("Loaded snapshot journal")
@@ -158,7 +159,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	}
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
-		log.WithField("err", err).Warn("Failed to load new-format journal")
+		log.Global.WithField("err", err).Warn("Failed to load new-format journal")
 		return nil, false, err
 	}
 	// Entire snapshot journal loaded, sanity check the head. If the loaded
@@ -180,7 +181,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		// the disk layer is always higher than chain head. It can
 		// be eventually recovered when the chain head beyonds the
 		// disk layer.
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"snaproot":  head,
 			"chainroot": root,
 		}).Warn("Snapshot is not continuous with chain")
@@ -284,7 +285,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// Ensure the generator stats is written even if none was ran this cycle
 	journalProgress(dl.diskdb, dl.genMarker, stats)
 
-	log.WithField("root", dl.root).Debug("Journalled disk layer")
+	log.Global.WithField("root", dl.root).Debug("Journalled disk layer")
 	return dl.root, nil
 }
 
@@ -334,7 +335,7 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"root":   dl.root,
 		"parent": dl.parent.Root(),
 	}).Debug("Journalled diff layer")

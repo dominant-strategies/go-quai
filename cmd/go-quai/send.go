@@ -64,7 +64,7 @@ func sendCmdPreRun(cmd *cobra.Command, args []string) error {
 
 	// if no bootstrap peers are provided, use the default ones defined in config/bootnodes.go
 	if bootstrapPeers := viper.GetStringSlice(utils.BootPeersFlag.Name); len(bootstrapPeers) == 0 {
-		log.Debugf("no bootstrap peers provided. Using default ones: %v", common.BootstrapPeers)
+		log.Global.Debugf("no bootstrap peers provided. Using default ones: %v", common.BootstrapPeers)
 		viper.Set(utils.BootPeersFlag.Name, common.BootstrapPeers)
 	}
 	return nil
@@ -78,12 +78,12 @@ func runSend(cmd *cobra.Command, args []string) error {
 	// create a new p2p node
 	node, err := node.NewNode(ctx)
 	if err != nil {
-		log.Fatalf("error creating node: %s", err)
+		log.Global.Fatalf("error creating node: %s", err)
 	}
 
 	// Ensure target peer is set, or use a default
 	if targetPeer == "" {
-		log.Warnf("no target peer provided. Using default bootnode: %s", common.BootstrapPeers[0])
+		log.Global.Warnf("no target peer provided. Using default bootnode: %s", common.BootstrapPeers[0])
 		targetPeer = common.BootstrapPeers[0]
 	}
 
@@ -95,12 +95,12 @@ func runSend(cmd *cobra.Command, args []string) error {
 
 	// start node
 	if err := node.Start(); err != nil {
-		log.Fatalf("error starting node: %s", err)
+		log.Global.Fatalf("error starting node: %s", err)
 	}
 
 	// Connect to the target peer
 	if err := node.Host.Connect(ctx, *targetAddrInfo); err != nil {
-		log.Errorf("error connecting to target peer: %+v, error: %s", targetAddrInfo.ID, err)
+		log.Global.Errorf("error connecting to target peer: %+v, error: %s", targetAddrInfo.ID, err)
 		return err
 	}
 
@@ -108,28 +108,28 @@ func runSend(cmd *cobra.Command, args []string) error {
 	sendMessage := func() error {
 		stream, err := node.Host.NewStream(ctx, targetAddrInfo.ID, protocol.ID(protocolID))
 		if err != nil {
-			log.Errorf("error opening stream: %s", err)
+			log.Global.Errorf("error opening stream: %s", err)
 			return err
 		}
 		defer stream.Close()
 
 		_, err = stream.Write([]byte(message + "\n"))
 		if err != nil {
-			log.Errorf("error writing to stream: %s", err)
+			log.Global.Errorf("error writing to stream: %s", err)
 			return err
 		}
 
-		log.Debugf("Sent message: '%s'. Waiting for response...", message)
+		log.Global.Debugf("Sent message: '%s'. Waiting for response...", message)
 
 		// Read the response from host2
 		buf := bufio.NewReader(stream)
 		// response, err := buf.ReadString('\n')
 		response, err := readWithTimeout(buf, ctx)
 		if err != nil {
-			log.Errorf("error reading from stream: %s", err)
+			log.Global.Errorf("error reading from stream: %s", err)
 			return err
 		}
-		log.Debugf("Received response: '%s'", response)
+		log.Global.Debugf("Received response: '%s'", response)
 		return nil
 	}
 
@@ -144,15 +144,15 @@ func runSend(cmd *cobra.Command, args []string) error {
 			select {
 			case <-ticker.C:
 				if err := sendMessage(); err != nil {
-					log.Errorf("Error sending message: %s", err)
+					log.Global.Errorf("Error sending message: %s", err)
 				}
 			case <-ch:
-				log.Warnf("Received 'stop' signal, shutting down gracefully...")
+				log.Global.Warnf("Received 'stop' signal, shutting down gracefully...")
 				cancel()
 				if err := node.Stop(); err != nil {
 					panic(err)
 				}
-				log.Warnf("Node is offline")
+				log.Global.Warnf("Node is offline")
 				return nil
 			case <-ctx.Done():
 				return ctx.Err()

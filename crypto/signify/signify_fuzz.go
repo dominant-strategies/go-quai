@@ -116,7 +116,7 @@ func Fuzz(data []byte) int {
 func getKey(fileS string) (string, error) {
 	file, err := os.Open(fileS)
 	if err != nil {
-		log.Fatal(err)
+		log.Global.Fatal(err)
 	}
 	defer file.Close()
 

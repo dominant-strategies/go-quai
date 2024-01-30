@@ -50,7 +50,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// freezerdb return N items (e.g up to 1000 items per go)
 		// That would require an API change in Ancients though
 		if h, err := db.Ancient(freezerHashTable, i); err != nil {
-			log.WithField("err", err).Fatal("Failed to init database from freezer")
+			log.Global.WithField("err", err).Fatal("Failed to init database from freezer")
 		} else {
 			hash = common.BytesToHash(h)
 		}
@@ -58,13 +58,13 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.WithField("err", err).Fatal("Failed to write data to db")
+				log.Global.WithField("err", err).Fatal("Failed to write data to db")
 			}
 			batch.Reset()
 		}
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"total":   frozen,
 				"number":  i,
 				"hash":    hash,
@@ -74,12 +74,12 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		}
 	}
 	if err := batch.Write(); err != nil {
-		log.WithField("err", err).Fatal("Failed to write data to db")
+		log.Global.WithField("err", err).Fatal("Failed to write data to db")
 	}
 	batch.Reset()
 
 	WriteHeadHeaderHash(db, hash)
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"blocks":  frozen,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("Initialized database from freezer")
@@ -145,7 +145,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		for data := range rlpCh {
 			var body types.Body
 			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"block": data.number,
 					"err":   err,
 				}).Warn("Failed to decode block body")
@@ -224,14 +224,14 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				WriteTxIndexTail(batch, lastNum) // Also write the tail here
 				if err := batch.Write(); err != nil {
-					log.WithField("err", err).Fatal("Failed writing batch to db")
+					log.Global.WithField("err", err).Fatal("Failed writing batch to db")
 					return
 				}
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"blocks":  blocks,
 					"txs":     txs,
 					"tail":    lastNum,
@@ -247,19 +247,19 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	// be flushed anyway.
 	WriteTxIndexTail(batch, lastNum)
 	if err := batch.Write(); err != nil {
-		log.WithField("err", err).Fatal("Failed writing batch to db")
+		log.Global.WithField("err", err).Fatal("Failed writing batch to db")
 		return
 	}
 	select {
 	case <-interrupt:
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"tail":    lastNum,
 			"elapsed": common.PrettyDuration(time.Since(start)),
 		}).Debug("Transaction indexing interrupted")
 	default:
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"tail":    lastNum,
@@ -331,14 +331,14 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			if blocks%1000 == 0 {
 				WriteTxIndexTail(batch, nextNum)
 				if err := batch.Write(); err != nil {
-					log.WithField("err", err).Fatal("Failed writing batch to db")
+					log.Global.WithField("err", err).Fatal("Failed writing batch to db")
 					return
 				}
 				batch.Reset()
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"blocks":  blocks,
 					"txs":     txs,
 					"total":   to - from,
@@ -353,19 +353,19 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 	// be flushed anyway.
 	WriteTxIndexTail(batch, nextNum)
 	if err := batch.Write(); err != nil {
-		log.WithField("err", err).Fatal("Failed writing batch to db")
+		log.Global.WithField("err", err).Fatal("Failed writing batch to db")
 		return
 	}
 	select {
 	case <-interrupt:
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"total":   to - from,
 			"elapsed": common.PrettyDuration(time.Since(start)),
 		}).Debug("Transaction unindexing interrupted")
 	default:
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"blocks":  blocks,
 			"txs":     txs,
 			"total":   to - from,

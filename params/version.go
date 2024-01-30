@@ -99,7 +99,7 @@ type CachedVersion struct {
 func (v *CachedVersion) load() {
 	ver, err := readVersionFile()
 	if err != nil {
-		log.Fatal("failed to read version file", err)
+		log.Global.Fatal("failed to read version file", err)
 	}
 	v.major.Store(ver.major)
 	v.minor.Store(ver.minor)

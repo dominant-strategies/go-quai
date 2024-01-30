@@ -17,6 +17,8 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -25,7 +27,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
 	"github.com/dominant-strategies/go-quai/quai"
-	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 // P2PNode represents a libp2p node
@@ -65,7 +66,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	// Load bootpeers
 	bootpeers, err := loadBootPeers()
 	if err != nil {
-		log.Errorf("error loading bootpeers: %s", err)
+		log.Global.Errorf("error loading bootpeers: %s", err)
 		return nil, err
 	}
 
@@ -76,7 +77,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("error creating libp2p connection manager: %s", err)
+		log.Global.Fatalf("error creating libp2p connection manager: %s", err)
 		return nil, err
 	}
 
@@ -132,7 +133,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 				dual.WanDHTOption(
 					kaddht.Mode(kaddht.ModeServer),
 					kaddht.BootstrapPeersFunc(func() []peer.AddrInfo {
-						log.Debugf("Bootstrapping to the following peers: %v", bootpeers)
+						log.Global.Debugf("Bootstrapping to the following peers: %v", bootpeers)
 						return bootpeers
 					}),
 					kaddht.ProtocolPrefix("/quai"),
@@ -143,7 +144,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		}),
 	)
 	if err != nil {
-		log.Fatalf("error creating libp2p host: %s", err)
+		log.Global.Fatalf("error creating libp2p host: %s", err)
 		return nil, err
 	}
 
@@ -156,7 +157,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	// Create the identity service
 	idServ, err := identify.NewIDService(host, idOpts...)
 	if err != nil {
-		log.Fatalf("error creating libp2p identity service: %s", err)
+		log.Global.Fatalf("error creating libp2p identity service: %s", err)
 		return nil, err
 	}
 	// Register the identity service with the host
@@ -164,7 +165,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 	// log the p2p node's ID
 	nodeID := host.ID()
-	log.Infof("node created: %s", nodeID)
+	log.Global.Infof("node created: %s", nodeID)
 
 	// Create a gossipsub instance with helper functions
 	ps, err := pubsubManager.NewGossipSubManager(ctx, host)
@@ -178,7 +179,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		"blocks": func() *lru.Cache[common.Hash, interface{}] {
 			cache, err := lru.New[common.Hash, interface{}](10)
 			if err != nil {
-				log.Fatal("error initializing cache;", err)
+				log.Global.Fatal("error initializing cache;", err)
 			}
 			return cache
 		}(),
@@ -206,7 +207,7 @@ func (p *P2PNode) pickCache(datatype interface{}) *lru.Cache[common.Hash, interf
 	case *types.Block:
 		return p.cache["blocks"]
 	default:
-		log.Fatalf("unsupported type")
+		log.Global.Fatalf("unsupported type")
 		return nil
 	}
 }

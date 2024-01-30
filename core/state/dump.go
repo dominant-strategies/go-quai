@@ -135,7 +135,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		start            = time.Now()
 		logged           = time.Now()
 	)
-	log.WithField("root", s.trie.Hash()).Info("Trie dumping started")
+	log.Global.WithField("root", s.trie.Hash()).Info("Trie dumping started")
 	c.OnRoot(s.trie.Hash())
 
 	it := trie.NewIterator(s.trie.NodeIterator(conf.Start))
@@ -175,7 +175,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			for storageIt.Next() {
 				_, content, _, err := rlp.Split(storageIt.Value)
 				if err != nil {
-					log.WithField("err", err).Error("Failed to decode the value returned by iterator")
+					log.Global.WithField("err", err).Error("Failed to decode the value returned by iterator")
 					continue
 				}
 				account.Storage[common.BytesToHash(s.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(content)
@@ -184,7 +184,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		c.OnAccount(internal, account)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"at":       it.Key,
 				"accounts": accounts,
 				"elapsed":  common.PrettyDuration(time.Since(start)),
@@ -199,9 +199,9 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		}
 	}
 	if missingPreimages > 0 {
-		log.WithField("missing", missingPreimages).Warn("Dump incomplete due to missing preimages")
+		log.Global.WithField("missing", missingPreimages).Warn("Dump incomplete due to missing preimages")
 	}
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"accounts": accounts,
 		"elapsed":  common.PrettyDuration(time.Since(start)),
 	}).Info("Trie dumping complete")

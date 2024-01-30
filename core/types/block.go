@@ -29,11 +29,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"lukechampine.com/blake3"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
-	"lukechampine.com/blake3"
 )
 
 var (
@@ -862,7 +863,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Tran
 		copy(b.subManifest, subManifest)
 	}
 	if nodeCtx < common.ZONE_CTX && subManifestHash != b.Header().ManifestHash(nodeCtx+1) {
-		log.Error("attempted to build block with invalid subordinate manifest")
+		log.Global.Error("attempted to build block with invalid subordinate manifest")
 		return nil
 	}
 

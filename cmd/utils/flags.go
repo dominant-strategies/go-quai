@@ -667,7 +667,7 @@ func ParseCoinbaseAddresses() (map[string]string, error) {
 	coinbases := make(map[string]string)
 
 	if coinbaseInput == "" {
-		log.Info("No coinbase addresses provided")
+		log.Global.Info("No coinbase addresses provided")
 		return coinbases, nil
 	}
 
@@ -676,15 +676,15 @@ func ParseCoinbaseAddresses() (map[string]string, error) {
 		address := common.FromHex(coinbase)
 		location := common.LocationFromAddressBytes(address)
 		if _, exists := coinbases[location.Name()]; exists {
-			log.WithField("shard", location.Name()).Fatalf("Duplicate coinbase address for shard")
+			log.Global.WithField("shard", location.Name()).Fatalf("Duplicate coinbase address for shard")
 		}
 		if err := isValidAddress(coinbase); err != nil {
-			log.WithField("err", err).Fatalf("Error parsing coinbase addresses")
+			log.Global.WithField("err", err).Fatalf("Error parsing coinbase addresses")
 		}
 		coinbases[location.Name()] = coinbase
 	}
 
-	log.Infof("Coinbase Addresses: %v", coinbases)
+	log.Global.Infof("Coinbase Addresses: %v", coinbases)
 
 	return coinbases, nil
 }
@@ -718,7 +718,7 @@ func CreateAndBindFlag(flag Flag, cmd *cobra.Command) {
 	case *BigIntValue:
 		cmd.PersistentFlags().VarP(val, flag.GetName(), flag.GetAbbreviation(), flag.GetUsage())
 	default:
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"flag": flag.GetName(),
 			"type": fmt.Sprintf("%T", val),
 		}).Error("Flag type not supported")
@@ -916,7 +916,7 @@ func HexAddress(account string, nodeLocation common.Location) (common.Address, e
 func setEtherbase(cfg *quaiconfig.Config) {
 	coinbaseMap, err := ParseCoinbaseAddresses()
 	if err != nil {
-		log.Fatalf("error parsing coinbase addresses: %s", err)
+		log.Global.Fatalf("error parsing coinbase addresses: %s", err)
 	}
 	// TODO: Have to handle more shards in the future
 	etherbase := coinbaseMap[cfg.NodeLocation.Name()]
@@ -1485,14 +1485,14 @@ func addFlagsToCategory(flags []Flag) {
 // Write a function to write the default values of each flag to a file
 func WriteDefaultConfigFile(configDir string, configFileName string, configType string) error {
 	if configDir == "" {
-		log.Fatalf("No config file path provided")
+		log.Global.Fatalf("No config file path provided")
 	}
 
 	// Check that dir exists, create if it doesn't
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		err := os.MkdirAll(configDir, 0755)
 		if err != nil {
-			log.Fatalf("Failed to create config directory: %s", err)
+			log.Global.Fatalf("Failed to create config directory: %s", err)
 		}
 	}
 
@@ -1502,7 +1502,7 @@ func WriteDefaultConfigFile(configDir string, configFileName string, configType 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		file, err := os.Create(configPath)
 		if err != nil {
-			log.Fatalf("Failed to create config file: %s", err)
+			log.Global.Fatalf("Failed to create config file: %s", err)
 		}
 		file.Close()
 	}
@@ -1510,7 +1510,7 @@ func WriteDefaultConfigFile(configDir string, configFileName string, configType 
 	// Open the file
 	f, err := os.OpenFile(configPath, os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Fatalf("Failed to open config file: %s", err)
+		log.Global.Fatalf("Failed to open config file: %s", err)
 	}
 	defer f.Close()
 
@@ -1532,16 +1532,16 @@ func WriteDefaultConfigFile(configDir string, configFileName string, configType 
 	case "yaml":
 		output, marshalErr = yaml.Marshal(configData)
 	default:
-		log.Fatalf("Unsupported config type: %s", configType)
+		log.Global.Fatalf("Unsupported config type: %s", configType)
 	}
 
 	if marshalErr != nil {
-		log.Fatalf("Failed to marshal config data: %s", marshalErr)
+		log.Global.Fatalf("Failed to marshal config data: %s", marshalErr)
 	}
 
 	// Write to the file
 	if _, err := f.Write(output); err != nil {
-		log.Fatalf("Failed to write to config file: %s", err)
+		log.Global.Fatalf("Failed to write to config file: %s", err)
 	}
 
 	return nil

@@ -1,11 +1,12 @@
 package pb
 
 import (
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 // Unmarshals a serialized protobuf slice of bytes into a protocol buffer type
@@ -167,21 +168,21 @@ func DecodeQuaiResponse(data []byte) (uint32, interface{}, error) {
 func ConvertAndMarshal(data interface{}) ([]byte, error) {
 	switch data := data.(type) {
 	case *types.Block:
-		log.Tracef("marshalling block: %+v", data)
+		log.Global.Tracef("marshalling block: %+v", data)
 		protoBlock, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
 		return MarshalProtoMessage(protoBlock)
 	case *types.Header:
-		log.Tracef("marshalling header: %+v", data)
+		log.Global.Tracef("marshalling header: %+v", data)
 		protoHeader, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
 		return MarshalProtoMessage(protoHeader)
 	case *types.Transaction:
-		log.Tracef("marshalling transaction: %+v", data)
+		log.Global.Tracef("marshalling transaction: %+v", data)
 		protoTransaction, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err

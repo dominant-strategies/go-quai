@@ -148,12 +148,12 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, cache, root, recovery)
 	if disabled {
-		log.Warn("Snapshot maintenance disabled (syncing)")
+		log.Global.Warn("Snapshot maintenance disabled (syncing)")
 		return snap, nil
 	}
 	if err != nil {
 		if rebuild {
-			log.WithField("err", err).Warn("Failed to load snapshot, regenerating")
+			log.Global.WithField("err", err).Warn("Failed to load snapshot, regenerating")
 			snap.Rebuild(root)
 			return snap, nil
 		}
@@ -233,7 +233,7 @@ func (t *Tree) Disable() {
 	// Note, we don't delete the sync progress
 
 	if err := batch.Write(); err != nil {
-		log.WithField("err", err).Fatal("Failed to disable snapshots")
+		log.Global.WithField("err", err).Fatal("Failed to disable snapshots")
 	}
 }
 
@@ -495,7 +495,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 				// crash and we'll detect and regenerate the snapshot.
 				if batch.ValueSize() > ethdb.IdealBatchSize {
 					if err := batch.Write(); err != nil {
-						log.WithField("err", err).Fatal("Failed to write storage deletions")
+						log.Global.WithField("err", err).Fatal("Failed to write storage deletions")
 					}
 					batch.Reset()
 				}
@@ -518,7 +518,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// the snapshot.
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.WithField("err", err).Fatal("Failed to write storage deletions")
+				log.Global.WithField("err", err).Fatal("Failed to write storage deletions")
 			}
 			batch.Reset()
 		}
@@ -555,9 +555,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Flush all the updates in the single db operation. Ensure the
 	// disk layer transition is atomic.
 	if err := batch.Write(); err != nil {
-		log.WithField("err", err).Fatal("Failed to write leftover snapshot")
+		log.Global.WithField("err", err).Fatal("Failed to write leftover snapshot")
 	}
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"root":     bottom.root,
 		"complete": base.genMarker == nil,
 	}).Debug("Journalled disk layer")
@@ -661,7 +661,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 	}
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
-	log.Info("Rebuilding state snapshot")
+	log.Global.Info("Rebuilding state snapshot")
 	t.layers = map[common.Hash]snapshot{
 		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root),
 	}

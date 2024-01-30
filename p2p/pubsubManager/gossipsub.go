@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/p2p/pb"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/pb"
 )
 
 var (
@@ -70,7 +71,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	g.subscriptions[topicName] = subscription
 
 	go func(sub *pubsub.Subscription) {
-		log.Debugf("waiting for first message on subscription: %s", sub.Topic())
+		log.Global.Debugf("waiting for first message on subscription: %s", sub.Topic())
 		for {
 			msg, err := sub.Next(g.ctx)
 			if err != nil {
@@ -78,15 +79,15 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 				if g.ctx.Err() != nil {
 					return
 				}
-				log.Errorf("error getting next message from subscription: %s", err)
+				log.Global.Errorf("error getting next message from subscription: %s", err)
 			}
-			log.Tracef("received message on topic: %s", topicName)
+			log.Global.Tracef("received message on topic: %s", topicName)
 
 			var data interface{}
 			// unmarshal the received data depending on the topic's type
 			err = pb.UnmarshalAndConvert(msg.Data, &data, datatype)
 			if err != nil {
-				log.Errorf("error unmarshalling data: %s", err)
+				log.Global.Errorf("error unmarshalling data: %s", err)
 				return
 			}
 

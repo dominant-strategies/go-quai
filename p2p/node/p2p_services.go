@@ -56,7 +56,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 
 	// Check the received request ID matches the request
 	if recvdID != id {
-		log.Warn("peer returned unexpected request ID")
+		log.Global.Warn("peer returned unexpected request ID")
 		panic("TODO: implement")
 	}
 
@@ -78,7 +78,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 			return tx, nil
 		}
 	default:
-		log.Warn("peer returned unexpected type")
+		log.Global.Warn("peer returned unexpected type")
 	}
 
 	// If this peer responded with an invalid response, ban them for misbehaving.

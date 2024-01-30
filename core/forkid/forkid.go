@@ -190,7 +190,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 			// No exact, subset or superset match. We are on differing chains, reject.
 			return ErrLocalIncompatibleOrStale
 		}
-		log.WithField("id", id).Error("Impossible fork ID validation")
+		log.Global.WithField("id", id).Error("Impossible fork ID validation")
 		return nil // Something's very wrong, accept rather than reject
 	}
 }

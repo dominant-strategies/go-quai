@@ -525,7 +525,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 	}
 	newconn, err := c.reconnectFunc(ctx)
 	if err != nil {
-		log.WithField("err", err).Trace("RPC client reconnect failed")
+		log.Global.WithField("err", err).Trace("RPC client reconnect failed")
 		return err
 	}
 	select {
@@ -574,13 +574,13 @@ func (c *Client) dispatch(codec ServerCodec) {
 			}
 
 		case err := <-c.readErr:
-			log.WithField("err", err).Debug("RPC connection read error")
+			log.Global.WithField("err", err).Debug("RPC connection read error")
 			conn.close(err, lastOp)
 			reading = false
 
 		// Reconnect:
 		case newcodec := <-c.reconnected:
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"reading": reading,
 				"conn":    newcodec.remoteAddr(),
 			}).Debug("RPC client reconnected")

@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/prometheus/client_golang/prometheus"
 	metrics "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -14,6 +13,8 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Enabled is checked by the constructor functions for all of the
@@ -155,7 +156,7 @@ func updateMetrics(metricsMap map[string]*prometheus.GaugeVec) {
 	pid := os.Getpid()
 	proc, err := process.NewProcess(int32(pid))
 	if err != nil {
-		log.Error("Failed to get process", "err", err)
+		log.Global.Error("Failed to get process", "err", err)
 	}
 
 	var wg sync.WaitGroup
@@ -185,14 +186,14 @@ func updateMetrics(metricsMap map[string]*prometheus.GaugeVec) {
 func collectCPUMetrics(cpuGaugeVec *metrics.GaugeVec, proc *process.Process) {
 	percent, err := proc.CPUPercent()
 	if err != nil {
-		log.Error("Failed to get CPU percent", "err", err)
+		log.Global.Error("Failed to get CPU percent", "err", err)
 	} else {
 		cpuGaugeVec.WithLabelValues("Go-quai").Set(percent)
 	}
 
 	usage, err := cpu.Percent(0, false)
 	if err != nil {
-		log.Error("Failed to get CPU percent", "err", err)
+		log.Global.Error("Failed to get CPU percent", "err", err)
 	} else {
 		percent = usage[0]
 		cpuGaugeVec.WithLabelValues("System").Set(percent)
@@ -200,7 +201,7 @@ func collectCPUMetrics(cpuGaugeVec *metrics.GaugeVec, proc *process.Process) {
 
 	cpuStats, err := cpu.Times(false)
 	if err != nil {
-		log.Error("Failed to get CPU stats", "err", err)
+		log.Global.Error("Failed to get CPU stats", "err", err)
 	} else {
 		iowaits := cpuStats[0].Iowait / 1 * 100 // convert to percent
 		cpuGaugeVec.WithLabelValues("Iowait").Set(iowaits)
@@ -208,7 +209,7 @@ func collectCPUMetrics(cpuGaugeVec *metrics.GaugeVec, proc *process.Process) {
 
 	threads, err := proc.NumThreads()
 	if err != nil {
-		log.Error("Failed to get threads", "err", err)
+		log.Global.Error("Failed to get threads", "err", err)
 	} else {
 		cpuGaugeVec.WithLabelValues("Go_routines").Set(float64(threads))
 	}
@@ -217,7 +218,7 @@ func collectCPUMetrics(cpuGaugeVec *metrics.GaugeVec, proc *process.Process) {
 func collectMemoryMetrics(memGaugeVec *metrics.GaugeVec, proc *process.Process) {
 	memInfo, err := proc.MemoryInfo()
 	if err != nil {
-		log.Error("Error while getting memory info", "err", err)
+		log.Global.Error("Error while getting memory info", "err", err)
 	} else {
 		memGaugeVec.WithLabelValues("Used").Set(float64(memInfo.RSS))
 		memGaugeVec.WithLabelValues("Swap").Set(float64(memInfo.Swap))
@@ -228,7 +229,7 @@ func collectMemoryMetrics(memGaugeVec *metrics.GaugeVec, proc *process.Process) 
 func collectDiskMetrics(diskGaugeVec *metrics.GaugeVec) {
 	ioCounters, err := disk.IOCounters()
 	if err != nil {
-		log.Error("Unable to get disk usage", "err", err)
+		log.Global.Error("Unable to get disk usage", "err", err)
 		return
 	}
 
@@ -243,7 +244,7 @@ func collectDiskMetrics(diskGaugeVec *metrics.GaugeVec) {
 
 	ioCountersEnd, err := disk.IOCounters()
 	if err != nil {
-		log.Error("Unable to get disk usage", "err", err)
+		log.Global.Error("Unable to get disk usage", "err", err)
 	}
 	var readDiff uint64 = 0
 	var writeDiff uint64 = 0
@@ -262,14 +263,14 @@ func collectDiskMetrics(diskGaugeVec *metrics.GaugeVec) {
 func collectNetworkingMetrics(netGaugeVec *metrics.GaugeVec, proc *process.Process) {
 	tcpConnections, err := net.ConnectionsPid("tcp", proc.Pid)
 	if err != nil {
-		log.Error("Error while getting networking info", "err", err)
+		log.Global.Error("Error while getting networking info", "err", err)
 	} else {
 		netGaugeVec.WithLabelValues("tcp").Set(float64(len(tcpConnections)))
 	}
 
 	udpConnections, err := net.ConnectionsPid("udp", proc.Pid)
 	if err != nil {
-		log.Error("Error while getting networking info", "err", err)
+		log.Global.Error("Error while getting networking info", "err", err)
 	} else {
 		netGaugeVec.WithLabelValues("udp").Set(float64(len(udpConnections)))
 	}

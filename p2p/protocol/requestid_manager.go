@@ -35,7 +35,7 @@ func (m *RequestIDManager) GenerateRequestID() uint32 {
 		b := make([]byte, 4)
 		_, err := rand.Read(b)
 		if err != nil {
-			log.Warnf("failed to generate random request ID: %s . Retrying...", err)
+			log.Global.Warnf("failed to generate random request ID: %s . Retrying...", err)
 			continue
 		}
 		id = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24

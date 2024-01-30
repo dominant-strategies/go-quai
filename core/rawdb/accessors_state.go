@@ -32,7 +32,7 @@ func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 	for hash, preimage := range preimages {
 		if err := db.Put(preimageKey(hash), preimage); err != nil {
-			log.WithField("err", err).Fatal("Failed to store trie preimage")
+			log.Global.WithField("err", err).Fatal("Failed to store trie preimage")
 		}
 	}
 }
@@ -62,14 +62,14 @@ func ReadCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) []byte {
 // WriteCode writes the provided contract code database.
 func WriteCode(db ethdb.KeyValueWriter, hash common.Hash, code []byte) {
 	if err := db.Put(codeKey(hash), code); err != nil {
-		log.WithField("err", err).Fatal("Failed to store contract code")
+		log.Global.WithField("err", err).Fatal("Failed to store contract code")
 	}
 }
 
 // DeleteCode deletes the specified contract code from the database.
 func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(codeKey(hash)); err != nil {
-		log.WithField("err", err).Fatal("Failed to delete contract code")
+		log.Global.WithField("err", err).Fatal("Failed to delete contract code")
 	}
 }
 
@@ -82,13 +82,13 @@ func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 // WriteTrieNode writes the provided trie node database.
 func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
 	if err := db.Put(hash.Bytes(), node); err != nil {
-		log.WithField("err", err).Fatal("Failed to store trie node")
+		log.Global.WithField("err", err).Fatal("Failed to store trie node")
 	}
 }
 
 // DeleteTrieNode deletes the specified trie node from the database.
 func DeleteTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(hash.Bytes()); err != nil {
-		log.WithField("err", err).Fatal("Failed to delete trie node")
+		log.Global.WithField("err", err).Fatal("Failed to delete trie node")
 	}
 }

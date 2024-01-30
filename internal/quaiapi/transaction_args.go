@@ -159,7 +159,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			return err
 		}
 		args.Gas = &estimated
-		log.WithField("gas", args.Gas).Trace("Estimate gas usage automatically")
+		log.Global.WithField("gas", args.Gas).Trace("Estimate gas usage automatically")
 	}
 	if args.ChainID == nil {
 		id := (*hexutil.Big)(b.ChainConfig().ChainID)
@@ -191,7 +191,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		gas = uint64(*args.Gas)
 	}
 	if globalGasCap != 0 && globalGasCap < gas {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"requested": gas,
 			"cap":       globalGasCap,
 		}).Warn("Caller gas above allowance, capping")

@@ -150,7 +150,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	defer func() {
 		elapsed := time.Since(start)
 
-		logEntry := log.WithFields(log.Fields{
+		logEntry := log.Global.WithFields(log.Fields{
 			"elapsed": common.PrettyDuration(elapsed),
 		})
 
@@ -182,7 +182,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 			case <-done:
 				return
 			case <-time.After(3 * time.Second):
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"percentage": uint64(atomic.LoadUint32(&progress) * 100 / uint32(rows) / 4),
 					"elapsed":    common.PrettyDuration(time.Since(start)),
 				}).Info("Generating ethash verification cache")
@@ -238,7 +238,7 @@ func generateCDag(cDag, cache []uint32, epoch uint64) {
 	}
 
 	elapsed := time.Since(start)
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"elapsed": common.PrettyDuration(elapsed),
 		"epoch":   epoch,
 	}).Debug("Generated progpow cDag")
@@ -306,7 +306,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	defer func() {
 		elapsed := time.Since(start)
 
-		logEntry := log.WithFields(log.Fields{
+		logEntry := log.Global.WithFields(log.Fields{
 			"elapsed": common.PrettyDuration(elapsed),
 		})
 
@@ -358,7 +358,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 				copy(dataset[index*hashBytes:], item)
 
 				if status := atomic.AddUint32(&progress, 1); status%percent == 0 {
-					log.WithFields(log.Fields{
+					log.Global.WithFields(log.Fields{
 						"percentage": uint64(status * 100 / uint32(size/hashBytes)),
 						"elapsed":    common.PrettyDuration(time.Since(start)),
 					}).Info("Generating DAG in progress")

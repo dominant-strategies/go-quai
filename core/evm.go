@@ -62,7 +62,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		if parent != nil {
 			timestamp = parent.Time()
 		} else {
-			log.Fatal("Parent is nil, panic", "headerHash", header.Hash(), "parentHash", header.ParentHash(chain.NodeCtx()), "number", header.Number(chain.NodeCtx()).Uint64())
+			log.Global.Fatal("Parent is nil, panic", "headerHash", header.Hash(), "parentHash", header.ParentHash(chain.NodeCtx()), "number", header.Number(chain.NodeCtx()).Uint64())
 		}
 	}
 

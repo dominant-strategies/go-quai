@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
@@ -106,7 +107,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 			}...)
 		}
 	}
-	log.WithField("ctx", ctx).Info(msg)
+	log.Global.WithField("ctx", ctx).Info(msg)
 }
 
 // generateSnapshot regenerates a brand new snapshot based on an existing state
@@ -122,7 +123,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, genMarker, stats)
 	if err := batch.Write(); err != nil {
-		log.WithField("err", err).Fatal("Failed to write initialized state marker")
+		log.Global.WithField("err", err).Fatal("Failed to write initialized state marker")
 	}
 	base := &diskLayer{
 		diskdb:     diskdb,
@@ -134,7 +135,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		genAbort:   make(chan chan *generatorStats),
 	}
 	go base.generate(stats)
-	log.WithField("root", root).Debug("Started snapshot generation")
+	log.Global.WithField("root", root).Debug("Started snapshot generation")
 	return base
 }
 
@@ -167,7 +168,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 	default:
 		logstr = fmt.Sprintf("%#x:%#x", marker[:common.HashLength], marker[common.HashLength:])
 	}
-	log.WithField("progress", logstr).Debug("Journalled generator progress")
+	log.Global.WithField("progress", logstr).Debug("Journalled generator progress")
 	rawdb.WriteSnapshotGenerator(db, blob)
 }
 
@@ -251,7 +252,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 				// Here append the original value to ensure that the number of key and
 				// value are the same.
 				vals = append(vals, common.CopyBytes(iter.Value()))
-				log.WithField("err", err).Error("Failed to convert account state data")
+				log.Global.WithField("err", err).Error("Failed to convert account state data")
 			} else {
 				vals = append(vals, val)
 			}
@@ -288,7 +289,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 		origin = common.Hash{}.Bytes()
 	}
 	if err := tr.Prove(origin, 0, proof); err != nil {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"kind":   kind,
 			"origin": origin,
 			"err":    err,
@@ -303,7 +304,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"kind": kind,
 				"last": last,
 				"err":  err,
@@ -358,7 +359,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
-		log.WithField("last", hexutil.Encode(last)).Debug("Proved state range")
+		log.Global.WithField("last", hexutil.Encode(last)).Debug("Proved state range")
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -369,7 +370,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// Only abort the iteration when both database and trie are exhausted
 		return !result.diskMore && !result.trieMore, last, nil
 	}
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"last": hexutil.Encode(last),
 		"err":  result.proofErr,
 	}).Trace("Detected outdated state range")
@@ -465,7 +466,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	}
 	internal += time.Since(istart)
 
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"root":      root,
 		"last":      hexutil.Encode(last),
 		"count":     count,
@@ -557,7 +558,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			CodeHash []byte
 		}
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
-			log.WithField("err", err).Fatal("Invalid account encountered during snapshot creation")
+			log.Global.WithField("err", err).Fatal("Invalid account encountered during snapshot creation")
 		}
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
@@ -660,7 +661,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// generator anyway to mark the snapshot is complete.
 	journalProgress(batch, nil, stats)
 	if err := batch.Write(); err != nil {
-		log.WithField("err", err).Error("Failed to flush batch")
+		log.Global.WithField("err", err).Error("Failed to flush batch")
 
 		abort = <-dl.genAbort
 		abort <- stats
@@ -668,7 +669,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	}
 	batch.Reset()
 
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"accounts": stats.accounts,
 		"slots":    stats.slots,
 		"storage":  stats.storage,

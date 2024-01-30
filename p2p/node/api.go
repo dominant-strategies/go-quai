@@ -13,25 +13,26 @@ import (
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/quai"
 
-	"github.com/dominant-strategies/go-quai/common"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // Starts the node and all of its services
 func (p *P2PNode) Start() error {
-	log.Infof("starting P2P node...")
+	log.Global.Infof("starting P2P node...")
 
 	// Start any async processes belonging to this node
-	log.Debugf("starting node processes...")
+	log.Global.Debugf("starting node processes...")
 	go p.eventLoop()
 	go p.statsLoop()
 
 	// Is this node expected to have bootstrap peers to dial?
 	if !viper.GetBool(utils.BootNodeFlag.Name) && !viper.GetBool(utils.SoloFlag.Name) && len(p.bootpeers) == 0 {
 		err := errors.New("no bootpeers provided. Unable to join network")
-		log.Errorf("%s", err)
+		log.Global.Errorf("%s", err)
 		return err
 	}
 
@@ -42,7 +43,7 @@ func (p *P2PNode) Start() error {
 
 	// If the node is a bootnode, start the bootnode service
 	if viper.GetBool(utils.BootNodeFlag.Name) {
-		log.Infof("starting node as a bootnode...")
+		log.Global.Infof("starting node as a bootnode...")
 		return nil
 	}
 
@@ -87,12 +88,12 @@ func (p *P2PNode) Stop() error {
 		select {
 		case err := <-errs:
 			if err != nil {
-				log.Errorf("error during shutdown: %s", err)
+				log.Global.Errorf("error during shutdown: %s", err)
 				allErrors = append(allErrors, err)
 			}
 		case <-time.After(5 * time.Second):
 			err := errors.New("timeout during shutdown")
-			log.Warnf("error: %s", err)
+			log.Global.Warnf("error: %s", err)
 			allErrors = append(allErrors, err)
 		}
 	}
@@ -111,7 +112,7 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		defer close(resultChan)
 		// 1. Check if the data is in the local cache
 		if res, ok := p.cacheGet(hash, datatype); ok {
-			log.Debugf("data %s found in cache", hash)
+			log.Global.Debugf("data %s found in cache", hash)
 			resultChan <- res.(*types.Block)
 			return
 		}
@@ -119,13 +120,13 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		// 2. If not, query the topic peers for the data
 		peers, err := p.pubsub.PeersForTopic(location, datatype)
 		if err != nil {
-			log.Error("Error requesting data: ", err)
+			log.Global.Error("Error requesting data: ", err)
 			return
 		}
 		for _, peerID := range peers {
 			go func(peerID p2p.PeerID) {
 				if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
-					log.Debugf("Received %s from peer %s", hash, peerID)
+					log.Global.Debugf("Received %s from peer %s", hash, peerID)
 					// cache the response
 					p.cacheAdd(hash, recvd)
 					// send the block to the result channel
@@ -144,14 +145,14 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		// create a Cid from the slice location
 		shardCid := locationToCid(location)
 		for retries := 0; retries < maxDHTQueryRetries; retries++ {
-			log.Debugf("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
+			log.Global.Debugf("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
 			// query the DHT for peers in the slice
 			// TODO: need to find providers of a topic, not a shard
 			for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
 				go func() {
 					// Ask peer and wait for response
 					if recvd, err := p.requestFromPeer(peer.ID, location, hash, datatype); err == nil {
-						log.Debugf("Received %s from peer %s", hash, peer.ID)
+						log.Global.Debugf("Received %s from peer %s", hash, peer.ID)
 						// cache the response
 						p.cacheAdd(hash, recvd)
 						// send the block to the result channel
@@ -161,16 +162,16 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 				}()
 			}
 			// if the data is not found, wait for a bit and try again
-			log.Debugf("Block %s not found in slice %s. Retrying...", hash, location)
+			log.Global.Debugf("Block %s not found in slice %s. Retrying...", hash, location)
 			time.Sleep(dhtQueryRetryInterval * time.Second)
 		}
-		log.Debugf("Block %s not found in slice %s", hash, location)
+		log.Global.Debugf("Block %s not found in slice %s", hash, location)
 	}()
 	return resultChan
 }
 
 func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID) {
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"peer": peer,
 	}).Debug("Recording well-behaving peer")
 
@@ -178,7 +179,7 @@ func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID) {
 }
 
 func (p *P2PNode) MarkLatentPeer(peer p2p.PeerID) {
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"peer": peer,
 	}).Debug("Recording misbehaving peer")
 
@@ -186,7 +187,7 @@ func (p *P2PNode) MarkLatentPeer(peer p2p.PeerID) {
 }
 
 func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"peer": peer,
 	}).Debug("Protecting peer connection from pruning")
 
@@ -194,7 +195,7 @@ func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {
 }
 
 func (p *P2PNode) BanPeer(peer p2p.PeerID) {
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"peer": peer,
 	}).Warn("Banning peer for misbehaving")
 
@@ -237,7 +238,7 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, data interface{}, nodeLoca
 		p.cacheAdd(v.Hash(), &v)
 	// TODO: send it to consensus
 	default:
-		log.Debugf("received unsupported block broadcast")
+		log.Global.Debugf("received unsupported block broadcast")
 		// TODO: ban the peer which sent it?
 		return
 	}

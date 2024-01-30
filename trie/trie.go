@@ -106,7 +106,7 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 func (t *Trie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
-		log.WithField("err", err).Error("Unhandled trie error")
+		log.Global.WithField("err", err).Error("Unhandled trie error")
 	}
 	return res
 }
@@ -243,7 +243,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 // stored in the trie.
 func (t *Trie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
-		log.WithField("err", err).Error("Unhandled trie error")
+		log.Global.WithField("err", err).Error("Unhandled trie error")
 	}
 }
 
@@ -346,7 +346,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) {
 	if err := t.TryDelete(key); err != nil {
-		log.WithField("err", err).Error("Unhandled trie error")
+		log.Global.WithField("err", err).Error("Unhandled trie error")
 	}
 }
 

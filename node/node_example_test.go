@@ -38,7 +38,7 @@ func ExampleLifecycle() {
 	// Create a network node to run protocols with the default values.
 	stack, err := node.New(&node.Config{})
 	if err != nil {
-		log.Fatalf("Failed to create network node: %v", err)
+		log.Global.Fatalf("Failed to create network node: %v", err)
 	}
 	defer stack.Close()
 
@@ -48,10 +48,10 @@ func ExampleLifecycle() {
 
 	// Boot up the entire protocol stack, do a restart and terminate
 	if err := stack.Start(); err != nil {
-		log.Fatalf("Failed to start the protocol stack: %v", err)
+		log.Global.Fatalf("Failed to start the protocol stack: %v", err)
 	}
 	if err := stack.Close(); err != nil {
-		log.Fatalf("Failed to stop the protocol stack: %v", err)
+		log.Global.Fatalf("Failed to stop the protocol stack: %v", err)
 	}
 	// Output:
 	// Service starting...

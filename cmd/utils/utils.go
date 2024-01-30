@@ -5,9 +5,10 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/spf13/viper"
+
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/spf13/viper"
 )
 
 // InitConfig initializes the viper config instance ensuring that environment variables
@@ -17,20 +18,20 @@ import (
 // It panics if an error occurs while reading the config file.
 func InitConfig() {
 	// read in config file and merge with defaults
-	log.Infof("Loading config from file: %s", viper.ConfigFileUsed())
+	log.Global.Infof("Loading config from file: %s", viper.ConfigFileUsed())
 	err := viper.ReadInConfig()
 	if err != nil {
 		// if error is type ConfigFileNotFoundError or fs.PathError, ignore error
 		if _, ok := err.(*fs.PathError); ok || errors.Is(err, viper.ConfigFileNotFoundError{}) {
-			log.Warnf("Config file not found: %s", viper.ConfigFileUsed())
+			log.Global.Warnf("Config file not found: %s", viper.ConfigFileUsed())
 		} else {
-			log.Errorf("Error reading config file: %s", err)
+			log.Global.Errorf("Error reading config file: %s", err)
 			// config file was found but another error was produced. Cannot continue
 			panic(err)
 		}
 	}
 
-	log.Infof("Loading config from environment variables with prefix: '%s_'", constants.ENV_PREFIX)
+	log.Global.Infof("Loading config from environment variables with prefix: '%s_'", constants.ENV_PREFIX)
 	viper.SetEnvPrefix(constants.ENV_PREFIX)
 	viper.AutomaticEnv()
 }
@@ -45,7 +46,7 @@ func InitConfig() {
 func SaveConfig() error {
 	// check if config file exists
 	configFile := viper.ConfigFileUsed()
-	log.Debugf("saving/updating config file: %s", configFile)
+	log.Global.Debugf("saving/updating config file: %s", configFile)
 	if _, err := os.Stat(configFile); err == nil {
 		// config file exists, create backup copy
 		err := os.Rename(configFile, configFile+".bak")

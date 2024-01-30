@@ -40,7 +40,7 @@ type ChecksumDB struct {
 func MustLoadChecksums(file string) *ChecksumDB {
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
-		log.Fatal("can't load checksum file: " + err.Error())
+		log.Global.Fatal("can't load checksum file: " + err.Error())
 	}
 	return &ChecksumDB{strings.Split(string(content), "\n")}
 }

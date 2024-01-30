@@ -43,11 +43,11 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	if err != nil && os.IsNotExist(err) {
 		// If the directory does not exist, create it
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			log.Fatalf("Failed to create config directory: %s, Error: %v", configDir, err)
+			log.Global.Fatalf("Failed to create config directory: %s, Error: %v", configDir, err)
 		}
-		log.Debug("Config directory created: %s", configDir)
+		log.Global.Debug("Config directory created: %s", configDir)
 	} else if err != nil {
-		log.Fatalf("Error accessing config directory: %s, Error: %v", configDir, err)
+		log.Global.Fatalf("Error accessing config directory: %s, Error: %v", configDir, err)
 	}
 
 	viper.SetConfigFile(filepath.Join(configDir, constants.CONFIG_FILE_NAME))
@@ -59,7 +59,7 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		log.WithField("path", filepath.Join(configDir, constants.CONFIG_FILE_NAME)).Info("Default config file created")
+		log.Global.WithField("path", filepath.Join(configDir, constants.CONFIG_FILE_NAME)).Info("Default config file created")
 	}
 
 	// load config from file and environment variables
@@ -85,9 +85,9 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	// Check that environment is local, colosseum, garden, lighthouse, dev, or orchard
 	environment := viper.GetString(utils.EnvironmentFlag.Name)
 	if !utils.IsValidEnvironment(environment) {
-		log.Fatalf("invalid environment: %s", environment)
+		log.Global.Fatalf("invalid environment: %s", environment)
 	}
 
-	log.WithField("options", viper.AllSettings()).Debug("config options loaded")
+	log.Global.WithField("options", viper.AllSettings()).Debug("config options loaded")
 	return nil
 }

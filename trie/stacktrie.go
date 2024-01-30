@@ -198,7 +198,7 @@ func (st *StackTrie) TryUpdate(key, value []byte) error {
 
 func (st *StackTrie) Update(key, value []byte) {
 	if err := st.TryUpdate(key, value); err != nil {
-		log.WithField("err", err).Error("Unhandled trie error")
+		log.Global.WithField("err", err).Error("Unhandled trie error")
 	}
 }
 

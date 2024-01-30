@@ -237,7 +237,7 @@ func (sf *subfetcher) loop() {
 	// Start by opening the trie and stop processing if it fails
 	trie, err := sf.db.OpenTrie(sf.root)
 	if err != nil {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"root": sf.root,
 			"err":  err,
 		}).Warn("Trie prefetcher failed opening trie")

@@ -24,6 +24,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
@@ -33,7 +35,6 @@ import (
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type revision struct {
@@ -577,7 +578,7 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 		}
 		data = new(Account)
 		if err := rlp.DecodeBytes(enc, data); err != nil {
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"addr": addr,
 				"err":  err,
 			}).Error("Failed to decode state object")
@@ -953,7 +954,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
-			log.WithField("err", err).Fatal("Failed to commit dirty codes")
+			log.Global.WithField("err", err).Fatal("Failed to commit dirty codes")
 		}
 	}
 	// Write the account trie changes, measuing the amount of wasted time
@@ -985,7 +986,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"root":   root,
 					"parent": parent,
 					"err":    err,
@@ -996,7 +997,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
 			if err := s.snaps.Cap(root, 128); err != nil {
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"root":   root,
 					"layers": 128,
 					"err":    err,

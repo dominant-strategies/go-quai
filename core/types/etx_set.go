@@ -37,7 +37,7 @@ func (set *EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64, nod
 		availableAtBlock := entry.Height
 		etxExpirationHeight := availableAtBlock + params.EtxExpirationAge
 		if currentHeight > etxExpirationHeight {
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"hash":                txHash,
 				"gasTipCap":           entry.ETX.GasTipCap(),
 				"gasFeeCap":           entry.ETX.GasFeeCap(),

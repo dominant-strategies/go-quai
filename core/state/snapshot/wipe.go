@@ -39,7 +39,7 @@ func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
 	wiper := make(chan struct{}, 1)
 	go func() {
 		if err := wipeContent(db); err != nil {
-			log.WithField("err", err).Error("Failed to wipe state snapshot") // Database close will trigger this
+			log.Global.WithField("err", err).Error("Failed to wipe state snapshot") // Database close will trigger this
 			return
 		}
 		close(wiper)
@@ -62,21 +62,21 @@ func wipeContent(db ethdb.KeyValueStore) error {
 	// Compact the snapshot section of the database to get rid of unused space
 	start := time.Now()
 
-	log.Info("Compacting snapshot account area ")
+	log.Global.Info("Compacting snapshot account area ")
 	end := common.CopyBytes(rawdb.SnapshotAccountPrefix)
 	end[len(end)-1]++
 
 	if err := db.Compact(rawdb.SnapshotAccountPrefix, end); err != nil {
 		return err
 	}
-	log.Info("Compacting snapshot storage area ")
+	log.Global.Info("Compacting snapshot storage area ")
 	end = common.CopyBytes(rawdb.SnapshotStoragePrefix)
 	end[len(end)-1]++
 
 	if err := db.Compact(rawdb.SnapshotStoragePrefix, end); err != nil {
 		return err
 	}
-	log.WithField("elapsed", common.PrettyDuration(time.Since(start))).Info("Compacted snapshot area in database")
+	log.Global.WithField("elapsed", common.PrettyDuration(time.Since(start))).Info("Compacted snapshot area in database")
 
 	return nil
 }
@@ -127,7 +127,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 			it = db.NewIterator(prefix, seekPos)
 
 			if time.Since(logged) > 8*time.Second && report {
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"kind":    kind,
 					"wiped":   items,
 					"elapsed": common.PrettyDuration(time.Since(start)),
@@ -141,7 +141,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 		return err
 	}
 	if report {
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"kind":    kind,
 			"wiped":   items,
 			"elapsed": common.PrettyDuration(time.Since(start)),

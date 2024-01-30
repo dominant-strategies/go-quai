@@ -23,11 +23,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	bloomfilter "github.com/holiman/bloomfilter/v2"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 // SyncBloom is a bloom filter used during fast sync to quickly decide if a trie
@@ -51,7 +52,7 @@ func NewSyncBloom(memory uint64, database ethdb.Iteratee) *SyncBloom {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create bloom: %v", err))
 	}
-	log.WithField("size", common.StorageSize(memory*1024*1024)).Info("Allocated fast sync bloom")
+	log.Global.WithField("size", common.StorageSize(memory*1024*1024)).Info("Allocated fast sync bloom")
 
 	// Assemble the fast sync bloom and init it from previous sessions
 	b := &SyncBloom{
@@ -97,7 +98,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 			it.Release()
 			it = database.NewIterator(nil, key)
 
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"items":     b.bloom.N(),
 				"errorrate": b.bloom.FalsePosititveProbability(),
 				"elapsed":   common.PrettyDuration(time.Since(start)),
@@ -108,7 +109,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 	it.Release()
 
 	// Mark the bloom filter inited and return
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"items":     b.bloom.N(),
 		"errorrate": b.bloom.FalsePosititveProbability(),
 		"elapsed":   common.PrettyDuration(time.Since(start)),
@@ -126,7 +127,7 @@ func (b *SyncBloom) Close() error {
 		b.pend.Wait()
 
 		// Wipe the bloom, but mark it "uninited" just in case someone attempts an access
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"items":     b.bloom.N(),
 			"errorrate": b.bloom.FalsePosititveProbability(),
 		}).Info("Deallocating state bloom")

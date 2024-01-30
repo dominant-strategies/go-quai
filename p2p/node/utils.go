@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/dominant-strategies/go-quai/cmd/utils"
-	"github.com/dominant-strategies/go-quai/common/constants"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
+
+	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/common/constants"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Utility function that asynchronously writes the provided "info" string to the node.info file.
@@ -21,7 +22,7 @@ func saveNodeInfo(info string) {
 		if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 			err := os.MkdirAll(dataDir, 0755)
 			if err != nil {
-				log.Errorf("error creating data directory: %s", err)
+				log.Global.Errorf("error creating data directory: %s", err)
 				return
 			}
 		}
@@ -29,7 +30,7 @@ func saveNodeInfo(info string) {
 		// Open file with O_APPEND flag to append data to the file or create the file if it doesn't exist.
 		f, err := os.OpenFile(nodeFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			log.Errorf("error opening node info file: %s", err)
+			log.Global.Errorf("error opening node info file: %s", err)
 			return
 		}
 		defer f.Close()
@@ -39,7 +40,7 @@ func saveNodeInfo(info string) {
 		defer writer.Flush()
 
 		// Append new line and write to file
-		log.Tracef("writing node info to file: %s", nodeFile)
+		log.Global.Tracef("writing node info to file: %s", nodeFile)
 		writer.WriteString(info + "\n")
 	}()
 }

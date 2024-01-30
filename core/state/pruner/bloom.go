@@ -21,10 +21,11 @@ import (
 	"errors"
 	"os"
 
+	bloomfilter "github.com/holiman/bloomfilter/v2"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/log"
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 // stateBloomHasher is a wrapper around a byte blob to satisfy the interface API
@@ -66,7 +67,7 @@ func newStateBloomWithSize(size uint64) (*stateBloom, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.WithField("size", common.StorageSize(float64(size))).Info("Initialized state bloom")
+	log.Global.WithField("size", common.StorageSize(float64(size))).Info("Initialized state bloom")
 	return &stateBloom{bloom: bloom}, nil
 }
 

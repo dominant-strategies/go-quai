@@ -235,7 +235,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
-		log.WithFields(log.Fields{
+		log.Global.WithFields(log.Fields{
 			"reqid": idForLog{msg.ID},
 			"t":     time.Since(start),
 		}).Trace("Handled RPC response")
@@ -249,7 +249,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 	var result subscriptionResult
 	if err := json.Unmarshal(msg.Params, &result); err != nil {
-		log.Debug("Dropping invalid subscription message")
+		log.Global.Debug("Dropping invalid subscription message")
 		return
 	}
 	if h.clientSubs[result.ID] != nil {
@@ -261,7 +261,7 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	op := h.respWait[string(msg.ID)]
 	if op == nil {
-		log.WithField("reqid", idForLog{msg.ID}).Debug("Unsolicited RPC response")
+		log.Global.WithField("reqid", idForLog{msg.ID}).Debug("Unsolicited RPC response")
 		return
 	}
 	delete(h.respWait, string(msg.ID))
@@ -290,7 +290,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	switch {
 	case msg.isNotification():
 		h.handleCall(ctx, msg)
-		log.WithField("t", time.Since(start)).Debug("Served " + msg.Method)
+		log.Global.WithField("t", time.Since(start)).Debug("Served " + msg.Method)
 		return nil
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
@@ -301,9 +301,9 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			log.Warn("Served " + msg.Method)
+			log.Global.Warn("Served " + msg.Method)
 		} else {
-			log.Debug("Served " + msg.Method)
+			log.Global.Debug("Served " + msg.Method)
 		}
 		return resp
 	case msg.hasValidID():

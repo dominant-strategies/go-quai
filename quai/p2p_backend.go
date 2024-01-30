@@ -69,7 +69,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 		block := data.(types.Block)
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
-			log.Error("no backend found")
+			log.Global.Error("no backend found")
 			return false
 		}
 		backend.WriteBlock(&block)

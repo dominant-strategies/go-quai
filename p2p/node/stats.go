@@ -23,11 +23,11 @@ func (p *P2PNode) statsLoop() {
 		select {
 		case <-ticker.C:
 			WANPeerNum, LANPeerNum, peersConnected := p.connectionStats()
-			
-			log.Debugf("Number of peers connected: %d", peersConnected)
-			log.Debugf("Peers in WAN Routing table: %d, Peers in LAN Routing table: %d", WANPeerNum, LANPeerNum)
+
+			log.Global.Debugf("Number of peers connected: %d", peersConnected)
+			log.Global.Debugf("Peers in WAN Routing table: %d, Peers in LAN Routing table: %d", WANPeerNum, LANPeerNum)
 		case <-p.ctx.Done():
-			log.Warnf("Context cancelled. Stopping stats loop...")
+			log.Global.Warnf("Context cancelled. Stopping stats loop...")
 			return
 		}
 

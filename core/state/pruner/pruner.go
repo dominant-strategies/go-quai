@@ -148,7 +148,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				checkKey = codeKey
 			}
 			if _, exist := middleStateRoots[common.BytesToHash(checkKey)]; exist {
-				log.WithField("hash", common.BytesToHash(checkKey)).Debug("Forcibly delete the middle state roots")
+				log.Global.WithField("hash", common.BytesToHash(checkKey)).Debug("Forcibly delete the middle state roots")
 			} else {
 				if ok, err := stateBloom.Contain(checkKey); err != nil {
 					return err
@@ -169,7 +169,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				eta = time.Duration(left/speed) * time.Millisecond
 			}
 			if time.Since(logged) > 8*time.Second {
-				log.WithFields(log.Fields{
+				log.Global.WithFields(log.Fields{
 					"nodes":   count,
 					"size":    size,
 					"elapsed": common.PrettyDuration(time.Since(pstart)),
@@ -193,7 +193,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		batch.Reset()
 	}
 	iter.Release()
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"nodes":   count,
 		"size":    size,
 		"elapsed": common.PrettyDuration(time.Since(pstart)),
@@ -230,18 +230,18 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			if b == 0xf0 {
 				end = nil
 			}
-			log.WithFields(log.Fields{
+			log.Global.WithFields(log.Fields{
 				"range":   fmt.Sprintf("%#x-%#x", start, end),
 				"elapsed": common.PrettyDuration(time.Since(cstart)),
 			}).Info("Compacting database")
 			if err := maindb.Compact(start, end); err != nil {
-				log.WithField("err", err).Error("Database compaction failed")
+				log.Global.WithField("err", err).Error("Database compaction failed")
 				return err
 			}
 		}
-		log.WithField("elapsed", common.PrettyDuration(time.Since(cstart))).Info("Database compaction finished")
+		log.Global.WithField("elapsed", common.PrettyDuration(time.Since(cstart))).Info("Database compaction finished")
 	}
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"pruned":  size,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("State pruning successful")
@@ -396,7 +396,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	if err != nil {
 		return err
 	}
-	log.WithField("path", stateBloomPath).Info("Loaded state bloom filter")
+	log.Global.WithField("path", stateBloomPath).Info("Loaded state bloom filter")
 
 	// Before start the pruning, delete the clean trie cache first.
 	// It's necessary otherwise in the next restart we will hit the
@@ -419,7 +419,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 		middleRoots[layer.Root()] = struct{}{}
 	}
 	if !found {
-		log.Error("Pruning target state is not existent")
+		log.Global.Error("Pruning target state is not existent")
 		return errors.New("non-existent target state")
 	}
 	return prune(snaptree, stateBloomRoot, db, stateBloom, stateBloomPath, middleRoots, time.Now())
@@ -524,9 +524,9 @@ Check the command description "quai snapshot prune-state --help" for more detail
 
 func deleteCleanTrieCache(path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		log.Warn(warningLog)
+		log.Global.Warn(warningLog)
 		return
 	}
 	os.RemoveAll(path)
-	log.WithField("path", path).Info("Deleted trie clean cache")
+	log.Global.WithField("path", path).Info("Deleted trie clean cache")
 }

@@ -273,6 +273,6 @@ func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
 	if *w {
 		return
 	}
-	log.Warn(fmt.Sprintf(format, args...))
+	log.Global.Warn(fmt.Sprintf(format, args...))
 	*w = true
 }
