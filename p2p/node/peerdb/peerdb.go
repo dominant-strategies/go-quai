@@ -1,0 +1,68 @@
+package peerdb
+
+import (
+	"os"
+
+	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/log"
+	datastore "github.com/ipfs/go-datastore"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/spf13/viper"
+	"github.com/syndtr/goleveldb/leveldb"
+)
+
+var (
+	ErrPeerNotFound = leveldb.ErrNotFound
+)
+
+// contains the information of a peer
+// that is stored in the peerDB as Value
+type PeerInfo struct {
+	AddrInfo  peer.AddrInfo
+	PubKey    []byte
+	Entropy   uint64
+	Protected bool
+}
+
+// PeerDB implements the ipfs Datastore interface
+// and exposes an API for storing and retrieving peers
+// using levelDB as the underlying database
+type PeerDB struct {
+	db          *leveldb.DB
+	peerCounter int
+}
+
+// Returns a new PeerDB instance
+func NewPeerDB(dbDirName string) (*PeerDB, error) {
+	dataDir := viper.GetString(utils.DataDirFlag.Name)
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		err := os.MkdirAll(dataDir, 0755)
+		if err != nil {
+			log.Global.Errorf("error creating data directory: %s", err)
+			return nil, err
+		}
+	}
+	dbPath := dataDir + dbDirName
+
+	log.Global.Debugf("Opening PeerDB with path: %s", dbPath)
+
+	db, err := leveldb.OpenFile(dbPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the key counter
+	peerCounter := initCounter(db)
+
+	log.Global.Debugf("Found %d peers in PeerDB", peerCounter)
+
+	return &PeerDB{
+		db:          db,
+		peerCounter: peerCounter,
+	}, nil
+}
+
+// Creates a new datastore.Key for the given prefix and peerID
+func NewKey(peerID peer.ID) datastore.Key {
+	return datastore.NewKey(peerID.String())
+}

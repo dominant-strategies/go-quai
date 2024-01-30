@@ -14,4 +14,6 @@ const (
 	NODEINFO_FILE_NAME = "node.info"
 	// file to read the host's IP address (used to replace Docker's internal IP)
 	HOST_IP_FILE_NAME = "host.ip"
+	// file to store the peers database
+	PEERS_DB_FILE_NAME = "peers.db"
 )
