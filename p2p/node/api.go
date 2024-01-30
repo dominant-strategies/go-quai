@@ -120,7 +120,7 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		// 2. If not, query the topic peers for the data
 		peerList, err := p.pubsub.PeersForTopic(location, datatype)
 		if err != nil {
-			log.Global.Error("Error requesting data: ", err)
+			log.Global.Errorf("Error requesting data: %s", err)
 			return
 		}
 		for _, peerID := range peerList {
@@ -194,7 +194,7 @@ func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {
 }
 
 func (p *P2PNode) UnprotectPeer(peer p2p.PeerID) {
-	log.WithFields(log.Fields{
+	log.Global.WithFields(log.Fields{
 		"peer": peer,
 	}).Debug("Unprotecting peer connection from pruning")
 
