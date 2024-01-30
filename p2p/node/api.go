@@ -118,11 +118,7 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		}
 
 		// 2. If not, query the topic peers for the data
-		peerList, err := p.pubsub.PeersForTopic(location, datatype)
-		if err != nil {
-			log.Global.Errorf("Error requesting data: %s", err)
-			return
-		}
+		peerList := p.peerManager.GetBestPeers()
 		for _, peerID := range peerList {
 			go p.requestAndWait(peerID, location, hash, datatype, resultChan)
 		}

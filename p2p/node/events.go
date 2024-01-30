@@ -4,6 +4,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/event"
 
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/libp2p/go-libp2p/core/network"
 )
 
 // subscribes to the event bus and handles libp2p events as they're received
@@ -71,6 +72,10 @@ func (p *P2PNode) eventLoop() {
 				// get the peer addresses
 				peerAddresses := p.Peerstore().Addrs(peerID)
 				log.Global.Debugf("Event: 'Peer connectedness change' - Peer %s (peerInfo: %+v) is now %s, protocols: %v, addresses: %v", peerID.String(), peerInfo, e.Connectedness, peerProtocols, peerAddresses)
+
+				if e.Connectedness == network.NotConnected {
+					p.peerManager.PrunePeerConnection(peerID)
+				}
 			case *event.EvtNATDeviceTypeChanged:
 				log.Global.Debugf("Event `NAT device type changed` - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
 			default:
