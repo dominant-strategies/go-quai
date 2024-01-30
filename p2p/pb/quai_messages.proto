@@ -1,23 +1,25 @@
 syntax = "proto3";
 
-
 package quaiprotocol;
 option go_package = "github.com/dominant-strategies/go-quai/p2p/pb";
 
-// GossipSub messages for broadcasting blocks and transactions
-message GossipBlock { Block block = 1; }
+import "common/proto_common.proto";
+import "core/types/proto_block.proto";
 
-message GossipTransaction { Transaction transaction = 1; }
+// GossipSub messages for broadcasting blocks and transactions
+message GossipBlock { block.ProtoBlock block = 1; }
+
+message GossipTransaction { block.ProtoTransaction transaction = 1; }
 
 // QuaiRequestMessage is the main 'envelope' for QuaiProtocol request messages
 message QuaiRequestMessage {
     uint32 id = 1;
-    Location location = 2;
-    Hash hash = 3;
+    common.ProtoLocation location = 2;
+    common.ProtoHash hash = 3;
     oneof request {
-        Block block = 4;
-        Header header = 5;
-        Transaction transaction = 6;
+        block.ProtoBlock block = 4;
+        block.ProtoHeader header = 5;
+        block.ProtoTransaction transaction = 6;
     }
 }
 
@@ -25,52 +27,9 @@ message QuaiRequestMessage {
 message QuaiResponseMessage {
     uint32 id = 1;
     oneof response {
-        Block block = 2;
-        Header header = 3;
-        Transaction transaction = 4;
+        block.ProtoBlock block = 2;
+        block.ProtoHeader header = 3;
+        block.ProtoTransaction transaction = 4;
     }
 }
 
-message Location {
-    bytes location = 1;
-}
-
-// Hash structure
-message Hash {
-    bytes hash = 1; // Hash is an array of 32 bytes
-}
-
-// Block structure
-message Block {
-    Header header = 1;
-    repeated Transaction txs = 2;
-    repeated Header uncles = 3;
-    repeated Transaction etxs = 4;
-// TODO: add submanifest
-// TODO: add receipts
-// TODO: add hasher
-    uint32 nodeCtx = 7;
-    // Additional fields...
-}
-
-// Header structure
-message Header {
-    Hash hash = 1;
-    Hash parentHash = 2;
-    uint64 gasLimit = 3;
-    uint64 gasUsed = 4;
-    // Additional fields...
-}
-
-// Transaction structure
-message Transaction {
-    Hash hash = 1;
-    string from = 2;
-    string to = 3;
-    uint64 nonce = 4;
-    string value = 5;
-    string gasPrice = 6;
-    uint64 gas = 7;
-    bytes input = 8;
-    // Additional fields...
-}

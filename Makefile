@@ -31,7 +31,7 @@ mocks:
 protogen:
 	@echo "Generating protobuf files"
 	@protoc --go_out=. --go_opt=paths=source_relative \
-	./p2p/pb/*.proto 
+	./**/*.proto
 
 ## build the go-quai binary
 go-quai:

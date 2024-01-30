@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package block;
+option go_package = "github.com/dominant-strategies/go-quai/core/types";
+
+import "common/proto_common.proto";
+
+// This file defines all the ProtoBuf definitions related to core
+message ProtoBlock {
+  optional ProtoHeader header = 1;
+  optional ProtoTransactions txs = 2;
+  optional ProtoHeaders uncles = 3;
+  optional ProtoTransactions etxs = 4;
+  optional ProtoManifest manifest = 5;
+}
+
+message ProtoHeader {
+  repeated common.ProtoHash parent_hash = 1;
+  optional common.ProtoHash uncle_hash = 2;
+  optional bytes coinbase = 3;
+  optional common.ProtoHash root = 4;
+  optional common.ProtoHash tx_hash = 5;
+  optional common.ProtoHash etx_hash = 6;
+  optional common.ProtoHash etx_rollup_hash = 7;
+  repeated common.ProtoHash manifest_hash = 8;
+  optional common.ProtoHash receipt_hash = 9;
+  optional bytes difficulty = 10;
+  repeated bytes parent_entropy = 11;
+  repeated bytes parent_delta_s = 12;
+  repeated bytes number = 13;
+  optional uint64 gas_limit = 14;
+  optional uint64 gas_used = 15;
+  optional bytes base_fee = 16;
+  optional common.ProtoLocation location = 17;
+  optional uint64 time = 18;
+  optional bytes extra = 19;
+  optional common.ProtoHash mix_hash = 20;
+  optional uint64 nonce = 21;
+}
+
+message ProtoTransaction {
+  optional uint64 type = 1;
+  optional bytes to = 2;
+  optional uint64 nonce = 3;
+  optional bytes value = 4;
+  optional bytes gas_price = 5;
+  optional uint64 gas = 6;
+  optional bytes data = 7;
+  optional bytes chain_id = 8;
+  optional bytes gas_fee_cap = 9;
+  optional bytes gas_tip_cap = 10;
+  optional ProtoAccessList access_list = 11;
+  optional uint64 etx_gas_limit = 12;
+  optional bytes etx_gas_price = 13;
+  optional bytes etx_gas_tip = 14;
+  optional bytes etx_data = 15;
+  optional ProtoAccessList etx_access_list = 16;
+  optional bytes v = 17;
+  optional bytes r = 18;
+  optional bytes s = 19;
+}
+
+message ProtoTransactions { repeated ProtoTransaction transactions = 1; }
+
+message ProtoHeaders { repeated ProtoHeader headers = 1; }
+
+message ProtoManifest { repeated common.ProtoHash manifest = 1; }
+
+message ProtoAccessList { repeated ProtoAccessTuple access_tuples = 1; }
+
+message ProtoAccessTuple {
+  bytes address = 1;
+  repeated common.ProtoHash storage_key = 2;
+}

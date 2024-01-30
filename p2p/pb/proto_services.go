@@ -30,8 +30,8 @@ func MarshalProtoMessage(pbMsg proto.Message) ([]byte, error) {
 func EncodeQuaiRequest(id uint32, location common.Location, hash common.Hash, datatype interface{}) ([]byte, error) {
 	reqMsg := QuaiRequestMessage{
 		Id:       id,
-		Location: convertLocationToProto(location),
-		Hash:     convertHashToProto(hash),
+		Location: location.ProtoEncode(),
+		Hash:     hash.ProtoEncode(),
 	}
 
 	switch datatype.(type) {
@@ -62,8 +62,11 @@ func DecodeQuaiRequest(data []byte) (uint32, interface{}, common.Location, commo
 		return 0, nil, common.Location{}, common.Hash{}, err
 	}
 
-	location := convertProtoToLocation(reqMsg.Location)
-	hash := convertProtoToHash(reqMsg.Hash)
+	location := common.Location{}
+	location.ProtoDecode(reqMsg.Location)
+	hash := common.Hash{}
+	hash.ProtoDecode(reqMsg.Hash)
+
 	id := reqMsg.Id
 
 	switch reqMsg.Request.(type) {
@@ -88,11 +91,23 @@ func EncodeQuaiResponse(id uint32, data interface{}) ([]byte, error) {
 
 	switch data := data.(type) {
 	case *types.Block:
-		respMsg.Response = &QuaiResponseMessage_Block{Block: convertBlockToProto(data)}
+		protoBlock, err := data.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		respMsg.Response = &QuaiResponseMessage_Block{Block: protoBlock}
 	case *types.Header:
-		respMsg.Response = &QuaiResponseMessage_Header{Header: convertHeaderToProto(data)}
+		protoHeader, err := data.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		respMsg.Response = &QuaiResponseMessage_Header{Header: protoHeader}
 	case *types.Transaction:
-		respMsg.Response = &QuaiResponseMessage_Transaction{Transaction: convertTransactionToProto(data)}
+		protoTransaction, err := data.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		respMsg.Response = &QuaiResponseMessage_Transaction{Transaction: protoTransaction}
 
 	default:
 		return nil, errors.Errorf("unsupported response data type: %T", data)
@@ -114,19 +129,34 @@ func DecodeQuaiResponse(data []byte) (uint32, interface{}, error) {
 	}
 
 	id := respMsg.Id
+	// TODO: when the location implementation is done at the P2P layer, we can
+	// remove this hard coding
+	location := common.Location{0, 0}
 
 	switch respMsg.Response.(type) {
 	case *QuaiResponseMessage_Block:
 		protoBlock := respMsg.GetBlock()
-		block := convertProtoToBlock(protoBlock)
+		block := &types.Block{}
+		err := block.ProtoDecode(protoBlock, location)
+		if err != nil {
+			return id, nil, err
+		}
 		return id, block, nil
 	case *QuaiResponseMessage_Header:
 		protoHeader := respMsg.GetHeader()
-		header := convertProtoToHeader(protoHeader)
+		header := &types.Header{}
+		err := header.ProtoDecode(protoHeader)
+		if err != nil {
+			return id, nil, err
+		}
 		return id, header, nil
 	case *QuaiResponseMessage_Transaction:
 		protoTransaction := respMsg.GetTransaction()
-		transaction := convertProtoToTransaction(protoTransaction)
+		transaction := &types.Transaction{}
+		err := transaction.ProtoDecode(protoTransaction, location)
+		if err != nil {
+			return id, nil, err
+		}
 		return id, transaction, nil
 	default:
 		return id, nil, errors.Errorf("unsupported response type: %T", respMsg.Response)
@@ -138,15 +168,24 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 	switch data := data.(type) {
 	case *types.Block:
 		log.Tracef("marshalling block: %+v", data)
-		protoBlock := convertBlockToProto(data)
+		protoBlock, err := data.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
 		return MarshalProtoMessage(protoBlock)
 	case *types.Header:
 		log.Tracef("marshalling header: %+v", data)
-		protoHeader := convertHeaderToProto(data)
+		protoHeader, err := data.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
 		return MarshalProtoMessage(protoHeader)
 	case *types.Transaction:
 		log.Tracef("marshalling transaction: %+v", data)
-		protoTransaction := convertTransactionToProto(data)
+		protoTransaction, err := data.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
 		return MarshalProtoMessage(protoTransaction)
 	default:
 		return nil, errors.New("unsupported data type")
@@ -154,33 +193,48 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 }
 
 // Unmarshals a protobuf message into a proto type and converts it to a custom go type
-func UnmarshalAndConvert(data []byte, dataPtr interface{}) error {
-	switch dataPtr := dataPtr.(type) {
+func UnmarshalAndConvert(data []byte, dataPtr *interface{}, datatype interface{}) error {
+	// TODO: when the location implementation is done at the P2P layer, we can
+	// remove this hard coding of location
+	location := common.Location{0, 0}
+	switch datatype.(type) {
 	case *types.Block:
-		protoBlock := new(Block)
+		protoBlock := &types.ProtoBlock{}
 		err := UnmarshalProtoMessage(data, protoBlock)
 		if err != nil {
 			return err
 		}
-		block := convertProtoToBlock(protoBlock)
+		block := &types.Block{}
+		err = block.ProtoDecode(protoBlock, location)
+		if err != nil {
+			return err
+		}
 		*dataPtr = *block
 		return nil
 	case *types.Header:
-		protoHeader := new(Header)
+		protoHeader := &types.ProtoHeader{}
 		err := UnmarshalProtoMessage(data, protoHeader)
 		if err != nil {
 			return err
 		}
-		header := convertProtoToHeader(protoHeader)
+		header := &types.Header{}
+		err = header.ProtoDecode(protoHeader)
+		if err != nil {
+			return err
+		}
 		*dataPtr = *header
 		return nil
 	case *types.Transaction:
-		protoTransaction := new(Transaction)
+		protoTransaction := &types.ProtoTransaction{}
 		err := UnmarshalProtoMessage(data, protoTransaction)
 		if err != nil {
 			return err
 		}
-		transaction := convertProtoToTransaction(protoTransaction)
+		transaction := &types.Transaction{}
+		err = transaction.ProtoDecode(protoTransaction, location)
+		if err != nil {
+			return err
+		}
 		*dataPtr = *transaction
 		return nil
 	default:

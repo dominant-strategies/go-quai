@@ -67,6 +67,11 @@ func NewTx(inner TxData) *Transaction {
 	return tx
 }
 
+// SetInner sets the inner transaction data of a transaction.
+func (tx *Transaction) SetInner(inner TxData) {
+	tx.setDecoded(inner.copy(), 0)
+}
+
 // TxData is the underlying data of a transaction.
 //
 // This is implemented by InternalTx, ExternalTx and InternalToExternal.
@@ -92,6 +97,194 @@ type TxData interface {
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+}
+
+// ProtoEncode serializes tx into the Quai Proto Transaction format
+func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
+	if tx == nil {
+		return nil, errors.New("transaction input to ProtoEncode is nil")
+	}
+	protoTx := &ProtoTransaction{}
+
+	// Encoding common fields to all the tx types
+	txType := uint64(tx.Type())
+	nonce := tx.Nonce()
+	gas := tx.Gas()
+	protoTx.Type = &txType
+	protoTx.ChainId = tx.ChainId().Bytes()
+	protoTx.Nonce = &nonce
+	protoTx.Gas = &gas
+	protoTx.AccessList = tx.AccessList().ProtoEncode()
+	protoTx.Value = tx.Value().Bytes()
+	protoTx.Data = tx.Data()
+	protoTx.To = tx.To().Bytes()
+	protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
+	protoTx.GasTipCap = tx.GasTipCap().Bytes()
+
+	// Other fields are set conditionally depending on tx type.
+	switch tx.Type() {
+	case 0:
+		V, R, S := tx.RawSignatureValues()
+		protoTx.V = V.Bytes()
+		protoTx.R = R.Bytes()
+		protoTx.S = S.Bytes()
+	case 2:
+		V, R, S := tx.RawSignatureValues()
+		protoTx.V = V.Bytes()
+		protoTx.R = R.Bytes()
+		protoTx.S = S.Bytes()
+		etxGasLimit := tx.ETXGasLimit()
+		protoTx.EtxGasLimit = &etxGasLimit
+		protoTx.EtxGasPrice = tx.ETXGasPrice().Bytes()
+		protoTx.EtxGasTip = tx.ETXGasTip().Bytes()
+		protoTx.EtxData = tx.ETXData()
+		protoTx.EtxAccessList = tx.ETXAccessList().ProtoEncode()
+	}
+	return protoTx, nil
+}
+
+// ProtoDecode deserializes the ProtoTransaction into the Transaction format
+func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Location) error {
+	if protoTx.Type == nil {
+		return errors.New("missing required field 'Type' in ProtoTransaction")
+	}
+	if protoTx.ChainId == nil {
+		return errors.New("missing required field 'ChainId' in ProtoTransaction")
+	}
+	if protoTx.Nonce == nil {
+		return errors.New("missing required field 'Nonce' in ProtoTransaction")
+	}
+	if protoTx.Gas == nil {
+		return errors.New("missing required field 'Gas' in ProtoTransaction")
+	}
+	if protoTx.AccessList == nil {
+		return errors.New("missing required field 'AccessList' in ProtoTransaction")
+	}
+	if protoTx.Value == nil {
+		return errors.New("missing required field 'Value' in ProtoTransaction")
+	}
+	if protoTx.Data == nil {
+		return errors.New("missing required field 'Data' in ProtoTransaction")
+	}
+	if protoTx.To == nil {
+		return errors.New("missing required field 'To' in ProtoTransaction")
+	}
+	if protoTx.GasFeeCap == nil {
+		return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
+	}
+	if protoTx.GasTipCap == nil {
+		return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
+	}
+
+	txType := protoTx.GetType()
+
+	switch txType {
+	case 0:
+		var itx InternalTx
+		itx.AccessList = AccessList{}
+		itx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
+		to := common.BytesToAddress(protoTx.GetTo(), location)
+		itx.To = &to
+		itx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
+		itx.Nonce = protoTx.GetNonce()
+		itx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
+		itx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
+		itx.Gas = protoTx.GetGas()
+		itx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+		itx.Data = protoTx.GetData()
+		if protoTx.V == nil {
+			return errors.New("missing required field 'V' in InternalTx")
+		}
+		itx.V = new(big.Int).SetBytes(protoTx.GetV())
+		if protoTx.R == nil {
+			return errors.New("missing required field 'R' in InternalTx")
+		}
+		itx.R = new(big.Int).SetBytes(protoTx.GetR())
+		if protoTx.S == nil {
+			return errors.New("missing required field 'S' in InternalTx")
+		}
+		itx.S = new(big.Int).SetBytes(protoTx.GetS())
+		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
+		if withSignature {
+			if err := sanityCheckSignature(itx.V, itx.R, itx.S); err != nil {
+				return err
+			}
+		}
+		tx.SetInner(&itx)
+
+	case 1:
+		var etx ExternalTx
+		etx.AccessList = AccessList{}
+		etx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
+		to := common.BytesToAddress(protoTx.GetTo(), location)
+		etx.To = &to
+		etx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
+		etx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
+		etx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
+		etx.Gas = protoTx.GetGas()
+		etx.Data = protoTx.GetData()
+		etx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+
+		tx.SetInner(&etx)
+
+	case 2:
+		var ietx InternalToExternalTx
+		ietx.AccessList = AccessList{}
+		ietx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
+		to := common.BytesToAddress(protoTx.GetTo(), location)
+		ietx.To = &to
+		ietx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
+		ietx.Nonce = protoTx.GetNonce()
+		ietx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
+		ietx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
+		ietx.Gas = protoTx.GetGas()
+		ietx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+		ietx.Data = protoTx.GetData()
+		if protoTx.V == nil {
+			return errors.New("missing required field 'V' in InternalToExternalTx")
+		}
+		ietx.V = new(big.Int).SetBytes(protoTx.GetV())
+		if protoTx.R == nil {
+			return errors.New("missing required field 'R' in InternalToExternalTx")
+		}
+		ietx.R = new(big.Int).SetBytes(protoTx.GetR())
+		if protoTx.S == nil {
+			return errors.New("missing required field 'S' in InternalToExternalTx")
+		}
+		ietx.S = new(big.Int).SetBytes(protoTx.GetS())
+		withSignature := ietx.V.Sign() != 0 || ietx.R.Sign() != 0 || ietx.S.Sign() != 0
+		if withSignature {
+			if err := sanityCheckSignature(ietx.V, ietx.R, ietx.S); err != nil {
+				return err
+			}
+		}
+		if protoTx.EtxAccessList == nil {
+			return errors.New("missing required field 'EtxAccessList' in InternalToExternalTx")
+		}
+		ietx.ETXAccessList = AccessList{}
+		ietx.ETXAccessList.ProtoDecode(protoTx.GetEtxAccessList(), location)
+		if protoTx.EtxGasLimit == nil {
+			return errors.New("missing required field 'EtxGasLimit' in InternalToExternalTx")
+		}
+		ietx.ETXGasLimit = protoTx.GetEtxGasLimit()
+		if protoTx.EtxGasPrice == nil {
+			return errors.New("missing required field 'EtxGasPrice' in InternalToExternalTx")
+		}
+		ietx.ETXGasPrice = new(big.Int).SetBytes(protoTx.GetEtxGasPrice())
+		if protoTx.EtxGasTip == nil {
+			return errors.New("missing required field 'EtxGasTip' in InternalToExternalTx")
+		}
+		ietx.ETXGasTip = new(big.Int).SetBytes(protoTx.GetEtxGasTip())
+		if protoTx.EtxData == nil {
+			return errors.New("missing required field 'EtxData' in InternalToExternalTx")
+		}
+		ietx.ETXData = protoTx.GetEtxData()
+
+		tx.SetInner(&ietx)
+	default:
+		return errors.New("invalid transaction type")
+	}
+	return nil
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -430,6 +623,33 @@ func (s Transactions) Len() int { return len(s) }
 func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx := s[i]
 	tx.encodeTyped(w)
+}
+
+// ProtoEncode encodes the transactions to the ProtoTransactions format
+func (s Transactions) ProtoEncode() (*ProtoTransactions, error) {
+	protoTxs := &ProtoTransactions{}
+	protoTxs.Transactions = make([]*ProtoTransaction, len(s))
+	for i, tx := range s {
+		protoTx, err := tx.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		protoTxs.Transactions[i] = protoTx
+	}
+	return protoTxs, nil
+}
+
+// ProtoDecode decodes the ProtoTransactions into the Transactions format
+func (s *Transactions) ProtoDecode(transactions *ProtoTransactions, location common.Location) error {
+	for _, protoTx := range transactions.Transactions {
+		tx := &Transaction{}
+		err := tx.ProtoDecode(protoTx, location)
+		if err != nil {
+			return err
+		}
+		*s = append(*s, tx)
+	}
+	return nil
 }
 
 // FilterByLocation returns the subset of transactions with a 'to' address which
@@ -785,6 +1005,36 @@ func (al AccessList) StorageKeys() int {
 		sum += len(tuple.StorageKeys)
 	}
 	return sum
+}
+
+// ProtoEncode serializes al into the Quai Proto AccessList format
+func (al AccessList) ProtoEncode() *ProtoAccessList {
+	protoAccessList := &ProtoAccessList{}
+	protoAccessList.AccessTuples = make([]*ProtoAccessTuple, len(al))
+	for i, tuple := range al {
+		storageKeys := make([]*common.ProtoHash, len(tuple.StorageKeys))
+		for j, key := range tuple.StorageKeys {
+			storageKeys[j] = key.ProtoEncode()
+		}
+		protoAccessList.AccessTuples[i] = &ProtoAccessTuple{
+			Address:    tuple.Address.Bytes(),
+			StorageKey: storageKeys,
+		}
+	}
+	return protoAccessList
+}
+
+// ProtoDecode deserializes the ProtoAccessList into the AccessList format
+func (al *AccessList) ProtoDecode(protoAccessList *ProtoAccessList, location common.Location) error {
+	for _, protoTuple := range protoAccessList.AccessTuples {
+		address := common.BytesToAddress(protoTuple.GetAddress(), location)
+		storageKeys := make([]common.Hash, len(protoTuple.StorageKey))
+		for i, key := range protoTuple.StorageKey {
+			storageKeys[i].ProtoDecode(key)
+		}
+		*al = append(*al, AccessTuple{Address: address, StorageKeys: storageKeys})
+	}
+	return nil
 }
 
 // This function must only be used by tests

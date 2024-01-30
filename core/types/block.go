@@ -20,6 +20,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -230,6 +231,163 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		MixHash:       h.mixHash,
 		Nonce:         h.nonce,
 	})
+}
+
+// ProtoEncode serializes h into the Quai Proto Header format
+func (h *Header) ProtoEncode() (*ProtoHeader, error) {
+	if h == nil {
+		return nil, errors.New("header to be proto encoded is nil")
+	}
+
+	uncleHash := common.ProtoHash{Value: h.UncleHash().Bytes()}
+	root := common.ProtoHash{Value: h.Root().Bytes()}
+	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
+	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
+	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
+	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
+	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
+	gasLimit := h.GasLimit()
+	gasUsed := h.GasUsed()
+	time := h.Time()
+	nonce := h.Nonce().Uint64()
+
+	protoHeader := &ProtoHeader{
+		UncleHash:     &uncleHash,
+		Coinbase:      h.Coinbase().Bytes(),
+		Root:          &root,
+		TxHash:        &txHash,
+		EtxHash:       &etxhash,
+		EtxRollupHash: &etxRollupHash,
+		ReceiptHash:   &receiptHash,
+		Difficulty:    h.Difficulty().Bytes(),
+		GasLimit:      &gasLimit,
+		GasUsed:       &gasUsed,
+		BaseFee:       h.BaseFee().Bytes(),
+		Location:      h.Location().ProtoEncode(),
+		Time:          &time,
+		Extra:         h.Extra(),
+		MixHash:       &mixHash,
+		Nonce:         &nonce,
+	}
+
+	for i := 0; i < common.HierarchyDepth; i++ {
+		protoHeader.ParentHash = append(protoHeader.ParentHash, h.ParentHash(i).ProtoEncode())
+		protoHeader.ManifestHash = append(protoHeader.ManifestHash, h.ManifestHash(i).ProtoEncode())
+		if h.ParentEntropy(i) != nil {
+			protoHeader.ParentEntropy = append(protoHeader.ParentEntropy, h.ParentEntropy(i).Bytes())
+		}
+		if h.ParentDeltaS(i) != nil {
+			protoHeader.ParentDeltaS = append(protoHeader.ParentDeltaS, h.ParentDeltaS(i).Bytes())
+		}
+		if h.Number(i) != nil {
+			protoHeader.Number = append(protoHeader.Number, h.Number(i).Bytes())
+		}
+	}
+	return protoHeader, nil
+}
+
+// ProtoDecode deserializes the ProtoHeader into the Header format
+func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
+	if protoHeader.ParentHash == nil {
+		return errors.New("missing required field 'ParentHash' in Header")
+	}
+	if protoHeader.UncleHash == nil {
+		return errors.New("missing required field 'UncleHash' in Header")
+	}
+	if protoHeader.Coinbase == nil {
+		return errors.New("missing required field 'Coinbase' in Header")
+	}
+	if protoHeader.Root == nil {
+		return errors.New("missing required field 'Root' in Header")
+	}
+	if protoHeader.TxHash == nil {
+		return errors.New("missing required field 'TxHash' in Header")
+	}
+	if protoHeader.EtxHash == nil {
+		return errors.New("missing required field 'EtxHash' in Header")
+	}
+	if protoHeader.EtxRollupHash == nil {
+		return errors.New("missing required field 'EtxRollupHash' in Header")
+	}
+	if protoHeader.ManifestHash == nil {
+		return errors.New("missing required field 'ManifestHash' in Header")
+	}
+	if protoHeader.ReceiptHash == nil {
+		return errors.New("missing required field 'ReceiptHash' in Header")
+	}
+	if protoHeader.Difficulty == nil {
+		return errors.New("missing required field 'Difficulty' in Header")
+	}
+	if protoHeader.BaseFee == nil {
+		return errors.New("missing required field 'BaseFee' in Header")
+	}
+	if protoHeader.MixHash == nil {
+		return errors.New("missing required field 'MixHash' in Header")
+	}
+	if protoHeader.ParentEntropy == nil {
+		return errors.New("missing required field 'ParentEntropy' in Header")
+	}
+	if protoHeader.ParentDeltaS == nil {
+		return errors.New("missing required field 'ParentDeltaS' in Header")
+	}
+	if protoHeader.Number == nil {
+		return errors.New("missing required field 'Number' in Header")
+	}
+	if protoHeader.Location == nil {
+		return errors.New("missing required field 'Location' in Header")
+	}
+	if protoHeader.Extra == nil {
+		return errors.New("missing required field 'Extra' in Header")
+	}
+	if protoHeader.MixHash == nil {
+		return errors.New("missing required field 'MixHash' in Header")
+	}
+
+	// Check if the location is valid length
+	if len(protoHeader.GetLocation().GetValue()) < 2 {
+		return errors.New("invalid length for location in Header")
+	}
+
+	// Initialize the array fields before setting
+	h.parentHash = make([]common.Hash, common.HierarchyDepth)
+	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
+	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
+	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
+	h.number = make([]*big.Int, common.HierarchyDepth)
+
+	for i := 0; i < common.HierarchyDepth; i++ {
+		h.SetParentHash(common.BytesToHash(protoHeader.GetParentHash()[i].GetValue()), i)
+		h.SetManifestHash(common.BytesToHash(protoHeader.GetManifestHash()[i].GetValue()), i)
+		h.SetParentEntropy(new(big.Int).SetBytes(protoHeader.GetParentEntropy()[i]), i)
+		h.SetParentDeltaS(new(big.Int).SetBytes(protoHeader.GetParentDeltaS()[i]), i)
+		h.SetNumber(new(big.Int).SetBytes(protoHeader.GetNumber()[i]), i)
+	}
+
+	h.SetUncleHash(common.BytesToHash(protoHeader.GetUncleHash().GetValue()))
+	h.SetCoinbase(common.BytesToAddress(protoHeader.GetCoinbase(), protoHeader.GetLocation().GetValue()))
+	h.SetRoot(common.BytesToHash(protoHeader.GetRoot().GetValue()))
+	h.SetTxHash(common.BytesToHash(protoHeader.GetTxHash().GetValue()))
+	h.SetReceiptHash(common.BytesToHash(protoHeader.GetReceiptHash().GetValue()))
+	h.SetEtxHash(common.BytesToHash(protoHeader.GetEtxHash().GetValue()))
+	h.SetEtxRollupHash(common.BytesToHash(protoHeader.GetEtxRollupHash().GetValue()))
+	h.SetDifficulty(new(big.Int).SetBytes(protoHeader.GetDifficulty()))
+	h.SetGasLimit(protoHeader.GetGasLimit())
+	h.SetGasUsed(protoHeader.GetGasUsed())
+	h.SetBaseFee(new(big.Int).SetBytes(protoHeader.GetBaseFee()))
+	h.SetTime(protoHeader.GetTime())
+	h.SetExtra(protoHeader.GetExtra())
+	h.SetMixHash(common.BytesToHash(protoHeader.GetMixHash().GetValue()))
+	h.SetNonce(uint64ToByteArr(protoHeader.GetNonce()))
+	h.SetLocation(protoHeader.GetLocation().GetValue())
+
+	return nil
+}
+
+// helper to convert uint64 into a byte array
+func uint64ToByteArr(val uint64) [8]byte {
+	var arr [8]byte
+	binary.BigEndian.PutUint64(arr[:], val)
+	return arr
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
@@ -778,6 +936,58 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 	})
 }
 
+// ProtoEncode serializes h into the Quai Proto Block format
+func (b *Block) ProtoEncode() (*ProtoBlock, error) {
+	protoHeader, err := b.header.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoTransactions, err := b.Transactions().ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoExtTransactions, err := b.ExtTransactions().ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoManifest, err := b.SubManifest().ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoBlock := &ProtoBlock{
+		Header:   protoHeader,
+		Txs:      protoTransactions,
+		Etxs:     protoExtTransactions,
+		Manifest: protoManifest,
+	}
+	return protoBlock, nil
+}
+
+// ProtoEncode deserializes th ProtoHeader into the Header format
+func (b *Block) ProtoDecode(protoBlock *ProtoBlock, location common.Location) error {
+	b.header = &Header{}
+	err := b.header.ProtoDecode(protoBlock.GetHeader())
+	if err != nil {
+		return err
+	}
+	b.transactions = Transactions{}
+	err = b.transactions.ProtoDecode(protoBlock.GetTxs(), location)
+	if err != nil {
+		return err
+	}
+	b.extTransactions = Transactions{}
+	err = b.extTransactions.ProtoDecode(protoBlock.GetEtxs(), location)
+	if err != nil {
+		return err
+	}
+	b.subManifest = BlockManifest{}
+	err = b.subManifest.ProtoDecode(protoBlock.GetManifest())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Wrapped header accessors
 func (b *Block) ParentHash(nodeCtx int) common.Hash   { return b.header.ParentHash(nodeCtx) }
 func (b *Block) UncleHash() common.Hash               { return b.header.UncleHash() }
@@ -1119,6 +1329,25 @@ func (m BlockManifest) EncodeIndex(i int, w *bytes.Buffer) {
 // to approximate and limit the memory consumption of various caches.
 func (m BlockManifest) Size() common.StorageSize {
 	return common.StorageSize(m.Len() * common.HashLength)
+}
+
+// ProtoEncode serializes m into the Quai Proto BlockManifest format
+func (m BlockManifest) ProtoEncode() (*ProtoManifest, error) {
+	var hashes []*common.ProtoHash
+	for _, hash := range m {
+		hashes = append(hashes, hash.ProtoEncode())
+	}
+	return &ProtoManifest{Manifest: hashes}, nil
+}
+
+// ProtoDecode deserializes th ProtoManifest into the BlockManifest format
+func (m *BlockManifest) ProtoDecode(protoManifest *ProtoManifest) error {
+	for _, protoHash := range protoManifest.Manifest {
+		hash := &common.Hash{}
+		hash.ProtoDecode(protoHash)
+		*m = append(*m, *hash)
+	}
+	return nil
 }
 
 type HashAndNumber struct {

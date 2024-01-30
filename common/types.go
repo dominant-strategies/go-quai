@@ -100,6 +100,16 @@ func (h Hash) String() string {
 	return h.Hex()
 }
 
+// ProtoEncode converts the hash into the ProtoHash type
+func (h Hash) ProtoEncode() *ProtoHash {
+	return &ProtoHash{Value: h.Bytes()}
+}
+
+// ProtoDecode converts the ProtoHash into the Hash type
+func (h *Hash) ProtoDecode(hash *ProtoHash) {
+	h.SetBytes(hash.GetValue())
+}
+
 // Format implements fmt.Formatter.
 // Hash supports the %v, %s, %v, %x, %X and %d format verbs.
 func (h Hash) Format(s fmt.State, c rune) {
@@ -300,6 +310,20 @@ func LocationFromAddressBytes(addr []byte) Location {
 	region := (addr[0] & 0xF0) >> 4 // bits[0..3]
 	zone := addr[0] & 0x0F          // bits[4..7]
 	return []byte{region, zone}
+}
+
+// ProtoEncode converts the Location type into ProtoLocation
+func (loc Location) ProtoEncode() *ProtoLocation {
+	return &ProtoLocation{Value: loc}
+}
+
+// ProtoDecode converts the ProtoLocation type back into Location
+func (loc *Location) ProtoDecode(location *ProtoLocation) {
+	loc.SetLocation(location.GetValue())
+}
+
+func (loc *Location) SetLocation(location Location) {
+	loc = &location
 }
 
 // Constructs the byte prefix from the location type
