@@ -316,8 +316,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
-	contractCreation := msg.To() == nil // for ETX contract creation, perhaps we should compare the "to" to the contextual zero-address (only in the ETX case)
-
+	contractCreation := msg.To() == nil
+	if st.msg.IsETX() {
+		// for ETX contract creation, we compare the "to" to the contextual zero-address (only in the ETX case)
+		// the "from" is also set to the contextual zero-address, so it will look like a transaction from the zero-address to itself
+		contractCreation = msg.To().Equal(common.ZeroAddress(st.evm.ChainConfig().Location))
+	}
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation)
 	if err != nil {
