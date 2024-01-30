@@ -5,7 +5,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/ipfs/go-datastore"
-	"github.com/libp2p/go-libp2p/core"
 	basicConnGater "github.com/libp2p/go-libp2p/p2p/net/conngater"
 	basicConnMgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
 
@@ -29,21 +28,21 @@ type PeerManager interface {
 	UnblockSubnet(ipnet *net.IPNet) error
 
 	// Increases the peer's liveliness score
-	MarkLivelyPeer(core.PeerID)
+	MarkLivelyPeer(p2p.PeerID)
 	// Decreases the peer's liveliness score
-	MarkLatentPeer(core.PeerID)
+	MarkLatentPeer(p2p.PeerID)
 
 	// Increases the peer's liveliness score. Not exposed outside of NetworkingAPI
-	MarkResponsivePeer(core.PeerID)
+	MarkResponsivePeer(p2p.PeerID)
 	// Decreases the peer's liveliness score. Not exposed outside of NetworkingAPI
-	MarkUnresponsivePeer(core.PeerID)
+	MarkUnresponsivePeer(p2p.PeerID)
 
 	// Protects the peer's connection from being disconnected
-	ProtectPeer(core.PeerID)
+	ProtectPeer(p2p.PeerID)
 	// Remove protection from the peer's connection
 	UnprotectPeer(p2p.PeerID)
 	// Bans the peer's connection from being re-established
-	BanPeer(core.PeerID)
+	BanPeer(p2p.PeerID)
 }
 
 type BasicPeerManager struct {
