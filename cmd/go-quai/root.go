@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -33,16 +34,32 @@ func init() {
 func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	// set config path to read config file
 	configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
-	viper.SetConfigFile(configDir + constants.CONFIG_FILE_NAME)
+
+	// Make sure configDir is a valid directory using path/filepath
+	// filepath.Clean returns the shortest path name equivalent to path by purely lexical processing
+	configDir = filepath.Clean(configDir)
+
+	_, err := os.Stat(configDir)
+	if err != nil && os.IsNotExist(err) {
+		// If the directory does not exist, create it
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			log.Fatalf("Failed to create config directory: %s, Error: %v", configDir, err)
+		}
+		log.Debug("Config directory created: %s", configDir)
+	} else if err != nil {
+		log.Fatalf("Error accessing config directory: %s, Error: %v", configDir, err)
+	}
+
+	viper.SetConfigFile(filepath.Join(configDir, constants.CONFIG_FILE_NAME))
 	viper.SetConfigType(constants.CONFIG_FILE_TYPE)
 
 	// Write default config file if it does not exist
-	if _, err := os.Stat(configDir + constants.CONFIG_FILE_NAME); os.IsNotExist(err) {
-		err := utils.WriteDefaultConfigFile(configDir+constants.CONFIG_FILE_NAME, constants.CONFIG_FILE_TYPE)
+	if _, err := os.Stat(filepath.Join(configDir, constants.CONFIG_FILE_NAME)); os.IsNotExist(err) {
+		err := utils.WriteDefaultConfigFile(configDir, constants.CONFIG_FILE_NAME, constants.CONFIG_FILE_TYPE)
 		if err != nil {
 			return err
 		}
-		log.WithField("path", configDir+constants.CONFIG_FILE_NAME).Info("Default config file created")
+		log.WithField("path", filepath.Join(configDir, constants.CONFIG_FILE_NAME)).Info("Default config file created")
 	}
 
 	// load config from file and environment variables
@@ -53,7 +70,7 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	log.SetGlobalLogger("", logLevel)
 
 	// bind cobra flags to viper instance
-	err := viper.BindPFlags(cmd.Flags())
+	err = viper.BindPFlags(cmd.Flags())
 	if err != nil {
 		return fmt.Errorf("error binding flags: %s", err)
 	}

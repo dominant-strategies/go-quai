@@ -1483,10 +1483,20 @@ func addFlagsToCategory(flags []Flag) {
 }
 
 // Write a function to write the default values of each flag to a file
-func WriteDefaultConfigFile(configPath string, configType string) error {
-	if configPath == "" {
+func WriteDefaultConfigFile(configDir string, configFileName string, configType string) error {
+	if configDir == "" {
 		log.Fatalf("No config file path provided")
 	}
+
+	// Check that dir exists, create if it doesn't
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		err := os.MkdirAll(configDir, 0755)
+		if err != nil {
+			log.Fatalf("Failed to create config directory: %s", err)
+		}
+	}
+
+	configPath := filepath.Join(configDir, configFileName)
 
 	// Check if file exists, create if it doesn't
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

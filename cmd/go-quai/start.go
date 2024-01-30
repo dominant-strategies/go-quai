@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 
@@ -57,7 +58,7 @@ func startCmdPreRun(cmd *cobra.Command, args []string) error {
 	// set keyfile path
 	if viper.GetString(utils.KeyFileFlag.Name) == "" {
 		configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
-		viper.Set(utils.KeyFileFlag.Name, configDir+"private.key")
+		viper.Set(utils.KeyFileFlag.Name, filepath.Join(configDir, "private.key"))
 	}
 
 	// if no bootstrap peers are provided, use the default ones defined in config/bootnodes.go

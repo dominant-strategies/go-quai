@@ -8,20 +8,22 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/node"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // In your cmd package where you define Cobra commands
@@ -57,7 +59,7 @@ func sendCmdPreRun(cmd *cobra.Command, args []string) error {
 	// set keyfile path
 	if viper.GetString(utils.KeyFileFlag.Name) == "" {
 		configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
-		viper.Set(utils.KeyFileFlag.Name, configDir+"private.key")
+		viper.Set(utils.KeyFileFlag.Name, filepath.Join(configDir, "private.key"))
 	}
 
 	// if no bootstrap peers are provided, use the default ones defined in config/bootnodes.go
