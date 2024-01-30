@@ -231,7 +231,7 @@ func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.H
 	panic("TODO: implement")
 }
 
-func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, data interface{}) {
+func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, data interface{}, nodeLocation common.Location) {
 	switch v := data.(type) {
 	case types.Block:
 		p.cacheAdd(v.Hash(), &v)
@@ -244,6 +244,6 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, data interface{}) {
 
 	// If we made it here, pass the data on to the consensus backend
 	if p.consensus != nil {
-		p.consensus.OnNewBroadcast(sourcePeer, data)
+		p.consensus.OnNewBroadcast(sourcePeer, data, nodeLocation)
 	}
 }

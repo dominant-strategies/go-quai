@@ -15,7 +15,7 @@ type ConsensusAPI interface {
 	// Handle new data propagated from the gossip network. Should return quickly.
 	// Specify the peer which propagated the data to us, as well as the data itself.
 	// Return true if this data should be relayed to peers. False if it should be ignored.
-	OnNewBroadcast(core.PeerID, interface{}) bool
+	OnNewBroadcast(core.PeerID, interface{}, common.Location) bool
 
 	// Asks the consensus backend to lookup a block by hash and location.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.

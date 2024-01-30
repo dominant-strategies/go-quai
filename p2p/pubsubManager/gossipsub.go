@@ -23,7 +23,7 @@ type PubsubManager struct {
 	topics        map[string]*pubsub.Topic
 
 	// Callback function to handle received data
-	onReceived func(peer.ID, interface{})
+	onReceived func(peer.ID, interface{}, common.Location)
 }
 
 // creates a new gossipsub instance
@@ -43,7 +43,7 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	}, nil
 }
 
-func (g *PubsubManager) Start(receiveCb func(peer.ID, interface{})) {
+func (g *PubsubManager) Start(receiveCb func(peer.ID, interface{}, common.Location)) {
 	g.onReceived = receiveCb
 }
 
@@ -84,7 +84,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 
 			var data interface{}
 			// unmarshal the received data depending on the topic's type
-			err = pb.UnmarshalAndConvert(msg.Data, &data)
+			err = pb.UnmarshalAndConvert(msg.Data, &data, datatype)
 			if err != nil {
 				log.Errorf("error unmarshalling data: %s", err)
 				return
@@ -92,7 +92,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 
 			// handle the received data
 			if g.onReceived != nil {
-				g.onReceived(msg.ReceivedFrom, data)
+				g.onReceived(msg.ReceivedFrom, data, location)
 			}
 		}
 	}(subscription)
