@@ -193,6 +193,14 @@ func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {
 	p.peerManager.ProtectPeer(peer)
 }
 
+func (p *P2PNode) UnprotectPeer(peer p2p.PeerID) {
+	log.WithFields(log.Fields{
+		"peer": peer,
+	}).Debug("Unprotecting peer connection from pruning")
+
+	p.peerManager.UnprotectPeer(peer)
+}
+
 func (p *P2PNode) BanPeer(peer p2p.PeerID) {
 	log.Global.WithFields(log.Fields{
 		"peer": peer,

@@ -49,6 +49,8 @@ type NetworkingAPI interface {
 
 	// Protects the peer's connection from being pruned
 	ProtectPeer(core.PeerID)
+	// Remove protection from the peer's connection
+	UnprotectPeer(core.PeerID)
 	// Ban will close the connection and prevent future connections with this peer
 	BanPeer(core.PeerID)
 }

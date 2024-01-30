@@ -40,6 +40,8 @@ type PeerManager interface {
 
 	// Protects the peer's connection from being disconnected
 	ProtectPeer(core.PeerID)
+	// Remove protection from the peer's connection
+	UnprotectPeer(p2p.PeerID)
 	// Bans the peer's connection from being re-established
 	BanPeer(core.PeerID)
 }
@@ -84,6 +86,10 @@ func (pm *BasicPeerManager) MarkUnresponsivePeer(peer p2p.PeerID) {
 
 func (pm *BasicPeerManager) ProtectPeer(peer p2p.PeerID) {
 	pm.Protect(peer, "gen_protection")
+}
+
+func (pm *BasicPeerManager) UnprotectPeer(peer p2p.PeerID) {
+	pm.Unprotect(peer, "gen_protection")
 }
 
 func (pm *BasicPeerManager) BanPeer(peer p2p.PeerID) {
