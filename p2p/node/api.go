@@ -118,21 +118,13 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		}
 
 		// 2. If not, query the topic peers for the data
-		peers, err := p.pubsub.PeersForTopic(location, datatype)
+		peerList, err := p.pubsub.PeersForTopic(location, datatype)
 		if err != nil {
 			log.Global.Error("Error requesting data: ", err)
 			return
 		}
-		for _, peerID := range peers {
-			go func(peerID p2p.PeerID) {
-				if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
-					log.Global.Debugf("Received %s from peer %s", hash, peerID)
-					// cache the response
-					p.cacheAdd(hash, recvd)
-					// send the block to the result channel
-					resultChan <- recvd
-				}
-			}(peerID)
+		for _, peerID := range peerList {
+			go p.requestAndWait(peerID, location, hash, datatype, resultChan)
 		}
 
 		// 3. If block is not found, query the DHT for peers in the slice
@@ -149,17 +141,7 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 			// query the DHT for peers in the slice
 			// TODO: need to find providers of a topic, not a shard
 			for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
-				go func() {
-					// Ask peer and wait for response
-					if recvd, err := p.requestFromPeer(peer.ID, location, hash, datatype); err == nil {
-						log.Global.Debugf("Received %s from peer %s", hash, peer.ID)
-						// cache the response
-						p.cacheAdd(hash, recvd)
-						// send the block to the result channel
-						resultChan <- recvd
-						// TODO: make sure gossipsub holds onto this good peer for future queries
-					}
-				}()
+				go p.requestAndWait(peer.ID, location, hash, datatype, resultChan)
 			}
 			// if the data is not found, wait for a bit and try again
 			log.Global.Debugf("Block %s not found in slice %s. Retrying...", hash, location)
@@ -168,6 +150,23 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 		log.Global.Debugf("Block %s not found in slice %s", hash, location)
 	}()
 	return resultChan
+}
+
+func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, hash common.Hash, datatype interface{}, resultChan chan interface{}) {
+	// Ask peer and wait for response
+	if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
+		log.Global.Debugf("Received %s from peer %s", hash, peerID)
+		// cache the response
+		p.cacheAdd(hash, recvd)
+		// send the block to the result channel
+		resultChan <- recvd
+
+		// Mark this peer as behaving well
+		p.peerManager.MarkResponsivePeer(peerID)
+	} else {
+		// Mark this peer as not responding
+		p.peerManager.MarkUnresponsivePeer(peerID)
+	}
 }
 
 func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID) {
