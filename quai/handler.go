@@ -5,6 +5,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"math/big"
 	"sync"
 	"time"
@@ -15,6 +16,8 @@ const (
 	c_missingBlockChanSize = 60
 	// c_checkNextPrimeBlockInterval is the interval for checking the next Block in Prime
 	c_checkNextPrimeBlockInterval = 60 * time.Second
+	// c_txsChanSize is the size of channel listening to the new txs event
+	c_newTxsChanSize = 100
 )
 
 // handler manages the fetch requests from the core and tx pool also takes care of the tx broadcast
@@ -24,6 +27,8 @@ type handler struct {
 	core            *core.Core
 	missingBlockCh  chan types.BlockRequest
 	missingBlockSub event.Subscription
+	txsCh           chan core.NewTxsEvent
+	txsSub          event.Subscription
 	wg              sync.WaitGroup
 	quitCh          chan struct{}
 }
@@ -45,6 +50,13 @@ func (h *handler) Start() {
 	go h.missingBlockLoop()
 
 	nodeCtx := h.nodeLocation.Context()
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
+		h.wg.Add(1)
+		h.txsCh = make(chan core.NewTxsEvent, c_newTxsChanSize)
+		h.txsSub = h.core.SubscribeNewTxsEvent(h.txsCh)
+		go h.txBroadcastLoop()
+	}
+
 	if nodeCtx == common.PRIME_CTX {
 		h.wg.Add(1)
 		go h.checkNextPrimeBlock()
@@ -53,6 +65,10 @@ func (h *handler) Start() {
 
 func (h *handler) Stop() {
 	h.missingBlockSub.Unsubscribe() // quits missingBlockLoop
+	nodeCtx := h.nodeLocation.Context()
+	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
+		h.txsSub.Unsubscribe() // quits the txBroadcastLoop
+	}
 	close(h.quitCh)
 	h.wg.Wait()
 }
@@ -71,6 +87,24 @@ func (h *handler) missingBlockLoop() {
 				}
 			}()
 		case <-h.missingBlockSub.Err():
+			return
+		}
+	}
+}
+
+// txBroadcastLoop announces new transactions to connected peers.
+func (h *handler) txBroadcastLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case event := <-h.txsCh:
+			for _, tx := range event.Txs {
+				err := h.p2pBackend.Broadcast(h.nodeLocation, tx)
+				if err != nil {
+					log.Global.Error("Error broadcasting transaction hash", tx.Hash(), err)
+				}
+			}
+		case <-h.txsSub.Err():
 			return
 		}
 	}

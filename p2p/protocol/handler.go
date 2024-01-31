@@ -32,9 +32,6 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 		data, err := common.ReadMessageFromStream(stream)
 		if err != nil {
 			if errors.Is(err, network.ErrReset) || errors.Is(err, io.EOF) || errors.Is(err, os.ErrDeadlineExceeded) {
-				log.Global.WithFields(log.Fields{
-					"error": err,
-				}).Warn("stream closed by peer")
 				return
 			}
 

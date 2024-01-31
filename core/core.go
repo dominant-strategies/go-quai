@@ -1125,6 +1125,10 @@ func (c *Core) AddLocal(tx *types.Transaction) error {
 	return c.sl.txPool.AddLocal(tx)
 }
 
+func (c *Core) AddRemote(tx *types.Transaction) error {
+	return c.sl.txPool.AddRemote(tx)
+}
+
 func (c *Core) TxPoolPending(enforceTips bool) (map[common.AddressBytes]types.Transactions, error) {
 	return c.sl.txPool.TxPoolPending(enforceTips, nil)
 }

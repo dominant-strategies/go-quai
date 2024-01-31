@@ -23,6 +23,8 @@ func TopicName(location common.Location, data interface{}) (string, error) {
 		return strings.Join([]string{location.Name(), C_blockType}, "/"), nil
 	case common.Hash:
 		return strings.Join([]string{location.Name(), C_hashType}, "/"), nil
+	case *types.Transaction:
+		return strings.Join([]string{location.Name(), C_transactionType}, "/"), nil
 	default:
 		return "", ErrUnsupportedType
 	}
