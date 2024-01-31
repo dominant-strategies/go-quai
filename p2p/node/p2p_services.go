@@ -48,7 +48,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 	}
 
 	// Unmarshal the response
-	recvdID, recvdType, err := pb.DecodeQuaiResponse(responseBytes)
+	recvdID, recvdType, err := pb.DecodeQuaiResponse(responseBytes, location)
 	if err != nil {
 		// TODO: should we report this peer for an invalid response?
 		return nil, err

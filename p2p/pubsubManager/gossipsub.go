@@ -70,7 +70,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	}
 	g.subscriptions[topicName] = subscription
 
-	go func(sub *pubsub.Subscription) {
+	go func(location common.Location, sub *pubsub.Subscription) {
 		log.Global.Debugf("waiting for first message on subscription: %s", sub.Topic())
 		for {
 			msg, err := sub.Next(g.ctx)
@@ -85,7 +85,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 
 			var data interface{}
 			// unmarshal the received data depending on the topic's type
-			err = pb.UnmarshalAndConvert(msg.Data, &data, datatype)
+			err = pb.UnmarshalAndConvert(msg.Data, location, &data, datatype)
 			if err != nil {
 				log.Global.Errorf("error unmarshalling data: %s", err)
 				return
@@ -96,7 +96,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 				g.onReceived(msg.ReceivedFrom, data, location)
 			}
 		}
-	}(subscription)
+	}(location, subscription)
 
 	return nil
 }

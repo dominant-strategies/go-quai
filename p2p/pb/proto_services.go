@@ -122,7 +122,7 @@ func EncodeQuaiResponse(id uint32, data interface{}) ([]byte, error) {
 //  1. The request ID
 //  2. The decoded type (i.e. *types.Header, *types.Block, etc)
 //  3. An error
-func DecodeQuaiResponse(data []byte) (uint32, interface{}, error) {
+func DecodeQuaiResponse(data []byte, sourceLocation common.Location) (uint32, interface{}, error) {
 	var respMsg QuaiResponseMessage
 	err := UnmarshalProtoMessage(data, &respMsg)
 	if err != nil {
@@ -130,15 +130,12 @@ func DecodeQuaiResponse(data []byte) (uint32, interface{}, error) {
 	}
 
 	id := respMsg.Id
-	// TODO: when the location implementation is done at the P2P layer, we can
-	// remove this hard coding
-	location := common.Location{0, 0}
 
 	switch respMsg.Response.(type) {
 	case *QuaiResponseMessage_Block:
 		protoBlock := respMsg.GetBlock()
 		block := &types.Block{}
-		err := block.ProtoDecode(protoBlock, location)
+		err := block.ProtoDecode(protoBlock, sourceLocation)
 		if err != nil {
 			return id, nil, err
 		}
@@ -154,7 +151,7 @@ func DecodeQuaiResponse(data []byte) (uint32, interface{}, error) {
 	case *QuaiResponseMessage_Transaction:
 		protoTransaction := respMsg.GetTransaction()
 		transaction := &types.Transaction{}
-		err := transaction.ProtoDecode(protoTransaction, location)
+		err := transaction.ProtoDecode(protoTransaction, sourceLocation)
 		if err != nil {
 			return id, nil, err
 		}
@@ -194,10 +191,7 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 }
 
 // Unmarshals a protobuf message into a proto type and converts it to a custom go type
-func UnmarshalAndConvert(data []byte, dataPtr *interface{}, datatype interface{}) error {
-	// TODO: when the location implementation is done at the P2P layer, we can
-	// remove this hard coding of location
-	location := common.Location{0, 0}
+func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *interface{}, datatype interface{}) error {
 	switch datatype.(type) {
 	case *types.Block:
 		protoBlock := &types.ProtoBlock{}
@@ -206,7 +200,7 @@ func UnmarshalAndConvert(data []byte, dataPtr *interface{}, datatype interface{}
 			return err
 		}
 		block := &types.Block{}
-		err = block.ProtoDecode(protoBlock, location)
+		err = block.ProtoDecode(protoBlock, sourceLocation)
 		if err != nil {
 			return err
 		}
@@ -232,7 +226,7 @@ func UnmarshalAndConvert(data []byte, dataPtr *interface{}, datatype interface{}
 			return err
 		}
 		transaction := &types.Transaction{}
-		err = transaction.ProtoDecode(protoTransaction, location)
+		err = transaction.ProtoDecode(protoTransaction, sourceLocation)
 		if err != nil {
 			return err
 		}
