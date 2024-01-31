@@ -56,6 +56,8 @@ type Quai struct {
 
 	p2p NetworkingAPI
 
+	handler *handler
+
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
@@ -218,9 +220,12 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 
 	// Set the p2p Networking API
 	quai.p2p = p2p
-
 	// Subscribe to the Blocks subscription
 	quai.p2p.Subscribe(config.NodeLocation, &types.Block{})
+
+	quai.handler = newHandler(quai.p2p, quai.core, config.NodeLocation)
+	// Start the handler
+	quai.handler.Start()
 
 	quai.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), quai, nil}
 	// Gasprice oracle is only initiated in zone chains
@@ -394,6 +399,7 @@ func (s *Quai) Stop() error {
 	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
 	s.eventMux.Stop()
+	s.handler.Stop()
 
 	return nil
 }

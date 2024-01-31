@@ -607,6 +607,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 			}
 		}
 	}
+
 	if c.GetHeaderOrCandidateByHash(block.Hash()) == nil {
 		c.sl.WriteBlock(block)
 	}

@@ -139,6 +139,10 @@ func (b *QuaiAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*ty
 	return b.quai.core.GetBlockByHash(hash), nil
 }
 
+func (b *QuaiAPIBackend) BlockOrCandidateByHash(hash common.Hash) *types.Block {
+	return b.quai.core.GetBlockOrCandidateByHash(hash)
+}
+
 func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
