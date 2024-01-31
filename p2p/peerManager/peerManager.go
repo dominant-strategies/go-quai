@@ -73,7 +73,7 @@ type BasicPeerManager struct {
 	responsivePeers map[p2p.PeerID]struct{}
 	peers           map[p2p.PeerID]struct{}
 
-	mu *sync.Mutex
+	mu sync.Mutex
 }
 
 func NewManager(low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
