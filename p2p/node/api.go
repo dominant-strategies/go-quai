@@ -119,8 +119,20 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 
 		// 2. If not, query the topic peers for the data
 		peerList := p.peerManager.GetBestPeers()
+		doneChan := make(chan bool)
 		for _, peerID := range peerList {
-			go p.requestAndWait(peerID, location, hash, datatype, resultChan)
+			go func(peerID peer.ID) {
+				doneChan <- p.requestAndWait(peerID, location, hash, datatype, resultChan)
+			}(peerID)
+		}
+
+		// Wait for a response from a peer
+		// If any peer provides a response, then return
+		for i := 0; i < len(peerList); i++ {
+			found := <-doneChan
+			if found {
+				return
+			}
 		}
 
 		// 3. If block is not found, query the DHT for peers in the slice
@@ -148,7 +160,7 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 	return resultChan
 }
 
-func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, hash common.Hash, datatype interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, hash common.Hash, datatype interface{}, resultChan chan interface{}) (resultFound bool) {
 	// Ask peer and wait for response
 	if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
 		log.Global.Debugf("Received %s from peer %s", hash, peerID)
@@ -159,9 +171,11 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, hash 
 
 		// Mark this peer as behaving well
 		p.peerManager.MarkResponsivePeer(peerID)
+		return true
 	} else {
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID)
+		return false
 	}
 }
 
