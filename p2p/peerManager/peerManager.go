@@ -159,8 +159,13 @@ func (pm *BasicPeerManager) MarkLatentPeer(peer p2p.PeerID) {
 }
 
 func (pm *BasicPeerManager) calculatePeerLiveness(peer p2p.PeerID) float64 {
-	liveness := pm.GetTagInfo(peer).Tags["liveness_reports"]
-	latents := pm.GetTagInfo(peer).Tags["latency_reports"]
+	peerTag := pm.GetTagInfo(peer)
+	if peerTag == nil {
+		return 0
+	}
+
+	liveness := peerTag.Tags["liveness_reports"]
+	latents := peerTag.Tags["latency_reports"]
 	return float64(liveness) / float64(latents)
 }
 
@@ -175,8 +180,12 @@ func (pm *BasicPeerManager) MarkUnresponsivePeer(peer p2p.PeerID) {
 }
 
 func (pm *BasicPeerManager) calculatePeerResponsiveness(peer p2p.PeerID) float64 {
-	responses := pm.GetTagInfo(peer).Tags["responses_served"]
-	misses := pm.GetTagInfo(peer).Tags["responses_missed"]
+	peerTag := pm.GetTagInfo(peer)
+	if peerTag == nil {
+		return 0
+	}
+	responses := peerTag.Tags["responses_served"]
+	misses := peerTag.Tags["responses_missed"]
 	return float64(responses) / float64(misses)
 }
 
