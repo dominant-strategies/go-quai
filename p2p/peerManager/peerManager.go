@@ -90,6 +90,10 @@ func NewManager(low int, high int, datastore datastore.Datastore) (*BasicPeerMan
 	return &BasicPeerManager{
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
+
+		bestPeers:       make(map[peer.ID]struct{}),
+		responsivePeers: make(map[peer.ID]struct{}),
+		peers:           make(map[peer.ID]struct{}),
 	}, nil
 }
 
