@@ -537,6 +537,9 @@ func TestHash_Format(t *testing.T) {
 }
 
 func TestZeroAddress(t *testing.T) {
+	t.Log(fmt.Sprintf("0x%x00000000000000000000000000000000000000", nodeLocation.BytePrefix()))
+	addr := HexToAddress("0x110000000000000000000000000000000000115", nodeLocation)
+	t.Log(fmt.Sprintf("0x%x000000000000000000000000000000000000%02x", nodeLocation.BytePrefix(), addr.Bytes20()[19]))
 	t.Log(ZeroAddress(nodeLocation).String())
 	internal, err := ZeroAddress(nodeLocation).InternalAddress()
 	if err != nil {

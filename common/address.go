@@ -20,7 +20,7 @@ type Address struct {
 	inner AddressData
 }
 
-type AddressBytes [20]byte
+type AddressBytes [AddressLength]byte
 
 type AddressData interface {
 	Bytes() []byte
@@ -255,6 +255,19 @@ func BigToAddress(b *big.Int, nodeLocation Location) Address {
 // If s is larger than len(h), s will be cropped from the left.
 func HexToAddress(s string, nodeLocation Location) Address {
 	return BytesToAddress(FromHex(s), nodeLocation)
+}
+
+func HexToAddressBytes(s string) AddressBytes {
+	var a AddressBytes
+	a.SetBytes(FromHex(s))
+	return a
+}
+
+func (a *AddressBytes) SetBytes(b []byte) {
+	if len(b) > len(a) {
+		b = b[len(b)-AddressLength:]
+	}
+	copy(a[AddressLength-len(b):], b)
 }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded

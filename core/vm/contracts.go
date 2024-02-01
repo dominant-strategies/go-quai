@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -41,136 +42,21 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
-var TranslatedAddresses = map[common.AddressBytes]int{
-	common.AddressBytes(intToByteArray20(1)): 0,
-	common.AddressBytes(intToByteArray20(2)): 1,
-	common.AddressBytes(intToByteArray20(3)): 2,
-	common.AddressBytes(intToByteArray20(4)): 3,
-	common.AddressBytes(intToByteArray20(5)): 4,
-	common.AddressBytes(intToByteArray20(6)): 5,
-	common.AddressBytes(intToByteArray20(7)): 6,
-	common.AddressBytes(intToByteArray20(8)): 7,
-	common.AddressBytes(intToByteArray20(9)): 8,
-}
-
 var (
 	PrecompiledContracts map[common.AddressBytes]PrecompiledContract = make(map[common.AddressBytes]PrecompiledContract)
 	PrecompiledAddresses map[string][]common.Address                 = make(map[string][]common.Address)
 )
 
 func InitializePrecompiles(nodeLocation common.Location) {
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][0].Bytes20()] = &ecrecover{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][1].Bytes20()] = &sha256hash{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][2].Bytes20()] = &ripemd160hash{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][3].Bytes20()] = &dataCopy{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][4].Bytes20()] = &bigModExp{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][5].Bytes20()] = &bn256Add{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][6].Bytes20()] = &bn256ScalarMul{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][7].Bytes20()] = &bn256Pairing{}
-	PrecompiledContracts[PrecompiledAddresses[nodeLocation.Name()][8].Bytes20()] = &blake2F{}
-}
-
-func init() {
-
-	PrecompiledAddresses["cyprus1"] = []common.Address{
-		common.HexToAddress("0x1400000000000000000000000000000000000001", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000002", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000003", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000004", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000005", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000006", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000007", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000008", common.Location{0, 0}),
-		common.HexToAddress("0x1400000000000000000000000000000000000009", common.Location{0, 0}),
-	}
-	PrecompiledAddresses["cyprus2"] = []common.Address{
-		common.HexToAddress("0x2000000000000000000000000000000000000001", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000002", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000003", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000004", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000005", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000006", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000007", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000008", common.Location{0, 1}),
-		common.HexToAddress("0x2000000000000000000000000000000000000009", common.Location{0, 1}),
-	}
-	PrecompiledAddresses["cyprus3"] = []common.Address{
-		common.HexToAddress("0x3E00000000000000000000000000000000000001", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000002", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000003", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000004", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000005", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000006", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000007", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000008", common.Location{0, 2}),
-		common.HexToAddress("0x3E00000000000000000000000000000000000009", common.Location{0, 2}),
-	}
-	PrecompiledAddresses["paxos1"] = []common.Address{
-		common.HexToAddress("0x5A00000000000000000000000000000000000001", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000002", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000003", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000004", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000005", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000006", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000007", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000008", common.Location{1, 0}),
-		common.HexToAddress("0x5A00000000000000000000000000000000000009", common.Location{1, 0}),
-	}
-	PrecompiledAddresses["paxos2"] = []common.Address{
-		common.HexToAddress("0x7800000000000000000000000000000000000001", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000002", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000003", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000004", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000005", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000006", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000007", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000008", common.Location{1, 1}),
-		common.HexToAddress("0x7800000000000000000000000000000000000009", common.Location{1, 1}),
-	}
-	PrecompiledAddresses["paxos3"] = []common.Address{
-		common.HexToAddress("0x9600000000000000000000000000000000000001", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000002", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000003", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000004", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000005", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000006", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000007", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000008", common.Location{1, 2}),
-		common.HexToAddress("0x9600000000000000000000000000000000000009", common.Location{1, 2}),
-	}
-	PrecompiledAddresses["hydra1"] = []common.Address{
-		common.HexToAddress("0xB400000000000000000000000000000000000001", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000002", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000003", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000004", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000005", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000006", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000007", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000008", common.Location{2, 0}),
-		common.HexToAddress("0xB400000000000000000000000000000000000009", common.Location{2, 0}),
-	}
-	PrecompiledAddresses["hydra2"] = []common.Address{
-		common.HexToAddress("0xD200000000000000000000000000000000000001", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000002", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000003", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000004", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000005", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000006", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000007", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000008", common.Location{2, 1}),
-		common.HexToAddress("0xD200000000000000000000000000000000000009", common.Location{2, 1}),
-	}
-	PrecompiledAddresses["hydra3"] = []common.Address{
-		common.HexToAddress("0xF000000000000000000000000000000000000001", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000002", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000003", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000004", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000005", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000006", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000007", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000008", common.Location{2, 2}),
-		common.HexToAddress("0xF000000000000000000000000000000000000009", common.Location{2, 2}),
-	}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000001", nodeLocation.BytePrefix()))] = &ecrecover{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000002", nodeLocation.BytePrefix()))] = &sha256hash{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000003", nodeLocation.BytePrefix()))] = &ripemd160hash{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000004", nodeLocation.BytePrefix()))] = &dataCopy{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000005", nodeLocation.BytePrefix()))] = &bigModExp{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000006", nodeLocation.BytePrefix()))] = &bn256Add{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000007", nodeLocation.BytePrefix()))] = &bn256ScalarMul{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000008", nodeLocation.BytePrefix()))] = &bn256Pairing{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000009", nodeLocation.BytePrefix()))] = &blake2F{}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
