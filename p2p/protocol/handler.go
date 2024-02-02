@@ -43,7 +43,7 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			// TODO: handle error
 			continue
 		}
-		log.Global.Debugf("Received request id: %d for %T, location %v hash %s from peer %s", id, decodedType, loc, hash, stream.Conn().RemotePeer())
+		log.Global.Tracef("Received request id: %d for %T, location %v hash %s from peer %s", id, decodedType, loc, hash, stream.Conn().RemotePeer())
 
 		switch decodedType.(type) {
 		case *types.Block:

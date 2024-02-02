@@ -63,20 +63,20 @@ func DecodeQuaiRequest(data []byte) (uint32, interface{}, common.Location, commo
 		return 0, nil, common.Location{}, common.Hash{}, err
 	}
 
-	location := common.Location{}
+	location := &common.Location{}
 	location.ProtoDecode(reqMsg.Location)
-	hash := common.Hash{}
+	hash := &common.Hash{}
 	hash.ProtoDecode(reqMsg.Hash)
 
 	id := reqMsg.Id
 
 	switch reqMsg.Request.(type) {
 	case *QuaiRequestMessage_Block:
-		return id, &types.Block{}, location, hash, nil
+		return id, &types.Block{}, *location, *hash, nil
 	case *QuaiRequestMessage_Header:
-		return id, &types.Header{}, location, hash, nil
+		return id, &types.Header{}, *location, *hash, nil
 	case *QuaiRequestMessage_Transaction:
-		return id, &types.Transaction{}, location, hash, nil
+		return id, &types.Transaction{}, *location, *hash, nil
 	default:
 		return 0, nil, common.Location{}, common.Hash{}, errors.Errorf("unsupported request type: %T", reqMsg.Request)
 	}

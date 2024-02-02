@@ -319,11 +319,7 @@ func (loc Location) ProtoEncode() *ProtoLocation {
 
 // ProtoDecode converts the ProtoLocation type back into Location
 func (loc *Location) ProtoDecode(location *ProtoLocation) {
-	loc.SetLocation(location.GetValue())
-}
-
-func (loc *Location) SetLocation(location Location) {
-	loc = &location
+	*loc = location.GetValue()
 }
 
 // Constructs the byte prefix from the location type
