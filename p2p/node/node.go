@@ -82,6 +82,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	}
 	// Peer manager handles both connection management and connection gating
 	peerMgr, err := peerManager.NewManager(
+		ctx,
 		peerID,
 		viper.GetInt(utils.MaxPeersFlag.Name), // LowWater
 		2*viper.GetInt(utils.MaxPeersFlag.Name), // HighWater

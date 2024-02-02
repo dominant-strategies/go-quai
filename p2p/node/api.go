@@ -75,6 +75,7 @@ func (p *P2PNode) Stop() error {
 	stopFuncs := []stopFunc{
 		p.Host.Close,
 		p.dht.Close,
+		p.peerManager.Stop,
 	}
 	// create a channel to collect errors
 	errs := make(chan error, len(stopFuncs))
@@ -159,8 +160,13 @@ func (p *P2PNode) RequestByHash(location common.Location, hash common.Hash, data
 		defer close(resultChan)
 
 		// 2. If not, query the topic peers for the data
-		peerList := p.peerManager.GetBestPeers()
 		var requestWg sync.WaitGroup
+		peerList, err := p.peerManager.GetBestPeers()
+		if err != nil {
+			log.Global.Errorf("error getting best peers: %s", err)
+			resultChan <- err
+			return
+		}
 		for _, peerID := range peerList {
 			requestWg.Add(1)
 			go func(peerID peer.ID) {
