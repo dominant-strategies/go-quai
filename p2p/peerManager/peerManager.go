@@ -69,6 +69,8 @@ type BasicPeerManager struct {
 	*basicConnGater.BasicConnectionGater
 	*basicConnMgr.BasicConnMgr
 
+	selfID p2p.PeerID
+
 	bestPeers       map[p2p.PeerID]struct{}
 	responsivePeers map[p2p.PeerID]struct{}
 	peers           map[p2p.PeerID]struct{}
@@ -76,7 +78,7 @@ type BasicPeerManager struct {
 	mu sync.Mutex
 }
 
-func NewManager(low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
+func NewManager(selfID p2p.PeerID, low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
 	mgr, err := basicConnMgr.NewConnManager(low, high)
 	if err != nil {
 		return nil, err
@@ -88,6 +90,7 @@ func NewManager(low int, high int, datastore datastore.Datastore) (*BasicPeerMan
 	}
 
 	return &BasicPeerManager{
+		selfID:               selfID,
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
 
@@ -149,11 +152,17 @@ func (pm *BasicPeerManager) GetPeers() []p2p.PeerID {
 }
 
 func (pm *BasicPeerManager) MarkLivelyPeer(peer p2p.PeerID) {
+	if peer == pm.selfID {
+		return
+	}
 	pm.TagPeer(peer, "liveness_reports", 1)
 	pm.recategorizePeer(peer)
 }
 
 func (pm *BasicPeerManager) MarkLatentPeer(peer p2p.PeerID) {
+	if peer == pm.selfID {
+		return
+	}
 	pm.TagPeer(peer, "latency_reports", 1)
 	pm.recategorizePeer(peer)
 }

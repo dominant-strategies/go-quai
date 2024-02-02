@@ -70,8 +70,14 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
+	peerID, err := peer.IDFromPublicKey(getNodeKey().GetPublic())
+	if err != nil {
+		log.Global.Fatalf("error getting self ID: %s", err)
+		return nil, err
+	}
 	// Peer manager handles both connection management and connection gating
 	peerMgr, err := peerManager.NewManager(
+		peerID,
 		viper.GetInt(utils.MaxPeersFlag.Name),   // LowWater
 		2*viper.GetInt(utils.MaxPeersFlag.Name), // HighWater
 		nil,
