@@ -3,6 +3,7 @@ package protocol
 import (
 	"errors"
 	"io"
+	"os"
 
 	"github.com/libp2p/go-libp2p/core/network"
 
@@ -28,9 +29,11 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	for {
 		data, err := common.ReadMessageFromStream(stream)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				log.Global.Debugf("stream closed by peer %s", stream.Conn().RemotePeer())
-				break
+			if errors.Is(err, network.ErrReset) || errors.Is(err, io.EOF) || errors.Is(err, os.ErrDeadlineExceeded) {
+				log.Global.WithFields(log.Fields{
+					"error": err,
+				}).Warn("stream closed by peer")
+				return
 			}
 
 			log.Global.Errorf("error reading message from stream: %s", err)
