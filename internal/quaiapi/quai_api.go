@@ -143,6 +143,29 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
 }
 
+func (s *PublicBlockChainQuaiAPI) GetQiBalance(ctx context.Context, address common.Address) (*hexutil.Big, error) {
+	utxos, err := s.b.UTXOsByAddress(ctx, address)
+	if utxos == nil || err != nil {
+		return nil, err
+	}
+
+	if len(utxos) == 0 {
+		return (*hexutil.Big)(big.NewInt(0)), nil
+	}
+
+	var balance *big.Int
+	for _, utxo := range utxos {
+		denomination := utxo.Denomination
+		value := types.Denominations[denomination]
+		if balance == nil {
+			balance = new(big.Int).Set(value)
+		} else {
+			balance.Add(balance, value)
+		}
+	}
+	return (*hexutil.Big)(balance), nil
+}
+
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
 	nodeCtx := s.b.NodeCtx()

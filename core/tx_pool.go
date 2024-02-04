@@ -1112,13 +1112,25 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 	}
 	pool.chain.FetchUtxosMain(view, needed)
 	if err := view.VerifyTxSignature(tx, pool.signer); err != nil {
+		pool.logger.WithFields(logrus.Fields{
+			"tx":  tx.Hash().String(),
+			"err": err,
+		}).Error("Invalid utxo tx")
 		return types.ErrInvalidSchnorrSig
 	}
 	if err := types.CheckUTXOTransactionSanity(tx, pool.chainconfig.Location); err != nil {
+		pool.logger.WithFields(logrus.Fields{
+			"tx":  tx.Hash().String(),
+			"err": err,
+		}).Error("Invalid utxo tx")
 		return err
 	}
 	fee, err := types.CheckTransactionInputs(tx, view)
 	if err != nil {
+		pool.logger.WithFields(logrus.Fields{
+			"tx":  tx.Hash().String(),
+			"err": err,
+		}).Error("Invalid utxo tx")
 		return err
 	}
 	pool.mu.Lock()

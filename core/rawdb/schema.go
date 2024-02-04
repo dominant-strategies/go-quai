@@ -96,8 +96,9 @@ var (
 	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
 	badHashesListPrefix = []byte("bh")
 	inboundEtxsPrefix   = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
-	utxoPrefix          = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
+	UtxoPrefix          = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix    = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
+	AddressUtxosPrefix  = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
 
 	blockBodyPrefix         = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -333,9 +334,13 @@ func inboundEtxsKey(hash common.Hash) []byte {
 func utxoKey(hash common.Hash, index uint32) []byte {
 	indexBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(indexBytes, index)
-	return append(utxoPrefix, append(indexBytes, hash.Bytes()...)...)
+	return append(UtxoPrefix, append(indexBytes, hash.Bytes()...)...)
 }
 
 func spentUTXOsKey(hash common.Hash) []byte {
 	return append(spentUTXOsPrefix, hash.Bytes()...)
+}
+
+func addressUtxosKey(address common.Address) []byte {
+	return append(AddressUtxosPrefix, address.Bytes()...)
 }

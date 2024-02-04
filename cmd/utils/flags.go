@@ -97,6 +97,7 @@ var NodeFlags = []Flag{
 	EnvironmentFlag,
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
+	IndexAddressUtxos,
 }
 
 var TXPoolFlags = []Flag{
@@ -510,6 +511,12 @@ var (
 		Name:  c_NodeFlagPrefix + "coinbases",
 		Value: "",
 		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"coinbases"),
+	}
+
+	IndexAddressUtxos = Flag{
+		Name:  c_NodeFlagPrefix + "index-address-utxos",
+		Value: false,
+		Usage: "Index address utxos" + generateEnvDoc(c_NodeFlagPrefix+"index-address-utxos"),
 	}
 
 	EnvironmentFlag = Flag{
@@ -1310,6 +1317,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = viper.GetBool(VMEnableDebugFlag.Name)
 	}
+	cfg.IndexAddressUtxos = viper.GetBool(IndexAddressUtxos.Name)
 
 	if viper.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = viper.GetUint64(RPCGlobalGasCapFlag.Name)

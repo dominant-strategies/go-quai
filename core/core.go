@@ -81,8 +81,12 @@ type Core struct {
 	logger *log.Logger
 }
 
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Core, error) {
-	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis, logger)
+type IndexerConfig struct {
+	IndexAddressUtxos bool
+}
+
+func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, indexerConfig *IndexerConfig, genesis *Genesis, logger *log.Logger) (*Core, error) {
+	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, indexerConfig, vmConfig, genesis, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -1115,6 +1119,10 @@ func (c *Core) StateAtTransaction(block *types.Block, txIndex int, reexec uint64
 
 func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
 	return c.sl.hc.bc.processor.TrieNode(hash)
+}
+
+func (c *Core) GetUTXOsByAddress(addr common.Address) ([]*types.UtxoEntry, error) {
+	return c.sl.hc.bc.processor.GetUTXOsByAddress(addr)
 }
 
 //----------------//

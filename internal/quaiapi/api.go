@@ -251,6 +251,29 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
 }
 
+func (s *PublicBlockChainAPI) GetQiBalance(ctx context.Context, address common.Address) (*hexutil.Big, error) {
+	utxos, err := s.b.UTXOsByAddress(ctx, address)
+	if utxos == nil || err != nil {
+		return nil, err
+	}
+
+	if len(utxos) == 0 {
+		return (*hexutil.Big)(big.NewInt(0)), nil
+	}
+
+	var balance *big.Int
+	for _, utxo := range utxos {
+		denomination := utxo.Denomination
+		value := types.Denominations[denomination]
+		if balance == nil {
+			balance = new(big.Int).Set(value)
+		} else {
+			balance.Add(balance, value)
+		}
+	}
+	return (*hexutil.Big)(balance), nil
+}
+
 // Result structs for GetProof
 type AccountResult struct {
 	Address      common.Address  `json:"address"`

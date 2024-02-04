@@ -176,6 +176,9 @@ type Config struct {
 
 	// NodeLocation of the node
 	NodeLocation common.Location
+
+	// IndexAddressUtxos enables or disables address utxo indexing
+	IndexAddressUtxos bool
 }
 
 // CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.

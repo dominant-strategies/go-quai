@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -77,11 +78,13 @@ type HeaderChain struct {
 	slicesRunning []common.Location
 
 	logger *log.Logger
+
+	indexerConfig *IndexerConfig
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, logger *log.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, indexerConfig *IndexerConfig, vmConfig vm.Config, slicesRunning []common.Location, logger *log.Logger) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 	nodeCtx := chainConfig.Location.Context()
@@ -96,6 +99,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		fetchPEtxRollup: pEtxsRollupFetcher,
 		fetchPEtx:       pEtxsFetcher,
 		logger:          logger,
+		indexerConfig:   indexerConfig,
 	}
 
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
@@ -135,6 +139,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	// Initialize the heads slice
 	heads := make([]*types.Header, 0)
 	hc.heads = heads
+
+	// Initialize the UTXO cache
+	hc.InitializeAddressUtxoCache()
 
 	return hc, nil
 }
@@ -1365,9 +1372,42 @@ func (hc *HeaderChain) WriteUtxoViewpoint(view *types.UtxoViewpoint) error {
 		// Remove the utxo entry if it is spent.
 		if entry.IsSpent() {
 			rawdb.DeleteUtxo(hc.bc.db, outpoint.TxHash, outpoint.Index)
+
+			// If the node decides to index utxos for each address, then
+			// we need to remove the address utxo entry as well.
+			if hc.indexerConfig.IndexAddressUtxos {
+
+				entryAddress := common.BytesToAddress(entry.Address, hc.NodeLocation())
+				addressUtxos := rawdb.ReadAddressUtxos(hc.bc.db, entryAddress)
+
+				// Iterate over addressUtxos and find the outpointHash and outpointIndex entry, then remove it.
+				for i, utxo := range addressUtxos {
+					// TODO: Need to determine if this is adequate matching to remove upon spending
+					// Entry will show as spent so need to determine how to check packed flags equivalence?
+					if utxo.Denomination == entry.Denomination &&
+						bytes.Equal(utxo.Address, entry.Address) && // Use bytes.Equal for byte slice comparison
+						utxo.BlockHeight == entry.BlockHeight {
+						// Remove the utxo from the slice by filtering it out.
+						addressUtxos = append(addressUtxos[:i], addressUtxos[i+1:]...)
+						break
+					}
+				}
+
+				rawdb.WriteAddressUtxos(hc.bc.db, entryAddress, addressUtxos)
+			}
+
 			continue
 		}
+
 		rawdb.WriteUtxo(hc.bc.db, outpoint.TxHash, outpoint.Index, entry)
+		// If the node decides to index utxos for each address, then
+		// we need to add the address utxo entry as well.
+		if hc.indexerConfig.IndexAddressUtxos {
+			entryAddress := common.BytesToAddress(entry.Address, hc.NodeLocation())
+			addressUtxos := rawdb.ReadAddressUtxos(hc.bc.db, entryAddress)
+			addressUtxos = append(addressUtxos, entry)
+			rawdb.WriteAddressUtxos(hc.bc.db, entryAddress, addressUtxos)
+		}
 	}
 
 	return nil
@@ -1537,4 +1577,63 @@ func (hc *HeaderChain) disconnectTransactions(view *types.UtxoViewpoint, block *
 
 func pubKeyToAddress(pubKey []byte, location common.Location) common.Address {
 	return common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:], location)
+}
+
+// InitializeAddressUtxoCache initializes the address utxo cache.
+// It is important to manage this set since nodes can enable / disable
+// address indexing between start ups. When a node disables address utxo
+// indexing, prior entries in the table will need to be removed.
+func (hc *HeaderChain) InitializeAddressUtxoCache() error {
+
+	start := time.Now()
+
+	it := hc.bc.db.NewIterator(rawdb.AddressUtxosPrefix, nil)
+	defer it.Release()
+
+	utxoCount := 0
+	for it.Next() {
+		utxoCount += 1
+		// If we are no longer running with address utxo indexing,
+		// delete all prior entries
+		if !hc.indexerConfig.IndexAddressUtxos {
+			err := hc.bc.db.Delete(it.Key())
+			if err != nil {
+				return err
+			}
+		} else {
+			break
+		}
+	}
+
+	// If we are no longer running with address utxo indexing,
+	// delete all prior entries and compact the table
+	if !hc.indexerConfig.IndexAddressUtxos {
+		end := common.CopyBytes(rawdb.AddressUtxosPrefix)
+		end[len(end)-1]++
+
+		hc.bc.db.Compact(rawdb.AddressUtxosPrefix, end)
+		return nil
+	}
+
+	// If there are utxos in the database, then we need to index them
+	// into the address utxo table
+	if utxoCount == 0 {
+		it := hc.bc.db.NewIterator(rawdb.UtxoPrefix, nil)
+		defer it.Release()
+
+		for it.Next() {
+			data := it.Value()
+			utxo := new(types.UtxoEntry)
+			if err := rlp.Decode(bytes.NewReader(data), utxo); err != nil {
+				return nil
+			}
+			address := common.BytesToAddress(utxo.Address, hc.NodeLocation())
+			addressUtxos := rawdb.ReadAddressUtxos(hc.bc.db, address)
+			addressUtxos = append(addressUtxos, utxo)
+			rawdb.WriteAddressUtxos(hc.bc.db, address, addressUtxos)
+		}
+	}
+
+	hc.logger.Info("Finished initializing address utxo cache", "duration", time.Since(start))
+	return nil
 }
