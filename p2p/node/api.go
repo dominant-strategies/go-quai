@@ -1,6 +1,7 @@
 package node
 
 import (
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -113,21 +114,17 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 
 		// 2. If not, query the topic peers for the data
 		peerList := p.peerManager.GetBestPeers()
-		doneChan := make(chan bool)
+		var requestWg sync.WaitGroup
 		for _, peerID := range peerList {
+			requestWg.Add(1)
 			go func(peerID peer.ID) {
-				doneChan <- p.requestAndWait(peerID, location, hash, datatype, resultChan)
+				defer requestWg.Done()
+				p.requestAndWait(peerID, location, hash, datatype, resultChan)
 			}(peerID)
 		}
 
-		// Wait for a response from a peer
-		// If any peer provides a response, then return
-		for i := 0; i < len(peerList); i++ {
-			found := <-doneChan
-			if found {
-				return
-			}
-		}
+		// Wait for all the requests to finish before exiting the Request loop
+		requestWg.Wait()
 
 		// 3. If block is not found, query the DHT for peers in the slice
 		// TODO: evaluate making this configurable
