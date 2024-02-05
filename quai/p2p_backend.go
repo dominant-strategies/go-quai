@@ -10,6 +10,7 @@ import (
 
 // QuaiBackend implements the quai consensus protocol
 type QuaiBackend struct {
+	p2pBackend        NetworkingAPI // Interface for all the P2P methods the libp2p exposes to consensus
 	primeApiBackend   *quaiapi.Backend
 	regionApiBackends []*quaiapi.Backend
 	zoneApiBackends   [][]*quaiapi.Backend
@@ -22,6 +23,11 @@ func NewQuaiBackend() (*QuaiBackend, error) {
 		zoneBackends[i] = make([]*quaiapi.Backend, 1)
 	}
 	return &QuaiBackend{regionApiBackends: make([]*quaiapi.Backend, 1), zoneApiBackends: zoneBackends}, nil
+}
+
+// Adds the p2pBackend into the given QuaiBackend
+func (qbe *QuaiBackend) SetP2PApiBackend(p2pBackend NetworkingAPI) {
+	qbe.p2pBackend = p2pBackend
 }
 
 func (qbe *QuaiBackend) SetApiBackend(apiBackend quaiapi.Backend, location common.Location) {
@@ -72,6 +78,9 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 			log.Global.Error("no backend found")
 			return false
 		}
+		// TODO: Verify the Block before writing it
+		// TODO: Determine if the block information was lively or stale and rate
+		// the peer accordingly
 		backend.WriteBlock(&block)
 		return true
 	case types.Header:

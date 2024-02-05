@@ -86,7 +86,7 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 	block := node.GetBlock(hash, loc)
 	if block == nil {
 		log.Global.Debugf("block not found")
-		// TODO: handle block not found
+		return nil
 	}
 	log.Global.Debugf("block found %s", block.Hash())
 	// create a Quai Message Response with the block
