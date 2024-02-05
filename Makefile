@@ -33,6 +33,9 @@ protogen:
 	@protoc --go_out=. --go_opt=paths=source_relative \
 	./**/*.proto
 
+debug:
+	go build -gcflags=all="-N -l" -v -o build/bin/go-quai ./cmd/go-quai
+
 ## build the go-quai binary
 go-quai:
 	$(GORUN) build/ci.go build ./cmd/go-quai

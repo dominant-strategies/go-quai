@@ -3,3 +3,4 @@ nodelogs/
 /data/
 */config.toml
 */private.key
+.vscode/
