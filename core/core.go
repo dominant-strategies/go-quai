@@ -111,6 +111,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	go c.updateAppendQueue()
 	go c.startStatsTimer()
 	go c.checkSyncTarget()
+
 	return c, nil
 }
 

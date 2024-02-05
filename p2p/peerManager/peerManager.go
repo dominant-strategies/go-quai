@@ -93,10 +93,9 @@ func NewManager(selfID p2p.PeerID, low int, high int, datastore datastore.Datast
 		selfID:               selfID,
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
-
-		bestPeers:       make(map[peer.ID]struct{}),
-		responsivePeers: make(map[peer.ID]struct{}),
-		peers:           make(map[peer.ID]struct{}),
+		bestPeers:            make(map[peer.ID]struct{}),
+		responsivePeers:      make(map[peer.ID]struct{}),
+		peers:                make(map[peer.ID]struct{}),
 	}, nil
 }
 

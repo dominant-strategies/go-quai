@@ -1,6 +1,8 @@
 package quai
 
 import (
+	"math/big"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 
@@ -20,6 +22,8 @@ type ConsensusAPI interface {
 	// Asks the consensus backend to lookup a block by hash and location.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.
 	LookupBlock(common.Hash, common.Location) *types.Block
+
+	LookupBlockHashByNumber(*big.Int, common.Location) *common.Hash
 }
 
 // The networking backend will implement the following interface to enable consensus to communicate with other nodes.
@@ -39,7 +43,7 @@ type NetworkingAPI interface {
 
 	// Method to request data from the network
 	// Specify location, data hash, and data type to request
-	Request(common.Location, common.Hash, interface{}) chan interface{}
+	Request(common.Location, interface{}, interface{}) chan interface{}
 
 	// Methods to report a peer to the P2PClient as behaving maliciously
 	// Should be called whenever a peer sends us data that is acceptably lively

@@ -1,6 +1,7 @@
 package node
 
 import (
+	"math/big"
 	"sync"
 	"time"
 
@@ -106,8 +107,53 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-// Request a block from the network for the specified slice
-func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype interface{}) chan interface{} {
+// RequestByNumber returns the hash for the given block number
+func (p *P2PNode) RequestByNumber(location common.Location, number *big.Int, datatype interface{}) chan interface{} {
+	resultChan := make(chan interface{}, 1)
+	go func() {
+		defer close(resultChan)
+		// 1. Query the topic peers for the data
+		peers, err := p.pubsub.PeersForTopic(location, datatype)
+		if err != nil {
+			log.Global.Errorf("Error requesting data: ", err)
+			return
+		}
+		var requestWg sync.WaitGroup
+		for _, peerID := range peers {
+			requestWg.Add(1)
+			go func(peerID peer.ID) {
+				defer requestWg.Done()
+				p.requestAndWait(peerID, location, number, datatype, resultChan)
+			}(peerID)
+		}
+		requestWg.Wait()
+
+		// 2. If hash is not found, query the DHT for peers in the slice
+		// TODO: evaluate making this configurable
+		const (
+			maxDHTQueryRetries    = 3  // Maximum number of retries for DHT queries
+			peersPerDHTQuery      = 10 // Number of peers to query per DHT attempt
+			dhtQueryRetryInterval = 5  // Time to wait between DHT query retries
+		)
+		// create a Cid from the slice location
+		shardCid := locationToCid(location)
+		for retries := 0; retries < maxDHTQueryRetries; retries++ {
+			log.Global.Infof("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
+			// query the DHT for peers in the slice
+			// TODO: need to find providers of a topic, not a shard
+			for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
+				go p.requestAndWait(peer.ID, location, number, datatype, resultChan)
+			}
+			// if the data is not found, wait for a bit and try again
+			log.Global.Infof("Block %s not found in slice %s. Retrying...", number, location)
+			time.Sleep(dhtQueryRetryInterval * time.Second)
+		}
+		log.Global.Infof("Block %s not found in slice %s", number, location)
+	}()
+	return resultChan
+}
+
+func (p *P2PNode) RequestByHash(location common.Location, hash common.Hash, datatype interface{}) chan interface{} {
 	resultChan := make(chan interface{}, 1)
 	go func() {
 		defer close(resultChan)
@@ -151,21 +197,43 @@ func (p *P2PNode) Request(location common.Location, hash common.Hash, datatype i
 	return resultChan
 }
 
-func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, hash common.Hash, datatype interface{}, resultChan chan interface{}) (resultFound bool) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data interface{}, datatype interface{}, resultChan chan interface{}) {
 	// Ask peer and wait for response
-	if recvd, err := p.requestFromPeer(peerID, location, hash, datatype); err == nil {
-		log.Global.Debugf("Received %s from peer %s", hash, peerID)
+	if recvd, err := p.requestFromPeer(peerID, location, data, datatype); err == nil {
+		log.Global.WithFields(log.Fields{
+			"data":   data,
+			"peerId": peerID,
+		}).Trace("Received data from peer")
 		// send the block to the result channel
 		resultChan <- recvd
 
 		// Mark this peer as behaving well
 		p.peerManager.MarkResponsivePeer(peerID)
-		return true
 	} else {
+		log.Global.WithFields(log.Fields{
+			"peerId":   peerID,
+			"location": location.Name(),
+			"data":     data,
+			"datatype": datatype,
+		}).Trace("Error requesting the data from peer")
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID)
-		return false
 	}
+}
+
+// Request a data from the network for the specified slice
+func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
+	switch requestDataType := requestData.(type) {
+	case common.Hash:
+		return p.RequestByHash(location, requestData.(common.Hash), responseDataType)
+	case *big.Int:
+		return p.RequestByNumber(location, requestData.(*big.Int), responseDataType)
+	default:
+		log.Global.WithFields(log.Fields{
+			"requestDataType": requestDataType,
+		}).Error("Unsupported Request Type")
+	}
+	return nil
 }
 
 func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID) {
@@ -228,6 +296,10 @@ func (p *P2PNode) Connect(pi peer.AddrInfo) error {
 // Returns nil if the block is not found.
 func (p *P2PNode) GetBlock(hash common.Hash, location common.Location) *types.Block {
 	return p.consensus.LookupBlock(hash, location)
+}
+
+func (p *P2PNode) GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash {
+	return p.consensus.LookupBlockHashByNumber(number, location)
 }
 
 func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.Header {

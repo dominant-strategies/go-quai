@@ -15,11 +15,15 @@ message GossipTransaction { block.ProtoTransaction transaction = 1; }
 message QuaiRequestMessage {
     uint32 id = 1;
     common.ProtoLocation location = 2;
-    common.ProtoHash hash = 3;
+    oneof data {
+        common.ProtoHash hash = 3;
+        bytes number = 7;
+    }
     oneof request {
         block.ProtoBlock block = 4;
         block.ProtoHeader header = 5;
         block.ProtoTransaction transaction = 6;
+        common.ProtoHash blockHash = 8;
     }
 }
 
@@ -30,6 +34,7 @@ message QuaiResponseMessage {
         block.ProtoBlock block = 2;
         block.ProtoHeader header = 3;
         block.ProtoTransaction transaction = 4;
+        common.ProtoHash blockHash = 5;
     }
 }
 

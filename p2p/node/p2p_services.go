@@ -15,7 +15,13 @@ import (
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
-func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash common.Hash, datatype interface{}) (interface{}, error) {
+func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data interface{}, datatype interface{}) (interface{}, error) {
+	log.Global.WithFields(log.Fields{
+		"peerId":   peerID,
+		"location": location.Name(),
+		"data":     data,
+		"datatype": datatype,
+	}).Trace("Requesting the data from peer")
 	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
 	if err != nil {
 		// TODO: should we report this peer for failure to participate?
@@ -27,7 +33,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 	id := protocol.GetRequestIDManager().GenerateRequestID()
 
 	// Create the corresponding data request
-	requestBytes, err := pb.EncodeQuaiRequest(id, location, hash, datatype)
+	requestBytes, err := pb.EncodeQuaiRequest(id, location, data, datatype)
 	if err != nil {
 		return nil, err
 	}
@@ -66,16 +72,20 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, hash
 	// Check the received data type & hash matches the request
 	switch datatype.(type) {
 	case *types.Block:
-		if block, ok := recvdType.(*types.Block); ok && block.Hash() == hash {
+		if block, ok := recvdType.(*types.Block); ok && block.Hash() == data.(common.Hash) {
 			return block, nil
 		}
 	case *types.Header:
-		if header, ok := recvdType.(*types.Header); ok && header.Hash() == hash {
+		if header, ok := recvdType.(*types.Header); ok && header.Hash() == data.(common.Hash) {
 			return header, nil
 		}
 	case *types.Transaction:
-		if tx, ok := recvdType.(*types.Transaction); ok && tx.Hash() == hash {
+		if tx, ok := recvdType.(*types.Transaction); ok && tx.Hash() == data.(common.Hash) {
 			return tx, nil
+		}
+	case common.Hash:
+		if hash, ok := recvdType.(common.Hash); ok {
+			return hash, nil
 		}
 	default:
 		log.Global.Warn("peer returned unexpected type")

@@ -1,12 +1,15 @@
 package protocol
 
 import (
+	"math/big"
+
 	"github.com/libp2p/go-libp2p/core/peer"
+
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
 // interface required to join the quai protocol network
@@ -19,4 +22,5 @@ type QuaiP2PNode interface {
 	// Returns nil if the block is not found.
 	GetBlock(hash common.Hash, location common.Location) *types.Block
 	GetHeader(hash common.Hash, location common.Location) *types.Header
+	GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash
 }

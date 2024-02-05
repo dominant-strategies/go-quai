@@ -5,12 +5,16 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
+	"math/big"
 	"sync"
+	"time"
 )
 
 const (
-	// missingBlockChanSize is the size of channel listening to the MissingBlockEvent
-	missingBlockChanSize = 60
+	// c_missingBlockChanSize is the size of channel listening to the MissingBlockEvent
+	c_missingBlockChanSize = 60
+	// c_checkNextPrimeBlockInterval is the interval for checking the next Block in Prime
+	c_checkNextPrimeBlockInterval = 60 * time.Second
 )
 
 // handler manages the fetch requests from the core and tx pool also takes care of the tx broadcast
@@ -21,6 +25,7 @@ type handler struct {
 	missingBlockCh  chan types.BlockRequest
 	missingBlockSub event.Subscription
 	wg              sync.WaitGroup
+	quitCh          chan struct{}
 }
 
 func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location) *handler {
@@ -28,19 +33,27 @@ func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.L
 		nodeLocation: nodeLocation,
 		p2pBackend:   p2pBackend,
 		core:         core,
+		quitCh:       make(chan struct{}),
 	}
 	return handler
 }
 
 func (h *handler) Start() {
 	h.wg.Add(1)
-	h.missingBlockCh = make(chan types.BlockRequest, missingBlockChanSize)
+	h.missingBlockCh = make(chan types.BlockRequest, c_missingBlockChanSize)
 	h.missingBlockSub = h.core.SubscribeMissingBlockEvent(h.missingBlockCh)
 	go h.missingBlockLoop()
+
+	nodeCtx := h.nodeLocation.Context()
+	if nodeCtx == common.PRIME_CTX {
+		h.wg.Add(1)
+		go h.checkNextPrimeBlock()
+	}
 }
 
 func (h *handler) Stop() {
 	h.missingBlockSub.Unsubscribe() // quits missingBlockLoop
+	close(h.quitCh)
 	h.wg.Wait()
 }
 
@@ -58,6 +71,45 @@ func (h *handler) missingBlockLoop() {
 				}
 			}()
 		case <-h.missingBlockSub.Err():
+			return
+		}
+	}
+}
+
+// checkNextPrimeBlock runs every c_checkNextPrimeBlockInterval and ask the peer for the next Block
+func (h *handler) checkNextPrimeBlock() {
+	defer h.wg.Done()
+	checkNextPrimeBlockTimer := time.NewTicker(c_checkNextPrimeBlockInterval)
+	defer checkNextPrimeBlockTimer.Stop()
+	for {
+		select {
+		case <-checkNextPrimeBlockTimer.C:
+			currentHeight := h.core.CurrentHeader().Number(h.nodeLocation.Context())
+			go func() {
+				resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(currentHeight, big.NewInt(1)), common.Hash{})
+				data := <-resultCh
+				// If we find a new hash for the requested block number we can check
+				// first if we already have the block in the database otherwise ask the
+				// peers for it
+				if data != nil {
+					blockHash, ok := data.(common.Hash)
+					if ok {
+						block := h.core.GetBlockByHash(blockHash)
+						// If the blockHash for the asked number is not present in the
+						// appended database we ask the peer for the block with this hash
+						if block == nil {
+							go func() {
+								resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.Block{})
+								block := <-resultCh
+								if block != nil {
+									h.core.WriteBlock(block.(*types.Block))
+								}
+							}()
+						}
+					}
+				}
+			}()
+		case <-h.quitCh:
 			return
 		}
 	}

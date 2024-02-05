@@ -222,6 +222,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	quai.p2p = p2p
 	// Subscribe to the Blocks subscription
 	quai.p2p.Subscribe(config.NodeLocation, &types.Block{})
+	quai.p2p.Subscribe(config.NodeLocation, common.Hash{})
 
 	quai.handler = newHandler(quai.p2p, quai.core, config.NodeLocation)
 	// Start the handler
