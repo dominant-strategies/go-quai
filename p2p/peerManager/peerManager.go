@@ -94,7 +94,7 @@ type BasicPeerManager struct {
 	ctx context.Context
 }
 
-func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
+func NewManager(ctx context.Context, low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
 	mgr, err := basicConnMgr.NewConnManager(low, high)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,6 @@ func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datas
 	}
 
 	return &BasicPeerManager{
-		selfID:               selfID,
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
 		bestPeersDB:          bestPeersDB,
@@ -148,6 +147,10 @@ func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
 	}
 
 	return nil
+}
+
+func (pm *BasicPeerManager) SetSelfID(selfID p2p.PeerID) {
+	pm.selfID = selfID
 }
 
 func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) []p2p.PeerID {

@@ -79,15 +79,9 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
-	peerID, err := peer.IDFromPublicKey(getNodeKey().GetPublic())
-	if err != nil {
-		log.Global.Fatalf("error getting self ID: %s", err)
-		return nil, err
-	}
 	// Peer manager handles both connection management and connection gating
 	peerMgr, err := peerManager.NewManager(
 		ctx,
-		peerID,
 		viper.GetInt(utils.MaxPeersFlag.Name), // LowWater
 		2*viper.GetInt(utils.MaxPeersFlag.Name), // HighWater
 		nil,
@@ -182,6 +176,9 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	// log the p2p node's ID
 	nodeID := host.ID()
 	log.Global.Infof("node created: %s", nodeID)
+
+	// Set peer manager's self ID
+	peerMgr.SetSelfID(nodeID)
 
 	// Create a gossipsub instance with helper functions
 	ps, err := pubsubManager.NewGossipSubManager(ctx, host)
