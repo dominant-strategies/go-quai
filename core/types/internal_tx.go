@@ -105,8 +105,8 @@ func (tx *InternalTx) originatingTxHash() common.Hash {
 	panic("internal TX does not have originatingTxHash")
 }
 func (tx *InternalTx) etxIndex() uint16 { panic("internal TX does not have etxIndex") }
-func (tx *InternalTx) txIn() []TxIn     { panic("internal TX does not have txIn") }
-func (tx *InternalTx) txOut() []TxOut   { panic("internal TX does not have txOut") }
+func (tx *InternalTx) txIn() TxIns      { panic("internal TX does not have txIn") }
+func (tx *InternalTx) txOut() TxOuts    { panic("internal TX does not have txOut") }
 func (tx *InternalTx) getSchnorrSignature() *schnorr.Signature {
 	panic("internal TX does not have getSchnorrSignature")
 }

@@ -88,6 +88,8 @@ func TestMultiSigners(t *testing.T) {
 		fmt.Println(err)
 	}
 	addr1 := crypto.PubkeyToAddress(key1.PublicKey, location)
+
+	b1, err := hex.DecodeString("345debf66bc68724062b236d3b0a6eb30f051e725ebb770f1dc367f2c569f003")
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -101,8 +101,8 @@ type TxData interface {
 	etxSender() common.Address
 	originatingTxHash() common.Hash
 	etxIndex() uint16
-	txIn() []TxIn
-	txOut() []TxOut
+	txIn() TxIns
+	txOut() TxOuts
 
 	getEcdsaSignatureValues() (v, r, s *big.Int)
 	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
@@ -120,7 +120,6 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 
 	// Encoding common fields to all the tx types
 	txType := uint64(tx.Type())
-	gas := tx.Gas()
 	protoTx.Type = &txType
 	protoTx.ChainId = tx.ChainId().Bytes()
 
@@ -128,6 +127,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 	switch tx.Type() {
 	case 0:
 		nonce := tx.Nonce()
+		gas := tx.Gas()
 		protoTx.Nonce = &nonce
 		protoTx.Gas = &gas
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
@@ -143,6 +143,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
 	case 1:
+		gas := tx.Gas()
 		protoTx.Gas = &gas
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		protoTx.Value = tx.Value().Bytes()
@@ -153,6 +154,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.EtxIndex = &etxIndex
 		protoTx.EtxSender = tx.ETXSender().Bytes()
 	case 2:
+		gas := tx.Gas()
 		nonce := tx.Nonce()
 		protoTx.Nonce = &nonce
 		protoTx.Gas = &gas
@@ -172,6 +174,17 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.EtxGasTip = tx.ETXGasTip().Bytes()
 		protoTx.EtxData = tx.ETXData()
 		protoTx.EtxAccessList = tx.ETXAccessList().ProtoEncode()
+	case 3:
+		var err error
+		protoTx.TxIns, err = tx.TxIn().ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		protoTx.TxOuts, err = tx.TxOut().ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		protoTx.Signature = tx.GetSchnorrSignature().Serialize()
 	}
 	return protoTx, nil
 }
@@ -203,6 +216,18 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	case 0:
 		if protoTx.Nonce == nil {
 			return errors.New("missing required field 'Nonce' in ProtoTransaction")
+		}
+		if protoTx.Gas == nil {
+			return errors.New("missing required field 'Gas' in ProtoTransaction")
+		}
+		if protoTx.AccessList == nil {
+			return errors.New("missing required field 'AccessList' in ProtoTransaction")
+		}
+		if protoTx.Value == nil {
+			return errors.New("missing required field 'Value' in ProtoTransaction")
+		}
+		if protoTx.Data == nil {
+			return errors.New("missing required field 'Data' in ProtoTransaction")
 		}
 		if protoTx.GasFeeCap == nil {
 			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
@@ -247,12 +272,34 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		tx.SetInner(&itx)
 
 	case 1:
-		var etx ExternalTx
-		etx.AccessList = AccessList{}
-		etx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
+		if protoTx.Nonce == nil {
+			return errors.New("missing required field 'Nonce' in ProtoTransaction")
+		}
+		if protoTx.Gas == nil {
+			return errors.New("missing required field 'Gas' in ProtoTransaction")
+		}
+		if protoTx.AccessList == nil {
+			return errors.New("missing required field 'AccessList' in ProtoTransaction")
+		}
+		if protoTx.Value == nil {
+			return errors.New("missing required field 'Value' in ProtoTransaction")
+		}
+		if protoTx.Data == nil {
+			return errors.New("missing required field 'Data' in ProtoTransaction")
+		}
 		if protoTx.To == nil {
 			return errors.New("missing required field 'To' in ProtoTransaction")
 		}
+		if protoTx.GasFeeCap == nil {
+			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
+		}
+		if protoTx.GasTipCap == nil {
+			return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
+		}
+
+		var etx ExternalTx
+		etx.AccessList = AccessList{}
+		etx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
 		to := common.BytesToAddress(protoTx.GetTo(), location)
 		etx.To = &to
 		etx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
@@ -270,6 +317,21 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.Nonce == nil {
 			return errors.New("missing required field 'Nonce' in ProtoTransaction")
 		}
+		if protoTx.Gas == nil {
+			return errors.New("missing required field 'Gas' in ProtoTransaction")
+		}
+		if protoTx.AccessList == nil {
+			return errors.New("missing required field 'AccessList' in ProtoTransaction")
+		}
+		if protoTx.Value == nil {
+			return errors.New("missing required field 'Value' in ProtoTransaction")
+		}
+		if protoTx.Data == nil {
+			return errors.New("missing required field 'Data' in ProtoTransaction")
+		}
+		if protoTx.To == nil {
+			return errors.New("missing required field 'To' in ProtoTransaction")
+		}
 		if protoTx.GasFeeCap == nil {
 			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
 		}
@@ -279,9 +341,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		var ietx InternalToExternalTx
 		ietx.AccessList = AccessList{}
 		ietx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
-		if protoTx.To == nil {
-			return errors.New("missing required field 'To' in ProtoTransaction")
-		}
 		to := common.BytesToAddress(protoTx.GetTo(), location)
 		ietx.To = &to
 		ietx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
@@ -332,6 +391,37 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		ietx.ETXData = protoTx.GetEtxData()
 
 		tx.SetInner(&ietx)
+	case 3:
+		if protoTx.TxIns == nil {
+			return errors.New("missing required field 'TxIns' in ProtoTransaction")
+		}
+		if protoTx.TxOuts == nil {
+			return errors.New("missing required field 'TxOuts' in ProtoTransaction")
+		}
+		if protoTx.Signature == nil {
+			return errors.New("missing required field 'Signature' in ProtoTransaction")
+		}
+		var qiTx QiTx
+		qiTx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
+
+		var err error
+		qiTx.TxIn = TxIns{}
+		err = qiTx.TxIn.ProtoDecode(protoTx.GetTxIns())
+		if err != nil {
+			return err
+		}
+		qiTx.TxOut = TxOuts{}
+		err = qiTx.TxOut.ProtoDecode(protoTx.GetTxOuts())
+		if err != nil {
+			return err
+		}
+		sig, err := schnorr.ParseSignature(protoTx.GetSignature())
+		if err != nil {
+			return err
+		}
+		qiTx.Signature = sig
+
+		tx.SetInner(&qiTx)
 	default:
 		return errors.New("invalid transaction type")
 	}
@@ -510,9 +600,9 @@ func (tx *Transaction) OriginatingTxHash() common.Hash { return tx.inner.origina
 
 func (tx *Transaction) ETXIndex() uint16 { return tx.inner.etxIndex() }
 
-func (tx *Transaction) TxOut() []TxOut { return tx.inner.txOut() }
+func (tx *Transaction) TxOut() TxOuts { return tx.inner.txOut() }
 
-func (tx *Transaction) TxIn() []TxIn { return tx.inner.txIn() }
+func (tx *Transaction) TxIn() TxIns { return tx.inner.txIn() }
 
 func (tx *Transaction) GetSchnorrSignature() *schnorr.Signature {
 	return tx.inner.getSchnorrSignature()

@@ -10,16 +10,16 @@ import (
 
 type QiTx struct {
 	ChainID *big.Int // replay protection
-	TxIn    []TxIn
-	TxOut   []TxOut
+	TxIn    TxIns
+	TxOut   TxOuts
 
 	Signature *schnorr.Signature
 }
 
 type WireQiTx struct {
 	ChainID   *big.Int // replay protection
-	TxIn      []TxIn
-	TxOut     []TxOut
+	TxIn      TxIns
+	TxOut     TxOuts
 	Signature []byte
 }
 
@@ -116,8 +116,8 @@ func (tx *QiTx) etxIndex() uint16 { panic("Qi TX does not have etxIndex") }
 func (tx *QiTx) etxSender() common.Address {
 	panic("Qi TX does not have etxSender")
 }
-func (tx *QiTx) txIn() []TxIn                            { return tx.TxIn }
-func (tx *QiTx) txOut() []TxOut                          { return tx.TxOut }
+func (tx *QiTx) txIn() TxIns                             { return tx.TxIn }
+func (tx *QiTx) txOut() TxOuts                           { return tx.TxOut }
 func (tx *QiTx) getSchnorrSignature() *schnorr.Signature { return tx.Signature }
 
 func (tx *QiTx) getEcdsaSignatureValues() (v, r, s *big.Int) {

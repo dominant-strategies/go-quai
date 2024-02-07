@@ -65,6 +65,9 @@ message ProtoTransaction {
   optional common.ProtoHash originating_tx_hash = 20;
   optional uint32 etx_index = 21;
   optional bytes etx_sender = 22;
+  optional ProtoTxIns tx_ins = 23;
+  optional ProtoTxOuts tx_outs = 24;
+  optional bytes signature = 25;
 }
 
 message ProtoTransactions { repeated ProtoTransaction transactions = 1; }
@@ -128,4 +131,27 @@ message ProtoPendingEtxs {
 message ProtoPendingEtxsRollup {
   optional ProtoHeader header = 1;
   optional ProtoTransactions etxs_rollup = 2;
+}
+
+message ProtoTxIns {
+  repeated ProtoTxIn tx_ins = 1;
+}
+
+message ProtoTxOuts {
+  repeated ProtoTxOut tx_outs = 1;
+}
+
+message ProtoTxIn { 
+  optional ProtoOutPoint previous_out_point  = 1;
+  optional bytes pub_key = 2;
+} 
+
+message ProtoOutPoint { 
+  optional common.ProtoHash hash = 1; 
+  optional uint32 index = 2; 
+}
+
+message ProtoTxOut {
+  optional uint32 denomination = 1;
+  optional bytes address = 2;
 }

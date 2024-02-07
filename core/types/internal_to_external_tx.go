@@ -128,10 +128,10 @@ func (tx *InternalToExternalTx) originatingTxHash() common.Hash {
 func (tx *InternalToExternalTx) etxIndex() uint16 {
 	panic("internalToExternal TX does not have etxIndex")
 }
-func (tx *InternalToExternalTx) txIn() []TxIn   { panic("InternalToExternalTx does not have txIn") }
-func (tx *InternalToExternalTx) txOut() []TxOut { panic("InternalToExternalTx does not have txOut") }
+func (tx *InternalToExternalTx) txIn() TxIns   { panic("InternalToExternalTx does not have txIn") }
+func (tx *InternalToExternalTx) txOut() TxOuts { panic("InternalToExternalTx does not have txOut") }
 func (tx *InternalToExternalTx) getSchnorrSignature() *schnorr.Signature {
-	panic("InternalToExternalTx does not have getSchnorrSignature")
+	panic("internalToExternal TX does not have getSchnorrSignature")
 }
 
 func (tx *InternalToExternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
