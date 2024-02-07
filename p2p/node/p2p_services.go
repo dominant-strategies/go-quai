@@ -24,7 +24,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 		"data":     data,
 		"datatype": datatype,
 	}).Trace("Requesting the data from peer")
-	stream, err := p.NewStream(peerID, protocol.ProtocolVersion)
+	stream, err := p.NewStream(peerID)
 	if err != nil {
 		// TODO: should we report this peer for failure to participate?
 		return nil, err
