@@ -4,6 +4,7 @@ package quaiprotocol;
 option go_package = "github.com/dominant-strategies/go-quai/p2p/pb";
 
 import "common/proto_common.proto";
+import "trie/proto_trienode.proto";
 import "core/types/proto_block.proto";
 
 // GossipSub messages for broadcasting blocks and transactions
@@ -24,6 +25,7 @@ message QuaiRequestMessage {
         block.ProtoHeader header = 5;
         block.ProtoTransaction transaction = 6;
         common.ProtoHash blockHash = 8;
+        trie.ProtoTrieNode trieNode = 9;
     }
 }
 
@@ -35,6 +37,7 @@ message QuaiResponseMessage {
         block.ProtoHeader header = 3;
         block.ProtoTransaction transaction = 4;
         common.ProtoHash blockHash = 5;
+        trie.ProtoTrieNode trieNode = 6;
     }
 }
 

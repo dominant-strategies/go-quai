@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package trie;
+option go_package = "github.com/dominant-strategies/go-quai/trie";
+
+message ProtoTrieNode{
+  // The serialized trie node data.
+  bytes protoNodeData = 1;
+}
