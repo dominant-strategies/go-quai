@@ -71,6 +71,7 @@ type environment struct {
 	header      *types.Header
 	txs         []*types.Transaction
 	etxs        []*types.Transaction
+	utxoFees    *big.Int
 	subManifest types.BlockManifest
 	receipts    []*types.Receipt
 	uncleMu     sync.RWMutex
@@ -91,6 +92,7 @@ func (env *environment) copy(processingState bool, nodeCtx int) *environment {
 			etxPLimit: env.etxPLimit,
 			header:    types.CopyHeader(env.header),
 			receipts:  copyReceipts(env.receipts),
+			utxoFees:  new(big.Int).Set(env.utxoFees),
 		}
 		if env.gasPool != nil {
 			gasPool := *env.gasPool
@@ -543,13 +545,10 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
-		coinbaseTx, err := createCoinbaseTx(work.header)
-		if err != nil {
-			return nil, err
-		}
-		work.txs = append(work.txs, coinbaseTx)
+		work.txs = append(work.txs, types.NewTx(&types.QiTx{})) // placeholder
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
+		work.utxoFees = big.NewInt(0)
 		if fill {
 			start := time.Now()
 			w.fillTransactions(interrupt, work, block)
@@ -560,6 +559,11 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
 			}).Info("Filled and sorted pending transactions")
 		}
+		coinbaseTx, err := createCoinbaseTxWithFees(work.header, work.utxoFees)
+		if err != nil {
+			return nil, err
+		}
+		work.txs[0] = coinbaseTx
 	}
 
 	// Create a local environment copy, avoid the data race with snapshot state.
@@ -762,12 +766,15 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 				continue
 			}
 			txGas := types.CalculateQiTxGas(tx)
-			gasUsed := env.header.GasUsed()
-			env.header.SetGasUsed(gasUsed + txGas)            // set utxo tx gas to 21000 for now
-			if err := env.gasPool.SubGas(txGas); err != nil { // set utxo tx gas to 21000 for now
+			if err := env.gasPool.SubGas(txGas); err != nil {
 				w.logger.WithField("err", err).Error("UTXO tx gas pool error")
 				txs.PopNoSort()
 				continue
+			}
+			gasUsed := env.header.GasUsed()
+			env.header.SetGasUsed(gasUsed + txGas)
+			if fee := txs.GetFee(); fee != nil {
+				env.utxoFees.Add(env.utxoFees, fee)
 			}
 			env.txs = append(env.txs, tx)
 			txs.PopNoSort()

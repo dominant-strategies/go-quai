@@ -903,6 +903,13 @@ func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 	return t.heads[0].tx
 }
 
+func (t *TransactionsByPriceAndNonce) GetFee() *big.Int {
+	if len(t.heads) == 0 {
+		return nil
+	}
+	return t.heads[0].minerFee
+}
+
 // Shift replaces the current best head with the next one from the same account.
 func (t *TransactionsByPriceAndNonce) Shift(acc common.AddressBytes, sort bool) {
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {

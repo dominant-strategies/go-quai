@@ -18,15 +18,18 @@ import (
 //
 // This function only differs from IsCoinBase in that it works with a raw wire
 // transaction as opposed to a higher level util transaction.
-func IsCoinBaseTx(msgTx *Transaction) bool {
+func IsCoinBaseTx(tx *Transaction) bool {
+	if tx == nil || tx.inner == nil || tx.Type() != QiTxType {
+		return false
+	}
 	// A coin base must only have one transaction input.
-	if len(msgTx.inner.txIn()) != 1 {
+	if len(tx.inner.txIn()) != 1 {
 		return false
 	}
 
 	// The previous output of a coin base must have a max value index and
 	// a non-zero hash.
-	prevOut := &msgTx.inner.txIn()[0].PreviousOutPoint
+	prevOut := &tx.inner.txIn()[0].PreviousOutPoint
 	if (prevOut.Index != math.MaxUint32 || prevOut.TxHash == common.Hash{}) {
 		return false
 	}
@@ -47,7 +50,7 @@ func IsCoinBaseTx(msgTx *Transaction) bool {
 func CheckTransactionInputs(tx *Transaction, utxoView *UtxoViewpoint) (*big.Int, error) {
 	// Coinbase transactions have no inputs.
 	if IsCoinBaseTx(tx) {
-		return nil, nil
+		return big.NewInt(0), nil
 	}
 
 	totalQitIn := big.NewInt(0)
