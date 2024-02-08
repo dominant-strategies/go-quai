@@ -9,6 +9,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // Unmarshals a serialized protobuf slice of bytes into a protocol buffer type
@@ -54,6 +55,8 @@ func EncodeQuaiRequest(id uint32, location common.Location, data interface{}, da
 		reqMsg.Request = &QuaiRequestMessage_Transaction{}
 	case common.Hash:
 		reqMsg.Request = &QuaiRequestMessage_BlockHash{}
+	case trie.TrieNodeRequest:
+		reqMsg.Request = &QuaiRequestMessage_TrieNode{}
 	default:
 		return nil, errors.Errorf("unsupported request data type: %T", datatype)
 	}
@@ -102,6 +105,8 @@ func DecodeQuaiRequest(data []byte) (uint32, interface{}, common.Location, inter
 		blockHash := &common.Hash{}
 		blockHash.ProtoDecode(t.BlockHash)
 		reqType = blockHash
+	case *QuaiRequestMessage_TrieNode:
+		reqType = trie.TrieNodeRequest{}
 	default:
 		return reqMsg.Id, nil, common.Location{}, common.Hash{}, errors.Errorf("unsupported request type: %T", reqMsg.Request)
 	}
@@ -136,6 +141,10 @@ func EncodeQuaiResponse(id uint32, data interface{}) ([]byte, error) {
 			return nil, err
 		}
 		respMsg.Response = &QuaiResponseMessage_Transaction{Transaction: protoTransaction}
+	case *trie.TrieNodeResponse:
+		protoTrieNode := &trie.ProtoTrieNode{ProtoNodeData: data.NodeData}
+		respMsg.Response = &QuaiResponseMessage_TrieNode{TrieNode: protoTrieNode}
+
 	case *common.Hash:
 		respMsg.Response = &QuaiResponseMessage_BlockHash{BlockHash: data.ProtoEncode()}
 	default:
@@ -189,6 +198,10 @@ func DecodeQuaiResponse(data []byte, sourceLocation common.Location) (uint32, in
 		hash := common.Hash{}
 		hash.ProtoDecode(blockHash)
 		return id, hash, nil
+	case *QuaiResponseMessage_TrieNode:
+		protoTrieNode := respMsg.GetTrieNode()
+		trieNode := &trie.TrieNodeResponse{NodeData: protoTrieNode.ProtoNodeData}
+		return id, trieNode, nil
 	default:
 		return id, nil, errors.Errorf("unsupported response type: %T", respMsg.Response)
 	}
