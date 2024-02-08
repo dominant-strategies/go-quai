@@ -178,12 +178,14 @@ func (tx *ExternalTx) etxGasPrice() *big.Int          { panic("external TX does 
 func (tx *ExternalTx) etxGasTip() *big.Int            { panic("external TX does not have etxGasTip") }
 func (tx *ExternalTx) etxData() []byte                { panic("external TX does not have etxData") }
 func (tx *ExternalTx) etxAccessList() AccessList      { panic("external TX does not have etxAccessList") }
+func (tx *ExternalTx) txIn() []*TxIn                  { panic("external TX does not have txIn") }
+func (tx *ExternalTx) txOut() []*TxOut                { panic("external TX does not have txOut") }
 
-func (tx *ExternalTx) rawSignatureValues() (v, r, s *big.Int) {
+func (tx *ExternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
 	return nil, nil, nil
 }
 
-func (tx *ExternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
+func (tx *ExternalTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
 }

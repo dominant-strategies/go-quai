@@ -1488,3 +1488,58 @@ func DeleteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 		log.Global.WithField("err", err).Fatal("Failed to delete inbound etxs")
 	}
 }
+
+func WriteUtxo(db ethdb.KeyValueWriter, hash common.Hash, utxo *types.UtxoEntry) {
+	data, err := rlp.EncodeToBytes(utxo)
+	if err != nil {
+		log.Global.Fatal("Failed to RLP encode inbound etxs", "err", err)
+	}
+	if err := db.Put(utxoKey(hash), data); err != nil {
+		log.Global.Fatal("Failed to store badHashesList", "err", err)
+	}
+}
+
+func ReadUtxo(db ethdb.Reader, hash common.Hash) *types.UtxoEntry {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(utxoKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	utxo := new(types.UtxoEntry)
+	if err := rlp.Decode(bytes.NewReader(data), utxo); err != nil {
+		log.Global.Error("Invalid utxo RLP", "utxo", utxo, "err", err)
+		return nil
+	}
+	return utxo
+}
+
+// DeleteUtxo deletes utxos from the database
+func DeleteUtxo(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(utxoKey(hash)); err != nil {
+		log.Global.Fatal("Failed to delete utxo", "err", err)
+	}
+}
+
+func WriteSpentUTXOs(db ethdb.KeyValueWriter, hash common.Hash, spentUTXOs *[]types.SpentTxOut) {
+	data, err := rlp.EncodeToBytes(spentUTXOs)
+	if err != nil {
+		log.Global.Fatal("Failed to RLP encode spent utxos", "err", err)
+	}
+	if err := db.Put(spentUTXOsKey(hash), data); err != nil {
+		log.Global.Fatal("Failed to store spent utxos", "err", err)
+	}
+}
+
+func ReadSpentUTXOs(db ethdb.Reader, hash common.Hash) []types.SpentTxOut {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(spentUTXOsKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	spentUTXOs := []types.SpentTxOut{}
+	if err := rlp.Decode(bytes.NewReader(data), &spentUTXOs); err != nil {
+		log.Global.Error("Invalid spent utxos RLP", "err", err)
+		return nil
+	}
+	return spentUTXOs
+}

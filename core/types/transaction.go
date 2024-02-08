@@ -44,6 +44,7 @@ const (
 	InternalTxType = iota
 	ExternalTxType
 	InternalToExternalTxType
+	QiTxType
 )
 
 // Transaction is a Quai transaction.
@@ -74,7 +75,7 @@ func (tx *Transaction) SetInner(inner TxData) {
 
 // TxData is the underlying data of a transaction.
 //
-// This is implemented by InternalTx, ExternalTx and InternalToExternal.
+// This is implemented by InternalTx, ExternalTx, InternalToExternal, and UtxoTx.
 type TxData interface {
 	txType() byte // returns the type ID
 	copy() TxData // creates a deep copy and initializes all fields
@@ -97,9 +98,11 @@ type TxData interface {
 	etxSender() common.Address
 	originatingTxHash() common.Hash
 	etxIndex() uint16
+	txIn() []*TxIn
+	txOut() []*TxOut
 
-	rawSignatureValues() (v, r, s *big.Int)
-	setSignatureValues(chainID, v, r, s *big.Int)
+	getEcdsaSignatureValues() (v, r, s *big.Int)
+	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
 }
 
 // ProtoEncode serializes tx into the Quai Proto Transaction format
@@ -129,7 +132,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		}
 		protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
 		protoTx.GasTipCap = tx.GasTipCap().Bytes()
-		V, R, S := tx.RawSignatureValues()
+		V, R, S := tx.GetEcdsaSignatureValues()
 		protoTx.V = V.Bytes()
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
@@ -153,7 +156,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.To = tx.To().Bytes()
 		protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
 		protoTx.GasTipCap = tx.GasTipCap().Bytes()
-		V, R, S := tx.RawSignatureValues()
+		V, R, S := tx.GetEcdsaSignatureValues()
 		protoTx.V = V.Bytes()
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
@@ -402,6 +405,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner InternalToExternalTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case QiTxType:
+		var inner QiTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -488,6 +495,10 @@ func (tx *Transaction) OriginatingTxHash() common.Hash { return tx.inner.origina
 
 func (tx *Transaction) ETXIndex() uint16 { return tx.inner.etxIndex() }
 
+func (tx *Transaction) TxOut() []*TxOut { return tx.inner.txOut() }
+
+func (tx *Transaction) TxIn() []*TxIn { return tx.inner.txIn() }
+
 func (tx *Transaction) IsInternalToExternalTx() (inner *InternalToExternalTx, ok bool) {
 	inner, ok = tx.inner.(*InternalToExternalTx)
 	return
@@ -522,10 +533,10 @@ func (tx *Transaction) Cost() *big.Int {
 	return total
 }
 
-// RawSignatureValues returns the V, R, S signature values of the transaction.
+// GetEcdsaSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
-func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
-	return tx.inner.rawSignatureValues()
+func (tx *Transaction) GetEcdsaSignatureValues() (v, r, s *big.Int) {
+	return tx.inner.getEcdsaSignatureValues()
 }
 
 // GasFeeCapCmp compares the fee cap of two transactions.
@@ -653,7 +664,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		return nil, err
 	}
 	cpy := tx.inner.copy()
-	cpy.setSignatureValues(signer.ChainID(), v, r, s)
+	cpy.setEcdsaSignatureValues(signer.ChainID(), v, r, s)
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 

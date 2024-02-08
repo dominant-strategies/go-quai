@@ -1091,6 +1091,17 @@ func (b *Block) SubManifest() BlockManifest { return b.subManifest }
 
 func (b *Block) Header() *Header { return b.header }
 
+func (b *Block) QiTransactions() []*Transaction {
+	// TODO: cache the UTXO loop
+	qiTxs := make([]*Transaction, 0)
+	for _, t := range b.Transactions() {
+		if t.Type() == QiTxType {
+			qiTxs = append(qiTxs, t)
+		}
+	}
+	return qiTxs
+}
+
 // Body returns the non-header content of the block.
 func (b *Block) Body() *Body {
 	return &Body{b.transactions, b.uncles, b.extTransactions, b.subManifest}

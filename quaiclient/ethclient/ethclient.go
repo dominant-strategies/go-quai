@@ -214,7 +214,7 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 		return nil, false, err
 	} else if json == nil {
 		return nil, false, quai.NotFound
-	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil && json.tx.Type() != types.ExternalTxType {
+	} else if _, r, _ := json.tx.GetEcdsaSignatureValues(); r == nil && json.tx.Type() != types.ExternalTxType {
 		return nil, false, fmt.Errorf("server returned transaction without signature")
 	}
 	if json.From != nil && json.BlockHash != nil {
@@ -264,7 +264,7 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 	}
 	if json == nil {
 		return nil, quai.NotFound
-	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil && json.tx.Type() != types.ExternalTxType {
+	} else if _, r, _ := json.tx.GetEcdsaSignatureValues(); r == nil && json.tx.Type() != types.ExternalTxType {
 		return nil, fmt.Errorf("server returned transaction without signature")
 	}
 	if json.From != nil && json.BlockHash != nil {

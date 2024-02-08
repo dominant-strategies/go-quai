@@ -104,11 +104,13 @@ func (tx *InternalTx) originatingTxHash() common.Hash {
 	panic("internal TX does not have originatingTxHash")
 }
 func (tx *InternalTx) etxIndex() uint16 { panic("internal TX does not have etxIndex") }
+func (tx *InternalTx) txIn() []*TxIn    { panic("internal TX does not have txIn") }
+func (tx *InternalTx) txOut() []*TxOut  { panic("internal TX does not have txOut") }
 
-func (tx *InternalTx) rawSignatureValues() (v, r, s *big.Int) {
+func (tx *InternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *InternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
+func (tx *InternalTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }

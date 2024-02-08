@@ -169,7 +169,7 @@ func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() == ExternalTxType { // External TX does not have a signature
 		return tx.inner.(*ExternalTx).Sender, nil
 	}
-	V, R, S := tx.RawSignatureValues()
+	V, R, S := tx.GetEcdsaSignatureValues()
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))

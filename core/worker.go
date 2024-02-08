@@ -870,6 +870,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	header.SetParentHash(block.Header().Hash(), nodeCtx)
 	header.SetNumber(big.NewInt(int64(num.Uint64())+1), nodeCtx)
 	header.SetTime(timestamp)
+	header.SetLocation(w.hc.NodeLocation())
 
 	// Only calculate entropy if the parent is not the genesis block
 	if parent.Hash() != w.hc.config.GenesisHash {

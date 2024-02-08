@@ -117,6 +117,8 @@ func (tx *InternalToExternalTx) etxGasPrice() *big.Int     { return tx.ETXGasPri
 func (tx *InternalToExternalTx) etxGasTip() *big.Int       { return tx.ETXGasTip }
 func (tx *InternalToExternalTx) etxData() []byte           { return tx.ETXData }
 func (tx *InternalToExternalTx) etxAccessList() AccessList { return tx.ETXAccessList }
+func (tx *InternalToExternalTx) txIn() []*TxIn             { panic("internalToExternal TX does not have txIn") }
+func (tx *InternalToExternalTx) txOut() []*TxOut           { panic("internalToExternal TX does not have txOut") }
 
 func (tx *InternalToExternalTx) etxSender() common.Address {
 	panic("internalToExternal TX does not have etxSender")
@@ -128,10 +130,10 @@ func (tx *InternalToExternalTx) etxIndex() uint16 {
 	panic("internalToExternal TX does not have etxIndex")
 }
 
-func (tx *InternalToExternalTx) rawSignatureValues() (v, r, s *big.Int) {
+func (tx *InternalToExternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *InternalToExternalTx) setSignatureValues(chainID, v, r, s *big.Int) {
+func (tx *InternalToExternalTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }
