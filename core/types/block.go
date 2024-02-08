@@ -184,7 +184,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	}
 	h.parentHash = eh.ParentHash
 	h.uncleHash = eh.UncleHash
-	h.coinbase = eh.Coinbase
+	h.coinbase = common.BytesToAddress(eh.Coinbase.Bytes(), eh.Location)
 	h.root = eh.Root
 	h.txHash = eh.TxHash
 	h.etxHash = eh.EtxHash

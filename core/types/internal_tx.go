@@ -99,6 +99,11 @@ func (tx *InternalTx) etxGasPrice() *big.Int     { panic("internal TX does not h
 func (tx *InternalTx) etxGasTip() *big.Int       { panic("internal TX does not have etxGasTip") }
 func (tx *InternalTx) etxData() []byte           { panic("internal TX does not have etxData") }
 func (tx *InternalTx) etxAccessList() AccessList { panic("internal TX does not have etxAccessList") }
+func (tx *InternalTx) etxSender() common.Address { panic("internal TX does not have etxSender") }
+func (tx *InternalTx) originatingTxHash() common.Hash {
+	panic("internal TX does not have originatingTxHash")
+}
+func (tx *InternalTx) etxIndex() uint16 { panic("internal TX does not have etxIndex") }
 
 func (tx *InternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

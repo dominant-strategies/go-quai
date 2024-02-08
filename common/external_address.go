@@ -127,43 +127,9 @@ func (a ExternalAddress) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
-// Location looks up the chain location which contains this address
-func (a ExternalAddress) Location(nodeLocation Location) *Location {
-	R, Z, D := 0, 0, HierarchyDepth
-	if nodeLocation.HasRegion() {
-		R = nodeLocation.Region()
-	}
-	if nodeLocation.HasZone() {
-		Z = nodeLocation.Zone()
-	}
-
-	// Search zone->region->prime address spaces in-slice first, and then search
-	// zone->region out-of-slice address spaces next. This minimizes expected
-	// search time under the following assumptions:
-	// * a node is more likely to encounter a TX from its slice than from another
-	// * we expect `>= Z` `zone` TXs for every `region` TX
-	// * we expect `>= R` `region` TXs for every `prime` TX
-	// * (and by extension) we expect `>= R*Z` `zone` TXs for every `prime` TX
-	primeChecked := false
-	for r := 0; r < NumRegionsInPrime; r++ {
-		for z := 0; z < NumZonesInRegion; z++ {
-			l := Location{byte((r + R) % D), byte((z + Z) % D)}
-			if l.ContainsAddress(Address{&a}) {
-				return &l
-			}
-		}
-		l := Location{byte((r + R) % D)}
-		if l.ContainsAddress(Address{&a}) {
-			return &l
-		}
-		// Check prime on first pass through slice, but not again
-		if !primeChecked {
-			primeChecked = true
-			l := Location{}
-			if l.ContainsAddress(Address{&a}) {
-				return &l
-			}
-		}
-	}
-	return nil
+func (a ExternalAddress) Location() *Location {
+	// Extract nibbles
+	lowerNib := a[0] & 0x0F        // Lower 4 bits
+	upperNib := (a[0] & 0xF0) >> 4 // Upper 4 bits, shifted right
+	return &Location{upperNib, lowerNib}
 }

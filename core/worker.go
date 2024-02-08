@@ -954,12 +954,26 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		return
 	}
 	etxSet.Update(types.Transactions{}, block.NumberU64(w.hc.NodeCtx())+1, w.hc.NodeLocation()) // Prune any expired ETXs
-	pending, err := w.txPool.TxPoolPending(true, etxSet)
+	etxs := make([]*types.Transaction, 0, len(etxSet))
+
+	for _, entry := range etxSet {
+		tx := entry.ETX
+		if tx.ETXSender().Location().Equal(w.chainConfig.Location) { // Sanity check
+			w.logger.WithFields(log.Fields{
+				"tx":     tx.Hash().String(),
+				"sender": tx.ETXSender().String(),
+			}).Error("ETX sender is in our location!")
+			continue // skip this tx
+		}
+		etxs = append(etxs, &tx)
+	}
+
+	pending, err := w.txPool.TxPoolPending(true)
 	if err != nil {
 		return
 	}
-	if len(pending) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, pending, env.header.BaseFee(), true)
+	if len(pending) > 0 || len(etxs) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, etxs, pending, env.header.BaseFee(), true)
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}

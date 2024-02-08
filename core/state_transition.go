@@ -76,11 +76,12 @@ type Message interface {
 	Value() *big.Int
 
 	Nonce() uint64
-	CheckNonce() bool
+	IsETX() bool
 	Data() []byte
 	AccessList() types.AccessList
 	ETXSender() common.Address
 	Type() byte
+	Hash() common.Hash
 
 	ETXGasLimit() uint64
 	ETXGasPrice() *big.Int
@@ -223,21 +224,31 @@ func (st *StateTransition) buyGas() error {
 	return nil
 }
 
+// subGasETX subtracts the gas for an ETX from the gas pool and adds it to the total gas used.
+// The ETX does not pay for the gas.
+func (st *StateTransition) subGasETX() error {
+	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
+		return err
+	}
+	st.gas += st.msg.Gas()
+
+	st.initialGas = st.msg.Gas()
+	return nil
+}
+
 func (st *StateTransition) preCheck() error {
 	from, err := st.msg.From().InternalAddress()
 	if err != nil {
 		return err
 	}
 	// Make sure this transaction's nonce is correct.
-	if st.msg.CheckNonce() {
-		stNonce := st.state.GetNonce(from)
-		if msgNonce := st.msg.Nonce(); stNonce < msgNonce {
-			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
-				st.msg.From().Hex(), msgNonce, stNonce)
-		} else if stNonce > msgNonce {
-			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
-				st.msg.From().Hex(), msgNonce, stNonce)
-		}
+	stNonce := st.state.GetNonce(from)
+	if msgNonce := st.msg.Nonce(); stNonce < msgNonce {
+		return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
+			st.msg.From().Hex(), msgNonce, stNonce)
+	} else if stNonce > msgNonce {
+		return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
+			st.msg.From().Hex(), msgNonce, stNonce)
 	}
 	// Make sure the sender is an EOA
 	if codeHash := st.state.GetCodeHash(from); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
@@ -294,9 +305,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	// Check clauses 1-3, buy gas if everything is correct
-	if err := st.preCheck(); err != nil {
+	if !st.msg.IsETX() {
+		if err := st.preCheck(); err != nil {
+			return nil, err
+		}
+	} else if err := st.subGasETX(); err != nil {
 		return nil, err
 	}
+
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
 	contractCreation := msg.To() == nil // for ETX contract creation, perhaps we should compare the "to" to the contextual zero-address (only in the ETX case)
@@ -355,7 +371,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)) // todo: etxs no longer pay the miner a fee
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),

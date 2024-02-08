@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -893,17 +894,23 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		return nil, nil // following opCall protocol
 	}
 
-	nonce := interpreter.evm.StateDB.GetNonce(internalSender)
+	interpreter.evm.ETXCacheLock.RLock()
+	index := len(interpreter.evm.ETXCache)
+	interpreter.evm.ETXCacheLock.RUnlock()
+	if index > math.MaxUint16 {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Println("opETX overflow error: too many ETXs in cache")
+		return nil, nil
+	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, GasTipCap: gasTipCap.ToBig(), GasFeeCap: gasFeeCap.ToBig(), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, Nonce: nonce, ChainID: interpreter.evm.chainConfig.ChainID}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, ChainID: interpreter.evm.chainConfig.ChainID}
 	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()
 	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
 	interpreter.evm.ETXCacheLock.Unlock()
-
-	interpreter.evm.StateDB.SetNonce(internalSender, nonce+1)
 
 	temp.SetOne() // following opCall protocol
 	stack.push(&temp)

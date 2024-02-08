@@ -19,6 +19,7 @@ package vm
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -82,6 +83,7 @@ type TxContext struct {
 	ETXSender     common.Address // Original sender of the ETX
 	TxType        byte
 	ETXGasLimit   uint64
+	Hash          common.Hash
 	ETXGasPrice   *big.Int
 	ETXGasTip     *big.Int
 	TXGasTip      *big.Int
@@ -187,7 +189,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
 	if evm.TxType == types.InternalToExternalTxType {
-		return evm.CreateETX(addr, caller.Address(), evm.ETXGasLimit, evm.ETXGasPrice, evm.ETXGasTip, evm.ETXData, evm.ETXAccessList, gas, value)
+		return evm.CreateETX(addr, caller.Address(), gas, value)
 	}
 	internalAddr, err := addr.InternalAddress()
 	if err != nil {
@@ -583,7 +585,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
 }
 
-func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGasLimit uint64, etxGasPrice *big.Int, etxGasTip *big.Int, etxData []byte, etxAccessList types.AccessList, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 
 	// Verify address is not in context
 	if common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
@@ -597,13 +599,13 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %s", err.Error())
 	}
 
-	if err := evm.ValidateETXGasPriceAndTip(fromAddr, toAddr, etxGasPrice, etxGasTip); err != nil {
+	if err := evm.ValidateETXGasPriceAndTip(fromAddr, toAddr, evm.ETXGasPrice, evm.ETXGasTip); err != nil {
 		return []byte{}, 0, err
 	}
 
 	fee := big.NewInt(0)
-	fee.Add(etxGasTip, etxGasPrice)
-	fee.Mul(fee, big.NewInt(int64(etxGasLimit)))
+	fee.Add(evm.ETXGasTip, evm.ETXGasPrice)
+	fee.Mul(fee, big.NewInt(int64(evm.ETXGasLimit)))
 	total := big.NewInt(0)
 	total.Add(value, fee)
 	// Fail if we're trying to transfer more than the available balance
@@ -613,10 +615,14 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 
 	evm.StateDB.SubBalance(fromInternal, total)
 
-	nonce := evm.StateDB.GetNonce(fromInternal)
-
+	evm.ETXCacheLock.RLock()
+	index := len(evm.ETXCache) // this is virtually guaranteed to be zero, but the logic is the same as opETX
+	evm.ETXCacheLock.RUnlock()
+	if index > math.MaxUint16 {
+		return []byte{}, 0, fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
+	}
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, GasTipCap: etxGasTip, GasFeeCap: etxGasPrice, Gas: etxGasLimit, Data: etxData, AccessList: etxAccessList, Nonce: nonce, ChainID: evm.chainConfig.ChainID}
+	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: evm.ETXGasLimit, Data: evm.ETXData, AccessList: evm.ETXAccessList, ChainID: evm.chainConfig.ChainID}
 	etx := types.NewTx(&etxInner)
 
 	evm.ETXCacheLock.Lock()
@@ -628,8 +634,8 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, etxGas
 
 // Emitted ETXs must include some multiple of BaseFee as miner tip, to
 // encourage processing at the destination.
-func calcEtxFeeMultiplier(fromAddr, toAddr common.Address, nodeLocation common.Location) *big.Int {
-	confirmationCtx := fromAddr.Location(nodeLocation).CommonDom(*toAddr.Location(nodeLocation)).Context()
+func calcEtxFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
+	confirmationCtx := fromAddr.Location().CommonDom(*toAddr.Location()).Context()
 	multiplier := big.NewInt(common.NumZonesInRegion)
 	if confirmationCtx == common.PRIME_CTX {
 		multiplier = big.NewInt(0).Mul(multiplier, big.NewInt(common.NumRegionsInPrime))
@@ -653,7 +659,7 @@ func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr, toAddr common.Address, etxGa
 	}
 	// This will panic if baseFee is nil, but basefee presence is verified
 	// as part of header validation.
-	feeMul := calcEtxFeeMultiplier(fromAddr, toAddr, evm.chainConfig.Location)
+	feeMul := calcEtxFeeMultiplier(fromAddr, toAddr)
 	mulBaseFee := new(big.Int).Mul(evm.Context.BaseFee, feeMul)
 	if etxGasPrice.Cmp(mulBaseFee) < 0 {
 		return fmt.Errorf("etx max fee per gas less than %dx block base fee: address %v, maxFeePerGas: %s baseFee: %s",

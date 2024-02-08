@@ -130,6 +130,9 @@ func (a InternalAddress) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
-func (a InternalAddress) Location(nodeLocation Location) *Location {
-	return &nodeLocation
+func (a InternalAddress) Location() *Location {
+	// Extract nibbles
+	lowerNib := a[0] & 0x0F        // Lower 4 bits
+	upperNib := (a[0] & 0xF0) >> 4 // Upper 4 bits, shifted right
+	return &Location{upperNib, lowerNib}
 }

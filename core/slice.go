@@ -696,7 +696,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	}
 
 	// Filter for ETXs destined to this slice
-	newInboundEtxs := subRollup.FilterToSlice(location, nodeCtx, nodeLocation)
+	newInboundEtxs := subRollup.FilterToSlice(location, nodeCtx)
 
 	// Filter this list to exclude any ETX for which we are not the crossing
 	// context node. Such ETXs cannot be used by our subordinate for one of the

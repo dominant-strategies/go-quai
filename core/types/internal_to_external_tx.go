@@ -118,6 +118,16 @@ func (tx *InternalToExternalTx) etxGasTip() *big.Int       { return tx.ETXGasTip
 func (tx *InternalToExternalTx) etxData() []byte           { return tx.ETXData }
 func (tx *InternalToExternalTx) etxAccessList() AccessList { return tx.ETXAccessList }
 
+func (tx *InternalToExternalTx) etxSender() common.Address {
+	panic("internalToExternal TX does not have etxSender")
+}
+func (tx *InternalToExternalTx) originatingTxHash() common.Hash {
+	panic("internalToExternal TX does not have originatingTxHash")
+}
+func (tx *InternalToExternalTx) etxIndex() uint16 {
+	panic("internalToExternal TX does not have etxIndex")
+}
+
 func (tx *InternalToExternalTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }

@@ -94,6 +94,9 @@ type TxData interface {
 	etxGasTip() *big.Int
 	etxData() []byte
 	etxAccessList() AccessList
+	etxSender() common.Address
+	originatingTxHash() common.Hash
+	etxIndex() uint16
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -108,27 +111,46 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 
 	// Encoding common fields to all the tx types
 	txType := uint64(tx.Type())
-	nonce := tx.Nonce()
 	gas := tx.Gas()
 	protoTx.Type = &txType
 	protoTx.ChainId = tx.ChainId().Bytes()
-	protoTx.Nonce = &nonce
-	protoTx.Gas = &gas
-	protoTx.AccessList = tx.AccessList().ProtoEncode()
-	protoTx.Value = tx.Value().Bytes()
-	protoTx.Data = tx.Data()
-	protoTx.To = tx.To().Bytes()
-	protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
-	protoTx.GasTipCap = tx.GasTipCap().Bytes()
 
 	// Other fields are set conditionally depending on tx type.
 	switch tx.Type() {
 	case 0:
+		nonce := tx.Nonce()
+		protoTx.Nonce = &nonce
+		protoTx.Gas = &gas
+		protoTx.AccessList = tx.AccessList().ProtoEncode()
+		protoTx.Value = tx.Value().Bytes()
+		protoTx.Data = tx.Data()
+		protoTx.To = tx.To().Bytes()
+		protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
+		protoTx.GasTipCap = tx.GasTipCap().Bytes()
 		V, R, S := tx.RawSignatureValues()
 		protoTx.V = V.Bytes()
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
+	case 1:
+		protoTx.Gas = &gas
+		protoTx.AccessList = tx.AccessList().ProtoEncode()
+		protoTx.Value = tx.Value().Bytes()
+		protoTx.Data = tx.Data()
+		protoTx.To = tx.To().Bytes()
+		protoTx.OriginatingTxHash = tx.OriginatingTxHash().ProtoEncode()
+		etxIndex := uint32(tx.ETXIndex())
+		protoTx.EtxIndex = &etxIndex
+		protoTx.EtxSender = tx.ETXSender().Bytes()
 	case 2:
+		nonce := tx.Nonce()
+		protoTx.Nonce = &nonce
+		protoTx.Gas = &gas
+		protoTx.AccessList = tx.AccessList().ProtoEncode()
+		protoTx.Value = tx.Value().Bytes()
+		protoTx.Data = tx.Data()
+		protoTx.To = tx.To().Bytes()
+		protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
+		protoTx.GasTipCap = tx.GasTipCap().Bytes()
 		V, R, S := tx.RawSignatureValues()
 		protoTx.V = V.Bytes()
 		protoTx.R = R.Bytes()
@@ -151,9 +173,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	if protoTx.ChainId == nil {
 		return errors.New("missing required field 'ChainId' in ProtoTransaction")
 	}
-	if protoTx.Nonce == nil {
-		return errors.New("missing required field 'Nonce' in ProtoTransaction")
-	}
 	if protoTx.Gas == nil {
 		return errors.New("missing required field 'Gas' in ProtoTransaction")
 	}
@@ -169,17 +188,20 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	if protoTx.To == nil {
 		return errors.New("missing required field 'To' in ProtoTransaction")
 	}
-	if protoTx.GasFeeCap == nil {
-		return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
-	}
-	if protoTx.GasTipCap == nil {
-		return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
-	}
 
 	txType := protoTx.GetType()
 
 	switch txType {
 	case 0:
+		if protoTx.Nonce == nil {
+			return errors.New("missing required field 'Nonce' in ProtoTransaction")
+		}
+		if protoTx.GasFeeCap == nil {
+			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
+		}
+		if protoTx.GasTipCap == nil {
+			return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
+		}
 		var itx InternalTx
 		itx.AccessList = AccessList{}
 		itx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
@@ -219,15 +241,26 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		to := common.BytesToAddress(protoTx.GetTo(), location)
 		etx.To = &to
 		etx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
-		etx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
-		etx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
+
 		etx.Gas = protoTx.GetGas()
 		etx.Data = protoTx.GetData()
 		etx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+		etx.OriginatingTxHash = common.BytesToHash(protoTx.GetOriginatingTxHash().Value)
+		etx.ETXIndex = uint16(protoTx.GetEtxIndex())
+		etx.Sender = common.BytesToAddress(protoTx.GetEtxSender(), location)
 
 		tx.SetInner(&etx)
 
 	case 2:
+		if protoTx.Nonce == nil {
+			return errors.New("missing required field 'Nonce' in ProtoTransaction")
+		}
+		if protoTx.GasFeeCap == nil {
+			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
+		}
+		if protoTx.GasTipCap == nil {
+			return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
+		}
 		var ietx InternalToExternalTx
 		ietx.AccessList = AccessList{}
 		ietx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
@@ -440,7 +473,11 @@ func (tx *Transaction) ETXAccessList() AccessList { return tx.inner.etxAccessLis
 // Nonce returns the sender account nonce of the transaction.
 func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 
-func (tx *Transaction) ETXSender() common.Address { return tx.inner.(*ExternalTx).Sender }
+func (tx *Transaction) ETXSender() common.Address { return tx.inner.etxSender() }
+
+func (tx *Transaction) OriginatingTxHash() common.Hash { return tx.inner.originatingTxHash() }
+
+func (tx *Transaction) ETXIndex() uint16 { return tx.inner.etxIndex() }
 
 func (tx *Transaction) IsInternalToExternalTx() (inner *InternalToExternalTx, ok bool) {
 	inner, ok = tx.inner.(*InternalToExternalTx)
@@ -560,7 +597,7 @@ func (tx *Transaction) FromChain(nodeLocation common.Location) common.Location {
 	case ExternalTxType:
 		// External transactions do not have a signature, but instead store the
 		// sender explicitly. Use that sender to get the location.
-		loc = *tx.inner.(*ExternalTx).Sender.Location(nodeLocation)
+		loc = *tx.inner.(*ExternalTx).Sender.Location()
 	default:
 		// All other TX types are signed, and should use the signature to determine
 		// the sender location
@@ -569,7 +606,7 @@ func (tx *Transaction) FromChain(nodeLocation common.Location) common.Location {
 		if err != nil {
 			panic("failed to get transaction sender!")
 		}
-		loc = *from.Location(nodeLocation)
+		loc = *from.Location()
 	}
 	tx.fromChain.Store(loc)
 	return loc
@@ -582,7 +619,7 @@ func (tx *Transaction) ConfirmationCtx(nodeLocation common.Location) int {
 		return ctx.(int)
 	}
 
-	ctx := tx.To().Location(nodeLocation).CommonDom(tx.FromChain(nodeLocation)).Context()
+	ctx := tx.To().Location().CommonDom(tx.FromChain(nodeLocation)).Context()
 	tx.confirmCtx.Store(ctx)
 	return ctx
 }
@@ -654,10 +691,10 @@ func (s *Transactions) ProtoDecode(transactions *ProtoTransactions, location com
 
 // FilterByLocation returns the subset of transactions with a 'to' address which
 // belongs the given chain location
-func (s Transactions) FilterToLocation(l common.Location, nodeLocation common.Location) Transactions {
+func (s Transactions) FilterToLocation(l common.Location) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		toChain := *tx.To().Location(nodeLocation)
+		toChain := *tx.To().Location()
 		if l.Equal(toChain) {
 			filteredList = append(filteredList, tx)
 		}
@@ -667,10 +704,10 @@ func (s Transactions) FilterToLocation(l common.Location, nodeLocation common.Lo
 
 // FilterToSlice returns the subset of transactions with a 'to' address which
 // belongs to the given slice location, at or above the given minimum context
-func (s Transactions) FilterToSlice(slice common.Location, minCtx int, nodeLocation common.Location) Transactions {
+func (s Transactions) FilterToSlice(slice common.Location, minCtx int) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		toChain := tx.To().Location(nodeLocation)
+		toChain := tx.To().Location()
 		if toChain.InSameSliceAs(slice) {
 			filteredList = append(filteredList, tx)
 		}
@@ -780,9 +817,15 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.AddressBytes]Transactions, baseFee *big.Int, sort bool) *TransactionsByPriceAndNonce {
+func NewTransactionsByPriceAndNonce(signer Signer, etxs []*Transaction, txs map[common.AddressBytes]Transactions, baseFee *big.Int, sort bool) *TransactionsByPriceAndNonce {
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByPriceAndTime, 0, len(txs))
+	// Push inbound ETXs to the front. They no longer have any associated fees.
+	// [Some amount of] ETXs must be processed before regular txs by consensus.
+	for _, etx := range etxs {
+		heads = append(heads, &TxWithMinerFee{etx, new(big.Int)})
+	}
+
 	for from, accTxs := range txs {
 		acc, _ := Sender(signer, accTxs[0])
 		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee)
@@ -866,9 +909,10 @@ type Message struct {
 	gasTipCap     *big.Int
 	data          []byte
 	accessList    AccessList
-	checkNonce    bool
+	isETX         bool
 	etxsender     common.Address // only used in ETX
 	txtype        byte
+	hash          common.Hash
 	etxGasLimit   uint64
 	etxGasPrice   *big.Int
 	etxGasTip     *big.Int
@@ -876,7 +920,7 @@ type Message struct {
 	etxAccessList AccessList
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isETX bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
@@ -888,14 +932,14 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasTipCap:  gasTipCap,
 		data:       data,
 		accessList: accessList,
-		checkNonce: checkNonce,
+		isETX:      isETX,
+		hash:       common.Hash{},
 	}
 }
 
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
-		nonce:      tx.Nonce(),
 		gasLimit:   tx.Gas(),
 		gasPrice:   new(big.Int).Set(tx.GasPrice()),
 		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
@@ -904,8 +948,9 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		amount:     tx.Value(),
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
-		checkNonce: true,
+		isETX:      false,
 		txtype:     tx.Type(),
+		hash:       tx.Hash(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -915,9 +960,10 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	if tx.Type() == ExternalTxType {
 		msg.from = common.ZeroAddress(s.Location())
 		msg.etxsender, err = Sender(s, tx)
-		msg.checkNonce = false
+		msg.isETX = true
 	} else {
 		msg.from, err = Sender(s, tx)
+		msg.nonce = tx.Nonce()
 	}
 	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
 		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
@@ -932,7 +978,6 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 // AsMessageWithSender returns the transaction as a core.Message.
 func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *common.InternalAddress) (Message, error) {
 	msg := Message{
-		nonce:      tx.Nonce(),
 		gasLimit:   tx.Gas(),
 		gasPrice:   new(big.Int).Set(tx.GasPrice()),
 		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
@@ -941,8 +986,9 @@ func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *c
 		amount:     tx.Value(),
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
-		checkNonce: true,
+		isETX:      false,
 		txtype:     tx.Type(),
+		hash:       tx.Hash(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -952,13 +998,14 @@ func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *c
 	if tx.Type() == ExternalTxType {
 		msg.from = common.ZeroAddress(s.Location())
 		msg.etxsender, err = Sender(s, tx)
-		msg.checkNonce = false
+		msg.isETX = true
 	} else {
 		if sender != nil {
 			msg.from = common.NewAddressFromData(sender)
 		} else {
 			msg.from, err = Sender(s, tx)
 		}
+		msg.nonce = tx.Nonce()
 	}
 	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
 		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
@@ -980,9 +1027,10 @@ func (m Message) Gas() uint64               { return m.gasLimit }
 func (m Message) Nonce() uint64             { return m.nonce }
 func (m Message) Data() []byte              { return m.data }
 func (m Message) AccessList() AccessList    { return m.accessList }
-func (m Message) CheckNonce() bool          { return m.checkNonce }
+func (m Message) IsETX() bool               { return m.isETX }
 func (m Message) ETXSender() common.Address { return m.etxsender }
 func (m Message) Type() byte                { return m.txtype }
+func (m Message) Hash() common.Hash         { return m.hash }
 func (m Message) ETXGasLimit() uint64       { return m.etxGasLimit }
 func (m Message) ETXGasPrice() *big.Int     { return m.etxGasPrice }
 func (m Message) ETXGasTip() *big.Int       { return m.etxGasTip }

@@ -155,7 +155,10 @@ func DecodeQuaiResponse(data []byte, sourceLocation common.Location) (uint32, in
 	case *QuaiResponseMessage_Block:
 		protoBlock := respMsg.GetBlock()
 		block := &types.Block{}
-		err := block.ProtoDecode(protoBlock, sourceLocation)
+		if protoBlock.Header.Location == nil {
+			return id, nil, errors.New("location is nil")
+		}
+		err := block.ProtoDecode(protoBlock, protoBlock.Header.GetLocation().GetValue())
 		if err != nil {
 			return id, nil, err
 		}
@@ -233,7 +236,10 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 			return err
 		}
 		block := &types.Block{}
-		err = block.ProtoDecode(protoBlock, sourceLocation)
+		if protoBlock.Header.Location == nil {
+			return errors.New("location is nil")
+		}
+		err = block.ProtoDecode(protoBlock, protoBlock.Header.GetLocation().GetValue())
 		if err != nil {
 			return err
 		}

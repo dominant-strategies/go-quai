@@ -123,7 +123,7 @@ func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common.AddressBytes, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBalance call can only be made in zone chain")
@@ -135,7 +135,8 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	addr := common.Bytes20ToAddress(address, s.b.NodeLocation())
+	internal, err := addr.InternalAddress()
 	if err != nil {
 		return nil, err
 	}

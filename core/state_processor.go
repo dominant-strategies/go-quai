@@ -341,11 +341,11 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	var ETXPCount int
 	for _, tx := range result.Etxs {
 		// Count which ETXs are cross-region
-		if tx.To().Location(nodeLocation).CommonDom(nodeLocation).Context() == common.REGION_CTX {
+		if tx.To().Location().CommonDom(nodeLocation).Context() == common.REGION_CTX {
 			ETXRCount++
 		}
 		// Count which ETXs are cross-prime
-		if tx.To().Location(nodeLocation).CommonDom(nodeLocation).Context() == common.PRIME_CTX {
+		if tx.To().Location().CommonDom(nodeLocation).Context() == common.PRIME_CTX {
 			ETXPCount++
 		}
 	}

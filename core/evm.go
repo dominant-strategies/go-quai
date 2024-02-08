@@ -86,6 +86,7 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 		GasPrice:      new(big.Int).Set(msg.GasPrice()),
 		ETXSender:     msg.ETXSender(),
 		TxType:        msg.Type(),
+		Hash:          msg.Hash(),
 		ETXGasLimit:   msg.ETXGasLimit(),
 		ETXGasPrice:   msg.ETXGasPrice(),
 		ETXGasTip:     msg.ETXGasTip(),

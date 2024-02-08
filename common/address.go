@@ -34,7 +34,7 @@ type AddressData interface {
 	UnmarshalJSON(input []byte) error
 	Scan(src interface{}) error
 	Value() (driver.Value, error)
-	Location(nodeLocation Location) *Location
+	Location() *Location
 	setBytes(b []byte)
 }
 
@@ -213,11 +213,11 @@ func (a Address) Value() (driver.Value, error) {
 }
 
 // Location looks up the chain location which contains this address
-func (a Address) Location(nodeLocation Location) *Location {
+func (a Address) Location() *Location {
 	if a.inner == nil {
 		panic("Address has nil inner")
 	}
-	return a.inner.Location(nodeLocation)
+	return a.inner.Location()
 }
 
 // BigToAddress returns Address with byte values of b.
@@ -239,6 +239,19 @@ func IsHexAddress(s string) bool {
 		s = s[2:]
 	}
 	return len(s) == 2*AddressLength && isHex(s)
+}
+
+func (a *AddressBytes) UnmarshalJSON(input []byte) error {
+	var temp [AddressLength]byte
+	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(AddressBytes{}), input, temp[:]); err != nil {
+		return err
+	}
+	copy(a[:], temp[:])
+	return nil
+}
+
+func (a AddressBytes) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a[:])
 }
 
 // Hex returns a hex string representation of the address.

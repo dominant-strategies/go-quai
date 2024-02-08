@@ -77,7 +77,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	var dec struct {
 		ParentHash    []common.Hash   `json:"parentHash"          gencodec:"required"`
 		UncleHash     *common.Hash    `json:"sha3Uncles"          gencodec:"required"`
-		Coinbase      *common.Address `json:"miner"               gencodec:"required"`
+		Coinbase      *common.AddressBytes `json:"miner"               gencodec:"required"`
 		Root          *common.Hash    `json:"stateRoot"           gencodec:"required"`
 		TxHash        *common.Hash    `json:"transactionsRoot"    gencodec:"required"`
 		ReceiptHash   *common.Hash    `json:"receiptsRoot"        gencodec:"required"`
@@ -178,7 +178,12 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		h.SetNumber((*big.Int)(dec.Number[i]), i)
 	}
 	h.SetUncleHash(*dec.UncleHash)
-	h.SetCoinbase(*dec.Coinbase)
+	if len(dec.Location) > 0 {
+		h.location = make([]byte, len(dec.Location))
+		copy(h.location, dec.Location)
+	}
+	coinbase := common.Bytes20ToAddress(*dec.Coinbase, h.location)
+	h.SetCoinbase(coinbase)
 	h.SetRoot(*dec.Root)
 	h.SetTxHash(*dec.TxHash)
 	h.SetReceiptHash(*dec.ReceiptHash)
@@ -188,10 +193,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetGasLimit(uint64(*dec.GasLimit))
 	h.SetGasUsed(uint64(*dec.GasUsed))
 	h.SetBaseFee((*big.Int)(dec.BaseFee))
-	if len(dec.Location) > 0 {
-		h.location = make([]byte, len(dec.Location))
-		copy(h.location, dec.Location)
-	}
 	h.SetTime(uint64(dec.Time))
 	h.SetExtra(dec.Extra)
 	h.SetMixHash(*dec.MixHash)

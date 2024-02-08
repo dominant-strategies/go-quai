@@ -58,6 +58,9 @@ message ProtoTransaction {
   optional bytes v = 17;
   optional bytes r = 18;
   optional bytes s = 19;
+  optional common.ProtoHash originating_tx_hash = 20;
+  optional uint32 etx_index = 21;
+  optional bytes etx_sender = 22;
 }
 
 message ProtoTransactions { repeated ProtoTransaction transactions = 1; }

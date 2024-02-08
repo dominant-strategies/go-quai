@@ -49,11 +49,13 @@ type txJSON struct {
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
 
-	ETXGasLimit   *hexutil.Uint64 `json:"etxGasLimit,omitempty"`
-	ETXGasPrice   *hexutil.Big    `json:"etxGasPrice,omitempty"`
-	ETXGasTip     *hexutil.Big    `json:"etxGasTip,omitempty"`
-	ETXData       *hexutil.Bytes  `json:"etxData,omitempty"`
-	ETXAccessList *AccessList     `json:"etxAccessList,omitempty"`
+	ETXGasLimit       *hexutil.Uint64 `json:"etxGasLimit,omitempty"`
+	ETXGasPrice       *hexutil.Big    `json:"etxGasPrice,omitempty"`
+	ETXGasTip         *hexutil.Big    `json:"etxGasTip,omitempty"`
+	ETXData           *hexutil.Bytes  `json:"etxData,omitempty"`
+	ETXAccessList     *AccessList     `json:"etxAccessList,omitempty"`
+	OriginatingTxHash *common.Hash    `json:"originatingTxHash,omitempty"`
+	ETXIndex          *hexutil.Uint64 `json:"etxIndex,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -84,10 +86,10 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	case *ExternalTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
+		enc.OriginatingTxHash = &tx.OriginatingTxHash
+		index := hexutil.Uint64(tx.ETXIndex)
+		enc.ETXIndex = &index
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.To = t.To()
@@ -195,18 +197,14 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'chainId' in external transaction")
 		}
 		etx.ChainID = (*big.Int)(dec.ChainID)
-		if dec.Nonce == nil {
-			return errors.New("missing required field 'nonce' in external transaction")
+		if dec.OriginatingTxHash == nil {
+			return errors.New("missing required field 'originatingTxHash' in external transaction")
 		}
-		etx.Nonce = uint64(*dec.Nonce)
-		if dec.MaxPriorityFeePerGas == nil {
-			return errors.New("missing required field 'maxPriorityFeePerGas' in external transaction")
+		etx.OriginatingTxHash = *dec.OriginatingTxHash
+		if dec.ETXIndex == nil {
+			return errors.New("missing required field 'etxIndex' in external transaction")
 		}
-		etx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
-		if dec.MaxFeePerGas == nil {
-			return errors.New("missing required field 'maxFeePerGas' in external transaction")
-		}
-		etx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+		etx.ETXIndex = uint16(*dec.ETXIndex)
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' in external transaction")
 		}
