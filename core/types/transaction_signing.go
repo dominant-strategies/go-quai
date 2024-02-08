@@ -203,6 +203,15 @@ func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s SignerV1) Hash(tx *Transaction) common.Hash {
+	if tx.Type() == QiTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.TxIn(),
+				tx.TxOut(),
+			})
+	}
 	txTo := tx.To()
 	var txToBytes []byte
 	if txTo == nil {

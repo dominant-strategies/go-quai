@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -178,8 +179,11 @@ func (tx *ExternalTx) etxGasPrice() *big.Int          { panic("external TX does 
 func (tx *ExternalTx) etxGasTip() *big.Int            { panic("external TX does not have etxGasTip") }
 func (tx *ExternalTx) etxData() []byte                { panic("external TX does not have etxData") }
 func (tx *ExternalTx) etxAccessList() AccessList      { panic("external TX does not have etxAccessList") }
-func (tx *ExternalTx) txIn() []*TxIn                  { panic("external TX does not have txIn") }
-func (tx *ExternalTx) txOut() []*TxOut                { panic("external TX does not have txOut") }
+func (tx *ExternalTx) txIn() []TxIn                   { panic("external TX does not have txIn") }
+func (tx *ExternalTx) txOut() []TxOut                 { panic("external TX does not have txOut") }
+func (tx *ExternalTx) getSchnorrSignature() *schnorr.Signature {
+	panic("external TX does not have getSchnorrSignature")
+}
 
 func (tx *ExternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	// Signature values are ignored for external transactions

@@ -3,13 +3,30 @@ package types
 import (
 	"math/big"
 
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 type QiTx struct {
 	ChainID *big.Int // replay protection
-	TxIn    []*TxIn
-	TxOut   []*TxOut
+	TxIn    []TxIn
+	TxOut   []TxOut
+
+	Signature *schnorr.Signature
+}
+
+type WireQiTx struct {
+	ChainID   *big.Int // replay protection
+	TxIn      []TxIn
+	TxOut     []TxOut
+	Signature []byte
+}
+
+type QiTxWithMinerFee struct {
+	Tx       *Transaction
+	Fee      uint64
+	FeePerKB uint64
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -20,8 +37,55 @@ func (tx *QiTx) copy() TxData {
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
-	cpy.TxIn = make([]*TxIn, len(tx.TxIn))
-	cpy.TxOut = make([]*TxOut, len(tx.TxOut))
+
+	cpy.TxIn = make([]TxIn, len(tx.TxIn))
+	cpy.TxOut = make([]TxOut, len(tx.TxOut))
+	if tx.Signature != nil {
+		cpy.Signature, _ = schnorr.ParseSignature(tx.Signature.Serialize()) // optional: fatal if error is not nil
+	} else {
+		cpy.Signature = new(schnorr.Signature)
+	}
+	copy(cpy.TxIn, tx.TxIn)
+	copy(cpy.TxOut, tx.TxOut)
+	return cpy
+}
+
+func (tx *QiTx) copyToWire() *WireQiTx {
+	cpy := &WireQiTx{
+		ChainID:   new(big.Int),
+		Signature: make([]byte, 64),
+	}
+	if tx.ChainID != nil {
+		cpy.ChainID.Set(tx.ChainID)
+	}
+
+	cpy.TxIn = make([]TxIn, len(tx.TxIn))
+	cpy.TxOut = make([]TxOut, len(tx.TxOut))
+	if tx.Signature != nil {
+		copy(cpy.Signature, tx.Signature.Serialize())
+	} else {
+		copy(cpy.Signature, make([]byte, 64))
+	}
+	copy(cpy.TxIn, tx.TxIn)
+	copy(cpy.TxOut, tx.TxOut)
+	return cpy
+}
+
+func (tx *WireQiTx) copyFromWire() *QiTx {
+	cpy := &QiTx{
+		ChainID: new(big.Int),
+	}
+	if tx.ChainID != nil {
+		cpy.ChainID.Set(tx.ChainID)
+	}
+
+	cpy.TxIn = make([]TxIn, len(tx.TxIn))
+	cpy.TxOut = make([]TxOut, len(tx.TxOut))
+	if tx.Signature != nil {
+		cpy.Signature, _ = schnorr.ParseSignature(tx.Signature) // optional: fatal if error is not nil
+	} else {
+		cpy.Signature = new(schnorr.Signature)
+	}
 	copy(cpy.TxIn, tx.TxIn)
 	copy(cpy.TxOut, tx.TxOut)
 	return cpy
@@ -52,8 +116,9 @@ func (tx *QiTx) etxIndex() uint16 { panic("Qi TX does not have etxIndex") }
 func (tx *QiTx) etxSender() common.Address {
 	panic("Qi TX does not have etxSender")
 }
-func (tx *QiTx) txIn() []*TxIn   { return tx.TxIn }
-func (tx *QiTx) txOut() []*TxOut { return tx.TxOut }
+func (tx *QiTx) txIn() []TxIn                            { return tx.TxIn }
+func (tx *QiTx) txOut() []TxOut                          { return tx.TxOut }
+func (tx *QiTx) getSchnorrSignature() *schnorr.Signature { return tx.Signature }
 
 func (tx *QiTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	panic("Qi TX does not have ECDSA signature values")
@@ -61,4 +126,11 @@ func (tx *QiTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 
 func (tx *QiTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	panic("Qi TX does not have ECDSA signature values")
+}
+
+func CalculateQiTxGas(transaction *Transaction) uint64 {
+	if transaction.Type() != QiTxType {
+		panic("CalculateQiTxGas called on a transaction that is not a Qi transaction")
+	}
+	return uint64(len(transaction.TxIn()))*params.SloadGas + uint64(len(transaction.TxOut()))*params.CallValueTransferGas + params.EcrecoverGas
 }

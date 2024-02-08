@@ -41,7 +41,7 @@ func IsCoinBaseTx(msgTx *Transaction) bool {
 //
 // NOTE: The transaction MUST have already been sanity checked with the
 // CheckTransactionSanity function prior to calling this function.
-func CheckTransactionInputs(tx *Transaction, txHeight uint64, utxoView *UtxoViewpoint) (uint64, error) {
+func CheckTransactionInputs(tx *Transaction, utxoView *UtxoViewpoint) (uint64, error) {
 	// Coinbase transactions have no inputs.
 	if IsCoinBaseTx(tx) {
 		return 0, nil

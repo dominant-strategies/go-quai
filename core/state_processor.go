@@ -244,8 +244,18 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		etxPLimit = params.ETXPLimitMin
 	}
 
-	for i, tx := range block.Transactions() {
+	transactions := block.Transactions()
+
+	if transactions[0].Type() == types.QiTxType && types.IsCoinBaseTx(transactions[0]) {
+		transactions = transactions[1:]
+	}
+
+	for i, tx := range transactions {
 		startProcess := time.Now()
+		if tx.Type() == types.QiTxType {
+			*usedGas += types.CalculateQiTxGas(tx)
+			continue
+		}
 		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
 		if err != nil {
 			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)

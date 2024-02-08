@@ -23,9 +23,13 @@ type SpentTxOut struct {
 
 // countSpentOutputs returns the number of utxos the passed block spends.
 func CountSpentOutputs(block *Block) int {
+	transactions := block.QiTransactions()
+	if IsCoinBaseTx(transactions[0]) {
+		transactions = transactions[1:]
+	}
 	// Exclude the coinbase transaction since it can't spend anything.
 	var numSpent int
-	for _, tx := range block.QiTransactions()[1:] {
+	for _, tx := range transactions {
 		numSpent += len(tx.TxIn())
 	}
 

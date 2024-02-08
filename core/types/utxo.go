@@ -16,13 +16,6 @@ const (
 	// MaxPrevOutIndex is the maximum index the index field of a previous
 	// outpoint can be.
 	MaxPrevOutIndex uint32 = 0xffffffff
-
-	// defaultTxInOutAlloc is the default size used for the backing array for
-	// transaction inputs and outputs.  The array will dynamically grow as needed,
-	// but this figure is intended to provide enough space for the number of
-	// inputs and outputs in a typical transaction without needing to grow the
-	// backing array multiple times.
-	defaultTxInOutAlloc = 15
 )
 
 // TxIn defines a Qi transaction input
@@ -36,6 +29,14 @@ type TxIn struct {
 type OutPoint struct {
 	TxHash common.Hash
 	Index  uint32
+}
+
+// NewOutPoint returns a new Qi transaction outpoint
+func NewOutPoint(txHash *common.Hash, index uint32) *OutPoint {
+	return &OutPoint{
+		TxHash: *txHash,
+		Index:  index,
+	}
 }
 
 // NewTxIn returns a new Qi transaction input

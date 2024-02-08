@@ -1,5 +1,15 @@
 package types
 
+import (
+	"errors"
+	"fmt"
+
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto"
+)
+
 // TxoFlags is a bitmask defining additional information and state for a
 // transaction output in a utxo view.
 type TxoFlags uint8
@@ -106,7 +116,8 @@ func NewUtxoEntry(
 // The unspent outputs are needed by other transactions for things such as
 // script validation and double spend prevention.
 type UtxoViewpoint struct {
-	Entries map[OutPoint]*UtxoEntry
+	Entries  map[OutPoint]*UtxoEntry
+	Location common.Location
 }
 
 // LookupEntry returns information about a given transaction output according to
@@ -161,14 +172,15 @@ func (view *UtxoViewpoint) AddTxOuts(tx *Transaction, blockHeight uint64) {
 		// same hash.  This is allowed so long as the previous
 		// transaction is fully spent.
 		prevOut.Index = uint32(txOutIdx)
-		view.addTxOut(prevOut, txOut, isCoinBase, blockHeight)
+		view.addTxOut(prevOut, &txOut, isCoinBase, blockHeight)
 	}
 }
 
 // NewUtxoViewpoint returns a new empty unspent transaction output view.
-func NewUtxoViewpoint() *UtxoViewpoint {
+func NewUtxoViewpoint(location common.Location) *UtxoViewpoint {
 	return &UtxoViewpoint{
-		Entries: make(map[OutPoint]*UtxoEntry),
+		Entries:  make(map[OutPoint]*UtxoEntry),
+		Location: location,
 	}
 }
 
@@ -216,5 +228,61 @@ func (view *UtxoViewpoint) ConnectTransaction(tx *Transaction, blockHeight uint6
 
 	// Add the transaction's outputs as available utxos.
 	view.AddTxOuts(tx, blockHeight)
+	return nil
+}
+
+func (view *UtxoViewpoint) ConnectTransactions(block *Block, stxos *[]SpentTxOut) error {
+	for _, tx := range block.QiTransactions() {
+		view.ConnectTransaction(tx, block.NumberU64(view.Location.Context()), stxos)
+	}
+	return nil
+}
+
+func (view UtxoViewpoint) VerifyTxSignature(tx *Transaction, signer Signer) error {
+	pubKeys := make([]*btcec.PublicKey, 0)
+	for _, txIn := range tx.TxIn() {
+		entry := view.LookupEntry(txIn.PreviousOutPoint)
+		if entry == nil {
+			return errors.New("utxo not found " + txIn.PreviousOutPoint.TxHash.String())
+		}
+
+		// Verify the pubkey
+		address := common.BytesToAddress(crypto.Keccak256(txIn.PubKey[1:])[12:], view.Location)
+		entryAddr := common.BytesToAddress(entry.Address, view.Location)
+		if !address.Equal(entryAddr) {
+			return errors.New("invalid address")
+		}
+
+		// We have the Public Key as 65 bytes uncompressed
+		pub, err := btcec.ParsePubKey(txIn.PubKey)
+		if err != nil {
+			return err
+		}
+
+		pubKeys = append(pubKeys, pub)
+	}
+
+	var finalKey *btcec.PublicKey
+	if len(tx.TxIn()) > 1 {
+		aggKey, _, _, err := musig2.AggregateKeys(
+			pubKeys, false,
+		)
+		if err != nil {
+			return err
+		}
+		finalKey = aggKey.FinalKey
+	} else {
+		finalKey = pubKeys[0]
+	}
+
+	fmt.Println("sig", common.Bytes2Hex(tx.GetSchnorrSignature().Serialize()))
+	txDigestHash := signer.Hash(tx)
+
+	fmt.Println("UTXO VIEW")
+	fmt.Println("TX Digest Hash", common.Bytes2Hex(txDigestHash[:]))
+	fmt.Println("Pubkey", common.Bytes2Hex(finalKey.SerializeUncompressed()))
+	if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
+		return errors.New("invalid signature")
+	}
 	return nil
 }

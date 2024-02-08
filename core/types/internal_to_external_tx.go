@@ -19,6 +19,7 @@ package types
 import (
 	"math/big"
 
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 )
 
@@ -117,8 +118,6 @@ func (tx *InternalToExternalTx) etxGasPrice() *big.Int     { return tx.ETXGasPri
 func (tx *InternalToExternalTx) etxGasTip() *big.Int       { return tx.ETXGasTip }
 func (tx *InternalToExternalTx) etxData() []byte           { return tx.ETXData }
 func (tx *InternalToExternalTx) etxAccessList() AccessList { return tx.ETXAccessList }
-func (tx *InternalToExternalTx) txIn() []*TxIn             { panic("internalToExternal TX does not have txIn") }
-func (tx *InternalToExternalTx) txOut() []*TxOut           { panic("internalToExternal TX does not have txOut") }
 
 func (tx *InternalToExternalTx) etxSender() common.Address {
 	panic("internalToExternal TX does not have etxSender")
@@ -128,6 +127,11 @@ func (tx *InternalToExternalTx) originatingTxHash() common.Hash {
 }
 func (tx *InternalToExternalTx) etxIndex() uint16 {
 	panic("internalToExternal TX does not have etxIndex")
+}
+func (tx *InternalToExternalTx) txIn() []TxIn   { panic("InternalToExternalTx does not have txIn") }
+func (tx *InternalToExternalTx) txOut() []TxOut { panic("InternalToExternalTx does not have txOut") }
+func (tx *InternalToExternalTx) getSchnorrSignature() *schnorr.Signature {
+	panic("InternalToExternalTx does not have getSchnorrSignature")
 }
 
 func (tx *InternalToExternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {

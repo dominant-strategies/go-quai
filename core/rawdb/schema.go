@@ -81,10 +81,11 @@ var (
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
-	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
-	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
-	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
-	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
+	headerPrefix             = []byte("h")  // headerPrefix + num (uint64 big endian) + hash -> header
+	currentStateHeaderPrefix = []byte("ch") // currentStateHeaderPrefix + num (uint64 big endian) + hash -> header
+	headerTDSuffix           = []byte("t")  // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
+	headerHashSuffix         = []byte("n")  // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
+	headerNumberPrefix       = []byte("H")  // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	pendingHeaderPrefix = []byte("ph")    // pendingHeaderPrefix + hash -> header
 	candidateBodyPrefix = []byte("cb")    // candidateBodyPrefix + hash -> Body
@@ -230,6 +231,10 @@ func headerHashKey(number uint64) []byte {
 // headerNumberKey = headerNumberPrefix + hash
 func headerNumberKey(hash common.Hash) []byte {
 	return append(headerNumberPrefix, hash.Bytes()...)
+}
+
+func currentStateHeaderHashKey(number uint64) []byte {
+	return append(append(currentStateHeaderPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
 }
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
