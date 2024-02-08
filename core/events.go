@@ -37,7 +37,8 @@ type ChainEvent struct {
 }
 
 type ChainSideEvent struct {
-	Block *types.Block
+	Blocks      []*types.Block
+	ResetUncles bool
 }
 
 type ChainHeadEvent struct{ Block *types.Block }

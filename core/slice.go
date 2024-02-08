@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -22,7 +24,6 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -373,6 +374,14 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	if setHead {
 		sl.hc.SetCurrentHeader(block.Header())
+	} else if !setHead && nodeCtx == common.ZONE_CTX && sl.hc.ProcessingState() {
+		sl.logger.WithFields(log.Fields{
+			"hash":       block.Hash(),
+			"number":     block.NumberU64(nodeCtx),
+			"location":   block.Location(),
+			"parentHash": block.ParentHash(nodeCtx),
+		}).Debug("Found uncle")
+		sl.hc.chainSideFeed.Send(ChainSideEvent{Blocks: []*types.Block{block}, ResetUncles: false})
 	}
 
 	if subReorg {

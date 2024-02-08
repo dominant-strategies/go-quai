@@ -58,7 +58,6 @@ import (
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
-	chainSideChanSize = 10
 
 	// reportInterval is the time interval between two reports.
 	reportInterval = 15
@@ -90,7 +89,6 @@ var (
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
 	TotalLogS(header *types.Header) *big.Int

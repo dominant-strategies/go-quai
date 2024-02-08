@@ -368,11 +368,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 			break
 		}
 	}
-
+	var prevHashStack []*types.Header
 	for {
 		if prevHeader.Hash() == commonHeader.Hash() {
 			break
 		}
+		prevHashStack = append(prevHashStack, prevHeader)
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64(hc.NodeCtx()))
 		prevHeader = hc.GetHeader(prevHeader.ParentHash(hc.NodeCtx()), prevHeader.NumberU64(hc.NodeCtx())-1)
 
@@ -385,6 +386,21 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64(hc.NodeCtx()))
+	}
+
+	if hc.NodeCtx() == common.ZONE_CTX && hc.ProcessingState() {
+		// Every Block that got removed from the canonical hash db is sent in the side feed to be
+		// recorded as uncles
+		go func() {
+			var blocks []*types.Block
+			for i := len(prevHashStack) - 1; i >= 0; i-- {
+				block := hc.bc.GetBlock(prevHashStack[i].Hash(), prevHashStack[i].NumberU64(hc.NodeCtx()))
+				if block != nil {
+					blocks = append(blocks, block)
+				}
+			}
+			hc.chainSideFeed.Send(ChainSideEvent{Blocks: blocks, ResetUncles: true})
+		}()
 	}
 
 	return nil
