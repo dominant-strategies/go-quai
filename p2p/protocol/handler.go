@@ -12,6 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
@@ -85,6 +86,12 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			if err != nil {
 				log.Global.Errorf("error handling block number request: %s", err)
 				continue
+			}
+		case trie.TrieNodeRequest:
+			requestedHash := query.(*common.Hash)
+			err := handleTrieNodeRequest(id, loc, *requestedHash, stream, node)
+			if err != nil {
+				log.Global.Errorf("error handling trie node request: %s", err)
 			}
 		default:
 			log.Global.Errorf("unsupported request data type: %T", decodedType)
@@ -164,5 +171,24 @@ func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, s
 		return err
 	}
 	log.Global.Tracef("Sent block hash %s to peer %s", blockHash, stream.Conn().RemotePeer())
+	return nil
+}
+
+func handleTrieNodeRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	trieNode := node.GetTrieNode(hash, loc)
+	if trieNode == nil {
+		log.Global.Tracef("trie node not found")
+		return nil
+	}
+	log.Global.Tracef("trie node found")
+	data, err := pb.EncodeQuaiResponse(id, trieNode)
+	if err != nil {
+		return err
+	}
+	err = common.WriteMessageToStream(stream, data)
+	if err != nil {
+		return err
+	}
+	log.Global.Tracef("Sent trie node to peer %s", stream.Conn().RemotePeer())
 	return nil
 }

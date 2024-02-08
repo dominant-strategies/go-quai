@@ -12,6 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
@@ -86,6 +87,10 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	case common.Hash:
 		if hash, ok := recvdType.(common.Hash); ok {
 			return hash, nil
+		}
+	case *trie.TrieNodeResponse:
+		if trieNode, ok := recvdType.(*trie.TrieNodeResponse); ok {
+			return trieNode, nil
 		}
 	default:
 		log.Global.Warn("peer returned unexpected type")
