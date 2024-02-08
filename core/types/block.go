@@ -951,6 +951,14 @@ func (b *Block) ProtoEncode() (*ProtoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
+	protoUncles := &ProtoHeaders{}
+	for _, unc := range b.Uncles() {
+		protoUncle, err := unc.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		protoUncles.Headers = append(protoUncles.Headers, protoUncle)
+	}
 	protoManifest, err := b.SubManifest().ProtoEncode()
 	if err != nil {
 		return nil, err
@@ -960,6 +968,7 @@ func (b *Block) ProtoEncode() (*ProtoBlock, error) {
 		Txs:      protoTransactions,
 		Etxs:     protoExtTransactions,
 		Manifest: protoManifest,
+		Uncles:   protoUncles,
 	}
 	return protoBlock, nil
 }
@@ -986,6 +995,16 @@ func (b *Block) ProtoDecode(protoBlock *ProtoBlock, location common.Location) er
 	if err != nil {
 		return err
 	}
+	b.uncles = make([]*Header, len(protoBlock.GetUncles().GetHeaders()))
+	for i, protoUncle := range protoBlock.GetUncles().GetHeaders() {
+		uncle := &Header{}
+		err = uncle.ProtoDecode(protoUncle)
+		if err != nil {
+			return err
+		}
+		b.uncles[i] = uncle
+	}
+
 	return nil
 }
 
