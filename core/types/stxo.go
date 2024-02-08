@@ -20,21 +20,3 @@ type SpentTxOut struct {
 	// Denotes if the creating tx is a coinbase.
 	IsCoinBase bool
 }
-
-// countSpentOutputs returns the number of utxos the passed block spends.
-func CountSpentOutputs(block *Block) int {
-	transactions := block.QiTransactions()
-	if len(transactions) == 0 {
-		return 0
-	}
-	if len(transactions) > 0 && IsCoinBaseTx(transactions[0]) {
-		transactions = transactions[1:]
-	}
-	// Exclude the coinbase transaction since it can't spend anything.
-	var numSpent int
-	for _, tx := range transactions {
-		numSpent += len(tx.TxIn())
-	}
-
-	return numSpent
-}

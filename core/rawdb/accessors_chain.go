@@ -107,29 +107,6 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 	return numbers, hashes
 }
 
-// ReadCurrentStateHeaderHashByNumber reads the hash assigned to a block number based on the current state that the pending block is based upon.
-func ReadCurrentStateHeaderHashByNumber(db ethdb.Reader, number uint64) common.Hash {
-	data, _ := db.Get(currentStateHeaderHashKey(number))
-	if len(data) == 0 {
-		return common.Hash{}
-	}
-	return common.BytesToHash(data)
-}
-
-// WriteCurrentStateHeaderHashByNumber stores the hash assigned to a block number based on the current state that the pending block is based upon.
-func WriteCurrentStateHeaderHashByNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Put(currentStateHeaderHashKey(number), hash.Bytes()); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store current state number to mapping")
-	}
-}
-
-// DeleteCurrentStateHeaderHashByNumber removes the number to hash current state mapping.
-func DeleteCurrentStateHeaderHashByNumber(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Delete(currentStateHeaderHashKey(number)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete current state number to hash mapping")
-	}
-}
-
 // ReadHeaderNumber returns the header number assigned to a hash.
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
@@ -1511,67 +1488,6 @@ func DeleteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(inboundEtxsKey(hash)); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to delete inbound etxs")
 	}
-}
-
-func WriteUtxo(db ethdb.KeyValueWriter, hash common.Hash, index uint32, utxo *types.UtxoEntry) {
-	data, err := rlp.EncodeToBytes(utxo)
-	if err != nil {
-		log.Global.WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Fatal("Failed to RLP encode utxo")
-	}
-	if err := db.Put(UtxoKey(hash, index), data); err != nil {
-		log.Global.WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Fatal("Failed to store utxo")
-	}
-}
-
-func ReadUtxo(db ethdb.Reader, hash common.Hash, index uint32) *types.UtxoEntry {
-	// Try to look up the data in leveldb.
-	data, _ := db.Get(UtxoKey(hash, index))
-	if len(data) == 0 {
-		return nil
-	}
-	utxo := new(types.UtxoEntry)
-	if err := rlp.Decode(bytes.NewReader(data), utxo); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to rlp decode utxo")
-		return nil
-	}
-	return utxo
-}
-
-// DeleteUtxo deletes utxos from the database
-func DeleteUtxo(db ethdb.KeyValueWriter, hash common.Hash, index uint32) {
-	if err := db.Delete(UtxoKey(hash, index)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete utxo")
-	}
-}
-
-func WriteSpentUTXOs(db ethdb.KeyValueWriter, hash common.Hash, spentUTXOs *[]types.SpentTxOut) {
-	data, err := rlp.EncodeToBytes(spentUTXOs)
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to rlp encode spent utxos")
-	}
-	if err := db.Put(spentUTXOsKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store spent utxos")
-	}
-}
-
-func ReadSpentUTXOs(db ethdb.Reader, hash common.Hash) []types.SpentTxOut {
-	// Try to look up the data in leveldb.
-	data, _ := db.Get(spentUTXOsKey(hash))
-	if len(data) == 0 {
-		return nil
-	}
-	spentUTXOs := []types.SpentTxOut{}
-	if err := rlp.Decode(bytes.NewReader(data), &spentUTXOs); err != nil {
-		log.Global.WithField("err", err).Error("Invalid spent utxos RLP")
-		return nil
-	}
-	return spentUTXOs
 }
 
 func WriteAddressUtxos(db ethdb.KeyValueWriter, address common.Address, utxos []*types.UtxoEntry) {

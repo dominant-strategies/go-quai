@@ -170,10 +170,6 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return block
 }
 
-func (bc *BodyDb) GetUtxo(hash common.Hash, index uint32) *types.UtxoEntry {
-	return rawdb.ReadUtxo(bc.db, hash, index)
-}
-
 // GetBlockOrCandidate retrieves any known block from the database by hash and number,
 // caching it if found.
 func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block {

@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -199,7 +198,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types.Receipts, []*types.Log, *state.StateDB, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types.Receipts, []*types.Transaction, []*types.Log, *state.StateDB, uint64, error) {
 	var (
 		receipts     types.Receipts
 		usedGas      = new(uint64)
@@ -215,14 +214,14 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	start := time.Now()
 	parent := p.hc.GetBlock(block.Header().ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	if parent == nil {
-		return types.Receipts{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
+		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, errors.New("parent block is nil for the block given to process")
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 
 	// Initialize a statedb
 	statedb, err := state.New(parent.Header().EVMRoot(), parent.Header().UTXORoot(), p.stateCache, p.utxoCache, p.snaps, nodeLocation)
 	if err != nil {
-		return types.Receipts{}, []*types.Log{}, nil, 0, err
+		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, err
 	}
 	time2 := common.PrettyDuration(time.Since(start))
 
@@ -257,36 +256,26 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		etxPLimit = params.ETXPLimitMin
 	}
 
-	utxoView := types.NewUtxoViewpoint(p.hc.NodeLocation())
-	err = p.FetchInputUtxos(statedb, utxoView, block)
-	if err != nil {
-		return nil, nil, nil, 0, err
-	}
-	totalFees, err := p.VerifyTransactions(utxoView, block, p.hc.pool.signer)
-	if err != nil {
-		return nil, nil, nil, 0, err
-	}
-
+	totalFees := big.NewInt(0)
+	qiEtxs := make([]*types.Transaction, 0)
 	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
-			if i != 0 {
-				// coinbase tx currently exempt from gas
-				*usedGas += types.CalculateQiTxGas(tx)
+			if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx)) {
+				// coinbase tx currently exempt from gas and outputs are added after all txs are processed
+				continue
 			}
-			// Add all of the outputs for this transaction which are not
-			// provably unspendable as available utxos.  Also, the passed
-			// spent txos slice is updated to contain an entry for each
-			// spent txout in the order each transaction spends them.
-			err = utxoView.ConnectTransaction(tx, block.Header(), nil)
+			fees, etxs, err := ProcessQiTx(tx, true, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
-				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %v: %w", tx.Hash().Hex(), err)
+				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
+			qiEtxs = append(qiEtxs, etxs...)
+			totalFees.Add(totalFees, fees)
 			continue
 		}
 		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
 		if err != nil {
-			return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		timeSignDelta := time.Since(startProcess)
 		timeSign += timeSignDelta
@@ -301,50 +290,81 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			startTimeEtx := time.Now()
 			etxEntry, exists := etxSet[tx.Hash()]
 			if !exists { // Verify that the ETX exists in the set
-				return nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
+				return nil, nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x not found in unspent etx set", tx.Hash())
 			}
-			prevZeroBal := prepareApplyETX(statedb, &etxEntry.ETX, nodeLocation)
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etxEntry.ETX, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
-			statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
-
-			if err != nil {
-				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, etxEntry.ETX.Hash().Hex(), err)
+			etx := etxEntry.ETX
+			if etx.To().IsInQiLedgerScope() {
+				if etx.Value().Int64() > types.MaxDenomination { // sanity check
+					return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", etx.Hash(), etx.Value().Int64())
+				}
+				// There are no more checks to be made as the ETX is worked so add it to the set
+				statedb.CreateUTXO(etx.OriginatingTxHash(), etx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(etx.Value().Int64()), etx.To().Bytes())))
+				if err := gp.SubGas(params.CallValueTransferGas); err != nil {
+					return nil, nil, nil, nil, 0, err
+				}
+				*usedGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
+				delete(etxSet, etxEntry.ETX.Hash())     // This ETX has been spent so remove it from the unspent set
+				timeEtxDelta := time.Since(startTimeEtx)
+				timeEtx += timeEtxDelta
+				continue
+			} else {
+				prevZeroBal := prepareApplyETX(statedb, &etx, nodeLocation)
+				receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, &etx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
+				statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
+				if err != nil {
+					return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, etx.Hash().Hex(), err)
+				}
+				delete(etxSet, etxEntry.ETX.Hash()) // This ETX has been spent so remove it from the unspent set
+				timeEtxDelta := time.Since(startTimeEtx)
+				timeEtx += timeEtxDelta
 			}
-
-			delete(etxSet, etxEntry.ETX.Hash()) // This ETX has been spent so remove it from the unspent set
-			timeEtxDelta := time.Since(startTimeEtx)
-			timeEtx += timeEtxDelta
-
 		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
 			startTimeTx := time.Now()
 
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 			if err != nil {
-				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 			timeTxDelta := time.Since(startTimeTx)
 			timeTx += timeTxDelta
 		} else {
-			return nil, nil, nil, 0, ErrTxTypeNotSupported
+			return nil, nil, nil, nil, 0, ErrTxTypeNotSupported
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		i++
 	}
 
-	if len(block.QiTransactions()) > 0 && types.IsCoinBaseTx(block.QiTransactions()[0]) {
+	qiTransactions := block.QiTransactions()
+	// Coinbase check
+	if len(qiTransactions) > 0 && types.IsCoinBaseTx(qiTransactions[0], header.ParentHash(nodeCtx)) {
 		totalCoinbaseOut := big.NewInt(0)
-		for _, txOut := range block.QiTransactions()[0].TxOut() {
+		for _, txOut := range qiTransactions[0].TxOut() {
 			totalCoinbaseOut.Add(totalCoinbaseOut, types.Denominations[txOut.Denomination])
 		}
 		maxCoinbaseOut := misc.CalculateRewardForQiWithFeesBigInt(header, totalFees) // TODO: Miner tip will soon no longer exist
-		if totalCoinbaseOut.Cmp(maxCoinbaseOut) == 1 {
-			return nil, nil, nil, 0, fmt.Errorf("coinbase output value of %v is higher than expected value of %v", totalCoinbaseOut, maxCoinbaseOut)
+		if totalCoinbaseOut.Cmp(maxCoinbaseOut) > 0 {
+			return nil, nil, nil, nil, 0, fmt.Errorf("coinbase output value of %v is higher than expected value of %v", totalCoinbaseOut, maxCoinbaseOut)
 		}
-	}
-
-	if err = p.WriteUtxoViewpoint(statedb, utxoView); err != nil {
-		return nil, nil, nil, 0, err
+		for txOutIdx, txOut := range qiTransactions[0].TxOut() {
+			coinbase := common.BytesToAddress(txOut.Address, nodeLocation)
+			if !coinbase.IsInQiLedgerScope() { // a coinbase tx cannot emit an ETX
+				return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx emits UTXO with To address not in the Qi ledger scope")
+			}
+			if _, err := coinbase.InternalAddress(); err != nil {
+				return nil, nil, nil, nil, 0, fmt.Errorf("invalid coinbase address %v: %w", coinbase, err)
+			}
+			if !header.Coinbase().Equal(coinbase) {
+				return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx emits UTXO with To address not equal to block coinbase")
+			}
+			utxo := types.NewUtxoEntry(&txOut)
+			statedb.CreateUTXO(qiTransactions[0].Hash(), uint16(txOutIdx), utxo)
+			p.logger.WithFields(log.Fields{
+				"txHash":       qiTransactions[0].Hash().Hex(),
+				"txOutIdx":     txOutIdx,
+				"denomination": txOut.Denomination,
+			}).Debug("Created Coinbase UTXO")
+		}
 	}
 
 	time4 := common.PrettyDuration(time.Since(start))
@@ -376,7 +396,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		"tx time":                     common.PrettyDuration(timeTx),
 	}).Debug("Total Tx Processing Time")
 
-	return receipts, allLogs, statedb, *usedGas, nil
+	return receipts, qiEtxs, allLogs, statedb, *usedGas, nil
 }
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
@@ -442,7 +462,153 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	return receipt, err
 }
 
-var lastWrite uint64
+func ProcessQiTx(tx *types.Transaction, updateState bool, statedb *state.StateDB, gp *GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.Transaction, error) {
+	// Sanity checks
+	if tx.Type() != types.QiTxType {
+		return nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
+	}
+	if tx.ChainId().Cmp(&chainId) != 0 {
+		return nil, nil, fmt.Errorf("tx %032x has invalid chain ID", tx.Hash())
+	}
+
+	addresses := make(map[common.AddressBytes]struct{})
+
+	txGas := types.CalculateQiTxGas(tx)
+	if err := gp.SubGas(txGas); err != nil {
+		return nil, nil, err
+	}
+	*usedGas += txGas
+
+	totalQitIn := big.NewInt(0)
+	pubKeys := make([]*btcec.PublicKey, 0)
+	for _, txIn := range tx.TxIn() {
+		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		if utxo == nil {
+			return nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		}
+		// Verify the pubkey
+		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
+		entryAddr := common.BytesToAddress(utxo.Address, location)
+		if !address.Equal(entryAddr) {
+			return nil, nil, errors.New("invalid address")
+		}
+
+		pubKey, err := btcec.ParsePubKey(txIn.PubKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		pubKeys = append(pubKeys, pubKey)
+		// Check for duplicate addresses. This also checks for duplicate inputs.
+		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
+			return nil, nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
+		}
+		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
+
+		// Perform some spend processing logic
+		denomination := utxo.Denomination
+		if denomination > types.MaxDenomination {
+			str := fmt.Sprintf("transaction output value of %v is "+
+				"higher than max allowed value of %v",
+				denomination,
+				types.MaxDenomination)
+			return nil, nil, errors.New(str)
+		}
+		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
+		if updateState { // only update the state if requested (txpool check does not need to update the state)
+			statedb.DeleteUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		}
+	}
+	var ETXRCount int
+	var ETXPCount int
+	etxs := make([]*types.Transaction, 0)
+	totalQitOut := big.NewInt(0)
+	for txOutIdx, txOut := range tx.TxOut() {
+		// It would be impossible for a tx to have this many outputs based on block gas limit, but cap it here anyways
+		if txOutIdx > types.MaxOutputIndex {
+			return nil, nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
+		}
+
+		if txOut.Denomination > types.MaxDenomination {
+			str := fmt.Sprintf("transaction output value of %v is "+
+				"higher than max allowed value of %v",
+				txOut.Denomination,
+				types.MaxDenomination)
+			return nil, nil, errors.New(str)
+		}
+		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
+
+		toAddr := common.BytesToAddress(txOut.Address, location)
+		if !toAddr.IsInQiLedgerScope() {
+			return nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
+		}
+		// Enforce no address reuse
+		if _, exists := addresses[toAddr.Bytes20()]; exists {
+			return nil, nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
+		}
+		addresses[toAddr.Bytes20()] = struct{}{}
+
+		if !toAddr.Location().Equal(location) { // This output creates an ETX
+			// Cross-region?
+			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
+				ETXRCount++
+			}
+			// Cross-prime?
+			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
+				ETXPCount++
+			}
+			if ETXRCount > *etxRLimit {
+				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit)
+			}
+			if ETXPCount > *etxPLimit {
+				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+			}
+
+			// We should require some kind of extra fee here
+			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: &chainId}
+			etx := types.NewTx(&etxInner)
+			etxs = append(etxs, etx)
+			log.Global.Info("Added UTXO ETX to ETX list")
+		} else {
+			// This output creates a normal UTXO
+			utxo := types.NewUtxoEntry(&txOut)
+			if updateState {
+				statedb.CreateUTXO(tx.Hash(), uint16(txOutIdx), utxo)
+			}
+		}
+	}
+	// Ensure the transaction does not spend more than its inputs.
+	if totalQitOut.Cmp(totalQitIn) == 1 {
+		str := fmt.Sprintf("total value of all transaction inputs for "+
+			"transaction %v is %v which is less than the amount "+
+			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
+		return nil, nil, errors.New(str)
+	}
+
+	// Ensure the transaction signature is valid
+	var finalKey *btcec.PublicKey
+	if len(tx.TxIn()) > 1 {
+		aggKey, _, _, err := musig2.AggregateKeys(
+			pubKeys, false,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+		finalKey = aggKey.FinalKey
+	} else {
+		finalKey = pubKeys[0]
+	}
+
+	txDigestHash := signer.Hash(tx)
+	if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
+		return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
+	}
+	// the fee to pay the basefee/miner is the difference between inputs and outputs
+	// We should enforce the Qi-converted-basefee here
+	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
+	*etxRLimit -= ETXRCount
+	*etxPLimit -= ETXPCount
+	return txFeeInQit, etxs, nil
+}
 
 // Apply State
 func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
@@ -461,7 +627,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	etxSet.Update(newInboundEtxs, block.NumberU64(nodeCtx), nodeLocation)
 	time2 := common.PrettyDuration(time.Since(start))
 	// Process our block
-	receipts, logs, statedb, usedGas, err := p.Process(block, etxSet)
+	receipts, utxoEtxs, logs, statedb, usedGas, err := p.Process(block, etxSet)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +638,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 		}).Warn("Block hash changed after Processing the block")
 	}
 	time3 := common.PrettyDuration(time.Since(start))
-	err = p.validator.ValidateState(block, statedb, receipts, usedGas)
+	err = p.validator.ValidateState(block, statedb, receipts, utxoEtxs, usedGas)
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +922,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		if currentBlock == nil {
 			return nil, errors.New("detached block found trying to regenerate state")
 		}
-		_, _, _, _, err := p.Process(currentBlock, etxSet)
+		_, _, _, _, _, err := p.Process(currentBlock, etxSet)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}
@@ -863,210 +1029,4 @@ func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction, nodeLocation
 func (p *StateProcessor) GetUTXOsByAddress(address common.Address) ([]*types.UtxoEntry, error) {
 	utxos := rawdb.ReadAddressUtxos(p.hc.bc.db, address)
 	return utxos, nil
-}
-
-// fetchUtxosMain fetches unspent transaction output data about the provided
-// set of outpoints from the point of view of the end of the main chain at the
-// time of the call.
-//
-// Upon completion of this function, the view will contain an entry for each
-// requested outpoint.  Spent outputs, or those which otherwise don't exist,
-// will result in a nil entry in the view.
-func (p *StateProcessor) FetchUtxosMain(statedb *state.StateDB, view *types.UtxoViewpoint, outpoints []types.OutPoint) error {
-	// Nothing to do if there are no requested outputs.
-	if len(outpoints) == 0 {
-		return nil
-	}
-
-	// Load the requested set of unspent transaction outputs from the point
-	// of view of the end of the main chain.
-	//
-	// NOTE: Missing entries are not considered an error here and instead
-	// will result in nil entries in the view.  This is intentionally done
-	// so other code can use the presence of an entry in the store as a way
-	// to unnecessarily avoid attempting to reload it from the database.
-	for i := range outpoints {
-		entry := statedb.GetUTXO(outpoints[i].TxHash, outpoints[i].Index)
-		if entry == nil {
-			return fmt.Errorf("utxo not found %v", outpoints[i].TxHash.String())
-		}
-
-		view.AddEntry(outpoints, i, entry)
-	}
-
-	return nil
-}
-
-// fetchInputUtxos loads the unspent transaction outputs for the inputs
-// referenced by the transactions in the given block into the view from the
-// database as needed.  In particular, referenced entries that are earlier in
-// the block are added to the view and entries that are already in the view are
-// not modified.
-func (p *StateProcessor) FetchInputUtxos(statedb *state.StateDB, view *types.UtxoViewpoint, block *types.Block) error {
-	// Build a map of in-flight transactions because some of the inputs in
-	// this block could be referencing other transactions earlier in this
-	// block which are not yet in the chain.
-	txInFlight := map[common.Hash]int{}
-	transactions := block.QiTransactions()
-	for i, tx := range transactions {
-		txInFlight[tx.Hash()] = i
-	}
-	if len(transactions) > 0 && types.IsCoinBaseTx(transactions[0]) {
-		transactions = transactions[1:]
-	}
-	// Loop through all of the transaction inputs (except for the coinbase
-	// which has no inputs) collecting them into sets of what is needed and
-	// what is already known (in-flight).
-	needed := make([]types.OutPoint, 0, len(transactions))
-	for i, tx := range transactions {
-		for _, txIn := range tx.TxIn() {
-			// It is acceptable for a transaction input to reference
-			// the output of another transaction in this block only
-			// if the referenced transaction comes before the
-			// current one in this block.  Add the outputs of the
-			// referenced transaction as available utxos when this
-			// is the case.  Otherwise, the utxo details are still
-			// needed.
-			//
-			// NOTE: The >= is correct here because i is one less
-			// than the actual position of the transaction within
-			// the block due to skipping the coinbase.
-			originHash := &txIn.PreviousOutPoint.TxHash
-			if inFlightIndex, ok := txInFlight[*originHash]; ok &&
-				i >= inFlightIndex {
-
-				originTx := transactions[inFlightIndex]
-				view.AddTxOuts(originTx, block.Header())
-				continue
-			}
-
-			// Don't request entries that are already in the view
-			// from the database.
-			if _, ok := view.Entries[txIn.PreviousOutPoint]; ok {
-				continue
-			}
-
-			needed = append(needed, txIn.PreviousOutPoint)
-		}
-	}
-
-	// Request the input utxos from the database.
-	return p.FetchUtxosMain(statedb, view, needed)
-}
-
-func (p *StateProcessor) VerifyTransactions(view *types.UtxoViewpoint, block *types.Block, signer types.Signer) (*big.Int, error) {
-
-	transactions := block.QiTransactions()
-	if len(transactions) > 0 && types.IsCoinBaseTx(transactions[0]) {
-		transactions = transactions[1:]
-	}
-
-	totalFees := big.NewInt(0)
-
-	for _, tx := range transactions {
-
-		fee, err := types.CheckTransactionInputs(tx, view)
-		if err != nil {
-			return nil, fmt.Errorf("could not apply tx %v: %w", tx.Hash().Hex(), err)
-		}
-		totalFees.Add(totalFees, fee)
-
-		pubKeys := make([]*btcec.PublicKey, 0)
-		for _, txIn := range tx.TxIn() {
-
-			entry := view.LookupEntry(txIn.PreviousOutPoint)
-			if entry == nil {
-				return nil, errors.New("utxo not found " + txIn.PreviousOutPoint.TxHash.String())
-			}
-
-			// Verify the pubkey
-			address := common.BytesToAddress(crypto.Keccak256(txIn.PubKey[1:])[12:], p.hc.NodeLocation())
-			entryAddr := common.BytesToAddress(entry.Address, p.hc.NodeLocation())
-			if !address.Equal(entryAddr) {
-				return nil, errors.New("invalid address")
-			}
-
-			pubKey, err := btcec.ParsePubKey(txIn.PubKey)
-			if err != nil {
-				return nil, err
-			}
-			pubKeys = append(pubKeys, pubKey)
-		}
-
-		var finalKey *btcec.PublicKey
-		if len(tx.TxIn()) > 1 {
-			aggKey, _, _, err := musig2.AggregateKeys(
-				pubKeys, false,
-			)
-			if err != nil {
-				return nil, err
-			}
-			finalKey = aggKey.FinalKey
-		} else {
-			finalKey = pubKeys[0]
-		}
-
-		txDigestHash := signer.Hash(tx)
-		if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
-			return nil, errors.New("invalid signature")
-		}
-
-	}
-
-	return totalFees, nil
-}
-
-// writeUtxoViewpoint updates the utxo set in the database based on the provided utxo view contents and state.  In
-// particular, only the entries that have been marked as modified are written
-// to the database.
-func (p *StateProcessor) WriteUtxoViewpoint(statedb *state.StateDB, view *types.UtxoViewpoint) error {
-	for outpoint, entry := range view.Entries {
-		// No need to update the database if the entry was not modified.
-		if entry == nil || !entry.IsModified() {
-			log.Global.Info("entry is nil or not modified: " + outpoint.TxHash.Hex())
-			continue
-		}
-
-		// Remove the utxo entry if it is spent.
-		if entry.IsSpent() {
-			statedb.DeleteUTXO(outpoint.TxHash, outpoint.Index)
-
-			// If the node decides to index utxos for each address, then
-			// we need to remove the address utxo entry as well.
-			if p.hc.indexerConfig.IndexAddressUtxos {
-
-				entryAddress := common.BytesToAddress(entry.Address, p.hc.NodeLocation())
-				addressUtxos := rawdb.ReadAddressUtxos(p.hc.bc.db, entryAddress)
-
-				// Iterate over addressUtxos and find the outpointHash and outpointIndex entry, then remove it.
-				for i, utxo := range addressUtxos {
-					// TODO: Need to determine if this is adequate matching to remove upon spending
-					// Entry will show as spent so need to determine how to check packed flags equivalence?
-					if utxo.Denomination == entry.Denomination &&
-						bytes.Equal(utxo.Address, entry.Address) && // Use bytes.Equal for byte slice comparison
-						utxo.BlockHeight == entry.BlockHeight {
-						// Remove the utxo from the slice by filtering it out.
-						addressUtxos = append(addressUtxos[:i], addressUtxos[i+1:]...)
-						break
-					}
-				}
-
-				rawdb.WriteAddressUtxos(p.hc.bc.db, entryAddress, addressUtxos)
-			}
-
-			continue
-		}
-
-		statedb.CreateUTXO(outpoint.TxHash, outpoint.Index, entry)
-		// If the node decides to index utxos for each address, then
-		// we need to add the address utxo entry as well.
-		if p.hc.indexerConfig.IndexAddressUtxos {
-			entryAddress := common.BytesToAddress(entry.Address, p.hc.NodeLocation())
-			addressUtxos := rawdb.ReadAddressUtxos(p.hc.bc.db, entryAddress)
-			addressUtxos = append(addressUtxos, entry)
-			rawdb.WriteAddressUtxos(p.hc.bc.db, entryAddress, addressUtxos)
-		}
-	}
-
-	return nil
 }

@@ -81,11 +81,10 @@ var (
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
-	headerPrefix             = []byte("h")  // headerPrefix + num (uint64 big endian) + hash -> header
-	currentStateHeaderPrefix = []byte("ch") // currentStateHeaderPrefix + num (uint64 big endian) + hash -> header
-	headerTDSuffix           = []byte("t")  // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
-	headerHashSuffix         = []byte("n")  // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
-	headerNumberPrefix       = []byte("H")  // headerNumberPrefix + hash -> num (uint64 big endian)
+	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
+	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
+	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
+	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	pendingHeaderPrefix = []byte("ph")    // pendingHeaderPrefix + hash -> header
 	candidateBodyPrefix = []byte("cb")    // candidateBodyPrefix + hash -> Body
@@ -96,7 +95,6 @@ var (
 	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
 	badHashesListPrefix = []byte("bh")
 	inboundEtxsPrefix   = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
-	UtxoPrefix          = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix    = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	AddressUtxosPrefix  = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
 
@@ -234,10 +232,6 @@ func headerNumberKey(hash common.Hash) []byte {
 	return append(headerNumberPrefix, hash.Bytes()...)
 }
 
-func currentStateHeaderHashKey(number uint64) []byte {
-	return append(append(currentStateHeaderPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
-}
-
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
@@ -328,17 +322,6 @@ func bloomKey(hash common.Hash) []byte {
 
 func inboundEtxsKey(hash common.Hash) []byte {
 	return append(inboundEtxsPrefix, hash.Bytes()...)
-}
-
-// This can be optimized via VLQ encoding as btcd has done
-func UtxoKey(hash common.Hash, index uint32) []byte {
-	indexBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(indexBytes, index)
-	return append(UtxoPrefix, append(indexBytes, hash.Bytes()...)...)
-}
-
-func spentUTXOsKey(hash common.Hash) []byte {
-	return append(spentUTXOsPrefix, hash.Bytes()...)
 }
 
 func addressUtxosKey(address common.Address) []byte {

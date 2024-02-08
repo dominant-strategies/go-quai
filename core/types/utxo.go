@@ -2,7 +2,6 @@ package types
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 
@@ -11,19 +10,9 @@ import (
 )
 
 const (
-
-	// UTXOVersion is the current latest supported transaction version.
-	UTXOVersion = 1
-
-	// MaxTxInSequenceNum is the maximum sequence number the sequence field
-	// of a transaction input can be.
-	MaxTxInSequenceNum uint32 = 0xffffffff
-
-	// MaxPrevOutIndex is the maximum index the index field of a previous
-	// outpoint can be.
-	MaxPrevOutIndex uint32 = 0xffffffff
-
 	MaxDenomination = 16
+
+	MaxOutputIndex = math.MaxUint16
 )
 
 var MaxQi = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
@@ -110,25 +99,26 @@ func (txIn *TxIn) ProtoDecode(protoTxIn *ProtoTxIn) error {
 // OutPoint defines a Qi data type that is used to track previous
 type OutPoint struct {
 	TxHash common.Hash
-	Index  uint32
+	Index  uint16
 }
 
 func (outPoint OutPoint) ProtoEncode() (*ProtoOutPoint, error) {
 	protoOutPoint := &ProtoOutPoint{}
 	protoOutPoint.Hash = outPoint.TxHash.ProtoEncode()
-	protoOutPoint.Index = &outPoint.Index
+	index := uint32(outPoint.Index)
+	protoOutPoint.Index = &index
 	return protoOutPoint, nil
 }
 
 func (outPoint *OutPoint) ProtoDecode(protoOutPoint *ProtoOutPoint) error {
 	outPoint.TxHash.ProtoDecode(protoOutPoint.Hash)
-	outPoint.Index = *protoOutPoint.Index
+	outPoint.Index = uint16(*protoOutPoint.Index)
 	return nil
 }
 
 // NewOutPoint returns a new Qi transaction outpoint point with the
 // provided hash and index.
-func NewOutPoint(txHash *common.Hash, index uint32) *OutPoint {
+func NewOutPoint(txHash *common.Hash, index uint16) *OutPoint {
 	return &OutPoint{
 		TxHash: *txHash,
 		Index:  index,
@@ -203,68 +193,4 @@ func NewTxOut(denomination uint8, address []byte) *TxOut {
 		Denomination: denomination,
 		Address:      address,
 	}
-}
-
-// CheckTransactionSanity performs some preliminary checks on a transaction to
-// ensure it is sane.  These checks are context free.
-func CheckUTXOTransactionSanity(tx *Transaction, location common.Location) error {
-	// A transaction must have at least one input.
-	if len(tx.TxIn()) == 0 {
-		return errors.New("transaction has no inputs")
-	}
-
-	// A transaction must have at least one output.
-	if len(tx.TxOut()) == 0 {
-		return errors.New("transaction has no outputs")
-	}
-
-	// TODO: A transaction must not exceed the maximum allowed block payload when
-	// serialized.
-	totalQit := big.NewInt(0)
-	for _, txOut := range tx.TxOut() {
-		denomination := txOut.Denomination
-		if denomination > MaxDenomination {
-			str := fmt.Sprintf("transaction output value of %v is "+
-				"higher than max allowed value of %v", denomination,
-				MaxDenomination)
-			return errors.New(str)
-		}
-
-		// Two's complement int64 overflow guarantees that any overflow
-		// is detected and reported.  This is impossible for Bitcoin, but
-		// perhaps possible if an alt increases the total money supply.
-		totalQit.Add(totalQit, Denominations[denomination])
-		if totalQit.Cmp(MaxQi) == 1 {
-			str := fmt.Sprintf("total value of all transaction "+
-				"outputs is %v which is higher than max "+
-				"allowed value of %v", totalQit,
-				math.MaxFloat32)
-			return errors.New(str)
-		}
-
-		if _, err := common.BytesToAddress(txOut.Address, location).InternalAddress(); err != nil {
-			return errors.New("invalid output address: " + err.Error())
-		}
-	}
-
-	// Check for duplicate transaction inputs.
-	existingTxOut := make(map[OutPoint]struct{})
-	for _, txIn := range tx.TxIn() {
-		if _, exists := existingTxOut[txIn.PreviousOutPoint]; exists {
-			return errors.New("transaction contains duplicate inputs")
-		}
-		existingTxOut[txIn.PreviousOutPoint] = struct{}{}
-	}
-
-	// Previous transaction outputs referenced by the inputs to this
-	// transaction must not be null.
-	for _, txIn := range tx.TxIn() {
-		if txIn.PreviousOutPoint.Index == math.MaxUint32 && txIn.PreviousOutPoint.TxHash == common.Zero.Hash() {
-			return errors.New("transaction " +
-				"input refers to previous output that " +
-				"is null")
-		}
-	}
-
-	return nil
 }

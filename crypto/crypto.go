@@ -279,6 +279,10 @@ func PubkeyToAddress(p ecdsa.PublicKey, nodeLocation common.Location) common.Add
 	return common.BytesToAddress(Keccak256(pubBytes[1:])[12:], nodeLocation)
 }
 
+func PubkeyBytesToAddress(pub []byte, nodeLocation common.Location) common.Address {
+	return common.BytesToAddress(Keccak256(pub[1:])[12:], nodeLocation)
+}
+
 func zeroBytes(bytes []byte) {
 	for i := range bytes {
 		bytes[i] = 0

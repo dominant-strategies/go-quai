@@ -695,6 +695,20 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
+		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
+			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+				return nil, err
+			}
+			if tx.Value().Int64() > types.MaxDenomination {
+				return nil, fmt.Errorf("tx %032x emits UTXO with value greater than max denomination", tx.Hash())
+			}
+			env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes())))
+			gasUsed := env.header.GasUsed()
+			gasUsed += params.CallValueTransferGas
+			env.header.SetGasUsed(gasUsed)
+			env.txs = append(env.txs, tx)
+			return []*types.Log{}, nil // need to make sure this does not modify receipt hash
+		}
 		snap := env.state.Snapshot()
 		// retrieve the gas used int and pass in the reference to the ApplyTransaction
 		gasUsed := env.header.GasUsed()
@@ -765,19 +779,14 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			break
 		}
 		if tx.Type() == types.QiTxType {
-			if err := w.processQiTx(env, tx); err != nil {
+			if err := w.processQiTx(tx, env); err != nil {
 				w.logger.WithFields(log.Fields{
 					"err": err,
 					"tx":  tx.Hash().Hex(),
 				}).Error("Error processing QiTx")
-				txs.PopNoSort()
-				continue
+				// It's unlikely that this transaction will be valid in the future so remove it asynchronously
+				go w.txPool.RemoveUtxoTx(tx)
 			}
-			// add fee of current head transaction
-			if fee := txs.GetFee(); fee != nil {
-				env.utxoFees.Add(env.utxoFees, fee)
-			}
-			env.txs = append(env.txs, tx)
 			txs.PopNoSort()
 			continue
 		}
@@ -1145,32 +1154,167 @@ func (w *worker) CurrentInfo(header *types.Header) bool {
 	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }
 
-func (w *worker) processQiTx(env *environment, tx *types.Transaction) error {
+func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
+
 	if tx.Type() != types.QiTxType {
-		return fmt.Errorf("tx type is not QiTx")
+		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
 	}
-	utxoView := types.NewUtxoViewpoint(w.hc.NodeLocation())
+	if types.IsCoinBaseTx(tx, env.header.ParentHash(w.hc.NodeCtx())) {
+		return fmt.Errorf("tx %032x is a coinbase QiTx", tx.Hash())
+	}
+	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
+		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
+	}
+
+	location := w.hc.NodeLocation()
+	txGas := types.CalculateQiTxGas(tx)
+
+	gasUsed := env.header.GasUsed()
+	gasUsed += txGas
+	addresses := make(map[common.AddressBytes]struct{})
+	totalQitIn := big.NewInt(0)
+	utxosDelete := make([]*types.OutPoint, 0, len(tx.TxIn()))
 	for _, txIn := range tx.TxIn() {
 		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
-			return fmt.Errorf("utxo not found")
+			return fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		}
-		utxoView.AddSingleEntry(txIn.PreviousOutPoint, utxo)
-	}
 
-	if err := utxoView.ConnectTransaction(tx, env.header, nil); err != nil {
-		return err
+		// Perform some spend processing logic
+		denomination := utxo.Denomination
+		if denomination > types.MaxDenomination {
+			str := fmt.Sprintf("transaction output value of %v is "+
+				"higher than max allowed value of %v",
+				denomination,
+				types.MaxDenomination)
+			return errors.New(str)
+		}
+		// Check for duplicate addresses. This also checks for duplicate inputs.
+		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
+			return errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
+		}
+		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
+		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
+		utxosDelete = append(utxosDelete, &txIn.PreviousOutPoint)
 	}
+	var ETXRCount int
+	var ETXPCount int
+	etxs := make([]*types.Transaction, 0)
+	totalQitOut := big.NewInt(0)
+	utxosCreate := make(map[types.OutPoint]*types.UtxoEntry)
+	for txOutIdx, txOut := range tx.TxOut() {
 
-	if err := w.hc.bc.processor.WriteUtxoViewpoint(env.state, utxoView); err != nil {
-		return err
+		if txOut.Denomination > types.MaxDenomination {
+			str := fmt.Sprintf("transaction output value of %v is "+
+				"higher than max allowed value of %v",
+				txOut.Denomination,
+				types.MaxDenomination)
+			return errors.New(str)
+		}
+		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
+		toAddr := common.BytesToAddress(txOut.Address, location)
+		if !toAddr.IsInQiLedgerScope() {
+			w.logger.Error(fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash()))
+			return fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
+		}
+		if _, exists := addresses[toAddr.Bytes20()]; exists {
+			return errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
+		}
+		addresses[toAddr.Bytes20()] = struct{}{}
+
+		if !toAddr.Location().Equal(location) { // This output creates an ETX
+			// Cross-region?
+			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
+				ETXRCount++
+			}
+			// Cross-prime?
+			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
+				ETXPCount++
+			}
+			if ETXRCount > env.etxRLimit {
+				w.logger.Error(fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRCount, env.etxRLimit))
+				return fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, env.etxRLimit)
+			}
+			if ETXPCount > env.etxPLimit {
+				w.logger.Error(fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, env.etxPLimit))
+				return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
+			}
+
+			// We should require some kind of extra fee here
+			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: w.chainConfig.ChainID}
+			etx := types.NewTx(&etxInner)
+			etxs = append(etxs, etx)
+			w.logger.Info("Added UTXO ETX to block")
+		} else {
+			// This output creates a normal UTXO
+			utxo := types.NewUtxoEntry(&txOut)
+			utxosCreate[types.OutPoint{TxHash: tx.Hash(), Index: uint16(txOutIdx)}] = utxo
+		}
 	}
-
-	txGas := types.CalculateQiTxGas(tx)
+	// Ensure the transaction does not spend more than its inputs.
+	if totalQitOut.Cmp(totalQitIn) > 0 {
+		str := fmt.Sprintf("total value of all transaction inputs for "+
+			"transaction %v is %v which is less than the amount "+
+			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
+		return errors.New(str)
+	}
+	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
 	if err := env.gasPool.SubGas(txGas); err != nil {
-		return fmt.Errorf("UTXO tx gas pool error: %v", err)
+		return err
 	}
-	gasUsed := env.header.GasUsed()
-	env.header.SetGasUsed(gasUsed + txGas)
+	env.header.SetGasUsed(gasUsed)
+	env.etxRLimit -= ETXRCount
+	env.etxPLimit -= ETXPCount
+	env.etxs = append(env.etxs, etxs...)
+	env.txs = append(env.txs, tx)
+	env.utxoFees.Add(env.utxoFees, txFeeInQit)
+	for _, utxo := range utxosDelete {
+		env.state.DeleteUTXO(utxo.TxHash, utxo.Index)
+	}
+	for outPoint, utxo := range utxosCreate {
+		env.state.CreateUTXO(outPoint.TxHash, outPoint.Index, utxo)
+	}
 	return nil
+}
+
+// createCoinbaseTx returns a coinbase transaction paying an appropriate subsidy
+// based on the passed block height to the provided address.  When the address
+// is nil, the coinbase transaction will instead be redeemable by anyone.
+func createCoinbaseTxWithFees(header *types.Header, fees *big.Int, state *state.StateDB) (*types.Transaction, error) {
+	parentHash := header.ParentHash(header.Location().Context()) // all blocks should have zone location and context
+	in := types.TxIn{
+		// Coinbase transactions have no inputs, so previous outpoint is
+		// zero hash and max index.
+		PreviousOutPoint: *types.NewOutPoint(&parentHash, types.MaxOutputIndex),
+	}
+
+	denominations := misc.CalculateRewardForQiWithFees(header, fees)
+	outs := make([]types.TxOut, 0, len(denominations))
+
+	// Iterate over the denominations in descending order (by key)
+	for i := types.MaxDenomination; i >= 0; i-- {
+		// If the denomination count is zero, skip it
+		if denominations[uint8(i)] == 0 {
+			continue
+		}
+		for j := uint8(0); j < denominations[uint8(i)]; j++ {
+			// Create the output for the denomination
+			out := types.TxOut{
+				Denomination: uint8(i),
+				Address:      header.Coinbase().Bytes(),
+			}
+			outs = append(outs, out)
+		}
+	}
+
+	qiTx := &types.QiTx{
+		TxIn:  []types.TxIn{in},
+		TxOut: outs,
+	}
+	tx := types.NewTx(qiTx)
+	for i, out := range qiTx.TxOut {
+		// this may be unnecessary
+		state.CreateUTXO(tx.Hash(), uint16(i), types.NewUtxoEntry(&out))
+	}
+	return tx, nil
 }

@@ -153,7 +153,11 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.Gas = &gas
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		protoTx.Value = tx.Value().Bytes()
-		protoTx.Data = tx.Data()
+		if tx.Data() == nil {
+			protoTx.Data = []byte{}
+		} else {
+			protoTx.Data = tx.Data()
+		}
 		protoTx.To = tx.To().Bytes()
 		protoTx.OriginatingTxHash = tx.OriginatingTxHash().ProtoEncode()
 		etxIndex := uint32(tx.ETXIndex())
@@ -479,7 +483,6 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
 		protoTxSigningData.TxIns, _ = tx.TxIn().ProtoEncode()
 		protoTxSigningData.TxOuts, _ = tx.TxOut().ProtoEncode()
-		protoTxSigningData.Signature = tx.GetSchnorrSignature().Serialize()
 	}
 	return protoTxSigningData
 }

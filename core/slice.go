@@ -1185,7 +1185,6 @@ func (sl *Slice) init(genesis *Genesis) error {
 		// Append each of the knot blocks
 		sl.WriteBestPhKey(genesisHash)
 		sl.hc.SetCurrentHeader(genesisHeader)
-		sl.hc.currentStateHeader.Store(genesisHeader)
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}
 		err := sl.hc.AddPendingEtxs(types.PendingEtxs{genesisHeader, emptyPendingEtxs})
@@ -1430,7 +1429,6 @@ func (sl *Slice) loadLastState() error {
 		if parent == nil {
 			return errors.New("failed to get pending header's parent header")
 		}
-		sl.hc.currentStateHeader.Store(parent) // the current state header should always be the parent of the best ph
 	}
 
 	if sl.ProcessingState() {
@@ -1604,7 +1602,6 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 	// Set the current header
 	currentHeader = sl.hc.GetHeaderByHash(hash)
 	sl.hc.currentHeader.Store(currentHeader)
-	sl.hc.currentStateHeader.Store(currentHeader) // no ph cache so start state from current header
 	rawdb.WriteHeadBlockHash(sl.sliceDb, currentHeader.Hash())
 
 	// Recover the snaps

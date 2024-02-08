@@ -18,6 +18,7 @@
 package state
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -538,11 +539,11 @@ func (s *StateDB) getStateObject(addr common.InternalAddress) *stateObject {
 
 // GetUTXO retrieves a UTXO entry given by the hash, returning nil if the object
 // is not found or was deleted in this execution context.
-func (s *StateDB) GetUTXO(txHash common.Hash, outputIndex uint32) *types.UtxoEntry {
+func (s *StateDB) GetUTXO(txHash common.Hash, outputIndex uint16) *types.UtxoEntry {
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("GetUTXO").Add(float64(time.Since(start))) }(time.Now())
 	}
-	enc, err := s.utxoTrie.TryGet(rawdb.UtxoKey(txHash, outputIndex))
+	enc, err := s.utxoTrie.TryGet(utxoKey(txHash, outputIndex))
 	if err != nil {
 		s.setError(fmt.Errorf("getUTXO (%x) error: %v", txHash, err))
 		return nil
@@ -562,19 +563,19 @@ func (s *StateDB) GetUTXO(txHash common.Hash, outputIndex uint32) *types.UtxoEnt
 }
 
 // DeleteUTXO removes the given utxo from the state trie.
-func (s *StateDB) DeleteUTXO(txHash common.Hash, outputIndex uint32) {
+func (s *StateDB) DeleteUTXO(txHash common.Hash, outputIndex uint16) {
 	// Track the amount of time wasted on deleting the utxo from the trie
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("DeleteUTXO").Add(float64(time.Since(start))) }(time.Now())
 	}
 	// Delete the utxo from the trie
-	if err := s.utxoTrie.TryDelete(rawdb.UtxoKey(txHash, outputIndex)); err != nil {
+	if err := s.utxoTrie.TryDelete(utxoKey(txHash, outputIndex)); err != nil {
 		s.setError(fmt.Errorf("deleteUTXO (%x) error: %v", txHash, err))
 	}
 }
 
 // CreateUTXO explicitly creates a UTXO entry.
-func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint32, utxo *types.UtxoEntry) {
+func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint16, utxo *types.UtxoEntry) {
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("CreateUTXO").Add(float64(time.Since(start))) }(time.Now())
 	}
@@ -582,7 +583,7 @@ func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint32, utxo *types
 	if err != nil {
 		panic(fmt.Errorf("can't encode UTXO entry at %x: %v", txHash, err))
 	}
-	if err := s.utxoTrie.TryUpdate(rawdb.UtxoKey(txHash, outputIndex), data); err != nil {
+	if err := s.utxoTrie.TryUpdate(utxoKey(txHash, outputIndex), data); err != nil {
 		s.setError(fmt.Errorf("createUTXO (%x) error: %v", txHash, err))
 	}
 }
@@ -606,9 +607,9 @@ func (s *StateDB) UTXORoot() common.Hash {
 	return s.utxoTrie.Hash()
 }
 
-func (s *StateDB) GetUTXOProof(hash common.Hash, index uint32) ([][]byte, error) {
+func (s *StateDB) GetUTXOProof(hash common.Hash, index uint16) ([][]byte, error) {
 	var proof proofList
-	err := s.utxoTrie.Prove(rawdb.UtxoKey(hash, index), 0, &proof)
+	err := s.utxoTrie.Prove(utxoKey(hash, index), 0, &proof)
 	return proof, err
 }
 
@@ -1157,4 +1158,11 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr.Bytes20(), slot)
+}
+
+// This can be optimized via VLQ encoding as btcd has done
+func utxoKey(hash common.Hash, index uint16) []byte {
+	indexBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(indexBytes, index)
+	return append(indexBytes, hash.Bytes()...)
 }

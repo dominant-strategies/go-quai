@@ -24,9 +24,8 @@ type WireQiTx struct {
 }
 
 type QiTxWithMinerFee struct {
-	Tx       *Transaction
-	Fee      *big.Int
-	FeePerKB uint64
+	Tx  *Transaction
+	Fee *big.Int
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
