@@ -933,6 +933,15 @@ func (t *TransactionsByPriceAndNonce) PopNoSort() {
 	}
 }
 
+// Appends a new transaction to the heads
+func (t *TransactionsByPriceAndNonce) AppendNoSort(tx *QiTxWithMinerFee) {
+	wrapped, err := NewTxWithMinerFee(tx.Tx, t.baseFee, tx.Fee)
+	if err != nil {
+		return
+	}
+	t.heads = append(t.heads, wrapped)
+}
+
 // Pop removes the best transaction, *not* replacing it with the next one from
 // the same account. This should be used when a transaction cannot be executed
 // and hence all subsequent ones should be discarded from the same account.

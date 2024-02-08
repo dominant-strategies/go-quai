@@ -474,7 +474,7 @@ func (hc *HeaderChain) setCurrentUTXOSet(head *types.Header) error {
 			// provably unspendable as available utxos.  Also, the passed
 			// spent txos slice is updated to contain an entry for each
 			// spent txout in the order each transaction spends them.
-			err = utxoView.ConnectTransaction(tx, block.NumberU64(hc.NodeCtx()), &stxos)
+			err = utxoView.ConnectTransaction(tx, block, &stxos)
 			if err != nil {
 				return fmt.Errorf("could not apply tx %v: %w", tx.Hash().Hex(), err)
 			}
@@ -548,7 +548,7 @@ func (hc *HeaderChain) setCurrentUTXOSet(head *types.Header) error {
 			// provably unspendable as available utxos.  Also, the passed
 			// spent txos slice is updated to contain an entry for each
 			// spent txout in the order each transaction spends them.
-			err = utxoView.ConnectTransaction(tx, block.NumberU64(hc.NodeCtx()), &stxos)
+			err = utxoView.ConnectTransaction(tx, block, &stxos)
 			if err != nil {
 				return fmt.Errorf("could not apply tx %v: %w", tx.Hash().Hex(), err)
 			}
@@ -1250,7 +1250,7 @@ func (hc *HeaderChain) fetchInputUtxos(view *types.UtxoViewpoint, block *types.B
 				i >= inFlightIndex {
 
 				originTx := transactions[inFlightIndex]
-				view.AddTxOuts(originTx, block.NumberU64(hc.NodeCtx()))
+				view.AddTxOuts(originTx, block)
 				continue
 			}
 

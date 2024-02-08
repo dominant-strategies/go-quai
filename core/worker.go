@@ -543,6 +543,11 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
+		coinbaseTx, err := createCoinbaseTx(work.header.ParentHash(w.hc.NodeCtx()), work.header.Coinbase())
+		if err != nil {
+			return nil, err
+		}
+		work.txs = append(work.txs, coinbaseTx)
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
 		if fill {
@@ -749,6 +754,24 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		tx := txs.Peek()
 		if tx == nil {
 			break
+		}
+		if tx.Type() == types.QiTxType {
+			if err := w.hc.VerifyUTXOsForTx(tx); err != nil { // No need to do sig verification again. Perhaps it should be cached?
+				w.logger.WithField("err", err).Error("UTXO tx verification failed")
+				txs.PopNoSort()
+				continue
+			}
+			txGas := types.CalculateQiTxGas(tx)
+			gasUsed := env.header.GasUsed()
+			env.header.SetGasUsed(gasUsed + txGas)            // set utxo tx gas to 21000 for now
+			if err := env.gasPool.SubGas(txGas); err != nil { // set utxo tx gas to 21000 for now
+				w.logger.WithField("err", err).Error("UTXO tx gas pool error")
+				txs.PopNoSort()
+				continue
+			}
+			env.txs = append(env.txs, tx)
+			txs.PopNoSort()
+			continue
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
@@ -973,8 +996,14 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	if err != nil {
 		return
 	}
-	if len(pending) > 0 || len(etxs) > 0 {
+
+	pendingUtxoTxs := w.txPool.UTXOPoolPending()
+
+	if len(pending) > 0 || len(pendingUtxoTxs) > 0 || len(etxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, etxs, pending, env.header.BaseFee(), true)
+		for _, tx := range pendingUtxoTxs {
+			txs.AppendNoSort(tx) // put all utxos at the back for now
+		}
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}

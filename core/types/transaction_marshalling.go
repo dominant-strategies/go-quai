@@ -39,6 +39,9 @@ type txJSON struct {
 	Data                 *hexutil.Bytes  `json:"input"`
 	To                   *common.Address `json:"to"`
 	AccessList           *AccessList     `json:"accessList"`
+	TxIn                 []TxIn          `json:"inputs,omitempty"`
+	TxOut                []TxOut         `json:"outputs,omitempty"`
+	UTXOSignature        *hexutil.Bytes  `json:"utxoSignature,omitempty"`
 
 	// Optional fields only present for internal transactions
 	ChainID *hexutil.Big `json:"chainId,omitempty"`
