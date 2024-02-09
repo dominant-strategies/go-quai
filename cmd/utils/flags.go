@@ -762,13 +762,19 @@ func setHTTP(cfg *node.Config, nodeLocation common.Location) {
 		}
 	}
 
-	if nodeLocation == nil {
-		cfg.HTTPPort = 9001
-	} else if len(nodeLocation) == 1 {
-		cfg.HTTPPort = 9002
-	} else if len(nodeLocation) == 2 {
-		cfg.HTTPPort = 9003
+	getHttpPort := func() int {
+		switch nodeLocation.Context() {
+		case common.PRIME_CTX:
+			return 9001
+		case common.REGION_CTX:
+			return 9002 + nodeLocation.Region()
+		case common.ZONE_CTX:
+			return 9100 + 20*nodeLocation.Region() + nodeLocation.Zone()
+		}
+		panic("node location is not valid")
 	}
+
+	cfg.HTTPPort = getHttpPort()
 
 	if viper.IsSet(HTTPCORSDomainFlag.Name) {
 		cfg.HTTPCors = SplitAndTrim(viper.GetString(HTTPCORSDomainFlag.Name))
@@ -796,13 +802,20 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 			cfg.WSHost = viper.GetString(WSListenAddrFlag.Name)
 		}
 	}
-	if nodeLocation == nil {
-		cfg.WSPort = 8001
-	} else if len(nodeLocation) == 1 {
-		cfg.WSPort = 8002
-	} else if len(nodeLocation) == 2 {
-		cfg.WSPort = 8003
+
+	getWsPort := func() int {
+		switch nodeLocation.Context() {
+		case common.PRIME_CTX:
+			return 8001
+		case common.REGION_CTX:
+			return 8002 + nodeLocation.Region()
+		case common.ZONE_CTX:
+			return 8100 + 20*nodeLocation.Region() + nodeLocation.Zone()
+		}
+		panic("node location is not valid")
 	}
+
+	cfg.WSPort = getWsPort()
 
 	if viper.IsSet(WSAllowedOriginsFlag.Name) {
 		cfg.WSOrigins = SplitAndTrim(viper.GetString(WSAllowedOriginsFlag.Name))
@@ -820,12 +833,11 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 // setDomUrl sets the dominant chain websocket url.
 func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *log.Logger) {
 	// only set the dom url if the node is not prime
-	if nodeLocation != nil {
-		if len(nodeLocation) == 1 {
-			cfg.DomUrl = "ws://127.0.0.1:8001"
-		} else if len(nodeLocation) == 2 {
-			cfg.DomUrl = "ws://127.0.0.1:8002"
-		}
+	switch nodeLocation.Context() {
+	case common.REGION_CTX:
+		cfg.DomUrl = "ws://127.0.0.1:8001"
+	case common.ZONE_CTX:
+		cfg.DomUrl = "ws://127.0.0.1:" + fmt.Sprintf("%d", 8002+nodeLocation.Region())
 	}
 	logger.WithFields(log.Fields{
 		"Location": nodeLocation,
@@ -836,12 +848,24 @@ func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *log
 // setSubUrls sets the subordinate chain urls
 func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location) {
 	// only set the sub urls if its not the zone
-	if len(nodeLocation) != 2 {
-		if nodeLocation == nil {
-			cfg.SubUrls = []string{"ws://127.0.0.1:8002"}
-		} else if len(nodeLocation) == 1 {
-			cfg.SubUrls = []string{"ws://127.0.0.1:8003"}
+	slicesRunning := cfg.SlicesRunning
+	switch nodeLocation.Context() {
+	case common.PRIME_CTX:
+		subUrls := []string{}
+		regionsRunning := getRegionsRunning(slicesRunning)
+		for _, region := range regionsRunning {
+			subUrls = append(subUrls, fmt.Sprintf("ws://127.0.0.1:%d", 8002+int(region)))
 		}
+		cfg.SubUrls = subUrls
+	case common.REGION_CTX:
+		suburls := []string{}
+		// Add the zones belonging to the region into the suburls list
+		for _, slice := range slicesRunning {
+			if slice.Region() == nodeLocation.Region() {
+				suburls = append(suburls, fmt.Sprintf("ws://127.0.0.1:%d", 8100+20*slice.Region()+slice.Zone()))
+			}
+		}
+		cfg.SubUrls = suburls
 	}
 }
 
@@ -867,24 +891,6 @@ func setGasLimitCeil(cfg *quaiconfig.Config) {
 // makeSubUrls returns the subordinate chain urls
 func makeSubUrls() []string {
 	return strings.Split(viper.GetString(SubUrls.Name), ",")
-}
-
-// setSlicesRunning sets the slices running flag
-func setSlicesRunning(cfg *quaiconfig.Config) {
-	slices := strings.Split(viper.GetString(SlicesRunningFlag.Name), ",")
-
-	// Sanity checks
-	if slices[0] == "" {
-		Fatalf("no slices are specified")
-	}
-	if len(slices) > common.NumRegionsInPrime*common.NumZonesInRegion {
-		Fatalf("number of slices exceed the current ontology")
-	}
-	slicesRunning := []common.Location{}
-	for _, slice := range slices {
-		slicesRunning = append(slicesRunning, common.Location{slice[1] - 48, slice[3] - 48})
-	}
-	cfg.SlicesRunning = slicesRunning
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
@@ -1200,8 +1206,9 @@ func CheckExclusive(args ...interface{}) {
 }
 
 // SetQuaiConfig applies quai-related command line flags to the config.
-func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common.Location, logger *log.Logger) {
+func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []common.Location, nodeLocation common.Location, logger *log.Logger) {
 	cfg.NodeLocation = nodeLocation
+	cfg.SlicesRunning = slicesRunning
 	// only set etherbase if its a zone chain
 	if len(nodeLocation) == 2 {
 		setEtherbase(cfg)
@@ -1227,9 +1234,6 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, nodeLocation common
 
 	// set the gas limit ceil
 	setGasLimitCeil(cfg)
-
-	// set the slices that the node is running
-	setSlicesRunning(cfg)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()

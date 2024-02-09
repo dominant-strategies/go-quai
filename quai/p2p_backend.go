@@ -23,11 +23,11 @@ type QuaiBackend struct {
 
 // Create a new instance of the QuaiBackend consensus service
 func NewQuaiBackend() (*QuaiBackend, error) {
-	zoneBackends := make([][]*quaiapi.Backend, 1)
-	for i := 0; i < 1; i++ {
-		zoneBackends[i] = make([]*quaiapi.Backend, 1)
+	zoneBackends := make([][]*quaiapi.Backend, common.HierarchyDepth)
+	for i := 0; i < common.HierarchyDepth; i++ {
+		zoneBackends[i] = make([]*quaiapi.Backend, common.HierarchyDepth)
 	}
-	return &QuaiBackend{regionApiBackends: make([]*quaiapi.Backend, 1), zoneApiBackends: zoneBackends}, nil
+	return &QuaiBackend{regionApiBackends: make([]*quaiapi.Backend, common.HierarchyDepth), zoneApiBackends: zoneBackends}, nil
 }
 
 // Adds the p2pBackend into the given QuaiBackend

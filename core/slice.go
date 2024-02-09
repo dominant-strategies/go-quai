@@ -119,7 +119,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.inboundEtxsCache, _ = lru.New(c_inboundEtxCacheSize)
 
 	// only set the subClients if the chain is not Zone
-	sl.subClients = make([]*quaiclient.Client, 3)
+	sl.subClients = make([]*quaiclient.Client, len(subClientUrls))
 	if nodeCtx != common.ZONE_CTX {
 		go func() {
 			sl.subClients = makeSubClients(subClientUrls, sl.logger)
@@ -1306,17 +1306,34 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	return combinedPendingHeader
 }
 
+func (sl *Slice) IsSubClientsEmpty() bool {
+	for _, client := range sl.subClients {
+		if client == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // NewGenesisPendingHeader creates a pending header on the genesis block
 func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	nodeCtx := sl.NodeLocation().Context()
 
-	if nodeCtx == common.PRIME_CTX {
-		time.Sleep(10 * time.Second)
+	if nodeCtx != common.ZONE_CTX {
+		for sl.IsSubClientsEmpty() {
+			if !sl.IsSubClientsEmpty() {
+				break
+			}
+		}
 	}
+
 	genesisHash := sl.config.GenesisHash
 	// Upate the local pending header
 	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(sl.hc.GetBlockByHash(genesisHash), false)
 	if err != nil {
+		sl.logger.WithFields(log.Fields{
+			"err": err,
+		}).Warn("Error generating the New Genesis Pending Header")
 		return
 	}
 
@@ -1376,7 +1393,7 @@ func makeDomClient(domurl string, logger *log.Logger) *quaiclient.Client {
 
 // MakeSubClients creates the quaiclient for the given suburls
 func makeSubClients(suburls []string, logger *log.Logger) []*quaiclient.Client {
-	subClients := make([]*quaiclient.Client, 3)
+	subClients := make([]*quaiclient.Client, len(suburls))
 	for i, suburl := range suburls {
 		if suburl != "" {
 			subClient, err := quaiclient.Dial(suburl, logger)
