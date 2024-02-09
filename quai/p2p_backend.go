@@ -10,6 +10,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // QuaiBackend implements the quai consensus protocol
@@ -99,6 +100,12 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 		// TODO: Handle the error here and mark the peers accordingly
 	}
 	return true
+}
+
+// GetTrieNode returns the TrieNodeResponse for a given hash
+func (qbe *QuaiBackend) GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse {
+	// Example/mock implementation
+	panic("todo")
 }
 
 // Returns the current block height for the given location
