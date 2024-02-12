@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -48,7 +49,7 @@ type PeerManager interface {
 	UnblockSubnet(ipnet *net.IPNet) error
 
 	// Removes a peer from all the quality buckets
-	PrunePeerConnection(p2p.PeerID) error
+	RemovePeer(p2p.PeerID) error
 
 	// Returns c_recipientCount of the highest quality peers: lively & resposnive
 	GetBestPeers() []p2p.PeerID
@@ -128,8 +129,19 @@ func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datas
 	}, nil
 }
 
-func (pm *BasicPeerManager) PrunePeerConnection(peerID p2p.PeerID) error {
-	return pm.deletePeerFromDB(peerID)
+// Removes peer from the bucket it is in. Does not return an error if the peer is not found
+func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
+	key := datastore.NewKey(peerID.String())
+
+	dbs := []*peerdb.PeerDB{pm.bestPeersDB, pm.responsivePeersDB, pm.allPeersDB}
+	for _, db := range dbs {
+		exists, _ := db.Has(pm.ctx, key)
+		if exists {
+			return db.Delete(pm.ctx, key)
+		}
+	}
+
+	return nil
 }
 
 func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) []p2p.PeerID {
@@ -240,7 +252,7 @@ func (pm *BasicPeerManager) recategorizePeer(peer p2p.PeerID) error {
 	responsiveness := pm.calculatePeerResponsiveness(peer)
 
 	// remove peer from DB first
-	err := pm.deletePeerFromDB(peer)
+	err := pm.RemovePeer(peer)
 	if err != nil {
 		return err
 	}
@@ -286,44 +298,35 @@ func (pm *BasicPeerManager) BanPeer(peer p2p.PeerID) {
 }
 
 func (pm *BasicPeerManager) Stop() error {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	var closeErrors []string
 
-	if err := pm.BasicConnMgr.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
+	closeFuncs := []func() error{
+		pm.BasicConnMgr.Close,
+		pm.bestPeersDB.Close,
+		pm.responsivePeersDB.Close,
+		pm.allPeersDB.Close,
 	}
-	if err := pm.bestPeersDB.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
+
+	wg.Add(len(closeFuncs))
+
+	for _, closeFunc := range closeFuncs {
+		go func(cf func() error) {
+			defer wg.Done()
+			if err := cf(); err != nil {
+				mu.Lock()
+				closeErrors = append(closeErrors, err.Error())
+				mu.Unlock()
+			}
+		}(closeFunc)
 	}
-	if err := pm.responsivePeersDB.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
-	}
-	if err := pm.allPeersDB.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
-	}
+
+	wg.Wait()
 
 	if len(closeErrors) > 0 {
 		return errors.New("failed to close some resources: " + strings.Join(closeErrors, "; "))
 	}
 
 	return nil
-}
-
-// Deletes the peer from the first DB it is found in.
-// Returns error 'ErrPeerNotFound' if the peer is not found in any of the DBs.
-func (pm *BasicPeerManager) deletePeerFromDB(peer p2p.PeerID) error {
-	key := datastore.NewKey(peer.String())
-
-	dbs := []*peerdb.PeerDB{pm.bestPeersDB, pm.responsivePeersDB, pm.allPeersDB}
-
-	for _, db := range dbs {
-		exists, err := db.Has(pm.ctx, key)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return db.Delete(pm.ctx, key)
-		}
-	}
-
-	return peerdb.ErrPeerNotFound
 }

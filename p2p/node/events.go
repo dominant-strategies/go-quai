@@ -74,7 +74,7 @@ func (p *P2PNode) eventLoop() {
 				log.Global.Debugf("Event: 'Peer connectedness change' - Peer %s (peerInfo: %+v) is now %s, protocols: %v, addresses: %v", peerID.String(), peerInfo, e.Connectedness, peerProtocols, peerAddresses)
 
 				if e.Connectedness == network.NotConnected {
-					p.peerManager.PrunePeerConnection(peerID)
+					p.peerManager.RemovePeer(peerID)
 				}
 			case *event.EvtNATDeviceTypeChanged:
 				log.Global.Debugf("Event `NAT device type changed` - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
