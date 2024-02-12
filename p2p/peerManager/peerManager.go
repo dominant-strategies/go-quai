@@ -1,19 +1,14 @@
 package peerManager
 
 import (
-	"context"
 	"net"
-	"strings"
-
-	"github.com/pkg/errors"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/query"
 	basicConnGater "github.com/libp2p/go-libp2p/p2p/net/conngater"
 	basicConnMgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
 
-	"github.com/dominant-strategies/go-quai/p2p/node/peerdb"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -25,11 +20,6 @@ const (
 
 	// The number of peers to return when querying for peers
 	c_peerCount = 3
-
-	// Dir names for the peerDBs
-	c_bestDBName       = "bestPeersDB"
-	c_responsiveDBName = "responsivePeersDB"
-	c_peersDBName      = "allPeersDB"
 )
 
 // PeerManager is an interface that extends libp2p Connection Manager and Gater
@@ -48,14 +38,14 @@ type PeerManager interface {
 	UnblockSubnet(ipnet *net.IPNet) error
 
 	// Removes a peer from all the quality buckets
-	PrunePeerConnection(p2p.PeerID) error
+	PrunePeerConnection(p2p.PeerID)
 
 	// Returns c_recipientCount of the highest quality peers: lively & resposnive
-	GetBestPeers() ([]p2p.PeerID, error)
+	GetBestPeers() []p2p.PeerID
 	// Returns c_recipientCount responsive, but less lively peers
-	GetResponsivePeers() ([]p2p.PeerID, error)
+	GetResponsivePeers() []p2p.PeerID
 	// Returns c_recipientCount peers regardless of status
-	GetPeers() ([]p2p.PeerID, error)
+	GetPeers() []p2p.PeerID
 
 	// Increases the peer's liveliness score
 	MarkLivelyPeer(p2p.PeerID)
@@ -73,9 +63,6 @@ type PeerManager interface {
 	UnprotectPeer(p2p.PeerID)
 	// Bans the peer's connection from being re-established
 	BanPeer(p2p.PeerID)
-
-	// Stops the peer manager
-	Stop() error
 }
 
 type BasicPeerManager struct {
@@ -84,14 +71,14 @@ type BasicPeerManager struct {
 
 	selfID p2p.PeerID
 
-	bestPeersDB       *peerdb.PeerDB
-	responsivePeersDB *peerdb.PeerDB
-	allPeersDB        *peerdb.PeerDB
+	bestPeers       map[p2p.PeerID]struct{}
+	responsivePeers map[p2p.PeerID]struct{}
+	peers           map[p2p.PeerID]struct{}
 
-	ctx context.Context
+	mu sync.Mutex
 }
 
-func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
+func NewManager(selfID p2p.PeerID, low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
 	mgr, err := basicConnMgr.NewConnManager(low, high)
 	if err != nil {
 		return nil, err
@@ -102,96 +89,65 @@ func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datas
 		return nil, err
 	}
 
-	bestPeersDB, err := peerdb.NewPeerDB(c_bestDBName)
-	if err != nil {
-		return nil, err
-	}
-
-	responsivePeersDB, err := peerdb.NewPeerDB(c_responsiveDBName)
-	if err != nil {
-		return nil, err
-	}
-
-	allPeersDB, err := peerdb.NewPeerDB(c_peersDBName)
-	if err != nil {
-		return nil, err
-	}
-
 	return &BasicPeerManager{
 		selfID:               selfID,
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
-		bestPeersDB:          bestPeersDB,
-		responsivePeersDB:    responsivePeersDB,
-		allPeersDB:           allPeersDB,
-		ctx:                  ctx,
+		bestPeers:            make(map[peer.ID]struct{}),
+		responsivePeers:      make(map[peer.ID]struct{}),
+		peers:                make(map[peer.ID]struct{}),
 	}, nil
 }
 
-func (pm *BasicPeerManager) PrunePeerConnection(peerID p2p.PeerID) error {
-	return pm.deletePeerFromDB(peerID)
+func (pm *BasicPeerManager) PrunePeerConnection(peer p2p.PeerID) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	delete(pm.bestPeers, peer)
+	delete(pm.responsivePeers, peer)
+	delete(pm.peers, peer)
 }
 
-func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) ([]p2p.PeerID, error) {
+// Returns a subset of the peers randomly. Go guarantees unstable iteration order every time.
+func (pm *BasicPeerManager) getPeersHelper(peerList map[p2p.PeerID]struct{}, numPeers int) []p2p.PeerID {
 	peerSubset := make([]p2p.PeerID, 0, numPeers)
-	q := query.Query{
-		Limit: numPeers,
-	}
-	results, err := peerDB.Query(pm.ctx, q)
-	if err != nil {
-		return nil, err
-	}
+	counter := 0
 
-	for result := range results.Next() {
-		peerID := p2p.PeerID(result.Key)
-		peerSubset = append(peerSubset, peerID)
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	for peer := range peerList {
+		peerSubset = append(peerSubset, peer)
+		counter++
+		if counter == numPeers {
+			break
+		}
 	}
-
-	return peerSubset, nil
+	return peerSubset
 }
 
-func (pm *BasicPeerManager) GetBestPeers() ([]p2p.PeerID, error) {
-	bestPeersCount := pm.bestPeersDB.GetPeerCount()
-	if bestPeersCount < c_peerCount {
-		bestPeerList, err := pm.getPeersHelper(pm.bestPeersDB, bestPeersCount)
-		if err != nil {
-			return nil, err
-		}
-
-		responsivePeerList, err := pm.getPeersHelper(pm.responsivePeersDB, c_peerCount-bestPeersCount)
-		if err != nil {
-			return nil, err
-		}
-
-		bestPeerList = append(bestPeerList, responsivePeerList...)
-		return bestPeerList, nil
+func (pm *BasicPeerManager) GetBestPeers() []p2p.PeerID {
+	if len(pm.bestPeers) < c_peerCount {
+		bestPeerList := pm.getPeersHelper(pm.bestPeers, len(pm.bestPeers))
+		bestPeerList = append(bestPeerList, pm.GetResponsivePeers()...)
+		return bestPeerList
 	}
-	return pm.getPeersHelper(pm.bestPeersDB, c_peerCount)
+	return pm.getPeersHelper(pm.bestPeers, c_peerCount)
 }
 
-func (pm *BasicPeerManager) GetResponsivePeers() ([]p2p.PeerID, error) {
-	responsivePeersCount := pm.responsivePeersDB.GetPeerCount()
-	if responsivePeersCount < c_peerCount {
-		responsivePeerList, err := pm.getPeersHelper(pm.responsivePeersDB, responsivePeersCount)
-		if err != nil {
-			return nil, err
-		}
-
-		allPeersList, err := pm.getPeersHelper(pm.allPeersDB, c_peerCount-responsivePeersCount)
-		if err != nil {
-			return nil, err
-		}
-
-		responsivePeerList = append(responsivePeerList, allPeersList...)
-
-		return responsivePeerList, nil
+func (pm *BasicPeerManager) GetResponsivePeers() []p2p.PeerID {
+	if len(pm.responsivePeers) < c_peerCount {
+		responsivePeerList := pm.getPeersHelper(pm.responsivePeers, len(pm.responsivePeers))
+		responsivePeerList = append(responsivePeerList, pm.GetPeers()...)
+		return responsivePeerList
 	}
-	return pm.getPeersHelper(pm.responsivePeersDB, c_peerCount)
-
+	return pm.getPeersHelper(pm.responsivePeers, c_peerCount)
 }
 
-func (pm *BasicPeerManager) GetPeers() ([]p2p.PeerID, error) {
-	return pm.getPeersHelper(pm.allPeersDB, c_peerCount)
+func (pm *BasicPeerManager) GetPeers() []p2p.PeerID {
+	if len(pm.peers) < c_peerCount {
+		return pm.getPeersHelper(pm.peers, len(pm.peers))
+	}
+	return pm.getPeersHelper(pm.peers, c_peerCount)
 }
 
 func (pm *BasicPeerManager) MarkLivelyPeer(peer p2p.PeerID) {
@@ -250,42 +206,28 @@ func (pm *BasicPeerManager) calculatePeerResponsiveness(peer p2p.PeerID) float64
 //
 // 3. peers
 //   - all other peers
-func (pm *BasicPeerManager) recategorizePeer(peer p2p.PeerID) error {
+func (pm *BasicPeerManager) recategorizePeer(peer p2p.PeerID) {
 	liveness := pm.calculatePeerLiveness(peer)
 	responsiveness := pm.calculatePeerResponsiveness(peer)
 
-	// remove peer from DB first
-	err := pm.deletePeerFromDB(peer)
-	if err != nil {
-		return err
-	}
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
 
-	key := peerdb.NewKey(peer)
-	// TODO: construct peerDB.PeerInfo and marshal it to bytes
-	peerInfo := []byte{}
+	// Remove peer from all buckets first
+	delete(pm.bestPeers, peer)
+	delete(pm.responsivePeers, peer)
+	delete(pm.peers, peer)
 
 	if liveness >= c_qualityThreshold && responsiveness >= c_qualityThreshold {
 		// Best peers: high liveness and responsiveness
-		err := pm.bestPeersDB.Put(pm.ctx, key, peerInfo)
-		if err != nil {
-			return errors.Wrap(err, "error putting peer in bestPeersDB")
-		}
-
+		(pm.bestPeers)[peer] = struct{}{}
 	} else if responsiveness >= c_qualityThreshold {
 		// Responsive peers: high responsiveness, but low liveness
-		err := pm.responsivePeersDB.Put(pm.ctx, key, peerInfo)
-		if err != nil {
-			return errors.Wrap(err, "error putting peer in responsivePeersDB")
-		}
-
+		(pm.responsivePeers)[peer] = struct{}{}
 	} else {
 		// All other peers
-		err := pm.allPeersDB.Put(pm.ctx, key, peerInfo)
-		if err != nil {
-			return errors.Wrap(err, "error putting peer in allPeersDB")
-		}
+		(pm.peers)[peer] = struct{}{}
 	}
-	return nil
 }
 
 func (pm *BasicPeerManager) ProtectPeer(peer p2p.PeerID) {
@@ -298,47 +240,4 @@ func (pm *BasicPeerManager) UnprotectPeer(peer p2p.PeerID) {
 
 func (pm *BasicPeerManager) BanPeer(peer p2p.PeerID) {
 	pm.BlockPeer(peer)
-}
-
-func (pm *BasicPeerManager) Stop() error {
-	var closeErrors []string
-
-	if err := pm.BasicConnMgr.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
-	}
-	if err := pm.bestPeersDB.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
-	}
-	if err := pm.responsivePeersDB.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
-	}
-	if err := pm.allPeersDB.Close(); err != nil {
-		closeErrors = append(closeErrors, err.Error())
-	}
-
-	if len(closeErrors) > 0 {
-		return errors.New("failed to close some resources: " + strings.Join(closeErrors, "; "))
-	}
-
-	return nil
-}
-
-// Deletes the peer from the first DB it is found in.
-// Returns error 'ErrPeerNotFound' if the peer is not found in any of the DBs.
-func (pm *BasicPeerManager) deletePeerFromDB(peer p2p.PeerID) error {
-	key := peerdb.NewKey(peer)
-
-	dbs := []*peerdb.PeerDB{pm.bestPeersDB, pm.responsivePeersDB, pm.allPeersDB}
-
-	for _, db := range dbs {
-		exists, err := db.Has(pm.ctx, key)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return db.Delete(pm.ctx, key)
-		}
-	}
-
-	return peerdb.ErrPeerNotFound
 }
