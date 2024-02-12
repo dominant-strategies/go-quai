@@ -13,7 +13,7 @@ import (
 	basicConnGater "github.com/libp2p/go-libp2p/p2p/net/conngater"
 	basicConnMgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
 
-	"github.com/dominant-strategies/go-quai/p2p/node/peerdb"
+	"github.com/dominant-strategies/go-quai/p2p/peerManager/peerdb"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
