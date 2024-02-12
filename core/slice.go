@@ -1683,3 +1683,7 @@ func (sl *Slice) NodeLocation() common.Location {
 func (sl *Slice) NodeCtx() int {
 	return sl.hc.NodeCtx()
 }
+
+func (sl *Slice) GetSlicesRunning() []common.Location {
+	return sl.hc.SlicesRunning()
+}

@@ -546,6 +546,10 @@ func (b *QuaiAPIBackend) Logger() *log.Logger {
 	return b.quai.logger
 }
 
+func (b *QuaiAPIBackend) GetSlicesRunning() []common.Location {
+	return b.quai.core.GetSlicesRunning()
+}
+
 // ///////////////////////////
 // /////// P2P ///////////////
 // ///////////////////////////

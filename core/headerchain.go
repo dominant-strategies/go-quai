@@ -1003,3 +1003,7 @@ func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.S
 func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return hc.bc.processor.StateAt(root)
 }
+
+func (hc *HeaderChain) SlicesRunning() []common.Location {
+	return hc.slicesRunning
+}

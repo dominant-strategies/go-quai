@@ -832,3 +832,8 @@ func (s *PublicBlockChainQuaiAPI) SetSyncTarget(ctx context.Context, raw json.Ra
 	s.b.SetSyncTarget(header)
 	return nil
 }
+
+// ListRunningChains returns the running locations where the node is serving data.
+func (s *PublicBlockChainQuaiAPI) ListRunningChains() []common.Location {
+	return s.b.GetSlicesRunning()
+}

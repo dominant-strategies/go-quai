@@ -494,6 +494,15 @@ func (l Location) RPCMarshal() []hexutil.Uint64 {
 	return res
 }
 
+// MarshalJSON marshals the location into a JSON array of integers
+func (l Location) MarshalJSON() ([]byte, error) {
+	intSlice := make([]int, len(l))
+	for i, v := range l {
+		intSlice[i] = int(v)
+	}
+	return json.Marshal(intSlice)
+}
+
 func IsInChainScope(b []byte, nodeLocation Location) bool {
 	nodeCtx := nodeLocation.Context()
 	// IsInChainScope only be called for a zone chain
