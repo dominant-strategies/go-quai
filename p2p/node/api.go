@@ -109,89 +109,42 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-// RequestByNumber returns the hash for the given block number
-func (p *P2PNode) RequestByNumber(location common.Location, number *big.Int, datatype interface{}) chan interface{} {
-	resultChan := make(chan interface{}, 1)
+func (p *P2PNode) requestFromPeers(location common.Location, data interface{}, datatype interface{}, resultChan chan interface{}) {
 	go func() {
 		defer close(resultChan)
 		peers := p.peerManager.GetBestPeers()
+
 		var requestWg sync.WaitGroup
 		for _, peerID := range peers {
 			requestWg.Add(1)
 			go func(peerID peer.ID) {
 				defer requestWg.Done()
-				p.requestAndWait(peerID, location, number, datatype, resultChan)
+				p.requestAndWait(peerID, location, data, datatype, resultChan)
 			}(peerID)
 		}
 		requestWg.Wait()
-
-		// 2. If hash is not found, query the DHT for peers in the slice
-		// TODO: evaluate making this configurable
-		const (
-			maxDHTQueryRetries    = 3  // Maximum number of retries for DHT queries
-			peersPerDHTQuery      = 10 // Number of peers to query per DHT attempt
-			dhtQueryRetryInterval = 5  // Time to wait between DHT query retries
-		)
-		// create a Cid from the slice location
-		shardCid := locationToCid(location)
-		for retries := 0; retries < maxDHTQueryRetries; retries++ {
-			log.Global.Infof("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
-			// query the DHT for peers in the slice
-			// TODO: need to find providers of a topic, not a shard
-			for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
-				go p.requestAndWait(peer.ID, location, number, datatype, resultChan)
-			}
-			// if the data is not found, wait for a bit and try again
-			log.Global.Infof("Block %s not found in slice %s. Retrying...", number, location)
-			time.Sleep(dhtQueryRetryInterval * time.Second)
-		}
-		log.Global.Infof("Block %s not found in slice %s", number, location)
 	}()
-	return resultChan
 }
 
-func (p *P2PNode) RequestByHash(location common.Location, hash common.Hash, datatype interface{}) chan interface{} {
-	resultChan := make(chan interface{}, 1)
-	go func() {
-		defer close(resultChan)
-
-		// 2. If not, query the topic peers for the data
-		var requestWg sync.WaitGroup
-		peerList := p.peerManager.GetBestPeers()
-		for _, peerID := range peerList {
-			requestWg.Add(1)
-			go func(peerID peer.ID) {
-				defer requestWg.Done()
-				p.requestAndWait(peerID, location, hash, datatype, resultChan)
-			}(peerID)
+func (p *P2PNode) queryDHT(location common.Location, data interface{}, datatype interface{}, resultChan chan interface{}) {
+	const (
+		maxDHTQueryRetries    = 3  // Maximum number of retries for DHT queries
+		peersPerDHTQuery      = 10 // Number of peers to query per DHT attempt
+		dhtQueryRetryInterval = 5  // Time to wait between DHT query retries
+	)
+	// create a Cid from the slice location
+	shardCid := locationToCid(location)
+	for retries := 0; retries < maxDHTQueryRetries; retries++ {
+		log.Global.Infof("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
+		// query the DHT for peers in the slice
+		// TODO: need to find providers of a topic, not a shard
+		for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
+			go p.requestAndWait(peer.ID, location, data, datatype, resultChan)
 		}
-
-		// Wait for all the requests to finish before exiting the Request loop
-		requestWg.Wait()
-
-		// 3. If block is not found, query the DHT for peers in the slice
-		// TODO: evaluate making this configurable
-		const (
-			maxDHTQueryRetries    = 3  // Maximum number of retries for DHT queries
-			peersPerDHTQuery      = 10 // Number of peers to query per DHT attempt
-			dhtQueryRetryInterval = 5  // Time to wait between DHT query retries
-		)
-		// create a Cid from the slice location
-		shardCid := locationToCid(location)
-		for retries := 0; retries < maxDHTQueryRetries; retries++ {
-			log.Global.Debugf("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
-			// query the DHT for peers in the slice
-			// TODO: need to find providers of a topic, not a shard
-			for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
-				go p.requestAndWait(peer.ID, location, hash, datatype, resultChan)
-			}
-			// if the data is not found, wait for a bit and try again
-			log.Global.Debugf("Block %s not found in slice %s. Retrying...", hash, location)
-			time.Sleep(dhtQueryRetryInterval * time.Second)
-		}
-		log.Global.Debugf("Block %s not found in slice %s", hash, location)
-	}()
-	return resultChan
+		// if the data is not found, wait for a bit and try again
+		log.Global.Infof("Block %s not found in slice %s. Retrying...", data, location)
+		time.Sleep(dhtQueryRetryInterval * time.Second)
+	}
 }
 
 func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data interface{}, datatype interface{}, resultChan chan interface{}) {
@@ -200,7 +153,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 		log.Global.WithFields(log.Fields{
 			"data":   data,
 			"peerId": peerID,
-		}).Trace("Received data from peer")
+		}).Warn("Received data from peer")
 		// send the block to the result channel
 		resultChan <- recvd
 
@@ -212,7 +165,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 			"location": location.Name(),
 			"data":     data,
 			"datatype": datatype,
-		}).Trace("Error requesting the data from peer")
+		}).Error("Error requesting the data from peer")
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID)
 	}
@@ -220,17 +173,14 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 
 // Request a data from the network for the specified slice
 func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
-	switch requestDataType := requestData.(type) {
-	case common.Hash:
-		return p.RequestByHash(location, requestData.(common.Hash), responseDataType)
-	case *big.Int:
-		return p.RequestByNumber(location, requestData.(*big.Int), responseDataType)
-	default:
-		log.Global.WithFields(log.Fields{
-			"requestDataType": requestDataType,
-		}).Error("Unsupported Request Type")
-	}
-	return nil
+	resultChan := make(chan interface{}, 1)
+
+	p.requestFromPeers(location, requestData, responseDataType, resultChan)
+	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
+	// Right now this creates too many streams, so don't call this until we have a better solution
+	// p.queryDHT(location, requestData, responseDataType, resultChan)
+
+	return resultChan
 }
 
 func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID) {
