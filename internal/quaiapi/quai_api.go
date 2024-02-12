@@ -837,3 +837,8 @@ func (s *PublicBlockChainQuaiAPI) SetSyncTarget(ctx context.Context, raw json.Ra
 func (s *PublicBlockChainQuaiAPI) ListRunningChains() []common.Location {
 	return s.b.GetSlicesRunning()
 }
+
+func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() int {
+	// TODO: Implement this
+	return 0
+}
