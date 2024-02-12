@@ -8,10 +8,14 @@ import "common/proto_common.proto";
 // This file defines all the ProtoBuf definitions related to core
 message ProtoBlock {
   optional ProtoHeader header = 1;
-  optional ProtoTransactions txs = 2;
-  optional ProtoHeaders uncles = 3;
-  optional ProtoTransactions etxs = 4;
-  optional ProtoManifest manifest = 5;
+  optional ProtoBody body = 2;
+}
+
+message ProtoBody {
+  optional ProtoTransactions txs = 1;
+  optional ProtoHeaders uncles = 2;
+  optional ProtoTransactions etxs = 3;
+  optional ProtoManifest manifest = 4;
 }
 
 message ProtoHeader {
@@ -74,4 +78,54 @@ message ProtoAccessList { repeated ProtoAccessTuple access_tuples = 1; }
 message ProtoAccessTuple {
   bytes address = 1;
   repeated common.ProtoHash storage_key = 2;
+}
+
+message ProtoReceiptForStorage {
+  bytes post_state_or_status = 1;
+  uint64 cumulative_gas_used = 2;
+  common.ProtoHash tx_hash = 3;
+  common.ProtoAddress contract_address = 4;
+  ProtoLogsForStorage logs = 5;
+  ProtoTransactions etxs = 6;
+  uint64 gas_used = 7;
+}
+
+message ProtoReceiptsForStorage {
+  repeated ProtoReceiptForStorage receipts = 1;
+}
+
+message ProtoLogForStorage {
+  common.ProtoAddress address = 1;
+  repeated common.ProtoHash topics = 2;
+  bytes data = 3;
+}
+
+message ProtoLogsForStorage { repeated ProtoLogForStorage logs = 1; }
+
+message ProtoPendingHeader {
+  optional ProtoHeader header = 1;
+  optional ProtoTermini termini = 2;
+}
+
+message ProtoTermini {
+  repeated common.ProtoHash dom_termini = 1;
+  repeated common.ProtoHash sub_termini = 2;
+}
+
+message ProtoEtxSet { repeated ProtoEtxSetEntry etx_set = 1; }
+
+message ProtoEtxSetEntry {
+  optional uint64 height = 1;
+  optional ProtoTransaction etx = 2;
+  optional common.ProtoHash etx_hash = 3;
+}
+
+message ProtoPendingEtxs {
+  optional ProtoHeader header = 1;
+  optional ProtoTransactions etxs = 2;
+}
+
+message ProtoPendingEtxsRollup {
+  optional ProtoHeader header = 1;
+  optional ProtoManifest manifest = 2;
 }

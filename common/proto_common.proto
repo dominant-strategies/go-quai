@@ -7,3 +7,7 @@ option go_package = "github.com/dominant-strategies/go-quai/common";
 message ProtoLocation { bytes value = 1; }
 
 message ProtoHash { bytes value = 1; }
+
+message ProtoHashes { repeated ProtoHash hashes = 1; }
+
+message ProtoAddress { bytes value = 1; }

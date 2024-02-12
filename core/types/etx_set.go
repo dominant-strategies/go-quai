@@ -50,3 +50,40 @@ func (set *EtxSet) Update(newInboundEtxs Transactions, currentHeight uint64, nod
 		}
 	}
 }
+
+// ProtoEncode encodes the EtxSet to protobuf format.
+func (set *EtxSet) ProtoEncode() *ProtoEtxSet {
+	protoSet := &ProtoEtxSet{}
+	for hash, entry := range *set {
+		protoHash := hash.ProtoEncode()
+		etxHeight := entry.Height
+		etx, err := entry.ETX.ProtoEncode()
+		if err != nil {
+			panic(err)
+		}
+		protoSet.EtxSet = append(protoSet.EtxSet, &ProtoEtxSetEntry{
+			EtxHash: protoHash,
+			Height:  &etxHeight,
+			Etx:     etx,
+		})
+	}
+	return protoSet
+}
+
+// ProtoDecode decodes the EtxSet from protobuf format.
+func (set *EtxSet) ProtoDecode(protoSet *ProtoEtxSet, location common.Location) error {
+	for _, entry := range protoSet.GetEtxSet() {
+		hash := &common.Hash{}
+		hash.ProtoDecode(entry.GetEtxHash())
+		etx := new(Transaction)
+		err := etx.ProtoDecode(entry.GetEtx(), location)
+		if err != nil {
+			return err
+		}
+		(*set)[*hash] = EtxSetEntry{
+			Height: entry.GetHeight(),
+			ETX:    *etx,
+		}
+	}
+	return nil
+}

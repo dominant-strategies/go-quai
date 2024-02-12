@@ -55,6 +55,9 @@ type Log struct {
 	Removed bool `json:"removed"`
 }
 
+// Logs is a list of log objects.
+type Logs []*Log
+
 type logMarshaling struct {
 	Data        hexutil.Bytes
 	BlockNumber hexutil.Uint64
@@ -101,6 +104,39 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 // LogForStorage is a wrapper around a Log that flattens and parses the entire content of
 // a log including non-consensus fields.
 type LogForStorage Log
+
+// ProtoEncode converts the log to a protobuf representation.
+func (l LogForStorage) ProtoEncode() *ProtoLogForStorage {
+	address := l.Address.ProtoEncode()
+	topics := make([]*common.ProtoHash, len(l.Topics))
+	for i, t := range l.Topics {
+		topics[i] = t.ProtoEncode()
+	}
+	return &ProtoLogForStorage{
+		Address: address,
+		Topics:  topics,
+		Data:    l.Data,
+	}
+}
+
+// ProtoDecode converts the protobuf to a log representation.
+func (l *LogForStorage) ProtoDecode(protoLog *ProtoLogForStorage, location common.Location) error {
+	address := new(common.Address)
+	err := address.ProtoDecode(protoLog.GetAddress(), location)
+	if err != nil {
+		return err
+	}
+	topics := make([]common.Hash, len(protoLog.Topics))
+	for i, t := range protoLog.Topics {
+		topic := new(common.Hash)
+		topic.ProtoDecode(t)
+		topics[i] = *topic
+	}
+	l.Address = *address
+	l.Topics = topics
+	l.Data = protoLog.GetData()
+	return nil
+}
 
 // EncodeRLP implements rlp.Encoder.
 func (l *LogForStorage) EncodeRLP(w io.Writer) error {

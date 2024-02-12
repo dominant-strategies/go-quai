@@ -205,6 +205,25 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(h[:])), nil
 }
 
+// Hashes is a slice of Hash
+type Hashes []Hash
+
+func (h Hashes) ProtoEncode() *ProtoHashes {
+	res := make([]*ProtoHash, len(h))
+	for i, hash := range h {
+		res[i] = hash.ProtoEncode()
+	}
+	return &ProtoHashes{Hashes: res}
+}
+
+func (h *Hashes) ProtoDecode(hashes *ProtoHashes) {
+	res := make([]Hash, len(hashes.GetHashes()))
+	for i, hash := range hashes.GetHashes() {
+		res[i].ProtoDecode(hash)
+	}
+	*h = res
+}
+
 /////////// Address
 
 type addrPrefixRange struct {

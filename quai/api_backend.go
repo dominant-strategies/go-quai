@@ -343,7 +343,7 @@ func (b *QuaiAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash)
 	if nodeCtx != common.ZONE_CTX {
 		return nil, common.Hash{}, 0, 0, errors.New("getTransaction can only be called in zone chain")
 	}
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.quai.ChainDb(), txHash)
+	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.quai.ChainDb(), txHash, b.NodeLocation())
 	return tx, blockHash, blockNumber, index, nil
 }
 

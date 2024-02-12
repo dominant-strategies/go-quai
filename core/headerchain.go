@@ -427,7 +427,7 @@ func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
 		}
 		// Checking of the Etx set exists makes sure that we have processed the
 		// state of the parent block
-		etxSet := rawdb.ReadEtxSet(hc.headerDb, header.Hash(), header.NumberU64(nodeCtx))
+		etxSet := rawdb.ReadEtxSet(hc.headerDb, header.Hash(), header.NumberU64(nodeCtx), hc.NodeLocation())
 		if etxSet != nil {
 			break
 		}
@@ -457,7 +457,7 @@ func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error
 	}
 	var inboundEtxs types.Transactions
 	if order < nodeCtx {
-		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash())
+		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash(), hc.NodeLocation())
 	}
 	return hc.AppendBlock(block, inboundEtxs)
 }
@@ -547,7 +547,7 @@ func (hc *HeaderChain) Stop() {
 		return
 	}
 
-	hashes := make([]common.Hash, 0)
+	hashes := make(common.Hashes, 0)
 	for i := 0; i < len(hc.heads); i++ {
 		hashes = append(hashes, hc.heads[i].Hash())
 	}
@@ -929,7 +929,7 @@ func (hc *HeaderChain) GetBody(hash common.Hash) *types.Body {
 	if number == nil {
 		return nil
 	}
-	body := rawdb.ReadBody(hc.headerDb, hash, *number)
+	body := rawdb.ReadBody(hc.headerDb, hash, *number, hc.NodeLocation())
 	if body == nil {
 		return nil
 	}
@@ -942,19 +942,19 @@ func (hc *HeaderChain) GetBody(hash common.Hash) *types.Body {
 // caching it if found.
 func (hc *HeaderChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	// Short circuit if the body's already in the cache, retrieve otherwise
-	if cached, ok := hc.bc.bodyRLPCache.Get(hash); ok {
+	if cached, ok := hc.bc.bodyProtoCache.Get(hash); ok {
 		return cached.(rlp.RawValue)
 	}
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
 	}
-	body := rawdb.ReadBodyRLP(hc.headerDb, hash, *number)
+	body := rawdb.ReadBodyProto(hc.headerDb, hash, *number)
 	if len(body) == 0 {
 		return nil
 	}
 	// Cache the found body for next time and return
-	hc.bc.bodyRLPCache.Add(hash, body)
+	hc.bc.bodyProtoCache.Add(hash, body)
 	return body
 }
 

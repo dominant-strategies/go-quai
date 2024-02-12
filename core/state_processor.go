@@ -401,7 +401,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	start := time.Now()
 	blockHash := block.Hash()
 	header := types.CopyHeader(block.Header())
-	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
+	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1, p.hc.NodeLocation())
 	time1 := common.PrettyDuration(time.Since(start))
 	if etxSet == nil {
 		return nil, errors.New("failed to load etx set")
@@ -552,7 +552,7 @@ func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxL
 	if lookup, exist := p.txLookupCache.Get(hash); exist {
 		return lookup.(*rawdb.LegacyTxLookupEntry)
 	}
-	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(p.hc.headerDb, hash)
+	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(p.hc.headerDb, hash, p.hc.NodeLocation())
 	if tx == nil {
 		return nil
 	}
@@ -682,14 +682,14 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			logged = time.Now()
 		}
 
-		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
+		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1, p.hc.NodeLocation())
 		if etxSet == nil {
 			return nil, errors.New("etxSet set is nil in StateProcessor")
 		}
-		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash())
+		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash(), p.hc.NodeLocation())
 		etxSet.Update(inboundEtxs, current.NumberU64(nodeCtx), nodeLocation)
 
-		currentBlock := rawdb.ReadBlock(p.hc.bc.db, current.Hash(), current.NumberU64(nodeCtx))
+		currentBlock := rawdb.ReadBlock(p.hc.bc.db, current.Hash(), current.NumberU64(nodeCtx), p.hc.NodeLocation())
 		if currentBlock == nil {
 			return nil, errors.New("detached block found trying to regenerate state")
 		}

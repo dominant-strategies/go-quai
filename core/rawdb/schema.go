@@ -156,6 +156,23 @@ type LegacyTxLookupEntry struct {
 	Index      uint64
 }
 
+func (l LegacyTxLookupEntry) ProtoEncode() (ProtoLegacyTxLookupEntry, error) {
+	blockHash := l.BlockHash.ProtoEncode()
+	return ProtoLegacyTxLookupEntry{
+		Hash:       blockHash,
+		BlockIndex: l.BlockIndex,
+		Index:      l.Index,
+	}, nil
+}
+
+func (l *LegacyTxLookupEntry) ProtoDecode(data *ProtoLegacyTxLookupEntry) error {
+	l.BlockHash = common.Hash{}
+	l.BlockHash.ProtoDecode(data.Hash)
+	l.BlockIndex = data.BlockIndex
+	l.Index = data.Index
+	return nil
+}
+
 // encodeBlockNumber encodes a block number as big endian uint64
 func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)

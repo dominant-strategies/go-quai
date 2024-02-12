@@ -35,12 +35,12 @@ type BodyDb struct {
 	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
 
-	engine       consensus.Engine
-	chainmu      sync.RWMutex
-	blockCache   *lru.Cache
-	bodyCache    *lru.Cache
-	bodyRLPCache *lru.Cache
-	processor    *StateProcessor
+	engine         consensus.Engine
+	chainmu        sync.RWMutex
+	blockCache     *lru.Cache
+	bodyCache      *lru.Cache
+	bodyProtoCache *lru.Cache
+	processor      *StateProcessor
 
 	slicesRunning []common.Location
 
@@ -67,14 +67,14 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 		bodyRLPCache, _ := lru.New(bodyCacheLimit)
 		bc.blockCache = blockCache
 		bc.bodyCache = bodyCache
-		bc.bodyRLPCache = bodyRLPCache
+		bc.bodyProtoCache = bodyRLPCache
 	} else {
 		blockCache, _ := lru.New(10)
 		bodyCache, _ := lru.New(10)
 		bodyRLPCache, _ := lru.New(10)
 		bc.blockCache = blockCache
 		bc.bodyCache = bodyCache
-		bc.bodyRLPCache = bodyRLPCache
+		bc.bodyProtoCache = bodyRLPCache
 	}
 
 	// only start the state processor in zone
@@ -161,7 +161,7 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block.(*types.Block)
 	}
-	block := rawdb.ReadBlock(bc.db, hash, number)
+	block := rawdb.ReadBlock(bc.db, hash, number, bc.NodeLocation())
 	if block == nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
 // GetBlockOrCandidate retrieves any known block from the database by hash and number,
 // caching it if found.
 func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block {
-	block := rawdb.ReadBlock(bc.db, hash, number)
+	block := rawdb.ReadBlock(bc.db, hash, number, bc.NodeLocation())
 	if block == nil {
 		return nil
 	}

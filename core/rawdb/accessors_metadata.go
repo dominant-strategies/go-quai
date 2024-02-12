@@ -24,31 +24,31 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
+	"google.golang.org/protobuf/proto"
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.
 func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
-	var version uint64
-
 	enc, _ := db.Get(databaseVersionKey)
 	if len(enc) == 0 {
 		return nil
 	}
-	if err := rlp.DecodeBytes(enc, &version); err != nil {
-		return nil
+	protoNumber := &ProtoNumber{}
+	err := proto.Unmarshal(enc, protoNumber)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to decode database version")
 	}
-
-	return &version
+	return &protoNumber.Number
 }
 
 // WriteDatabaseVersion stores the version number of the database
 func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
-	enc, err := rlp.EncodeToBytes(version)
+	protoNumber := &ProtoNumber{Number: version}
+	data, err := proto.Marshal(protoNumber)
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to encode database version")
 	}
-	if err = db.Put(databaseVersionKey, enc); err != nil {
+	if err = db.Put(databaseVersionKey, data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store the database version")
 	}
 }

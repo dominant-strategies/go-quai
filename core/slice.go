@@ -1210,7 +1210,7 @@ func (sl *Slice) init(genesis *Genesis) error {
 // from the candidate body db. This method is used when peers give the block as a placeholder
 // for the body.
 func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error) {
-	pendingBlockBody := rawdb.ReadBody(sl.sliceDb, header.Hash(), header.NumberU64(sl.NodeCtx()))
+	pendingBlockBody := rawdb.ReadBody(sl.sliceDb, header.Hash(), header.NumberU64(sl.NodeCtx()), sl.NodeLocation())
 	if pendingBlockBody == nil {
 		return nil, ErrBodyNotFound
 	}
@@ -1581,7 +1581,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 	// bodydb caches
 	sl.hc.bc.blockCache.Purge()
 	sl.hc.bc.bodyCache.Purge()
-	sl.hc.bc.bodyRLPCache.Purge()
+	sl.hc.bc.bodyProtoCache.Purge()
 
 	var badHashes []common.Hash
 	header := currentHeader

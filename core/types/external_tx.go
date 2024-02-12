@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -42,6 +43,40 @@ func (p *PendingEtxsRollup) IsValid(hasher TrieHasher) bool {
 	return DeriveSha(p.Manifest, hasher) == p.Header.ManifestHash(common.ZONE_CTX)
 }
 
+// ProtoEncode encodes the PendingEtxsRollup to protobuf format.
+func (p *PendingEtxsRollup) ProtoEncode() (*ProtoPendingEtxsRollup, error) {
+	header, err := p.Header.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	manifest, err := p.Manifest.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	return &ProtoPendingEtxsRollup{
+		Header:   header,
+		Manifest: manifest,
+	}, nil
+}
+
+// ProtoDecode decodes the protobuf to a PendingEtxsRollup representation.
+func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxsRollup) error {
+	if protoPendingEtxsRollup.Header == nil {
+		return errors.New("header is nil in ProtoDecode")
+	}
+	p.Header = new(Header)
+	err := p.Header.ProtoDecode(protoPendingEtxsRollup.GetHeader())
+	if err != nil {
+		return err
+	}
+	p.Manifest = BlockManifest{}
+	err = p.Manifest.ProtoDecode(protoPendingEtxsRollup.GetManifest())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // PendingEtxs are ETXs which have been emitted from the zone which produced
 // the given block. Specifically, it contains the collection of ETXs emitted
 // since our prior coincident with our sub in that slice. In Prime context, our
@@ -61,6 +96,40 @@ func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
 		return false
 	}
 	return DeriveSha(p.Etxs, hasher) == p.Header.EtxHash()
+}
+
+// ProtoEncode encodes the PendingEtxs to protobuf format.
+func (p *PendingEtxs) ProtoEncode() (*ProtoPendingEtxs, error) {
+	header, err := p.Header.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	etxs, err := p.Etxs.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	return &ProtoPendingEtxs{
+		Header: header,
+		Etxs:   etxs,
+	}, nil
+}
+
+// ProtoDecode decodes the protobuf to a PendingEtxs representation.
+func (p *PendingEtxs) ProtoDecode(protoPendingEtxs *ProtoPendingEtxs) error {
+	if protoPendingEtxs.Header == nil {
+		return errors.New("header is nil in ProtoDecode")
+	}
+	p.Header = new(Header)
+	err := p.Header.ProtoDecode(protoPendingEtxs.GetHeader())
+	if err != nil {
+		return err
+	}
+	p.Etxs = Transactions{}
+	err = p.Etxs.ProtoDecode(protoPendingEtxs.GetEtxs(), p.Header.Location())
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.

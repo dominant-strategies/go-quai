@@ -100,6 +100,17 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Bloom", input, b[:])
 }
 
+// ProtoEncode encodes b as a protobuf message.
+func (b *Bloom) ProtoEncode() ([]byte, error) {
+	return b[:], nil
+}
+
+// ProtoDecode decodes b from a protobuf message.
+func (b *Bloom) ProtoDecode(data []byte) error {
+	copy(b[:], data)
+	return nil
+}
+
 // CreateBloom creates a bloom filter out of the give Receipts (+Logs)
 func CreateBloom(receipts Receipts) Bloom {
 	buf := make([]byte, 6)

@@ -166,6 +166,7 @@ func EmptyHeader() *Header {
 	h.etxRollupHash = EmptyRootHash
 	h.uncleHash = EmptyUncleHash
 	h.baseFee = big.NewInt(0)
+	h.extra = []byte{}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
@@ -339,11 +340,6 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	}
 	if protoHeader.MixHash == nil {
 		return errors.New("missing required field 'MixHash' in Header")
-	}
-
-	// Check if the location is valid length
-	if len(protoHeader.GetLocation().GetValue()) < 2 {
-		return errors.New("invalid length for location in Header")
 	}
 
 	// Initialize the array fields before setting
@@ -784,10 +780,83 @@ func (h *Header) EmptyReceipts() bool {
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
 type Body struct {
-	Transactions    []*Transaction
+	Transactions    Transactions
 	Uncles          []*Header
-	ExtTransactions []*Transaction
+	ExtTransactions Transactions
 	SubManifest     BlockManifest
+}
+
+// ProtoEncode serializes b into the Quai Proto Body format
+func (b *Body) ProtoEncode() (*ProtoBody, error) {
+	protoTransactions, err := b.Transactions.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoExtTransactions, err := b.ExtTransactions.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoUncles := &ProtoHeaders{}
+	for _, unc := range b.Uncles {
+		protoUncle, err := unc.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		protoUncles.Headers = append(protoUncles.Headers, protoUncle)
+	}
+	protoManifest, err := b.SubManifest.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ProtoBody{
+		Txs:      protoTransactions,
+		Uncles:   protoUncles,
+		Etxs:     protoExtTransactions,
+		Manifest: protoManifest,
+	}, nil
+}
+
+// ProtoDecode deserializes the ProtoBody into the Body format
+func (b *Body) ProtoDecode(protoBody *ProtoBody, location common.Location) error {
+	if protoBody.Txs == nil {
+		return errors.New("missing required field 'Txs' in Body")
+	}
+	if protoBody.Uncles == nil {
+		return errors.New("missing required field 'Uncles' in Body")
+	}
+	if protoBody.Etxs == nil {
+		return errors.New("missing required field 'Etxs' in Body")
+	}
+	if protoBody.Manifest == nil {
+		return errors.New("missing required field 'Manifest' in Body")
+	}
+
+	b.Transactions = Transactions{}
+	err := b.Transactions.ProtoDecode(protoBody.GetTxs(), location)
+	if err != nil {
+		return err
+	}
+	b.ExtTransactions = Transactions{}
+	err = b.ExtTransactions.ProtoDecode(protoBody.GetEtxs(), location)
+	if err != nil {
+		return err
+	}
+	b.SubManifest = BlockManifest{}
+	err = b.SubManifest.ProtoDecode(protoBody.GetManifest())
+	if err != nil {
+		return err
+	}
+	b.Uncles = make([]*Header, len(protoBody.GetUncles().GetHeaders()))
+	for i, protoUncle := range protoBody.GetUncles().GetHeaders() {
+		uncle := &Header{}
+		err = uncle.ProtoDecode(protoUncle)
+		if err != nil {
+			return err
+		}
+		b.Uncles[i] = uncle
+	}
+	return nil
 }
 
 // Block represents an entire block in the Quai blockchain.
@@ -943,32 +1012,13 @@ func (b *Block) ProtoEncode() (*ProtoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	protoTransactions, err := b.Transactions().ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-	protoExtTransactions, err := b.ExtTransactions().ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-	protoUncles := &ProtoHeaders{}
-	for _, unc := range b.Uncles() {
-		protoUncle, err := unc.ProtoEncode()
-		if err != nil {
-			return nil, err
-		}
-		protoUncles.Headers = append(protoUncles.Headers, protoUncle)
-	}
-	protoManifest, err := b.SubManifest().ProtoEncode()
+	protoBody, err := b.Body().ProtoEncode()
 	if err != nil {
 		return nil, err
 	}
 	protoBlock := &ProtoBlock{
-		Header:   protoHeader,
-		Txs:      protoTransactions,
-		Etxs:     protoExtTransactions,
-		Manifest: protoManifest,
-		Uncles:   protoUncles,
+		Header: protoHeader,
+		Body:   protoBody,
 	}
 	return protoBlock, nil
 }
@@ -980,31 +1030,15 @@ func (b *Block) ProtoDecode(protoBlock *ProtoBlock, location common.Location) er
 	if err != nil {
 		return err
 	}
-	b.transactions = Transactions{}
-	err = b.transactions.ProtoDecode(protoBlock.GetTxs(), location)
+	body := &Body{}
+	err = body.ProtoDecode(protoBlock.GetBody(), location)
 	if err != nil {
 		return err
 	}
-	b.extTransactions = Transactions{}
-	err = b.extTransactions.ProtoDecode(protoBlock.GetEtxs(), location)
-	if err != nil {
-		return err
-	}
-	b.subManifest = BlockManifest{}
-	err = b.subManifest.ProtoDecode(protoBlock.GetManifest())
-	if err != nil {
-		return err
-	}
-	b.uncles = make([]*Header, len(protoBlock.GetUncles().GetHeaders()))
-	for i, protoUncle := range protoBlock.GetUncles().GetHeaders() {
-		uncle := &Header{}
-		err = uncle.ProtoDecode(protoUncle)
-		if err != nil {
-			return err
-		}
-		b.uncles[i] = uncle
-	}
-
+	b.transactions = body.Transactions
+	b.extTransactions = body.ExtTransactions
+	b.uncles = body.Uncles
+	b.subManifest = body.SubManifest
 	return nil
 }
 
@@ -1189,6 +1223,34 @@ func CopyPendingHeader(ph *PendingHeader) *PendingHeader {
 	return &cpy
 }
 
+// ProtoEncode serializes h into the Quai Proto PendingHeader format
+func (ph PendingHeader) ProtoEncode() (*ProtoPendingHeader, error) {
+	protoHeader, err := ph.Header().ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoTermini := ph.Termini().ProtoEncode()
+	return &ProtoPendingHeader{
+		Header:  protoHeader,
+		Termini: protoTermini,
+	}, nil
+}
+
+// ProtoEncode deserializes the ProtoHeader into the Header format
+func (ph *PendingHeader) ProtoDecode(protoPendingHeader *ProtoPendingHeader) error {
+	ph.header = &Header{}
+	err := ph.header.ProtoDecode(protoPendingHeader.GetHeader())
+	if err != nil {
+		return err
+	}
+	ph.termini = Termini{}
+	err = ph.termini.ProtoDecode(protoPendingHeader.GetTermini())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // "external" pending header encoding. used for rlp
 type extPendingHeader struct {
 	Header  *Header
@@ -1332,6 +1394,45 @@ func (t Termini) EncodeRLP(w io.Writer) error {
 		DomTermini: t.domTermini,
 		SubTermini: t.subTermini,
 	})
+}
+
+// ProtoEncode serializes t into the Quai Proto Termini format
+func (t Termini) ProtoEncode() *ProtoTermini {
+	domtermini := make([]*common.ProtoHash, len(t.domTermini))
+	for i, hash := range t.domTermini {
+		domtermini[i] = hash.ProtoEncode()
+	}
+	subtermini := make([]*common.ProtoHash, len(t.subTermini))
+	for i, hash := range t.subTermini {
+		subtermini[i] = hash.ProtoEncode()
+	}
+	return &ProtoTermini{
+		DomTermini: domtermini,
+		SubTermini: subtermini,
+	}
+}
+
+// ProtoDecode deserializes th ProtoTermini into the Termini format
+func (t *Termini) ProtoDecode(protoTermini *ProtoTermini) error {
+	if protoTermini.DomTermini == nil {
+		return errors.New("missing required field 'DomTermini' in Termini")
+	}
+	if protoTermini.SubTermini == nil {
+		return errors.New("missing required field 'SubTermini' in Termini")
+	}
+	t.domTermini = make([]common.Hash, len(protoTermini.GetDomTermini()))
+	for i, protoHash := range protoTermini.GetDomTermini() {
+		hash := &common.Hash{}
+		hash.ProtoDecode(protoHash)
+		t.domTermini[i] = *hash
+	}
+	t.subTermini = make([]common.Hash, len(protoTermini.GetSubTermini()))
+	for i, protoHash := range protoTermini.GetSubTermini() {
+		hash := &common.Hash{}
+		hash.ProtoDecode(protoHash)
+		t.subTermini[i] = *hash
+	}
+	return nil
 }
 
 // BlockManifest is a list of block hashes, which implements DerivableList

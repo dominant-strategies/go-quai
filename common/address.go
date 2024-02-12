@@ -82,6 +82,25 @@ func NewAddressFromData(inner AddressData) Address {
 	return Address{inner: inner}
 }
 
+// ProtoEncode converts the address to a protobuf representation.
+func (a Address) ProtoEncode() *ProtoAddress {
+	if a.inner == nil {
+		return nil
+	}
+	protoAddress := &ProtoAddress{}
+	protoAddress.Value = a.inner.Bytes()
+	return protoAddress
+}
+
+// ProtoDecode converts the protobuf to an address representation.
+func (a *Address) ProtoDecode(protoAddress *ProtoAddress, location Location) error {
+	if protoAddress.Value == nil {
+		return errors.New("address is nil in ProtoDecode")
+	}
+	*a = BytesToAddress(protoAddress.GetValue(), location)
+	return nil
+}
+
 // EncodeRLP serializes b into the Quai RLP block format.
 func (a Address) EncodeRLP(w io.Writer) error {
 	if a.inner == nil {

@@ -57,7 +57,7 @@ type Receipt struct {
 	Status            uint64 `json:"status"`
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
-	Logs              []*Log `json:"logs"              gencodec:"required"`
+	Logs              Logs   `json:"logs"              gencodec:"required"`
 
 	// Implementation fields: These fields are added by quai when processing a transaction.
 	// They are stored in the chain database.
@@ -67,10 +67,10 @@ type Receipt struct {
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
-	BlockHash        common.Hash    `json:"blockHash,omitempty"`
-	BlockNumber      *big.Int       `json:"blockNumber,omitempty"`
-	TransactionIndex uint           `json:"transactionIndex"`
-	Etxs             []*Transaction `json:"etxs"`
+	BlockHash        common.Hash  `json:"blockHash,omitempty"`
+	BlockNumber      *big.Int     `json:"blockNumber,omitempty"`
+	TransactionIndex uint         `json:"transactionIndex"`
+	Etxs             Transactions `json:"etxs"`
 }
 
 type receiptMarshaling struct {
@@ -202,9 +202,89 @@ func (r *Receipt) Size() common.StorageSize {
 	return size
 }
 
+// ReceiptsForStorage is a list of ReceiptForStorage.
+type ReceiptsForStorage []*ReceiptForStorage
+
+// ProtoEncode converts the receipts to a protobuf representation.
+func (rs ReceiptsForStorage) ProtoEncode() (*ProtoReceiptsForStorage, error) {
+	protoReceipts := make([]*ProtoReceiptForStorage, len(rs))
+	for i, r := range rs {
+		protoReceipt, err := r.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		protoReceipts[i] = protoReceipt
+	}
+	return &ProtoReceiptsForStorage{Receipts: protoReceipts}, nil
+}
+
+// ProtoDecode converts the protobuf to a receipts representation.
+func (rs *ReceiptsForStorage) ProtoDecode(protoReceipts *ProtoReceiptsForStorage, location common.Location) error {
+	for _, protoReceipt := range protoReceipts.Receipts {
+		receipt := new(ReceiptForStorage)
+		err := receipt.ProtoDecode(protoReceipt, location)
+		if err != nil {
+			return err
+		}
+		*rs = append(*rs, receipt)
+	}
+	return nil
+}
+
 // ReceiptForStorage is a wrapper around a Receipt that flattens and parses the
 // entire content of a receipt, as opposed to only the consensus fields originally.
 type ReceiptForStorage Receipt
+
+func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
+	ProtoReceiptForStorage := &ProtoReceiptForStorage{
+		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
+		CumulativeGasUsed: r.CumulativeGasUsed,
+	}
+	protoEtxs, err := r.Etxs.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	ProtoReceiptForStorage.Etxs = protoEtxs
+
+	protoLogs := &ProtoLogsForStorage{}
+	protoLogs.Logs = make([]*ProtoLogForStorage, len(r.Logs))
+	for i, log := range r.Logs {
+		protoLog := (*LogForStorage)(log).ProtoEncode()
+		protoLogs.Logs[i] = protoLog
+	}
+	return ProtoReceiptForStorage, nil
+}
+
+func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, location common.Location) error {
+	if err := (*Receipt)(r).setStatus(protoReceipt.PostStateOrStatus); err != nil {
+		return err
+	}
+	r.CumulativeGasUsed = protoReceipt.CumulativeGasUsed
+	r.TxHash.ProtoDecode(protoReceipt.GetTxHash())
+	err := r.ContractAddress.ProtoDecode(protoReceipt.ContractAddress, location)
+	if err != nil {
+		return err
+	}
+	r.GasUsed = protoReceipt.GetGasUsed()
+	for i, protoLog := range protoReceipt.Logs.GetLogs() {
+		log := new(LogForStorage)
+		err := log.ProtoDecode(protoLog, location)
+		if err != nil {
+			return err
+		}
+		r.Logs[i] = (*Log)(log)
+	}
+	for i, protoEtx := range protoReceipt.Etxs.GetTransactions() {
+		etx := new(Transaction)
+		err := etx.ProtoDecode(protoEtx, location)
+		if err != nil {
+			return err
+		}
+		r.Etxs[i] = etx
+	}
+	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	return nil
+}
 
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
 // into an RLP stream.

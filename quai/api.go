@@ -300,7 +300,7 @@ type BadBlockArgs struct {
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
 		err     error
-		blocks  = rawdb.ReadAllBadBlocks(api.quai.chainDb)
+		blocks  = rawdb.ReadAllBadBlocks(api.quai.chainDb, api.quai.config.NodeLocation)
 		results = make([]*BadBlockArgs, 0, len(blocks))
 	)
 	for _, block := range blocks {

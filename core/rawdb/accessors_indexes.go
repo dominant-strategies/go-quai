@@ -25,7 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
+	"google.golang.org/protobuf/proto"
 )
 
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction
@@ -45,15 +45,18 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 		return ReadHeaderNumber(db, common.BytesToHash(data))
 	}
 	// Finally try database v3 tx lookup format
-	var entry LegacyTxLookupEntry
-	if err := rlp.DecodeBytes(data, &entry); err != nil {
+	protoLegacyTxLookupEntry := new(ProtoLegacyTxLookupEntry)
+	err := proto.Unmarshal(data, protoLegacyTxLookupEntry)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"blob": data,
 			"err":  err,
-		}).Error("Invalid transaction lookup entry RLP")
+		}).Error("Invalid transaction lookup entry protobuf")
 		return nil
 	}
+	entry := new(LegacyTxLookupEntry)
+	entry.ProtoDecode(protoLegacyTxLookupEntry)
 	return &entry.BlockIndex
 }
 
@@ -99,7 +102,7 @@ func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
 
 // ReadTransaction retrieves a specific transaction from the database, along with
 // its added positional metadata.
-func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+func ReadTransaction(db ethdb.Reader, hash common.Hash, location common.Location) (*types.Transaction, common.Hash, uint64, uint64) {
 	blockNumber := ReadTxLookupEntry(db, hash)
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
@@ -108,7 +111,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	body := ReadBody(db, blockHash, *blockNumber)
+	body := ReadBody(db, blockHash, *blockNumber, location)
 	if body == nil {
 		log.Global.WithFields(log.Fields{
 			"number": blockNumber,

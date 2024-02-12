@@ -29,7 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
+	"google.golang.org/protobuf/proto"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
@@ -171,17 +171,19 @@ func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
 	if len(data) == 0 {
 		return nil
 	}
-	var pivot uint64
-	if err := rlp.DecodeBytes(data, &pivot); err != nil {
-		log.Global.WithField("err", err).Error("Invalid pivot block number in database")
-		return nil
+	protoPivot := new(ProtoNumber)
+	err := proto.Unmarshal(data, protoPivot)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pivot block number")
 	}
-	return &pivot
+	return &protoPivot.Number
 }
 
 // WriteLastPivotNumber stores the number of the last pivot block.
 func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
-	enc, err := rlp.EncodeToBytes(pivot)
+	protoPivot := new(ProtoNumber)
+	protoPivot.Number = pivot
+	enc, err := proto.Marshal(protoPivot)
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to encode pivot block number")
 	}
@@ -245,8 +247,8 @@ func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
-// ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
-func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+// ReadHeaderProto retrieves a block header in its raw proto database encoding.
+func ReadHeaderProto(db ethdb.Reader, hash common.Hash, number uint64) []byte {
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
@@ -283,16 +285,23 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 
 // ReadHeader retrieves the block header corresponding to the hash.
 func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
-	data := ReadHeaderRLP(db, hash, number)
+	data := ReadHeaderProto(db, hash, number)
 	if len(data) == 0 {
+		log.Global.Warn("proto header is nil")
 		return nil
 	}
+	protoHeader := new(types.ProtoHeader)
+	err := proto.Unmarshal(data, protoHeader)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal header")
+	}
 	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+	err = header.ProtoDecode(protoHeader)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid block header RLP")
+		}).Error("Invalid block header Proto")
 		return nil
 	}
 	return header
@@ -309,9 +318,13 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header, nodeCtx int) {
 	WriteHeaderNumber(db, hash, number)
 
 	// Write the encoded header
-	data, err := rlp.EncodeToBytes(header)
+	protoHeader, err := header.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode header")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode header")
+	}
+	data, err := proto.Marshal(protoHeader)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal header")
 	}
 	key := headerKey(number, hash)
 	if err := db.Put(key, data); err != nil {
@@ -335,8 +348,8 @@ func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number
 	}
 }
 
-// ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
-func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+// ReadBodyProto retrieves the block body (transactions and uncles) in protobuf encoding.
+func ReadBodyProto(db ethdb.Reader, hash common.Hash, number uint64) []byte {
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
@@ -366,9 +379,9 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	return nil // Can't find the data anywhere.
 }
 
-// ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the canonical
-// block at number, in RLP encoding.
-func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
+// ReadCanonicalBodyProto retrieves the block body (transactions and uncles) for the canonical
+// block at number, in Proto encoding.
+func ReadCanonicalBodyProto(db ethdb.Reader, number uint64) []byte {
 	// If it's an ancient one, we don't need the canonical hash
 	data, _ := db.Ancient(freezerBodiesTable, number)
 	if len(data) == 0 {
@@ -385,9 +398,9 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 	return data
 }
 
-// WriteBodyRLP stores an RLP encoded block body into the database.
-func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
-	if err := db.Put(blockBodyKey(number, hash), rlp); err != nil {
+// WriteBodyProto stores an Proto encoded block body into the database.
+func WriteBodyProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, data []byte) {
+	if err := db.Put(blockBodyKey(number, hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store block body")
 	}
 }
@@ -404,17 +417,23 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadBody retrieves the block body corresponding to the hash.
-func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
-	data := ReadBodyRLP(db, hash, number)
+func ReadBody(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) *types.Body {
+	data := ReadBodyProto(db, hash, number)
 	if len(data) == 0 {
 		return nil
 	}
+	protoBody := new(types.ProtoBody)
+	err := proto.Unmarshal(data, protoBody)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal body")
+	}
 	body := new(types.Body)
-	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+	err = body.ProtoDecode(protoBody, location)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid block body RLP")
+		}).Error("Invalid block body Proto")
 		return nil
 	}
 	return body
@@ -422,11 +441,15 @@ func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 
 // WriteBody stores a block body into the database.
 func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *types.Body) {
-	data, err := rlp.EncodeToBytes(body)
+	protoBody, err := body.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode body")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
 	}
-	WriteBodyRLP(db, hash, number, data)
+	data, err := proto.Marshal(protoBody)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal body")
+	}
+	WriteBodyProto(db, hash, number, data)
 }
 
 // DeleteBody removes all block body data associated with a hash.
@@ -437,7 +460,7 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 }
 
 // ReadPbCacheBody retrieves the block body corresponding to the hash.
-func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.Body {
+func ReadPbCacheBody(db ethdb.Reader, hash common.Hash, location common.Location) *types.Body {
 	data, err := db.Get(pbBodyKey(hash))
 	if err != nil {
 		log.Global.WithFields(log.Fields{
@@ -449,12 +472,17 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.Body {
 	if len(data) == 0 {
 		return nil
 	}
+	protoBody := new(types.ProtoBody)
+	if err := proto.Unmarshal(data, protoBody); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal body")
+	}
 	body := new(types.Body)
-	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+	body.ProtoDecode(protoBody, location)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid pending block body RLP")
+		}).Error("Invalid pending block body Proto")
 		return nil
 	}
 	return body
@@ -462,9 +490,13 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.Body {
 
 // WritePbCacheBody stores a block body into the database.
 func WritePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.Body) {
-	data, err := rlp.EncodeToBytes(body)
+	protoBody, err := body.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode body")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
+	}
+	data, err := proto.Marshal(protoBody)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to Proto Marshal encode body")
 	}
 	if err := db.Put(pbBodyKey(hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to write pbBodyKey")
@@ -479,7 +511,7 @@ func DeletePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadPbBodyKeys retreive's the phBodyKeys of the worker
-func ReadPbBodyKeys(db ethdb.Reader) []common.Hash {
+func ReadPbBodyKeys(db ethdb.Reader) common.Hashes {
 	key := pbBodyHashKey()
 	data, err := db.Get(key)
 	if err != nil {
@@ -487,21 +519,32 @@ func ReadPbBodyKeys(db ethdb.Reader) []common.Hash {
 		return nil
 	}
 	if len(data) == 0 {
-		return []common.Hash{}
+		return common.Hashes{}
 	}
-	keys := []common.Hash{}
-	if err := rlp.DecodeBytes(data, &keys); err != nil {
-		return []common.Hash{}
+	protoKeys := new(common.ProtoHashes)
+	err = proto.Unmarshal(data, protoKeys)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pbBodyKeys")
 	}
-	return keys
+
+	keys := &common.Hashes{}
+	keys.ProtoDecode(protoKeys)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"err": err,
+		}).Error("Invalid pbBodyKeys Proto")
+		return nil
+	}
+	return *keys
 }
 
 // WritePbBodyKeys writes the workers pendingHeaderBody keys to the db
-func WritePbBodyKeys(db ethdb.KeyValueWriter, hashes []common.Hash) {
+func WritePbBodyKeys(db ethdb.KeyValueWriter, hashes common.Hashes) {
 	key := pbBodyHashKey()
-	data, err := rlp.EncodeToBytes(hashes)
+	protoHashes := hashes.ProtoEncode()
+	data, err := proto.Marshal(protoHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode pending block body keys")
+		log.Global.WithField("err", err).Fatal("Failed to Proto marshal pbBodyKeys")
 	}
 	if err := db.Put(key, data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store pending block body keys")
@@ -524,19 +567,30 @@ func ReadTermini(db ethdb.Reader, hash common.Hash) *types.Termini {
 	if len(data) == 0 {
 		return nil
 	}
-	var termini types.Termini
-	if err := rlp.DecodeBytes(data, &termini); err != nil {
+	protoTermini := new(types.ProtoTermini)
+	err := proto.Unmarshal(data, protoTermini)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal termini")
+	}
+	termini := new(types.Termini)
+	err = termini.ProtoDecode(protoTermini)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"hash": hash,
+			"err":  err,
+		}).Error("Invalid termini Proto")
 		return nil
 	}
-	return &termini
+	return termini
 }
 
 // WriteTermini writes the heads hashes of the blockchain.
 func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes types.Termini) {
 	key := terminiKey(index)
-	data, err := rlp.EncodeToBytes(hashes)
+	protoTermini := hashes.ProtoEncode()
+	data, err := proto.Marshal(protoTermini)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode termini")
+		log.Global.WithField("err", err).Fatal("Failed to Proto marshal termini")
 	}
 	if err := db.Put(key, data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store last block's termini")
@@ -561,9 +615,20 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 		return nil
 	}
 
+	protoPendingHeader := new(types.ProtoPendingHeader)
+	err := proto.Unmarshal(data, protoPendingHeader)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pending header")
+	}
+
 	pendingHeader := new(types.PendingHeader)
-	if err := rlp.Decode(bytes.NewReader(data), pendingHeader); err != nil {
-		log.Global.WithField("err", err).Error("Invalid pendingHeader RLP")
+
+	err = pendingHeader.ProtoDecode(protoPendingHeader)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"hash": hash,
+			"err":  err,
+		}).Error("Invalid pendingHeader Proto")
 		return nil
 	}
 	return pendingHeader
@@ -573,12 +638,14 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader types.PendingHeader) {
 	key := pendingHeaderKey(hash)
 
-	// Write the encoded pending header
-	data, err := rlp.EncodeToBytes(pendingHeader)
+	protoPendingHeader, err := pendingHeader.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode pending header")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode pending header")
 	}
-
+	data, err := proto.Marshal(protoPendingHeader)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal pending header")
+	}
 	if err := db.Put(key, data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store header")
 	}
@@ -599,18 +666,21 @@ func ReadBestPhKey(db ethdb.Reader) common.Hash {
 	if len(data) == 0 {
 		return common.Hash{}
 	}
-	bestPhKey := common.Hash{}
-	if err := rlp.DecodeBytes(data, &bestPhKey); err != nil {
-		return common.Hash{}
+	protoBestPhKey := new(common.ProtoHash)
+	if err := proto.Unmarshal(data, protoBestPhKey); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal best ph key")
 	}
-	return bestPhKey
+	bestPhKey := new(common.Hash)
+	bestPhKey.ProtoDecode(protoBestPhKey)
+	return *bestPhKey
 }
 
 // WriteBestPhKey writes the bestPhKey of the blockchain
 func WriteBestPhKey(db ethdb.KeyValueWriter, bestPhKey common.Hash) {
-	data, err := rlp.EncodeToBytes(bestPhKey)
+	protoPhKey := bestPhKey.ProtoEncode()
+	data, err := proto.Marshal(protoPhKey)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode write best ph key")
+		log.Global.WithField("err", err).Fatal("Failed to Proto marshal best ph key")
 	}
 	if err := db.Put(phHeadKey, data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store last block's hash")
@@ -625,23 +695,27 @@ func DeleteBestPhKey(db ethdb.KeyValueWriter) {
 }
 
 // ReadHeadsHashes retreive's the heads hashes of the blockchain.
-func ReadHeadsHashes(db ethdb.Reader) []common.Hash {
+func ReadHeadsHashes(db ethdb.Reader) common.Hashes {
 	data, _ := db.Get(headsHashesKey)
 	if len(data) == 0 {
 		return []common.Hash{}
 	}
-	hashes := []common.Hash{}
-	if err := rlp.DecodeBytes(data, &hashes); err != nil {
-		return []common.Hash{}
+	protoHeadsHashes := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoHeadsHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal heads hashes")
 	}
-	return hashes
+	headsHashes := new(common.Hashes)
+	headsHashes.ProtoDecode(protoHeadsHashes)
+	return *headsHashes
 }
 
 // WriteHeadsHashes writes the heads hashes of the blockchain.
-func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes []common.Hash) {
-	data, err := rlp.EncodeToBytes(hashes)
+func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes common.Hashes) {
+	protoHeadsHashes := hashes.ProtoEncode()
+	data, err := proto.Marshal(protoHeadsHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode block total difficulty")
+		log.Global.WithField("err", err).Fatal("Failed to Proto marshal heads hashes")
 	}
 	if err := db.Put(headsHashesKey, data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store last block's hash")
@@ -667,8 +741,8 @@ func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	return true
 }
 
-// ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
-func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+// ReadReceiptsProto retrieves all the transaction receipts belonging to a block in Proto encoding.
+func ReadReceiptsProto(db ethdb.Reader, hash common.Hash, number uint64) []byte {
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
@@ -701,23 +775,30 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 // ReadRawReceipts retrieves all the transaction receipts belonging to a block.
 // The receipt metadata fields are not guaranteed to be populated, so they
 // should not be used. Use ReadReceipts instead if the metadata is needed.
-func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
+func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) types.Receipts {
 	// Retrieve the flattened receipt slice
-	data := ReadReceiptsRLP(db, hash, number)
+	data := ReadReceiptsProto(db, hash, number)
 	if len(data) == 0 {
 		return nil
 	}
+	protoReceipt := new(types.ProtoReceiptsForStorage)
+	err := proto.Unmarshal(data, protoReceipt)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal receipt")
+		return nil
+	}
 	// Convert the receipts from their storage form to their internal representation
-	storageReceipts := []*types.ReceiptForStorage{}
-	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
+	storageReceipts := new(types.ReceiptsForStorage)
+	err = storageReceipts.ProtoDecode(protoReceipt, location)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid receipt array RLP")
+		}).Error("Invalid receipt array Proto")
 		return nil
 	}
-	receipts := make(types.Receipts, len(storageReceipts))
-	for i, storageReceipt := range storageReceipts {
+	var receipts types.Receipts
+	for i, storageReceipt := range *storageReceipts {
 		receipts[i] = (*types.Receipt)(storageReceipt)
 	}
 	return receipts
@@ -732,11 +813,11 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Rec
 // if the receipt itself is stored.
 func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) types.Receipts {
 	// We're deriving many fields from the block body, retrieve beside the receipt
-	receipts := ReadRawReceipts(db, hash, number)
+	receipts := ReadRawReceipts(db, hash, number, config.Location)
 	if receipts == nil {
 		return nil
 	}
-	body := ReadBody(db, hash, number)
+	body := ReadBody(db, hash, number, config.Location)
 	if body == nil {
 		log.Global.WithFields(log.Fields{
 			"hash":   hash,
@@ -758,13 +839,18 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 // WriteReceipts stores all the transaction receipts belonging to a block.
 func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, receipts types.Receipts) {
 	// Convert the receipts into their storage form and serialize them
-	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
+	storageReceipts := make(types.ReceiptsForStorage, len(receipts))
 	for i, receipt := range receipts {
 		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
 	}
-	bytes, err := rlp.EncodeToBytes(storageReceipts)
+
+	protoReceipts, err := storageReceipts.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to encode block receipts")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode receipt")
+	}
+	bytes, err := proto.Marshal(protoReceipts)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal receipt")
 	}
 	// Store the flattened receipt slice
 	if err := db.Put(blockReceiptsKey(number, hash), bytes); err != nil {
@@ -779,108 +865,18 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-// storedReceiptRLP is the storage encoding of a receipt.
-// Re-definition in core/types/receipt.go.
-type storedReceiptRLP struct {
-	PostStateOrStatus []byte
-	CumulativeGasUsed uint64
-	Logs              []*types.LogForStorage
-}
-
-// ReceiptLogs is a barebone version of ReceiptForStorage which only keeps
-// the list of logs. When decoding a stored receipt into this object we
-// avoid creating the bloom filter.
-type receiptLogs struct {
-	Logs []*types.Log
-}
-
-// DecodeRLP implements rlp.Decoder.
-func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
-	var stored storedReceiptRLP
-	if err := s.Decode(&stored); err != nil {
-		return err
-	}
-	r.Logs = make([]*types.Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*types.Log)(log)
-	}
-	return nil
-}
-
-// DeriveLogFields fills the logs in receiptLogs with information such as block number, txhash, etc.
-func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, txs types.Transactions) error {
-	logIndex := uint(0)
-	if len(txs) != len(receipts) {
-		return errors.New("transaction and receipt count mismatch")
-	}
-	for i := 0; i < len(receipts); i++ {
-		txHash := txs[i].Hash()
-		// The derived log fields can simply be set from the block and transaction
-		for j := 0; j < len(receipts[i].Logs); j++ {
-			receipts[i].Logs[j].BlockNumber = number
-			receipts[i].Logs[j].BlockHash = hash
-			receipts[i].Logs[j].TxHash = txHash
-			receipts[i].Logs[j].TxIndex = uint(i)
-			receipts[i].Logs[j].Index = logIndex
-			logIndex++
-		}
-	}
-	return nil
-}
-
-// ReadLogs retrieves the logs for all transactions in a block. The log fields
-// are populated with metadata. In case the receipts or the block body
-// are not found, a nil is returned.
-func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
-	// Retrieve the flattened receipt slice
-	data := ReadReceiptsRLP(db, hash, number)
-	if len(data) == 0 {
-		return nil
-	}
-	receipts := []*receiptLogs{}
-	if err := rlp.DecodeBytes(data, &receipts); err != nil {
-		log.Global.WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Error("Invalid receipt array RLP")
-		return nil
-	}
-
-	body := ReadBody(db, hash, number)
-	if body == nil {
-		log.Global.WithFields(log.Fields{
-			"hash":   hash,
-			"number": number,
-		}).Error("Missing body but have receipt")
-		return nil
-	}
-	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
-		log.Global.WithFields(log.Fields{
-			"hash":   hash,
-			"number": number,
-			"err":    err,
-		}).Error("Failed to derive block receipts fields")
-		return nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs
-}
-
 // ReadBlock retrieves an entire block corresponding to the hash, assembling it
 // back from the stored header and body. If either the header or body could not
 // be retrieved nil is returned.
 //
 // Note, due to concurrent download of header and block body the header and thus
 // canonical hash can be stored in the database but the body data not (yet).
-func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
+func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) *types.Block {
 	header := ReadHeader(db, hash, number)
 	if header == nil {
 		return nil
 	}
-	body := ReadBody(db, hash, number)
+	body := ReadBody(db, hash, number, location)
 	if body == nil {
 		return nil
 	}
@@ -915,6 +911,37 @@ type badBlock struct {
 	Body   *types.Body
 }
 
+// ProtoEncode returns the protobuf encoding of the bad block.
+func (b badBlock) ProtoEncode() *ProtoBadBlock {
+	protoHeader, err := b.Header.ProtoEncode()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto encode header")
+	}
+	protoBody, err := b.Body.ProtoEncode()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
+	}
+	return &ProtoBadBlock{
+		Header: protoHeader,
+		Body:   protoBody,
+	}
+}
+
+// ProtoDecode decodes the protobuf encoding of the bad block.
+func (b *badBlock) ProtoDecode(pb *ProtoBadBlock, location common.Location) error {
+	header := new(types.Header)
+	if err := header.ProtoDecode(pb.Header); err != nil {
+		return err
+	}
+	b.Header = header
+	body := new(types.Body)
+	if err := body.ProtoDecode(pb.Body, location); err != nil {
+		return err
+	}
+	b.Body = body
+	return nil
+}
+
 // badBlockList implements the sort interface to allow sorting a list of
 // bad blocks by their number in the reverse order.
 type badBlockList []*badBlock
@@ -925,17 +952,45 @@ func (s badBlockList) Less(i, j int) bool {
 }
 func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
+func (s badBlockList) ProtoEncode() *ProtoBadBlocks {
+	protoList := make([]*ProtoBadBlock, len(s))
+	for i, bad := range s {
+		protoList[i] = bad.ProtoEncode()
+	}
+	return &ProtoBadBlocks{BadBlocks: protoList}
+}
+
+func (s *badBlockList) ProtoDecode(pb *ProtoBadBlocks, location common.Location) error {
+	list := make(badBlockList, len(pb.BadBlocks))
+	for i, protoBlock := range pb.BadBlocks {
+		block := new(badBlock)
+		if err := block.ProtoDecode(protoBlock, location); err != nil {
+			return err
+		}
+		list[i] = block
+	}
+	*s = list
+	return nil
+}
+
 // ReadBadBlock retrieves the bad block with the corresponding block hash.
-func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
+func ReadBadBlock(db ethdb.Reader, hash common.Hash, location common.Location) *types.Block {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		return nil
 	}
-	var badBlocks badBlockList
-	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
+	protoBadBlocks := new(ProtoBadBlocks)
+	err = proto.Unmarshal(blob, protoBadBlocks)
+	if err != nil {
 		return nil
 	}
-	for _, bad := range badBlocks {
+
+	badBlocks := new(badBlockList)
+	err = badBlocks.ProtoDecode(protoBadBlocks, location)
+	if err != nil {
+		return nil
+	}
+	for _, bad := range *badBlocks {
 		if bad.Header.Hash() == hash {
 			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest)
 		}
@@ -945,17 +1000,25 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 
 // ReadAllBadBlocks retrieves all the bad blocks in the database.
 // All returned blocks are sorted in reverse order by number.
-func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
+func ReadAllBadBlocks(db ethdb.Reader, location common.Location) []*types.Block {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		return nil
 	}
-	var badBlocks badBlockList
-	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
+
+	protoBadBlocks := new(ProtoBadBlocks)
+	err = proto.Unmarshal(blob, protoBadBlocks)
+	if err != nil {
+		return nil
+	}
+	badBlocks := new(badBlockList)
+
+	err = badBlocks.ProtoDecode(protoBadBlocks, location)
+	if err != nil {
 		return nil
 	}
 	var blocks []*types.Block
-	for _, bad := range badBlocks {
+	for _, bad := range *badBlocks {
 		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest))
 	}
 	return blocks
@@ -963,17 +1026,26 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 
 // WriteBadBlock serializes the bad block into the database. If the cumulated
 // bad blocks exceeds the limitation, the oldest will be dropped.
-func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block, nodeCtx int) {
+func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block, location common.Location) {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		log.Global.WithField("err", err).Warn("Failed to load old bad blocks")
 	}
-	var badBlocks badBlockList
+
+	protoBadBlocks := new(ProtoBadBlocks)
+	err = proto.Unmarshal(blob, protoBadBlocks)
+	if err != nil {
+		log.Global.WithField("err", err).Warn("Failed to proto Unmarshal bad blocks")
+	}
+	badBlocksList := badBlockList{}
 	if len(blob) > 0 {
-		if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
+		err := badBlocksList.ProtoDecode(protoBadBlocks, location)
+		if err != nil {
 			log.Global.WithField("err", err).Fatal("Failed to decode old bad blocks")
 		}
 	}
+	badBlocks := badBlocksList
+	nodeCtx := location.Context()
 	for _, b := range badBlocks {
 		if b.Header.NumberU64(nodeCtx) == block.NumberU64(nodeCtx) && b.Header.Hash() == block.Hash() {
 			log.Global.WithFields(log.Fields{
@@ -989,9 +1061,11 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block, nodeCtx int) {
 	})
 	sort.Sort(sort.Reverse(badBlocks))
 	if len(badBlocks) > badBlockToKeep {
-		badBlocks = badBlocks[:badBlockToKeep]
+		blocks := badBlocks
+		badBlocks = blocks[:badBlockToKeep]
 	}
-	data, err := rlp.EncodeToBytes(badBlocks)
+	protoBadBlocks = badBlocks.ProtoEncode()
+	data, err := proto.Marshal(protoBadBlocks)
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to encode bad blocks")
 	}
@@ -1048,7 +1122,7 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 }
 
 // ReadHeadBlock returns the current canonical head block.
-func ReadHeadBlock(db ethdb.Reader) *types.Block {
+func ReadHeadBlock(db ethdb.Reader, location common.Location) *types.Block {
 	headBlockHash := ReadHeadBlockHash(db)
 	if headBlockHash == (common.Hash{}) {
 		return nil
@@ -1057,11 +1131,11 @@ func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	if headBlockNumber == nil {
 		return nil
 	}
-	return ReadBlock(db, headBlockHash, *headBlockNumber)
+	return ReadBlock(db, headBlockHash, *headBlockNumber, location)
 }
 
-// ReadEtxSetRLP retrieves the EtxSet corresponding to a given block, in RLP encoding.
-func ReadEtxSetRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+// ReadEtxSetProto retrieves the EtxSet corresponding to a given block, in Proto encoding.
+func ReadEtxSetProto(db ethdb.Reader, hash common.Hash, number uint64) ([]byte, error) {
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
@@ -1069,13 +1143,14 @@ func ReadEtxSetRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	if len(data) > 0 {
 		h, _ := db.Ancient(freezerHashTable, number)
 		if common.BytesToHash(h) == hash {
-			return data
+			return data, nil
 		}
 	}
+	var err error
 	// Then try to look up the data in leveldb.
-	data, _ = db.Get(etxSetKey(number, hash))
-	if len(data) > 0 {
-		return data
+	data, err = db.Get(etxSetKey(number, hash))
+	if err == nil {
+		return data, nil
 	}
 	// In the background freezer is moving data from leveldb to flatten files.
 	// So during the first check for ancient db, the data is not yet in there,
@@ -1085,58 +1160,50 @@ func ReadEtxSetRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 	if len(data) > 0 {
 		h, _ := db.Ancient(freezerHashTable, number)
 		if common.BytesToHash(h) == hash {
-			return data
+			return data, nil
 		}
 	}
-	return nil // Can't find the data anywhere.
+	return nil, errors.New("etx set not found") // Can't find the data anywhere.
 }
 
-// WriteEtxSetRLP stores the EtxSet corresponding to a given block, in RLP encoding.
-func WriteEtxSetRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
-	if err := db.Put(etxSetKey(number, hash), rlp); err != nil {
+// WriteEtxSetProto stores the EtxSet corresponding to a given block, in Proto encoding.
+func WriteEtxSetProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, data []byte) {
+	if err := db.Put(etxSetKey(number, hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store etx set")
 	}
 }
 
-type EtxSetEntry struct {
-	EtxHash   common.Hash
-	EtxHeight uint64
-	Etx       types.Transaction
-}
-
 // ReadEtxSet retreives the EtxSet corresponding to a given block
-func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) types.EtxSet {
-	data := ReadEtxSetRLP(db, hash, number)
-	if len(data) == 0 {
+func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) types.EtxSet {
+	data, err := ReadEtxSetProto(db, hash, number)
+	if err != nil {
 		return nil
 	}
-	var entries []EtxSetEntry
-	if err := rlp.Decode(bytes.NewReader(data), &entries); err != nil {
+	protoEtxSet := new(types.ProtoEtxSet)
+	if err := proto.Unmarshal(data, protoEtxSet); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal etx set")
+	}
+	etxSet := make(types.EtxSet)
+	err = etxSet.ProtoDecode(protoEtxSet, location)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid etx set RLP")
+		}).Error("Invalid etx set Proto")
 		return nil
-	}
-	etxSet := make(types.EtxSet)
-	for _, entry := range entries {
-		etxSet[entry.EtxHash] = types.EtxSetEntry{Height: entry.EtxHeight, ETX: entry.Etx}
 	}
 	return etxSet
 }
 
 // WriteEtxSet stores the EtxSet corresponding to a given block
 func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
-	var entries []EtxSetEntry
-	for etxHash, entry := range etxSet {
-		entry := EtxSetEntry{EtxHash: etxHash, EtxHeight: entry.Height, Etx: entry.ETX}
-		entries = append(entries, entry)
-	}
-	data, err := rlp.EncodeToBytes(entries)
+	protoEtxSet := etxSet.ProtoEncode()
+
+	data, err := proto.Marshal(protoEtxSet)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode etx set")
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal etx set")
 	}
-	WriteEtxSetRLP(db, hash, number, data)
+	WriteEtxSetProto(db, hash, number, data)
 }
 
 // DeleteEtxSet removes all EtxSet data associated with a block.
@@ -1146,8 +1213,8 @@ func DeleteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-// ReadPendingEtxsRLP retrieves the set of pending ETXs for the given block, in RLP encoding
-func ReadPendingEtxsRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
+// ReadPendingEtxsProto retrieves the set of pending ETXs for the given block, in Proto encoding
+func ReadPendingEtxsProto(db ethdb.Reader, hash common.Hash) []byte {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(pendingEtxsKey(hash))
 	if len(data) > 0 {
@@ -1156,37 +1223,45 @@ func ReadPendingEtxsRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
-// WritePendingEtxsRLP stores the pending ETXs corresponding to a given block, in RLP encoding.
-func WritePendingEtxsRLP(db ethdb.KeyValueWriter, hash common.Hash, rlp rlp.RawValue) {
-	if err := db.Put(pendingEtxsKey(hash), rlp); err != nil {
+// WritePendingEtxsProto stores the pending ETXs corresponding to a given block, in Proto encoding.
+func WritePendingEtxsProto(db ethdb.KeyValueWriter, hash common.Hash, data []byte) {
+	if err := db.Put(pendingEtxsKey(hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store pending etxs")
 	}
 }
 
 // ReadPendingEtxs retreives the pending ETXs corresponding to a given block
 func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) *types.PendingEtxs {
-	data := ReadPendingEtxsRLP(db, hash)
+	data := ReadPendingEtxsProto(db, hash)
 	if len(data) == 0 {
 		return nil
 	}
-	pendingEtxs := types.PendingEtxs{}
-	if err := rlp.Decode(bytes.NewReader(data), &pendingEtxs); err != nil {
+	protoPendingEtxs := new(types.ProtoPendingEtxs)
+	if err := proto.Unmarshal(data, protoPendingEtxs); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pending etxs")
+	}
+	pendingEtxs := new(types.PendingEtxs)
+	if err := pendingEtxs.ProtoDecode(protoPendingEtxs); err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid pending etxs RLP")
+		}).Error("Invalid pending etxs Proto")
 		return nil
 	}
-	return &pendingEtxs
+	return pendingEtxs
 }
 
 // WritePendingEtxs stores the pending ETXs corresponding to a given block
 func WritePendingEtxs(db ethdb.KeyValueWriter, pendingEtxs types.PendingEtxs) {
-	data, err := rlp.EncodeToBytes(pendingEtxs)
+	protoPendingEtxs, err := pendingEtxs.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode pending etxs")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode pending etxs")
 	}
-	WritePendingEtxsRLP(db, pendingEtxs.Header.Hash(), data)
+	data, err := proto.Marshal(protoPendingEtxs)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal pending etxs")
+	}
+	WritePendingEtxsProto(db, pendingEtxs.Header.Hash(), data)
 }
 
 // DeletePendingEtxs removes all pending ETX data associated with a block.
@@ -1203,22 +1278,32 @@ func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash) *types.PendingEtxs
 	if len(data) == 0 {
 		return nil
 	}
-	pendingEtxsRollup := types.PendingEtxsRollup{}
-	if err := rlp.Decode(bytes.NewReader(data), &pendingEtxsRollup); err != nil {
+	protoPendingEtxsRollup := new(types.ProtoPendingEtxsRollup)
+	err := proto.Unmarshal(data, protoPendingEtxsRollup)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pending etxs rollup")
+	}
+	pendingEtxsRollup := new(types.PendingEtxsRollup)
+	err = pendingEtxsRollup.ProtoDecode(protoPendingEtxsRollup)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid pending etxs rollup rlp")
+		}).Error("Invalid pending etxs rollup Proto")
 		return nil
 	}
-	return &pendingEtxsRollup
+	return pendingEtxsRollup
 }
 
 // WritePendingEtxsRollup stores the pending ETXs rollup corresponding to a given block
 func WritePendingEtxsRollup(db ethdb.KeyValueWriter, pendingEtxsRollup types.PendingEtxsRollup) {
-	data, err := rlp.EncodeToBytes(pendingEtxsRollup)
+	protoPendingEtxsRollup, err := pendingEtxsRollup.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode pending etxs rollup")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode pending etxs rollup")
+	}
+	data, err := proto.Marshal(protoPendingEtxsRollup)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal pending etxs rollup")
 	}
 	if err := db.Put(pendingEtxsRollupKey(pendingEtxsRollup.Header.Hash()), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store pending etxs rollup")
@@ -1239,22 +1324,32 @@ func ReadManifest(db ethdb.Reader, hash common.Hash) types.BlockManifest {
 	if len(data) == 0 {
 		return nil
 	}
-	manifest := types.BlockManifest{}
-	if err := rlp.Decode(bytes.NewReader(data), &manifest); err != nil {
+	protoManifest := new(types.ProtoManifest)
+	err := proto.Unmarshal(data, protoManifest)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal manifest")
+	}
+	manifest := new(types.BlockManifest)
+	err = manifest.ProtoDecode(protoManifest)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid manifest RLP")
+		}).Error("Invalid manifest Proto")
 		return nil
 	}
-	return manifest
+	return *manifest
 }
 
 // WriteManifest stores the manifest corresponding to a given block
 func WriteManifest(db ethdb.KeyValueWriter, hash common.Hash, manifest types.BlockManifest) {
-	data, err := rlp.EncodeToBytes(manifest)
+	protoManifest, err := manifest.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode manifest")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode manifest")
+	}
+	data, err := proto.Marshal(protoManifest)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal manifest")
 	}
 	if err := db.Put(manifestKey(hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store manifest")
@@ -1268,8 +1363,8 @@ func DeleteManifest(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadBloomRLP retrieves the bloom for the given block, in RLP encoding
-func ReadBloomRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
+// ReadBloomProto retrieves the bloom for the given block, in bytes
+func ReadBloomProto(db ethdb.Reader, hash common.Hash) []byte {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(bloomKey(hash))
 	if len(data) > 0 {
@@ -1278,37 +1373,31 @@ func ReadBloomRLP(db ethdb.Reader, hash common.Hash) rlp.RawValue {
 	return nil // Can't find the data anywhere.
 }
 
-// WriteBloomRLP stores the bloom corresponding to a given block, in RLP encoding.
-func WriteBloomRLP(db ethdb.KeyValueWriter, hash common.Hash, rlp rlp.RawValue) {
-	if err := db.Put(bloomKey(hash), rlp); err != nil {
+// WriteBloomProto stores the bloom corresponding to a given block, in proto bug encoding
+func WriteBloomProto(db ethdb.KeyValueWriter, hash common.Hash, data []byte) {
+	if err := db.Put(bloomKey(hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store block bloom filter")
 	}
 }
 
 // ReadBloom retreives the bloom corresponding to a given block
 func ReadBloom(db ethdb.Reader, hash common.Hash) *types.Bloom {
-	data := ReadBloomRLP(db, hash)
+	data := ReadBloomProto(db, hash)
 	if len(data) == 0 {
 		return nil
 	}
 	bloom := types.Bloom{}
-	if err := rlp.Decode(bytes.NewReader(data), &bloom); err != nil {
-		log.Global.WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Error("Invalid bloom RLP")
-		return nil
-	}
+	bloom.ProtoDecode(data)
 	return &bloom
 }
 
 // WriteBloom stores the bloom corresponding to a given block
 func WriteBloom(db ethdb.KeyValueWriter, hash common.Hash, bloom types.Bloom) {
-	data, err := rlp.EncodeToBytes(bloom)
+	data, err := bloom.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode pending etxs")
+		log.Global.WithField("err", err).Fatal("Failed to Proto encode pending etxs")
 	}
-	WriteBloomRLP(db, hash, data)
+	WriteBloomProto(db, hash, data)
 }
 
 // DeleteBloom removes all bloom data associated with a block.
@@ -1319,25 +1408,28 @@ func DeleteBloom(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 }
 
 // ReadBadHashesList retreives the bad hashes corresponding to the recent fork
-func ReadBadHashesList(db ethdb.Reader) types.BlockManifest {
+func ReadBadHashesList(db ethdb.Reader) common.Hashes {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(badHashesListPrefix)
 	if len(data) == 0 {
 		return nil
 	}
-	badHashes := []common.Hash{}
-	if err := rlp.Decode(bytes.NewReader(data), &badHashes); err != nil {
-		log.Global.Error("Invalid badHashesList rlp")
-		return nil
+	protoBadHashes := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoBadHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal badHashesList")
 	}
-	return badHashes
+	badHashes := &common.Hashes{}
+	badHashes.ProtoDecode(protoBadHashes)
+	return *badHashes
 }
 
 // WriteBadHashesList stores the bad hashes corresponding to the recent fork
-func WriteBadHashesList(db ethdb.KeyValueWriter, badHashes []common.Hash) {
-	data, err := rlp.EncodeToBytes(badHashes)
+func WriteBadHashesList(db ethdb.KeyValueWriter, badHashes common.Hashes) {
+	protoBadHashes := badHashes.ProtoEncode()
+	data, err := proto.Marshal(protoBadHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode badHashesList")
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal badHashesList")
 	}
 	if err := db.Put(badHashesListPrefix, data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store badHashesList")
@@ -1353,9 +1445,13 @@ func DeleteBadHashesList(db ethdb.KeyValueWriter) {
 
 // WriteInboundEtxs stores the inbound etxs for a given dom block hashes
 func WriteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash, inboundEtxs types.Transactions) {
-	data, err := rlp.EncodeToBytes(inboundEtxs)
+	protoInboundEtxs, err := inboundEtxs.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to RLP encode inbound etxs")
+		log.Global.WithField("err", err).Fatal("Failed to proto encode inbound etxs")
+	}
+	data, err := proto.Marshal(protoInboundEtxs)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal inbound etxs")
 	}
 	if err := db.Put(inboundEtxsKey(hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store badHashesList")
@@ -1363,18 +1459,24 @@ func WriteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash, inboundEtxs typ
 }
 
 // ReadInboundEtxs reads the inbound etxs from the database
-func ReadInboundEtxs(db ethdb.Reader, hash common.Hash) types.Transactions {
+func ReadInboundEtxs(db ethdb.Reader, hash common.Hash, location common.Location) types.Transactions {
 	// Try to look up the data in leveldb.
-	data, _ := db.Get(inboundEtxsKey(hash))
-	if len(data) == 0 {
+	data, err := db.Get(inboundEtxsKey(hash))
+	if err != nil {
 		return nil
 	}
+	protoInboundEtxs := new(types.ProtoTransactions)
+	err = proto.Unmarshal(data, protoInboundEtxs)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal inbound etxs")
+	}
 	inboundEtxs := types.Transactions{}
-	if err := rlp.Decode(bytes.NewReader(data), &inboundEtxs); err != nil {
+	err = inboundEtxs.ProtoDecode(protoInboundEtxs, location)
+	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
-		}).Error("Invalid inbound etxs RLP")
+		}).Error("Invalid inbound etxs Proto")
 		return nil
 	}
 	return inboundEtxs

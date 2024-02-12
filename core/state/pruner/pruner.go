@@ -86,8 +86,8 @@ type Pruner struct {
 }
 
 // NewPruner creates the pruner instance.
-func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64, logger *log.Logger) (*Pruner, error) {
-	headBlock := rawdb.ReadHeadBlock(db)
+func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64, logger *log.Logger, location common.Location) (*Pruner, error) {
+	headBlock := rawdb.ReadHeadBlock(db, location)
 	if headBlock == nil {
 		return nil, errors.New("Failed to load head block")
 	}
@@ -251,7 +251,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 // Prune deletes all historical state nodes except the nodes belong to the
 // specified state version. If user doesn't specify the state version, use
 // the bottom-most snapshot diff layer as the target.
-func (p *Pruner) Prune(root common.Hash) error {
+func (p *Pruner) Prune(root common.Hash, location common.Location) error {
 	// If the state bloom filter is already committed previously,
 	// reuse it for pruning instead of generating a new one. It's
 	// mandatory because a part of state may already be deleted,
@@ -261,7 +261,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		return err
 	}
 	if stateBloomRoot != (common.Hash{}) {
-		return RecoverPruning(p.datadir, p.db, p.trieCachePath)
+		return RecoverPruning(p.datadir, p.db, p.trieCachePath, location)
 	}
 	// If the target state root is not specified, use the HEAD-127 as the
 	// target. The reason for picking it is:
@@ -348,7 +348,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	}
 	// Traverse the genesis, put all genesis state entries into the
 	// bloom filter too.
-	if err := extractGenesis(p.db, p.stateBloom); err != nil {
+	if err := extractGenesis(p.db, p.stateBloom, location); err != nil {
 		return err
 	}
 	filterName := bloomFilterName(p.datadir, root)
@@ -368,7 +368,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) error {
+func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, location common.Location) error {
 	stateBloomPath, stateBloomRoot, err := findBloomFilter(datadir)
 	if err != nil {
 		return err
@@ -376,7 +376,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
-	headBlock := rawdb.ReadHeadBlock(db)
+	headBlock := rawdb.ReadHeadBlock(db, location)
 	if headBlock == nil {
 		return errors.New("Failed to load head block")
 	}
@@ -427,12 +427,12 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 
 // extractGenesis loads the genesis state and commits all the state entries
 // into the given bloomfilter.
-func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
+func extractGenesis(db ethdb.Database, stateBloom *stateBloom, location common.Location) error {
 	genesisHash := rawdb.ReadCanonicalHash(db, 0)
 	if genesisHash == (common.Hash{}) {
 		return errors.New("missing genesis hash")
 	}
-	genesis := rawdb.ReadBlock(db, genesisHash, 0)
+	genesis := rawdb.ReadBlock(db, genesisHash, 0, location)
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}

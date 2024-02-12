@@ -391,7 +391,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 				f.logger.WithField("number", f.frozen).Error("Canonical hash missing, can't freeze")
 				break
 			}
-			header := ReadHeaderRLP(nfdb, hash, f.frozen)
+			header := ReadHeaderProto(nfdb, hash, f.frozen)
 			if len(header) == 0 {
 				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
@@ -399,7 +399,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 				}).Error("Block header missing, can't freeze")
 				break
 			}
-			body := ReadBodyRLP(nfdb, hash, f.frozen)
+			body := ReadBodyProto(nfdb, hash, f.frozen)
 			if len(body) == 0 {
 				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
@@ -407,7 +407,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 				}).Error("Block body missing, can't freeze")
 				break
 			}
-			receipts := ReadReceiptsRLP(nfdb, hash, f.frozen)
+			receipts := ReadReceiptsProto(nfdb, hash, f.frozen)
 			if len(receipts) == 0 {
 				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
@@ -415,8 +415,8 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 				}).Error("Block receipts missing, can't freeze")
 				break
 			}
-			etxSet := ReadEtxSetRLP(nfdb, hash, f.frozen)
-			if len(etxSet) == 0 {
+			etxSet, err := ReadEtxSetProto(nfdb, hash, f.frozen)
+			if err != nil {
 				f.logger.WithFields(log.Fields{
 					"number": f.frozen,
 					"hash":   hash,
