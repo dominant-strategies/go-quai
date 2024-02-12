@@ -114,11 +114,7 @@ func (p *P2PNode) RequestByNumber(location common.Location, number *big.Int, dat
 	resultChan := make(chan interface{}, 1)
 	go func() {
 		defer close(resultChan)
-		peers, err := p.peerManager.GetBestPeers()
-		if err != nil {
-			log.Global.WithField("err", err).Error("Error getting peers")
-			return
-		}
+		peers := p.peerManager.GetBestPeers()
 		var requestWg sync.WaitGroup
 		for _, peerID := range peers {
 			requestWg.Add(1)

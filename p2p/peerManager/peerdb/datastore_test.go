@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	datastore "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ func TestPeerDB_PutGetDeletePeer(t *testing.T) {
 
 	peerInfo := createPeers(t, 1)[0]
 
-	key := NewKey(peerInfo.AddrInfo.ID)
+	key := datastore.NewKey(peerInfo.AddrInfo.ID.String())
 
 	// Marshal the peer info as JSON for storage
 	value, err := json.Marshal(peerInfo)
@@ -56,7 +57,7 @@ func TestHas(t *testing.T) {
 
 	peerInfo := createPeers(t, 1)[0]
 
-	key := NewKey(peerInfo.AddrInfo.ID)
+	key := datastore.NewKey(peerInfo.AddrInfo.ID.String())
 
 	value, err := json.Marshal(peerInfo)
 	require.NoError(t, err)
@@ -86,7 +87,7 @@ func TestQuery(t *testing.T) {
 	peers := createPeers(t, 5)
 
 	for _, peerInfo := range peers {
-		key := NewKey(peerInfo.AddrInfo.ID)
+		key := datastore.NewKey(peerInfo.AddrInfo.ID.String())
 		value, err := json.Marshal(peerInfo)
 		require.NoError(t, err)
 		err = ps.Put(context.Background(), key, value)

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/ipfs/go-datastore"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
@@ -37,7 +38,7 @@ func TestCounter(t *testing.T) {
 
 	t.Run("Test increment counter", func(t *testing.T) {
 		for _, peer := range peers {
-			key := NewKey(peer.AddrInfo.ID)
+			key := datastore.NewKey(peer.AddrInfo.ID.String())
 			value, err := json.Marshal(peer)
 			require.NoError(t, err)
 			err = ps.Put(context.Background(), key, value)
@@ -63,7 +64,7 @@ func TestCounter(t *testing.T) {
 	t.Run("Test decrement counter", func(t *testing.T) {
 		// delete 5 peers
 		for i := 0; i < 5; i++ {
-			key := NewKey(peers[i].AddrInfo.ID)
+			key := datastore.NewKey(peers[i].AddrInfo.ID.String())
 			err = ps.Delete(context.Background(), key)
 			require.NoError(t, err)
 		}

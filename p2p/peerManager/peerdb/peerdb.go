@@ -5,7 +5,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/log"
-	datastore "github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/viper"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -60,9 +59,4 @@ func NewPeerDB(dbDirName string) (*PeerDB, error) {
 		db:          db,
 		peerCounter: peerCounter,
 	}, nil
-}
-
-// Creates a new datastore.Key for the given prefix and peerID
-func NewKey(peerID peer.ID) datastore.Key {
-	return datastore.NewKey(peerID.String())
 }

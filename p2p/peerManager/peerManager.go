@@ -143,7 +143,10 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 	}
 
 	for result := range results.Next() {
-		peerID := p2p.PeerID(result.Key)
+		peerID, err := peer.Decode(strings.TrimPrefix(result.Key, "/"))
+		if err != nil {
+			return nil
+		}
 		peerSubset = append(peerSubset, peerID)
 	}
 
@@ -242,7 +245,7 @@ func (pm *BasicPeerManager) recategorizePeer(peer p2p.PeerID) error {
 		return err
 	}
 
-	key := peerdb.NewKey(peer)
+	key := datastore.NewKey(peer.String())
 	// TODO: construct peerDB.PeerInfo and marshal it to bytes
 	peerInfo := []byte{}
 
@@ -308,7 +311,7 @@ func (pm *BasicPeerManager) Stop() error {
 // Deletes the peer from the first DB it is found in.
 // Returns error 'ErrPeerNotFound' if the peer is not found in any of the DBs.
 func (pm *BasicPeerManager) deletePeerFromDB(peer p2p.PeerID) error {
-	key := peerdb.NewKey(peer)
+	key := datastore.NewKey(peer.String())
 
 	dbs := []*peerdb.PeerDB{pm.bestPeersDB, pm.responsivePeersDB, pm.allPeersDB}
 
