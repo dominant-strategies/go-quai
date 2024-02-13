@@ -114,10 +114,9 @@ func (p *P2PNode) RequestByNumber(location common.Location, number *big.Int, dat
 	resultChan := make(chan interface{}, 1)
 	go func() {
 		defer close(resultChan)
-		// 1. Query the topic peers for the data
-		peers, err := p.pubsub.PeersForTopic(location, datatype)
+		peers, err := p.peerManager.GetBestPeers()
 		if err != nil {
-			log.Global.Errorf("Error requesting data: ", err)
+			log.Global.WithField("err", err).Error("Error getting peers")
 			return
 		}
 		var requestWg sync.WaitGroup
