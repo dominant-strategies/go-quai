@@ -12,23 +12,6 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
-// Unmarshals a serialized protobuf slice of bytes into a protocol buffer type
-func UnmarshalProtoMessage(data []byte, msg proto.Message) error {
-	if err := proto.Unmarshal(data, msg); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Marshals a protocol buffer type into a serialized protobuf slice of bytes
-func MarshalProtoMessage(pbMsg proto.Message) ([]byte, error) {
-	data, err := proto.Marshal(pbMsg)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
 // EncodeRequestMessage creates a marshaled protobuf message for a Quai Request.
 // Returns the serialized protobuf message.
 func EncodeQuaiRequest(id uint32, location common.Location, data interface{}, datatype interface{}) ([]byte, error) {
@@ -61,7 +44,7 @@ func EncodeQuaiRequest(id uint32, location common.Location, data interface{}, da
 		return nil, errors.Errorf("unsupported request data type: %T", datatype)
 	}
 
-	return MarshalProtoMessage(&reqMsg)
+	return proto.Marshal(&reqMsg)
 }
 
 // DecodeRequestMessage unmarshals a protobuf message into a Quai Request.
@@ -73,7 +56,7 @@ func EncodeQuaiRequest(id uint32, location common.Location, data interface{}, da
 //  5. An error
 func DecodeQuaiRequest(data []byte) (uint32, interface{}, common.Location, interface{}, error) {
 	var reqMsg QuaiRequestMessage
-	err := UnmarshalProtoMessage(data, &reqMsg)
+	err := proto.Unmarshal(data, &reqMsg)
 	if err != nil {
 		return 0, nil, common.Location{}, nil, err
 	}
@@ -151,7 +134,7 @@ func EncodeQuaiResponse(id uint32, data interface{}) ([]byte, error) {
 		return nil, errors.Errorf("unsupported response data type: %T", data)
 	}
 
-	return MarshalProtoMessage(&respMsg)
+	return proto.Marshal(&respMsg)
 }
 
 // Unmarshals a serialized protobuf message into a Quai Response message.
@@ -161,7 +144,7 @@ func EncodeQuaiResponse(id uint32, data interface{}) ([]byte, error) {
 //  3. An error
 func DecodeQuaiResponse(data []byte, sourceLocation common.Location) (uint32, interface{}, error) {
 	var respMsg QuaiResponseMessage
-	err := UnmarshalProtoMessage(data, &respMsg)
+	err := proto.Unmarshal(data, &respMsg)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -216,25 +199,25 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		return MarshalProtoMessage(protoBlock)
+		return proto.Marshal(protoBlock)
 	case *types.Header:
 		log.Global.Tracef("marshalling header: %+v", data)
 		protoHeader, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
-		return MarshalProtoMessage(protoHeader)
+		return proto.Marshal(protoHeader)
 	case *types.Transaction:
 		log.Global.Tracef("marshalling transaction: %+v", data)
 		protoTransaction, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
-		return MarshalProtoMessage(protoTransaction)
+		return proto.Marshal(protoTransaction)
 	case common.Hash:
 		log.Global.Tracef("marshalling hash: %+v", data)
 		protoHash := data.ProtoEncode()
-		return MarshalProtoMessage(protoHash)
+		return proto.Marshal(protoHash)
 	default:
 		return nil, errors.New("unsupported data type")
 	}
@@ -245,7 +228,7 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 	switch datatype.(type) {
 	case *types.Block:
 		protoBlock := &types.ProtoBlock{}
-		err := UnmarshalProtoMessage(data, protoBlock)
+		err := proto.Unmarshal(data, protoBlock)
 		if err != nil {
 			return err
 		}
@@ -258,7 +241,7 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		return nil
 	case *types.Header:
 		protoHeader := &types.ProtoHeader{}
-		err := UnmarshalProtoMessage(data, protoHeader)
+		err := proto.Unmarshal(data, protoHeader)
 		if err != nil {
 			return err
 		}
@@ -271,7 +254,7 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		return nil
 	case *types.Transaction:
 		protoTransaction := &types.ProtoTransaction{}
-		err := UnmarshalProtoMessage(data, protoTransaction)
+		err := proto.Unmarshal(data, protoTransaction)
 		if err != nil {
 			return err
 		}
@@ -284,7 +267,7 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		return nil
 	case common.Hash:
 		protoHash := &common.ProtoHash{}
-		err := UnmarshalProtoMessage(data, protoHash)
+		err := proto.Unmarshal(data, protoHash)
 		if err != nil {
 			return err
 		}
