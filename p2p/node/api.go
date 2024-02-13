@@ -162,12 +162,7 @@ func (p *P2PNode) RequestByHash(location common.Location, hash common.Hash, data
 
 		// 2. If not, query the topic peers for the data
 		var requestWg sync.WaitGroup
-		peerList, err := p.peerManager.GetBestPeers()
-		if err != nil {
-			log.Global.Errorf("error getting best peers: %s", err)
-			resultChan <- err
-			return
-		}
+		peerList := p.peerManager.GetBestPeers()
 		for _, peerID := range peerList {
 			requestWg.Add(1)
 			go func(peerID peer.ID) {

@@ -51,11 +51,11 @@ type PeerManager interface {
 	PrunePeerConnection(p2p.PeerID) error
 
 	// Returns c_recipientCount of the highest quality peers: lively & resposnive
-	GetBestPeers() ([]p2p.PeerID, error)
+	GetBestPeers() []p2p.PeerID
 	// Returns c_recipientCount responsive, but less lively peers
-	GetResponsivePeers() ([]p2p.PeerID, error)
+	GetResponsivePeers() []p2p.PeerID
 	// Returns c_recipientCount peers regardless of status
-	GetPeers() ([]p2p.PeerID, error)
+	GetPeers() []p2p.PeerID
 
 	// Increases the peer's liveliness score
 	MarkLivelyPeer(p2p.PeerID)
@@ -132,14 +132,14 @@ func (pm *BasicPeerManager) PrunePeerConnection(peerID p2p.PeerID) error {
 	return pm.deletePeerFromDB(peerID)
 }
 
-func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) ([]p2p.PeerID, error) {
+func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) []p2p.PeerID {
 	peerSubset := make([]p2p.PeerID, 0, numPeers)
 	q := query.Query{
 		Limit: numPeers,
 	}
 	results, err := peerDB.Query(pm.ctx, q)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	for result := range results.Next() {
@@ -147,50 +147,32 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 		peerSubset = append(peerSubset, peerID)
 	}
 
-	return peerSubset, nil
+	return peerSubset
 }
 
-func (pm *BasicPeerManager) GetBestPeers() ([]p2p.PeerID, error) {
+func (pm *BasicPeerManager) GetBestPeers() []p2p.PeerID {
 	bestPeersCount := pm.bestPeersDB.GetPeerCount()
 	if bestPeersCount < c_peerCount {
-		bestPeerList, err := pm.getPeersHelper(pm.bestPeersDB, bestPeersCount)
-		if err != nil {
-			return nil, err
-		}
-
-		responsivePeerList, err := pm.getPeersHelper(pm.responsivePeersDB, c_peerCount-bestPeersCount)
-		if err != nil {
-			return nil, err
-		}
-
-		bestPeerList = append(bestPeerList, responsivePeerList...)
-		return bestPeerList, nil
+		bestPeerList := pm.getPeersHelper(pm.bestPeersDB, bestPeersCount)
+		bestPeerList = append(bestPeerList, pm.GetResponsivePeers()...)
+		return bestPeerList
 	}
 	return pm.getPeersHelper(pm.bestPeersDB, c_peerCount)
 }
 
-func (pm *BasicPeerManager) GetResponsivePeers() ([]p2p.PeerID, error) {
+func (pm *BasicPeerManager) GetResponsivePeers() []p2p.PeerID {
 	responsivePeersCount := pm.responsivePeersDB.GetPeerCount()
 	if responsivePeersCount < c_peerCount {
-		responsivePeerList, err := pm.getPeersHelper(pm.responsivePeersDB, responsivePeersCount)
-		if err != nil {
-			return nil, err
-		}
+		responsivePeerList := pm.getPeersHelper(pm.responsivePeersDB, responsivePeersCount)
+		responsivePeerList = append(responsivePeerList, pm.GetPeers()...)
 
-		allPeersList, err := pm.getPeersHelper(pm.allPeersDB, c_peerCount-responsivePeersCount)
-		if err != nil {
-			return nil, err
-		}
-
-		responsivePeerList = append(responsivePeerList, allPeersList...)
-
-		return responsivePeerList, nil
+		return responsivePeerList
 	}
 	return pm.getPeersHelper(pm.responsivePeersDB, c_peerCount)
 
 }
 
-func (pm *BasicPeerManager) GetPeers() ([]p2p.PeerID, error) {
+func (pm *BasicPeerManager) GetPeers() []p2p.PeerID {
 	return pm.getPeersHelper(pm.allPeersDB, c_peerCount)
 }
 
