@@ -48,6 +48,8 @@ type PeerManager interface {
 	UnblockPeer(p peer.ID) error
 	UnblockSubnet(ipnet *net.IPNet) error
 
+	// Initializes a peer to the peer manager
+	AddPeer(p2p.PeerID) error
 	// Removes a peer from all the quality buckets
 	RemovePeer(p2p.PeerID) error
 
@@ -127,6 +129,10 @@ func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datas
 		allPeersDB:           allPeersDB,
 		ctx:                  ctx,
 	}, nil
+}
+
+func (pm *BasicPeerManager) AddPeer(peerID p2p.PeerID) error {
+	return pm.recategorizePeer(peerID)
 }
 
 // Removes peer from the bucket it is in. Does not return an error if the peer is not found
