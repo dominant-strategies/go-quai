@@ -124,7 +124,9 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		protoTx.Value = tx.Value().Bytes()
 		protoTx.Data = tx.Data()
-		protoTx.To = tx.To().Bytes()
+		if tx.To() != nil {
+			protoTx.To = tx.To().Bytes()
+		}
 		protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
 		protoTx.GasTipCap = tx.GasTipCap().Bytes()
 		V, R, S := tx.RawSignatureValues()
@@ -185,9 +187,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	if protoTx.Data == nil {
 		return errors.New("missing required field 'Data' in ProtoTransaction")
 	}
-	if protoTx.To == nil {
-		return errors.New("missing required field 'To' in ProtoTransaction")
-	}
 
 	txType := protoTx.GetType()
 
@@ -205,8 +204,12 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		var itx InternalTx
 		itx.AccessList = AccessList{}
 		itx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
-		to := common.BytesToAddress(protoTx.GetTo(), location)
-		itx.To = &to
+		if protoTx.To == nil {
+			itx.To = nil
+		} else {
+			to := common.BytesToAddress(protoTx.GetTo(), location)
+			itx.To = &to
+		}
 		itx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
 		itx.Nonce = protoTx.GetNonce()
 		itx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
@@ -238,6 +241,9 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		var etx ExternalTx
 		etx.AccessList = AccessList{}
 		etx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
+		if protoTx.To == nil {
+			return errors.New("missing required field 'To' in ProtoTransaction")
+		}
 		to := common.BytesToAddress(protoTx.GetTo(), location)
 		etx.To = &to
 		etx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
@@ -264,6 +270,9 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		var ietx InternalToExternalTx
 		ietx.AccessList = AccessList{}
 		ietx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
+		if protoTx.To == nil {
+			return errors.New("missing required field 'To' in ProtoTransaction")
+		}
 		to := common.BytesToAddress(protoTx.GetTo(), location)
 		ietx.To = &to
 		ietx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
