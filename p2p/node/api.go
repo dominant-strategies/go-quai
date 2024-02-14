@@ -112,7 +112,7 @@ func (p *P2PNode) Stop() error {
 func (p *P2PNode) requestFromPeers(location common.Location, data interface{}, datatype interface{}, resultChan chan interface{}) {
 	go func() {
 		defer close(resultChan)
-		peers := p.peerManager.GetBestPeers()
+		peers := p.peerManager.GetBestPeersWithFallback()
 
 		var requestWg sync.WaitGroup
 		for _, peerID := range peers {

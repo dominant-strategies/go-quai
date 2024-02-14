@@ -30,7 +30,7 @@ const (
 	// Dir names for the peerDBs
 	c_bestDBName       = "bestPeersDB"
 	c_responsiveDBName = "responsivePeersDB"
-	c_peersDBName      = "allPeersDB"
+	c_lastResortDBName = "lastResortPeersDB"
 )
 
 // PeerManager is an interface that extends libp2p Connection Manager and Gater
@@ -54,11 +54,11 @@ type PeerManager interface {
 	RemovePeer(p2p.PeerID) error
 
 	// Returns c_recipientCount of the highest quality peers: lively & resposnive
-	GetBestPeers() []p2p.PeerID
+	GetBestPeersWithFallback() []p2p.PeerID
 	// Returns c_recipientCount responsive, but less lively peers
-	GetResponsivePeers() []p2p.PeerID
+	GetResponsivePeersWithFallback() []p2p.PeerID
 	// Returns c_recipientCount peers regardless of status
-	GetPeers() []p2p.PeerID
+	GetLastResortPeers() []p2p.PeerID
 
 	// Increases the peer's liveliness score
 	MarkLivelyPeer(p2p.PeerID)
@@ -89,7 +89,7 @@ type BasicPeerManager struct {
 
 	bestPeersDB       *peerdb.PeerDB
 	responsivePeersDB *peerdb.PeerDB
-	allPeersDB        *peerdb.PeerDB
+	lastResortPeers   *peerdb.PeerDB
 
 	ctx context.Context
 }
@@ -115,7 +115,7 @@ func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datas
 		return nil, err
 	}
 
-	allPeersDB, err := peerdb.NewPeerDB(c_peersDBName)
+	lastResortPeers, err := peerdb.NewPeerDB(c_lastResortDBName)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func NewManager(ctx context.Context, selfID p2p.PeerID, low int, high int, datas
 		BasicConnectionGater: gater,
 		bestPeersDB:          bestPeersDB,
 		responsivePeersDB:    responsivePeersDB,
-		allPeersDB:           allPeersDB,
+		lastResortPeers:      lastResortPeers,
 		ctx:                  ctx,
 	}, nil
 }
@@ -139,7 +139,7 @@ func (pm *BasicPeerManager) AddPeer(peerID p2p.PeerID) error {
 func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
 	key := datastore.NewKey(peerID.String())
 
-	dbs := []*peerdb.PeerDB{pm.bestPeersDB, pm.responsivePeersDB, pm.allPeersDB}
+	dbs := []*peerdb.PeerDB{pm.bestPeersDB, pm.responsivePeersDB, pm.lastResortPeers}
 	for _, db := range dbs {
 		exists, _ := db.Has(pm.ctx, key)
 		if exists {
@@ -171,21 +171,21 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 	return peerSubset
 }
 
-func (pm *BasicPeerManager) GetBestPeers() []p2p.PeerID {
+func (pm *BasicPeerManager) GetBestPeersWithFallback() []p2p.PeerID {
 	bestPeersCount := pm.bestPeersDB.GetPeerCount()
 	if bestPeersCount < c_peerCount {
 		bestPeerList := pm.getPeersHelper(pm.bestPeersDB, bestPeersCount)
-		bestPeerList = append(bestPeerList, pm.GetResponsivePeers()...)
+		bestPeerList = append(bestPeerList, pm.GetResponsivePeersWithFallback()...)
 		return bestPeerList
 	}
 	return pm.getPeersHelper(pm.bestPeersDB, c_peerCount)
 }
 
-func (pm *BasicPeerManager) GetResponsivePeers() []p2p.PeerID {
+func (pm *BasicPeerManager) GetResponsivePeersWithFallback() []p2p.PeerID {
 	responsivePeersCount := pm.responsivePeersDB.GetPeerCount()
 	if responsivePeersCount < c_peerCount {
 		responsivePeerList := pm.getPeersHelper(pm.responsivePeersDB, responsivePeersCount)
-		responsivePeerList = append(responsivePeerList, pm.GetPeers()...)
+		responsivePeerList = append(responsivePeerList, pm.GetLastResortPeers()...)
 
 		return responsivePeerList
 	}
@@ -193,8 +193,8 @@ func (pm *BasicPeerManager) GetResponsivePeers() []p2p.PeerID {
 
 }
 
-func (pm *BasicPeerManager) GetPeers() []p2p.PeerID {
-	return pm.getPeersHelper(pm.allPeersDB, c_peerCount)
+func (pm *BasicPeerManager) GetLastResortPeers() []p2p.PeerID {
+	return pm.getPeersHelper(pm.lastResortPeers, c_peerCount)
 }
 
 func (pm *BasicPeerManager) MarkLivelyPeer(peer p2p.PeerID) {
@@ -283,7 +283,7 @@ func (pm *BasicPeerManager) recategorizePeer(peer p2p.PeerID) error {
 
 	} else {
 		// All other peers
-		err := pm.allPeersDB.Put(pm.ctx, key, peerInfo)
+		err := pm.lastResortPeers.Put(pm.ctx, key, peerInfo)
 		if err != nil {
 			return errors.Wrap(err, "error putting peer in allPeersDB")
 		}
@@ -312,7 +312,7 @@ func (pm *BasicPeerManager) Stop() error {
 		pm.BasicConnMgr.Close,
 		pm.bestPeersDB.Close,
 		pm.responsivePeersDB.Close,
-		pm.allPeersDB.Close,
+		pm.lastResortPeers.Close,
 	}
 
 	wg.Add(len(closeFuncs))
