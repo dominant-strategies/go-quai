@@ -562,10 +562,13 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 	}
 }
 
-func (sl *Slice) randomRelayArray() [3]int {
-	rand.Seed(time.Now().UnixNano())
-	nums := [3]int{0, 1, 2}
-	for i := len(nums) - 1; i > 0; i-- {
+func (sl *Slice) randomRelayArray() []int {
+	length := len(sl.subClients)
+	nums := []int{}
+	for i := 0; i < length; i++ {
+		nums = append(nums, i)
+	}
+	for i := length - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)
 		nums[i], nums[j] = nums[j], nums[i]
 	}
