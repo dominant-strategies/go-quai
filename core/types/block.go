@@ -337,9 +337,6 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	if protoHeader.Location == nil {
 		return errors.New("missing required field 'Location' in Header")
 	}
-	if protoHeader.Extra == nil {
-		return errors.New("missing required field 'Extra' in Header")
-	}
 	if protoHeader.MixHash == nil {
 		return errors.New("missing required field 'MixHash' in Header")
 	}
