@@ -12,6 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/p2p/requestManager"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -31,7 +32,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	defer stream.Close()
 
 	// Get a new request ID
-	id := protocol.GetRequestIDManager().GenerateRequestID()
+	id := requestManager.GetRequestIDManager().GenerateRequestID()
 
 	// Create the corresponding data request
 	requestBytes, err := pb.EncodeQuaiRequest(id, location, data, datatype)
@@ -46,7 +47,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	}
 
 	// Add request ID to the map of pending requests
-	protocol.GetRequestIDManager().AddRequestID(id)
+	requestManager.GetRequestIDManager().AddRequestID(id)
 
 	// Read the response from the peer
 	responseBytes, err := common.ReadMessageFromStream(stream)
@@ -68,7 +69,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	}
 
 	// Remove request ID from the map of pending requests
-	protocol.GetRequestIDManager().RemoveRequestID(id)
+	requestManager.GetRequestIDManager().RemoveRequestID(id)
 
 	// Check the received data type & hash matches the request
 	switch datatype.(type) {
