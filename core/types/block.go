@@ -660,7 +660,10 @@ func (h *Header) SealHash() (hash common.Hash) {
 		hdata.ManifestHash[i] = h.ManifestHash(i)
 		hdata.Number[i] = h.Number(i)
 	}
-	rlp.Encode(hasher, hdata)
+	err := rlp.Encode(hasher, hdata)
+	if err != nil {
+		log.Global.Error("Failed to encode header data ", "err", err)
+	}
 	hash.SetBytes(hasher.Sum(hash[:0]))
 	return hash
 }

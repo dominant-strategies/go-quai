@@ -1320,6 +1320,10 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 		return
 	}
 
+	if nodeCtx != common.ZONE_CTX {
+		localPendingHeader.SetCoinbase(common.Zero)
+	}
+
 	if nodeCtx == common.PRIME_CTX {
 		domPendingHeader = types.CopyHeader(localPendingHeader)
 	} else {

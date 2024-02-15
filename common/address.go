@@ -85,7 +85,7 @@ func NewAddressFromData(inner AddressData) Address {
 // EncodeRLP serializes b into the Quai RLP block format.
 func (a Address) EncodeRLP(w io.Writer) error {
 	if a.inner == nil {
-		return ErrNilInner
+		a.inner = &ExternalAddress{}
 	}
 	return rlp.Encode(w, a.inner)
 }
@@ -103,7 +103,7 @@ func (a *Address) DecodeRLP(s *rlp.Stream) error {
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte {
 	if a.inner == nil {
-		panic("Address has nil inner")
+		return []byte{}
 	}
 	return a.inner.Bytes()
 }
@@ -111,7 +111,7 @@ func (a Address) Bytes() []byte {
 // Bytes20 gets the bytes20 representation of the underlying address.
 func (a Address) Bytes20() (addr AddressBytes) {
 	if a.inner == nil {
-		panic("Address has nil inner")
+		return AddressBytes{}
 	}
 	copy(addr[:], a.Bytes()[:]) // this is not very performant
 	return addr
@@ -120,7 +120,7 @@ func (a Address) Bytes20() (addr AddressBytes) {
 // Hash converts an address to a hash by left-padding it with zeros.
 func (a Address) Hash() Hash {
 	if a.inner == nil {
-		panic("Address has nil inner")
+		return Hash{}
 	}
 	return a.inner.Hash()
 }
@@ -128,7 +128,7 @@ func (a Address) Hash() Hash {
 // Hex returns a hex string representation of the address.
 func (a Address) Hex() string {
 	if a.inner == nil {
-		panic("Address has nil inner")
+		return string([]byte{})
 	}
 	return a.inner.Hex()
 }
@@ -136,7 +136,7 @@ func (a Address) Hex() string {
 // String implements fmt.Stringer.
 func (a Address) String() string {
 	if a.inner == nil {
-		panic("Address has nil inner")
+		return string([]byte{})
 	}
 	return a.inner.String()
 }
@@ -152,7 +152,7 @@ func (a Address) Format(s fmt.State, c rune) {
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
 	if a.inner == nil {
-		return nil, ErrNilInner
+		a.inner = &ExternalAddress{}
 	}
 	return a.inner.MarshalText()
 }
@@ -170,7 +170,7 @@ func (a *Address) UnmarshalText(input []byte) error {
 // MarshalJSON marshals a subscription as its ID.
 func (a *Address) MarshalJSON() ([]byte, error) {
 	if a.inner == nil {
-		return nil, ErrNilInner
+		return []byte{}, ErrNilInner
 	}
 	return json.Marshal(a.inner)
 }
@@ -207,7 +207,7 @@ func (a *Address) Scan(src interface{}, args ...Location) error {
 // Value implements valuer for database/sql.
 func (a Address) Value() (driver.Value, error) {
 	if a.inner == nil {
-		return nil, ErrNilInner
+		return []byte{}, ErrNilInner
 	}
 	return a.inner.Value()
 }

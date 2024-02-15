@@ -526,9 +526,11 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	start := time.Now()
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
-	if w.coinbase.Equal(common.Zero) {
+	if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) {
 		w.logger.Error("Refusing to mine without etherbase")
 		return nil, errors.New("etherbase not found")
+	} else if w.coinbase.Equal(common.Address{}) {
+		w.coinbase = common.Zero
 	}
 	coinbase = w.coinbase // Use the preset address as the fee recipient
 
