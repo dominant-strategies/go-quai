@@ -2,43 +2,38 @@ package requestManager
 
 import (
 	"crypto/rand"
+	"errors"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/log"
 )
 
 var (
-	manager *requestIDManager
-	once sync.Once
+	errRequestNotFound = errors.New("request not found")
 )
 
 type RequestManager interface {
-	GenerateRequestID() uint32
-	AddRequestID(uint32)
-	RemoveRequestID(uint32)
-	CheckRequestIDExists(uint32) bool
+	CreateRequest() (id uint32)
+	CloseRequest(id uint32)
+	GetRequestChan(id uint32) (dataChan chan interface{}, err error)
 }
 
 // RequestIDManager is a singleton that manages request IDs
 type requestIDManager struct {
 	mu             sync.Mutex
-	activeRequests map[uint32]struct{}
+	activeRequests map[uint32]chan interface{}
 }
 
 // Returns the singleton RequestIDManager
-func GetRequestIDManager() RequestManager {
-	once.Do(func() {
-		manager = &requestIDManager{
-			activeRequests: make(map[uint32]struct{}),
-		}
-	})
+func NewManager() RequestManager {
 	return &requestIDManager{
-		activeRequests: make(map[uint32]struct{}),
+		mu:             sync.Mutex{},
+		activeRequests: make(map[uint32]chan interface{}),
 	}
 }
 
 // Generates a new random uint32 as request ID
-func (m *requestIDManager) GenerateRequestID() uint32 {
+func (m *requestIDManager) CreateRequest() uint32 {
 	var id uint32
 	for {
 		b := make([]byte, 4)
@@ -48,31 +43,38 @@ func (m *requestIDManager) GenerateRequestID() uint32 {
 			continue
 		}
 		id = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
-		if !m.CheckRequestIDExists(id) {
+		if _, ok := m.activeRequests[id]; !ok{
 			break
 		}
 	}
+
+	m.addRequestID(id, make(chan interface{}))
 	return id
 }
 
 // Adds a request ID to the active requests map
-func (m *requestIDManager) AddRequestID(id uint32) {
+func (m *requestIDManager) addRequestID(id uint32, dataChan chan interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.activeRequests[id] = struct{}{}
+	m.activeRequests[id] = dataChan
 }
 
 // Removes a request ID from the active requests map
-func (m *requestIDManager) RemoveRequestID(id uint32) {
+func (m *requestIDManager) CloseRequest(id uint32) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	dataChan := m.activeRequests[id]
+	close(dataChan)
 	delete(m.activeRequests, id)
 }
 
 // Checks if a request ID exists in the active requests map
-func (m *requestIDManager) CheckRequestIDExists(id uint32) bool {
+func (m *requestIDManager) GetRequestChan(id uint32) (chan interface{}, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	_, exists := m.activeRequests[id]
-	return exists
+	dataChan, ok := m.activeRequests[id]
+	if !ok {
+		return nil, errRequestNotFound
+	}
+	return dataChan, nil
 }

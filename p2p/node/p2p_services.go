@@ -32,7 +32,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	defer stream.Close()
 
 	// Get a new request ID
-	id := requestManager.GetRequestIDManager().GenerateRequestID()
+	id := requestManager.GetRequestIDManager().CreateRequest()
 
 	// Create the corresponding data request
 	requestBytes, err := pb.EncodeQuaiRequest(id, location, data, datatype)
@@ -45,9 +45,6 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	if err != nil {
 		return nil, err
 	}
-
-	// Add request ID to the map of pending requests
-	requestManager.GetRequestIDManager().AddRequestID(id)
 
 	// Read the response from the peer
 	responseBytes, err := common.ReadMessageFromStream(stream)
@@ -69,7 +66,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	}
 
 	// Remove request ID from the map of pending requests
-	requestManager.GetRequestIDManager().RemoveRequestID(id)
+	requestManager.GetRequestIDManager().CloseRequest(id)
 
 	// Check the received data type & hash matches the request
 	switch datatype.(type) {
