@@ -7,29 +7,38 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 )
 
+var (
+	manager *requestIDManager
+	once sync.Once
+)
+
+type RequestManager interface {
+	GenerateRequestID() uint32
+	AddRequestID(uint32)
+	RemoveRequestID(uint32)
+	CheckRequestIDExists(uint32) bool
+}
+
 // RequestIDManager is a singleton that manages request IDs
-type RequestIDManager struct {
+type requestIDManager struct {
 	mu             sync.Mutex
 	activeRequests map[uint32]struct{}
 }
 
-var (
-	manager *RequestIDManager
-	once    sync.Once
-)
-
 // Returns the singleton RequestIDManager
-func GetRequestIDManager() *RequestIDManager {
+func GetRequestIDManager() RequestManager {
 	once.Do(func() {
-		manager = &RequestIDManager{
+		manager = &requestIDManager{
 			activeRequests: make(map[uint32]struct{}),
 		}
 	})
-	return manager
+	return &requestIDManager{
+		activeRequests: make(map[uint32]struct{}),
+	}
 }
 
 // Generates a new random uint32 as request ID
-func (m *RequestIDManager) GenerateRequestID() uint32 {
+func (m *requestIDManager) GenerateRequestID() uint32 {
 	var id uint32
 	for {
 		b := make([]byte, 4)
@@ -47,21 +56,21 @@ func (m *RequestIDManager) GenerateRequestID() uint32 {
 }
 
 // Adds a request ID to the active requests map
-func (m *RequestIDManager) AddRequestID(id uint32) {
+func (m *requestIDManager) AddRequestID(id uint32) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.activeRequests[id] = struct{}{}
 }
 
 // Removes a request ID from the active requests map
-func (m *RequestIDManager) RemoveRequestID(id uint32) {
+func (m *requestIDManager) RemoveRequestID(id uint32) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.activeRequests, id)
 }
 
 // Checks if a request ID exists in the active requests map
-func (m *RequestIDManager) CheckRequestIDExists(id uint32) bool {
+func (m *requestIDManager) CheckRequestIDExists(id uint32) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	_, exists := m.activeRequests[id]
