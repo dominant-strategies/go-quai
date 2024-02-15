@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
+	"github.com/dominant-strategies/go-quai/p2p/requestManager"
 	"github.com/dominant-strategies/go-quai/quai"
 )
 
@@ -52,8 +53,11 @@ type P2PNode struct {
 	// Gossipsub instance
 	pubsub *pubsubManager.PubsubManager
 
-	// Peer management instance
+	// Peer management interface instance
 	peerManager peerManager.PeerManager
+
+	// Request management interface instance
+	requestManager requestManager.RequestManager
 
 	// Caches for each type of data we may receive
 	cache map[string]*lru.Cache[common.Hash, interface{}]
@@ -193,13 +197,14 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	}
 
 	return &P2PNode{
-		ctx:         ctx,
-		Host:        host,
-		bootpeers:   bootpeers,
-		dht:         dht,
-		pubsub:      ps,
-		peerManager: peerMgr,
-		cache:       cache,
+		ctx:            ctx,
+		Host:           host,
+		bootpeers:      bootpeers,
+		dht:            dht,
+		pubsub:         ps,
+		peerManager:    peerMgr,
+		requestManager: requestManager.NewManager(),
+		cache:          cache,
 	}, nil
 }
 
