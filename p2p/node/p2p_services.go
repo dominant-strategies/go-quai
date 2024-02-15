@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/ipfs/go-cid"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"
 
@@ -39,30 +40,21 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 		return nil, err
 	}
 
+	// Start listening for the response
+	go p.readLoop(stream, location)
+
 	// Send the request to the peer
 	err = common.WriteMessageToStream(stream, requestBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	// Read the response from the peer
-	responseBytes, err := common.ReadMessageFromStream(stream)
+	// Get appropriate channel and wait for response
+	dataChan, err := p.requestManager.GetRequestChan(id)
 	if err != nil {
 		return nil, err
 	}
-
-	// Unmarshal the response
-	recvdID, recvdType, err := pb.DecodeQuaiResponse(responseBytes, location)
-	if err != nil {
-		// TODO: should we report this peer for an invalid response?
-		return nil, err
-	}
-
-	// Check the received request ID matches the request
-	if recvdID != id {
-		log.Global.Warn("peer returned unexpected request ID")
-		panic("TODO: implement")
-	}
+	recvdType := <-dataChan
 
 	// Remove request ID from the map of pending requests
 	p.requestManager.CloseRequest(id)
@@ -96,6 +88,33 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	// If this peer responded with an invalid response, ban them for misbehaving.
 	p.BanPeer(peerID)
 	return nil, errors.New("invalid response")
+}
+
+func (p *P2PNode) readLoop(stream network.Stream, location common.Location) {
+	for {
+		message, err := common.ReadMessageFromStream(stream)
+		if err != nil {
+			return
+		}
+
+		recvdID, recvdType, err := pb.DecodeQuaiResponse(message, location)
+		if err != nil {
+			log.Global.WithField(
+				"err", err,
+			).Errorf("error decoding quai response: %s", err)
+			return
+		}
+
+		dataChan, err := p.requestManager.GetRequestChan(recvdID)
+		if err != nil {
+			log.Global.WithFields(log.Fields{
+				"requestID": recvdID,
+				"err":       err,
+			}).Error("error associating request ID with data channel")
+			return
+		}
+		dataChan <- recvdType
+	}
 }
 
 // Creates a Cid from a location to be used as DHT key
