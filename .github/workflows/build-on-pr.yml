@@ -1,4 +1,4 @@
-name: Build on PR
+name: Common Build on PR
 on:
   pull_request:
     types:
@@ -6,19 +6,15 @@ on:
       - synchronize
       - reopened
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-
-    - uses: actions/setup-go@v4
-      with:
-        go-version: '1.20'
-
-    - name: create network.env from dist 
-      run: mv network.env.dist network.env
-
-    - name: build 
-      run: make go-quai
+  call-common-workflow:
+    uses: dominant-strategies/quai-cicd/.github/workflows/deploy-dev-common.yml@main
+    with:
+      needs_build: true
+      build_command: "make go-quai"
+      needs_docker: false
+      include_chart: false
+      cloud_deploy: false
+      skip_deploy: true
+      update_version: false
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}

@@ -1,16 +1,14 @@
-name: Build and Deploy to Prod
+name: Common Prod Workflow
 on: workflow_dispatch
 jobs:
-  buildDeployProd:
-    uses: ./.github/workflows/build-deploy.yml
-    secrets:
-      DOCKER: ${{ secrets.DOCKER }}
-      GH_PAT: ${{ secrets.GH_PAT }}
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-      GKE_PROJECT: ${{ secrets.GKE_PROJECT }}
-      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+  call-common-workflow:
+    uses: dominant-strategies/quai-cicd/.github/workflows/deploy-prod-common.yml@main
     with:
-      env: quai-prod
-      awk: sed "s/-.*//g" | awk -F. '{print $1"."$2"."$3+1"-rc.0"}'
-      rails: '[[ ! "$VERSION" =~ "rc" ]] && [[ ! "$VERSION" =~ "pre" ]]'
+      needs_build: true
+      build_command: "make go-quai"
+      needs_docker: false
+      include_chart: false
+      cloud_deploy: false
+      skip_deploy: true
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}

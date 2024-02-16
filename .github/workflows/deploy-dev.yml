@@ -1,15 +1,18 @@
-name: Build and Deploy to Dev
-on: workflow_dispatch
+name: Common Dev Workflow
+on:
+  pull_request:
+    types: [closed]
+    branches: [ "main" ]
 jobs:
-  buildDeployDev:
-    uses: ./.github/workflows/build-deploy.yml
-    secrets:
-      DOCKER: ${{ secrets.DOCKER }}
-      GH_PAT: ${{ secrets.GH_PAT }}
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-      GKE_PROJECT: ${{ secrets.GKE_PROJECT }}
-      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+  call-common-workflow:
+    uses: dominant-strategies/quai-cicd/.github/workflows/deploy-dev-common.yml@main
     with:
-      env: quai-dev
-      awk: awk -F. '{print $1"."$2"."$3"."$4+1}'
+      needs_build: true
+      build_command: "make go-quai"
+      needs_docker: false
+      include_chart: false
+      cloud_deploy: false
+      skip_deploy: true
+
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}
