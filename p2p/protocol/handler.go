@@ -1,9 +1,10 @@
 package protocol
 
 import (
-	"errors"
 	"io"
 	"math/big"
+
+	"github.com/pkg/errors"
 
 	"github.com/libp2p/go-libp2p/core/network"
 
@@ -75,7 +76,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 		log.Global.WithFields(log.Fields{
 			"requestID":   id,
 			"decodedType": decodedType,
-			"location":    loc,
+			"location":    loc.Name(),
 			"hash":        query,
 			"peer":        stream.Conn().RemotePeer(),
 		}).Debug("Received request by hash to handle")
@@ -83,7 +84,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 		log.Global.WithFields(log.Fields{
 			"requestID":   id,
 			"decodedType": decodedType,
-			"location":    loc,
+			"location":    loc.Name(),
 			"number":      query,
 			"peer":        stream.Conn().RemotePeer(),
 		}).Debug("Received request by number to handle")
@@ -141,7 +142,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			log.Global.WithField("err", err).Error("error handling block number request")
 			return
 		}
-	case trie.TrieNodeRequest:
+	case *trie.TrieNodeRequest:
 		requestedHash := query.(*common.Hash)
 		err := handleTrieNodeRequest(id, loc, *requestedHash, stream, node)
 		if err != nil {
@@ -177,13 +178,14 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
 func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	log.Global.Tracef("looking up block %s for location %s", hash, loc.Name())
 	// check if we have the block in our cache or database
 	block := node.GetBlock(hash, loc)
 	if block == nil {
-		log.Global.Debugf("block not found")
+		log.Global.Debugf("block %s not found for location %s", hash, loc.Name())
 		return nil
 	}
-	log.Global.Debugf("block found %s", block.Hash())
+	log.Global.Tracef("block found %s for location %s", block.Hash(), loc.Name())
 	// create a Quai Message Response with the block
 	data, err := pb.EncodeQuaiResponse(id, loc, block)
 	if err != nil {
@@ -250,19 +252,30 @@ func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, s
 }
 
 func handleTrieNodeRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
-	trieNode := node.GetTrieNode(hash, loc)
+	log.Global.Tracef("looking up trie node %s from location %s", hash, loc.Name())
+	trieNode, err := node.GetTrieNode(hash, loc)
+	if err != nil {
+		return errors.Wrapf(err, "error getting trie node for hash %s", hash)
+	}
+
 	if trieNode == nil {
-		log.Global.Tracef("trie node not found")
-		return nil
+		return errors.Errorf("trie node not found for hash %s", hash)
 	}
 	log.Global.Tracef("trie node found")
-	data, err := pb.EncodeQuaiResponse(id, loc, trieNode)
-	if err != nil {
-		return err
+
+	trieNodeResp := &trie.TrieNodeResponse{
+		NodeHash: hash,
+		NodeData: trieNode,
 	}
+
+	data, err := pb.EncodeQuaiResponse(id, loc, trieNodeResp)
+	if err != nil {
+		return errors.Wrapf(err, "error encoding trie node response")
+	}
+	log.Global.Tracef("Sending trie node to peer %s", stream.Conn().RemotePeer())
 	err = common.WriteMessageToStream(stream, data)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error writing trie node response to stream")
 	}
 	log.Global.Tracef("Sent trie node to peer %s", stream.Conn().RemotePeer())
 	return nil

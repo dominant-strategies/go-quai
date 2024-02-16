@@ -805,6 +805,11 @@ func (c *Core) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return c.sl.hc.GetBlock(hash, number)
 }
 
+// GetTrieNode retrieves a trie node from the database by hash.
+func (c *Core) GetTrieNodeByHash(hash common.Hash) ([]byte, error) {
+	return c.sl.hc.GetTrieNodeByHash(hash)
+}
+
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (c *Core) GetBlockByHash(hash common.Hash) *types.Block {
 	return c.sl.hc.GetBlockByHash(hash)
@@ -1159,10 +1164,6 @@ func (c *Core) StateAtBlock(block *types.Block, reexec uint64, base *state.State
 
 func (c *Core) StateAtTransaction(block *types.Block, txIndex int, reexec uint64) (Message, vm.BlockContext, *state.StateDB, error) {
 	return c.sl.hc.bc.processor.StateAtTransaction(block, txIndex, reexec)
-}
-
-func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
-	return c.sl.hc.bc.processor.TrieNode(hash)
 }
 
 func (c *Core) GetUTXOsByAddress(addr common.Address) ([]*types.UtxoEntry, error) {
