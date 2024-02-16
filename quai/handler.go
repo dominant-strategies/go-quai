@@ -1,14 +1,17 @@
 package quai
 
 import (
-	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core"
-	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/event"
-	"github.com/dominant-strategies/go-quai/log"
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/quai/downloader"
 )
 
 const (
@@ -29,16 +32,24 @@ type handler struct {
 	missingBlockSub event.Subscription
 	txsCh           chan core.NewTxsEvent
 	txsSub          event.Subscription
-	wg              sync.WaitGroup
-	quitCh          chan struct{}
+
+	wg     sync.WaitGroup
+	quitCh chan struct{}
+
+	snapSyncCh  chan core.SnapSyncStartEvent
+	snapSyncSub event.Subscription
+	d           *downloader.Downloader
 }
 
-func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location) *handler {
+func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location, chainDb ethdb.Database) *handler {
+	quitCh := make(chan struct{})
+	d := downloader.NewDownloader(p2pBackend, chainDb, quitCh)
 	handler := &handler{
 		nodeLocation: nodeLocation,
 		p2pBackend:   p2pBackend,
 		core:         core,
-		quitCh:       make(chan struct{}),
+		quitCh:       quitCh,
+		d:            d,
 	}
 	return handler
 }
@@ -48,6 +59,11 @@ func (h *handler) Start() {
 	h.missingBlockCh = make(chan types.BlockRequest, c_missingBlockChanSize)
 	h.missingBlockSub = h.core.SubscribeMissingBlockEvent(h.missingBlockCh)
 	go h.missingBlockLoop()
+
+	h.snapSyncCh = make(chan core.SnapSyncStartEvent)
+	h.snapSyncSub = h.core.SubscribeSnapSyncStartEvent(h.snapSyncCh)
+	h.wg.Add(1)
+	go h.snapSyncLoop()
 
 	nodeCtx := h.nodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
@@ -147,4 +163,30 @@ func (h *handler) checkNextPrimeBlock() {
 			return
 		}
 	}
+}
+
+// snapSyncLoop starts a snapSync process every time a SnapSyncStartEvent is received
+func (h *handler) snapSyncLoop() {
+	defer h.wg.Done()
+
+	for {
+		select {
+		case event := <-h.snapSyncCh:
+			h.startSnapSync(big.NewInt(int64(event.BlockNumber)))
+		case <-h.snapSyncSub.Err():
+			log.Global.Error("snapSyncSub error")
+			return
+		case <-h.quitCh:
+			return
+		}
+	}
+}
+
+func (h *handler) startSnapSync(blockNumber *big.Int) {
+	log.Global.Debugf("starting snapshot sync for location %s and block %d", h.nodeLocation.Name(), blockNumber)
+	err := h.d.StartSnapSync(h.nodeLocation, blockNumber)
+	if err != nil {
+		panic(err)
+	}
+	log.Global.Debugf("snapshot sync for location %s and block %d finished", h.nodeLocation.Name(), blockNumber)
 }

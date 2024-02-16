@@ -164,6 +164,10 @@ func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash 
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+func (b *QuaiAPIBackend) TrieNodeByHash(hash common.Hash) ([]byte, error) {
+	return b.quai.core.GetTrieNodeByHash(hash)
+}
+
 func (b *QuaiAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return b.quai.core.PendingBlockAndReceipts()
 }

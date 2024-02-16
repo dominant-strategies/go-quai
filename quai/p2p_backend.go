@@ -10,9 +10,9 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 )
 
 // QuaiBackend implements the quai consensus protocol
@@ -104,12 +104,6 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 	return true
 }
 
-// GetTrieNode returns the TrieNodeResponse for a given hash
-func (qbe *QuaiBackend) GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse {
-	// Example/mock implementation
-	panic("todo")
-}
-
 // Returns the current block height for the given location
 func (qbe *QuaiBackend) GetHeight(location common.Location) uint64 {
 	// Example/mock implementation
@@ -154,17 +148,37 @@ func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) 
 func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common.Location) *common.Hash {
 	backend := *qbe.GetBackend(location)
 	if backend == nil {
-		log.Global.Error("no backend found")
+		log.Global.Errorf("no backend found (location: %s)", location.Name())
 		return nil
 	}
 	block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(number.Int64()))
 	if err != nil {
-		log.Global.Tracef("Error looking up the BlockByNumber", location)
-	}
-	if block != nil {
-		blockHash := block.Hash()
-		return &blockHash
-	} else {
+		log.Global.Errorf("error looking up block %s (location: %s) : %s", number.String(), location.Name(), err)
 		return nil
 	}
+	if block == nil {
+		log.Global.Errorf("block not found for number %s (location: %s)", number.String(), location.Name())
+		return nil
+	}
+
+	hash := block.Hash()
+	return &hash
+}
+
+// LookupTrieNode returns the encoded RLP trie node for a given hash
+func (qbe *QuaiBackend) LookupTrieNode(hash common.Hash, location common.Location) ([]byte, error) {
+	log.Global.Tracef("Looking up trie node %s at location %s", hash.String(), location.Name())
+	backend := *qbe.GetBackend(location)
+	if backend == nil {
+		return nil, errors.Errorf("no backend found")
+	}
+	/*
+		data, err := backend.ChainDb().Get(hash.Bytes())
+		if err != nil {
+			return nil, err
+		}
+	*/
+
+	return backend.TrieNodeByHash(hash)
+
 }

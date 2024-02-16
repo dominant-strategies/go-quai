@@ -232,7 +232,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	quai.p2p.Subscribe(config.NodeLocation, common.Hash{})
 	quai.p2p.Subscribe(config.NodeLocation, &types.Transaction{})
 
-	quai.handler = newHandler(quai.p2p, quai.core, config.NodeLocation)
+	quai.handler = newHandler(quai.p2p, quai.core, config.NodeLocation, chainDb)
 	// Start the handler
 	quai.handler.Start()
 
