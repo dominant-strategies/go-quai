@@ -18,17 +18,37 @@ type RequestManager interface {
 	GetRequestChan(id uint32) (dataChan chan interface{}, err error)
 }
 
+type requestIDMap struct {
+	sync.Map
+}
+
+func (m *requestIDMap) store(id uint32, dataChan chan interface{}) {
+	m.Map.Store(id, dataChan)
+}
+
+func (m *requestIDMap) load(id uint32) (chan interface{}, bool) {
+	dataChan, ok := m.Map.Load(id)
+	if !ok {
+		return nil, false
+	}
+	return dataChan.(chan interface{}), true
+}
+
+func (m *requestIDMap) delete(id uint32) {
+	m.Map.Delete(id)
+}
+
 // RequestIDManager is a singleton that manages request IDs
 type requestIDManager struct {
 	mu             sync.Mutex
-	activeRequests map[uint32]chan interface{}
+	activeRequests *requestIDMap
 }
 
 // Returns the singleton RequestIDManager
 func NewManager() RequestManager {
 	return &requestIDManager{
 		mu:             sync.Mutex{},
-		activeRequests: make(map[uint32]chan interface{}),
+		activeRequests: &requestIDMap{},
 	}
 }
 
@@ -43,7 +63,7 @@ func (m *requestIDManager) CreateRequest() uint32 {
 			continue
 		}
 		id = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
-		if _, ok := m.activeRequests[id]; !ok{
+		if _, ok := m.activeRequests.load(id); !ok {
 			break
 		}
 	}
@@ -56,23 +76,23 @@ func (m *requestIDManager) CreateRequest() uint32 {
 func (m *requestIDManager) addRequestID(id uint32, dataChan chan interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.activeRequests[id] = dataChan
+	m.activeRequests.store(id, dataChan)
 }
 
 // Removes a request ID from the active requests map
 func (m *requestIDManager) CloseRequest(id uint32) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	dataChan := m.activeRequests[id]
+	dataChan, _ := m.activeRequests.load(id)
 	close(dataChan)
-	delete(m.activeRequests, id)
+	m.activeRequests.delete(id)
 }
 
 // Checks if a request ID exists in the active requests map
 func (m *requestIDManager) GetRequestChan(id uint32) (chan interface{}, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	dataChan, ok := m.activeRequests[id]
+	dataChan, ok := m.activeRequests.load(id)
 	if !ok {
 		return nil, errRequestNotFound
 	}
