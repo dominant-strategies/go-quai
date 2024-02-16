@@ -223,11 +223,3 @@ func wrapError(err error, ctx string) error {
 func (err *decodeError) Error() string {
 	return fmt.Sprintf("%v (decode path: %s)", err.what, strings.Join(err.stack, "<-"))
 }
-
-// Used to send a trie node request to a peer
-type TrieNodeRequest struct{}
-
-// Used to get a trie node response from a peer
-type TrieNodeResponse struct {
-	NodeData []byte
-}
