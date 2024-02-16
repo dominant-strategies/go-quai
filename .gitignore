@@ -4,3 +4,4 @@ nodelogs/
 */config.toml
 */private.key
 .vscode/
+.idea*
