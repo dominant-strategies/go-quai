@@ -74,6 +74,8 @@ type Core struct {
 
 	syncTarget *types.Header // sync target header decided based on Best Prime Block as the target to sync to
 
+	snapSyncFeed event.Feed // Snap sync feed
+
 	normalListBackoff uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
 
 	quit chan struct{} // core quit channel
@@ -958,6 +960,16 @@ func (c *Core) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 // block processing has started while false means it has stopped.
 func (c *Core) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return c.sl.hc.bc.SubscribeBlockProcessingEvent(ch)
+}
+
+// SubscribeSnapSyncStartEvent returns a subscription to snap sync start events.
+func (c *Core) SubscribeSnapSyncStartEvent(ch chan<- SnapSyncStartEvent) event.Subscription {
+	return c.snapSyncFeed.Subscribe(ch)
+}
+
+// triggerSnapSyncStart sends a snap sync start event to all subscribers.
+func (c *Core) triggerSnapSyncStart(blockNumber uint64) {
+	c.snapSyncFeed.Send(SnapSyncStartEvent{BlockNumber: blockNumber})
 }
 
 // Export writes the active chain to the given writer.
