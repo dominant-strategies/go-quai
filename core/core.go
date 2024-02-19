@@ -705,8 +705,8 @@ func (c *Core) GetPendingEtxs(hash common.Hash) *types.PendingEtxs {
 	return rawdb.ReadPendingEtxs(c.sl.sliceDb, hash)
 }
 
-func (c *Core) GetPendingEtxsRollup(hash common.Hash) *types.PendingEtxsRollup {
-	return rawdb.ReadPendingEtxsRollup(c.sl.sliceDb, hash)
+func (c *Core) GetPendingEtxsRollup(hash common.Hash, location common.Location) *types.PendingEtxsRollup {
+	return rawdb.ReadPendingEtxsRollup(c.sl.sliceDb, hash, location)
 }
 
 func (c *Core) GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {

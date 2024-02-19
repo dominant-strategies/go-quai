@@ -758,8 +758,8 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsToDom(ctx context.Context, raw 
 }
 
 type SendPendingEtxsRollupToDomArgs struct {
-	Header   *types.Header       `json:"header"`
-	Manifest types.BlockManifest `json:"manifest"`
+	Header     *types.Header      `json:"header"`
+	EtxsRollup types.Transactions `json:"etxsrollup"`
 }
 
 func (s *PublicBlockChainQuaiAPI) SendPendingEtxsRollupToDom(ctx context.Context, raw json.RawMessage) error {
@@ -767,7 +767,7 @@ func (s *PublicBlockChainQuaiAPI) SendPendingEtxsRollupToDom(ctx context.Context
 	if err := json.Unmarshal(raw, &pEtxsRollup); err != nil {
 		return err
 	}
-	return s.b.AddPendingEtxsRollup(types.PendingEtxsRollup{Header: pEtxsRollup.Header, Manifest: pEtxsRollup.Manifest})
+	return s.b.AddPendingEtxsRollup(types.PendingEtxsRollup{Header: pEtxsRollup.Header, EtxsRollup: pEtxsRollup.EtxsRollup})
 }
 
 type GenerateRecoveryPendingHeaderArgs struct {
@@ -799,7 +799,7 @@ func (s *PublicBlockChainQuaiAPI) GetPendingEtxsRollupFromSub(ctx context.Contex
 	}
 	fields := make(map[string]interface{})
 	fields["header"] = pEtxsRollup.Header.RPCMarshalHeader()
-	fields["manifest"] = pEtxsRollup.Manifest
+	fields["etxsrollup"] = pEtxsRollup.EtxsRollup
 
 	return fields, nil
 }

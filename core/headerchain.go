@@ -143,22 +143,12 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 	subRollup := types.Transactions{}
 	if nodeCtx < common.ZONE_CTX {
 		// Since in prime the pending etxs are stored in 2 parts, pendingEtxsRollup
-		// consists of region header and its sub manifests
-		// Prime independently stores the pending etxs for each of the hashes in
-		// the sub manifests, so it needs the pendingEtxsRollup to do so.
+		// consists of region header and subrollups
 		for _, hash := range b.SubManifest() {
 			if nodeCtx == common.PRIME_CTX {
-				pEtxRollup, err := hc.GetPendingEtxsRollup(hash)
+				pEtxRollup, err := hc.GetPendingEtxsRollup(hash, b.Location())
 				if err == nil {
-					for _, pEtxHash := range pEtxRollup.Manifest {
-						pendingEtxs, err := hc.GetPendingEtxs(pEtxHash)
-						if err != nil {
-							// Get the pendingEtx from the appropriate zone
-							hc.fetchPEtx(b.Hash(), pEtxHash, pEtxRollup.Header.Location())
-							return nil, ErrPendingEtxNotFound
-						}
-						subRollup = append(subRollup, pendingEtxs.Etxs...)
-					}
+					subRollup = append(subRollup, pEtxRollup.EtxsRollup...)
 				} else {
 					// Try to get the pending etx from the Regions
 					hc.fetchPEtxRollup(b.Hash(), hash, b.Location())
@@ -173,6 +163,7 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 					return nil, ErrPendingEtxNotFound
 				}
 				subRollup = append(subRollup, pendingEtxs.Etxs...)
+
 			}
 		}
 		// Rolluphash is specifically for zone rollup, which can only be validated by region
@@ -200,12 +191,12 @@ func (hc *HeaderChain) GetPendingEtxs(hash common.Hash) (*types.PendingEtxs, err
 	return &pendingEtxs, nil
 }
 
-func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash) (*types.PendingEtxsRollup, error) {
+func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash, location common.Location) (*types.PendingEtxsRollup, error) {
 	var rollups types.PendingEtxsRollup
 	// Look for pending ETXs first in pending ETX cache, then in database
 	if res, ok := hc.pendingEtxsRollup.Get(hash); ok && res != nil {
 		rollups = res.(types.PendingEtxsRollup)
-	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash); res != nil {
+	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash, location); res != nil {
 		rollups = *res
 	} else {
 		hc.logger.WithField("hash", hash.String()).Trace("Unable to find pending etx rollups for hash in manifest")

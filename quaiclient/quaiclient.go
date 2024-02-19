@@ -234,7 +234,7 @@ func (ec *Client) SendPendingEtxsToDom(ctx context.Context, pEtxs types.PendingE
 func (ec *Client) SendPendingEtxsRollupToDom(ctx context.Context, pEtxsRollup types.PendingEtxsRollup) error {
 	fields := make(map[string]interface{})
 	fields["header"] = pEtxsRollup.Header.RPCMarshalHeader()
-	fields["manifest"] = pEtxsRollup.Manifest
+	fields["etxsrollup"] = pEtxsRollup.EtxsRollup
 	var raw json.RawMessage
 	return ec.c.CallContext(ctx, &raw, "quai_sendPendingEtxsRollupToDom", fields)
 }

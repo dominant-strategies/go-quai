@@ -127,5 +127,5 @@ message ProtoPendingEtxs {
 
 message ProtoPendingEtxsRollup {
   optional ProtoHeader header = 1;
-  optional ProtoManifest manifest = 2;
+  optional ProtoTransactions etxs_rollup = 2;
 }

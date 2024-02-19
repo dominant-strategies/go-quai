@@ -28,19 +28,19 @@ type ExternalTx struct {
 	// the origin chain indeed confirmed emission of that ETX.
 }
 
-// PendingEtxsRollup is Header and manifest Hash of that header that should
+// PendingEtxsRollup is Header and EtxRollups of that header that should
 // be forward propagated
 type PendingEtxsRollup struct {
-	Header   *Header       `json:"header" gencodec:"required"`
-	Manifest BlockManifest `json:"manifest" gencodec:"required"`
+	Header     *Header      `json:"header" gencodec:"required"`
+	EtxsRollup Transactions `json:"etxsrollup" gencodec:"required"`
 }
 
 func (p *PendingEtxsRollup) IsValid(hasher TrieHasher) bool {
-	if p == nil || p.Header == nil || p.Manifest == nil {
-		log.Global.WithField("p", p).Info("PendingEtxRollup: p/p.Header/p.Manifest is nil")
+	if p == nil || p.Header == nil || p.EtxsRollup == nil {
+		log.Global.WithField("p", p).Info("PendingEtxRollup: p/p.Header/p.EtxRollup is nil")
 		return false
 	}
-	return DeriveSha(p.Manifest, hasher) == p.Header.ManifestHash(common.ZONE_CTX)
+	return DeriveSha(p.EtxsRollup, hasher) == p.Header.EtxRollupHash()
 }
 
 // ProtoEncode encodes the PendingEtxsRollup to protobuf format.
@@ -49,18 +49,18 @@ func (p *PendingEtxsRollup) ProtoEncode() (*ProtoPendingEtxsRollup, error) {
 	if err != nil {
 		return nil, err
 	}
-	manifest, err := p.Manifest.ProtoEncode()
+	etxRollup, err := p.EtxsRollup.ProtoEncode()
 	if err != nil {
 		return nil, err
 	}
 	return &ProtoPendingEtxsRollup{
-		Header:   header,
-		Manifest: manifest,
+		Header:     header,
+		EtxsRollup: etxRollup,
 	}, nil
 }
 
 // ProtoDecode decodes the protobuf to a PendingEtxsRollup representation.
-func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxsRollup) error {
+func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxsRollup, location common.Location) error {
 	if protoPendingEtxsRollup.Header == nil {
 		return errors.New("header is nil in ProtoDecode")
 	}
@@ -69,8 +69,8 @@ func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxs
 	if err != nil {
 		return err
 	}
-	p.Manifest = BlockManifest{}
-	err = p.Manifest.ProtoDecode(protoPendingEtxsRollup.GetManifest())
+	p.EtxsRollup = Transactions{}
+	err = p.EtxsRollup.ProtoDecode(protoPendingEtxsRollup.GetEtxsRollup(), location)
 	if err != nil {
 		return err
 	}
