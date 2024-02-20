@@ -267,9 +267,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	head.SetTime(g.Timestamp)
 	head.SetExtra(g.ExtraData)
 	head.SetDifficulty(g.Difficulty)
-	if g.Config.Location.Context() == common.ZONE_CTX {
-		head.SetCoinbase(common.ZeroAddress(g.Config.Location))
-	}
 	head.SetGasLimit(g.GasLimit)
 	head.SetGasUsed(0)
 	head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
