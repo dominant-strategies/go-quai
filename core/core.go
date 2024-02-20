@@ -396,7 +396,7 @@ func (c *Core) addToQueueIfNotAppended(block *types.Block) {
 
 // SetSyncTarget sets the sync target entropy based on the prime blocks
 func (c *Core) SetSyncTarget(header *types.Header) {
-	if c.sl.subClients == nil || header.Hash() == c.sl.config.GenesisHash {
+	if c.sl.subClients == nil || header.Hash() == c.sl.config.GenesisHash || header == nil {
 		return
 	}
 
@@ -410,10 +410,8 @@ func (c *Core) SetSyncTarget(header *types.Header) {
 	nodeCtx := c.NodeLocation().Context()
 	// Set Sync Target for subs
 	if nodeCtx != common.ZONE_CTX {
-		if header != nil {
-			if c.sl.subClients[header.Location().SubIndex(nodeLocation)] != nil {
-				c.sl.subClients[header.Location().SubIndex(nodeLocation)].SetSyncTarget(context.Background(), header)
-			}
+		if subClient := c.sl.subClients[header.Location().SubIndex(nodeLocation)]; subClient != nil {
+			subClient.SetSyncTarget(context.Background(), header)
 		}
 	}
 	if c.syncTarget == nil || c.syncTarget.ParentEntropy(nodeCtx).Cmp(header.ParentEntropy(nodeCtx)) < 0 {
