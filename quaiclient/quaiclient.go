@@ -271,6 +271,11 @@ func (ec *Client) SetSyncTarget(ctx context.Context, header *types.Header) {
 	ec.c.CallContext(ctx, nil, "quai_setSyncTarget", fields)
 }
 
+func (ec *Client) TriggerSnapSync(ctx context.Context, header *types.Header) {
+	fields := header.RPCMarshalHeader()
+	ec.c.CallContext(ctx, nil, "quai_triggerSnapSync", fields)
+}
+
 //// Miner APIS
 
 // GetPendingHeader gets the latest pending header from the chain.
