@@ -144,7 +144,7 @@ type blockChain interface {
 	CurrentBlock() *types.Block
 	CurrentStateHeader() *types.Header
 	GetBlock(hash common.Hash, number uint64) *types.Block
-	StateAt(root common.Hash) (*state.StateDB, error)
+	StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error)
 	FetchUtxosMain(view *types.UtxoViewpoint, outpoints []types.OutPoint) error
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
@@ -1112,11 +1112,17 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 	pool.mu.RUnlock()
 
 	view := types.NewUtxoViewpoint(pool.chainconfig.Location)
-	needed := make([]types.OutPoint, 0, len(tx.TxIn()))
+	outpoints := make([]types.OutPoint, 0, len(tx.TxIn()))
 	for _, txIn := range tx.TxIn() {
-		needed = append(needed, txIn.PreviousOutPoint)
+		outpoints = append(outpoints, txIn.PreviousOutPoint)
 	}
-	pool.chain.FetchUtxosMain(view, needed)
+	for i := range outpoints {
+		entry := pool.currentState.GetUTXO(outpoints[i].TxHash, outpoints[i].Index)
+		if entry == nil {
+			return fmt.Errorf("utxo not found")
+		}
+		view.AddEntry(outpoints, i, entry)
+	}
 	if err := view.VerifyTxSignature(tx, pool.signer); err != nil {
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
@@ -1593,7 +1599,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.Root())
+	statedb, err := pool.chain.StateAt(newHead.Root(), newHead.UTXORoot())
 	if err != nil {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return

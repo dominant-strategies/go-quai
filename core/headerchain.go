@@ -421,10 +421,6 @@ func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
 		return nil
 	}
 
-	if err := hc.setCurrentUTXOSet(head); err != nil {
-		return err
-	}
-
 	current := types.CopyHeader(head)
 	var headersWithoutState []*types.Header
 	for {
@@ -1181,8 +1177,8 @@ func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.S
 	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
 }
 
-func (hc *HeaderChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return hc.bc.processor.StateAt(root)
+func (hc *HeaderChain) StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error) {
+	return hc.bc.processor.StateAt(root, utxoRoot)
 }
 
 func (hc *HeaderChain) SlicesRunning() []common.Location {
@@ -1445,7 +1441,7 @@ func (hc *HeaderChain) DeleteUtxoViewpoint(hash common.Hash) error {
 //
 // See the comment for NewBlockTemplate for more information about why the nil
 // address handling is useful.
-func createCoinbaseTxWithFees(header *types.Header, fees *big.Int) (*types.Transaction, error) {
+func createCoinbaseTxWithFees(header *types.Header, fees *big.Int, state *state.StateDB) (*types.Transaction, error) {
 	parentHash := header.ParentHash(header.Location().Context()) // all blocks should have zone location and context
 	in := types.TxIn{
 		// Coinbase transactions have no inputs, so previous outpoint is
@@ -1476,7 +1472,9 @@ func createCoinbaseTxWithFees(header *types.Header, fees *big.Int) (*types.Trans
 		TxIn:  []types.TxIn{in},
 		TxOut: outs,
 	}
-
+	for i, out := range qiTx.TxOut {
+		state.CreateUTXO(parentHash, uint32(i), types.NewUtxoEntry(&out, header.NumberU64(header.Location().Context()), true))
+	}
 	tx := types.NewTx(qiTx)
 	return tx, nil
 }

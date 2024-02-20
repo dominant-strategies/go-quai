@@ -230,7 +230,14 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}
+			utxoRoot, err := statedb.CommitUTXOs()
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
 			if err := statedb.Database().TrieDB().Commit(root, false, nil); err != nil {
+				panic(fmt.Sprintf("trie write error: %v", err))
+			}
+			if err := statedb.UTXODatabase().TrieDB().Commit(utxoRoot, false, nil); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
 			return block, b.receipts
@@ -238,7 +245,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		return nil, nil
 	}
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db), nil, config.Location)
+		statedb, err := state.New(parent.Root(), parent.UTXORoot(), state.NewDatabase(db), state.NewDatabase(db), nil, config.Location)
 		if err != nil {
 			panic(err)
 		}
@@ -268,6 +275,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 
 	// Make new header
 	header := types.EmptyHeader()
+	header.SetUTXORoot(state.UTXORoot())
 	header.SetRoot(state.IntermediateRoot(true))
 	header.SetParentHash(parent.Hash(), nodeCtx)
 	header.SetCoinbase(parent.Coinbase())

@@ -559,7 +559,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
 			}).Info("Filled and sorted pending transactions")
 		}
-		coinbaseTx, err := createCoinbaseTxWithFees(work.header, work.utxoFees)
+		coinbaseTx, err := createCoinbaseTxWithFees(work.header, work.utxoFees, work.state)
 		if err != nil {
 			return nil, err
 		}
@@ -592,6 +592,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, s
 			"gas":      block.GasUsed(),
 			"fees":     totalFees(block, work.receipts),
 			"elapsed":  common.PrettyDuration(time.Since(start)),
+			"utxoRoot": block.UTXORoot(),
 		}).Info("Commit new sealing work")
 	} else {
 		w.logger.WithFields(log.Fields{
@@ -629,7 +630,7 @@ func (w *worker) eventExitLoop() {
 func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
-	state, err := w.hc.bc.processor.StateAt(parent.Root())
+	state, err := w.hc.bc.processor.StateAt(parent.Root(), parent.UTXORoot())
 	if err != nil {
 		return nil, err
 	}
@@ -760,19 +761,15 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			break
 		}
 		if tx.Type() == types.QiTxType {
-			if err := w.hc.VerifyUTXOsForTx(tx); err != nil { // No need to do sig verification again. Perhaps it should be cached?
-				w.logger.WithField("err", err).Error("UTXO tx verification failed")
+			if err := w.processQiTx(env, tx); err != nil {
+				w.logger.WithFields(log.Fields{
+					"err": err,
+					"tx":  tx.Hash().Hex(),
+				}).Error("Error processing QiTx")
 				txs.PopNoSort()
 				continue
 			}
-			txGas := types.CalculateQiTxGas(tx)
-			if err := env.gasPool.SubGas(txGas); err != nil {
-				w.logger.WithField("err", err).Error("UTXO tx gas pool error")
-				txs.PopNoSort()
-				continue
-			}
-			gasUsed := env.header.GasUsed()
-			env.header.SetGasUsed(gasUsed + txGas)
+			// add fee of current head transaction
 			if fee := txs.GetFee(); fee != nil {
 				env.utxoFees.Add(env.utxoFees, fee)
 			}
@@ -1081,7 +1078,6 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 
 		w.AddPendingBlockBody(block.Header(), block.Body())
 	}
-
 	return block, nil
 }
 
@@ -1143,4 +1139,34 @@ func (w *worker) CurrentInfo(header *types.Header) bool {
 
 	w.headerPrints.Add(header.Hash(), nil)
 	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
+}
+
+func (w *worker) processQiTx(env *environment, tx *types.Transaction) error {
+	if tx.Type() != types.QiTxType {
+		return fmt.Errorf("tx type is not QiTx")
+	}
+	utxoView := types.NewUtxoViewpoint(w.hc.NodeLocation())
+	for _, txIn := range tx.TxIn() {
+		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		if utxo == nil {
+			return fmt.Errorf("utxo not found")
+		}
+		utxoView.AddSingleEntry(txIn.PreviousOutPoint, utxo)
+	}
+
+	if err := utxoView.ConnectTransaction(tx, env.header, nil); err != nil {
+		return err
+	}
+
+	if err := w.hc.bc.processor.WriteUtxoViewpoint(env.state, utxoView); err != nil {
+		return err
+	}
+
+	txGas := types.CalculateQiTxGas(tx)
+	if err := env.gasPool.SubGas(txGas); err != nil {
+		return fmt.Errorf("UTXO tx gas pool error: %v", err)
+	}
+	gasUsed := env.header.GasUsed()
+	env.header.SetGasUsed(gasUsed + txGas)
+	return nil
 }

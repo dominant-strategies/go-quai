@@ -20,6 +20,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		UncleHash     common.Hash    `json:"sha3Uncles"          gencodec:"required"`
 		Coinbase      common.Address `json:"miner"               gencodec:"required"`
 		Root          common.Hash    `json:"stateRoot"           gencodec:"required"`
+		UTXORoot		  common.Hash	 `json:"utxoRoot"              gencodec:"required"`
 		TxHash        common.Hash    `json:"transactionsRoot"    gencodec:"required"`
 		EtxHash       common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
 		EtxRollupHash common.Hash    `json:"extRollupRoot"       gencodec:"required"`
@@ -54,6 +55,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.UncleHash = h.UncleHash()
 	enc.Coinbase = h.Coinbase()
 	enc.Root = h.Root()
+	enc.UTXORoot = h.UTXORoot()
 	enc.TxHash = h.TxHash()
 	enc.EtxHash = h.EtxHash()
 	enc.EtxRollupHash = h.EtxRollupHash()
@@ -79,6 +81,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		UncleHash     *common.Hash    `json:"sha3Uncles"          gencodec:"required"`
 		Coinbase      *common.AddressBytes `json:"miner"               gencodec:"required"`
 		Root          *common.Hash    `json:"stateRoot"           gencodec:"required"`
+		UTXORoot		  *common.Hash	 `json:"utxoRoot"              gencodec:"required"`
 		TxHash        *common.Hash    `json:"transactionsRoot"    gencodec:"required"`
 		ReceiptHash   *common.Hash    `json:"receiptsRoot"        gencodec:"required"`
 		EtxHash       *common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
@@ -111,6 +114,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for Header")
+	}
+	if dec.UTXORoot == nil {
+		return errors.New("missing required field 'utxoRoot' for Header")
 	}
 	if dec.TxHash == nil {
 		return errors.New("missing required field 'transactionsRoot' for Header")
@@ -185,6 +191,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	coinbase := common.Bytes20ToAddress(*dec.Coinbase, h.location)
 	h.SetCoinbase(coinbase)
 	h.SetRoot(*dec.Root)
+	h.SetUTXORoot(*dec.UTXORoot)
 	h.SetTxHash(*dec.TxHash)
 	h.SetReceiptHash(*dec.ReceiptHash)
 	h.SetEtxHash(*dec.EtxHash)

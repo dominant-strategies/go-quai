@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"math"
-
 	"github.com/dominant-strategies/go-quai/common"
 )
 
@@ -30,7 +28,7 @@ func IsCoinBaseTx(tx *Transaction) bool {
 	// The previous output of a coin base must have a max value index and
 	// a non-zero hash.
 	prevOut := &tx.inner.txIn()[0].PreviousOutPoint
-	if (prevOut.Index != math.MaxUint32 || prevOut.TxHash == common.Hash{}) {
+	if (prevOut.Index != MaxPrevOutIndex || prevOut.TxHash == common.Hash{}) {
 		return false
 	}
 

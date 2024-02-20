@@ -67,16 +67,17 @@ var LightClientGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Quai main net.
 var Defaults = Config{
-	Progpow:                 progpow.Config{},
-	NetworkId:               1,
-	TxLookupLimit:           2350000,
-	DatabaseCache:           512,
-	TrieCleanCache:          154,
-	TrieCleanCacheJournal:   "triecache",
-	TrieCleanCacheRejournal: 60 * time.Minute,
-	TrieDirtyCache:          256,
-	TrieTimeout:             60 * time.Minute,
-	SnapshotCache:           102,
+	Progpow:                   progpow.Config{},
+	NetworkId:                 1,
+	TxLookupLimit:             2350000,
+	DatabaseCache:             512,
+	TrieCleanCache:            154,
+	TrieCleanCacheJournal:     "triecache",
+	UTXOTrieCleanCacheJournal: "utxotriecache",
+	TrieCleanCacheRejournal:   60 * time.Minute,
+	TrieDirtyCache:            256,
+	TrieTimeout:               60 * time.Minute,
+	SnapshotCache:             102,
 	Miner: core.Config{
 		GasCeil:  18000000,
 		GasPrice: big.NewInt(params.GWei),
@@ -120,13 +121,14 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 
-	TrieCleanCache          int
-	TrieCleanCacheJournal   string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
-	TrieCleanCacheRejournal time.Duration `toml:",omitempty"` // Time interval to regenerate the journal for clean cache
-	TrieDirtyCache          int
-	TrieTimeout             time.Duration
-	SnapshotCache           int
-	Preimages               bool
+	TrieCleanCache            int
+	TrieCleanCacheJournal     string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
+	UTXOTrieCleanCacheJournal string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
+	TrieCleanCacheRejournal   time.Duration `toml:",omitempty"` // Time interval to regenerate the journal for clean cache
+	TrieDirtyCache            int
+	TrieTimeout               time.Duration
+	SnapshotCache             int
+	Preimages                 bool
 
 	// Mining options
 	Miner core.Config

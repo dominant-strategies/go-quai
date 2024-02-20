@@ -40,6 +40,7 @@ message ProtoHeader {
   optional bytes extra = 19;
   optional common.ProtoHash mix_hash = 20;
   optional uint64 nonce = 21;
+  optional common.ProtoHash utxo_root = 22;
 }
 
 message ProtoTransaction {

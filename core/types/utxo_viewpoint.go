@@ -94,7 +94,7 @@ func (entry *UtxoEntry) Clone() *UtxoEntry {
 // NewUtxoEntry returns a new UtxoEntry built from the arguments.
 func NewUtxoEntry(
 	txOut *TxOut, blockHeight uint64, isCoinbase bool) *UtxoEntry {
-	var cbFlag TxoFlags
+	cbFlag := TfModified
 	if isCoinbase {
 		cbFlag |= TfCoinBase
 	}
@@ -129,6 +129,10 @@ func (view *UtxoViewpoint) LookupEntry(outpoint OutPoint) *UtxoEntry {
 
 func (view *UtxoViewpoint) AddEntry(outpoints []OutPoint, i int, entry *UtxoEntry) {
 	view.Entries[outpoints[i]] = entry
+}
+
+func (view *UtxoViewpoint) AddSingleEntry(outpoint OutPoint, entry *UtxoEntry) {
+	view.Entries[outpoint] = entry
 }
 
 // addTxOut adds the specified output to the view if it is not provably

@@ -1306,6 +1306,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetEtxHash(header.EtxHash())
 		combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
 		combinedPendingHeader.SetRoot(header.Root())
+		combinedPendingHeader.SetUTXORoot(header.UTXORoot())
 		combinedPendingHeader.SetCoinbase(header.Coinbase())
 		combinedPendingHeader.SetBaseFee(header.BaseFee())
 		combinedPendingHeader.SetGasLimit(header.GasLimit())

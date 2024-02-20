@@ -1521,7 +1521,7 @@ func WriteUtxo(db ethdb.KeyValueWriter, hash common.Hash, index uint32, utxo *ty
 			"err":  err,
 		}).Fatal("Failed to RLP encode utxo")
 	}
-	if err := db.Put(utxoKey(hash, index), data); err != nil {
+	if err := db.Put(UtxoKey(hash, index), data); err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
@@ -1531,7 +1531,7 @@ func WriteUtxo(db ethdb.KeyValueWriter, hash common.Hash, index uint32, utxo *ty
 
 func ReadUtxo(db ethdb.Reader, hash common.Hash, index uint32) *types.UtxoEntry {
 	// Try to look up the data in leveldb.
-	data, _ := db.Get(utxoKey(hash, index))
+	data, _ := db.Get(UtxoKey(hash, index))
 	if len(data) == 0 {
 		return nil
 	}
@@ -1545,7 +1545,7 @@ func ReadUtxo(db ethdb.Reader, hash common.Hash, index uint32) *types.UtxoEntry 
 
 // DeleteUtxo deletes utxos from the database
 func DeleteUtxo(db ethdb.KeyValueWriter, hash common.Hash, index uint32) {
-	if err := db.Delete(utxoKey(hash, index)); err != nil {
+	if err := db.Delete(UtxoKey(hash, index)); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to delete utxo")
 	}
 }

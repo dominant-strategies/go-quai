@@ -17,22 +17,27 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -74,14 +79,15 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieCleanJournal    string        // Disk journal for saving clean cache entries.
-	TrieCleanRejournal  time.Duration // Time interval to dump clean cache to disk periodically
-	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
-	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
-	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
-	Preimages           bool          // Whether to store preimage of trie key to the disk
+	TrieCleanLimit       int    // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieCleanJournal     string // Disk journal for saving clean cache entries.
+	UTXOTrieCleanJournal string
+	TrieCleanRejournal   time.Duration // Time interval to dump clean cache to disk periodically
+	TrieCleanNoPrefetch  bool          // Whether to disable heuristic state prefetching for followup blocks
+	TrieDirtyLimit       int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieTimeLimit        time.Duration // Time limit after which to flush the current in-memory trie to disk
+	SnapshotLimit        int           // Memory allowance (MB) to use for caching snapshot entries in memory
+	Preimages            bool          // Whether to store preimage of trie key to the disk
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -105,6 +111,7 @@ type StateProcessor struct {
 	rmLogsFeed    event.Feed
 	cacheConfig   *CacheConfig   // CacheConfig for StateProcessor
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
+	utxoCache     state.Database // UTXO database to reuse between imports (contains UTXO cache)
 	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
 	txLookupCache *lru.Cache
 	validator     Validator // Block and state validator interface
@@ -143,6 +150,11 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
+		utxoCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
+			Cache:     cacheConfig.TrieCleanLimit,
+			Journal:   cacheConfig.UTXOTrieCleanJournal,
+			Preimages: cacheConfig.Preimages,
+		}),
 		engine: engine,
 		triegc: prque.New(nil),
 		quit:   make(chan struct{}),
@@ -169,10 +181,12 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 			sp.cacheConfig.TrieCleanRejournal = time.Minute
 		}
 		triedb := sp.stateCache.TrieDB()
+		utxoTrieDb := sp.utxoCache.TrieDB()
 		sp.wg.Add(1)
 		go func() {
 			defer sp.wg.Done()
 			triedb.SaveCachePeriodically(sp.cacheConfig.TrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
+			utxoTrieDb.SaveCachePeriodically(sp.cacheConfig.UTXOTrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
 		}()
 	}
 	return sp
@@ -206,7 +220,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	time1 := common.PrettyDuration(time.Since(start))
 
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().Root(), p.stateCache, p.snaps, nodeLocation)
+	statedb, err := state.New(parent.Header().Root(), parent.Header().UTXORoot(), p.stateCache, p.utxoCache, p.snaps, nodeLocation)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
@@ -243,16 +257,31 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		etxPLimit = params.ETXPLimitMin
 	}
 
-	transactions := block.Transactions()
-
-	if transactions[0].Type() == types.QiTxType && types.IsCoinBaseTx(transactions[0]) {
-		transactions = transactions[1:]
+	utxoView := types.NewUtxoViewpoint(p.hc.NodeLocation())
+	err = p.FetchInputUtxos(statedb, utxoView, block)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	totalFees, err := p.VerifyTransactions(utxoView, block, p.hc.pool.signer)
+	if err != nil {
+		return nil, nil, nil, 0, err
 	}
 
-	for i, tx := range transactions {
+	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
-			*usedGas += types.CalculateQiTxGas(tx)
+			if i != 0 {
+				// coinbase tx currently exempt from gas
+				*usedGas += types.CalculateQiTxGas(tx)
+			}
+			// Add all of the outputs for this transaction which are not
+			// provably unspendable as available utxos.  Also, the passed
+			// spent txos slice is updated to contain an entry for each
+			// spent txout in the order each transaction spends them.
+			err = utxoView.ConnectTransaction(tx, block.Header(), nil)
+			if err != nil {
+				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %v: %w", tx.Hash().Hex(), err)
+			}
 			continue
 		}
 		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
@@ -301,6 +330,21 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		i++
+	}
+
+	if types.IsCoinBaseTx(block.QiTransactions()[0]) {
+		totalCoinbaseOut := big.NewInt(0)
+		for _, txOut := range block.QiTransactions()[0].TxOut() {
+			totalCoinbaseOut.Add(totalCoinbaseOut, types.Denominations[txOut.Denomination])
+		}
+		maxCoinbaseOut := misc.CalculateRewardForQiWithFeesBigInt(header, totalFees) // TODO: Miner tip will soon no longer exist
+		if totalCoinbaseOut.Cmp(maxCoinbaseOut) == 1 {
+			return nil, nil, nil, 0, fmt.Errorf("coinbase output value of %v is higher than expected value of %v", totalCoinbaseOut, maxCoinbaseOut)
+		}
+	}
+
+	if err = p.WriteUtxoViewpoint(statedb, utxoView); err != nil {
+		return nil, nil, nil, 0, err
 	}
 
 	time4 := common.PrettyDuration(time.Since(start))
@@ -446,6 +490,10 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	if err != nil {
 		return nil, err
 	}
+	utxoRoot, err := statedb.CommitUTXOs()
+	if err != nil {
+		return nil, err
+	}
 	triedb := p.stateCache.TrieDB()
 	time7 := common.PrettyDuration(time.Since(start))
 	var time8 common.PrettyDuration
@@ -453,6 +501,9 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	var time10 common.PrettyDuration
 	var time11 common.PrettyDuration
 	if err := triedb.Commit(root, false, nil); err != nil {
+		return nil, err
+	}
+	if err := p.utxoCache.TrieDB().Commit(utxoRoot, false, nil); err != nil {
 		return nil, err
 	}
 	time8 = common.PrettyDuration(time.Since(start))
@@ -506,12 +557,12 @@ func (p *StateProcessor) GetVMConfig() *vm.Config {
 
 // State returns a new mutable state based on the current HEAD block.
 func (p *StateProcessor) State() (*state.StateDB, error) {
-	return p.StateAt(p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).Root())
+	return p.StateAt(p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).Root(), p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).UTXORoot())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (p *StateProcessor) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, p.stateCache, p.snaps, p.hc.NodeLocation())
+func (p *StateProcessor) StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error) {
+	return state.New(root, utxoRoot, p.stateCache, p.utxoCache, p.snaps, p.hc.NodeLocation())
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -609,6 +660,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	var (
 		current      *types.Header
 		database     state.Database
+		utxoDatabase state.Database
 		report       = true
 		nodeLocation = p.hc.NodeLocation()
 		nodeCtx      = p.hc.NodeCtx()
@@ -616,7 +668,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	)
 	// Check the live database first if we have the state fully available, use that.
 	if checkLive {
-		statedb, err = p.StateAt(block.Root())
+		statedb, err = p.StateAt(block.Root(), block.UTXORoot())
 		if err == nil {
 			return statedb, nil
 		}
@@ -625,7 +677,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	var newHeads []*types.Header
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
-		statedb, database, report = base, base.Database(), false
+		statedb, database, utxoDatabase, report = base, base.Database(), base.UTXODatabase(), false
 		current = p.hc.GetHeaderOrCandidate(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
@@ -634,12 +686,15 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		// Create an ephemeral trie.Database for isolating the live one. Otherwise
 		// the internal junks created by tracing will be persisted into the disk.
 		database = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
+		// Create an ephemeral trie.Database for isolating the live one. Otherwise
+		// the internal junks created by tracing will be persisted into the disk.
+		utxoDatabase = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
 
 		// If we didn't check the dirty database, do check the clean one, otherwise
 		// we would rewind past a persisted block (specific corner case is chain
 		// tracing from the genesis).
 		if !checkLive {
-			statedb, err = state.New(current.Root(), database, nil, nodeLocation)
+			statedb, err = state.New(current.Root(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
 			if err == nil {
 				return statedb, nil
 			}
@@ -656,7 +711,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			}
 			current = types.CopyHeader(parent)
 
-			statedb, err = state.New(current.Root(), database, nil, nodeLocation)
+			statedb, err = state.New(current.Root(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
 			if err == nil {
 				break
 			}
@@ -711,7 +766,12 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database, nil, nodeLocation)
+		utxoRoot, err := statedb.CommitUTXOs()
+		if err != nil {
+			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
+				current.NumberU64(nodeCtx), current.Root().Hex(), err)
+		}
+		statedb, err = state.New(root, utxoRoot, database, utxoDatabase, nil, nodeLocation)
 		if err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}
@@ -783,6 +843,10 @@ func (p *StateProcessor) Stop() {
 		triedb := p.stateCache.TrieDB()
 		triedb.SaveCache(p.cacheConfig.TrieCleanJournal)
 	}
+	if p.cacheConfig.UTXOTrieCleanJournal != "" {
+		utxoTrieDB := p.utxoCache.TrieDB()
+		utxoTrieDB.SaveCache(p.cacheConfig.UTXOTrieCleanJournal)
+	}
 	close(p.quit)
 	p.logger.Info("State Processor stopped")
 }
@@ -799,4 +863,208 @@ func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction, nodeLocation
 func (p *StateProcessor) GetUTXOsByAddress(address common.Address) ([]*types.UtxoEntry, error) {
 	utxos := rawdb.ReadAddressUtxos(p.hc.bc.db, address)
 	return utxos, nil
+}
+
+// fetchUtxosMain fetches unspent transaction output data about the provided
+// set of outpoints from the point of view of the end of the main chain at the
+// time of the call.
+//
+// Upon completion of this function, the view will contain an entry for each
+// requested outpoint.  Spent outputs, or those which otherwise don't exist,
+// will result in a nil entry in the view.
+func (p *StateProcessor) FetchUtxosMain(statedb *state.StateDB, view *types.UtxoViewpoint, outpoints []types.OutPoint) error {
+	// Nothing to do if there are no requested outputs.
+	if len(outpoints) == 0 {
+		return nil
+	}
+
+	// Load the requested set of unspent transaction outputs from the point
+	// of view of the end of the main chain.
+	//
+	// NOTE: Missing entries are not considered an error here and instead
+	// will result in nil entries in the view.  This is intentionally done
+	// so other code can use the presence of an entry in the store as a way
+	// to unnecessarily avoid attempting to reload it from the database.
+	for i := range outpoints {
+		entry := statedb.GetUTXO(outpoints[i].TxHash, outpoints[i].Index)
+		if entry == nil {
+			return fmt.Errorf("utxo not found %v", outpoints[i].TxHash.String())
+		}
+
+		view.AddEntry(outpoints, i, entry)
+	}
+
+	return nil
+}
+
+// fetchInputUtxos loads the unspent transaction outputs for the inputs
+// referenced by the transactions in the given block into the view from the
+// database as needed.  In particular, referenced entries that are earlier in
+// the block are added to the view and entries that are already in the view are
+// not modified.
+func (p *StateProcessor) FetchInputUtxos(statedb *state.StateDB, view *types.UtxoViewpoint, block *types.Block) error {
+	// Build a map of in-flight transactions because some of the inputs in
+	// this block could be referencing other transactions earlier in this
+	// block which are not yet in the chain.
+	txInFlight := map[common.Hash]int{}
+	transactions := block.QiTransactions()
+	for i, tx := range transactions {
+		txInFlight[tx.Hash()] = i
+	}
+
+	// Loop through all of the transaction inputs (except for the coinbase
+	// which has no inputs) collecting them into sets of what is needed and
+	// what is already known (in-flight).
+	needed := make([]types.OutPoint, 0, len(transactions))
+	for i, tx := range transactions[1:] {
+		for _, txIn := range tx.TxIn() {
+			// It is acceptable for a transaction input to reference
+			// the output of another transaction in this block only
+			// if the referenced transaction comes before the
+			// current one in this block.  Add the outputs of the
+			// referenced transaction as available utxos when this
+			// is the case.  Otherwise, the utxo details are still
+			// needed.
+			//
+			// NOTE: The >= is correct here because i is one less
+			// than the actual position of the transaction within
+			// the block due to skipping the coinbase.
+			originHash := &txIn.PreviousOutPoint.TxHash
+			if inFlightIndex, ok := txInFlight[*originHash]; ok &&
+				i >= inFlightIndex {
+
+				originTx := transactions[inFlightIndex]
+				view.AddTxOuts(originTx, block.Header())
+				continue
+			}
+
+			// Don't request entries that are already in the view
+			// from the database.
+			if _, ok := view.Entries[txIn.PreviousOutPoint]; ok {
+				continue
+			}
+
+			needed = append(needed, txIn.PreviousOutPoint)
+		}
+	}
+
+	// Request the input utxos from the database.
+	return p.FetchUtxosMain(statedb, view, needed)
+}
+
+func (p *StateProcessor) VerifyTransactions(view *types.UtxoViewpoint, block *types.Block, signer types.Signer) (*big.Int, error) {
+
+	transactions := block.QiTransactions()
+	if types.IsCoinBaseTx(transactions[0]) {
+		transactions = transactions[1:]
+	}
+
+	totalFees := big.NewInt(0)
+
+	for _, tx := range transactions {
+
+		fee, err := types.CheckTransactionInputs(tx, view)
+		if err != nil {
+			return nil, fmt.Errorf("could not apply tx %v: %w", tx.Hash().Hex(), err)
+		}
+		totalFees.Add(totalFees, fee)
+
+		pubKeys := make([]*btcec.PublicKey, 0)
+		for _, txIn := range tx.TxIn() {
+
+			entry := view.LookupEntry(txIn.PreviousOutPoint)
+			if entry == nil {
+				return nil, errors.New("utxo not found " + txIn.PreviousOutPoint.TxHash.String())
+			}
+
+			// Verify the pubkey
+			address := common.BytesToAddress(crypto.Keccak256(txIn.PubKey[1:])[12:], p.hc.NodeLocation())
+			entryAddr := common.BytesToAddress(entry.Address, p.hc.NodeLocation())
+			if !address.Equal(entryAddr) {
+				return nil, errors.New("invalid address")
+			}
+
+			pubKey, err := btcec.ParsePubKey(txIn.PubKey)
+			if err != nil {
+				return nil, err
+			}
+			pubKeys = append(pubKeys, pubKey)
+		}
+
+		var finalKey *btcec.PublicKey
+		if len(tx.TxIn()) > 1 {
+			aggKey, _, _, err := musig2.AggregateKeys(
+				pubKeys, false,
+			)
+			if err != nil {
+				return nil, err
+			}
+			finalKey = aggKey.FinalKey
+		} else {
+			finalKey = pubKeys[0]
+		}
+
+		txDigestHash := signer.Hash(tx)
+		if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
+			return nil, errors.New("invalid signature")
+		}
+
+	}
+
+	return totalFees, nil
+}
+
+// writeUtxoViewpoint updates the utxo set in the database based on the provided utxo view contents and state.  In
+// particular, only the entries that have been marked as modified are written
+// to the database.
+func (p *StateProcessor) WriteUtxoViewpoint(statedb *state.StateDB, view *types.UtxoViewpoint) error {
+	for outpoint, entry := range view.Entries {
+		// No need to update the database if the entry was not modified.
+		if entry == nil || !entry.IsModified() {
+			log.Global.Info("entry is nil or not modified: " + outpoint.TxHash.Hex())
+			continue
+		}
+
+		// Remove the utxo entry if it is spent.
+		if entry.IsSpent() {
+			statedb.DeleteUTXO(outpoint.TxHash, outpoint.Index)
+
+			// If the node decides to index utxos for each address, then
+			// we need to remove the address utxo entry as well.
+			if p.hc.indexerConfig.IndexAddressUtxos {
+
+				entryAddress := common.BytesToAddress(entry.Address, p.hc.NodeLocation())
+				addressUtxos := rawdb.ReadAddressUtxos(p.hc.bc.db, entryAddress)
+
+				// Iterate over addressUtxos and find the outpointHash and outpointIndex entry, then remove it.
+				for i, utxo := range addressUtxos {
+					// TODO: Need to determine if this is adequate matching to remove upon spending
+					// Entry will show as spent so need to determine how to check packed flags equivalence?
+					if utxo.Denomination == entry.Denomination &&
+						bytes.Equal(utxo.Address, entry.Address) && // Use bytes.Equal for byte slice comparison
+						utxo.BlockHeight == entry.BlockHeight {
+						// Remove the utxo from the slice by filtering it out.
+						addressUtxos = append(addressUtxos[:i], addressUtxos[i+1:]...)
+						break
+					}
+				}
+
+				rawdb.WriteAddressUtxos(p.hc.bc.db, entryAddress, addressUtxos)
+			}
+
+			continue
+		}
+
+		statedb.CreateUTXO(outpoint.TxHash, outpoint.Index, entry)
+		// If the node decides to index utxos for each address, then
+		// we need to add the address utxo entry as well.
+		if p.hc.indexerConfig.IndexAddressUtxos {
+			entryAddress := common.BytesToAddress(entry.Address, p.hc.NodeLocation())
+			addressUtxos := rawdb.ReadAddressUtxos(p.hc.bc.db, entryAddress)
+			addressUtxos = append(addressUtxos, entry)
+			rawdb.WriteAddressUtxos(p.hc.bc.db, entryAddress, addressUtxos)
+		}
+	}
+
+	return nil
 }

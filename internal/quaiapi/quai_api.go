@@ -658,7 +658,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	s.b.Logger().WithFields(log.Fields{
 		"number":   header.Number(s.b.NodeCtx()),
 		"location": header.Location(),
-	})
+	}).Info("Received mined header")
 
 	return nil
 }
