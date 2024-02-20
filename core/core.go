@@ -50,7 +50,8 @@ const (
 	c_appendQueuePrintSize                     = 10
 	c_badSyncTargetsSize                       = 20 // List of bad sync target hashes
 	c_badSyncTargetCheckTime                   = 15 * time.Minute
-	c_normalListBackoffThreshold               = 5 // Max multiple on the c_normalListProcCounter
+	c_normalListBackoffThreshold               = 5   // Max multiple on the c_normalListProcCounter
+	c_snapSyncTriggerThreshold                 = 500 // Number of blocks behind the current header to trigger snap sync
 )
 
 type blockNumberAndRetryCounter struct {
@@ -433,6 +434,17 @@ func (c *Core) SyncTargetEntropy() (*big.Int, *big.Int) {
 	}
 }
 
+// TriggerSnapSync triggers snap sync at the zone level
+func (c *Core) TriggerSnapSync(header *types.Header) {
+	if nodeCtx := c.NodeLocation().Context(); nodeCtx != common.ZONE_CTX {
+		for _, subClient := range c.sl.subClients {
+			subClient.TriggerSnapSync(context.Background(), header)
+		}
+	} else {
+		c.triggerSnapSyncStart(header.Number(c.sl.NodeCtx()).Uint64())
+	}
+}
+
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
 	nodeCtx := c.NodeLocation().Context()
@@ -625,8 +637,23 @@ func (c *Core) WriteBlock(block *types.Block) {
 	if nodeCtx == common.PRIME_CTX {
 		if block != nil {
 			c.SetSyncTarget(block.Header())
+			if c.shouldStartSnapSync(block) {
+				log.Global.Debugf("Starting snap sync for block %d", block.NumberU64(c.NodeCtx()))
+				c.TriggerSnapSync(block.Header())
+			}
 		}
 	}
+}
+
+// Returns true if the chain tip is 500 blocks ahead
+// of the current block
+func (c *Core) shouldStartSnapSync(block *types.Block) bool {
+	// 1. Get the block from the chain tip
+	latest := c.CurrentBlock()
+
+	// 2. If latest block is more than 500 blocks ahead of the current block
+	// then start snap sync
+	return block.NumberU64(c.NodeCtx())+c_snapSyncTriggerThreshold < latest.NumberU64(c.NodeCtx())
 }
 
 func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
