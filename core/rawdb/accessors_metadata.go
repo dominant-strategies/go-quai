@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -81,63 +80,5 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 	if err := db.Put(configKey(hash), data); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store chain config")
-	}
-}
-
-// crashList is a list of unclean-shutdown-markers, for rlp-encoding to the
-// database
-type crashList struct {
-	Discarded uint64   // how many ucs have we deleted
-	Recent    []uint64 // unix timestamps of 10 latest unclean shutdowns
-}
-
-const crashesToKeep = 10
-
-// PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
-// the previous data
-// - a list of timestamps
-// - a count of how many old unclean-shutdowns have been discarded
-func PushUncleanShutdownMarker(db ethdb.KeyValueStore, logger *log.Logger) ([]uint64, uint64, error) {
-	var uncleanShutdowns crashList
-	// Read old data
-	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		logger.WithField("err", err).Warn("Error reading unclean shutdown markers")
-	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
-		return nil, 0, err
-	}
-	var discarded = uncleanShutdowns.Discarded
-	var previous = make([]uint64, len(uncleanShutdowns.Recent))
-	copy(previous, uncleanShutdowns.Recent)
-	// Add a new (but cap it)
-	uncleanShutdowns.Recent = append(uncleanShutdowns.Recent, uint64(time.Now().Unix()))
-	if count := len(uncleanShutdowns.Recent); count > crashesToKeep+1 {
-		numDel := count - (crashesToKeep + 1)
-		uncleanShutdowns.Recent = uncleanShutdowns.Recent[numDel:]
-		uncleanShutdowns.Discarded += uint64(numDel)
-	}
-	// And save it again
-	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
-	if err := db.Put(uncleanShutdownKey, data); err != nil {
-		logger.WithField("err", err).Warn("Failed to write unclean-shutdown marker")
-		return nil, 0, err
-	}
-	return previous, discarded, nil
-}
-
-// PopUncleanShutdownMarker removes the last unclean shutdown marker
-func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
-	var uncleanShutdowns crashList
-	// Read old data
-	if data, err := db.Get(uncleanShutdownKey); err != nil {
-		log.Global.WithField("err", err).Warn("Error reading unclean shutdown markers")
-	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
-		log.Global.WithField("err", err).Error("Error decoding unclean shutdown markers") // Should mos def _not_ happen
-	}
-	if l := len(uncleanShutdowns.Recent); l > 0 {
-		uncleanShutdowns.Recent = uncleanShutdowns.Recent[:l-1]
-	}
-	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
-	if err := db.Put(uncleanShutdownKey, data); err != nil {
-		log.Global.WithField("err", err).Warn("Failed to clear unclean-shutdown marker")
 	}
 }

@@ -243,20 +243,6 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	stack.RegisterAPIs(quai.APIs())
 	stack.RegisterLifecycle(quai)
 	// Check for unclean shutdown
-	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb, logger); err != nil {
-		logger.WithField("err", err).Error("Could not update unclean-shutdown-marker list")
-	} else {
-		if discards > 0 {
-			logger.WithField("count", discards).Warn("Old unclean shutdowns found")
-		}
-		for _, tstamp := range uncleanShutdowns {
-			t := time.Unix(int64(tstamp), 0)
-			logger.WithFields(log.Fields{
-				"booted": t,
-				"age":    common.PrettyAge(t),
-			}).Warn("Unclean shutdown detected")
-		}
-	}
 	return quai, nil
 }
 
@@ -398,7 +384,6 @@ func (s *Quai) Stop() error {
 	}
 	s.core.Stop()
 	s.engine.Close()
-	rawdb.PopUncleanShutdownMarker(s.chainDb)
 	s.chainDb.Close()
 	s.eventMux.Stop()
 	s.handler.Stop()
