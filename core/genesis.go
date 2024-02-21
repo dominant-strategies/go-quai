@@ -269,6 +269,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	head.SetDifficulty(g.Difficulty)
 	head.SetGasLimit(g.GasLimit)
 	head.SetGasUsed(0)
+	head.SetCoinbase(common.Zero)
 	head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
 	if g.GasLimit == 0 {
 		head.SetGasLimit(params.GenesisGasLimit)

@@ -29,6 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"lukechampine.com/blake3"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -582,10 +583,8 @@ func (h *Header) SetTime(val uint64) {
 func (h *Header) SetExtra(val []byte) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	if len(val) > 0 {
-		h.extra = make([]byte, len(val))
-		copy(h.extra, val)
-	}
+	h.extra = make([]byte, len(val))
+	copy(h.extra, val)
 }
 func (h *Header) SetMixHash(val common.Hash) {
 	h.hash = atomic.Value{} // clear hash cache
@@ -601,27 +600,51 @@ func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
 func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
 func (h *Header) NumberArray() []*big.Int          { return h.number }
 
-// headerData comprises all data fields of the header, excluding the nonce, so
-// that the nonce may be independently adjusted in the work algorithm.
-type sealData struct {
-	ParentHash    []common.Hash
-	UncleHash     common.Hash
-	Coinbase      common.Address
-	Root          common.Hash
-	TxHash        common.Hash
-	EtxHash       common.Hash
-	EtxRollupHash common.Hash
-	ManifestHash  []common.Hash
-	ReceiptHash   common.Hash
-	Number        []*big.Int
-	GasLimit      uint64
-	GasUsed       uint64
-	BaseFee       *big.Int
-	Difficulty    *big.Int
-	Location      common.Location
-	Time          uint64
-	Extra         []byte
-	Nonce         BlockNonce
+// ProtoEncode serializes s into the Quai Proto sealData format
+func (h *Header) SealEncode() *ProtoHeader {
+	uncleHash := common.ProtoHash{Value: h.UncleHash().Bytes()}
+	root := common.ProtoHash{Value: h.Root().Bytes()}
+	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
+	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
+	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
+	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
+	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
+	gasLimit := h.GasLimit()
+	gasUsed := h.GasUsed()
+	time := h.Time()
+
+	protoSealData := &ProtoHeader{
+		UncleHash:     &uncleHash,
+		Coinbase:      h.Coinbase().Bytes(),
+		Root:          &root,
+		TxHash:        &txHash,
+		EtxHash:       &etxhash,
+		EtxRollupHash: &etxRollupHash,
+		ReceiptHash:   &receiptHash,
+		Difficulty:    h.Difficulty().Bytes(),
+		GasLimit:      &gasLimit,
+		GasUsed:       &gasUsed,
+		BaseFee:       h.BaseFee().Bytes(),
+		Location:      h.Location().ProtoEncode(),
+		Time:          &time,
+		Extra:         h.Extra(),
+		MixHash:       &mixHash,
+	}
+
+	for i := 0; i < common.HierarchyDepth; i++ {
+		protoSealData.ParentHash = append(protoSealData.ParentHash, h.ParentHash(i).ProtoEncode())
+		protoSealData.ManifestHash = append(protoSealData.ManifestHash, h.ManifestHash(i).ProtoEncode())
+		if h.ParentEntropy(i) != nil {
+			protoSealData.ParentEntropy = append(protoSealData.ParentEntropy, h.ParentEntropy(i).Bytes())
+		}
+		if h.ParentDeltaS(i) != nil {
+			protoSealData.ParentDeltaS = append(protoSealData.ParentDeltaS, h.ParentDeltaS(i).Bytes())
+		}
+		if h.Number(i) != nil {
+			protoSealData.Number = append(protoSealData.Number, h.Number(i).Bytes())
+		}
+	}
+	return protoSealData
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -629,35 +652,13 @@ func (h *Header) SealHash() (hash common.Hash) {
 	hasherMu.Lock()
 	defer hasherMu.Unlock()
 	hasher.Reset()
-	hdata := sealData{
-		ParentHash:    make([]common.Hash, common.HierarchyDepth),
-		UncleHash:     h.UncleHash(),
-		Coinbase:      h.Coinbase(),
-		Root:          h.Root(),
-		TxHash:        h.TxHash(),
-		EtxHash:       h.EtxHash(),
-		EtxRollupHash: h.EtxRollupHash(),
-		ManifestHash:  make([]common.Hash, common.HierarchyDepth),
-		ReceiptHash:   h.ReceiptHash(),
-		Number:        make([]*big.Int, common.HierarchyDepth),
-		GasLimit:      h.GasLimit(),
-		GasUsed:       h.GasUsed(),
-		BaseFee:       h.BaseFee(),
-		Difficulty:    h.Difficulty(),
-		Location:      h.Location(),
-		Time:          h.Time(),
-		Extra:         h.Extra(),
-	}
-	for i := 0; i < common.HierarchyDepth; i++ {
-		hdata.ParentHash[i] = h.ParentHash(i)
-		hdata.ManifestHash[i] = h.ManifestHash(i)
-		hdata.Number[i] = h.Number(i)
-	}
-	err := rlp.Encode(hasher, hdata)
+	protoSealData := h.SealEncode()
+	data, err := proto.Marshal(protoSealData)
 	if err != nil {
-		log.Global.Error("Failed to encode header data ", "err", err)
+		log.Global.Error("Failed to marshal seal data ", "err", err)
 	}
-	hash.SetBytes(hasher.Sum(hash[:0]))
+	sum := blake3.Sum256(data[:])
+	hash.SetBytes(sum[:])
 	return hash
 }
 
