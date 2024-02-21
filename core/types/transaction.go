@@ -197,18 +197,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	if protoTx.ChainId == nil {
 		return errors.New("missing required field 'ChainId' in ProtoTransaction")
 	}
-	if protoTx.Gas == nil {
-		return errors.New("missing required field 'Gas' in ProtoTransaction")
-	}
-	if protoTx.AccessList == nil {
-		return errors.New("missing required field 'AccessList' in ProtoTransaction")
-	}
-	if protoTx.Value == nil {
-		return errors.New("missing required field 'Value' in ProtoTransaction")
-	}
-	if protoTx.Data == nil {
-		return errors.New("missing required field 'Data' in ProtoTransaction")
-	}
 
 	txType := protoTx.GetType()
 
