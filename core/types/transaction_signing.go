@@ -24,7 +24,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -208,56 +210,13 @@ func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s SignerV1) Hash(tx *Transaction) common.Hash {
-	if tx.Type() == QiTxType {
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				s.chainId,
-				tx.TxIn(),
-				tx.TxOut(),
-			})
+func (s SignerV1) Hash(tx *Transaction) (h common.Hash) {
+	protoTxSigningData := tx.ProtoEncodeTxSigningData()
+	data, err := proto.Marshal(protoTxSigningData)
+	if err != nil {
+		log.Global.Error("failed to marshal tx signing data", "err", err)
 	}
-	txTo := tx.To()
-	var txToBytes []byte
-	if txTo == nil {
-		txToBytes = []byte{}
-	} else {
-		txToBytes = txTo.Bytes()
-	}
-	if tx.Type() == InternalToExternalTxType {
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				s.chainId,
-				tx.Nonce(),
-				tx.GasTipCap(),
-				tx.GasFeeCap(),
-				tx.Gas(),
-				txToBytes,
-				tx.Value(),
-				tx.Data(),
-				tx.AccessList(),
-				tx.ETXGasLimit(),
-				tx.ETXGasPrice(),
-				tx.ETXGasTip(),
-				tx.ETXData(),
-				tx.ETXAccessList(),
-			})
-	}
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
-			txToBytes,
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-		})
+	return crypto.Keccak256Hash(data)
 }
 
 func (s SignerV1) ChainID() *big.Int {

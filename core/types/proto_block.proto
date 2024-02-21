@@ -47,27 +47,26 @@ message ProtoTransaction {
   optional bytes to = 2;
   optional uint64 nonce = 3;
   optional bytes value = 4;
-  optional bytes gas_price = 5;
-  optional uint64 gas = 6;
-  optional bytes data = 7;
-  optional bytes chain_id = 8;
-  optional bytes gas_fee_cap = 9;
-  optional bytes gas_tip_cap = 10;
-  optional ProtoAccessList access_list = 11;
-  optional uint64 etx_gas_limit = 12;
-  optional bytes etx_gas_price = 13;
-  optional bytes etx_gas_tip = 14;
-  optional bytes etx_data = 15;
-  optional ProtoAccessList etx_access_list = 16;
-  optional bytes v = 17;
-  optional bytes r = 18;
-  optional bytes s = 19;
-  optional common.ProtoHash originating_tx_hash = 20;
-  optional uint32 etx_index = 21;
-  optional bytes etx_sender = 22;
-  optional ProtoTxIns tx_ins = 23;
-  optional ProtoTxOuts tx_outs = 24;
-  optional bytes signature = 25;
+  optional uint64 gas = 5;
+  optional bytes data = 6;
+  optional bytes chain_id = 7;
+  optional bytes gas_fee_cap = 8;
+  optional bytes gas_tip_cap = 9;
+  optional ProtoAccessList access_list = 10;
+  optional uint64 etx_gas_limit = 11;
+  optional bytes etx_gas_price = 12;
+  optional bytes etx_gas_tip = 13;
+  optional bytes etx_data = 14;
+  optional ProtoAccessList etx_access_list = 15;
+  optional bytes v = 16;
+  optional bytes r = 17;
+  optional bytes s = 18;
+  optional common.ProtoHash originating_tx_hash = 19;
+  optional uint32 etx_index = 20;
+  optional bytes etx_sender = 21;
+  optional ProtoTxIns tx_ins = 22;
+  optional ProtoTxOuts tx_outs = 23;
+  optional bytes signature = 24;
 }
 
 message ProtoTransactions { repeated ProtoTransaction transactions = 1; }
@@ -133,22 +132,18 @@ message ProtoPendingEtxsRollup {
   optional ProtoTransactions etxs_rollup = 2;
 }
 
-message ProtoTxIns {
-  repeated ProtoTxIn tx_ins = 1;
-}
+message ProtoTxIns { repeated ProtoTxIn tx_ins = 1; }
 
-message ProtoTxOuts {
-  repeated ProtoTxOut tx_outs = 1;
-}
+message ProtoTxOuts { repeated ProtoTxOut tx_outs = 1; }
 
-message ProtoTxIn { 
-  optional ProtoOutPoint previous_out_point  = 1;
+message ProtoTxIn {
+  optional ProtoOutPoint previous_out_point = 1;
   optional bytes pub_key = 2;
-} 
+}
 
-message ProtoOutPoint { 
-  optional common.ProtoHash hash = 1; 
-  optional uint32 index = 2; 
+message ProtoOutPoint {
+  optional common.ProtoHash hash = 1;
+  optional uint32 index = 2;
 }
 
 message ProtoTxOut {

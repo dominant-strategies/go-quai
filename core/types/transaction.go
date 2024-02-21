@@ -28,6 +28,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/rlp"
@@ -414,6 +415,63 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	return nil
 }
 
+func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
+	protoTxSigningData := &ProtoTransaction{}
+	if tx == nil {
+		return protoTxSigningData
+	}
+	switch tx.Type() {
+	case 0:
+		txType := uint64(tx.Type())
+		protoTxSigningData.Type = &txType
+		protoTxSigningData.ChainId = tx.ChainId().Bytes()
+		nonce := tx.Nonce()
+		gas := tx.Gas()
+		protoTxSigningData.Nonce = &nonce
+		protoTxSigningData.Gas = &gas
+		protoTxSigningData.AccessList = tx.AccessList().ProtoEncode()
+		protoTxSigningData.Value = tx.Value().Bytes()
+		protoTxSigningData.Data = tx.Data()
+		if tx.To() != nil {
+			protoTxSigningData.To = tx.To().Bytes()
+		} else {
+			protoTxSigningData.To = []byte{}
+		}
+		protoTxSigningData.GasFeeCap = tx.GasFeeCap().Bytes()
+		protoTxSigningData.GasTipCap = tx.GasTipCap().Bytes()
+	case 1:
+		return protoTxSigningData
+	case 2:
+		txType := uint64(tx.Type())
+		protoTxSigningData.Type = &txType
+		protoTxSigningData.ChainId = tx.ChainId().Bytes()
+		gas := tx.Gas()
+		nonce := tx.Nonce()
+		protoTxSigningData.Nonce = &nonce
+		protoTxSigningData.Gas = &gas
+		protoTxSigningData.AccessList = tx.AccessList().ProtoEncode()
+		protoTxSigningData.Value = tx.Value().Bytes()
+		protoTxSigningData.Data = tx.Data()
+		protoTxSigningData.To = tx.To().Bytes()
+		protoTxSigningData.GasFeeCap = tx.GasFeeCap().Bytes()
+		protoTxSigningData.GasTipCap = tx.GasTipCap().Bytes()
+		etxGasLimit := tx.ETXGasLimit()
+		protoTxSigningData.EtxGasLimit = &etxGasLimit
+		protoTxSigningData.EtxGasPrice = tx.ETXGasPrice().Bytes()
+		protoTxSigningData.EtxGasTip = tx.ETXGasTip().Bytes()
+		protoTxSigningData.EtxData = tx.ETXData()
+		protoTxSigningData.EtxAccessList = tx.ETXAccessList().ProtoEncode()
+	case 3:
+		txType := uint64(tx.Type())
+		protoTxSigningData.Type = &txType
+		protoTxSigningData.ChainId = tx.ChainId().Bytes()
+		protoTxSigningData.TxIns, _ = tx.TxIn().ProtoEncode()
+		protoTxSigningData.TxOuts, _ = tx.TxOut().ProtoEncode()
+		protoTxSigningData.Signature = tx.GetSchnorrSignature().Serialize()
+	}
+	return protoTxSigningData
+}
+
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
@@ -697,11 +755,13 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 }
 
 // Hash returns the transaction hash.
-func (tx *Transaction) Hash() common.Hash {
+func (tx *Transaction) Hash() (h common.Hash) {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	h := prefixedRlpHash(tx.Type(), tx.inner)
+	protoTx, _ := tx.ProtoEncode()
+	data, _ := proto.Marshal(protoTx)
+	h = crypto.Keccak256Hash(data)
 	tx.hash.Store(h)
 	return h
 }
