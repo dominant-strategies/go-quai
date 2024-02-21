@@ -1599,7 +1599,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.Root(), newHead.UTXORoot())
+	statedb, err := pool.chain.StateAt(newHead.EVMRoot(), newHead.UTXORoot())
 	if err != nil {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return

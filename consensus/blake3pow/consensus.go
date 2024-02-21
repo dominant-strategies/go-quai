@@ -452,7 +452,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 		}
 	}
 	header.SetUTXORoot(state.UTXORoot())
-	header.SetRoot(state.IntermediateRoot(true))
+	header.SetEVMRoot(state.IntermediateRoot(true))
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and

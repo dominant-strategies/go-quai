@@ -86,7 +86,7 @@ type Header struct {
 	parentHash    []common.Hash   `json:"parentHash"           gencodec:"required"`
 	uncleHash     common.Hash     `json:"sha3Uncles"           gencodec:"required"`
 	coinbase      common.Address  `json:"miner"                gencodec:"required"`
-	root          common.Hash     `json:"stateRoot"            gencodec:"required"`
+	evmRoot       common.Hash     `json:"evmRoot"            gencodec:"required"`
 	utxoRoot      common.Hash     `json:"utxoRoot"               gencodec:"required"`
 	txHash        common.Hash     `json:"transactionsRoot"     gencodec:"required"`
 	etxHash       common.Hash     `json:"extTransactionsRoot"  gencodec:"required"`
@@ -132,7 +132,7 @@ type extheader struct {
 	ParentHash    []common.Hash
 	UncleHash     common.Hash
 	Coinbase      common.Address
-	Root          common.Hash
+	EVMRoot       common.Hash
 	UTXORoot      common.Hash
 	TxHash        common.Hash
 	EtxHash       common.Hash
@@ -162,7 +162,7 @@ func EmptyHeader() *Header {
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.difficulty = big.NewInt(0)
-	h.root = EmptyRootHash
+	h.evmRoot = EmptyRootHash
 	h.utxoRoot = EmptyRootHash
 	h.mixHash = EmptyRootHash
 	h.txHash = EmptyRootHash
@@ -190,7 +190,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.parentHash = eh.ParentHash
 	h.uncleHash = eh.UncleHash
 	h.coinbase = common.BytesToAddress(eh.Coinbase.Bytes(), eh.Location)
-	h.root = eh.Root
+	h.evmRoot = eh.EVMRoot
 	h.utxoRoot = eh.UTXORoot
 	h.txHash = eh.TxHash
 	h.etxHash = eh.EtxHash
@@ -219,7 +219,7 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		ParentHash:    h.parentHash,
 		UncleHash:     h.uncleHash,
 		Coinbase:      h.coinbase,
-		Root:          h.root,
+		EVMRoot:       h.evmRoot,
 		UTXORoot:      h.utxoRoot,
 		TxHash:        h.txHash,
 		EtxHash:       h.etxHash,
@@ -248,7 +248,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	}
 
 	uncleHash := common.ProtoHash{Value: h.UncleHash().Bytes()}
-	root := common.ProtoHash{Value: h.Root().Bytes()}
+	evmRoot := common.ProtoHash{Value: h.EVMRoot().Bytes()}
 	utxoRoot := common.ProtoHash{Value: h.UTXORoot().Bytes()}
 	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
 	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
@@ -263,7 +263,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	protoHeader := &ProtoHeader{
 		UncleHash:     &uncleHash,
 		Coinbase:      h.Coinbase().Bytes(),
-		Root:          &root,
+		EvmRoot:       &evmRoot,
 		UtxoRoot:      &utxoRoot,
 		TxHash:        &txHash,
 		EtxHash:       &etxhash,
@@ -307,7 +307,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	if protoHeader.Coinbase == nil {
 		return errors.New("missing required field 'Coinbase' in Header")
 	}
-	if protoHeader.Root == nil {
+	if protoHeader.EvmRoot == nil {
 		return errors.New("missing required field 'Root' in Header")
 	}
 	if protoHeader.UtxoRoot == nil {
@@ -370,7 +370,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 
 	h.SetUncleHash(common.BytesToHash(protoHeader.GetUncleHash().GetValue()))
 	h.SetCoinbase(common.BytesToAddress(protoHeader.GetCoinbase(), protoHeader.GetLocation().GetValue()))
-	h.SetRoot(common.BytesToHash(protoHeader.GetRoot().GetValue()))
+	h.SetEVMRoot(common.BytesToHash(protoHeader.GetEvmRoot().GetValue()))
 	h.SetUTXORoot(common.BytesToHash(protoHeader.GetUtxoRoot().GetValue()))
 	h.SetTxHash(common.BytesToHash(protoHeader.GetTxHash().GetValue()))
 	h.SetReceiptHash(common.BytesToHash(protoHeader.GetReceiptHash().GetValue()))
@@ -404,7 +404,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"difficulty":          (*hexutil.Big)(h.Difficulty()),
 		"nonce":               h.Nonce(),
 		"sha3Uncles":          h.UncleHash(),
-		"stateRoot":           h.Root(),
+		"evmRoot":             h.EVMRoot(),
 		"utxoRoot":            h.UTXORoot(),
 		"miner":               h.Coinbase(),
 		"extraData":           hexutil.Bytes(h.Extra()),
@@ -450,8 +450,8 @@ func (h *Header) UncleHash() common.Hash {
 func (h *Header) Coinbase() common.Address {
 	return h.coinbase
 }
-func (h *Header) Root() common.Hash {
-	return h.root
+func (h *Header) EVMRoot() common.Hash {
+	return h.evmRoot
 }
 func (h *Header) UTXORoot() common.Hash {
 	return h.utxoRoot
@@ -517,10 +517,10 @@ func (h *Header) SetCoinbase(val common.Address) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.coinbase = val
 }
-func (h *Header) SetRoot(val common.Hash) {
+func (h *Header) SetEVMRoot(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.root = val
+	h.evmRoot = val
 }
 func (h *Header) SetUTXORoot(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -623,7 +623,7 @@ func (h *Header) NumberArray() []*big.Int          { return h.number }
 // ProtoEncode serializes s into the Quai Proto sealData format
 func (h *Header) SealEncode() *ProtoHeader {
 	uncleHash := common.ProtoHash{Value: h.UncleHash().Bytes()}
-	root := common.ProtoHash{Value: h.Root().Bytes()}
+	evmRoot := common.ProtoHash{Value: h.EVMRoot().Bytes()}
 	utxoRoot := common.ProtoHash{Value: h.UTXORoot().Bytes()}
 	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
 	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
@@ -637,7 +637,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 	protoSealData := &ProtoHeader{
 		UncleHash:     &uncleHash,
 		Coinbase:      h.Coinbase().Bytes(),
-		Root:          &root,
+		EvmRoot:       &evmRoot,
 		UtxoRoot:      &utxoRoot,
 		TxHash:        &txHash,
 		EtxHash:       &etxhash,
@@ -997,7 +997,7 @@ func CopyHeader(h *Header) *Header {
 	}
 	cpy.SetUncleHash(h.UncleHash())
 	cpy.SetCoinbase(h.Coinbase())
-	cpy.SetRoot(h.Root())
+	cpy.SetEVMRoot(h.EVMRoot())
 	cpy.SetUTXORoot(h.UTXORoot())
 	cpy.SetTxHash(h.TxHash())
 	cpy.SetEtxHash(h.EtxHash())
@@ -1080,7 +1080,7 @@ func (b *Block) ProtoDecode(protoBlock *ProtoBlock, location common.Location) er
 func (b *Block) ParentHash(nodeCtx int) common.Hash   { return b.header.ParentHash(nodeCtx) }
 func (b *Block) UncleHash() common.Hash               { return b.header.UncleHash() }
 func (b *Block) Coinbase() common.Address             { return b.header.Coinbase() }
-func (b *Block) Root() common.Hash                    { return b.header.Root() }
+func (b *Block) EVMRoot() common.Hash                 { return b.header.EVMRoot() }
 func (b *Block) UTXORoot() common.Hash                { return b.header.UTXORoot() }
 func (b *Block) TxHash() common.Hash                  { return b.header.TxHash() }
 func (b *Block) EtxHash() common.Hash                 { return b.header.EtxHash() }

@@ -91,7 +91,7 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 	if headBlock == nil {
 		return nil, errors.New("Failed to load head block")
 	}
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, false)
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.EVMRoot(), false, false)
 	if err != nil {
 		return nil, err // The relevant snapshot(s) might not exist
 	}
@@ -272,7 +272,7 @@ func (p *Pruner) Prune(root common.Hash, location common.Location) error {
 		// Retrieve all snapshot layers from the current HEAD.
 		// In theory there are 128 difflayers + 1 disk layer present,
 		// so 128 diff layers are expected to be returned.
-		layers = p.snaptree.Snapshots(p.headHeader.Root(), 128, true)
+		layers = p.snaptree.Snapshots(p.headHeader.EVMRoot(), 128, true)
 		if len(layers) != 128 {
 			// Reject if the accumulated diff layers are less than 128. It
 			// means in most of normal cases, there is no associated state
@@ -388,7 +388,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, loc
 	// - The state HEAD is rewound already because of multiple incomplete `prune-state`
 	// In this case, even the state HEAD is not exactly matched with snapshot, it
 	// still feasible to recover the pruning correctly.
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, true)
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.EVMRoot(), false, true)
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
@@ -408,7 +408,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, loc
 	// otherwise the dangling state will be left.
 	var (
 		found       bool
-		layers      = snaptree.Snapshots(headBlock.Root(), 128, true)
+		layers      = snaptree.Snapshots(headBlock.EVMRoot(), 128, true)
 		middleRoots = make(map[common.Hash]struct{})
 	)
 	for _, layer := range layers {
@@ -436,7 +436,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom, location common.L
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}
-	t, err := trie.NewSecure(genesis.Root(), trie.NewDatabase(db))
+	t, err := trie.NewSecure(genesis.EVMRoot(), trie.NewDatabase(db))
 	if err != nil {
 		return err
 	}

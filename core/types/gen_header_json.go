@@ -19,7 +19,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ParentHash    []common.Hash  `json:"parentHash"          gencodec:"required"`
 		UncleHash     common.Hash    `json:"sha3Uncles"          gencodec:"required"`
 		Coinbase      common.Address `json:"miner"               gencodec:"required"`
-		Root          common.Hash    `json:"stateRoot"           gencodec:"required"`
+		EVMRoot          common.Hash    `json:"evmRoot"           gencodec:"required"`
 		UTXORoot		  common.Hash	 `json:"utxoRoot"              gencodec:"required"`
 		TxHash        common.Hash    `json:"transactionsRoot"    gencodec:"required"`
 		EtxHash       common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
@@ -54,7 +54,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	}
 	enc.UncleHash = h.UncleHash()
 	enc.Coinbase = h.Coinbase()
-	enc.Root = h.Root()
+	enc.EVMRoot = h.EVMRoot()
 	enc.UTXORoot = h.UTXORoot()
 	enc.TxHash = h.TxHash()
 	enc.EtxHash = h.EtxHash()
@@ -80,7 +80,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		ParentHash    []common.Hash   `json:"parentHash"          gencodec:"required"`
 		UncleHash     *common.Hash    `json:"sha3Uncles"          gencodec:"required"`
 		Coinbase      *common.AddressBytes `json:"miner"               gencodec:"required"`
-		Root          *common.Hash    `json:"stateRoot"           gencodec:"required"`
+		EVMRoot          *common.Hash    `json:"evmRoot"           gencodec:"required"`
 		UTXORoot		  *common.Hash	 `json:"utxoRoot"              gencodec:"required"`
 		TxHash        *common.Hash    `json:"transactionsRoot"    gencodec:"required"`
 		ReceiptHash   *common.Hash    `json:"receiptsRoot"        gencodec:"required"`
@@ -112,8 +112,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Coinbase == nil {
 		return errors.New("missing required field 'miner' for Header")
 	}
-	if dec.Root == nil {
-		return errors.New("missing required field 'stateRoot' for Header")
+	if dec.EVMRoot == nil {
+		return errors.New("missing required field 'evmRoot' for Header")
 	}
 	if dec.UTXORoot == nil {
 		return errors.New("missing required field 'utxoRoot' for Header")
@@ -190,7 +190,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	coinbase := common.Bytes20ToAddress(*dec.Coinbase, h.location)
 	h.SetCoinbase(coinbase)
-	h.SetRoot(*dec.Root)
+	h.SetEVMRoot(*dec.EVMRoot)
 	h.SetUTXORoot(*dec.UTXORoot)
 	h.SetTxHash(*dec.TxHash)
 	h.SetReceiptHash(*dec.ReceiptHash)

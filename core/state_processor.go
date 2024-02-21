@@ -166,7 +166,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	if sp.cacheConfig.SnapshotLimit > 0 {
 		// TODO: If the state is not available, enable snapshot recovery
 		head := hc.CurrentHeader()
-		sp.snaps, _ = snapshot.New(hc.headerDb, sp.stateCache.TrieDB(), sp.cacheConfig.SnapshotLimit, head.Root(), true, false)
+		sp.snaps, _ = snapshot.New(hc.headerDb, sp.stateCache.TrieDB(), sp.cacheConfig.SnapshotLimit, head.EVMRoot(), true, false)
 	}
 	if txLookupLimit != nil {
 		sp.txLookupLimit = *txLookupLimit
@@ -220,7 +220,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 	time1 := common.PrettyDuration(time.Since(start))
 
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().Root(), parent.Header().UTXORoot(), p.stateCache, p.utxoCache, p.snaps, nodeLocation)
+	statedb, err := state.New(parent.Header().EVMRoot(), parent.Header().UTXORoot(), p.stateCache, p.utxoCache, p.snaps, nodeLocation)
 	if err != nil {
 		return types.Receipts{}, []*types.Log{}, nil, 0, err
 	}
@@ -557,7 +557,7 @@ func (p *StateProcessor) GetVMConfig() *vm.Config {
 
 // State returns a new mutable state based on the current HEAD block.
 func (p *StateProcessor) State() (*state.StateDB, error) {
-	return p.StateAt(p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).Root(), p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).UTXORoot())
+	return p.StateAt(p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).EVMRoot(), p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).UTXORoot())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
@@ -584,7 +584,7 @@ func (p *StateProcessor) HasBlockAndState(hash common.Hash, number uint64) bool 
 	if block == nil {
 		return false
 	}
-	return p.HasState(block.Root())
+	return p.HasState(block.EVMRoot())
 }
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
@@ -649,7 +649,7 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 // base layer statedb can be passed then it's regarded as the statedb of the
 // parent block.
 // Parameters:
-//   - block: The block for which we want the state (== state at the stateRoot of the parent)
+//   - block: The block for which we want the state (== state at the evmRoot of the parent)
 //   - reexec: The maximum number of blocks to reprocess trying to obtain the desired state
 //   - base: If the caller is tracing multiple blocks, the caller can provide the parent state
 //     continuously from the callsite.
@@ -668,7 +668,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 	)
 	// Check the live database first if we have the state fully available, use that.
 	if checkLive {
-		statedb, err = p.StateAt(block.Root(), block.UTXORoot())
+		statedb, err = p.StateAt(block.EVMRoot(), block.UTXORoot())
 		if err == nil {
 			return statedb, nil
 		}
@@ -694,7 +694,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		// we would rewind past a persisted block (specific corner case is chain
 		// tracing from the genesis).
 		if !checkLive {
-			statedb, err = state.New(current.Root(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
 			if err == nil {
 				return statedb, nil
 			}
@@ -711,7 +711,7 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			}
 			current = types.CopyHeader(parent)
 
-			statedb, err = state.New(current.Root(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
 			if err == nil {
 				break
 			}
@@ -764,12 +764,12 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 		root, err := statedb.Commit(true)
 		if err != nil {
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
-				current.NumberU64(nodeCtx), current.Root().Hex(), err)
+				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
 		utxoRoot, err := statedb.CommitUTXOs()
 		if err != nil {
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
-				current.NumberU64(nodeCtx), current.Root().Hex(), err)
+				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
 		statedb, err = state.New(root, utxoRoot, database, utxoDatabase, nil, nodeLocation)
 		if err != nil {
@@ -911,12 +911,14 @@ func (p *StateProcessor) FetchInputUtxos(statedb *state.StateDB, view *types.Utx
 	for i, tx := range transactions {
 		txInFlight[tx.Hash()] = i
 	}
-
+	if types.IsCoinBaseTx(transactions[0]) {
+		transactions = transactions[1:]
+	}
 	// Loop through all of the transaction inputs (except for the coinbase
 	// which has no inputs) collecting them into sets of what is needed and
 	// what is already known (in-flight).
 	needed := make([]types.OutPoint, 0, len(transactions))
-	for i, tx := range transactions[1:] {
+	for i, tx := range transactions {
 		for _, txIn := range tx.TxIn() {
 			// It is acceptable for a transaction input to reference
 			// the output of another transaction in this block only

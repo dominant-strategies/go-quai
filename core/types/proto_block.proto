@@ -22,7 +22,7 @@ message ProtoHeader {
   repeated common.ProtoHash parent_hash = 1;
   optional common.ProtoHash uncle_hash = 2;
   optional bytes coinbase = 3;
-  optional common.ProtoHash root = 4;
+  optional common.ProtoHash evm_root = 4;
   optional common.ProtoHash tx_hash = 5;
   optional common.ProtoHash etx_hash = 6;
   optional common.ProtoHash etx_rollup_hash = 7;

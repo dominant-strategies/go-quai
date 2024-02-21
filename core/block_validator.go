@@ -118,8 +118,8 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	time4 := common.PrettyDuration(time.Since(start))
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(true); header.Root() != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root(), root)
+	if root := statedb.IntermediateRoot(true); header.EVMRoot() != root {
+		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.EVMRoot(), root)
 	}
 	if root := statedb.UTXORoot(); header.UTXORoot() != root {
 		return fmt.Errorf("invalid utxo root (remote: %x local: %x)", header.UTXORoot(), root)

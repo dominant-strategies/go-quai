@@ -489,7 +489,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 		}
 	}
 	header.SetUTXORoot(state.UTXORoot())
-	header.SetRoot(state.IntermediateRoot(true))
+	header.SetEVMRoot(state.IntermediateRoot(true))
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and

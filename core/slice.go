@@ -425,7 +425,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"utxos":      len(block.QiTransactions()),
 		"gas":        block.GasUsed(),
 		"gasLimit":   block.GasLimit(),
-		"root":       block.Root(),
+		"evmRoot":    block.EVMRoot(),
 		"order":      order,
 		"location":   block.Header().Location(),
 		"elapsed":    common.PrettyDuration(time.Since(start)),
@@ -1023,7 +1023,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		}
 		// Pick the head
 		if subReorg {
-			if (localPendingHeader.Header().Root() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
+			if (localPendingHeader.Header().EVMRoot() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
 				sl.logger.WithFields(log.Fields{
 					"NumberArray": combinedPendingHeader.NumberArray(),
 					"Number":      combinedPendingHeader.Number(nodeCtx),
@@ -1305,7 +1305,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetTxHash(header.TxHash())
 		combinedPendingHeader.SetEtxHash(header.EtxHash())
 		combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
-		combinedPendingHeader.SetRoot(header.Root())
+		combinedPendingHeader.SetEVMRoot(header.EVMRoot())
 		combinedPendingHeader.SetUTXORoot(header.UTXORoot())
 		combinedPendingHeader.SetCoinbase(header.Coinbase())
 		combinedPendingHeader.SetBaseFee(header.BaseFee())
@@ -1591,7 +1591,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 			rawdb.DeletePendingEtxsRollup(sl.sliceDb, header.Hash())
 		}
 		// delete the trie node for a given root of the header
-		rawdb.DeleteTrieNode(sl.sliceDb, header.Root())
+		rawdb.DeleteTrieNode(sl.sliceDb, header.EVMRoot())
 		badHashes = append(badHashes, header.Hash())
 		parent := sl.hc.GetHeader(header.ParentHash(nodeCtx), header.NumberU64(nodeCtx)-1)
 		header = parent
@@ -1609,7 +1609,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 
 	// Recover the snaps
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
-		sl.hc.bc.processor.snaps, _ = snapshot.New(sl.sliceDb, sl.hc.bc.processor.stateCache.TrieDB(), sl.hc.bc.processor.cacheConfig.SnapshotLimit, currentHeader.Root(), true, true)
+		sl.hc.bc.processor.snaps, _ = snapshot.New(sl.sliceDb, sl.hc.bc.processor.stateCache.TrieDB(), sl.hc.bc.processor.cacheConfig.SnapshotLimit, currentHeader.EVMRoot(), true, true)
 	}
 }
 

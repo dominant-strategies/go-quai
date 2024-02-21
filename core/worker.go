@@ -630,7 +630,7 @@ func (w *worker) eventExitLoop() {
 func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
-	state, err := w.hc.bc.processor.StateAt(parent.Root(), parent.UTXORoot())
+	state, err := w.hc.bc.processor.StateAt(parent.EVMRoot(), parent.UTXORoot())
 	if err != nil {
 		return nil, err
 	}
