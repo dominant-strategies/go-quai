@@ -51,6 +51,12 @@ func (a Address) InternalAddress() (InternalAddress, error) {
 	return *internal, nil
 }
 
+func (a Address) IsInQiLedgerScope() bool {
+	LedgerMask := byte(0b10000000)
+	// The first bit of the second byte is set if the address is in the Qi ledger
+	return a.Bytes()[1]&LedgerMask == LedgerMask
+}
+
 func (a Address) Equal(b Address) bool {
 	if a.inner == nil && b.inner == nil {
 		return true
