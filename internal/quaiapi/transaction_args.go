@@ -51,6 +51,11 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	// Support for Qi (UTXO) transaction
+	TxIn   types.TxIns  `json:"txIn,omitempty"`
+	TxOut  types.TxOuts `json:"txOut,omitempty"`
+	TxType uint8        `json:"txType,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -242,4 +247,23 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 	}
 	msg := types.NewMessage(addr, args.To, uint64(*args.Nonce), value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, false)
 	return msg, nil
+}
+
+// CalculateQiTxGas calculates the gas usage of a utxo transaction.
+func (args *TransactionArgs) CalculateQiTxGas() (hexutil.Uint64, error) {
+	if args.TxType != types.QiTxType {
+		return 0, errors.New("not a Qi transaction")
+	}
+
+	if len(args.TxIn) == 0 || len(args.TxOut) == 0 {
+		return 0, errors.New("Qi transaction must have at least one input and one output")
+	}
+
+	qiTx := &types.QiTx{
+		TxIn:  args.TxIn,
+		TxOut: args.TxOut,
+	}
+
+	tx := types.NewTx(qiTx)
+	return hexutil.Uint64(types.CalculateQiTxGas(tx)), nil
 }

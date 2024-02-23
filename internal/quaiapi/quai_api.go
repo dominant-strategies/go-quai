@@ -441,7 +441,14 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	switch args.TxType {
+	case types.QiTxType:
+		return args.CalculateQiTxGas()
+	case types.InternalTxType, types.ExternalTxType, types.InternalToExternalTxType:
+		return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	default:
+		return 0, errors.New("unsupported tx type")
+	}
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
