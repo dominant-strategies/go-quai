@@ -301,7 +301,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			log.Global.Warn("Served " + msg.Method)
+			log.Global.Warn(ctx, "Served "+msg.Method)
 		} else {
 			log.Global.Debug("Served " + msg.Method)
 		}

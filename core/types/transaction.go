@@ -260,9 +260,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		tx.SetInner(&itx)
 
 	case 1:
-		if protoTx.Nonce == nil {
-			return errors.New("missing required field 'Nonce' in ProtoTransaction")
-		}
 		if protoTx.Gas == nil {
 			return errors.New("missing required field 'Gas' in ProtoTransaction")
 		}
@@ -277,12 +274,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		if protoTx.To == nil {
 			return errors.New("missing required field 'To' in ProtoTransaction")
-		}
-		if protoTx.GasFeeCap == nil {
-			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
-		}
-		if protoTx.GasTipCap == nil {
-			return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
 		}
 
 		var etx ExternalTx

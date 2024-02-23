@@ -137,6 +137,7 @@ func NewOracle(backend OracleBackend, params Config, logger *log.Logger) *Oracle
 // necessary to add the basefee to the returned number to fall back to the legacy
 // behavior.
 func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(0), nil
 	nodeCtx := oracle.backend.ChainConfig().Location.Context()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("suggestTipCap can only be called in zone chains")

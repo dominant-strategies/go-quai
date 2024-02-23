@@ -115,6 +115,9 @@ func (qbe *QuaiBackend) GetHeight(location common.Location) uint64 {
 }
 
 func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) *types.Block {
+	if qbe == nil {
+		return nil
+	}
 	backend := *qbe.GetBackend(location)
 	if backend == nil {
 		log.Global.Error("no backend found")
