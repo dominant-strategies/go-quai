@@ -25,6 +25,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -449,6 +450,28 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	default:
 		return 0, errors.New("unsupported tx type")
 	}
+}
+
+// BaseFee returns the base fee for a tx to be included in the next block.
+// If txType is set to "true" returns the Quai base fee in units of Wei.
+// If txType is set to "false" returns the Qi base fee in units of Qit.
+func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*big.Int, error) {
+	header := s.b.CurrentHeader()
+	if header == nil {
+		return nil, errors.New("no header available")
+	}
+
+	chainCfg := s.b.ChainConfig()
+	if chainCfg == nil {
+		return nil, errors.New("no chain config available")
+	}
+
+	if txType {
+		return misc.CalcBaseFee(chainCfg, header), nil
+	}
+
+	// TODO: implement Qi base fee calculation
+	panic("Qi base fee calculation not implemented")
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
