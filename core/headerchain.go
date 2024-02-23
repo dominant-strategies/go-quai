@@ -467,7 +467,7 @@ func (hc *HeaderChain) setCurrentUTXOSet(head *types.Header) error {
 	// If head is the normal extension of current state head, we can return by just updating the UTXO set.
 	if prevHeader.Hash() == head.ParentHash(nodeCtx) {
 		// Set up UTXO processing
-		block := hc.GetBlockByHash(head.Hash())
+		block := hc.GetBlockOrCandidateByHash(head.Hash())
 		utxoView := types.NewUtxoViewpoint(hc.NodeLocation())
 		stxos := make([]types.SpentTxOut, 0, types.CountSpentOutputs(block))
 		err := hc.fetchInputUtxos(utxoView, block)

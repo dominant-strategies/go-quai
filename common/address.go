@@ -94,7 +94,7 @@ func (a Address) ProtoEncode() *ProtoAddress {
 
 // ProtoDecode converts the protobuf to an address representation.
 func (a *Address) ProtoDecode(protoAddress *ProtoAddress, location Location) error {
-	if protoAddress.Value == nil {
+	if protoAddress == nil || protoAddress.Value == nil {
 		return errors.New("address is nil in ProtoDecode")
 	}
 	*a = BytesToAddress(protoAddress.GetValue(), location)

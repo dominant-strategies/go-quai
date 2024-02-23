@@ -109,9 +109,8 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	if dec.TransactionIndex != nil {
 		r.TransactionIndex = uint(*dec.TransactionIndex)
 	}
-	if dec.Etxs == nil {
-		return errors.New("missing required field 'etxs' for Receipt")
+	if dec.Etxs != nil {
+		r.Etxs = dec.Etxs
 	}
-	r.Etxs = dec.Etxs
 	return nil
 }

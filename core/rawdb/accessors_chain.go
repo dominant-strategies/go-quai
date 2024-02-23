@@ -821,7 +821,7 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64, location 
 		}).Error("Invalid receipt array Proto")
 		return nil
 	}
-	var receipts types.Receipts
+	receipts := make(types.Receipts, len(*storageReceipts))
 	for i, storageReceipt := range *storageReceipts {
 		receipts[i] = (*types.Receipt)(storageReceipt)
 	}
@@ -849,7 +849,7 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 		}).Error("Missing body but have receipt")
 		return nil
 	}
-	if err := receipts.DeriveFields(config, hash, number, body.Transactions); err != nil {
+	if err := receipts.DeriveFields(config, hash, number, body.QuaiTransactions()); err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,

@@ -859,6 +859,16 @@ func (b *Body) ProtoDecode(protoBody *ProtoBody, location common.Location) error
 	return nil
 }
 
+func (b *Body) QuaiTransactions() []*Transaction {
+	quaiTxs := make([]*Transaction, 0)
+	for _, t := range b.Transactions {
+		if t.Type() != QiTxType {
+			quaiTxs = append(quaiTxs, t)
+		}
+	}
+	return quaiTxs
+}
+
 // Block represents an entire block in the Quai blockchain.
 type Block struct {
 	header          *Header
@@ -1100,6 +1110,16 @@ func (b *Block) QiTransactions() []*Transaction {
 		}
 	}
 	return qiTxs
+}
+
+func (b *Block) QuaiTransactions() []*Transaction {
+	quaiTxs := make([]*Transaction, 0)
+	for _, t := range b.Transactions() {
+		if t.Type() != QiTxType {
+			quaiTxs = append(quaiTxs, t)
+		}
+	}
+	return quaiTxs
 }
 
 // Body returns the non-header content of the block.

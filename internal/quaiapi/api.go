@@ -600,6 +600,15 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
+	if args.Nonce == nil {
+		internal, err := args.from(b.NodeLocation()).InternalAddress()
+		if err != nil {
+			return nil, err
+		}
+		nonce := state.GetNonce(internal)
+		args.Nonce = (*hexutil.Uint64)(&nonce)
+	}
+
 	// Get a new instance of the EVM.
 	msg, err := args.ToMessage(globalGasCap, header.BaseFee(), b.NodeLocation())
 	if err != nil {
@@ -702,8 +711,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		cap uint64
 	)
 	// Use zero address if sender unspecified.
-	if args.From == nil {
-		args.From = new(common.Address)
+	if args.From == nil || args.From.Equal(common.Address{}) || args.From.Equal(common.Zero) {
+		zero := common.ZeroAddress(b.NodeLocation())
+		args.From = &zero
 	}
 	// Determine the highest gas limit can be used during the estimation.
 	if args.Gas != nil && uint64(*args.Gas) >= params.TxGas {
@@ -742,7 +752,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		balance := state.GetBalance(internal) // from can't be nil
 		available := new(big.Int).Set(balance)
-		if args.Value != nil {
+		if args.Value != nil && args.Value.ToInt().Cmp(big.NewInt(0)) != 0 {
 			if args.Value.ToInt().Cmp(available) >= 0 {
 				return 0, errors.New("insufficient funds for transfer")
 			}
@@ -1413,14 +1423,19 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	if err != nil {
 		return nil, nil
 	}
+	if tx.Type() == types.QiTxType {
+		return nil, errors.New("QiTx does not have receipt")
+	}
 	receipts, err := s.b.GetReceipts(ctx, blockHash)
 	if err != nil {
 		return nil, err
 	}
-	if len(receipts) <= int(index) {
-		return nil, nil
+	var receipt *types.Receipt
+	for _, r := range receipts {
+		if r.TxHash == hash {
+			receipt = r
+		}
 	}
-	receipt := receipts[index]
 
 	// Derive the sender.
 	bigblock := new(big.Int).SetUint64(blockNumber)
@@ -1460,7 +1475,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["logs"] = [][]*types.Log{}
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if !receipt.ContractAddress.Equal(common.Zero) {
+	if !receipt.ContractAddress.Equal(common.Zero) && !receipt.ContractAddress.Equal(common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
 	}
 	return fields, nil

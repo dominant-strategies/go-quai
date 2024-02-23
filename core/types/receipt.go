@@ -239,6 +239,7 @@ func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
 	ProtoReceiptForStorage := &ProtoReceiptForStorage{
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
+		ContractAddress:   r.ContractAddress.ProtoEncode(),
 	}
 	protoEtxs, err := r.Etxs.ProtoEncode()
 	if err != nil {
@@ -256,6 +257,9 @@ func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
 }
 
 func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, location common.Location) error {
+	if protoReceipt == nil {
+		return errors.New("protoReceipt is nil in ProtoDecode")
+	}
 	if err := (*Receipt)(r).setStatus(protoReceipt.PostStateOrStatus); err != nil {
 		return err
 	}
@@ -369,9 +373,6 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 	signer := MakeSigner(config, new(big.Int).SetUint64(number))
 
 	logIndex := uint(0)
-	if len(txs) != len(r) {
-		return errors.New("transaction and receipt count mismatch")
-	}
 	for i := 0; i < len(r); i++ {
 		// The transaction type and hash can be retrieved from the transaction itself
 		r[i].Type = txs[i].Type()
@@ -383,7 +384,7 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 		r[i].TransactionIndex = uint(i)
 
 		// The contract address can be derived from the transaction itself
-		if txs[i].To() == nil {
+		if r[i].ContractAddress.Equal(common.Address{}) && txs[i].To() == nil {
 			// Deriving the signer is expensive, only do if it's actually needed
 			from, _ := Sender(signer, txs[i])
 			r[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce(), txs[i].Data(), config.Location)
