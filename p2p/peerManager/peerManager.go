@@ -157,7 +157,13 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 }
 
 func (pm *BasicPeerManager) AddPeer(peerID p2p.PeerID) error {
-	return pm.recategorizePeer(peerID)
+	err := pm.recategorizePeer(peerID)
+	if err == nil {
+		if peerMetrics != nil {
+			peerMetrics.WithLabelValues("numPeers").Inc()
+		}
+	}
+	return err
 }
 
 func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
@@ -172,14 +178,22 @@ func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
 func (pm *BasicPeerManager) removePeerFromDBs(peerID p2p.PeerID) error {
 	key := datastore.NewKey(peerID.String())
 
+	var err error
 	dbs := []*peerdb.PeerDB{pm.bestPeersDB, pm.responsivePeersDB, pm.lastResortPeers}
 	for _, db := range dbs {
 		exists, _ := db.Has(pm.ctx, key)
 		if exists {
-			return db.Delete(pm.ctx, key)
+			err = db.Delete(pm.ctx, key)
+			break
 		}
 	}
-	return nil
+
+	if err == nil {
+		if peerMetrics != nil {
+			// peerMetrics.WithLabelValues("numPeers").Dec()
+		}
+	}
+	return err
 }
 
 func (pm *BasicPeerManager) prunePeerConnection(peerID p2p.PeerID) error {
@@ -214,6 +228,9 @@ func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error)
 		pm.streamCache.Add(peerID, stream)
 		go quaiprotocol.QuaiProtocolHandler(stream.(network.Stream), pm.p2pBackend)
 		log.Global.Debug("Had to create new stream")
+		if streamMetrics != nil {
+			streamMetrics.WithLabelValues("NumStreams").Inc()
+		}
 	} else {
 		log.Global.Debug("Requested stream was found in cache")
 	}

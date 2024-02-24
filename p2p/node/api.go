@@ -153,6 +153,12 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 			"data":   data,
 			"peerId": peerID,
 		}).Warn("Received data from peer")
+
+		if streamMetrics != nil {
+			// Mark the stream as closed
+			streamMetrics.WithLabelValues("NumStreams").Dec()
+		}
+
 		// send the block to the result channel
 		resultChan <- recvd
 
