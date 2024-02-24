@@ -24,6 +24,9 @@ import (
 // for less cluttered pprof profiles.
 var enabled bool
 
+var registeredGauges = make(map[string]*prometheus.GaugeVec)
+var registeredCounters = make(map[string]*prometheus.CounterVec)
+
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
@@ -57,11 +60,15 @@ func StartProcessMetrics() {
 }
 
 func NewGaugeVec(name string, help string) *prometheus.GaugeVec {
+	if gaugeVec, exists := registeredGauges[name]; exists {
+		return gaugeVec
+	}
 	gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: name,
 		Help: help,
 	}, []string{"label"})
-	prometheus.MustRegister(gaugeVec)
+	prometheus.Register(gaugeVec)
+	registeredGauges[name] = gaugeVec
 	return gaugeVec
 }
 
@@ -70,7 +77,7 @@ func NewGauge(name string, help string) *prometheus.Gauge {
 		Name: name,
 		Help: help,
 	})
-	prometheus.MustRegister(gauge)
+	prometheus.Register(gauge)
 	return &gauge
 }
 
@@ -79,8 +86,21 @@ func NewCounter(name string, help string) *prometheus.Counter {
 		Name: name,
 		Help: help,
 	})
-	prometheus.MustRegister(counter)
+	prometheus.Register(counter)
 	return &counter
+}
+
+func NewCounterVec(name string, help string) *prometheus.CounterVec {
+	if counterVec, exists := registeredCounters[name]; exists {
+		return counterVec
+	}
+	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: name,
+		Help: help,
+	}, []string{"label"})
+	prometheus.Register(counterVec)
+	registeredCounters[name] = counterVec
+	return counterVec
 }
 
 func NewTimer(name string, help string) *prometheus.Timer {

@@ -22,6 +22,9 @@ func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 	if _, err := io.ReadFull(stream, lenBytes); err != nil {
 		return nil, errors.Wrap(err, "failed to read message length")
 	}
+	if messageMetrics != nil {
+		messageMetrics.WithLabelValues("received").Inc()
+	}
 	msgLen := binary.BigEndian.Uint32(lenBytes)
 
 	// Now read the message

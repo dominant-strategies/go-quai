@@ -61,6 +61,8 @@ func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
 	default:
 		log.Global.WithField("quaiMsg", quaiMsg).Errorf("unsupported quai message type")
 	}
+	streamMetrics.WithLabelValues("NumStreams").Dec()
+	log.Global.Tracef("Exiting Quai Protocol Handler")
 }
 
 func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node QuaiP2PNode) {
