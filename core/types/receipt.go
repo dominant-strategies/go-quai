@@ -386,7 +386,10 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 		// The contract address can be derived from the transaction itself
 		if r[i].ContractAddress.Equal(common.Address{}) && txs[i].To() == nil {
 			// Deriving the signer is expensive, only do if it's actually needed
-			from, _ := Sender(signer, txs[i])
+			from, err := Sender(signer, txs[i])
+			if err != nil {
+				return err
+			}
 			r[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce(), txs[i].Data(), config.Location)
 		}
 		// The used gas can be calculated based on previous r

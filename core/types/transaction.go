@@ -941,7 +941,10 @@ func NewTransactionsByPriceAndNonce(signer Signer, etxs []*Transaction, txs map[
 	}
 
 	for from, accTxs := range txs {
-		acc, _ := Sender(signer, accTxs[0])
+		acc, err := Sender(signer, accTxs[0])
+		if err != nil {
+			continue
+		}
 		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee, nil)
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
 		if acc.Bytes20() != from || err != nil {

@@ -784,7 +784,10 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		// during transaction acceptance is the transaction pool.
 		//
 		// We use the signer regardless of the current hf.
-		from, _ := types.Sender(env.signer, tx)
+		from, err := types.Sender(env.signer, tx)
+		if err != nil {
+			continue
+		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 

@@ -815,7 +815,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 	}
 	// Try to replace an existing transaction in the pending pool
-	from, _ := types.Sender(pool.signer, tx) // already validated
+	from, err := types.Sender(pool.signer, tx) // already validated
+	if err != nil {
+		return false, err
+	}
 	internal, err := from.InternalAddress()
 	if err != nil {
 		return false, err
@@ -876,7 +879,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
-	from, _ := types.Sender(pool.signer, tx) // already validated
+	from, err := types.Sender(pool.signer, tx) // already validated
+	if err != nil {
+		return false, err
+	}
 	internal, err := from.InternalAddress()
 	if err != nil {
 		return false, err
@@ -1185,7 +1191,10 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		if tx == nil {
 			continue
 		}
-		from, _ := types.Sender(pool.signer, tx) // already validated
+		from, err := types.Sender(pool.signer, tx) // already validated
+		if err != nil {
+			continue
+		}
 		internal, err := from.InternalAddress()
 		if err != nil {
 			continue
@@ -1222,7 +1231,10 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	if tx == nil {
 		return
 	}
-	addr, _ := types.Sender(pool.signer, tx) // already validated during insertion
+	addr, err := types.Sender(pool.signer, tx) // already validated during insertion
+	if err != nil {
+		return
+	}
 	internal, err := addr.InternalAddress()
 	if err != nil {
 		return
@@ -1353,7 +1365,10 @@ func (pool *TxPool) scheduleReorgLoop() {
 		case tx := <-pool.queueTxEventCh:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
-			addr, _ := types.Sender(pool.signer, tx)
+			addr, err := types.Sender(pool.signer, tx)
+			if err != nil {
+				continue
+			}
 			internal, err := addr.InternalAddress()
 			if err != nil {
 				pool.logger.WithField("err", err).Debug("Failed to queue transaction")
@@ -1444,7 +1459,10 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 
 			// Notify subsystems for newly added transactions
 			for _, tx := range promoted {
-				addr, _ := types.Sender(pool.signer, tx)
+				addr, err := types.Sender(pool.signer, tx)
+				if err != nil {
+					continue
+				}
 				internal, err := addr.InternalAddress()
 				if err != nil {
 					pool.logger.WithField("err", err).Debug("Failed to add transaction event")

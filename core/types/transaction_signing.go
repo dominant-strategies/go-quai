@@ -106,6 +106,9 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	if tx.Type() == ExternalTxType { // External TX does not have a signature
 		return tx.inner.(*ExternalTx).Sender, nil
 	}
+	if tx.Type() == QiTxType {
+		return common.Zero, errors.New("sender field not available for qi type")
+	}
 	if sc := tx.from.Load(); sc != nil {
 		sigCache := sc.(sigCache)
 		// If the signer used to derive from in a previous
@@ -168,6 +171,9 @@ func NewSigner(chainId *big.Int, nodeLocation common.Location) Signer {
 func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() == ExternalTxType { // External TX does not have a signature
 		return tx.inner.(*ExternalTx).Sender, nil
+	}
+	if tx.Type() == QiTxType {
+		return common.Zero, errors.New("cannot find the sender for a qi transaction type")
 	}
 	V, R, S := tx.GetEcdsaSignatureValues()
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
