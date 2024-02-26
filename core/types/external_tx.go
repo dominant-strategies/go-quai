@@ -193,3 +193,7 @@ func (tx *ExternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 func (tx *ExternalTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
 }
+
+func (tx *ExternalTx) setTo(to common.Address) {
+	panic("You should not set To on an external transaction")
+}

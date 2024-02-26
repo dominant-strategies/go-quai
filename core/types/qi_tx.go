@@ -134,3 +134,7 @@ func CalculateQiTxGas(transaction *Transaction) uint64 {
 	}
 	return uint64(len(transaction.TxIn()))*params.SloadGas + uint64(len(transaction.TxOut()))*params.CallValueTransferGas + params.EcrecoverGas
 }
+
+func (tx *QiTx) setTo(to common.Address) {
+	panic("Cannot set To on a Qi transaction")
+}

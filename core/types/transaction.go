@@ -106,6 +106,7 @@ type TxData interface {
 
 	getEcdsaSignatureValues() (v, r, s *big.Int)
 	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
+	setTo(to common.Address)
 
 	// Schnorr segregated sigs
 	getSchnorrSignature() *schnorr.Signature
@@ -274,6 +275,12 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		if protoTx.To == nil {
 			return errors.New("missing required field 'To' in ProtoTransaction")
+		}
+		if protoTx.OriginatingTxHash == nil {
+			return errors.New("missing required field 'OriginatingTxHash' in ProtoTransaction")
+		}
+		if protoTx.EtxIndex == nil {
+			return errors.New("missing required field 'EtxIndex' in ProtoTransaction")
 		}
 
 		var etx ExternalTx
@@ -612,6 +619,10 @@ func (tx *Transaction) To() *common.Address {
 	}
 	cpy := *ito
 	return &cpy
+}
+
+func (tx *Transaction) SetTo(addr common.Address) {
+	tx.inner.setTo(addr)
 }
 
 // Cost returns gas * gasPrice + value.

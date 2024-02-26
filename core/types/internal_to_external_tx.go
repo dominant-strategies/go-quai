@@ -141,3 +141,7 @@ func (tx *InternalToExternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 func (tx *InternalToExternalTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }
+
+func (tx *InternalToExternalTx) setTo(to common.Address) {
+	tx.To = &to
+}

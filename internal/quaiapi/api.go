@@ -1540,6 +1540,10 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
 	}
+	// Set To address to Internal if it was accidentally unmarshalled as External (or vice-versa)
+	if tx.Type() != types.QiTxType {
+		tx.SetTo(common.BytesToAddress(tx.To().Bytes(), s.b.NodeLocation()))
+	}
 	return SubmitTransaction(ctx, s.b, tx)
 }
 
