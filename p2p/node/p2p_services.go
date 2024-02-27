@@ -90,33 +90,6 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	return nil, errors.New("invalid response")
 }
 
-func (p *P2PNode) readLoop(stream network.Stream, location common.Location) {
-	for {
-		message, err := common.ReadMessageFromStream(stream)
-		if err != nil {
-			return
-		}
-
-		recvdID, recvdType, err := pb.DecodeQuaiResponse(message, location)
-		if err != nil {
-			log.Global.WithField(
-				"err", err,
-			).Errorf("error decoding quai response: %s", err)
-			return
-		}
-
-		dataChan, err := p.requestManager.GetRequestChan(recvdID)
-		if err != nil {
-			log.Global.WithFields(log.Fields{
-				"requestID": recvdID,
-				"err":       err,
-			}).Error("error associating request ID with data channel")
-			return
-		}
-		dataChan <- recvdType
-	}
-}
-
 // Creates a Cid from a location to be used as DHT key
 func locationToCid(location common.Location) cid.Cid {
 	sliceBytes := []byte(location.Name())

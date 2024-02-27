@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"math/big"
-	"os"
 
 	"github.com/libp2p/go-libp2p/core/network"
 
@@ -32,7 +31,7 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	for {
 		data, err := common.ReadMessageFromStream(stream)
 		if err != nil {
-			if errors.Is(err, network.ErrReset) || errors.Is(err, io.EOF) || errors.Is(err, os.ErrDeadlineExceeded) {
+			if errors.Is(err, network.ErrReset) || errors.Is(err, io.EOF) {
 				return
 			}
 
@@ -40,67 +39,118 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			// TODO: handle error
 			continue
 		}
-		id, decodedType, loc, query, err := pb.DecodeQuaiRequest(data)
+
+		quaiMsg, err := pb.DecodeQuaiMessage(data)
 		if err != nil {
-			log.Global.Errorf("error decoding quai request: %s", err)
-			// TODO: handle error
+			log.Global.Errorf("error decoding quai message: %s", err)
 			continue
 		}
-		switch query.(type) {
-		case *common.Hash:
-			log.Global.Debugf("Received request id: %d for %T, location %v hash %s from peer %s", id, decodedType, loc, query, stream.Conn().RemotePeer())
-		case *big.Int:
-			log.Global.Debugf("Received request id: %d for %T, location %v number %s from peer %s", id, decodedType, loc, query, stream.Conn().RemotePeer())
-		default:
-			log.Global.Errorf("unsupported request input data field type: %T", query)
-		}
 
-		switch decodedType.(type) {
-		case *types.Block:
-			requestedHash := query.(*common.Hash)
-			err = handleBlockRequest(id, loc, *requestedHash, stream, node)
-			if err != nil {
-				log.Global.Errorf("error handling block request: %s", err)
-				// TODO: handle error
-				continue
-			}
-		case *types.Header:
-			requestedHash := query.(*common.Hash)
-			err = handleHeaderRequest(id, loc, *requestedHash, stream, node)
-			if err != nil {
-				log.Global.Errorf("error handling header request: %s", err)
-				// TODO: handle error
-				continue
-			}
-		case *types.Transaction:
-			requestedHash := query.(*common.Hash)
-			err = handleTransactionRequest(id, loc, *requestedHash, stream, node)
-			if err != nil {
-				log.Global.Errorf("error handling transaction request: %s", err)
-				// TODO: handle error
-				continue
-			}
-		case *common.Hash:
-			number := query.(*big.Int)
-			err = handleBlockNumberRequest(id, loc, number, stream, node)
-			if err != nil {
-				log.Global.Errorf("error handling block number request: %s", err)
-				continue
-			}
-		case trie.TrieNodeRequest:
-			requestedHash := query.(*common.Hash)
-			err := handleTrieNodeRequest(id, loc, *requestedHash, stream, node)
-			if err != nil {
-				log.Global.Errorf("error handling trie node request: %s", err)
-			}
-		default:
-			log.Global.Errorf("unsupported request data type: %T", decodedType)
-			// TODO: handle error
-			continue
+		switch {
+		case quaiMsg.GetRequest() != nil:
+			handleRequest(quaiMsg.GetRequest(), stream, node)
 
+		case quaiMsg.GetResponse() != nil:
+			handleResponse(quaiMsg.GetResponse(), stream, node)
+
+		default:
+			log.Global.WithField("quaiMsg", quaiMsg).Errorf("unsupported quai message type")
 		}
 	}
-	log.Global.Tracef("Exiting Quai Protocol Handler")
+}
+
+func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node QuaiP2PNode) {
+	id, decodedType, loc, query, err := pb.DecodeQuaiRequest(quaiMsg)
+	if err != nil {
+		log.Global.WithField("err", err).Errorf("error decoding quai request")
+		// TODO: handle error
+		return
+	}
+	switch query.(type) {
+	case *common.Hash:
+		log.Global.WithFields(log.Fields{
+			"requestID": id,
+			"decodedType": decodedType,
+			"location":  loc,
+			"hash":      query,
+			"peer":      stream.Conn().RemotePeer(),
+		}).Debug("Received request by hash to handle")
+	case *big.Int:
+		log.Global.WithFields(log.Fields{
+			"requestID": id,
+			"decodedType": decodedType,
+			"location":  loc,
+			"hash":      query,
+			"peer":      stream.Conn().RemotePeer(),
+		}).Debug("Received request by number to handle")
+	default:
+		log.Global.Errorf("unsupported request input data field type: %T", query)
+	}
+
+	switch decodedType.(type) {
+	case *types.Block:
+		requestedHash := query.(*common.Hash)
+		err = handleBlockRequest(id, loc, *requestedHash, stream, node)
+		if err != nil {
+			log.Global.WithField("err", err).Error("error handling block request")
+			// TODO: handle error
+			return
+		}
+	case *types.Header:
+		requestedHash := query.(*common.Hash)
+		err = handleHeaderRequest(id, loc, *requestedHash, stream, node)
+		if err != nil {
+			log.Global.WithField("err", err).Error("error handling header request")
+			// TODO: handle error
+			return
+		}
+	case *types.Transaction:
+		requestedHash := query.(*common.Hash)
+		err = handleTransactionRequest(id, loc, *requestedHash, stream, node)
+		if err != nil {
+			log.Global.WithField("err", err).Error("error handling transaction request")
+			// TODO: handle error
+			return
+		}
+	case *common.Hash:
+		number := query.(*big.Int)
+		err = handleBlockNumberRequest(id, loc, number, stream, node)
+		if err != nil {
+			log.Global.WithField("err", err).Error("error handling block number request")
+			return
+		}
+	case trie.TrieNodeRequest:
+		requestedHash := query.(*common.Hash)
+		err := handleTrieNodeRequest(id, loc, *requestedHash, stream, node)
+		if err != nil {
+			log.Global.WithField("err", err).Error("error handling trie node request")
+		}
+	default:
+		log.Global.WithField("request type", decodedType).Error("unsupported request data type")
+		// TODO: handle error
+		return
+
+	}
+}
+
+func handleResponse(quaiResp *pb.QuaiResponseMessage, stream network.Stream, node QuaiP2PNode) {
+	recvdID, recvdType, err := pb.DecodeQuaiResponse(quaiResp)
+	if err != nil {
+		log.Global.WithField(
+			"err", err,
+		).Errorf("error decoding quai response: %s", err)
+		return
+	}
+
+	dataChan, err := node.GetRequestManager().GetRequestChan(recvdID)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"requestID": recvdID,
+			"err":       err,
+		}).Error("error associating request ID with data channel")
+		return
+	}
+	dataChan <- recvdType
 }
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
@@ -113,7 +163,7 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 	}
 	log.Global.Debugf("block found %s", block.Hash())
 	// create a Quai Message Response with the block
-	data, err := pb.EncodeQuaiResponse(id, block)
+	data, err := pb.EncodeQuaiResponse(id, loc, block)
 	if err != nil {
 		return err
 	}
@@ -121,7 +171,10 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 	if err != nil {
 		return err
 	}
-	log.Global.Debugf("Sent block %s to peer %s", block.Hash(), stream.Conn().RemotePeer())
+	log.Global.WithFields(log.Fields{
+		"blockHash": block.Hash(),
+		"peer":      stream.Conn().RemotePeer(),
+	}).Trace("Sent block to peer")
 	return nil
 }
 
@@ -135,7 +188,7 @@ func handleHeaderRequest(id uint32, loc common.Location, hash common.Hash, strea
 	}
 	log.Global.Debugf("header found %s", header.Hash())
 	// create a Quai Message Response with the header
-	data, err := pb.EncodeQuaiResponse(id, header)
+	data, err := pb.EncodeQuaiResponse(id, loc, header)
 	if err != nil {
 		return err
 	}
@@ -161,7 +214,7 @@ func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, s
 	}
 	log.Global.Tracef("block found %s", blockHash)
 	// create a Quai Message Response with the block
-	data, err := pb.EncodeQuaiResponse(id, blockHash)
+	data, err := pb.EncodeQuaiResponse(id, loc, blockHash)
 	if err != nil {
 		return err
 	}
@@ -181,7 +234,7 @@ func handleTrieNodeRequest(id uint32, loc common.Location, hash common.Hash, str
 		return nil
 	}
 	log.Global.Tracef("trie node found")
-	data, err := pb.EncodeQuaiResponse(id, trieNode)
+	data, err := pb.EncodeQuaiResponse(id, loc, trieNode)
 	if err != nil {
 		return err
 	}
