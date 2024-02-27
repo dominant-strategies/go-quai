@@ -1,4 +1,4 @@
-name: Common Sandbox Workflow
+name: Patch Release Branch Workflow
 on:
   pull_request:
     types: [closed]
@@ -16,3 +16,5 @@ jobs:
       skip_deploy: true
     secrets:
       GH_PAT: ${{ secrets.GH_PAT }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY2 }}
+      GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}

@@ -1,4 +1,4 @@
-name: Common Dev Workflow
+name: Dev Workflow
 on:
   pull_request:
     types: [closed]
@@ -13,6 +13,9 @@ jobs:
       include_chart: false
       cloud_deploy: false
       skip_deploy: true
+      update_version: false
 
     secrets:
       GH_PAT: ${{ secrets.GH_PAT }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY2 }}
+      GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
