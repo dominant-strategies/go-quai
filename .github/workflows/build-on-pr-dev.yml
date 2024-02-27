@@ -1,4 +1,4 @@
-name: Common Build on PR
+name: Build on PR
 on:
   pull_request:
     types:
