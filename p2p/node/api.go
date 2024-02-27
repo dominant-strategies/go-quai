@@ -18,7 +18,6 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/dominant-strategies/go-quai/common"
 )
@@ -230,8 +229,8 @@ func (p *P2PNode) GetBootPeers() []peer.AddrInfo {
 }
 
 // Opens a new stream to the given peer using the given protocol ID
-func (p *P2PNode) NewStream(peerID peer.ID, protocolID protocol.ID) (network.Stream, error) {
-	return p.Host.NewStream(p.ctx, peerID, protocolID)
+func (p *P2PNode) NewStream(peerID peer.ID) (network.Stream, error) {
+	return p.peerManager.GetStream(peerID)
 }
 
 // Connects to the given peer
