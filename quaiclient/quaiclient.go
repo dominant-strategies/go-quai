@@ -375,3 +375,15 @@ func (ec *Client) EstimateGas(ctx context.Context, msg quai.CallMsg) (uint64, er
 	}
 	return uint64(hex), nil
 }
+
+// BaseFee returns the base fee for a tx to be included in the next block.
+// If txType is set to "true" returns the Quai base fee in units of Wei.
+// If txType is set to "false" returns the Qi base fee in units of Qit.
+func (ec *Client) BaseFee(ctx context.Context, txType bool) (*big.Int, error) {
+	var hex hexutil.Big
+	err := ec.c.CallContext(ctx, &hex, "quai_baseFee", txType)
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(&hex), nil
+}
