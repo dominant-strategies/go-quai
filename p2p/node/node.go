@@ -193,7 +193,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		"headers":      createCache(c_defaultCacheSize),
 	}
 
-	return &P2PNode{
+	p2p := &P2PNode{
 		ctx:            ctx,
 		Host:           host,
 		bootpeers:      bootpeers,
@@ -202,7 +202,12 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		peerManager:    peerMgr,
 		requestManager: requestManager.NewManager(),
 		cache:          cache,
-	}, nil
+	}
+
+	// Set the peer manager's backend to the host
+	peerMgr.SetP2PBackend(p2p)
+
+	return p2p, nil
 }
 
 func createCache(size int) *lru.Cache[common.Hash, interface{}] {

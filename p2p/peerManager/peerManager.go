@@ -85,6 +85,8 @@ type BasicPeerManager struct {
 	*basicConnGater.BasicConnectionGater
 	*basicConnMgr.BasicConnMgr
 
+	p2pBackend  quaiprotocol.QuaiP2PNode
+
 	selfID p2p.PeerID
 
 	bestPeersDB       *peerdb.PeerDB
@@ -148,6 +150,10 @@ func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
 
 	return nil
 }
+func (pm *BasicPeerManager) SetP2PBackend(host quaiprotocol.QuaiP2PNode) {
+	pm.p2pBackend = host
+}
+
 
 func (pm *BasicPeerManager) SetSelfID(selfID p2p.PeerID) {
 	pm.selfID = selfID
