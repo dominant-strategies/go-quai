@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/ipfs/go-cid"
-	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"
 
@@ -12,7 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
-	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/p2p/requestManager"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -26,10 +26,12 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	}).Trace("Requesting the data from peer")
 	stream, err := p.NewStream(peerID)
 	if err != nil {
-		// TODO: should we report this peer for failure to participate?
+		log.Global.WithFields(log.Fields{
+			"peerId": peerID,
+			"error":  err,
+		}).Error("Failed to open stream to peer")
 		return nil, err
 	}
-	defer stream.Close()
 
 	// Get a new request ID
 	id := p.requestManager.CreateRequest()
@@ -39,9 +41,6 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	if err != nil {
 		return nil, err
 	}
-
-	// Start listening for the response
-	go p.readLoop(stream, location)
 
 	// Send the request to the peer
 	err = common.WriteMessageToStream(stream, requestBytes)
@@ -88,6 +87,14 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	// If this peer responded with an invalid response, ban them for misbehaving.
 	p.BanPeer(peerID)
 	return nil, errors.New("invalid response")
+}
+
+func (p *P2PNode) GetRequestManager() requestManager.RequestManager {
+	return p.requestManager
+}
+
+func (p *P2PNode) GetHostBackend() host.Host {
+	return p.Host
 }
 
 // Creates a Cid from a location to be used as DHT key
