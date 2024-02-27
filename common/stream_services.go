@@ -17,11 +17,6 @@ const (
 
 // Reads the message from the stream and returns a byte of data.
 func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
-	// Set a read deadline
-	if err := stream.SetReadDeadline(time.Now().Add(C_STREAM_TIMEOUT)); err != nil {
-		return nil, errors.Wrap(err, "failed to set read deadline")
-	}
-
 	// First read the length of the incoming message
 	lenBytes := make([]byte, 4)
 	if _, err := io.ReadFull(stream, lenBytes); err != nil {
