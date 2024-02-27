@@ -582,6 +582,15 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if !b.ProcessingState() {
 		return nil, errors.New("doCall call can only be made on chain processing the state")
 	}
+	// Reset to and from in case of type unmarshal error
+	if args.To != nil {
+		to := common.BytesToAddress(args.To.Bytes(), b.NodeLocation())
+		args.To = &to
+	}
+	if args.From != nil {
+		from := common.BytesToAddress(args.From.Bytes(), b.NodeLocation())
+		args.From = &from
+	}
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -997,27 +1006,29 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Bloc
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash        *common.Hash      `json:"blockHash"`
-	BlockNumber      *hexutil.Big      `json:"blockNumber"`
-	From             common.Address    `json:"from"`
-	Gas              hexutil.Uint64    `json:"gas"`
-	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	Hash             common.Hash       `json:"hash"`
-	Input            hexutil.Bytes     `json:"input"`
-	Nonce            hexutil.Uint64    `json:"nonce"`
-	To               *common.Address   `json:"to"`
-	TransactionIndex *hexutil.Uint64   `json:"transactionIndex"`
-	Value            *hexutil.Big      `json:"value"`
-	Type             hexutil.Uint64    `json:"type"`
-	Accesses         *types.AccessList `json:"accessList,omitempty"`
-	ChainID          *hexutil.Big      `json:"chainId,omitempty"`
-	V                *hexutil.Big      `json:"v"`
-	R                *hexutil.Big      `json:"r"`
-	S                *hexutil.Big      `json:"s"`
-	TxIn             []types.TxIn      `json:"inputs,omitempty"`
-	TxOut            []types.TxOut     `json:"outputs,omitempty"`
-	UTXOSignature    hexutil.Bytes     `json:"utxoSignature,omitempty"`
+	BlockHash         *common.Hash      `json:"blockHash"`
+	BlockNumber       *hexutil.Big      `json:"blockNumber"`
+	From              *common.Address   `json:"from,omitempty"`
+	Gas               hexutil.Uint64    `json:"gas"`
+	GasFeeCap         *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap         *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
+	Hash              common.Hash       `json:"hash"`
+	Input             hexutil.Bytes     `json:"input"`
+	Nonce             hexutil.Uint64    `json:"nonce"`
+	To                *common.Address   `json:"to,omitempty"`
+	TransactionIndex  *hexutil.Uint64   `json:"transactionIndex"`
+	Value             *hexutil.Big      `json:"value,omitempty"`
+	Type              hexutil.Uint64    `json:"type"`
+	Accesses          *types.AccessList `json:"accessList,omitempty"`
+	ChainID           *hexutil.Big      `json:"chainId,omitempty"`
+	V                 *hexutil.Big      `json:"v,omitempty"`
+	R                 *hexutil.Big      `json:"r,omitempty"`
+	S                 *hexutil.Big      `json:"s,omitempty"`
+	TxIn              []types.TxIn      `json:"inputs,omitempty"`
+	TxOut             []types.TxOut     `json:"outputs,omitempty"`
+	UTXOSignature     hexutil.Bytes     `json:"utxoSignature,omitempty"`
+	OriginatingTxHash *common.Hash      `json:"originatingTxHash,omitempty"`
+	ETXIndex          *hexutil.Uint64   `json:"etxIndex,omitempty"`
 
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
@@ -1061,7 +1072,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	case types.InternalTxType:
 		result = &RPCTransaction{
 			Type:      hexutil.Uint64(tx.Type()),
-			From:      from,
+			From:      &from,
 			Gas:       hexutil.Uint64(tx.Gas()),
 			Hash:      tx.Hash(),
 			Input:     hexutil.Bytes(tx.Data()),
@@ -1074,23 +1085,24 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		}
 	case types.ExternalTxType:
 		result = &RPCTransaction{
-			Type:      hexutil.Uint64(tx.Type()),
-			Gas:       hexutil.Uint64(tx.Gas()),
-			Hash:      tx.Hash(),
-			Input:     hexutil.Bytes(tx.Data()),
-			Nonce:     hexutil.Uint64(tx.Nonce()),
-			To:        tx.To(),
-			Value:     (*hexutil.Big)(tx.Value()),
-			ChainID:   (*hexutil.Big)(tx.ChainId()),
-			GasFeeCap: (*hexutil.Big)(tx.GasFeeCap()),
-			GasTipCap: (*hexutil.Big)(tx.GasTipCap()),
+			Type:    hexutil.Uint64(tx.Type()),
+			Gas:     hexutil.Uint64(tx.Gas()),
+			Hash:    tx.Hash(),
+			Input:   hexutil.Bytes(tx.Data()),
+			To:      tx.To(),
+			Value:   (*hexutil.Big)(tx.Value()),
+			ChainID: (*hexutil.Big)(tx.ChainId()),
 		}
+		originatingTxHash := tx.OriginatingTxHash()
+		etxIndex := uint64(tx.ETXIndex())
 		sender := tx.ETXSender()
+		result.OriginatingTxHash = &originatingTxHash
 		result.Sender = &sender
+		result.ETXIndex = (*hexutil.Uint64)(&etxIndex)
 	case types.InternalToExternalTxType:
 		result = &RPCTransaction{
 			Type:        hexutil.Uint64(tx.Type()),
-			From:        from,
+			From:        &from,
 			Gas:         hexutil.Uint64(tx.Gas()),
 			Hash:        tx.Hash(),
 			Input:       hexutil.Bytes(tx.Data()),
@@ -1431,7 +1443,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	if err != nil {
 		return nil, err
 	}
-	var receipt *types.Receipt
+	receipt := &types.Receipt{}
 	for _, r := range receipts {
 		if r.TxHash == hash {
 			receipt = r

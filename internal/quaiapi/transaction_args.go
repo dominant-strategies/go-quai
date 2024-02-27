@@ -60,7 +60,7 @@ type TransactionArgs struct {
 
 // from retrieves the transaction sender address.
 func (arg *TransactionArgs) from(nodeLocation common.Location) common.Address {
-	if arg.From == nil {
+	if arg.From == nil || arg.From.Equal(common.Zero) {
 		return common.ZeroAddress(nodeLocation)
 	}
 	return *arg.From

@@ -589,6 +589,11 @@ func (c *Core) WriteBlock(block *types.Block) {
 	defer c.writeBlockLock.Unlock()
 	nodeCtx := c.NodeCtx()
 
+	if block.Location() == nil {
+		log.Global.Errorf("Block %d has nil location in %d context", block.NumberU64(c.sl.NodeCtx()), c.NodeCtx())
+		return
+	}
+
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
 	}

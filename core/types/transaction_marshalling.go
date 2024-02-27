@@ -266,10 +266,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'value' in internalToExternal transaction")
 		}
 		itx.Value = (*big.Int)(dec.Value)
-		if dec.Data == nil {
-			return errors.New("missing required field 'input' in internalToExternal transaction")
+		if dec.Data != nil {
+			itx.Data = *dec.Data
 		}
-		itx.Data = *dec.Data
 		if dec.V == nil {
 			return errors.New("missing required field 'v' in internalToExternal transaction")
 		}

@@ -265,26 +265,29 @@ func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, lo
 	}
 	r.CumulativeGasUsed = protoReceipt.CumulativeGasUsed
 	r.TxHash.ProtoDecode(protoReceipt.GetTxHash())
-	err := r.ContractAddress.ProtoDecode(protoReceipt.ContractAddress, location)
-	if err != nil {
-		return err
+
+	if protoReceipt.ContractAddress != nil {
+		err := r.ContractAddress.ProtoDecode(protoReceipt.ContractAddress, location)
+		if err != nil {
+			return err
+		}
 	}
 	r.GasUsed = protoReceipt.GetGasUsed()
-	for i, protoLog := range protoReceipt.Logs.GetLogs() {
+	for _, protoLog := range protoReceipt.Logs.GetLogs() {
 		log := new(LogForStorage)
 		err := log.ProtoDecode(protoLog, location)
 		if err != nil {
 			return err
 		}
-		r.Logs[i] = (*Log)(log)
+		r.Logs = append(r.Logs, (*Log)(log))
 	}
-	for i, protoEtx := range protoReceipt.Etxs.GetTransactions() {
+	for _, protoEtx := range protoReceipt.Etxs.GetTransactions() {
 		etx := new(Transaction)
 		err := etx.ProtoDecode(protoEtx, location)
 		if err != nil {
 			return err
 		}
-		r.Etxs[i] = etx
+		r.Etxs = append(r.Etxs, etx)
 	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 	return nil

@@ -195,7 +195,7 @@ func (a *Address) UnmarshalText(input []byte) error {
 // MarshalJSON marshals a subscription as its ID.
 func (a *Address) MarshalJSON() ([]byte, error) {
 	if a.inner == nil {
-		return []byte{}, ErrNilInner
+		return []byte{}, nil
 	}
 	return json.Marshal(a.inner)
 }
