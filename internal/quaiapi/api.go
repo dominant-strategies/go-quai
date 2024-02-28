@@ -1544,10 +1544,6 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 		return common.Hash{}, err
 	}
 	tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
-	// Set To address to Internal if it was accidentally unmarshalled as External (or vice-versa)
-	if tx.Type() != types.QiTxType {
-		tx.SetTo(common.BytesToAddress(tx.To().Bytes(), s.b.NodeLocation()))
-	}
 	return SubmitTransaction(ctx, s.b, tx)
 }
 

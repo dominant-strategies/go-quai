@@ -70,7 +70,7 @@ func TestUTXOTransactionEncode(t *testing.T) {
 		Address:      to.Bytes(),
 	}
 
-	utxo := &UtxoTx{
+	utxo := &QiTx{
 		ChainID: big.NewInt(1337),
 		TxIn:    TxIns{in},
 		TxOut:   TxOuts{newOut},
@@ -101,5 +101,44 @@ func TestUTXOTransactionEncode(t *testing.T) {
 	t.Log("secondProtoTx", secondProtoTx)
 
 	require.Equal(t, protoTx, secondProtoTx)
+
+}
+
+func TestTransactionHashing(t *testing.T) {
+	// Create a new transaction
+	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
+	inner := &InternalTx{
+		ChainID:    new(big.Int).SetUint64(1),
+		Nonce:      uint64(0),
+		GasTipCap:  new(big.Int).SetUint64(0),
+		GasFeeCap:  new(big.Int).SetUint64(0),
+		Gas:        uint64(0),
+		To:         &to,
+		Value:      new(big.Int).SetUint64(0),
+		Data:       []byte{0x04},
+		AccessList: AccessList{},
+		V:          new(big.Int).SetUint64(0),
+		R:          new(big.Int).SetUint64(0),
+		S:          new(big.Int).SetUint64(0),
+	}
+	tx := NewTx(inner)
+
+	// Calculate the hash of the transaction
+	hash := tx.Hash()
+
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		t.Errorf("Transaction hash is empty")
+	}
+
+	// change something in the transaction
+	newInner := inner
+	newInner.Nonce = uint64(1)
+
+	// Create a new transaction with the modified inner transaction
+	newTx := NewTx(newInner)
+	txHash := newTx.Hash()
+
+	require.NotEqual(t, hash, txHash)
 
 }
