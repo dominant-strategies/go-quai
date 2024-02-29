@@ -134,7 +134,11 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.Gas = &gas
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		protoTx.Value = tx.Value().Bytes()
-		protoTx.Data = tx.Data()
+		if tx.Data() == nil {
+			protoTx.Data = []byte{}
+		} else {
+			protoTx.Data = tx.Data()
+		}
 		if tx.To() != nil {
 			protoTx.To = tx.To().Bytes()
 		}
@@ -216,14 +220,14 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.Value == nil {
 			return errors.New("missing required field 'Value' in ProtoTransaction")
 		}
-		if protoTx.Data == nil {
-			return errors.New("missing required field 'Data' in ProtoTransaction")
-		}
 		if protoTx.GasFeeCap == nil {
 			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
 		}
 		if protoTx.GasTipCap == nil {
 			return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
+		}
+		if protoTx.Data == nil {
+			return errors.New("missing required field 'Data' in ProtoTransaction")
 		}
 		var itx InternalTx
 		itx.AccessList = AccessList{}
@@ -239,7 +243,11 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		itx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
 		itx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
 		itx.Gas = protoTx.GetGas()
-		itx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+		if len(protoTx.GetValue()) == 0 {
+			itx.Value = common.Big0
+		} else {
+			itx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+		}
 		itx.Data = protoTx.GetData()
 		if protoTx.V == nil {
 			return errors.New("missing required field 'V' in InternalTx")
@@ -431,11 +439,15 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		protoTxSigningData.Gas = &gas
 		protoTxSigningData.AccessList = tx.AccessList().ProtoEncode()
 		protoTxSigningData.Value = tx.Value().Bytes()
-		protoTxSigningData.Data = tx.Data()
-		if tx.To() != nil {
-			protoTxSigningData.To = tx.To().Bytes()
+		if tx.Data() == nil {
+			protoTxSigningData.Data = []byte{}
 		} else {
+			protoTxSigningData.Data = tx.Data()
+		}
+		if tx.To() == nil {
 			protoTxSigningData.To = []byte{}
+		} else {
+			protoTxSigningData.To = tx.To().Bytes()
 		}
 		protoTxSigningData.GasFeeCap = tx.GasFeeCap().Bytes()
 		protoTxSigningData.GasTipCap = tx.GasTipCap().Bytes()

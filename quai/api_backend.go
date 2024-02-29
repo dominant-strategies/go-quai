@@ -348,6 +348,9 @@ func (b *QuaiAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash)
 		return nil, common.Hash{}, 0, 0, errors.New("getTransaction can only be called in zone chain")
 	}
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.quai.ChainDb(), txHash, b.NodeLocation())
+	if tx == nil {
+		return nil, common.Hash{}, 0, 0, errors.New("transaction not found")
+	}
 	return tx, blockHash, blockNumber, index, nil
 }
 

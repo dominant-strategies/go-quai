@@ -1249,7 +1249,7 @@ func (hc *HeaderChain) fetchInputUtxos(view *types.UtxoViewpoint, block *types.B
 		txInFlight[tx.Hash()] = i
 	}
 
-	if types.IsCoinBaseTx(transactions[0]) {
+	if len(transactions) > 0 && types.IsCoinBaseTx(transactions[0]) {
 		transactions = transactions[1:]
 	}
 
@@ -1296,7 +1296,7 @@ func (hc *HeaderChain) fetchInputUtxos(view *types.UtxoViewpoint, block *types.B
 func (hc *HeaderChain) verifyInputUtxos(view *types.UtxoViewpoint, block *types.Block, signer types.Signer) (*big.Int, error) { // should this be used instead of Verify
 
 	transactions := block.QiTransactions()
-	if types.IsCoinBaseTx(transactions[0]) {
+	if len(transactions) > 0 && types.IsCoinBaseTx(transactions[0]) {
 		transactions = transactions[1:]
 	}
 

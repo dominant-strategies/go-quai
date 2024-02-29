@@ -29,6 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // Client defines typed wrappers for the Quai RPC API.
@@ -504,7 +505,11 @@ func (ec *Client) EstimateGas(ctx context.Context, msg quai.CallMsg) (uint64, er
 // If the transaction was a contract creation use the TransactionReceipt method to get the
 // contract address after the transaction has been mined.
 func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) error {
-	data, err := tx.MarshalBinary()
+	protoTx, err := tx.ProtoEncode()
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoTx)
 	if err != nil {
 		return err
 	}

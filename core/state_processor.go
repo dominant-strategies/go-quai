@@ -332,7 +332,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		i++
 	}
 
-	if types.IsCoinBaseTx(block.QiTransactions()[0]) {
+	if len(block.QiTransactions()) > 0 && types.IsCoinBaseTx(block.QiTransactions()[0]) {
 		totalCoinbaseOut := big.NewInt(0)
 		for _, txOut := range block.QiTransactions()[0].TxOut() {
 			totalCoinbaseOut.Add(totalCoinbaseOut, types.Denominations[txOut.Denomination])
@@ -911,7 +911,7 @@ func (p *StateProcessor) FetchInputUtxos(statedb *state.StateDB, view *types.Utx
 	for i, tx := range transactions {
 		txInFlight[tx.Hash()] = i
 	}
-	if types.IsCoinBaseTx(transactions[0]) {
+	if len(transactions) > 0 && types.IsCoinBaseTx(transactions[0]) {
 		transactions = transactions[1:]
 	}
 	// Loop through all of the transaction inputs (except for the coinbase
@@ -957,7 +957,7 @@ func (p *StateProcessor) FetchInputUtxos(statedb *state.StateDB, view *types.Utx
 func (p *StateProcessor) VerifyTransactions(view *types.UtxoViewpoint, block *types.Block, signer types.Signer) (*big.Int, error) {
 
 	transactions := block.QiTransactions()
-	if types.IsCoinBaseTx(transactions[0]) {
+	if len(transactions) > 0 && types.IsCoinBaseTx(transactions[0]) {
 		transactions = transactions[1:]
 	}
 

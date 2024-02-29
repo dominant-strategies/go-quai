@@ -1496,6 +1496,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
+	if tx == nil {
+		return common.Hash{}, errors.New("transaction is nil")
+	}
 	nodeLocation := b.NodeLocation()
 	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -1555,7 +1558,10 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	if err != nil {
 		return common.Hash{}, err
 	}
-	tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
+	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
+	if err != nil {
+		return common.Hash{}, err
+	}
 	return SubmitTransaction(ctx, s.b, tx)
 }
 

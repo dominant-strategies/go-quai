@@ -27,7 +27,7 @@ func CountSpentOutputs(block *Block) int {
 	if len(transactions) == 0 {
 		return 0
 	}
-	if IsCoinBaseTx(transactions[0]) {
+	if len(transactions) > 0 && IsCoinBaseTx(transactions[0]) {
 		transactions = transactions[1:]
 	}
 	// Exclude the coinbase transaction since it can't spend anything.

@@ -545,7 +545,9 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	}
 
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
-		work.txs = append(work.txs, types.NewTx(&types.QiTx{})) // placeholder
+		if coinbase.IsInQiLedgerScope() {
+			work.txs = append(work.txs, types.NewTx(&types.QiTx{})) // placeholder
+		}
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
 		work.utxoFees = big.NewInt(0)
@@ -559,11 +561,13 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
 			}).Info("Filled and sorted pending transactions")
 		}
-		coinbaseTx, err := createCoinbaseTxWithFees(work.header, work.utxoFees, work.state)
-		if err != nil {
-			return nil, err
+		if coinbase.IsInQiLedgerScope() {
+			coinbaseTx, err := createCoinbaseTxWithFees(work.header, work.utxoFees, work.state)
+			if err != nil {
+				return nil, err
+			}
+			work.txs[0] = coinbaseTx
 		}
-		work.txs[0] = coinbaseTx
 	}
 
 	// Create a local environment copy, avoid the data race with snapshot state.
