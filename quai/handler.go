@@ -19,6 +19,9 @@ const (
 	c_missingBlockChanSize = 60
 	// c_checkNextPrimeBlockInterval is the interval for checking the next Block in Prime
 	c_checkNextPrimeBlockInterval = 60 * time.Second
+	// c_provideMessageInterval is the interval for sending providing messages
+	// on various topics to the network
+	c_provideMessageInterval = 2 * time.Minute
 	// c_txsChanSize is the size of channel listening to the new txs event
 	c_newTxsChanSize = 1000
 	// c_recentBlockReqCache is the size of the cache for the recent block requests
