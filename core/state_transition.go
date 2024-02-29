@@ -208,7 +208,7 @@ func (st *StateTransition) buyGas() error {
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
 		balanceCheck.Add(balanceCheck, st.value)
 	}
-	from, err := st.msg.From().InternalAddress()
+	from, err := st.msg.From().InternalAndQuaiAddress()
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (st *StateTransition) subGasETX() error {
 }
 
 func (st *StateTransition) preCheck() error {
-	from, err := st.msg.From().InternalAddress()
+	from, err := st.msg.From().InternalAndQuaiAddress()
 	if err != nil {
 		return err
 	}
@@ -352,11 +352,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		contractAddr = &contract
 	} else {
 		// Increment the nonce for the next transaction
-		addr, err := sender.Address().InternalAddress()
+		addr, err := sender.Address().InternalAndQuaiAddress()
 		if err != nil {
 			return nil, err
 		}
-		from, err := msg.From().InternalAddress()
+		from, err := msg.From().InternalAndQuaiAddress()
 		if err != nil {
 			return nil, err
 		}
@@ -375,11 +375,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.refundGas(params.RefundQuotient)
 
 	effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+
 	coinbase, err := st.evm.Context.Coinbase.InternalAddress()
 	if err != nil {
 		return nil, err
 	}
-	st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)) // todo: etxs no longer pay the miner a fee
+	if coinbase.IsInQuaiLedgerScope() {
+		st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)) // todo: etxs no longer pay the miner a fee
+	}
 
 	return &ExecutionResult{
 		UsedGas:      st.gasUsed(),
@@ -400,7 +403,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	from, err := st.msg.From().InternalAddress()
+	from, err := st.msg.From().InternalAndQuaiAddress()
 	if err != nil {
 		return
 	}

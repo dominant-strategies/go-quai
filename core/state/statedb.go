@@ -695,7 +695,7 @@ func (s *StateDB) GetOrNewStateObject(addr common.InternalAddress) *stateObject 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
 func (s *StateDB) createObject(addr common.InternalAddress) (newobj, prev *stateObject) {
-	if !common.IsInChainScope(addr.Bytes(), s.nodeLocation) {
+	if !common.IsInChainScope(addr.Bytes(), s.nodeLocation) || !addr.IsInQuaiLedgerScope() {
 		s.setError(fmt.Errorf("createObject (%x) error: %v", addr.Bytes(), common.ErrInvalidScope))
 		return nil, nil
 	}

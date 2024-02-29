@@ -245,7 +245,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 		return nil, err
 	}
 	addr := common.Bytes20ToAddress(address, s.b.NodeLocation())
-	internal, err := addr.InternalAddress()
+	internal, err := addr.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +305,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -480,7 +480,7 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -503,7 +503,7 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -538,7 +538,7 @@ func (diff *StateOverride) Apply(state *state.StateDB, nodeLocation common.Locat
 		return nil
 	}
 	for addr, account := range *diff {
-		internal, err := common.Bytes20ToAddress(addr, nodeLocation).InternalAddress()
+		internal, err := common.Bytes20ToAddress(addr, nodeLocation).InternalAndQuaiAddress()
 		if err != nil {
 			return err
 		}
@@ -611,7 +611,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	defer cancel()
 
 	if args.Nonce == nil {
-		internal, err := args.from(b.NodeLocation()).InternalAddress()
+		internal, err := args.from(b.NodeLocation()).InternalAndQuaiAddress()
 		if err != nil {
 			return nil, err
 		}
@@ -756,7 +756,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if err != nil {
 			return 0, err
 		}
-		internal, err := args.From.InternalAddress()
+		internal, err := args.From.InternalAndQuaiAddress()
 		if err != nil {
 			return 0, err
 		}
@@ -1382,7 +1382,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -1561,6 +1561,11 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
 	if err != nil {
 		return common.Hash{}, err
+	}
+	if tx.Type() != types.QiTxType {
+		if tx.To().IsInQiLedgerScope() { // change after adding Quai->Qi conversion tx type
+			return common.Hash{}, common.MakeErrQiAddress(tx.To().Hex())
+		}
 	}
 	return SubmitTransaction(ctx, s.b, tx)
 }

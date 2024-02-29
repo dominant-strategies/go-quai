@@ -35,7 +35,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			y, x              = stack.Back(1), stack.peek()
 			slot              = common.Hash(x.Bytes32())
 			cost              = uint64(0)
-			internalAddr, err = contract.Address().InternalAddress()
+			internalAddr, err = contract.Address().InternalAndQuaiAddress()
 		)
 		if err != nil {
 			return 0, err
@@ -200,12 +200,12 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 		var (
 			gas                  uint64
 			address              = common.Bytes20ToAddress(stack.peek().Bytes20(), evm.chainConfig.Location)
-			internalAddress, err = address.InternalAddress()
+			internalAddress, err = address.InternalAndQuaiAddress()
 		)
 		if err != nil {
 			return 0, err
 		}
-		contractAddress, err := contract.Address().InternalAddress()
+		contractAddress, err := contract.Address().InternalAndQuaiAddress()
 		if err != nil {
 			return 0, err
 		}

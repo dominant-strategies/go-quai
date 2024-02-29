@@ -161,7 +161,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			account.SecureKey = it.Key
 		}
 		addr := common.BytesToAddress(addrBytes, s.nodeLocation)
-		internal, err := addr.InternalAddress()
+		internal, err := addr.InternalAndQuaiAddress()
 		if err != nil {
 			continue
 		}

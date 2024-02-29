@@ -55,9 +55,8 @@ const (
 var (
 	hashT = reflect.TypeOf(Hash{})
 	// The zero address (0x0)
-	ZeroExternal    = ExternalAddress{}
-	Zero            = Address{&ZeroExternal} // For utility purposes only. It is out-of-scope for state purposes.
-	ErrInvalidScope = errors.New("address is not in scope")
+	ZeroExternal = ExternalAddress{}
+	Zero         = Address{&ZeroExternal} // For utility purposes only. It is out-of-scope for state purposes.
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

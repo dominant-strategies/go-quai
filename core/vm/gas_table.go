@@ -113,7 +113,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	// Gas sentry honoured, do the actual gas calculation based on the stored value
 	var (
 		y, x                      = stack.Back(1), stack.Back(0)
-		internalContractAddr, err = contract.Address().InternalAddress()
+		internalContractAddr, err = contract.Address().InternalAndQuaiAddress()
 	)
 	if err != nil {
 		return 0, err
@@ -250,7 +250,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	var (
 		gas            uint64
 		transfersValue = !stack.Back(2).IsZero()
-		address, err   = common.Bytes20ToAddress(stack.Back(1).Bytes20(), evm.chainConfig.Location).InternalAddress()
+		address, err   = common.Bytes20ToAddress(stack.Back(1).Bytes20(), evm.chainConfig.Location).InternalAndQuaiAddress()
 	)
 	if err != nil {
 		return 0, err
@@ -339,12 +339,12 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var gas uint64
-	contractAddr, err := contract.Address().InternalAddress()
+	contractAddr, err := contract.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return 0, err
 	}
 	gas = params.SelfdestructGas
-	address, err := common.Bytes20ToAddress(stack.Back(0).Bytes20(), evm.chainConfig.Location).InternalAddress()
+	address, err := common.Bytes20ToAddress(stack.Back(0).Bytes20(), evm.chainConfig.Location).InternalAndQuaiAddress()
 	if err != nil {
 		return 0, err
 	}

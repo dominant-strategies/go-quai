@@ -104,7 +104,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return []byte{}, nil, err
 	}
@@ -162,7 +162,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg)
-	_, err := cfg.Origin.InternalAddress()
+	_, err := cfg.Origin.InternalAndQuaiAddress()
 	if err != nil {
 		return []byte{}, 0, err
 	}

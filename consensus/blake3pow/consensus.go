@@ -443,11 +443,16 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 			if err != nil {
 				blake3pow.logger.Error("Provided address in genesis block is out of scope")
 			}
-			state.AddBalance(internal, account.Balance)
-			state.SetCode(internal, account.Code)
-			state.SetNonce(internal, account.Nonce)
-			for key, value := range account.Storage {
-				state.SetState(internal, key, value)
+			if addr.IsInQuaiLedgerScope() {
+				state.AddBalance(internal, account.Balance)
+				state.SetCode(internal, account.Code)
+				state.SetNonce(internal, account.Nonce)
+				for key, value := range account.Storage {
+					state.SetState(internal, key, value)
+				}
+			} else {
+				blake3pow.logger.WithField("address", addr.String()).Error("Provided address in genesis block alloc is not in the Quai ledger scope")
+				continue
 			}
 		}
 	}
@@ -486,6 +491,13 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			"Address": header.Coinbase().String(),
 			"Hash":    header.Hash().String(),
 		}).Error("Block has out of scope coinbase, skipping block reward")
+		return
+	}
+	if !header.Coinbase().IsInQuaiLedgerScope() {
+		logger.WithFields(log.Fields{
+			"Address": header.Coinbase().String(),
+			"Hash":    header.Hash().String(),
+		}).Debug("Block coinbase is in Qi ledger, skipping Quai block reward") // this log is largely unnecessary
 		return
 	}
 

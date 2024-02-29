@@ -693,7 +693,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	addToCache := true
 	if sender := tx.From(); sender != nil { // Check tx cache first
 		var err error
-		internal, err = sender.InternalAddress()
+		internal, err = sender.InternalAndQuaiAddress()
 		if err != nil {
 			return err
 		}
@@ -706,7 +706,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if err != nil {
 			return ErrInvalidSender
 		}
-		internal, err = from.InternalAddress()
+		internal, err = from.InternalAndQuaiAddress()
 		if err != nil {
 			return err
 		}
@@ -819,7 +819,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	if err != nil {
 		return false, err
 	}
-	internal, err := from.InternalAddress()
+	internal, err := from.InternalAndQuaiAddress()
 	if err != nil {
 		return false, err
 	}
@@ -883,7 +883,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	if err != nil {
 		return false, err
 	}
-	internal, err := from.InternalAddress()
+	internal, err := from.InternalAndQuaiAddress()
 	if err != nil {
 		return false, err
 	}
@@ -1040,12 +1040,17 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			pool.addUtxoTx(tx)
 			continue
 		}
+		if tx.To().IsInQiLedgerScope() {
+			errs[i] = common.MakeErrQiAddress(tx.To().Hex())
+			invalidTxMeter.Add(1)
+			continue
+		}
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock
 		if sender := tx.From(); sender != nil {
 			var err error
-			_, err = sender.InternalAddress()
+			_, err = sender.InternalAndQuaiAddress()
 			if err != nil {
 				errs[i] = err
 				invalidTxMeter.Add(1)
@@ -1060,9 +1065,9 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 				invalidTxMeter.Add(1)
 				continue
 			}
-			_, err = from.InternalAddress()
+			_, err = from.InternalAndQuaiAddress()
 			if err != nil {
-				errs[i] = ErrInvalidSender
+				errs[i] = err
 				invalidTxMeter.Add(1)
 				continue
 			}
@@ -1201,7 +1206,7 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		if err != nil {
 			continue
 		}
-		internal, err := from.InternalAddress()
+		internal, err := from.InternalAndQuaiAddress()
 		if err != nil {
 			continue
 		}
@@ -1241,7 +1246,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	if err != nil {
 		return
 	}
-	internal, err := addr.InternalAddress()
+	internal, err := addr.InternalAndQuaiAddress()
 	if err != nil {
 		return
 	}
@@ -1375,7 +1380,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			if err != nil {
 				continue
 			}
-			internal, err := addr.InternalAddress()
+			internal, err := addr.InternalAndQuaiAddress()
 			if err != nil {
 				pool.logger.WithField("err", err).Debug("Failed to queue transaction")
 				continue
@@ -1469,7 +1474,7 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 				if err != nil {
 					continue
 				}
-				internal, err := addr.InternalAddress()
+				internal, err := addr.InternalAndQuaiAddress()
 				if err != nil {
 					pool.logger.WithField("err", err).Debug("Failed to add transaction event")
 					continue
@@ -1994,7 +1999,7 @@ func (as *accountSet) empty() bool {
 // cannot be derived, this method returns false.
 func (as *accountSet) containsTx(tx *types.Transaction) bool {
 	if addr, err := types.Sender(as.signer, tx); err == nil {
-		internal, err := addr.InternalAddress()
+		internal, err := addr.InternalAndQuaiAddress()
 		if err != nil {
 			return false
 		}
@@ -2012,7 +2017,7 @@ func (as *accountSet) add(addr common.InternalAddress) {
 // addTx adds the sender of tx into the set.
 func (as *accountSet) addTx(tx *types.Transaction, logger *log.Logger) {
 	if addr, err := types.Sender(as.signer, tx); err == nil {
-		internal, err := addr.InternalAddress()
+		internal, err := addr.InternalAndQuaiAddress()
 		if err != nil {
 			logger.WithField("err", err).Debug("Failed to add tx to account set")
 			return

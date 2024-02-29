@@ -137,7 +137,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 		return nil, err
 	}
 	addr := common.Bytes20ToAddress(address, s.b.NodeLocation())
-	internal, err := addr.InternalAddress()
+	internal, err := addr.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +379,7 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +402,7 @@ func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address comm
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAddress()
+	internal, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}

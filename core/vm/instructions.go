@@ -262,7 +262,7 @@ func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 
 func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	address, err := common.Bytes20ToAddress(slot.Bytes20(), interpreter.evm.chainConfig.Location).InternalAddress()
+	address, err := common.Bytes20ToAddress(slot.Bytes20(), interpreter.evm.chainConfig.Location).InternalAndQuaiAddress()
 	if err != nil { // if an ErrInvalidScope error is returned, the caller (usually interpreter.go/Run) will return the error to Call which will eventually set ReceiptStatusFailed in the tx receipt (state_processor.go/applyTransaction)
 		return nil, err
 	}
@@ -392,7 +392,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if overflow {
 		uint64CodeOffset = 0xffffffffffffffff
 	}
-	addr, err := common.Bytes20ToAddress(a.Bytes20(), interpreter.evm.chainConfig.Location).InternalAddress()
+	addr, err := common.Bytes20ToAddress(a.Bytes20(), interpreter.evm.chainConfig.Location).InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +437,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // this account should be regarded as a non-existent account and zero should be returned.
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	address, err := common.Bytes20ToAddress(slot.Bytes20(), interpreter.evm.chainConfig.Location).InternalAddress()
+	address, err := common.Bytes20ToAddress(slot.Bytes20(), interpreter.evm.chainConfig.Location).InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +533,7 @@ func opMstore8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
-	addr, err := scope.Contract.Address().InternalAddress()
+	addr, err := scope.Contract.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -545,7 +545,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()
-	addr, err := scope.Contract.Address().InternalAddress()
+	addr, err := scope.Contract.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -820,11 +820,11 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	beneficiary := scope.Stack.pop()
-	addr, err := scope.Contract.Address().InternalAddress()
+	addr, err := scope.Contract.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
-	beneficiaryAddr, err := common.Bytes20ToAddress(beneficiary.Bytes20(), interpreter.evm.chainConfig.Location).InternalAddress()
+	beneficiaryAddr, err := common.Bytes20ToAddress(beneficiary.Bytes20(), interpreter.evm.chainConfig.Location).InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -853,7 +853,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		return nil, nil // following opCall protocol
 	}
 	sender := scope.Contract.self.Address()
-	internalSender, err := sender.InternalAddress()
+	internalSender, err := sender.InternalAndQuaiAddress()
 	if err != nil {
 		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil

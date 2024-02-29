@@ -21,7 +21,7 @@ import (
 )
 
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	internalAddr, err := scope.Contract.Address().InternalAddress()
+	internalAddr, err := scope.Contract.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}

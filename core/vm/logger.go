@@ -184,7 +184,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		if op == SLOAD && stack.len() >= 1 {
 			var (
 				address                   = common.Hash(stack.data[stack.len()-1].Bytes32())
-				internalContractAddr, err = contract.Address().InternalAddress()
+				internalContractAddr, err = contract.Address().InternalAndQuaiAddress()
 			)
 			if err != nil {
 				fmt.Println("Error in CaptureState: " + err.Error())

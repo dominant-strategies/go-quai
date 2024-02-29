@@ -197,7 +197,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if evm.TxType == types.InternalToExternalTxType {
 		return evm.CreateETX(addr, caller.Address(), gas, value)
 	}
-	internalAddr, err := addr.InternalAddress()
+	internalAddr, err := addr.InternalAndQuaiAddress()
 	if err != nil {
 		// We might want to return zero leftOverGas here, but we're being nice
 		return nil, gas, err
@@ -287,7 +287,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
-		internalAddr, err := addrCopy.InternalAddress()
+		internalAddr, err := addrCopy.InternalAndQuaiAddress()
 		if err != nil {
 			return nil, gas, err
 		}
@@ -327,7 +327,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
-		internalAddr, err := addrCopy.InternalAddress()
+		internalAddr, err := addrCopy.InternalAndQuaiAddress()
 		if err != nil {
 			return nil, gas, err
 		}
@@ -369,7 +369,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if p, isPrecompile, addr := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
-		internalAddr, err := addr.InternalAddress()
+		internalAddr, err := addr.InternalAndQuaiAddress()
 		if err != nil {
 			return nil, gas, err
 		}
@@ -410,7 +410,7 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address) ([]byte, common.Address, uint64, error) {
-	internalCallerAddr, err := caller.Address().InternalAddress()
+	internalCallerAddr, err := caller.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, common.Zero, 0, err
 	}
@@ -426,7 +426,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Zero, gas, ErrInsufficientBalance
 	}
 
-	internalContractAddr, err := address.InternalAddress()
+	internalContractAddr, err := address.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, common.Zero, 0, err
 	}
@@ -507,7 +507,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	internalAddr, err := caller.Address().InternalAddress()
+	internalAddr, err := caller.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, common.Zero, 0, err
 	}
@@ -515,7 +515,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	nonce := evm.StateDB.GetNonce(internalAddr)
 
 	contractAddr = crypto.CreateAddress(caller.Address(), nonce, code, evm.chainConfig.Location)
-	if _, err := contractAddr.InternalAddress(); err == nil {
+	if _, err := contractAddr.InternalAndQuaiAddress(); err == nil {
 		return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
 	}
 
@@ -573,7 +573,7 @@ func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, g
 		contractAddr := crypto.CreateAddress2(senderAddress, salt, codeAndHash.Hash().Bytes(), evm.chainConfig.Location)
 
 		// Check if the generated address is valid.
-		if _, err := contractAddr.InternalAddress(); err == nil {
+		if _, err := contractAddr.InternalAndQuaiAddress(); err == nil {
 			return contractAddr, gas, nil
 		}
 	}
@@ -597,10 +597,13 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	if common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
 		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
 	}
+	if !toAddr.IsInQuaiLedgerScope() {
+		return []byte{}, 0, fmt.Errorf("%x is not in quai scope, but CreateETX was called", toAddr)
+	}
 	if gas < params.ETXGas {
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
 	}
-	fromInternal, err := fromAddr.InternalAddress()
+	fromInternal, err := fromAddr.InternalAndQuaiAddress()
 	if err != nil {
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %s", err.Error())
 	}

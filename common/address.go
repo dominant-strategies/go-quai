@@ -38,23 +38,51 @@ type AddressData interface {
 	setBytes(b []byte)
 }
 
-var ErrNilInner = errors.New("Address has nil inner")
+var (
+	ErrNilInner     = errors.New("Address has nil inner")
+	ErrInvalidScope = errors.New("address is not in scope")
+	ErrQuaiAddress  = errors.New("address is in Quai ledger scope and is not in Qi ledger scope")
+)
 
 func (a Address) InternalAddress() (InternalAddress, error) {
 	if a.inner == nil {
 		return InternalAddress{}, ErrNilInner
 	}
 	internal, ok := a.inner.(*InternalAddress)
-	if !ok || internal == nil {
+	if !ok {
 		return InternalAddress{}, ErrInvalidScope
+	}
+	if internal == nil {
+		return InternalAddress{}, ErrNilInner
+	}
+	return *internal, nil
+}
+
+func (a Address) InternalAndQuaiAddress() (InternalAddress, error) {
+	if a.inner == nil {
+		return InternalAddress{}, ErrNilInner
+	}
+	if a.IsInQiLedgerScope() {
+		return InternalAddress{}, MakeErrQiAddress(a.Hex())
+	}
+	internal, ok := a.inner.(*InternalAddress)
+	if !ok {
+		return InternalAddress{}, ErrInvalidScope
+	}
+	if internal == nil {
+		return InternalAddress{}, ErrNilInner
 	}
 	return *internal, nil
 }
 
 func (a Address) IsInQiLedgerScope() bool {
-	LedgerMask := byte(0b10000000)
 	// The first bit of the second byte is set if the address is in the Qi ledger
-	return a.Bytes()[1]&LedgerMask == LedgerMask
+	return a.Bytes()[1] > 127
+}
+
+func (a Address) IsInQuaiLedgerScope() bool {
+	// The first bit of the second byte is not set if the address is in the Quai ledger
+	return a.Bytes()[1] <= 127
 }
 
 func (a Address) Equal(b Address) bool {
@@ -328,4 +356,8 @@ func (a AddressBytes) hex() []byte {
 	copy(buf[:2], "0x")
 	hex.Encode(buf[2:], a[:])
 	return buf[:]
+}
+
+func MakeErrQiAddress(addr string) error {
+	return fmt.Errorf("address %s is in Qi ledger scope and is not in Quai ledger scope", addr)
 }

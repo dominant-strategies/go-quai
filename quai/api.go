@@ -404,7 +404,7 @@ func (api *PrivateDebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, c
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-	internal, err := contractAddress.InternalAddress()
+	internal, err := contractAddress.InternalAndQuaiAddress()
 	if err != nil {
 		return StorageRangeResult{}, err
 	}

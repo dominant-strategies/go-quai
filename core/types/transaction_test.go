@@ -142,3 +142,9 @@ func TestTransactionHashing(t *testing.T) {
 	require.NotEqual(t, hash, txHash)
 
 }
+
+func TestQiAddressScope(t *testing.T) {
+	addr := common.HexToAddress("0x001a1C308B372Fe50E7eA2Df8323d57a08a89f83", common.Location{0, 0})
+	t.Log(addr.IsInQiLedgerScope())
+	t.Log(addr.IsInQuaiLedgerScope())
+}

@@ -136,3 +136,8 @@ func (a InternalAddress) Location() *Location {
 	upperNib := (a[0] & 0xF0) >> 4 // Upper 4 bits, shifted right
 	return &Location{upperNib, lowerNib}
 }
+
+func (a InternalAddress) IsInQuaiLedgerScope() bool {
+	// The first bit of the second byte is not set if the address is in the Quai ledger
+	return a.Bytes()[1] <= 127
+}
