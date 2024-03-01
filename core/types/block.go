@@ -130,33 +130,6 @@ type headerMarshaling struct {
 	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
-// "external" header encoding. used for eth protocol, etc.
-type extheader struct {
-	ParentHash    []common.Hash
-	UncleHash     common.Hash
-	Coinbase      common.Address
-	EVMRoot       common.Hash
-	UTXORoot      common.Hash
-	TxHash        common.Hash
-	EtxHash       common.Hash
-	EtxSetHash    common.Hash
-	EtxRollupHash common.Hash
-	ManifestHash  []common.Hash
-	ReceiptHash   common.Hash
-	Difficulty    *big.Int
-	ParentEntropy []*big.Int
-	ParentDeltaS  []*big.Int
-	Number        []*big.Int
-	GasLimit      uint64
-	GasUsed       uint64
-	BaseFee       *big.Int
-	Location      common.Location
-	Time          uint64
-	Extra         []byte
-	MixHash       common.Hash
-	Nonce         BlockNonce
-}
-
 // Construct an empty header
 func EmptyHeader() *Header {
 	h := &Header{}
@@ -184,68 +157,6 @@ func EmptyHeader() *Header {
 		h.number[i] = big.NewInt(0)
 	}
 	return h
-}
-
-// DecodeRLP decodes the Quai header format into h.
-func (h *Header) DecodeRLP(s *rlp.Stream) error {
-	var eh extheader
-	if err := s.Decode(&eh); err != nil {
-		return err
-	}
-	h.parentHash = eh.ParentHash
-	h.uncleHash = eh.UncleHash
-	h.coinbase = common.BytesToAddress(eh.Coinbase.Bytes(), eh.Location)
-	h.evmRoot = eh.EVMRoot
-	h.utxoRoot = eh.UTXORoot
-	h.txHash = eh.TxHash
-	h.etxHash = eh.EtxHash
-	h.etxSetHash = eh.EtxSetHash
-	h.etxRollupHash = eh.EtxRollupHash
-	h.manifestHash = eh.ManifestHash
-	h.receiptHash = eh.ReceiptHash
-	h.difficulty = eh.Difficulty
-	h.parentEntropy = eh.ParentEntropy
-	h.parentDeltaS = eh.ParentDeltaS
-	h.number = eh.Number
-	h.gasLimit = eh.GasLimit
-	h.gasUsed = eh.GasUsed
-	h.baseFee = eh.BaseFee
-	h.location = eh.Location
-	h.time = eh.Time
-	h.extra = eh.Extra
-	h.mixHash = eh.MixHash
-	h.nonce = eh.Nonce
-
-	return nil
-}
-
-// EncodeRLP serializes h into the Quai RLP block format.
-func (h *Header) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, extheader{
-		ParentHash:    h.parentHash,
-		UncleHash:     h.uncleHash,
-		Coinbase:      h.coinbase,
-		EVMRoot:       h.evmRoot,
-		UTXORoot:      h.utxoRoot,
-		TxHash:        h.txHash,
-		EtxHash:       h.etxHash,
-		EtxSetHash:    h.etxSetHash,
-		EtxRollupHash: h.etxRollupHash,
-		ManifestHash:  h.manifestHash,
-		ReceiptHash:   h.receiptHash,
-		Difficulty:    h.difficulty,
-		ParentEntropy: h.parentEntropy,
-		ParentDeltaS:  h.parentDeltaS,
-		Number:        h.number,
-		GasLimit:      h.gasLimit,
-		GasUsed:       h.gasUsed,
-		BaseFee:       h.baseFee,
-		Location:      h.location,
-		Time:          h.time,
-		Extra:         h.extra,
-		MixHash:       h.mixHash,
-		Nonce:         h.nonce,
-	})
 }
 
 // ProtoEncode serializes h into the Quai Proto Header format
