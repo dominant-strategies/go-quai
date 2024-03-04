@@ -65,6 +65,7 @@ func (p *P2PNode) Broadcast(location common.Location, data interface{}) error {
 
 func (p *P2PNode) SetConsensusBackend(be quai.ConsensusAPI) {
 	p.consensus = be
+	p.pubsub.SetQuaiBackend(be)
 }
 
 type stopFunc func() error

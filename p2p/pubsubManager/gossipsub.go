@@ -11,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
+	"github.com/dominant-strategies/go-quai/quai"
 )
 
 var (
@@ -22,6 +23,7 @@ type PubsubManager struct {
 	ctx           context.Context
 	subscriptions map[string]*pubsub.Subscription
 	topics        map[string]*pubsub.Topic
+	consensus     quai.ConsensusAPI
 
 	// Callback function to handle received data
 	onReceived func(peer.ID, interface{}, common.Location)
@@ -41,7 +43,12 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 		make(map[string]*pubsub.Subscription),
 		make(map[string]*pubsub.Topic),
 		nil,
+		nil,
 	}, nil
+}
+
+func (g *PubsubManager) SetQuaiBackend(consensus quai.ConsensusAPI) {
+	g.consensus = consensus
 }
 
 func (g *PubsubManager) Start(receiveCb func(peer.ID, interface{}, common.Location)) {
@@ -62,6 +69,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 		return err
 	}
 	g.topics[topicName] = topic
+	g.PubSub.RegisterTopicValidator(topic.String(), g.consensus.ValidatorFunc())
 
 	// subscribe to the topic
 	subscription, err := topic.Subscribe()
