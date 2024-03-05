@@ -5,7 +5,7 @@ jobs:
     uses: dominant-strategies/quai-cicd/.github/workflows/deploy-sandbox-common.yml@main
     with:
       needs_build: true
-      build_command: "make go-quai"
+      build_command: "[ -f network.env.dist ] && mv network.env.dist network.env; make go-quai"
       needs_docker: false
       include_chart: false
       cloud_deploy: false
