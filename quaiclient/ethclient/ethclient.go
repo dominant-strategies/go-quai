@@ -355,6 +355,12 @@ func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.H
 	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
 }
 
+// SubscribeFullPendingTransactions subscribes to new pending transactions.
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- *common.Hash) (quai.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
+}
+
+
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.
