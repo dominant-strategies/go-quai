@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"os"
 
@@ -448,7 +448,7 @@ func ReadGenesisAlloc(filename string) map[string]GenesisAccount {
 	}
 	defer jsonFile.Close()
 	// Read the file contents
-	byteValue, err := ioutil.ReadAll(jsonFile)
+	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
 		log.Error(err.Error())
 		return nil

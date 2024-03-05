@@ -18,7 +18,7 @@ package node
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,7 +32,7 @@ import (
 // ones or automatically generated temporary ones.
 func TestDatadirCreation(t *testing.T) {
 	// Create a temporary data dir and check that it can be used by a node
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create manual data dir: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestIPCPathResolution(t *testing.T) {
 // ephemeral.
 func TestNodeKeyPersistency(t *testing.T) {
 	// Create a temporary folder and make sure no key is present
-	dir, err := ioutil.TempDir("", "node-test")
+	dir, err := os.MkdirTemp("", "node-test")
 	if err != nil {
 		t.Fatalf("failed to create temporary data directory: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestNodeKeyPersistency(t *testing.T) {
 	if _, err = crypto.LoadECDSA(keyfile); err != nil {
 		t.Fatalf("failed to load freshly persisted node key: %v", err)
 	}
-	blob1, err := ioutil.ReadFile(keyfile)
+	blob1, err := os.ReadFile(keyfile)
 	if err != nil {
 		t.Fatalf("failed to read freshly persisted node key: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestNodeKeyPersistency(t *testing.T) {
 	// Configure a new node and ensure the previously persisted key is loaded
 	config = &Config{Name: "unit-test", DataDir: dir}
 	config.NodeKey()
-	blob2, err := ioutil.ReadFile(filepath.Join(keyfile))
+	blob2, err := os.ReadFile(filepath.Join(keyfile))
 	if err != nil {
 		t.Fatalf("failed to read previously persisted node key: %v", err)
 	}
