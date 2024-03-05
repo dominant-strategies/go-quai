@@ -1,13 +1,12 @@
-name: Build on PR
+name: Patch Release Branch Workflow
 on:
   pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
+    types: [closed]
+    branches:
+      - 'v?[0-9]+.[0-9]+'
 jobs:
   call-common-workflow:
-    uses: dominant-strategies/quai-cicd/.github/workflows/deploy-dev-common.yml@main
+    uses: dominant-strategies/quai-cicd/.github/workflows/deploy-sandbox-common.yml@main
     with:
       needs_build: true
       build_command: "make go-quai"
@@ -20,4 +19,3 @@ jobs:
       GH_PAT: ${{ secrets.GH_PAT }}
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY2 }}
       GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-
