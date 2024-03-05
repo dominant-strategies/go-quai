@@ -90,6 +90,12 @@ type GenesisAccount struct {
 	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
 }
 
+type GenesisUTXO struct {
+	Denomination uint32 `json:"denomination"`
+	Index        uint32 `json:"index"`
+	Hash         string `json:"hash"`
+}
+
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
 	Nonce      math.HexOrDecimal64
@@ -466,4 +472,57 @@ func ReadGenesisAlloc(filename string, logger *log.Logger) map[string]GenesisAcc
 
 	// Use the parsed data
 	return data
+}
+
+func ReadGenesisQiAlloc(filename string, logger *log.Logger) map[string]GenesisUTXO {
+	jsonFile, err := os.Open(filename)
+	if err != nil {
+		logger.Error(err.Error())
+		return nil
+	}
+	defer jsonFile.Close()
+	// Read the file contents
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		logger.Error(err.Error())
+		return nil
+	}
+
+	// Parse the JSON data
+	var data map[string]GenesisUTXO
+	err = json.Unmarshal(byteValue, &data)
+	if err != nil {
+		logger.Error(err.Error())
+		return nil
+	}
+
+	// Use the parsed data
+	return data
+}
+
+// WriteGenesisUtxoSet writes the genesis utxo set to the database
+func AddGenesisUtxos(state *state.StateDB, nodeLocation common.Location, logger *log.Logger) {
+	qiAlloc := ReadGenesisQiAlloc("genallocs/gen_alloc_qi_"+nodeLocation.Name()+".json", logger)
+	// logger.WithField("alloc", len(qiAlloc)).Info("Allocating genesis accounts")
+	for addressString, utxo := range qiAlloc {
+		addr := common.HexToAddress(addressString, nodeLocation)
+		internal, err := addr.InternalAddress()
+		if err != nil {
+			logger.Error("Provided address in genesis block is out of scope")
+		}
+
+		hash := common.HexToHash(utxo.Hash)
+
+		// check if utxo.Denomination is less than uint8
+		if utxo.Denomination > 255 {
+			logger.Error("Provided denomination is larger than uint8")
+		}
+
+		newUtxo := &types.UtxoEntry{
+			Address:      internal.Bytes(),
+			Denomination: uint8(utxo.Denomination),
+		}
+
+		state.CreateUTXO(hash, uint16(utxo.Index), newUtxo)
+	}
 }

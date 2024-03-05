@@ -492,6 +492,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 				continue
 			}
 		}
+		core.AddGenesisUtxos(state, nodeLocation, progpow.logger)
 	}
 	header.SetUTXORoot(state.UTXORoot())
 	header.SetEVMRoot(state.IntermediateRoot(true))
