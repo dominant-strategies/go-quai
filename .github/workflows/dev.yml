@@ -1,10 +1,8 @@
-name: Build on PR
+name: Dev Workflow
 on:
   pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
+    types: [closed]
+    branches: [ "main" ]
 jobs:
   call-common-workflow:
     uses: dominant-strategies/quai-cicd/.github/workflows/deploy-dev-common.yml@main
@@ -20,4 +18,3 @@ jobs:
       GH_PAT: ${{ secrets.GH_PAT }}
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY2 }}
       GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-
