@@ -30,6 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -445,7 +446,14 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	switch args.TxType {
 	case types.QiTxType:
 		return args.CalculateQiTxGas()
-	case types.InternalTxType, types.ExternalTxType, types.InternalToExternalTxType:
+	case types.InternalToExternalTxType:
+		if args.To == nil {
+			return 0, errors.New("to address is required for internal to external transaction")
+		} else if _, err := args.To.InternalAndQuaiAddress(); err != nil {
+			return 0, err
+		}
+		return hexutil.Uint64(params.TxGas + params.ETXGas), nil
+	case types.InternalTxType:
 		return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 	default:
 		return 0, errors.New("unsupported tx type")
