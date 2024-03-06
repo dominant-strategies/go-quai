@@ -33,7 +33,7 @@ var (
 	headHeaderKey = []byte("LastHeader")
 
 	// headBlockKey tracks the latest known full block's hash.
-	headBlockKey = []byte("LastBlock")
+	headWorkObjectKey = []byte("LastWorkObject")
 
 	// headersHashKey tracks the latest known headers hash in Blockchain.
 	headsHashesKey = []byte("HeadersHash")
@@ -74,8 +74,8 @@ var (
 	// fastTxLookupLimitKey tracks the transaction lookup limit during fast sync.
 	fastTxLookupLimitKey = []byte("FastTransactionLookupLimit")
 
-	// badBlockKey tracks the list of bad blocks seen by local
-	badBlockKey = []byte("InvalidBlock")
+	// badWorkObjectKey tracks the list of bad blocks seen by local
+	badWorkObjectKey = []byte("InvalidWorkObject")
 
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
@@ -89,17 +89,25 @@ var (
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
-	pendingHeaderPrefix = []byte("ph")    // pendingHeaderPrefix + hash -> header
-	candidateBodyPrefix = []byte("cb")    // candidateBodyPrefix + hash -> Body
-	pbBodyPrefix        = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
-	pbBodyHashPrefix    = []byte("pbKey") // pbBodyPrefix -> []common.Hash
-	phTerminiPrefix     = []byte("pht")   // phTerminiPrefix + hash -> []common.Hash
-	phBodyPrefix        = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
-	terminiPrefix       = []byte("tk")    //terminiPrefix + hash -> []common.Hash
-	badHashesListPrefix = []byte("bh")
-	inboundEtxsPrefix   = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
-	spentUTXOsPrefix    = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
-	AddressUtxosPrefix  = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
+	pendingHeaderPrefix         = []byte("ph")    // pendingHeaderPrefix + hash -> header
+	candidateBodyPrefix         = []byte("cb")    // candidateBodyPrefix + hash -> Body
+	pbBodyPrefix                = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
+	pbBodyHashPrefix            = []byte("pbKey") // pbBodyPrefix -> []common.Hash
+	phTerminiPrefix             = []byte("pht")   // phTerminiPrefix + hash -> []common.Hash
+	phBodyPrefix                = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
+	terminiPrefix               = []byte("tk")    //terminiPrefix + hash -> []common.Hash
+	blockWorkObjectHeaderPrefix = []byte("bw")    //blockWObjectHeaderPrefix + hash -> []common.Hash
+	txWorkObjectHeaderPrefix    = []byte("tw")    //txWorkObjectHeaderPrefix + hash -> []common.Hash
+	phWorkObjectHeaderPrefix    = []byte("pw")    //phWorkObjectHeaderPrefix + hash -> []common.Hash
+	workObjectBodyPrefix        = []byte("wb")    //workObjectBodyPrefix + hash -> []common.Hash
+	blockWorkObjectPrefix       = []byte("bo")    //blockWorkObjectPrefix + hash -> []common.Hash
+	txWorkObjectPrefix          = []byte("to")    //txWorkObjectPrefix + hash -> []common.Hash
+	phWorkObjectPrefix          = []byte("po")    //phWorkObjectPrefix + hash -> []common.Hash
+	badHashesListPrefix         = []byte("bh")
+	inboundEtxsPrefix           = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
+	UtxoPrefix                  = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
+	spentUTXOsPrefix            = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
+	AddressUtxosPrefix          = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
 
 	blockBodyPrefix         = []byte("b")   // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")   // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -203,6 +211,26 @@ func headerKey(number uint64, hash common.Hash) []byte {
 // terminiKey = domPendingHeaderPrefix + hash
 func terminiKey(hash common.Hash) []byte {
 	return append(terminiPrefix, hash.Bytes()...)
+}
+
+// blockWorkObjectHeaderKey = workObjectHeaderPrefix + hash
+func blockWorkObjectHeaderKey(hash common.Hash) []byte {
+	return append(blockWorkObjectHeaderPrefix, hash.Bytes()...)
+}
+
+// txObjectHeaderKey = workObjectHeaderPrefix + hash
+func txWorkObjectHeaderKey(hash common.Hash) []byte {
+	return append(txWorkObjectHeaderPrefix, hash.Bytes()...)
+}
+
+// phObjectHeaderKey = workObjectHeaderPrefix + hash
+func phWorkObjectHeaderKey(hash common.Hash) []byte {
+	return append(phWorkObjectHeaderPrefix, hash.Bytes()...)
+}
+
+// workObjectBodyKey = workObjectBodyPrefix + hash
+func workObjectBodyKey(hash common.Hash) []byte {
+	return append(workObjectBodyPrefix, hash.Bytes()...)
 }
 
 // pendingHeaderKey = pendingHeaderPrefix + hash

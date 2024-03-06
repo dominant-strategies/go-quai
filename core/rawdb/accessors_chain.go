@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/big"
-	"sort"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -151,7 +150,7 @@ func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
 
 // ReadHeadBlockHash retrieves the hash of the current canonical head block.
 func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
-	data, _ := db.Get(headBlockKey)
+	data, _ := db.Get(headWorkObjectKey)
 	if len(data) == 0 {
 		return common.Hash{}
 	}
@@ -160,7 +159,7 @@ func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
 
 // WriteHeadBlockHash stores the head block's hash.
 func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
+	if err := db.Put(headWorkObjectKey, hash.Bytes()); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to store last block's hash")
 	}
 }
@@ -285,27 +284,8 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadHeader retrieves the block header corresponding to the hash.
-func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
-	data := ReadHeaderProto(db, hash, number)
-	if len(data) == 0 {
-		log.Global.Warn("proto header is nil")
-		return nil
-	}
-	protoHeader := new(types.ProtoHeader)
-	err := proto.Unmarshal(data, protoHeader)
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal header")
-	}
-	header := new(types.Header)
-	err = header.ProtoDecode(protoHeader)
-	if err != nil {
-		log.Global.WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Error("Invalid block header Proto")
-		return nil
-	}
-	return header
+func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.WorkObject {
+	return ReadWorkObject(db, hash, types.BlockObject)
 }
 
 // WriteHeader stores a block header into the database and also stores the hash-
@@ -417,51 +397,8 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	return true
 }
 
-// ReadBody retrieves the block body corresponding to the hash.
-func ReadBody(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) *types.Body {
-	data := ReadBodyProto(db, hash, number)
-	if len(data) == 0 {
-		return nil
-	}
-	protoBody := new(types.ProtoBody)
-	err := proto.Unmarshal(data, protoBody)
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal body")
-	}
-	body := new(types.Body)
-	err = body.ProtoDecode(protoBody, location)
-	if err != nil {
-		log.Global.WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Error("Invalid block body Proto")
-		return nil
-	}
-	return body
-}
-
-// WriteBody stores a block body into the database.
-func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *types.Body) {
-	protoBody, err := body.ProtoEncode()
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
-	}
-	data, err := proto.Marshal(protoBody)
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal body")
-	}
-	WriteBodyProto(db, hash, number, data)
-}
-
-// DeleteBody removes all block body data associated with a hash.
-func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(blockBodyKey(number, hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete block body")
-	}
-}
-
 // ReadPbCacheBody retrieves the block body corresponding to the hash.
-func ReadPbCacheBody(db ethdb.Reader, hash common.Hash, location common.Location) *types.Body {
+func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 	data, err := db.Get(pbBodyKey(hash))
 	if err != nil {
 		log.Global.WithFields(log.Fields{
@@ -473,12 +410,12 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash, location common.Location
 	if len(data) == 0 {
 		return nil
 	}
-	protoBody := new(types.ProtoBody)
-	if err := proto.Unmarshal(data, protoBody); err != nil {
+	protoWorkObject := new(types.ProtoWorkObject)
+	if err := proto.Unmarshal(data, protoWorkObject); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal body")
 	}
-	body := new(types.Body)
-	body.ProtoDecode(protoBody, location)
+	body := new(types.WorkObject)
+	body.ProtoDecode(protoWorkObject)
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
@@ -490,7 +427,7 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash, location common.Location
 }
 
 // WritePbCacheBody stores a block body into the database.
-func WritePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.Body) {
+func WritePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.WorkObject) {
 	protoBody, err := body.ProtoEncode()
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
@@ -607,6 +544,166 @@ func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadWorkObjectHeader retreive's the work object header stored in hash.
+func ReadWorkObjectHeader(db ethdb.Reader, hash common.Hash, woType int) *types.WorkObjectHeader {
+	var key []byte
+	switch woType {
+	case types.BlockObject:
+		key = blockWorkObjectHeaderKey(hash)
+	case types.TxObject:
+		key = txWorkObjectHeaderKey(hash)
+	case types.PhObject:
+		key = phWorkObjectHeaderKey(hash)
+	}
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	protoWorkObjectHeader := new(types.ProtoWorkObjectHeader)
+	err := proto.Unmarshal(data, protoWorkObjectHeader)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal work object header")
+	}
+	workObjectHeader := new(types.WorkObjectHeader)
+	err = workObjectHeader.ProtoDecode(protoWorkObjectHeader)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"hash": hash,
+			"err":  err,
+		}).Error("Invalid work object header Proto")
+		return nil
+	}
+	return workObjectHeader
+}
+
+// WriteWorkObjectHeader writes the work object header of the terminus hash.
+func WriteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, workObject *types.WorkObject, woType int, nodeCtx int) {
+	var key []byte
+	switch woType {
+	case types.BlockObject:
+		key = blockWorkObjectHeaderKey(hash)
+	case types.TxObject:
+		key = txWorkObjectHeaderKey(hash)
+	case types.PhObject:
+		key = phWorkObjectHeaderKey(hash)
+	}
+	protoWorkObjectHeader, err := workObject.WorkObjectHeader().ProtoEncode()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto encode work object header")
+	}
+	data, err := proto.Marshal(protoWorkObjectHeader)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal work object header")
+	}
+	if err := db.Put(key, data); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to store work object header")
+	}
+}
+
+// DeleteWorkObjectHeader deletes the work object header stored for the header hash.
+func DeleteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, woType int) {
+	var key []byte
+	switch woType {
+	case types.BlockObject:
+		key = blockWorkObjectHeaderKey(hash)
+	case types.TxObject:
+		key = txWorkObjectHeaderKey(hash)
+	case types.PhObject:
+		key = phWorkObjectHeaderKey(hash)
+	}
+	if err := db.Delete(key); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to delete work object header ")
+	}
+}
+
+// ReadWorkObject retreive's the work object stored in hash.
+func ReadWorkObject(db ethdb.Reader, hash common.Hash, woType int) *types.WorkObject {
+	workObjectHeader := ReadWorkObjectHeader(db, hash, woType)
+	if workObjectHeader == nil {
+		return nil
+	}
+	workObjectBody := ReadWorkObjectBody(db, hash, workObjectHeader.Location())
+	if workObjectBody == nil {
+		return nil
+	}
+	return types.NewWorkObject(workObjectHeader, workObjectBody, types.NewEmptyTx()) //TODO: mmtx transaction
+}
+
+// WriteWorkObject writes the work object of the terminus hash.
+func WriteWorkObject(db ethdb.KeyValueWriter, hash common.Hash, workObject *types.WorkObject, woType int, nodeCtx int) {
+	WriteWorkObjectBody(db, hash, workObject, woType, nodeCtx)
+	WriteWorkObjectHeader(db, hash, workObject, woType, nodeCtx)
+	//TODO: mmtx transaction
+}
+
+// DeleteWorkObject deletes the work object stored for the header hash.
+func DeleteWorkObject(db ethdb.KeyValueWriter, hash common.Hash, number uint64, woType int) {
+	DeleteWorkObjectBody(db, hash)
+	DeleteWorkObjectHeader(db, hash, woType) //TODO: mmtx transaction
+	DeleteHeader(db, hash, number)
+	DeleteReceipts(db, hash, number)
+}
+
+// DeleteWorkObjectWithoutNumber removes all block data associated with a hash, except
+// the hash to number mapping.
+func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64, woType int) {
+	DeleteWorkObjectBody(db, hash)
+	DeleteWorkObjectHeader(db, hash, woType) //TODO: mmtx transaction
+	DeleteReceipts(db, hash, number)
+	deleteHeaderWithoutNumber(db, hash, number)
+}
+
+// ReadWorkObjectBody retreive's the work object body stored in hash.
+func ReadWorkObjectBody(db ethdb.Reader, hash common.Hash, location common.Location) *types.WorkObjectBody {
+	key := workObjectBodyKey(hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	protoWorkObjectBody := new(types.ProtoWorkObjectBody)
+	err := proto.Unmarshal(data, protoWorkObjectBody)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal work object body")
+	}
+	workObjectBody := new(types.WorkObjectBody)
+	err = workObjectBody.ProtoDecode(protoWorkObjectBody, location)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"hash": hash,
+			"err":  err,
+		}).Error("Invalid work object body Proto")
+		return nil
+	}
+	return workObjectBody
+}
+
+// WriteWorkObjectBody writes the work object body of the terminus hash.
+func WriteWorkObjectBody(db ethdb.KeyValueWriter, hash common.Hash, workObject *types.WorkObject, woType int, nodeCtx int) {
+
+	key := workObjectBodyKey(hash)
+	WriteHeaderNumber(db, hash, workObject.NumberU64(nodeCtx))
+
+	protoWorkObjectBody, err := workObject.Body().ProtoEncode()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto encode work object body")
+	}
+	data, err := proto.Marshal(protoWorkObjectBody)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal work object body")
+	}
+	if err := db.Put(key, data); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to store work object body")
+	}
+}
+
+// DeleteWorkObjectBody deletes the work object body stored for the header hash.
+func DeleteWorkObjectBody(db ethdb.KeyValueWriter, hash common.Hash) {
+	key := workObjectBodyKey(hash)
+	if err := db.Delete(key); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to delete work object body ")
+	}
+}
+
 // ReadPendingHeader retreive's the pending header stored in hash.
 func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 	key := pendingHeaderKey(hash)
@@ -624,7 +721,7 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 
 	pendingHeader := new(types.PendingHeader)
 
-	err = pendingHeader.ProtoDecode(protoPendingHeader)
+	err = pendingHeader.ProtoDecode(protoPendingHeader, db.Location())
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
@@ -776,7 +873,7 @@ func ReadReceiptsProto(db ethdb.Reader, hash common.Hash, number uint64) []byte 
 // ReadRawReceipts retrieves all the transaction receipts belonging to a block.
 // The receipt metadata fields are not guaranteed to be populated, so they
 // should not be used. Use ReadReceipts instead if the metadata is needed.
-func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) types.Receipts {
+func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsProto(db, hash, number)
 	if len(data) == 0 {
@@ -790,7 +887,7 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64, location 
 	}
 	// Convert the receipts from their storage form to their internal representation
 	storageReceipts := new(types.ReceiptsForStorage)
-	err = storageReceipts.ProtoDecode(protoReceipt, location)
+	err = storageReceipts.ProtoDecode(protoReceipt, db.Location())
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
@@ -814,11 +911,11 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64, location 
 // if the receipt itself is stored.
 func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) types.Receipts {
 	// We're deriving many fields from the block body, retrieve beside the receipt
-	receipts := ReadRawReceipts(db, hash, number, config.Location)
+	receipts := ReadRawReceipts(db, hash, number)
 	if receipts == nil {
 		return nil
 	}
-	body := ReadBody(db, hash, number, config.Location)
+	body := ReadWorkObject(db, hash, types.BlockObject)
 	if body == nil {
 		log.Global.WithFields(log.Fields{
 			"hash":   hash,
@@ -866,106 +963,68 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-// ReadBlock retrieves an entire block corresponding to the hash, assembling it
-// back from the stored header and body. If either the header or body could not
-// be retrieved nil is returned.
-//
-// Note, due to concurrent download of header and block body the header and thus
-// canonical hash can be stored in the database but the body data not (yet).
-func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) *types.Block {
-	header := ReadHeader(db, hash, number)
-	if header == nil {
-		return nil
-	}
-	body := ReadBody(db, hash, number, location)
-	if body == nil {
-		return nil
-	}
-	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles, body.ExtTransactions, body.SubManifest, body.InterlinkHashes)
+const badWorkObjectToKeep = 10
+
+type badWorkObject struct {
+	woHeader *types.WorkObjectHeader
+	woBody   *types.WorkObjectBody
+	tx       types.Transaction
 }
 
-// WriteBlock serializes a block into the database, header and body separately.
-func WriteBlock(db ethdb.KeyValueWriter, block *types.Block, nodeCtx int) {
-	WriteBody(db, block.Hash(), block.NumberU64(nodeCtx), block.Body())
-	WriteHeader(db, block.Header(), nodeCtx)
-}
-
-// DeleteBlock removes all block data associated with a hash.
-func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	DeleteReceipts(db, hash, number)
-	DeleteHeader(db, hash, number)
-	DeleteBody(db, hash, number)
-}
-
-// DeleteBlockWithoutNumber removes all block data associated with a hash, except
-// the hash to number mapping.
-func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	DeleteReceipts(db, hash, number)
-	deleteHeaderWithoutNumber(db, hash, number)
-	DeleteBody(db, hash, number)
-}
-
-const badBlockToKeep = 10
-
-type badBlock struct {
-	Header *types.Header
-	Body   *types.Body
-}
-
-// ProtoEncode returns the protobuf encoding of the bad block.
-func (b badBlock) ProtoEncode() *ProtoBadBlock {
-	protoHeader, err := b.Header.ProtoEncode()
+// ProtoEncode returns the protobuf encoding of the bad workObject.
+func (b badWorkObject) ProtoEncode() *ProtoBadWorkObject {
+	protoWorkObjectHeader, err := b.woHeader.ProtoEncode()
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto encode header")
 	}
-	protoBody, err := b.Body.ProtoEncode()
+	protoWorkObjectBody, err := b.woBody.ProtoEncode()
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
 	}
-	return &ProtoBadBlock{
-		Header: protoHeader,
-		Body:   protoBody,
+	return &ProtoBadWorkObject{
+		WoHeader: protoWorkObjectHeader,
+		WoBody:   protoWorkObjectBody,
 	}
 }
 
-// ProtoDecode decodes the protobuf encoding of the bad block.
-func (b *badBlock) ProtoDecode(pb *ProtoBadBlock, location common.Location) error {
-	header := new(types.Header)
-	if err := header.ProtoDecode(pb.Header); err != nil {
+// ProtoDecode decodes the protobuf encoding of the bad workObject.
+func (b *badWorkObject) ProtoDecode(pb *ProtoBadWorkObject) error {
+	woHeader := new(types.WorkObjectHeader)
+	if err := woHeader.ProtoDecode(pb.WoHeader); err != nil {
 		return err
 	}
-	b.Header = header
-	body := new(types.Body)
-	if err := body.ProtoDecode(pb.Body, location); err != nil {
+	b.woHeader = woHeader
+	woBody := new(types.WorkObjectBody)
+	if err := woBody.ProtoDecode(pb.WoBody, b.woHeader.Location()); err != nil {
 		return err
 	}
-	b.Body = body
+	b.woBody = woBody
 	return nil
 }
 
-// badBlockList implements the sort interface to allow sorting a list of
+// badWorkObjectList implements the sort interface to allow sorting a list of
 // bad blocks by their number in the reverse order.
-type badBlockList []*badBlock
+type badWorkObjectList []*badWorkObject
 
-func (s badBlockList) Len() int { return len(s) }
-func (s badBlockList) Less(i, j int) bool {
-	return s[i].Header.NumberU64(common.ZONE_CTX) < s[j].Header.NumberU64(common.ZONE_CTX)
+func (s badWorkObjectList) Len() int { return len(s) }
+func (s badWorkObjectList) Less(i, j int) bool {
+	return s[i].woHeader.NumberU64() < s[j].woHeader.NumberU64()
 }
-func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s badWorkObjectList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-func (s badBlockList) ProtoEncode() *ProtoBadBlocks {
-	protoList := make([]*ProtoBadBlock, len(s))
+func (s badWorkObjectList) ProtoEncode() *ProtoBadWorkObjects {
+	protoList := make([]*ProtoBadWorkObject, len(s))
 	for i, bad := range s {
 		protoList[i] = bad.ProtoEncode()
 	}
-	return &ProtoBadBlocks{BadBlocks: protoList}
+	return &ProtoBadWorkObjects{BadWorkObjects: protoList}
 }
 
-func (s *badBlockList) ProtoDecode(pb *ProtoBadBlocks, location common.Location) error {
-	list := make(badBlockList, len(pb.BadBlocks))
-	for i, protoBlock := range pb.BadBlocks {
-		block := new(badBlock)
-		if err := block.ProtoDecode(protoBlock, location); err != nil {
+func (s *badWorkObjectList) ProtoDecode(pb *ProtoBadWorkObjects) error {
+	list := make(badWorkObjectList, len(pb.BadWorkObjects))
+	for i, protoBlock := range pb.BadWorkObjects {
+		block := new(badWorkObject)
+		if err := block.ProtoDecode(protoBlock); err != nil {
 			return err
 		}
 		list[i] = block
@@ -974,116 +1033,33 @@ func (s *badBlockList) ProtoDecode(pb *ProtoBadBlocks, location common.Location)
 	return nil
 }
 
-// ReadBadBlock retrieves the bad block with the corresponding block hash.
-func ReadBadBlock(db ethdb.Reader, hash common.Hash, location common.Location) *types.Block {
-	blob, err := db.Get(badBlockKey)
+// ReadBadWorkObject retrieves the bad workObject with the corresponding workObject hash.
+func ReadBadWorkObject(db ethdb.Reader, hash common.Hash) *types.WorkObject {
+	blob, err := db.Get(badWorkObjectKey)
 	if err != nil {
 		return nil
 	}
-	protoBadBlocks := new(ProtoBadBlocks)
-	err = proto.Unmarshal(blob, protoBadBlocks)
+	protoBadWorkObjects := new(ProtoBadWorkObjects)
+	err = proto.Unmarshal(blob, protoBadWorkObjects)
 	if err != nil {
 		return nil
 	}
 
-	badBlocks := new(badBlockList)
-	err = badBlocks.ProtoDecode(protoBadBlocks, location)
+	badWorkObjects := new(badWorkObjectList)
+	err = badWorkObjects.ProtoDecode(protoBadWorkObjects)
 	if err != nil {
 		return nil
 	}
-	for _, bad := range *badBlocks {
-		if bad.Header.Hash() == hash {
-			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest, bad.Body.InterlinkHashes)
+	for _, bad := range *badWorkObjects {
+		if bad.woHeader.Hash() == hash {
+			return types.NewWorkObject(bad.woHeader, bad.woBody, types.NewEmptyTx()) //TODO: mmtx transaction
 		}
 	}
 	return nil
 }
 
-// ReadAllBadBlocks retrieves all the bad blocks in the database.
-// All returned blocks are sorted in reverse order by number.
-func ReadAllBadBlocks(db ethdb.Reader, location common.Location) []*types.Block {
-	blob, err := db.Get(badBlockKey)
-	if err != nil {
-		return nil
-	}
-
-	protoBadBlocks := new(ProtoBadBlocks)
-	err = proto.Unmarshal(blob, protoBadBlocks)
-	if err != nil {
-		return nil
-	}
-	badBlocks := new(badBlockList)
-
-	err = badBlocks.ProtoDecode(protoBadBlocks, location)
-	if err != nil {
-		return nil
-	}
-	var blocks []*types.Block
-	for _, bad := range *badBlocks {
-		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest, bad.Body.InterlinkHashes))
-	}
-	return blocks
-}
-
-// WriteBadBlock serializes the bad block into the database. If the cumulated
-// bad blocks exceeds the limitation, the oldest will be dropped.
-func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block, location common.Location) {
-	blob, err := db.Get(badBlockKey)
-	if err != nil {
-		log.Global.WithField("err", err).Warn("Failed to load old bad blocks")
-	}
-
-	protoBadBlocks := new(ProtoBadBlocks)
-	err = proto.Unmarshal(blob, protoBadBlocks)
-	if err != nil {
-		log.Global.WithField("err", err).Warn("Failed to proto Unmarshal bad blocks")
-	}
-	badBlocksList := badBlockList{}
-	if len(blob) > 0 {
-		err := badBlocksList.ProtoDecode(protoBadBlocks, location)
-		if err != nil {
-			log.Global.WithField("err", err).Fatal("Failed to decode old bad blocks")
-		}
-	}
-	badBlocks := badBlocksList
-	nodeCtx := location.Context()
-	for _, b := range badBlocks {
-		if b.Header.NumberU64(nodeCtx) == block.NumberU64(nodeCtx) && b.Header.Hash() == block.Hash() {
-			log.Global.WithFields(log.Fields{
-				"number": block.NumberU64(nodeCtx),
-				"hash":   block.Hash(),
-			}).Info("Skip duplicated bad block")
-			return
-		}
-	}
-	badBlocks = append(badBlocks, &badBlock{
-		Header: block.Header(),
-		Body:   block.Body(),
-	})
-	sort.Sort(sort.Reverse(badBlocks))
-	if len(badBlocks) > badBlockToKeep {
-		blocks := badBlocks
-		badBlocks = blocks[:badBlockToKeep]
-	}
-	protoBadBlocks = badBlocks.ProtoEncode()
-	data, err := proto.Marshal(protoBadBlocks)
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to encode bad blocks")
-	}
-	if err := db.Put(badBlockKey, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to write bad blocks")
-	}
-}
-
-// DeleteBadBlocks deletes all the bad blocks from the database
-func DeleteBadBlocks(db ethdb.KeyValueWriter) {
-	if err := db.Delete(badBlockKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete bad blocks")
-	}
-}
-
 // FindCommonAncestor returns the last common ancestor of two block headers
-func FindCommonAncestor(db ethdb.Reader, a, b *types.Header, nodeCtx int) *types.Header {
+func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) *types.WorkObject {
 	for bn := b.NumberU64(nodeCtx); a.NumberU64(nodeCtx) > bn; {
 		a = ReadHeader(db, a.ParentHash(nodeCtx), a.NumberU64(nodeCtx)-1)
 		if a == nil {
@@ -1110,7 +1086,7 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header, nodeCtx int) *types
 }
 
 // ReadHeadHeader returns the current canonical head header.
-func ReadHeadHeader(db ethdb.Reader) *types.Header {
+func ReadHeadHeader(db ethdb.Reader) *types.WorkObject {
 	headHeaderHash := ReadHeadHeaderHash(db)
 	if headHeaderHash == (common.Hash{}) {
 		return nil
@@ -1123,16 +1099,16 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 }
 
 // ReadHeadBlock returns the current canonical head block.
-func ReadHeadBlock(db ethdb.Reader, location common.Location) *types.Block {
-	headBlockHash := ReadHeadBlockHash(db)
-	if headBlockHash == (common.Hash{}) {
+func ReadHeadBlock(db ethdb.Reader) *types.WorkObject {
+	headWorkObjectHash := ReadHeadBlockHash(db)
+	if headWorkObjectHash == (common.Hash{}) {
 		return nil
 	}
-	headBlockNumber := ReadHeaderNumber(db, headBlockHash)
-	if headBlockNumber == nil {
+	headWorkObjectNumber := ReadHeaderNumber(db, headWorkObjectHash)
+	if headWorkObjectNumber == nil {
 		return nil
 	}
-	return ReadBlock(db, headBlockHash, *headBlockNumber, location)
+	return ReadWorkObject(db, headWorkObjectHash, types.BlockObject)
 }
 
 // ReadEtxSetProto retrieves the EtxSet corresponding to a given block, in Proto encoding.
@@ -1175,7 +1151,7 @@ func WriteEtxSetProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, 
 }
 
 // ReadEtxSet retreives the EtxSet corresponding to a given block
-func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) *types.EtxSet {
+func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) *types.EtxSet {
 	data, err := ReadEtxSetProto(db, hash, number)
 	if err != nil {
 		log.Global.WithError(err).Error("Failed to read etx set")
@@ -1188,7 +1164,7 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64, location commo
 	etxSet := types.EtxSet{
 		ETXHashes: make([]byte, 0),
 	}
-	err = etxSet.ProtoDecode(protoEtxSet, location)
+	err = etxSet.ProtoDecode(protoEtxSet)
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
@@ -1316,7 +1292,7 @@ func DeletePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadPendingEtxsRollup retreives the pending ETXs rollup corresponding to a given block
-func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash, location common.Location) *types.PendingEtxsRollup {
+func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash) *types.PendingEtxsRollup {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(pendingEtxsRollupKey(hash))
 	if len(data) == 0 {
@@ -1328,7 +1304,7 @@ func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash, location common.Lo
 		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pending etxs rollup")
 	}
 	pendingEtxsRollup := new(types.PendingEtxsRollup)
-	err = pendingEtxsRollup.ProtoDecode(protoPendingEtxsRollup, location)
+	err = pendingEtxsRollup.ProtoDecode(protoPendingEtxsRollup, db.Location())
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,
@@ -1539,7 +1515,7 @@ func WriteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash, inboundEtxs typ
 }
 
 // ReadInboundEtxs reads the inbound etxs from the database
-func ReadInboundEtxs(db ethdb.Reader, hash common.Hash, location common.Location) types.Transactions {
+func ReadInboundEtxs(db ethdb.Reader, hash common.Hash) types.Transactions {
 	// Try to look up the data in leveldb.
 	data, err := db.Get(inboundEtxsKey(hash))
 	if err != nil {
@@ -1551,7 +1527,7 @@ func ReadInboundEtxs(db ethdb.Reader, hash common.Hash, location common.Location
 		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal inbound etxs")
 	}
 	inboundEtxs := types.Transactions{}
-	err = inboundEtxs.ProtoDecode(protoInboundEtxs, location)
+	err = inboundEtxs.ProtoDecode(protoInboundEtxs, db.Location())
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash": hash,

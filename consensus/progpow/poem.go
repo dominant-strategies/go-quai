@@ -13,7 +13,7 @@ import (
 )
 
 // CalcOrder returns the order of the block within the hierarchy of chains
-func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
+func (progpow *Progpow) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
 	nodeCtx := progpow.config.NodeLocation.Context()
 	// Except for the slice [0,0] have to check if the header hash is the genesis hash
 	if header.NumberU64(nodeCtx) == 0 {
@@ -69,7 +69,7 @@ func (progpow *Progpow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
@@ -94,7 +94,7 @@ func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.H
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) TotalLogPhS(header *types.Header) *big.Int {
+func (progpow *Progpow) TotalLogPhS(header *types.WorkObject) *big.Int {
 	switch progpow.config.NodeLocation.Context() {
 	case common.PRIME_CTX:
 		totalS := header.ParentEntropy(common.PRIME_CTX)
@@ -110,7 +110,7 @@ func (progpow *Progpow) TotalLogPhS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) DeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+func (progpow *Progpow) DeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	intrinsicS, order, err := progpow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -129,7 +129,7 @@ func (progpow *Progpow) DeltaLogS(chain consensus.GenesisReader, header *types.H
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) UncledLogS(block *types.Block) *big.Int {
+func (progpow *Progpow) UncledLogS(block *types.WorkObject) *big.Int {
 	uncles := block.Uncles()
 	totalUncledLogS := big.NewInt(0)
 	for _, uncle := range uncles {
@@ -145,7 +145,7 @@ func (progpow *Progpow) UncledLogS(block *types.Block) *big.Int {
 	return totalUncledLogS
 }
 
-func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -171,7 +171,7 @@ func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.GenesisReader, header
 
 // CalcRank returns the rank of the block within the hierarchy of chains, this
 // determines the level of the interlink
-func (progpow *Progpow) CalcRank(chain consensus.GenesisReader, header *types.Header) (int, error) {
+func (progpow *Progpow) CalcRank(chain consensus.GenesisReader, header *types.WorkObject) (int, error) {
 	if chain.IsGenesisHash(header.Hash()) {
 		return 0, nil
 	}

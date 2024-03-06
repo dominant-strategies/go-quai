@@ -44,7 +44,7 @@ type Miner struct {
 	logger   *log.Logger
 }
 
-func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.Header) bool, processingState bool, logger *log.Logger) *Miner {
+func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.WorkObject) bool, processingState bool, logger *log.Logger) *Miner {
 	miner := &Miner{
 		hc:       hc,
 		engine:   engine,
@@ -139,7 +139,7 @@ func (miner *Miner) SetRecommitInterval(interval time.Duration) {
 }
 
 // Pending returns the currently pending block and associated state.
-func (miner *Miner) Pending() *types.Block {
+func (miner *Miner) Pending() *types.WorkObject {
 	return miner.worker.pending()
 }
 
@@ -148,12 +148,12 @@ func (miner *Miner) Pending() *types.Block {
 // Note, to access both the pending block and the pending state
 // simultaneously, please use Pending(), as the pending state can
 // change between multiple method calls
-func (miner *Miner) PendingBlock() *types.Block {
+func (miner *Miner) PendingBlock() *types.WorkObject {
 	return miner.worker.pendingBlock()
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
-func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+func (miner *Miner) PendingBlockAndReceipts() (*types.WorkObject, types.Receipts) {
 	return miner.worker.pendingBlockAndReceipts()
 }
 
@@ -191,6 +191,6 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 }
 
 // SubscribePendingBlock starts delivering the pending block to the given channel.
-func (miner *Miner) SubscribePendingHeader(ch chan<- *types.Header) event.Subscription {
+func (miner *Miner) SubscribePendingHeader(ch chan<- *types.WorkObject) event.Subscription {
 	return miner.worker.pendingHeaderFeed.Subscribe(ch)
 }

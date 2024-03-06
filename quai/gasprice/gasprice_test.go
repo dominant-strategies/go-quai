@@ -140,11 +140,11 @@ func newTestBackend(t *testing.T, pending bool) *testBackend {
 	return &testBackend{chain: chain, pending: pending}
 }
 
-func (b *testBackend) CurrentHeader() *types.Header {
+func (b *testBackend) CurrentHeader() *types.WorkObject {
 	return b.chain.CurrentHeader()
 }
 
-func (b *testBackend) GetBlockByNumber(number uint64) *types.Block {
+func (b *testBackend) GetBlockByNumber(number uint64) *types.WorkObject {
 	return b.chain.GetBlockByNumber(number)
 }
 

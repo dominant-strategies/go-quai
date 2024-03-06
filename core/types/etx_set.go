@@ -46,7 +46,7 @@ func (set *EtxSet) ProtoEncode() *ProtoEtxSet {
 }
 
 // ProtoDecode decodes the EtxSet from protobuf format.
-func (set *EtxSet) ProtoDecode(protoSet *ProtoEtxSet, location common.Location) error {
+func (set *EtxSet) ProtoDecode(protoSet *ProtoEtxSet) error {
 	set.ETXHashes = protoSet.GetEtxHashes()
 	return nil
 }

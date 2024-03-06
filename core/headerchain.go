@@ -53,7 +53,7 @@ type HeaderChain struct {
 	scope         event.SubscriptionScope
 
 	headerDb      ethdb.Database
-	genesisHeader *types.Header
+	genesisHeader *types.WorkObject
 
 	currentHeader atomic.Value // Current head of the header chain (may be above the block chain!)
 	headerCache   *lru.Cache   // Cache for the most recent block headers
@@ -72,7 +72,7 @@ type HeaderChain struct {
 	procInterrupt int32          // interrupt signaler for block processing
 
 	headermu      sync.RWMutex
-	heads         []*types.Header
+	heads         []*types.WorkObject
 	slicesRunning []common.Location
 
 	logger *log.Logger
@@ -102,13 +102,13 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	}
 
 	genesisHash := hc.GetGenesisHashes()[0]
-	hc.genesisHeader = hc.GetHeaderByHash(genesisHash)
+	hc.genesisHeader = rawdb.ReadWorkObject(db, genesisHash, types.BlockObject)
 	if bytes.Equal(chainConfig.Location, common.Location{0, 0}) {
 		if hc.genesisHeader == nil {
 			return nil, ErrNoGenesis
 		}
 		if hc.genesisHeader.Hash() != hc.config.DefaultGenesisHash {
-			return nil, fmt.Errorf("genesis hash mismatch: have %x, want %x", hc.genesisHeader.Hash(), genesisHash)
+			return nil, fmt.Errorf("genesis hash mismatch: have %x, want %x", hc.genesisHeader.Hash(), hc.config.DefaultGenesisHash)
 		}
 	}
 	hc.logger.WithField("Hash", hc.genesisHeader.Hash()).Info("Genesis")
@@ -139,7 +139,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	hc.subRollupCache = subRollupCache
 
 	// Initialize the heads slice
-	heads := make([]*types.Header, 0)
+	heads := make([]*types.WorkObject, 0)
 	hc.heads = heads
 
 	// Initialize the UTXO cache
@@ -150,13 +150,13 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 
 // CollectSubRollup collects the rollup of ETXs emitted from the subordinate
 // chain in the slice which emitted the given block.
-func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, error) {
+func (hc *HeaderChain) CollectSubRollup(b *types.WorkObject) (types.Transactions, error) {
 	nodeCtx := hc.NodeCtx()
 	subRollup := types.Transactions{}
 	if nodeCtx < common.ZONE_CTX {
 		// Since in prime the pending etxs are stored in 2 parts, pendingEtxsRollup
 		// consists of region header and subrollups
-		for _, hash := range b.SubManifest() {
+		for _, hash := range b.Manifest() {
 			if nodeCtx == common.PRIME_CTX {
 				pEtxRollup, err := hc.GetPendingEtxsRollup(hash, b.Location())
 				if err == nil {
@@ -171,7 +171,7 @@ func (hc *HeaderChain) CollectSubRollup(b *types.Block) (types.Transactions, err
 				pendingEtxs, err := hc.GetPendingEtxs(hash)
 				if err != nil {
 					// Get the pendingEtx from the appropriate zone
-					hc.fetchPEtx(b.Hash(), hash, b.Header().Location())
+					hc.fetchPEtx(b.Hash(), hash, b.Location())
 					return nil, ErrPendingEtxNotFound
 				}
 				subRollup = append(subRollup, pendingEtxs.Etxs...)
@@ -208,7 +208,7 @@ func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash, location common.Lo
 	// Look for pending ETXs first in pending ETX cache, then in database
 	if res, ok := hc.pendingEtxsRollup.Get(hash); ok && res != nil {
 		rollups = res.(types.PendingEtxsRollup)
-	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash, location); res != nil {
+	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash); res != nil {
 		rollups = *res
 	} else {
 		hc.logger.WithField("hash", hash.String()).Trace("Unable to find pending etx rollups for hash in manifest")
@@ -234,7 +234,7 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 
 // Collect all emmitted ETXs since the last coincident block, but excluding
 // those emitted in this block
-func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
+func (hc *HeaderChain) CollectEtxRollup(b *types.WorkObject) (types.Transactions, error) {
 	if hc.IsGenesisHash(b.Hash()) {
 		return b.ExtTransactions(), nil
 	}
@@ -245,7 +245,7 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, err
 	return hc.collectInclusiveEtxRollup(parent)
 }
 
-func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transactions, error) {
+func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.WorkObject) (types.Transactions, error) {
 	// Initialize the rollup with ETXs emitted by this block
 	newEtxs := b.ExtTransactions()
 	// Terminate the search if we reached genesis
@@ -253,7 +253,7 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 		return newEtxs, nil
 	}
 	// Terminate the search on coincidence with dom chain
-	if hc.engine.IsDomCoincident(hc, b.Header()) {
+	if hc.engine.IsDomCoincident(hc, b) {
 		return newEtxs, nil
 	}
 	// Recursively get the ancestor rollup, until a coincident ancestor is found
@@ -270,7 +270,7 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 }
 
 // Append
-func (hc *HeaderChain) AppendHeader(header *types.Header) error {
+func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 	nodeCtx := hc.NodeCtx()
 	hc.logger.WithFields(log.Fields{
 		"Hash":     header.Hash(),
@@ -317,7 +317,7 @@ func (hc *HeaderChain) ProcessingState() bool {
 }
 
 // Append
-func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Transactions) error {
+func (hc *HeaderChain) AppendBlock(block *types.WorkObject, newInboundEtxs types.Transactions) error {
 	blockappend := time.Now()
 	// Append block else revert header append
 	logs, err := hc.bc.Append(block, newInboundEtxs)
@@ -335,7 +335,7 @@ func (hc *HeaderChain) AppendBlock(block *types.Block, newInboundEtxs types.Tran
 }
 
 // SetCurrentHeader sets the current header based on the POEM choice
-func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
+func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -361,11 +361,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 
 	//Find a common header
 	commonHeader := hc.findCommonAncestor(head)
-	newHeader := types.CopyHeader(head)
+	newHeader := types.CopyWorkObject(head)
 
 	// Delete each header and rollback state processor until common header
 	// Accumulate the hash slice stack
-	var hashStack []*types.Header
+	var hashStack []*types.WorkObject
 	for {
 		if newHeader.Hash() == commonHeader.Hash() {
 			break
@@ -380,7 +380,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 			break
 		}
 	}
-	var prevHashStack []*types.Header
+	var prevHashStack []*types.WorkObject
 	for {
 		if prevHeader.Hash() == commonHeader.Hash() {
 			break
@@ -406,7 +406,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		// Every Block that got removed from the canonical hash db is sent in the side feed to be
 		// recorded as uncles
 		go func() {
-			var blocks []*types.Block
+			var blocks []*types.WorkObject
 			for i := len(prevHashStack) - 1; i >= 0; i-- {
 				block := hc.bc.GetBlock(prevHashStack[i].Hash(), prevHashStack[i].NumberU64(hc.NodeCtx()))
 				if block != nil {
@@ -421,7 +421,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 }
 
 // SetCurrentState updates the current Quai state and Qi UTXO set upon which the current pending block is built
-func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
+func (hc *HeaderChain) SetCurrentState(head *types.WorkObject) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
 
@@ -430,8 +430,8 @@ func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
 		return nil
 	}
 
-	current := types.CopyHeader(head)
-	var headersWithoutState []*types.Header
+	current := types.CopyWorkObject(head)
+	var headersWithoutState []*types.WorkObject
 	for {
 		headersWithoutState = append(headersWithoutState, current)
 		header := hc.GetHeaderByHash(current.ParentHash(nodeCtx))
@@ -443,11 +443,11 @@ func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
 		}
 		// Checking of the Etx set exists makes sure that we have processed the
 		// state of the parent block
-		etxSet := rawdb.ReadEtxSet(hc.headerDb, header.Hash(), header.NumberU64(nodeCtx), hc.NodeLocation())
+		etxSet := rawdb.ReadEtxSet(hc.headerDb, header.Hash(), header.NumberU64(nodeCtx))
 		if etxSet != nil {
 			break
 		}
-		current = types.CopyHeader(header)
+		current = types.CopyWorkObject(header)
 	}
 
 	// Run through the hash stack to update canonicalHash and forward state processor
@@ -461,19 +461,19 @@ func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
 }
 
 // ReadInboundEtxsAndAppendBlock reads the inbound etxs from database and appends the block
-func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error {
+func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.WorkObject) error {
 	nodeCtx := hc.NodeCtx()
 	block := hc.GetBlockOrCandidate(header.Hash(), header.NumberU64(nodeCtx))
 	if block == nil {
-		return errors.New("Could not find block during reorg")
+		return errors.New("could not find block during reorg")
 	}
-	_, order, err := hc.engine.CalcOrder(block.Header())
+	_, order, err := hc.engine.CalcOrder(block)
 	if err != nil {
 		return err
 	}
 	var inboundEtxs types.Transactions
 	if order < nodeCtx {
-		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash(), hc.NodeLocation())
+		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash())
 	}
 	err = hc.AppendBlock(block, inboundEtxs)
 	if err != nil {
@@ -483,8 +483,8 @@ func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.Header) error
 }
 
 // findCommonAncestor
-func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
-	current := types.CopyHeader(header)
+func (hc *HeaderChain) findCommonAncestor(header *types.WorkObject) *types.WorkObject {
+	current := types.CopyWorkObject(header)
 	for {
 		if current == nil {
 			return nil
@@ -554,7 +554,7 @@ func (hc *HeaderChain) loadLastState() error {
 		hc.currentHeader.Store(recoveredHeader)
 	}
 
-	heads := make([]*types.Header, 0)
+	heads := make([]*types.WorkObject, 0)
 	for _, hash := range headsHashes {
 		heads = append(heads, hc.GetHeaderByHash(hash))
 	}
@@ -678,20 +678,20 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	return hash, number
 }
 
-func (hc *HeaderChain) WriteBlock(block *types.Block) {
-	hc.bc.WriteBlock(block)
+func (hc *HeaderChain) WriteBlock(block *types.WorkObject) {
+	hc.bc.WriteBlock(block, hc.NodeCtx())
 }
 
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
-func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.WorkObject {
 	termini := hc.GetTerminiByHash(hash)
 	if termini == nil {
 		return nil
 	}
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
+		return header.(*types.WorkObject)
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
@@ -704,7 +704,7 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
-func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
+func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 	termini := hc.GetTerminiByHash(hash)
 	if termini == nil {
 		return nil
@@ -719,10 +719,10 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 // GetHeaderOrCandidate retrieves a block header from the database by hash and number,
 // caching it if found.
-func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.Header {
+func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
+		return header.(*types.WorkObject)
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash, number)
 	if header == nil {
@@ -735,7 +735,7 @@ func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *ty
 
 // RecoverCurrentHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache
-func (hc *HeaderChain) RecoverCurrentHeader() *types.Header {
+func (hc *HeaderChain) RecoverCurrentHeader() *types.WorkObject {
 	// Start logarithmic ascent to find the upper bound
 	high := uint64(1)
 	for hc.GetHeaderByNumber(high) != nil {
@@ -759,7 +759,7 @@ func (hc *HeaderChain) RecoverCurrentHeader() *types.Header {
 
 // GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
 // found.
-func (hc *HeaderChain) GetHeaderOrCandidateByHash(hash common.Hash) *types.Header {
+func (hc *HeaderChain) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkObject {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -780,7 +780,7 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
-func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
+func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.WorkObject {
 	hash := rawdb.ReadCanonicalHash(hc.headerDb, number)
 	if hash == (common.Hash{}) {
 		return nil
@@ -795,17 +795,17 @@ func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
-func (hc *HeaderChain) CurrentHeader() *types.Header {
-	return hc.currentHeader.Load().(*types.Header)
+func (hc *HeaderChain) CurrentHeader() *types.WorkObject {
+	return hc.currentHeader.Load().(*types.WorkObject)
 }
 
 // CurrentBlock returns the block for the current header.
-func (hc *HeaderChain) CurrentBlock() *types.Block {
+func (hc *HeaderChain) CurrentBlock() *types.WorkObject {
 	return hc.GetBlockOrCandidateByHash(hc.CurrentHeader().Hash())
 }
 
 // SetGenesis sets a new genesis block header for the chain
-func (hc *HeaderChain) SetGenesis(head *types.Header) {
+func (hc *HeaderChain) SetGenesis(head *types.WorkObject) {
 	hc.genesisHeader = head
 }
 
@@ -814,8 +814,12 @@ func (hc *HeaderChain) Config() *params.ChainConfig { return hc.config }
 
 // GetBlock implements consensus.ChainReader, and returns nil for every input as
 // a header chain does not have blocks available for retrieval.
-func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.WorkObject {
 	return hc.bc.GetBlock(hash, number)
+}
+
+func (hc *HeaderChain) GetWorkObject(hash common.Hash) *types.WorkObject {
+	return hc.bc.GetWorkObject(hash)
 }
 
 // CheckContext checks to make sure the range of a context or order is valid
@@ -833,8 +837,8 @@ func (hc *HeaderChain) GasLimit() uint64 {
 
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
-func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
-	uncles := []*types.Header{}
+func (hc *HeaderChain) GetUnclesInChain(block *types.WorkObject, length int) types.WorkObjects {
+	uncles := types.WorkObjects{}
 	for i := 0; block != nil && i < length; i++ {
 		uncles = append(uncles, block.Uncles()...)
 		block = hc.GetBlock(block.ParentHash(hc.NodeCtx()), block.NumberU64(hc.NodeCtx())-1)
@@ -844,7 +848,7 @@ func (hc *HeaderChain) GetUnclesInChain(block *types.Block, length int) []*types
 
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until
 // a specific distance is reached.
-func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
+func (hc *HeaderChain) GetGasUsedInChain(block *types.WorkObject, length int) int64 {
 	gasUsed := 0
 	for i := 0; block != nil && i < length; i++ {
 		gasUsed += int(block.GasUsed())
@@ -855,7 +859,7 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.Block, length int) int64 {
 
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until
 // a specific distance is reached.
-func (hc *HeaderChain) CalculateBaseFee(header *types.Header) *big.Int {
+func (hc *HeaderChain) CalculateBaseFee(header *types.WorkObject) *big.Int {
 	return misc.CalcBaseFee(hc.Config(), header)
 }
 
@@ -870,17 +874,17 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 }
 
 // GetBlockFromCacheOrDb looks up the body cache first and then checks the db
-func (hc *HeaderChain) GetBlockFromCacheOrDb(hash common.Hash, number uint64) *types.Block {
+func (hc *HeaderChain) GetBlockFromCacheOrDb(hash common.Hash, number uint64) *types.WorkObject {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if cached, ok := hc.bc.blockCache.Get(hash); ok {
-		block := cached.(*types.Block)
+		block := cached.(*types.WorkObject)
 		return block
 	}
 	return hc.GetBlock(hash, number)
 }
 
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
-func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
+func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.WorkObject {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -888,12 +892,12 @@ func (hc *HeaderChain) GetBlockByHash(hash common.Hash) *types.Block {
 	return hc.GetBlock(hash, *number)
 }
 
-func (hc *HeaderChain) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block {
+func (hc *HeaderChain) GetBlockOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
 	return hc.bc.GetBlockOrCandidate(hash, number)
 }
 
 // GetBlockOrCandidateByHash retrieves any block from the database by hash, caching it if found.
-func (hc *HeaderChain) GetBlockOrCandidateByHash(hash common.Hash) *types.Block {
+func (hc *HeaderChain) GetBlockOrCandidateByHash(hash common.Hash) *types.WorkObject {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -903,7 +907,7 @@ func (hc *HeaderChain) GetBlockOrCandidateByHash(hash common.Hash) *types.Block 
 
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
-func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
+func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.WorkObject {
 	hash := rawdb.ReadCanonicalHash(hc.headerDb, number)
 	if hash == (common.Hash{}) {
 		return nil
@@ -913,17 +917,17 @@ func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
 
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
-func (hc *HeaderChain) GetBody(hash common.Hash) *types.Body {
+func (hc *HeaderChain) GetBody(hash common.Hash) *types.WorkObject {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := hc.bc.bodyCache.Get(hash); ok {
-		body := cached.(*types.Body)
+		body := cached.(*types.WorkObject)
 		return body
 	}
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
 	}
-	body := rawdb.ReadBody(hc.headerDb, hash, *number, hc.NodeLocation())
+	body := rawdb.ReadWorkObject(hc.headerDb, hash, types.BlockObject)
 	if body == nil {
 		return nil
 	}
@@ -954,7 +958,7 @@ func (hc *HeaderChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
 // [deprecated by eth/62]
-func (hc *HeaderChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
+func (hc *HeaderChain) GetBlocksFromHash(hash common.Hash, n int) (blocks types.WorkObjects) {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -1062,7 +1066,7 @@ func (hc *HeaderChain) InitializeAddressUtxoCache() error {
 }
 
 // ComputeEfficiencyScore calculates the efficiency score for the given header
-func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.Header) uint16 {
+func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) uint16 {
 	deltaS := new(big.Int).Add(parent.ParentDeltaS(common.REGION_CTX), parent.ParentDeltaS(common.ZONE_CTX))
 	uncledDeltaS := new(big.Int).Add(parent.ParentUncledSubDeltaS(common.REGION_CTX), parent.ParentUncledSubDeltaS(common.ZONE_CTX))
 
@@ -1076,7 +1080,7 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.Header) uint16 {
 }
 
 // UpdateEtxEligibleSlices returns the updated etx eligible slices field
-func (hc *HeaderChain) UpdateEtxEligibleSlices(header *types.Header, location common.Location) common.Hash {
+func (hc *HeaderChain) UpdateEtxEligibleSlices(header *types.WorkObject, location common.Location) common.Hash {
 	// After 5 days of the start of a new chain, the chain becomes eligible to receive etxs
 	position := location[0]*16 + location[1]
 	byteIndex := position / 8      // Find the byte index within the array
@@ -1094,7 +1098,7 @@ func (hc *HeaderChain) UpdateEtxEligibleSlices(header *types.Header, location co
 
 // IsSliceSetToReceiveEtx returns true if the etx eligible slice is set to
 // receive etx for the given zone location
-func (hc *HeaderChain) IsSliceSetToReceiveEtx(header *types.Header, location common.Location) bool {
+func (hc *HeaderChain) IsSliceSetToReceiveEtx(header *types.WorkObject, location common.Location) bool {
 	return hc.CheckIfEtxIsEligible(header.EtxEligibleSlices(), location)
 }
 
@@ -1143,6 +1147,6 @@ func (hc *HeaderChain) GetExpansionNumber() uint8 {
 	return hc.currentExpansionNumber
 }
 
-func (hc *HeaderChain) GetPrimeTerminus(header *types.Header) *types.Header {
+func (hc *HeaderChain) GetPrimeTerminus(header *types.WorkObject) *types.WorkObject {
 	return hc.GetHeaderByHash(header.PrimeTerminus())
 }

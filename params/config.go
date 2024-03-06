@@ -36,7 +36,7 @@ var (
 	Blake3PowColosseumGenesisHash  = common.HexToHash("0xf8667e0e993cfd3c19c474fed7d8c070be3180bfbe911592a59f61ac9b0278e4")
 	Blake3PowGardenGenesisHash     = common.HexToHash("0xadb8b9429e719e1c54717925d920c7126afb82be85eaa3a044b51abf8f62ac24")
 	Blake3PowOrchardGenesisHash    = common.HexToHash("0xd1d433069d581af323157a32c0ceecd121acbc9e3e80ec07f403b7da002fb9d5")
-	Blake3PowLocalGenesisHash      = common.HexToHash("0xe28db2c6fbc597ff900cd32ca853cf25cfa0d53e969f037816bb95f9119881fa")
+	Blake3PowLocalGenesisHash      = common.HexToHash("0xcbe14caf0911f6253a00ea5ad896903cb9cf19e7a65bb527d3b8088724b408a9")
 	Blake3PowLighthouseGenesisHash = common.HexToHash("0x4daa067e9f4d540f8810f4a841ff6aa906c0fd707706e62afb336858f22d2f4f")
 )
 

@@ -2,7 +2,7 @@ package rawdb
 
 import (
 	"math/big"
-	"reflect"
+	reflect "reflect"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -14,7 +14,7 @@ func TestHeaderStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Create a test header to move around the database and make sure it's really new
-	header := types.EmptyHeader()
+	header := types.EmptyHeader(2)
 	header.SetParentHash(common.Hash{1}, common.ZONE_CTX)
 	header.SetBaseFee(big.NewInt(1))
 
@@ -23,7 +23,7 @@ func TestHeaderStorage(t *testing.T) {
 	}
 	t.Log("Header Hash stored", header.Hash())
 	// Write and verify the header in the database
-	WriteHeader(db, header, common.ZONE_CTX)
+	WriteHeader(db, header.Header(), common.ZONE_CTX)
 	if entry := ReadHeader(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64()); entry == nil {
 		t.Fatalf("Stored header not found with hash %s", entry.Hash())
 	} else if entry.Hash() != header.Hash() {
@@ -67,19 +67,18 @@ func TestEtxSetStorage(t *testing.T) {
 	etxSet := types.NewEtxSet()
 	hash := common.Hash{1}
 	var number uint64 = 0
-	location := common.Location{0, 0}
-	if entry := ReadEtxSet(db, hash, number, location); entry != nil {
+	if entry := ReadEtxSet(db, hash, number); entry != nil {
 		t.Fatalf("Non existent etxSet returned: %v", entry)
 	}
 	t.Log("EtxSet Hash stored", hash)
 	// Write and verify the etxSet in the database
 	WriteEtxSet(db, hash, 0, etxSet)
-	if entry := ReadEtxSet(db, hash, number, location); entry == nil {
+	if entry := ReadEtxSet(db, hash, number); entry == nil {
 		t.Fatalf("Stored etxSet not found with hash %s", hash)
 	}
 	// Delete the etxSet and verify the execution
 	DeleteEtxSet(db, hash, number)
-	if entry := ReadEtxSet(db, hash, number, location); entry != nil {
+	if entry := ReadEtxSet(db, hash, number); entry != nil {
 		t.Fatalf("Deleted etxSet returned: %v", entry)
 	}
 }
@@ -88,7 +87,6 @@ func TestEtxSetStorage(t *testing.T) {
 func TestInboundEtxsStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 	hash := common.Hash{1}
-	location := common.Location{0, 0}
 
 	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
 	inner := &types.InternalTx{
@@ -108,13 +106,13 @@ func TestInboundEtxsStorage(t *testing.T) {
 	tx := types.NewTx(inner)
 	inboundEtxs := types.Transactions{tx}
 
-	if entry := ReadInboundEtxs(db, hash, location); entry != nil {
+	if entry := ReadInboundEtxs(db, hash); entry != nil {
 		t.Fatalf("Non existent inbound etxs returned: %v", entry)
 	}
 	t.Log("Inbound InboundEtxs stored", inboundEtxs)
 	// Write and verify the inboundEtxs in the database
 	WriteInboundEtxs(db, hash, inboundEtxs)
-	if entry := ReadInboundEtxs(db, hash, location); entry == nil {
+	if entry := ReadInboundEtxs(db, hash); entry == nil {
 		t.Fatalf("Stored InboundEtxs not found with hash %s", hash)
 	} else {
 		t.Log("InboundEtxs", entry)
@@ -122,7 +120,37 @@ func TestInboundEtxsStorage(t *testing.T) {
 	}
 	// Delete the inboundEtxs and verify the execution
 	DeleteInboundEtxs(db, hash)
-	if entry := ReadInboundEtxs(db, hash, location); entry != nil {
+	if entry := ReadInboundEtxs(db, hash); entry != nil {
 		t.Fatalf("Deleted InboundEtxs returned: %v", entry)
+	}
+}
+
+// Tests block header storage and retrieval operations.
+func TestWorkObjectStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	// Create a test header to move around the database and make sure it's really new
+	woBody := &types.WorkObjectBody{}
+	woBody.SetTransactions([]*types.Transaction{types.NewEmptyTx()})
+	woBody.SetExtTransactions([]*types.Transaction{types.NewEmptyTx()})
+	woBody.SetHeader(types.EmptyHeader(2).Header())
+	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), types.EmptyRootHash, types.BlockNonce{23}, common.LocationFromAddressBytes([]byte{0x01, 0x01})), woBody, types.NewEmptyTx())
+
+	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
+		t.Fatalf("Non existent header returned: %v", entry)
+	}
+	t.Log("Header Hash stored", header.Hash())
+	// Write and verify the header in the database
+	WriteWorkObject(db, header.Hash(), header, types.BlockObject, common.ZONE_CTX)
+	entry := ReadWorkObject(db, header.Hash(), types.BlockObject)
+	if entry == nil {
+		t.Fatalf("Stored header not found with hash %s", entry.Hash())
+	} else if entry.Hash() != header.Hash() {
+		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
+	}
+	// Delete the header and verify the execution
+	DeleteWorkObject(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64(), types.BlockObject)
+	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
+		t.Fatalf("Deleted header returned: %v", entry)
 	}
 }

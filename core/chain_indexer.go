@@ -42,7 +42,7 @@ type ChainIndexerBackend interface {
 
 	// Process crunches through the next header in the chain segment. The caller
 	// will ensure a sequential order of headers.
-	Process(ctx context.Context, header *types.Header, bloom types.Bloom) error
+	Process(ctx context.Context, header *types.WorkObject, bloom types.Bloom) error
 
 	// Commit finalizes the section metadata and stores it into the database.
 	Commit() error
@@ -54,7 +54,7 @@ type ChainIndexerBackend interface {
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
 type ChainIndexerChain interface {
 	// CurrentHeader retrieves the latest locally known header.
-	CurrentHeader() *types.Header
+	CurrentHeader() *types.WorkObject
 	// GetBloom retrieves the bloom for the given block hash.
 	GetBloom(blockhash common.Hash) (*types.Bloom, error)
 	// SubscribeChainHeadEvent subscribes to new head header notifications.
@@ -173,7 +173,7 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription, nodeCtx int) {
+func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan ChainHeadEvent, sub event.Subscription, nodeCtx int) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
@@ -200,7 +200,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 				errc <- nil
 				return
 			}
-			header := ev.Block.Header()
+			header := ev.Block
 			if header.ParentHash(nodeCtx) != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO: This seems a bit brittle, can we detect this case explicitly?

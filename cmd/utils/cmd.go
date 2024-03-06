@@ -117,7 +117,7 @@ func defaultNodeConfig() node.Config {
 }
 
 // makeFullNode loads quai configuration and creates the Quai backend.
-func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.Block, logger *log.Logger) (*node.Node, quaiapi.Backend) {
+func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, logger *log.Logger) (*node.Node, quaiapi.Backend) {
 	stack, cfg := makeConfigNode(slicesRunning, nodeLocation, currentExpansionNumber, logger)
 	startingExpansionNumber := viper.GetUint64(StartingExpansionNumberFlag.Name)
 	backend, _ := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), currentExpansionNumber, startingExpansionNumber, genesisBlock, logger)
@@ -132,7 +132,7 @@ func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRu
 // RegisterQuaiService adds a Quai client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.Block, logger *log.Logger) (quaiapi.Backend, error) {
+func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.WorkObject, logger *log.Logger) (quaiapi.Backend, error) {
 	backend, err := quai.New(stack, p2p, &cfg, nodeCtx, currentExpansionNumber, startingExpansionNumber, genesisBlock, logger)
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)

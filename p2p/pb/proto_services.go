@@ -38,12 +38,8 @@ func EncodeQuaiRequest(id uint32, location common.Location, data interface{}, da
 	}
 
 	switch datatype.(type) {
-	case *types.Block:
-		reqMsg.Request = &QuaiRequestMessage_Block{}
-	case *types.Header:
-		reqMsg.Request = &QuaiRequestMessage_Header{}
-	case *types.Transaction:
-		reqMsg.Request = &QuaiRequestMessage_Transaction{}
+	case *types.WorkObject:
+		reqMsg.Request = &QuaiRequestMessage_WorkObject{}
 	case common.Hash:
 		reqMsg.Request = &QuaiRequestMessage_BlockHash{}
 	case trie.TrieNodeRequest:
@@ -83,12 +79,8 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 	// Decode the request type
 	var reqType interface{}
 	switch t := reqMsg.Request.(type) {
-	case *QuaiRequestMessage_Block:
-		reqType = &types.Block{}
-	case *QuaiRequestMessage_Header:
-		reqType = &types.Header{}
-	case *QuaiRequestMessage_Transaction:
-		reqType = &types.Transaction{}
+	case *QuaiRequestMessage_WorkObject:
+		reqType = &types.WorkObject{}
 	case *QuaiRequestMessage_BlockHash:
 		blockHash := &common.Hash{}
 		blockHash.ProtoDecode(t.BlockHash)
@@ -112,27 +104,12 @@ func EncodeQuaiResponse(id uint32, location common.Location, data interface{}) (
 	}
 
 	switch data := data.(type) {
-	case *types.Block:
-		protoBlock, err := data.ProtoEncode()
+	case *types.WorkObject:
+		protoWorkObject, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
-		respMsg.Response = &QuaiResponseMessage_Block{Block: protoBlock}
-
-	case *types.Header:
-		protoHeader, err := data.ProtoEncode()
-		if err != nil {
-			return nil, err
-		}
-		respMsg.Response = &QuaiResponseMessage_Header{Header: protoHeader}
-
-	case *types.Transaction:
-		protoTransaction, err := data.ProtoEncode()
-		if err != nil {
-			return nil, err
-		}
-		respMsg.Response = &QuaiResponseMessage_Transaction{Transaction: protoTransaction}
-
+		respMsg.Response = &QuaiResponseMessage_WorkObject{WorkObject: protoWorkObject}
 	case *trie.TrieNodeResponse:
 		protoTrieNode := &trie.ProtoTrieNode{ProtoNodeData: data.NodeData}
 		respMsg.Response = &QuaiResponseMessage_TrieNode{TrieNode: protoTrieNode}
@@ -162,33 +139,14 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 	sourceLocation.ProtoDecode(respMsg.Location)
 
 	switch respMsg.Response.(type) {
-	case *QuaiResponseMessage_Block:
-		protoBlock := respMsg.GetBlock()
-		block := &types.Block{}
-		if protoBlock.Header.Location == nil {
-			return id, nil, errors.New("location is nil")
-		}
-		err := block.ProtoDecode(protoBlock, *sourceLocation)
+	case *QuaiResponseMessage_WorkObject:
+		protoWorkObject := respMsg.GetWorkObject()
+		block := &types.WorkObject{}
+		err := block.ProtoDecode(protoWorkObject)
 		if err != nil {
 			return id, nil, err
 		}
 		return id, block, nil
-	case *QuaiResponseMessage_Header:
-		protoHeader := respMsg.GetHeader()
-		header := &types.Header{}
-		err := header.ProtoDecode(protoHeader)
-		if err != nil {
-			return id, nil, err
-		}
-		return id, header, nil
-	case *QuaiResponseMessage_Transaction:
-		protoTransaction := respMsg.GetTransaction()
-		transaction := &types.Transaction{}
-		err := transaction.ProtoDecode(protoTransaction, *sourceLocation)
-		if err != nil {
-			return id, nil, err
-		}
-		return id, transaction, nil
 	case *QuaiResponseMessage_BlockHash:
 		blockHash := respMsg.GetBlockHash()
 		hash := common.Hash{}
@@ -206,7 +164,7 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 // Converts a custom go type to a proto type and marhsals it into a protobuf message
 func ConvertAndMarshal(data interface{}) ([]byte, error) {
 	switch data := data.(type) {
-	case *types.Block:
+	case *types.WorkObject:
 		log.Global.Tracef("marshalling block: %+v", data)
 		protoBlock, err := data.ProtoEncode()
 		if err != nil {
@@ -239,21 +197,21 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 // Unmarshals a protobuf message into a proto type and converts it to a custom go type
 func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *interface{}, datatype interface{}) error {
 	switch datatype.(type) {
-	case *types.Block:
-		protoBlock := &types.ProtoBlock{}
-		err := proto.Unmarshal(data, protoBlock)
+	case *types.WorkObject:
+		protoWorkObject := &types.ProtoWorkObject{}
+		err := proto.Unmarshal(data, protoWorkObject)
 		if err != nil {
 			return err
 		}
-		block := &types.Block{}
-		if protoBlock.Header.Location == nil {
+		workObject := &types.WorkObject{}
+		if protoWorkObject.WoHeader.Location == nil {
 			return errors.New("location is nil")
 		}
-		err = block.ProtoDecode(protoBlock, protoBlock.Header.GetLocation().GetValue())
+		err = workObject.ProtoDecode(protoWorkObject)
 		if err != nil {
 			return err
 		}
-		*dataPtr = *block
+		*dataPtr = *workObject
 		return nil
 	case *types.Header:
 		protoHeader := &types.ProtoHeader{}
@@ -262,7 +220,7 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 			return err
 		}
 		header := &types.Header{}
-		err = header.ProtoDecode(protoHeader)
+		err = header.ProtoDecode(protoHeader, sourceLocation)
 		if err != nil {
 			return err
 		}
@@ -274,7 +232,7 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		if err != nil {
 			return err
 		}
-		transaction := &types.Transaction{}
+		transaction := types.NewEmptyTx()
 		err = transaction.ProtoDecode(protoTransaction, sourceLocation)
 		if err != nil {
 			return err

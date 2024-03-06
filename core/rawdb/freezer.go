@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
@@ -302,7 +303,7 @@ func (f *freezer) Sync() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
-func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
+func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int, location common.Location) {
 	nfdb := &nofreezedb{KeyValueStore: db}
 
 	var (
@@ -442,7 +443,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 		for i := 0; i < len(ancients); i++ {
 			// Always keep the genesis block in active database
 			if first+uint64(i) != 0 {
-				DeleteBlockWithoutNumber(batch, ancients[i], first+uint64(i))
+				DeleteBlockWithoutNumber(batch, ancients[i], first+uint64(i), types.BlockObject)
 				DeleteCanonicalHash(batch, first+uint64(i))
 			}
 		}
@@ -462,7 +463,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 						"number": number,
 						"hash":   hash,
 					}).Trace("Deleting side chain")
-					DeleteBlock(batch, hash, number)
+					DeleteWorkObject(batch, hash, number, types.BlockObject)
 				}
 			}
 		}
@@ -505,7 +506,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int) {
 						"hash":   children[i],
 						"parent": child.ParentHash(nodeCtx),
 					}).Debug("Deleting dangling block")
-					DeleteBlock(batch, children[i], tip)
+					DeleteWorkObject(batch, children[i], tip, types.BlockObject)
 				}
 				dangling = children
 				tip++
