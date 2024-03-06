@@ -126,7 +126,7 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
 // value data store with a freezer moving immutable chain segments into cold
 // storage.
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool, nodeCtx int, logger *log.Logger) (ethdb.Database, error) {
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool, nodeCtx int, logger *log.Logger, location common.Location) (ethdb.Database, error) {
 	// Create the idle freezer instance
 	frdb, err := newFreezer(freezer, namespace, readonly, logger)
 	if err != nil {
@@ -217,8 +217,8 @@ func NewMemoryDatabaseWithCap(size int) ethdb.Database {
 
 // NewLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger) (ethdb.Database, error) {
-	db, err := leveldb.New(file, cache, handles, namespace, readonly, logger)
+func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger, location common.Location) (ethdb.Database, error) {
+	db, err := leveldb.New(file, cache, handles, namespace, readonly, logger, location)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ type OpenOptions struct {
 //	                   +----------------------------------------
 //	db is non-existent |  leveldb default  |  specified type
 //	db is existent     |  from db          |  specified type (if compatible)
-func openKeyValueDatabase(o OpenOptions, logger *log.Logger) (ethdb.Database, error) {
+func openKeyValueDatabase(o OpenOptions, logger *log.Logger, location common.Location) (ethdb.Database, error) {
 	existingDb := hasPreexistingDb(o.Directory)
 	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
 		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
@@ -273,7 +273,7 @@ func openKeyValueDatabase(o OpenOptions, logger *log.Logger) (ethdb.Database, er
 	if o.Type == dbPebble || existingDb == dbPebble {
 		if PebbleEnabled {
 			logger.Info("Using pebble as the backing database")
-			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, logger)
+			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, logger, location)
 		} else {
 			return nil, errors.New("db.engine 'pebble' not supported on this platform")
 		}
@@ -283,7 +283,7 @@ func openKeyValueDatabase(o OpenOptions, logger *log.Logger) (ethdb.Database, er
 	}
 	logger.Info("Using leveldb as the backing database")
 	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
-	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, logger)
+	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, logger, location)
 }
 
 // Open opens both a disk-based key-value database such as leveldb or pebble, but also
@@ -291,15 +291,15 @@ func openKeyValueDatabase(o OpenOptions, logger *log.Logger) (ethdb.Database, er
 // set on the provided OpenOptions.
 // The passed o.AncientDir indicates the path of root ancient directory where
 // the chain freezer can be opened.
-func Open(o OpenOptions, nodeCtx int, logger *log.Logger) (ethdb.Database, error) {
-	kvdb, err := openKeyValueDatabase(o, logger)
+func Open(o OpenOptions, nodeCtx int, logger *log.Logger, location common.Location) (ethdb.Database, error) {
+	kvdb, err := openKeyValueDatabase(o, logger, location)
 	if err != nil {
 		return nil, err
 	}
 	if len(o.AncientsDirectory) == 0 {
 		return kvdb, nil
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly, nodeCtx, logger)
+	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly, nodeCtx, logger, location)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
@@ -430,10 +430,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *log.
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
-				databaseVersionKey, headHeaderKey, headBlockKey, lastPivotKey,
+				databaseVersionKey, headHeaderKey, headWorkObjectKey, lastPivotKey,
 				fastTrieProgressKey, snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey,
+				uncleanShutdownKey, badWorkObjectKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)

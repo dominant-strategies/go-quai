@@ -45,7 +45,7 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 		make(map[string]*pubsub.Subscription),
 		make(map[string]*pubsub.Topic),
 		nil,
-		utils.MakeGenesis().ToHeader(0).Hash(),
+		utils.MakeGenesis().ToBlock(0).Hash(),
 		nil,
 	}, nil
 }

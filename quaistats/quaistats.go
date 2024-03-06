@@ -90,9 +90,9 @@ var (
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
-	CurrentHeader() *types.Header
-	TotalLogS(header *types.Header) *big.Int
-	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	CurrentHeader() *types.WorkObject
+	TotalLogS(header *types.WorkObject) *big.Int
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
 	Stats() (pending int, queued int)
 	ChainConfig() *params.ChainConfig
 	ProcessingState() bool
@@ -105,9 +105,9 @@ type backend interface {
 // reporting to quaistats
 type fullNodeBackend interface {
 	backend
-	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
-	CurrentBlock() *types.Block
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
+	BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error)
+	CurrentBlock() *types.WorkObject
 }
 
 // Service implements an Quai netstats reporting daemon that pushes local
@@ -478,7 +478,7 @@ func (s *Service) initializeURLMap() map[string]string {
 	}
 }
 
-func (s *Service) handleBlock(block *types.Block) {
+func (s *Service) handleBlock(block *types.WorkObject) {
 	// Cache Block
 	s.backend.Logger().WithFields(log.Fields{
 		"detailsQueueSize":     s.detailStatsQueue.Size(),
@@ -501,7 +501,7 @@ func (s *Service) handleBlock(block *types.Block) {
 		s.appendTimeStatsQueue.Enqueue(appStats)
 	}
 
-	if block.NumberU64(s.backend.NodeCtx())%c_txBatchSize == 0 && s.sendfullstats && block.Header().Location().Context() == common.ZONE_CTX {
+	if block.NumberU64(s.backend.NodeCtx())%c_txBatchSize == 0 && s.sendfullstats && block.Location().Context() == common.ZONE_CTX {
 		txStats := s.assembleBlockTransactionStats(block)
 		if txStats != nil {
 			s.transactionStatsQueue.Enqueue(txStats)
@@ -1024,7 +1024,7 @@ type BatchObject struct {
 	OldestBlockTime     uint64
 }
 
-func (s *Service) cacheBlock(block *types.Block) cachedBlock {
+func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
 	currentBlock := cachedBlock{
 		number:     block.NumberU64(s.backend.NodeCtx()),
 		parentHash: block.ParentHash(s.backend.NodeCtx()),
@@ -1035,7 +1035,7 @@ func (s *Service) cacheBlock(block *types.Block) cachedBlock {
 	return currentBlock
 }
 
-func (s *Service) calculateTPS(block *types.Block) *tps {
+func (s *Service) calculateTPS(block *types.WorkObject) *tps {
 	var totalTransactions1h uint64
 	var totalTransactions1m uint64
 	var currentBlock interface{}
@@ -1107,30 +1107,28 @@ func (s *Service) calculateTPS(block *types.Block) *tps {
 	}
 }
 
-func (s *Service) assembleBlockDetailStats(block *types.Block) *blockDetailStats {
+func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetailStats {
 	if block == nil {
 		return nil
 	}
-	header := block.Header()
-	difficulty := header.Difficulty().String()
+	difficulty := block.Difficulty().String()
 
 	// Assemble and return the block stats
 	return &blockDetailStats{
-		Timestamp:    new(big.Int).SetUint64(header.Time()),
-		ZoneHeight:   header.NumberU64(2),
-		RegionHeight: header.NumberU64(1),
-		PrimeHeight:  header.NumberU64(0),
+		Timestamp:    new(big.Int).SetUint64(block.Time()),
+		ZoneHeight:   block.NumberU64(2),
+		RegionHeight: block.NumberU64(1),
+		PrimeHeight:  block.NumberU64(0),
 		Chain:        s.backend.NodeLocation().Name(),
-		Entropy:      common.BigBitsToBits(s.backend.TotalLogS(block.Header())).String(),
+		Entropy:      common.BigBitsToBits(s.backend.TotalLogS(block)).String(),
 		Difficulty:   difficulty,
 	}
 }
 
-func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendTime {
+func (s *Service) assembleBlockAppendTimeStats(block *types.WorkObject) *blockAppendTime {
 	if block == nil {
 		return nil
 	}
-	header := block.Header()
 	appendTime := block.GetAppendTime()
 
 	s.backend.Logger().WithField("appendTime", appendTime.Microseconds()).Info("Raw Block Append Time")
@@ -1138,16 +1136,15 @@ func (s *Service) assembleBlockAppendTimeStats(block *types.Block) *blockAppendT
 	// Assemble and return the block stats
 	return &blockAppendTime{
 		AppendTime:  appendTime,
-		BlockNumber: header.Number(s.backend.NodeCtx()),
+		BlockNumber: block.Number(s.backend.NodeCtx()),
 		Chain:       s.backend.NodeLocation().Name(),
 	}
 }
 
-func (s *Service) assembleBlockTransactionStats(block *types.Block) *blockTransactionStats {
+func (s *Service) assembleBlockTransactionStats(block *types.WorkObject) *blockTransactionStats {
 	if block == nil {
 		return nil
 	}
-	header := block.Header()
 	tps := s.calculateTPS(block)
 	if tps == nil {
 		return nil
@@ -1155,7 +1152,7 @@ func (s *Service) assembleBlockTransactionStats(block *types.Block) *blockTransa
 
 	// Assemble and return the block stats
 	return &blockTransactionStats{
-		Timestamp:             new(big.Int).SetUint64(header.Time()),
+		Timestamp:             new(big.Int).SetUint64(block.Time()),
 		TotalNoTransactions1h: tps.TotalNumberTransactions1h,
 		TPS1m:                 tps.TPS1m,
 		TPS1hr:                tps.TPS1hr,

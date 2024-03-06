@@ -8,12 +8,15 @@ import "common/proto_common.proto";
 
 message ProtoNumber { uint64 number = 1; }
 
-message ProtoBadBlock {
-  block.ProtoHeader header = 1;
-  block.ProtoBody body = 2;
+message ProtoBadWorkObject {
+  block.ProtoWorkObjectHeader wo_header = 1;
+  block.ProtoWorkObjectBody wo_body = 2;
+  block.ProtoTransaction tx = 3;
 }
 
-message ProtoBadBlocks { repeated ProtoBadBlock bad_blocks = 1; }
+message ProtoBadWorkObjects {
+  repeated ProtoBadWorkObject bad_work_objects = 1;
+}
 
 message ProtoLegacyTxLookupEntry {
   common.ProtoHash hash = 1;

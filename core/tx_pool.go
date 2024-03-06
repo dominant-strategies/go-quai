@@ -142,17 +142,17 @@ const (
 // blockChain provides the state of blockchain and current gas limit to do
 // some pre checks in tx pool and event subscribers.
 type blockChain interface {
-	CurrentBlock() *types.Block
-	GetBlock(hash common.Hash, number uint64) *types.Block
+	CurrentBlock() *types.WorkObject
+	GetBlock(hash common.Hash, number uint64) *types.WorkObject
 	StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	IsGenesisHash(hash common.Hash) bool
 	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
 	Engine() consensus.Engine
-	GetHeaderOrCandidate(common.Hash, uint64) *types.Header
-	GetHeader(common.Hash, uint64) *types.Header
+	GetHeaderOrCandidate(common.Hash, uint64) *types.WorkObject
+	GetHeader(common.Hash, uint64) *types.WorkObject
 	NodeCtx() int
-	GetHeaderByHash(common.Hash) *types.Header
+	GetHeaderByHash(common.Hash) *types.WorkObject
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -308,7 +308,7 @@ type TxPool struct {
 }
 
 type txpoolResetRequest struct {
-	oldHead, newHead *types.Header
+	oldHead, newHead *types.WorkObject
 }
 
 type newSender struct {
@@ -377,7 +377,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		pool.locals.add(addr)
 	}
 	pool.priced = newTxPricedList(pool.all)
-	pool.reset(nil, chain.CurrentBlock().Header())
+	pool.reset(nil, chain.CurrentBlock())
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
@@ -426,7 +426,7 @@ func (pool *TxPool) loop() {
 		// Handle ChainHeadEvent
 		case ev := <-pool.chainHeadCh:
 			if ev.Block != nil {
-				pool.requestReset(head.Header(), ev.Block.Header())
+				pool.requestReset(head, ev.Block)
 				head = ev.Block
 			}
 
@@ -1140,7 +1140,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	if grabLock {
 		pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
 	}
-	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock().Header(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		pool.mu.RUnlock()
 		pool.logger.WithFields(logrus.Fields{
@@ -1298,7 +1298,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 
 // requestReset requests a pool reset to the new head block.
 // The returned channel is closed when the reset has occurred.
-func (pool *TxPool) requestReset(oldHead *types.Header, newHead *types.Header) chan struct{} {
+func (pool *TxPool) requestReset(oldHead *types.WorkObject, newHead *types.WorkObject) chan struct{} {
 	select {
 	case pool.reqResetCh <- &txpoolResetRequest{oldHead, newHead}:
 		return <-pool.reorgDoneCh
@@ -1509,7 +1509,7 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
 // The mempool lock must be held by the caller.
-func (pool *TxPool) reset(oldHead, newHead *types.Header) {
+func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	nodeCtx := pool.chainconfig.Location.Context()
 	var start time.Time
 	if pool.reOrgCounter == c_reorgCounterThreshold {
@@ -1610,7 +1610,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	// Initialize the internal state to the current head
 	if newHead == nil {
-		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
+		newHead = pool.chain.CurrentBlock() // Special case during testing
 	}
 
 	evmRoot := newHead.EVMRoot()

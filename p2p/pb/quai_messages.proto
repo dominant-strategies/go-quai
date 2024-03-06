@@ -8,7 +8,7 @@ import "trie/proto_trienode.proto";
 import "core/types/proto_block.proto";
 
 // GossipSub messages for broadcasting blocks and transactions
-message GossipBlock { block.ProtoBlock block = 1; }
+message GossipWorkObject { block.ProtoWorkObject work_object = 1; }
 
 message GossipTransaction { block.ProtoTransaction transaction = 1; }
 
@@ -18,14 +18,13 @@ message QuaiRequestMessage {
     common.ProtoLocation location = 2;
     oneof data {
         common.ProtoHash hash = 3;
-        bytes number = 7;
+        bytes number = 4;
     }
     oneof request {
-        block.ProtoBlock block = 4;
-        block.ProtoHeader header = 5;
-        block.ProtoTransaction transaction = 6;
-        common.ProtoHash blockHash = 8;
-        trie.ProtoTrieNode trieNode = 9;
+        block.ProtoWorkObject work_object = 5;
+        block.ProtoTransaction transaction = 6; 
+        common.ProtoHash block_hash = 7;
+        trie.ProtoTrieNode trie_node = 8;
     }
 }
 
@@ -34,11 +33,10 @@ message QuaiResponseMessage {
     uint32 id = 1;
     common.ProtoLocation location = 2;
     oneof response {
-        block.ProtoBlock block = 3;
-        block.ProtoHeader header = 4;
-        block.ProtoTransaction transaction = 5;
-        common.ProtoHash blockHash = 6;
-        trie.ProtoTrieNode trieNode = 7;
+        block.ProtoWorkObject work_object = 3;
+        block.ProtoTransaction transaction = 4;
+        common.ProtoHash block_hash = 5;
+        trie.ProtoTrieNode trie_node = 6;
     }
 }
 

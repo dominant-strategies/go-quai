@@ -125,7 +125,7 @@ func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error)
 	return quaiBackend, nil
 }
 
-func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.ConsensusAPI, location common.Location, genesisBlock *types.Block) {
+func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.ConsensusAPI, location common.Location, genesisBlock *types.WorkObject) {
 	hc.wg.Add(1)
 	logger := log.NewLogger(logPath, hc.logLevel)
 	logger.Info("Starting Node at location", "location", location)
@@ -133,7 +133,7 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 	quaiBackend.SetApiBackend(&apiBackend, location)
 
 	// Subscribe to the new topics after setting the api backend
-	hc.p2p.Subscribe(location, &types.Block{})
+	hc.p2p.Subscribe(location, &types.WorkObject{})
 	hc.p2p.Subscribe(location, common.Hash{})
 	hc.p2p.Subscribe(location, &types.Transaction{})
 
@@ -195,7 +195,7 @@ func (hc *HierarchicalCoordinator) expansionEventLoop() {
 	}
 }
 
-func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.Block) error {
+func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject) error {
 	// set the current expansion on all the backends
 	currentRegions, currentZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
 	newRegions, newZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber + 1)

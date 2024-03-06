@@ -7,9 +7,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 var (
@@ -55,7 +53,6 @@ type Blake3pow struct {
 	rand    *rand.Rand    // Properly seeded random source for nonces
 	threads int           // Number of threads to mine on if mining
 	update  chan struct{} // Notification channel to update mining parameters
-	remote  *remoteSealer
 
 	// The fields below are hooks for testing
 	shared    *Blake3pow    // Shared PoW verifier to avoid cache regeneration
@@ -80,7 +77,6 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Bla
 	if config.PowMode == ModeShared {
 		blake3pow.shared = sharedBlake3pow
 	}
-	blake3pow.remote = startRemoteSealer(blake3pow, notify, noverify)
 	return blake3pow
 }
 
@@ -141,19 +137,6 @@ func NewShared() *Blake3pow {
 	return &Blake3pow{shared: sharedBlake3pow}
 }
 
-// Close closes the exit channel to notify all backend threads exiting.
-func (blake3pow *Blake3pow) Close() error {
-	blake3pow.closeOnce.Do(func() {
-		// Short circuit if the exit channel is not allocated.
-		if blake3pow.remote == nil {
-			return
-		}
-		close(blake3pow.remote.requestExit)
-		<-blake3pow.remote.exitCh
-	})
-	return nil
-}
-
 // Threads returns the number of mining threads currently enabled. This doesn't
 // necessarily mean that mining is running!
 func (blake3pow *Blake3pow) Threads() int {
@@ -182,25 +165,5 @@ func (blake3pow *Blake3pow) SetThreads(threads int) {
 		case blake3pow.update <- struct{}{}:
 		default:
 		}
-	}
-}
-
-// APIs implements consensus.Engine, returning the user facing RPC APIs.
-func (blake3pow *Blake3pow) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	// In order to ensure backward compatibility, we exposes blake3pow RPC APIs
-	// to both eth and blake3pow namespaces.
-	return []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   &API{blake3pow},
-			Public:    true,
-		},
-		{
-			Namespace: "blake3pow",
-			Version:   "1.0",
-			Service:   &API{blake3pow},
-			Public:    true,
-		},
 	}
 }

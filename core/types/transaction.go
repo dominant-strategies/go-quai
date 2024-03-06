@@ -28,6 +28,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/log"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -108,11 +109,10 @@ type TxData interface {
 
 // ProtoEncode serializes tx into the Quai Proto Transaction format
 func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
-	if tx == nil {
-		return nil, errors.New("transaction input to ProtoEncode is nil")
-	}
 	protoTx := &ProtoTransaction{}
-
+	if tx == nil {
+		return protoTx, nil
+	}
 	// Encoding common fields to all the tx types
 	txType := uint64(tx.Type())
 	protoTx.Type = &txType
@@ -640,6 +640,7 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 		} else {
 			from, err := Sender(NewSigner(tx.ChainId(), common.Location{0, 0}), tx) // location not important when performing ecrecover
 			if err != nil {
+				log.Global.Error("err", err)
 				panic("failed to get transaction sender!")
 			}
 			location := *from.Location()

@@ -53,52 +53,52 @@ type Backend interface {
 	// Blockchain API
 	NodeLocation() common.Location
 	NodeCtx() int
-	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
-	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
-	HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error)
-	CurrentHeader() *types.Header
-	CurrentBlock() *types.Block
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
+	HeaderByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error)
+	HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.WorkObject, error)
+	CurrentHeader() *types.WorkObject
+	CurrentBlock() *types.WorkObject
 	CurrentLogEntropy() *big.Int
-	TotalLogS(header *types.Header) *big.Int
-	CalcOrder(header *types.Header) (*big.Int, int, error)
-	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
-	BlockOrCandidateByHash(hash common.Hash) *types.Block
-	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error)
-	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error)
-	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
+	TotalLogS(header *types.WorkObject) *big.Int
+	CalcOrder(header *types.WorkObject) (*big.Int, int, error)
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
+	BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error)
+	BlockOrCandidateByHash(hash common.Hash) *types.WorkObject
+	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.WorkObject, error)
+	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.WorkObject, error)
+	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.WorkObject, error)
 	UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
-	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
+	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SetCurrentExpansionNumber(expansionNumber uint8)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
-	WriteBlock(block *types.Block)
-	Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error)
+	WriteBlock(block *types.WorkObject)
+	Append(header *types.WorkObject, manifest types.BlockManifest, domPendingHeader *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error)
 	DownloadBlocksInManifest(hash common.Hash, manifest types.BlockManifest, entropy *big.Int)
-	ConstructLocalMinedBlock(header *types.Header) (*types.Block, error)
-	InsertBlock(ctx context.Context, block *types.Block) (int, error)
-	PendingBlock() *types.Block
+	ConstructLocalMinedBlock(header *types.WorkObject) (*types.WorkObject, error)
+	InsertBlock(ctx context.Context, block *types.WorkObject) (int, error)
+	PendingBlock() *types.WorkObject
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int)
 	UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location)
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
-	NewGenesisPendingHeader(pendingHeader *types.Header, domTerminus common.Hash, hash common.Hash)
-	GetPendingHeader() (*types.Header, error)
+	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash)
+	GetPendingHeader() (*types.WorkObject, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
 	AddPendingEtxs(pEtxs types.PendingEtxs) error
 	AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
-	PendingBlockAndReceipts() (*types.Block, types.Receipts)
-	GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkpointHashes types.Termini) error
+	PendingBlockAndReceipts() (*types.WorkObject, types.Receipts)
+	GenerateRecoveryPendingHeader(pendingHeader *types.WorkObject, checkpointHashes types.Termini) error
 	GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error)
 	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
 	ProcessingState() bool
 	GetSlicesRunning() []common.Location
 	SetSubClient(client *quaiclient.Client, location common.Location)
-	AddGenesisPendingEtxs(block *types.Block)
+	AddGenesisPendingEtxs(block *types.WorkObject)
 	SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription
-	WriteGenesisBlock(block *types.Block, location common.Location)
+	WriteGenesisBlock(block *types.WorkObject, location common.Location)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -119,7 +119,7 @@ type Backend interface {
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
-	SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription
+	SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -128,7 +128,7 @@ type Backend interface {
 	Logger() *log.Logger
 
 	// P2P apis
-	BroadcastBlock(block *types.Block, location common.Location) error
+	BroadcastBlock(block *types.WorkObject, location common.Location) error
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

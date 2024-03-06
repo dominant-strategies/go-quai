@@ -16,51 +16,49 @@ var _ = (*headerMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	var enc struct {
-		ParentHash    				[]common.Hash  	`json:"parentHash"						 	gencodec:"required"`
-		UncleHash     				common.Hash    	`json:"sha3Uncles"						 	gencodec:"required"`
-		Coinbase      				common.Address 	`json:"miner"									 	gencodec:"required"`
-		EVMRoot          			common.Hash    	`json:"evmRoot"								 	gencodec:"required"`
-		UTXORoot		  				common.Hash	 		`json:"utxoRoot"								gencodec:"required"`
-		TxHash        				common.Hash    	`json:"transactionsRoot"			 	gencodec:"required"`
-		EtxHash       				common.Hash    	`json:"extTransactionsRoot"		 	gencodec:"required"`
-		EtxSetHash						common.Hash     `json:"etxSetHash"              gencodec:"required"`
-		EtxRollupHash 				common.Hash    	`json:"extRollupRoot"					 	gencodec:"required"`
-		ManifestHash  				[]common.Hash  	`json:"manifestHash"					 	gencodec:"required"`
-		ReceiptHash   				common.Hash    	`json:"receiptsRoot"					 	gencodec:"required"`
-		Difficulty    				*hexutil.Big   	`json:"difficulty"						 	gencodec:"required"`
-		ParentEntropy 				[]*hexutil.Big 	`json:"parentEntropy"					 	gencodec:"required"`
-		ParentDeltaS  				[]*hexutil.Big 	`json:"parentDeltaS"					 	gencodec:"required"`
-		ParentUncledSubDeltaS []*hexutil.Big 	`json:"parentUncledSubDeltaS"   gencodec:"required"`
-		PrimeTerminus         common.Hash    	`json:"primeTerminus"           gencodec:"required"`
-		InterlinkRootHash     common.Hash    	`json:"interlinkRootHash"       gencodec:"required"`
-		UncledS 							*hexutil.Big 		`json:"uncledS"        					gencodec:"required"`
-		Number        				[]*hexutil.Big 	`json:"number"              		gencodec:"required"`
-		GasLimit      				hexutil.Uint64 	`json:"gasLimit"            		gencodec:"required"`
-		GasUsed       				hexutil.Uint64 	`json:"gasUsed"             		gencodec:"required"`
-		EfficiencyScore 			hexutil.Uint64	`json:"efficiencyScore"     		gencodec:"required"`
-		ThresholdCount  			hexutil.Uint64	`json:"thresholdCount"      		gencodec:"required"`
-		ExpansionNumber 			hexutil.Uint64	`json:"expansionNumber"     		gencodec:"required"`
-		EtxEligibleSlices 		common.Hash    	`json:"etxEligibleSlices"   		gencodec:"required"`
-		BaseFee       				*hexutil.Big   	`json:"baseFeePerGas"       		gencodec:"required"`
-		Location      				hexutil.Bytes  	`json:"location"            		gencodec:"required"`
-		Time          				hexutil.Uint64 	`json:"timestamp"           		gencodec:"required"`
-		Extra         				hexutil.Bytes  	`json:"extraData"           		gencodec:"required"`
-		MixHash       				common.Hash    	`json:"mixHash"             		gencodec:"required"`
-		Nonce         				BlockNonce     	`json:"nonce"`
-		Hash          				common.Hash    	`json:"hash"`
+		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
+		UncleHash    					common.Hash    			`json:"sha3Uncles"         			gencodec:"required"`
+		Coinbase     					common.Address 			`json:"miner"              			gencodec:"required"`
+		EVMRoot      					common.Hash   			`json:"evmRoot"            			gencodec:"required"`
+		UTXORoot		 				common.Hash	 			`json:"utxoRoot"           			gencodec:"required"`
+		TxHash       					common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
+		ReceiptHash  					common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
+		EtxHash      					common.Hash   			`json:"extTransactionsRoot"			gencodec:"required"`
+		EtxSetHash    					common.Hash    			`json:"etxSetHash"          		gencodec:"required"`
+		EtxRollupHash					common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
+		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
+		PrimeTerminus         			common.Hash           	`json:"primeTerminus"            	gencodec:"required"`
+		InterlinkRootHash     			common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
+		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
+		ParentDeltaS 					[]*hexutil.Big 			`json:"parentDeltaS"       			gencodec:"required"`
+		ParentUncledSubDeltaS  		 	[]*hexutil.Big 			`json:"parentUncledSubDeltaS"    	gencodec:"required"`
+		EfficiencyScore 			 	hexutil.Uint64  		`json:"efficiencyScore"    			gencodec:"required"`
+		ThresholdCount				 	hexutil.Uint64  		`json:"thresholdCount"    			gencodec:"required"`
+		ExpansionNumber				 	hexutil.Uint64  		`json:"expansionNumber"    			gencodec:"required"`
+		EtxEligibleSlices			 	common.Hash  		  	`json:"etxEligibleSlices" 			gencodec:"required"`
+		UncledS							*hexutil.Big   			`json:"uncledS"            			gencodec:"required"`
+		Number      					[]*hexutil.Big 			`json:"number"             			gencodec:"required"`
+		GasLimit    					hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
+		GasUsed     					hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
+		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
+		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
+		Nonce       					BlockNonce     		 	`json:"nonce"`
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
 	enc.ParentDeltaS = make([]*hexutil.Big, common.HierarchyDepth)
 	enc.ParentUncledSubDeltaS = make([]*hexutil.Big, common.HierarchyDepth)
-	enc.Number = make([]*hexutil.Big, common.HierarchyDepth)
+	enc.ParentHash = make([]common.Hash, common.HierarchyDepth-1)
+	enc.Number = make([]*hexutil.Big, common.HierarchyDepth-1)
 
-	copy(enc.ParentHash, h.ParentHashArray())
 	copy(enc.ManifestHash, h.ManifestHashArray())
 	for i := 0; i < common.HierarchyDepth; i++ {
 		enc.ParentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
 		enc.ParentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
 		enc.ParentUncledSubDeltaS[i] = (*hexutil.Big)(h.ParentUncledSubDeltaS(i))
+	}
+	for i :=0 ; i< common.HierarchyDepth-1; i++ {
+		enc.ParentHash[i] = h.ParentHash(i)
 		enc.Number[i] = (*hexutil.Big)(h.Number(i))
 	}
 	enc.UncleHash = h.UncleHash()
@@ -74,7 +72,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.ReceiptHash = h.ReceiptHash()
 	enc.PrimeTerminus = h.PrimeTerminus()
 	enc.InterlinkRootHash = h.InterlinkRootHash()
-	enc.Difficulty = (*hexutil.Big)(h.Difficulty())
 	enc.UncledS = (*hexutil.Big)(h.UncledS())
 	enc.GasLimit = hexutil.Uint64(h.GasLimit())
 	enc.GasUsed = hexutil.Uint64(h.GasUsed())
@@ -83,12 +80,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.ExpansionNumber = hexutil.Uint64(h.ExpansionNumber())
 	enc.EtxEligibleSlices = h.EtxEligibleSlices()
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee())
-	enc.Location = hexutil.Bytes(h.Location())
-	enc.Time = hexutil.Uint64(h.Time())
 	enc.Extra = hexutil.Bytes(h.Extra())
-	enc.MixHash = h.MixHash()
-	enc.Nonce = h.Nonce()
-	enc.Hash = h.Hash()
 	raw, err := json.Marshal(&enc)
 	return raw, err
 }
@@ -96,37 +88,33 @@ func (h Header) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (h *Header) UnmarshalJSON(input []byte) error {
 	var dec struct {
-		ParentHash   					 []common.Hash   				`json:"parentHash"         			 gencodec:"required"`
-		UncleHash    					 *common.Hash    				`json:"sha3Uncles"         			 gencodec:"required"`
-		Coinbase     					 *common.AddressBytes 	`json:"miner"              			 gencodec:"required"`
-		EVMRoot      					 *common.Hash   			 	`json:"evmRoot"            			 gencodec:"required"`
-		UTXORoot		 					 *common.Hash	 					`json:"utxoRoot"           			 gencodec:"required"`
-		TxHash       					 *common.Hash   			  `json:"transactionsRoot"   			 gencodec:"required"`
-		ReceiptHash  					 *common.Hash   			 	`json:"receiptsRoot"       			 gencodec:"required"`
-		EtxHash      					 *common.Hash   			 	`json:"extTransactionsRoot"			 gencodec:"required"`
-		EtxSetHash    				 *common.Hash    				`json:"etxSetHash"          		 gencodec:"required"`
-		EtxRollupHash					 *common.Hash   			 	`json:"extRollupRoot"      			 gencodec:"required"`
-		ManifestHash 					 []common.Hash  			 	`json:"manifestHash"       			 gencodec:"required"`
-		PrimeTerminus          *common.Hash           `json:"primeTerminus"            gencodec:"required"`
-		InterlinkRootHash      *common.Hash           `json:"interlinkRootHash"        gencodec:"required"`
-		Difficulty   					 *hexutil.Big   			 	`json:"difficulty"         			 gencodec:"required"`
-		ParentEntropy					 []*hexutil.Big 			 	`json:"parentEntropy"      			 gencodec:"required"`
-		ParentDeltaS 					 []*hexutil.Big 			 	`json:"parentDeltaS"       			 gencodec:"required"`
-		ParentUncledSubDeltaS  []*hexutil.Big 			 	`json:"parentUncledSubDeltaS"    gencodec:"required"`
-		EfficiencyScore 			 *hexutil.Uint64  			`json:"efficiencyScore"    			 gencodec:"required"`
-		ThresholdCount				 *hexutil.Uint64  			`json:"thresholdCount"    			 gencodec:"required"`
-		ExpansionNumber			 	 *hexutil.Uint64  			`json:"expansionNumber"    			 gencodec:"required"`
-		EtxEligibleSlices			 *common.Hash  				  `json:"etxEligibleSlices" 			 gencodec:"required"`
-		UncledS								 *hexutil.Big   			 	`json:"uncledS"            			 gencodec:"required"`
-		Number      					 []*hexutil.Big 			 	`json:"number"             			 gencodec:"required"`
-		GasLimit    					 *hexutil.Uint64			 	`json:"gasLimit"           			 gencodec:"required"`
-		GasUsed     					 *hexutil.Uint64			 	`json:"gasUsed"            			 gencodec:"required"`
-		BaseFee     					 *hexutil.Big   			 	`json:"baseFeePerGas"      			 gencodec:"required"`
-		Location    					 hexutil.Bytes  			 	`json:"location"           			 gencodec:"required"`
-		Time        					 hexutil.Uint64 			 	`json:"timestamp"          			 gencodec:"required"`
-		Extra       					 hexutil.Bytes  			 	`json:"extraData"          			 gencodec:"required"`
-		MixHash     					 *common.Hash   			 	`json:"MixHash"            			 gencodec:"required"`
-		Nonce       					 BlockNonce     			 	`json:"nonce"`
+		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
+		UncleHash    					*common.Hash    		`json:"sha3Uncles"         			gencodec:"required"`
+		Coinbase     					*common.AddressBytes 	`json:"miner"              			gencodec:"required"`
+		EVMRoot      					*common.Hash   			`json:"evmRoot"            			gencodec:"required"`
+		UTXORoot		 				*common.Hash	 		`json:"utxoRoot"           			gencodec:"required"`
+		TxHash       					*common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
+		ReceiptHash  					*common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
+		EtxHash      					*common.Hash   			`json:"extTransactionsRoot"			gencodec:"required"`
+		EtxSetHash    					*common.Hash    		`json:"etxSetHash"          		gencodec:"required"`
+		EtxRollupHash					*common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
+		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
+		PrimeTerminus         			*common.Hash           	`json:"primeTerminus"            	gencodec:"required"`
+		InterlinkRootHash     			*common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
+		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
+		ParentDeltaS 					[]*hexutil.Big 			`json:"parentDeltaS"       			gencodec:"required"`
+		ParentUncledSubDeltaS  		 	[]*hexutil.Big 			`json:"parentUncledSubDeltaS"    	gencodec:"required"`
+		EfficiencyScore 			 	*hexutil.Uint64  		`json:"efficiencyScore"    			gencodec:"required"`
+		ThresholdCount				 	*hexutil.Uint64  		`json:"thresholdCount"    			gencodec:"required"`
+		ExpansionNumber				 	*hexutil.Uint64  		`json:"expansionNumber"    			gencodec:"required"`
+		EtxEligibleSlices			 	*common.Hash  		  	`json:"etxEligibleSlices" 			gencodec:"required"`
+		UncledS							*hexutil.Big   			`json:"uncledS"            			gencodec:"required"`
+		Number      					[]*hexutil.Big 			`json:"number"             			gencodec:"required"`
+		GasLimit    					*hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
+		GasUsed     					*hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
+		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
+		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
+		Nonce       					BlockNonce     		 	`json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -170,9 +158,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.InterlinkRootHash == nil {
 		return errors.New("missing required field 'interlinkRootHash' for Header")
 	}
-	if dec.Difficulty == nil {
-		return errors.New("missing required field 'difficulty' for Header")
-	}
 	if dec.ParentEntropy == nil {
 		return errors.New("missing required field 'parentEntropy' for Header")
 	}
@@ -209,19 +194,15 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
-	if dec.MixHash == nil {
-		return errors.New("missing required field 'mixHash' for Header")
-	}
 	// Initialize the header
-	h.parentHash = make([]common.Hash, common.HierarchyDepth)
+	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
-	h.number = make([]*big.Int, common.HierarchyDepth)
+	h.number = make([]*big.Int, common.HierarchyDepth-1)
 
 	for i := 0; i < common.HierarchyDepth; i++ {
-		h.SetParentHash(dec.ParentHash[i], i)
 		h.SetManifestHash(dec.ManifestHash[i], i)
 		if dec.ParentEntropy[i] == nil {
 			return errors.New("missing required field 'parentEntropy' for Header")
@@ -235,17 +216,18 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'parentUncledDeltaS' for Header")
 		}
 		h.SetParentUncledSubDeltaS((*big.Int)(dec.ParentUncledSubDeltaS[i]), i)
+	}
+
+	for i := 0; i < common.HierarchyDepth-1; i++ {
+		h.SetParentHash(dec.ParentHash[i], i)
 		if dec.Number[i] == nil {
 			return errors.New("missing required field 'number' for Header")
 		}
 		h.SetNumber((*big.Int)(dec.Number[i]), i)
 	}
+
 	h.SetUncleHash(*dec.UncleHash)
-	if len(dec.Location) > 0 {
-		h.location = make([]byte, len(dec.Location))
-		copy(h.location, dec.Location)
-	}
-	coinbase := common.Bytes20ToAddress(*dec.Coinbase, h.location)
+	coinbase := common.Bytes20ToAddress(*dec.Coinbase, []byte{0,0})
 	h.SetCoinbase(coinbase)
 	h.SetEVMRoot(*dec.EVMRoot)
 	h.SetUTXORoot(*dec.UTXORoot)
@@ -256,7 +238,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
 	h.SetPrimeTerminus(*dec.PrimeTerminus)
 	h.SetInterlinkRootHash(*dec.InterlinkRootHash)
-	h.SetDifficulty((*big.Int)(dec.Difficulty))
 	h.SetUncledS((*big.Int)(dec.UncledS))
 	h.SetGasLimit(uint64(*dec.GasLimit))
 	h.SetGasUsed(uint64(*dec.GasUsed))
@@ -265,10 +246,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetExpansionNumber(uint8(*dec.ExpansionNumber))
 	h.SetEtxEligibleSlices(*dec.EtxEligibleSlices)
 	h.SetBaseFee((*big.Int)(dec.BaseFee))
-	h.SetTime(uint64(dec.Time))
 	h.SetExtra(dec.Extra)
-	h.SetMixHash(*dec.MixHash)
-	h.SetNonce(dec.Nonce)
 	return nil
 }
 
@@ -299,5 +277,142 @@ func (t *Termini) UnmarshalJSON(input []byte) error {
 	}
 	t.SetDomTermini(dec.DomTermini)
 	t.SetSubTermini(dec.SubTermini)
+	return nil
+}
+
+func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
+	var enc struct {
+		HeaderHash common.Hash    `json:"headerHash" gencoden:"required"`
+		ParentHash common.Hash    `json:"parentHash" gencoden:"required"`
+		Number     *hexutil.Big   `json:"number" gencoden:"required"`
+		Difficulty *hexutil.Big   `json:"difficulty" gencoden:"required"`
+		TxHash     common.Hash    `json:"txHash" gencoden:"required"`
+		Location   hexutil.Bytes  `json:"location" gencoden:"required"`
+		MixHash    common.Hash    `json:"mixHash" gencoden:"required"`
+		Time       hexutil.Uint64 `json:"time" gencoden:"required"`
+		Nonce      BlockNonce     `json:"nonce" gencoden:"required"`
+	}
+
+	enc.HeaderHash = wh.HeaderHash()
+	enc.Difficulty = (*hexutil.Big)(wh.Difficulty())
+	enc.Number = (*hexutil.Big)(wh.Number())
+	enc.TxHash = wh.TxHash()
+	enc.Location = hexutil.Bytes(wh.Location())
+	enc.MixHash = wh.MixHash()
+	enc.Time = hexutil.Uint64(wh.Time())
+	enc.Nonce = wh.Nonce()
+
+	raw, err := json.Marshal(&enc)
+	return raw, err
+}
+
+func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		HeaderHash common.Hash     `json:"headerHash" gencoden:"required"`
+		ParentHash common.Hash     `json:"parentHash" gencoden:"required"`
+		Number     *hexutil.Big    `json:"number" gencoden:"required"`
+		Difficulty *hexutil.Big    `json:"difficulty" gencoden:"required"`
+		TxHash     common.Hash     `json:"txHash" gencoden:"required"`
+		Location   hexutil.Bytes   `json:"location" gencoden:"required"`
+		MixHash	   common.Hash     `json:"mixHash" gencoden:"required"`
+		Time       hexutil.Uint64  `json:"time" gencoden:"required"`
+		Nonce      BlockNonce      `json:"nonce" gencoden:"required"`
+	}
+
+	err := json.Unmarshal(input, &dec)
+	if err != nil {
+		return err
+	}
+
+	wh.SetHeaderHash(dec.HeaderHash)
+	wh.SetParentHash(dec.ParentHash)
+	wh.SetNumber((*big.Int)(dec.Number))
+	wh.SetDifficulty((*big.Int)(dec.Difficulty))
+	wh.SetTxHash(dec.TxHash)
+	if len(dec.Location) > 0 {
+		wh.location = make([]byte, len(dec.Location))
+		copy(wh.location, dec.Location)
+	}
+	wh.SetMixHash(dec.MixHash)
+	wh.SetTime(uint64(dec.Time))
+	wh.SetNonce(dec.Nonce)
+	return nil
+}
+
+func (wb *WorkObjectBody) MarshalJSON() ([]byte, error) {
+	var enc struct {
+		Header 				*Header 			`json:"header" gencoden:"required"`
+		Transactions 		Transactions 		`json:"transactions" gencoden:"required"`
+		ExtTransactions 	Transactions 		`json:"extTransactions" gencoden:"required"`
+		Uncles 				[]*WorkObjectHeader	`json:"uncles" gencoden:"required"`
+		Manifest 			BlockManifest 		`json:"manifest" gencoden:"required"`
+		InterlinkHashes 	common.Hashes 		`json:"interlinkHashes" gencoden:"required"`
+	}
+
+	enc.Header = wb.Header()
+	enc.Transactions = wb.Transactions()
+	enc.ExtTransactions = wb.ExtTransactions()
+	enc.Uncles = wb.Uncles()
+	enc.Manifest = wb.Manifest()
+	enc.InterlinkHashes = wb.InterlinkHashes()
+
+	raw, err := json.Marshal(&enc)
+	return raw, err
+}
+
+func (wb *WorkObjectBody) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		Header 				*Header 				`json:"header" gencoden:"required"`
+		Transactions 		Transactions 			`json:"transactions" gencoden:"required"`
+		ExtTransactions 	Transactions 			`json:"extTransactions" gencoden:"required"`
+		Uncles 				[]*WorkObjectHeader 	`json:"uncles" gencoden:"required"`
+		Manifest 			BlockManifest 			`json:"manifest" gencoden:"required"`
+		InterlinkHashes 	common.Hashes 			`json:"interlinkHashes" gencoden:"required"`
+	}
+
+	err := json.Unmarshal(input, &dec)
+	if err != nil {
+		return err
+	}
+
+	wb.SetHeader(dec.Header)
+	wb.SetTransactions(dec.Transactions)
+	wb.SetExtTransactions(dec.ExtTransactions)
+	wb.SetUncles(dec.Uncles)
+	wb.SetManifest(dec.Manifest)
+	wb.SetInterlinkHashes(dec.InterlinkHashes)
+	return nil
+}
+
+func (wo *WorkObject) MarshalJSON() ([]byte, error) {
+	var enc struct {
+		WoHeader *WorkObjectHeader `json:"woHeader" gencoden:"required"`
+		WoBody   *WorkObjectBody   `json:"woBody" gencoden:"required"`
+		Tx       *Transaction	   `json:"tx" gencoden:"required"`
+	}
+
+	enc.WoHeader = wo.WorkObjectHeader()
+	enc.WoBody = wo.Body()
+	enc.Tx = wo.Tx()
+
+	raw, err := json.Marshal(&enc)
+	return raw, err
+}
+
+func (wo *WorkObject) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		WoHeader *WorkObjectHeader `json:"woHeader" gencoden:"required"`
+		WoBody   *WorkObjectBody   `json:"woBody" gencoden:"required"`
+		Tx 	     *Transaction      `json:"tx" gencoden:"required"`
+	}
+
+	err := json.Unmarshal(input, &dec)
+	if err != nil {
+		return err
+	}
+
+	wo.SetWorkObjectHeader(dec.WoHeader)
+	wo.SetBody(dec.WoBody)
+	wo.SetTx(dec.Tx)
 	return nil
 }

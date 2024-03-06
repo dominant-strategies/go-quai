@@ -79,9 +79,9 @@ func WriteTxLookupEntries(db ethdb.KeyValueWriter, number uint64, hashes []commo
 
 // WriteTxLookupEntriesByBlock stores a positional metadata for every transaction from
 // a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block, nodeCtx int) {
-	numberBytes := block.Number(nodeCtx).Bytes()
-	for _, tx := range block.Transactions() {
+func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, wo *types.WorkObject, nodeCtx int) {
+	numberBytes := wo.Number(nodeCtx).Bytes()
+	for _, tx := range wo.Body().Transactions() {
 		writeTxLookupEntry(db, tx.Hash(), numberBytes)
 	}
 }
@@ -102,7 +102,7 @@ func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
 
 // ReadTransaction retrieves a specific transaction from the database, along with
 // its added positional metadata.
-func ReadTransaction(db ethdb.Reader, hash common.Hash, location common.Location) (*types.Transaction, common.Hash, uint64, uint64) {
+func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	blockNumber := ReadTxLookupEntry(db, hash)
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
@@ -111,15 +111,15 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash, location common.Location
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	body := ReadBody(db, blockHash, *blockNumber, location)
-	if body == nil {
+	wo := ReadWorkObject(db, blockHash, types.BlockObject)
+	if wo == nil {
 		log.Global.WithFields(log.Fields{
 			"number": blockNumber,
 			"hash":   blockHash,
 		}).Error("Transaction referenced missing")
 		return nil, common.Hash{}, 0, 0
 	}
-	for txIndex, tx := range body.Transactions {
+	for txIndex, tx := range wo.Body().Transactions() {
 		if tx.Hash() == hash {
 			return tx, blockHash, *blockNumber, uint64(txIndex)
 		}
