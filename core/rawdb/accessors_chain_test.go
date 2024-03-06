@@ -17,6 +17,8 @@ func TestHeaderStorage(t *testing.T) {
 	header := types.EmptyHeader()
 	header.SetParentHash(common.Hash{1}, common.ZONE_CTX)
 	header.SetBaseFee(big.NewInt(1))
+	header.SetLocation(common.Location{0, 0})
+	header.SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 0}))
 
 	if entry := ReadHeader(db, header.Hash(), common.ZONE_CTX); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
