@@ -40,17 +40,15 @@ func WriteMessageToStream(stream network.Stream, msg []byte) error {
 		return errors.Wrap(err, "failed to set write deadline")
 	}
 
-	// Get the length of the message and convert it into 4 bytes
+	// Get the length of the message and encode it
 	msgLen := uint32(len(msg))
 	lenBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBytes, msgLen)
 
-	// First write the length of the message
-	if _, err := stream.Write(lenBytes); err != nil {
-		return errors.Wrap(err, "failed to write message length to stream")
-	}
+	// Prefix the message with the encoded length
+	msg = append(lenBytes, msg...)
 
-	// Then write the message itself
+	// Then write the message
 	_, err := stream.Write(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to write message to stream")
