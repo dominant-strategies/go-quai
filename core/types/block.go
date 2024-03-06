@@ -1140,7 +1140,7 @@ func (b *Block) QiTransactions() []*Transaction {
 func (b *Block) QuaiTransactions() []*Transaction {
 	quaiTxs := make([]*Transaction, 0)
 	for _, t := range b.Transactions() {
-		if t.Type() != QiTxType && t.To().IsInQuaiLedgerScope() {
+		if t.Type() != QiTxType && (t.To() == nil || t.To().IsInQuaiLedgerScope()) {
 			quaiTxs = append(quaiTxs, t)
 		}
 	}

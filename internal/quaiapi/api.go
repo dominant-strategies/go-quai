@@ -1563,7 +1563,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 		return common.Hash{}, err
 	}
 	if tx.Type() != types.QiTxType {
-		if tx.To().IsInQiLedgerScope() { // change after adding Quai->Qi conversion tx type
+		if tx.To() != nil && tx.To().IsInQiLedgerScope() { // change after adding Quai->Qi conversion tx type
 			return common.Hash{}, common.MakeErrQiAddress(tx.To().Hex())
 		}
 	}

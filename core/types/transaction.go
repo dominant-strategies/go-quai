@@ -424,6 +424,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	default:
 		return errors.New("invalid transaction type")
 	}
+	tx.time = time.Now()
 	return nil
 }
 
@@ -1017,7 +1018,7 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, etxs []*Transaction, txs map[common.AddressBytes]Transactions, baseFee *big.Int, sort bool) *TransactionsByPriceAndNonce {
+func NewTransactionsByPriceAndNonce(signer Signer, etxs []*Transaction, qiTxs map[common.Hash]*TxWithMinerFee, txs map[common.AddressBytes]Transactions, baseFee *big.Int, sort bool) *TransactionsByPriceAndNonce {
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByPriceAndTime, 0, len(txs))
 	// Push inbound ETXs to the front. They no longer have any associated fees.
@@ -1039,6 +1040,9 @@ func NewTransactionsByPriceAndNonce(signer Signer, etxs []*Transaction, txs map[
 		}
 		heads = append(heads, wrapped)
 		txs[from] = accTxs[1:]
+	}
+	for _, qiTx := range qiTxs {
+		heads = append(heads, qiTx)
 	}
 	if sort {
 		heap.Init(&heads)
@@ -1096,15 +1100,6 @@ func (t *TransactionsByPriceAndNonce) PopNoSort() {
 	} else {
 		t.heads = make(TxByPriceAndTime, 0)
 	}
-}
-
-// Appends a new transaction to the heads
-func (t *TransactionsByPriceAndNonce) AppendNoSort(tx *QiTxWithMinerFee) {
-	wrapped, err := NewTxWithMinerFee(tx.Tx, t.baseFee, tx.Fee)
-	if err != nil {
-		return
-	}
-	t.heads = append(t.heads, wrapped)
 }
 
 // Pop removes the best transaction, *not* replacing it with the next one from

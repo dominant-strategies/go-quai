@@ -265,7 +265,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 				// coinbase tx currently exempt from gas and outputs are added after all txs are processed
 				continue
 			}
-			fees, etxs, err := ProcessQiTx(tx, true, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
+			fees, etxs, err := ProcessQiTx(tx, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -342,7 +342,9 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 		for _, txOut := range qiTransactions[0].TxOut() {
 			totalCoinbaseOut.Add(totalCoinbaseOut, types.Denominations[txOut.Denomination])
 		}
-		maxCoinbaseOut := misc.CalculateRewardForQiWithFeesBigInt(header, totalFees) // TODO: Miner tip will soon no longer exist
+		reward := misc.CalculateReward(header)
+		maxCoinbaseOut := new(big.Int).Add(reward, totalFees) // TODO: Miner tip will soon no longer exist
+
 		if totalCoinbaseOut.Cmp(maxCoinbaseOut) > 0 {
 			return nil, nil, nil, nil, 0, fmt.Errorf("coinbase output value of %v is higher than expected value of %v", totalCoinbaseOut, maxCoinbaseOut)
 		}
@@ -462,13 +464,16 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	return receipt, err
 }
 
-func ProcessQiTx(tx *types.Transaction, updateState bool, statedb *state.StateDB, gp *GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.Transaction, error) {
+func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.Header, statedb *state.StateDB, gp *GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.Transaction, error) {
 	// Sanity checks
-	if tx.Type() != types.QiTxType {
+	if tx == nil || tx.Type() != types.QiTxType {
 		return nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
 	}
 	if tx.ChainId().Cmp(&chainId) != 0 {
 		return nil, nil, fmt.Errorf("tx %032x has invalid chain ID", tx.Hash())
+	}
+	if currentHeader == nil || statedb == nil || gp == nil || usedGas == nil || signer == nil || etxRLimit == nil || etxPLimit == nil {
+		return nil, nil, errors.New("one of the parameters is nil")
 	}
 
 	addresses := make(map[common.AddressBytes]struct{})
@@ -603,8 +608,16 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, statedb *state.StateDB
 		return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
 	}
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
-	// We should enforce the Qi-converted-basefee here
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
+	// Check tx against required base fee and gas
+	baseFeeInQi := misc.QuaiToQi(currentHeader, currentHeader.BaseFee())
+	minimumFee := new(big.Int).Mul(baseFeeInQi, big.NewInt(int64(txGas)))
+	if txFeeInQit.Cmp(minimumFee) < 0 {
+		return nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee of %d and gas of %d", tx.Hash(), baseFeeInQi.Uint64(), txGas)
+	}
+	// Miner gets remainder of fee after base fee
+	txFeeInQit.Sub(txFeeInQit, minimumFee)
+
 	*etxRLimit -= ETXRCount
 	*etxPLimit -= ETXPCount
 	return txFeeInQit, etxs, nil

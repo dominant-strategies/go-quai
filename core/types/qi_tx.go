@@ -23,11 +23,6 @@ type WireQiTx struct {
 	Signature []byte
 }
 
-type QiTxWithMinerFee struct {
-	Tx  *Transaction
-	Fee *big.Int
-}
-
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *QiTx) copy() TxData {
 	cpy := &QiTx{

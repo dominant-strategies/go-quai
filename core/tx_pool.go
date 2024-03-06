@@ -273,7 +273,7 @@ type TxPool struct {
 
 	locals         *accountSet                                                 // Set of local transaction to exempt from eviction rules
 	journal        *txJournal                                                  // Journal of local transaction to back up to disk
-	utxoPool       map[common.Hash]*types.QiTxWithMinerFee                     // Utxo pool to store utxo transactions
+	utxoPool       map[common.Hash]*types.TxWithMinerFee                       // Utxo pool to store utxo transactions
 	pending        map[common.InternalAddress]*txList                          // All currently processable transactions
 	queue          map[common.InternalAddress]*txList                          // Queued but non-processable transactions
 	beats          map[common.InternalAddress]time.Time                        // Last heartbeat from each known account
@@ -345,7 +345,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		chain:           chain,
 		signer:          types.LatestSigner(chainconfig),
 		pending:         make(map[common.InternalAddress]*txList),
-		utxoPool:        make(map[common.Hash]*types.QiTxWithMinerFee),
+		utxoPool:        make(map[common.Hash]*types.TxWithMinerFee),
 		queue:           make(map[common.InternalAddress]*txList),
 		beats:           make(map[common.InternalAddress]time.Time),
 		senders:         orderedmap.New[common.Hash, common.InternalAddress](),
@@ -593,11 +593,15 @@ func (pool *TxPool) ContentFrom(addr common.InternalAddress) (types.Transactions
 	return pending, queued
 }
 
-func (pool *TxPool) UTXOPoolPending() map[common.Hash]*types.QiTxWithMinerFee {
+func (pool *TxPool) UTXOPoolPending() map[common.Hash]*types.TxWithMinerFee {
 	pool.utxoMu.RLock()
 	defer pool.utxoMu.RUnlock()
-	// to do: check fees
-	return pool.utxoPool
+	// Return a copy of the pool because it is not safe to access the pool pointer directly
+	qiTxs := make(map[common.Hash]*types.TxWithMinerFee)
+	for hash, qiTx := range pool.utxoPool {
+		qiTxs[hash] = qiTx
+	}
+	return qiTxs
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
@@ -1045,7 +1049,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			invalidTxMeter.Add(1)
 			continue
 		}
-		if tx.To().IsInQiLedgerScope() {
+		if tx.To() != nil && tx.To().IsInQiLedgerScope() {
 			errs[i] = common.MakeErrQiAddress(tx.To().Hex())
 			invalidTxMeter.Add(1)
 			continue
@@ -1127,7 +1131,7 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 		etxPLimit = params.ETXPLimitMin
 	}
 	pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
-	fee, _, err := ProcessQiTx(tx, false, pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+	fee, _, err := ProcessQiTx(tx, false, pool.chain.CurrentBlock().Header(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		pool.mu.RUnlock()
 		pool.logger.WithFields(logrus.Fields{
@@ -1137,9 +1141,12 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 		return err
 	}
 	pool.mu.RUnlock()
-
+	txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
+	if err != nil {
+		return err
+	}
 	pool.utxoMu.Lock()
-	pool.utxoPool[tx.Hash()] = &types.QiTxWithMinerFee{tx, fee}
+	pool.utxoPool[tx.Hash()] = txWithMinerFee
 	pool.utxoMu.Unlock()
 	pool.logger.WithFields(logrus.Fields{
 		"tx":  tx.Hash().String(),

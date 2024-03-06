@@ -1017,13 +1017,10 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		return
 	}
 
-	pendingUtxoTxs := w.txPool.UTXOPoolPending()
+	pendingQiTxs := w.txPool.UTXOPoolPending()
 
-	if len(pending) > 0 || len(pendingUtxoTxs) > 0 || len(etxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, etxs, pending, env.header.BaseFee(), true)
-		for _, tx := range pendingUtxoTxs {
-			txs.AppendNoSort(tx) // put all utxos at the back for now
-		}
+	if len(pending) > 0 || len(pendingQiTxs) > 0 || len(etxs) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, etxs, pendingQiTxs, pending, env.header.BaseFee(), true)
 		if w.commitTransactions(env, txs, interrupt) {
 			return
 		}
@@ -1262,6 +1259,15 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	if err := env.gasPool.SubGas(txGas); err != nil {
 		return err
 	}
+	// Check tx against required base fee and gas
+	baseFeeInQi := misc.QuaiToQi(env.header, env.header.BaseFee())
+	minimumFee := new(big.Int).Mul(baseFeeInQi, big.NewInt(int64(txGas)))
+	if txFeeInQit.Cmp(minimumFee) < 0 {
+		return fmt.Errorf("tx %032x has insufficient fee for base fee of %d and gas of %d", tx.Hash(), baseFeeInQi.Uint64(), txGas)
+	}
+	// Miner gets remainder of fee after base fee
+	txFeeInQit.Sub(txFeeInQit, minimumFee)
+
 	env.header.SetGasUsed(gasUsed)
 	env.etxRLimit -= ETXRCount
 	env.etxPLimit -= ETXPCount
@@ -1288,7 +1294,9 @@ func createCoinbaseTxWithFees(header *types.Header, fees *big.Int, state *state.
 		PreviousOutPoint: *types.NewOutPoint(&parentHash, types.MaxOutputIndex),
 	}
 
-	denominations := misc.CalculateRewardForQiWithFees(header, fees)
+	reward := misc.CalculateReward(header)
+	reward.Add(reward, fees)
+	denominations := misc.FindMinDenominations(reward)
 	outs := make([]types.TxOut, 0, len(denominations))
 
 	// Iterate over the denominations in descending order (by key)
