@@ -30,7 +30,7 @@ type ConsensusAPI interface {
 
 	// Asks the consensus backend to lookup a block by hash and location.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.
-	LookupBlock(common.Hash, common.Location) *types.Block
+	LookupBlock(common.Hash, common.Location) *types.WorkObject
 
 	LookupBlockHashByNumber(*big.Int, common.Location) *common.Hash
 
@@ -51,10 +51,10 @@ type ConsensusAPI interface {
 	SetSubClient(*quaiclient.Client, common.Location, common.Location)
 
 	// AddGenesisPendingEtxs adds the genesis pending etxs for the given location
-	AddGenesisPendingEtxs(*types.Block, common.Location)
+	AddGenesisPendingEtxs(*types.WorkObject, common.Location)
 
 	// WriteGenesisBlock adds the genesis block to the database and also writes the block to the disk
-	WriteGenesisBlock(*types.Block, common.Location)
+	WriteGenesisBlock(*types.WorkObject, common.Location)
 }
 
 // The networking backend will implement the following interface to enable consensus to communicate with other nodes.

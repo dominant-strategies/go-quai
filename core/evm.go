@@ -32,12 +32,12 @@ type ChainContext interface {
 	// Engine retrieves the chain's consensus engine.
 	Engine() consensus.Engine
 
+	// GetHeader returns the hash corresponding to their hash.
+	GetHeader(common.Hash, uint64) *types.WorkObject
+
 	// GetHeader returns a block header from the database by hash.
 	// The header might not be on the canonical chain.
-	GetHeaderOrCandidate(common.Hash, uint64) *types.Header
-
-	// GetHeader returns a block header in the canonical chain from the database by hash.
-	GetHeader(common.Hash, uint64) *types.Header
+	GetHeaderOrCandidate(common.Hash, uint64) *types.WorkObject
 
 	// NodeCtx returns the context of the running node
 	NodeCtx() int
@@ -46,7 +46,7 @@ type ChainContext interface {
 	IsGenesisHash(common.Hash) bool
 
 	// GetHeaderByHash returns a block header from the database by hash.
-	GetHeaderByHash(common.Hash) *types.Header
+	GetHeaderByHash(common.Hash) *types.WorkObject
 
 	// CheckIfEtxIsEligible checks if the given slice is eligible to accept the
 	// etx based on the EtxEligibleSlices
@@ -54,7 +54,7 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
+func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -119,7 +119,7 @@ func NewEVMTxContext(msg Message) vm.TxContext {
 }
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
-func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
+func GetHashFn(ref *types.WorkObject, chain ChainContext) func(n uint64) common.Hash {
 	// Cache will initially contain [refHash.parent],
 	// Then fill up with [refHash.p, refHash.pp, refHash.ppp, ...]
 	var cache []common.Hash

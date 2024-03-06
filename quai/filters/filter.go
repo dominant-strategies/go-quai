@@ -32,8 +32,8 @@ import (
 
 type Backend interface {
 	ChainDb() ethdb.Database
-	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
-	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
+	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.WorkObject, error)
+	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.WorkObject, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
 	GetBloom(blockHash common.Hash) (*types.Bloom, error)
@@ -42,7 +42,7 @@ type Backend interface {
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribePendingHeaderEvent(ch chan<- *types.Header) event.Subscription
+	SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription
 	ProcessingState() bool
 	NodeLocation() common.Location
 	NodeCtx() int
@@ -130,7 +130,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if header == nil {
 			return nil, errors.New("unknown block")
 		}
-		return f.blockLogs(ctx, header)
+		return f.blockLogs(ctx, header.Header())
 	}
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -202,7 +202,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 			if header == nil || err != nil {
 				return logs, err
 			}
-			found, err := f.checkMatches(ctx, header)
+			found, err := f.checkMatches(ctx, header.Header())
 			if err != nil {
 				return logs, err
 			}
@@ -224,7 +224,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 		if header == nil || err != nil {
 			return logs, err
 		}
-		found, err := f.blockLogs(ctx, header)
+		found, err := f.blockLogs(ctx, header.Header())
 		if err != nil {
 			return logs, err
 		}

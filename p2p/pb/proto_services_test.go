@@ -36,8 +36,8 @@ func TestEncodeDecodeRequest(t *testing.T) {
 		},
 		{
 			name:         "Transaction",
-			input:        &types.Transaction{},
-			expectedType: reflect.TypeOf(&types.Transaction{}),
+			input:        types.NewEmptyTx(),
+			expectedType: reflect.TypeOf(types.NewEmptyTx()),
 		},
 		{
 			name:         "Header",

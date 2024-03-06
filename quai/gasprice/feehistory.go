@@ -50,8 +50,7 @@ const (
 type blockFees struct {
 	// set by the caller
 	blockNumber uint64
-	header      *types.Header
-	block       *types.Block // only set if reward percentiles are requested
+	block       *types.WorkObject // only set if reward percentiles are requested
 	receipts    types.Receipts
 	// filled by processBlock
 	reward               []*big.Int
@@ -82,24 +81,24 @@ func (s sortGasAndReward) Less(i, j int) bool {
 // fills in the rest of the fields.
 func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	chainconfig := oracle.backend.ChainConfig()
-	if bf.baseFee = bf.header.BaseFee(); bf.baseFee == nil {
+	if bf.baseFee = bf.block.BaseFee(); bf.baseFee == nil {
 		bf.baseFee = new(big.Int)
 	}
 
-	bf.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header)
+	bf.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.block)
 
-	bf.gasUsedRatio = float64(bf.header.GasUsed()) / float64(bf.header.GasLimit())
+	bf.gasUsedRatio = float64(bf.block.GasUsed()) / float64(bf.block.GasLimit())
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null
 		return
 	}
-	if bf.block == nil || (bf.receipts == nil && len(bf.block.Transactions()) != 0) {
+	if bf.block == nil || (bf.receipts == nil && len(bf.block.Body().Transactions()) != 0) {
 		oracle.logger.Error("Block or receipts are missing while reward percentiles are requested")
 		return
 	}
 
 	bf.reward = make([]*big.Int, len(percentiles))
-	if len(bf.block.Transactions()) == 0 {
+	if len(bf.block.Body().Transactions()) == 0 {
 		// return an all zero row if there are no transactions to gather data from
 		for i := range bf.reward {
 			bf.reward[i] = new(big.Int)
@@ -132,10 +131,10 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 // also returned if requested and available.
 // Note: an error is only returned if retrieving the head header has failed. If there are no
 // retrievable blocks in the specified range then zero block count is returned with no error.
-func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.BlockNumber, blocks, maxHistory int) (*types.Block, []*types.Receipt, uint64, int, error) {
+func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.BlockNumber, blocks, maxHistory int) (*types.WorkObject, []*types.Receipt, uint64, int, error) {
 	var (
 		headBlock       rpc.BlockNumber
-		pendingBlock    *types.Block
+		pendingBlock    *types.WorkObject
 		pendingReceipts types.Receipts
 		nodeCtx         = oracle.backend.ChainConfig().Location.Context()
 	)
@@ -227,7 +226,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 		maxHistory = oracle.maxBlockHistory
 	}
 	var (
-		pendingBlock    *types.Block
+		pendingBlock    *types.WorkObject
 		pendingReceipts []*types.Receipt
 		err             error
 	)
@@ -260,13 +259,13 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 							fees.receipts, fees.err = oracle.backend.GetReceipts(ctx, fees.block.Hash())
 						}
 					} else {
-						fees.header, fees.err = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber))
+						fees.block, fees.err = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber))
 					}
 				}
 				if fees.block != nil {
-					fees.header = fees.block.Header()
+					fees.block = types.CopyWorkObject(fees.block)
 				}
-				if fees.header != nil {
+				if fees.block != nil {
 					oracle.processBlock(fees, rewardPercentiles)
 				}
 				// send to results even if empty to guarantee that blocks items are sent in total
@@ -286,7 +285,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 			return common.Big0, nil, nil, nil, fees.err
 		}
 		i := int(fees.blockNumber - oldestBlock)
-		if fees.header != nil {
+		if fees.block != nil {
 			reward[i], baseFee[i], baseFee[i+1], gasUsedRatio[i] = fees.reward, fees.baseFee, fees.nextBaseFee, fees.gasUsedRatio
 		} else {
 			// getting no block and no error means we are requesting into the future (might happen because of a reorg)

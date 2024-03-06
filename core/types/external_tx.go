@@ -31,7 +31,7 @@ type ExternalTx struct {
 // PendingEtxsRollup is Header and EtxRollups of that header that should
 // be forward propagated
 type PendingEtxsRollup struct {
-	Header     *Header      `json:"header" gencodec:"required"`
+	Header     *WorkObject  `json:"header" gencodec:"required"`
 	EtxsRollup Transactions `json:"etxsrollup" gencodec:"required"`
 }
 
@@ -45,7 +45,7 @@ func (p *PendingEtxsRollup) IsValid(hasher TrieHasher) bool {
 
 // ProtoEncode encodes the PendingEtxsRollup to protobuf format.
 func (p *PendingEtxsRollup) ProtoEncode() (*ProtoPendingEtxsRollup, error) {
-	header, err := p.Header.ProtoEncode()
+	header, err := p.Header.ProtoEncode(PEtxObject)
 	if err != nil {
 		return nil, err
 	}
@@ -64,8 +64,8 @@ func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxs
 	if protoPendingEtxsRollup.Header == nil {
 		return errors.New("header is nil in ProtoDecode")
 	}
-	p.Header = new(Header)
-	err := p.Header.ProtoDecode(protoPendingEtxsRollup.GetHeader())
+	p.Header = new(WorkObject)
+	err := p.Header.ProtoDecode(protoPendingEtxsRollup.GetHeader(), location, PEtxObject)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxs
 // itself, so the Etxs list will just contain the ETXs emitted directly in that
 // zone block (a.k.a. a singleton).
 type PendingEtxs struct {
-	Header *Header      `json:"header" gencodec:"required"`
+	Header *WorkObject  `json:"header" gencodec:"required"`
 	Etxs   Transactions `json:"etxs"   gencodec:"required"`
 }
 
@@ -100,7 +100,7 @@ func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
 
 // ProtoEncode encodes the PendingEtxs to protobuf format.
 func (p *PendingEtxs) ProtoEncode() (*ProtoPendingEtxs, error) {
-	header, err := p.Header.ProtoEncode()
+	header, err := p.Header.ProtoEncode(PEtxObject)
 	if err != nil {
 		return nil, err
 	}
@@ -115,17 +115,17 @@ func (p *PendingEtxs) ProtoEncode() (*ProtoPendingEtxs, error) {
 }
 
 // ProtoDecode decodes the protobuf to a PendingEtxs representation.
-func (p *PendingEtxs) ProtoDecode(protoPendingEtxs *ProtoPendingEtxs) error {
+func (p *PendingEtxs) ProtoDecode(protoPendingEtxs *ProtoPendingEtxs, location common.Location) error {
 	if protoPendingEtxs.Header == nil {
 		return errors.New("header is nil in ProtoDecode")
 	}
-	p.Header = new(Header)
-	err := p.Header.ProtoDecode(protoPendingEtxs.GetHeader())
+	p.Header = new(WorkObject)
+	err := p.Header.ProtoDecode(protoPendingEtxs.GetHeader(), location, PEtxObject)
 	if err != nil {
 		return err
 	}
 	p.Etxs = Transactions{}
-	err = p.Etxs.ProtoDecode(protoPendingEtxs.GetEtxs(), p.Header.Location())
+	err = p.Etxs.ProtoDecode(protoPendingEtxs.GetEtxs(), location)
 	if err != nil {
 		return err
 	}

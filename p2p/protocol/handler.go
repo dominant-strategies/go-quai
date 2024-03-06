@@ -92,7 +92,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 	}
 
 	switch decodedType.(type) {
-	case *types.Block:
+	case *types.WorkObject:
 		requestedHash := &common.Hash{}
 		switch query := query.(type) {
 		case *common.Hash:
@@ -178,7 +178,7 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
 func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
 	// check if we have the block in our cache or database
-	block := node.GetBlock(hash, loc)
+	block := node.GetWorkObject(hash, loc)
 	if block == nil {
 		log.Global.Debugf("block not found")
 		return nil

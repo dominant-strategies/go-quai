@@ -40,6 +40,7 @@ type BodyDb struct {
 	blockCache     *lru.Cache
 	bodyCache      *lru.Cache
 	bodyProtoCache *lru.Cache
+	woCache        *lru.Cache
 	processor      *StateProcessor
 
 	slicesRunning []common.Location
@@ -68,6 +69,7 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 		bc.blockCache = blockCache
 		bc.bodyCache = bodyCache
 		bc.bodyProtoCache = bodyRLPCache
+		bc.woCache, _ = lru.New(bodyCacheLimit)
 	} else {
 		blockCache, _ := lru.New(10)
 		bodyCache, _ := lru.New(10)
@@ -75,6 +77,7 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 		bc.blockCache = blockCache
 		bc.bodyCache = bodyCache
 		bc.bodyProtoCache = bodyRLPCache
+		bc.woCache, _ = lru.New(10)
 	}
 
 	// only start the state processor in zone
@@ -87,7 +90,7 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 }
 
 // Append
-func (bc *BodyDb) Append(block *types.Block, newInboundEtxs types.Transactions) ([]*types.Log, error) {
+func (bc *BodyDb) Append(block *types.WorkObject, newInboundEtxs types.Transactions) ([]*types.Log, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
@@ -131,10 +134,10 @@ func (bc *BodyDb) ProcessingState() bool {
 }
 
 // WriteBlock write the block to the bodydb database
-func (bc *BodyDb) WriteBlock(block *types.Block) {
+func (bc *BodyDb) WriteBlock(block *types.WorkObject, nodeCtx int) {
 	// add the block to the cache as well
 	bc.blockCache.Add(block.Hash(), block)
-	rawdb.WriteBlock(bc.db, block, bc.NodeCtx())
+	rawdb.WriteWorkObject(bc.db, block.Hash(), block, types.BlockObject, nodeCtx)
 }
 
 // HasBlock checks if a block is fully present in the database or not.
@@ -152,16 +155,16 @@ func (bc *BodyDb) Engine() consensus.Engine {
 
 // GetBlock retrieves a block from the database by hash and number,
 // caching it if found.
-func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
+func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.WorkObject {
 	termini := rawdb.ReadTermini(bc.db, hash)
 	if termini == nil {
 		return nil
 	}
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.Block)
+		return block.(*types.WorkObject)
 	}
-	block := rawdb.ReadBlock(bc.db, hash, number, bc.NodeLocation())
+	block := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
 	if block == nil {
 		return nil
 	}
@@ -170,10 +173,30 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return block
 }
 
+// GetWorkObject retrieves a workObject from the database by hash,
+// caching it if found.
+func (bc *BodyDb) GetWorkObject(hash common.Hash) *types.WorkObject {
+	termini := rawdb.ReadTermini(bc.db, hash)
+	if termini == nil {
+		return nil
+	}
+	// Short circuit if the block's already in the cache, retrieve otherwise
+	if wo, ok := bc.woCache.Get(hash); ok {
+		return wo.(*types.WorkObject)
+	}
+	wo := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
+	if wo == nil {
+		return nil
+	}
+	// Cache the found block for next time and return
+	bc.woCache.Add(wo.Hash(), wo)
+	return wo
+}
+
 // GetBlockOrCandidate retrieves any known block from the database by hash and number,
 // caching it if found.
-func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Block {
-	block := rawdb.ReadBlock(bc.db, hash, number, bc.NodeLocation())
+func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
+	block := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
 	if block == nil {
 		return nil
 	}

@@ -81,7 +81,7 @@ type Quai struct {
 
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
-func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.Block, logger *log.Logger) (*Quai, error) {
+func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.WorkObject, logger *log.Logger) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
 		logger.WithFields(log.Fields{
@@ -105,7 +105,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	}).Info("Allocated trie memory caches")
 
 	// Assemble the Quai object
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false, config.NodeLocation)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 			// This only happens during the expansion
 			if genesisBlock != nil {
 				// write the block to the database
-				rawdb.WriteBlock(chainDb, genesisBlock, nodeCtx)
+				rawdb.WriteWorkObject(chainDb, genesisBlock.Hash(), genesisBlock, types.BlockObject, nodeCtx)
 				rawdb.WriteHeadBlockHash(chainDb, genesisBlock.Hash())
 				// Initialize slice state for genesis knot
 				genesisTermini := types.EmptyTermini()
@@ -288,9 +288,6 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 func (s *Quai) APIs() []rpc.API {
 	apis := quaiapi.GetAPIs(s.APIBackend)
 
-	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.Core())...)
-
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
@@ -352,7 +349,7 @@ func (s *Quai) Etherbase() (eb common.Address, err error) {
 //
 // We regard two types of accounts as local miner account: etherbase
 // and accounts specified via `txpool.locals` flag.
-func (s *Quai) isLocalBlock(header *types.Header) bool {
+func (s *Quai) isLocalBlock(header *types.WorkObject) bool {
 	author, err := s.engine.Author(header)
 	if err != nil {
 		s.logger.WithFields(log.Fields{
@@ -386,8 +383,8 @@ func (s *Quai) isLocalBlock(header *types.Header) bool {
 // shouldPreserve checks whether we should preserve the given block
 // during the chain reorg depending on whether the author of block
 // is a local account.
-func (s *Quai) shouldPreserve(block *types.Block) bool {
-	return s.isLocalBlock(block.Header())
+func (s *Quai) shouldPreserve(block *types.WorkObject) bool {
+	return s.isLocalBlock(block)
 }
 
 func (s *Quai) Core() *core.Core                 { return s.core }
@@ -420,7 +417,6 @@ func (s *Quai) Stop() error {
 		close(s.closeBloomHandler)
 	}
 	s.core.Stop()
-	s.engine.Close()
 	s.chainDb.Close()
 	s.eventMux.Stop()
 	s.handler.Stop()

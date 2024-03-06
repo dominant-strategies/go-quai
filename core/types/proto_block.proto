@@ -5,20 +5,6 @@ option go_package = "github.com/dominant-strategies/go-quai/core/types";
 
 import "common/proto_common.proto";
 
-// This file defines all the ProtoBuf definitions related to core
-message ProtoBlock {
-  optional ProtoHeader header = 1;
-  optional ProtoBody body = 2;
-}
-
-message ProtoBody {
-  optional ProtoTransactions txs = 1;
-  optional ProtoHeaders uncles = 2;
-  optional ProtoTransactions etxs = 3;
-  optional ProtoManifest manifest = 4;
-  optional common.ProtoHashes interlink_hashes = 5;
-}
-
 message ProtoHeader {
   repeated common.ProtoHash parent_hash = 1;
   optional common.ProtoHash uncle_hash = 2;
@@ -39,18 +25,17 @@ message ProtoHeader {
   optional uint64 gas_used = 17;
   optional bytes base_fee = 18;
   optional common.ProtoLocation location = 19;
-  optional uint64 time = 20;
-  optional bytes extra = 21;
-  optional common.ProtoHash mix_hash = 22;
-  optional uint64 nonce = 23;
-  optional common.ProtoHash utxo_root = 24;
-  optional common.ProtoHash etx_set_hash = 25;
-  optional uint64 efficiency_score = 26;
-  optional uint64 threshold_count = 27;
-  optional uint64 expansion_number = 28;
-  optional common.ProtoHash etx_eligible_slices = 29;
-  optional common.ProtoHash prime_terminus = 30;
-  optional common.ProtoHash interlink_root_hash = 31;
+  optional bytes extra = 20;
+  optional common.ProtoHash mix_hash = 21;
+  optional uint64 nonce = 22;
+  optional common.ProtoHash utxo_root = 23;
+  optional common.ProtoHash etx_set_hash = 24;
+  optional uint64 efficiency_score = 25;
+  optional uint64 threshold_count = 26;
+  optional uint64 expansion_number = 27;
+  optional common.ProtoHash etx_eligible_slices = 28;
+  optional common.ProtoHash prime_terminus = 29;
+  optional common.ProtoHash interlink_root_hash = 30;
 }
 
 message ProtoTransaction {
@@ -83,6 +68,39 @@ message ProtoManifest { repeated common.ProtoHash manifest = 1; }
 
 message ProtoAccessList { repeated ProtoAccessTuple access_tuples = 1; }
 
+message ProtoWorkObjectHeader {
+  optional common.ProtoHash header_hash = 1;
+  optional common.ProtoHash parent_hash = 2;
+  optional bytes number = 3;
+  optional bytes difficulty = 4;
+  optional common.ProtoHash tx_hash = 5;
+  optional uint64 nonce = 6;
+  optional common.ProtoLocation location = 7;
+  optional common.ProtoHash mix_hash = 8;
+  optional uint64 time = 9;
+}
+
+message ProtoWorkObjectHeaders {
+  repeated ProtoWorkObjectHeader wo_headers = 1;
+}
+
+message ProtoWorkObjectBody {
+  optional ProtoHeader header = 1;
+  optional ProtoTransactions transactions = 2;
+  optional ProtoWorkObjectHeaders uncles = 3;
+  optional ProtoTransactions ext_transactions = 4;
+  optional ProtoManifest manifest = 5;
+  optional common.ProtoHashes interlink_hashes = 6;
+}
+
+message ProtoWorkObject {
+  optional ProtoWorkObjectHeader wo_header = 1;
+  optional ProtoWorkObjectBody wo_body = 2;
+  optional ProtoTransaction tx = 3;
+}
+
+message ProtoWorkObjects { repeated ProtoWorkObject work_objects = 1; }
+
 message ProtoAccessTuple {
   bytes address = 1;
   repeated common.ProtoHash storage_key = 2;
@@ -111,7 +129,7 @@ message ProtoLogForStorage {
 message ProtoLogsForStorage { repeated ProtoLogForStorage logs = 1; }
 
 message ProtoPendingHeader {
-  optional ProtoHeader header = 1;
+  optional ProtoWorkObject wo = 1;
   optional ProtoTermini termini = 2;
 }
 
@@ -123,12 +141,12 @@ message ProtoTermini {
 message ProtoEtxSet { optional bytes etx_hashes = 1; }
 
 message ProtoPendingEtxs {
-  optional ProtoHeader header = 1;
+  optional ProtoWorkObject header = 1;
   optional ProtoTransactions etxs = 2;
 }
 
 message ProtoPendingEtxsRollup {
-  optional ProtoHeader header = 1;
+  optional ProtoWorkObject header = 1;
   optional ProtoTransactions etxs_rollup = 2;
 }
 

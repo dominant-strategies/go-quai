@@ -41,7 +41,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.Coinbase = g.Coinbase
 	enc.Number = make([]math.HexOrDecimal64, common.HierarchyDepth)
 	enc.ParentHash = make([]common.Hash, common.HierarchyDepth)
-	for i := 0; i < common.HierarchyDepth; i++ {
+	for i := 0; i < common.HierarchyDepth-1; i++ {
 		enc.Number[i] = math.HexOrDecimal64(g.Number[i])
 		enc.ParentHash[i] = g.ParentHash[i]
 	}

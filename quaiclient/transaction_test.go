@@ -2,88 +2,111 @@ package quaiclient
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/crypto"
+	goCrypto "github.com/dominant-strategies/go-quai/crypto"
+
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quaiclient/ethclient"
 )
 
 var (
-	location     = common.Location{0, 1}
-	PARAMS       = params.ChainConfig{ChainID: big.NewInt(1337), Location: location}
-	wsUrl        = "ws://localhost:8101"
-	wsUrlCyprus2 = "ws://localhost:8101"
-	MINERTIP     = big.NewInt(1 * params.GWei)
-	BASEFEE      = big.NewInt(1 * params.GWei)
-	GAS          = uint64(42000)
-	VALUE        = big.NewInt(10)
+	location = common.Location{0, 0}
+	PARAMS   = params.ChainConfig{ChainID: big.NewInt(1337), Location: location}
+	MINERTIP = big.NewInt(1 * params.GWei)
+	BASEFEE  = big.NewInt(1 * params.GWei)
+	GAS      = uint64(420000)
+	VALUE    = big.NewInt(10)
 )
 
-func TestETX(t *testing.T) {
-	fromAddress := common.HexToAddress("0x016E397cf93239A46Ef94Abf3676cb541013F5Fa", location)
-	privKey, err := crypto.ToECDSA(common.FromHex("0x178bc73569bc321f3941936fa8d5f118cfe6a1fadccbffa329e95dd4692ee2fe"))
+func TestTX(t *testing.T) {
+
+	numTests := 1
+	fromAddress := make([]common.Address, numTests)
+	privKey := make([]*ecdsa.PrivateKey, numTests)
+	toAddress := make([]common.Address, numTests)
+	// toPrivKey := make([]*ecdsa.PrivateKey, numTests)
+	wsUrl := make([]string, numTests)
+	err := error(nil)
+	fromLocation := make([]common.Location, numTests)
+	toLocation := make([]common.Location, numTests)
+
+	//cyprus 1 -> cyprus 1
+	fromLocation[0] = common.Location{0, 0}
+	toLocation[0] = common.Location{0, 0}
+	fromAddress[0] = common.HexToAddress("0x0021358CeaC22936858C3eDa6EB86e0559915550", fromLocation[0])
+	privKey[0], err = goCrypto.ToECDSA(common.FromHex("0x7e99ffbdf4b3dda10174f18a0991114bb4a7a684b5972c6901fbe8a4a4bfc325"))
 	if err != nil {
 		t.Fatalf("Failed to convert private key to ECDSA: %v", err)
 	}
-	from := crypto.PubkeyToAddress(privKey.PublicKey, location)
-	if !from.Equal(fromAddress) {
-		t.Fatalf("Failed to convert public key to address: %v", err)
+	toAddress[0] = common.HexToAddress("0x0147f9CEa7662C567188D58640ffC48901cde02a", toLocation[0])
+	// toPrivKey[0], err = goCrypto.ToECDSA(common.FromHex("0x86f3731e698525a27530d4da6d1ae826303bb9b813ee718762b4c3524abddac5"))
+	// if err != nil {
+	// 	t.Fatalf("Failed to convert private key to ECDSA: %v", err)
+	// }
+	wsUrl[0] = "ws://localhost:8100"
+	to := toAddress[0]
+
+	for i := 0; i < numTests; i++ {
+		from := goCrypto.PubkeyToAddress(privKey[i].PublicKey, fromLocation[i])
+		if !from.Equal(fromAddress[i]) {
+			t.Fatalf("Failed to convert public key to address: %v", err)
+		}
+
+		// to := goCrypto.PubkeyToAddress(toPrivKey[i].PublicKey, toLocation[i])
+		// if !to.Equal(toAddress[i]) {
+		// 	t.Fatalf("Failed to convert public key to address: %v", err)
+		// }
+
+		signer := types.LatestSigner(&PARAMS)
+
+		wsClient, err := ethclient.Dial(wsUrl[i])
+		if err != nil {
+			t.Fatalf("Failed to connect to the Ethereum WebSocket client: %v", err)
+		}
+		defer wsClient.Close()
+
+		nonce, err := wsClient.NonceAt(context.Background(), from, nil)
+
+		if err != nil {
+			t.Error(err.Error())
+			t.Fail()
+		}
+
+		inner_tx := types.QuaiTx{ChainID: PARAMS.ChainID, Nonce: nonce, GasTipCap: MINERTIP, GasFeeCap: BASEFEE, Gas: GAS * 3, To: &to, Value: VALUE, Data: nil, AccessList: types.AccessList{}}
+		tx := types.NewTx(&inner_tx)
+
+		tx, err = types.SignTx(tx, signer, privKey[i])
+		if err != nil {
+			t.Error(err.Error())
+			t.Fail()
+		}
+
+		t.Log(tx.Hash().String())
+
+		err = wsClient.SendTransaction(context.Background(), tx)
+		if err != nil {
+			t.Error(err.Error())
+			t.Fail()
+		}
+
 	}
-
-	toAddress := common.HexToAddress("0x107569E1b81B7c217062ed10e6d03e6e94a80DaC", common.Location{1, 0})
-	toPrivKey, err := crypto.ToECDSA(common.FromHex("0x2541d7f6f17d4c65359bad46d82a48eacce266af8df72b982174f7ef9f934be2"))
-	if err != nil {
-		t.Fatalf("Failed to convert private key to ECDSA: %v", err)
-	}
-	to := crypto.PubkeyToAddress(toPrivKey.PublicKey, common.Location{1, 0})
-	if !to.Equal(toAddress) {
-		t.Fatalf("Failed to convert public key to address: %v", err)
-	}
-
-	signer := types.LatestSigner(&PARAMS)
-
-	wsClient, err := ethclient.Dial(wsUrl)
-	if err != nil {
-		t.Fatalf("Failed to connect to the Ethereum WebSocket client: %v", err)
-	}
-	defer wsClient.Close()
-
-	nonce, err := wsClient.NonceAt(context.Background(), from, nil)
-	if err != nil {
-		t.Error(err.Error())
-		t.Fail()
-	}
-
-	inner_tx := types.InternalToExternalTx{ChainID: PARAMS.ChainID, Nonce: nonce, GasTipCap: MINERTIP, Data: []byte{}, ETXData: []byte{}, GasFeeCap: BASEFEE, ETXGasPrice: big.NewInt(500 * params.GWei), ETXGasLimit: 21000, ETXGasTip: big.NewInt(500 * params.GWei), Gas: GAS * 3, To: &to, Value: VALUE, AccessList: types.AccessList{}}
-	tx := types.NewTx(&inner_tx)
-	t.Log(tx.Hash().String())
-
-	tx, err = types.SignTx(tx, signer, privKey)
-	if err != nil {
-		t.Error(err.Error())
-		t.Fail()
-	}
-
-	err = wsClient.SendTransaction(context.Background(), tx)
-	if err != nil {
-		t.Error(err.Error())
-		t.Fail()
-	}
-
 }
 
 func TestGetBalance(t *testing.T) {
+	wsUrl := "ws://localhost:8100"
+	wsUrlCyprus2 := "ws://localhost:8101"
 	wsClientCyprus1, err := ethclient.Dial(wsUrl)
 	if err != nil {
 		t.Fatalf("Failed to connect to the Ethereum WebSocket client: %v", err)
 	}
 	defer wsClientCyprus1.Close()
 
-	balance, err := wsClientCyprus1.BalanceAt(context.Background(), common.HexToAddress("0x007c0C63038D8E099D6CDe00BBec41ca0d940D40", common.Location{0, 0}), nil)
+	balance, err := wsClientCyprus1.BalanceAt(context.Background(), common.HexToAddress("0x0047f9CEa7662C567188D58640ffC48901cde02a", common.Location{0, 0}), nil)
 	if err != nil {
 		t.Error(err.Error())
 		t.Fail()
@@ -96,7 +119,7 @@ func TestGetBalance(t *testing.T) {
 	}
 	defer wsClientCyprus2.Close()
 
-	balance, err = wsClientCyprus2.BalanceAt(context.Background(), common.HexToAddress("0x010978987B569072744dc9426E76590eb6fCfE8B", common.Location{0, 1}), nil)
+	balance, err = wsClientCyprus2.BalanceAt(context.Background(), common.HexToAddress("0x01736f9273a0dF59619Ea4e17c284b422561819e", common.Location{0, 1}), nil)
 	if err != nil {
 		t.Error(err.Error())
 		t.Fail()

@@ -603,14 +603,14 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		header := make(chan *types.Header, c_pendingHeaderChSize)
+		header := make(chan *types.WorkObject, c_pendingHeaderChSize)
 		headerSub := api.backend.SubscribePendingHeaderEvent(header)
 
 		for {
 			select {
 			case b := <-header:
 				// Marshal the header data
-				marshalHeader := b.RPCMarshalHeader()
+				marshalHeader := b.RPCMarshalWorkObject()
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
 				headerSub.Unsubscribe()

@@ -79,8 +79,8 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 // Handle consensus data propagated to us from our peers
 func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, nodeLocation common.Location) bool {
 	switch data.(type) {
-	case types.Block:
-		block := data.(types.Block)
+	case types.WorkObject:
+		block := data.(types.WorkObject)
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
 			log.Global.Error("no backend found")
@@ -124,8 +124,8 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 		var data interface{}
 		data = msg.Message.GetData()
 		switch data.(type) {
-		case types.Block:
-			block := data.(types.Block)
+		case types.WorkObject:
+			block := data.(types.WorkObject)
 			backend := *qbe.GetBackend(block.Location())
 			if backend == nil {
 				log.Global.WithFields(log.Fields{
@@ -172,7 +172,7 @@ func (qbe *QuaiBackend) SetCurrentExpansionNumber(expansionNumber uint8) {
 }
 
 // WriteGenesisBlock adds the genesis block to the database and also writes the block to the disk
-func (qbe *QuaiBackend) WriteGenesisBlock(block *types.Block, location common.Location) {
+func (qbe *QuaiBackend) WriteGenesisBlock(block *types.WorkObject, location common.Location) {
 	backend := *qbe.GetBackend(location)
 	if backend == nil {
 		log.Global.Error("no backend found")
@@ -192,7 +192,7 @@ func (qbe *QuaiBackend) SetSubClient(client *quaiclient.Client, nodeLocation com
 }
 
 // AddGenesisPendingEtxs adds the genesis pending etxs for the given location
-func (qbe *QuaiBackend) AddGenesisPendingEtxs(block *types.Block, location common.Location) {
+func (qbe *QuaiBackend) AddGenesisPendingEtxs(block *types.WorkObject, location common.Location) {
 	backend := *qbe.GetBackend(location)
 	if backend == nil {
 		log.Global.Error("no backend found")
@@ -201,7 +201,7 @@ func (qbe *QuaiBackend) AddGenesisPendingEtxs(block *types.Block, location commo
 	backend.AddGenesisPendingEtxs(block)
 }
 
-func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) *types.Block {
+func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) *types.WorkObject {
 	if qbe == nil {
 		return nil
 	}

@@ -13,14 +13,14 @@ import (
 )
 
 // CalcOrder returns the order of the block within the hierarchy of chains
-func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, error) {
+func (blake3pow *Blake3pow) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
 	}
 
 	// Verify the seal and get the powHash for the given header
-	err := blake3pow.verifySeal(header)
+	err := blake3pow.verifySeal(header.WorkObjectHeader())
 	if err != nil {
 		return big0, -1, err
 	}
@@ -68,7 +68,7 @@ func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -94,7 +94,7 @@ func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *typ
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) TotalLogPhS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) TotalLogPhS(header *types.WorkObject) *big.Int {
 	switch blake3pow.config.NodeLocation.Context() {
 	case common.PRIME_CTX:
 		totalS := header.ParentEntropy(common.PRIME_CTX)
@@ -110,7 +110,7 @@ func (blake3pow *Blake3pow) TotalLogPhS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) DeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) DeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -133,7 +133,7 @@ func (blake3pow *Blake3pow) DeltaLogS(chain consensus.GenesisReader, header *typ
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) UncledLogS(block *types.Block) *big.Int {
+func (blake3pow *Blake3pow) UncledLogS(block *types.WorkObject) *big.Int {
 	uncles := block.Uncles()
 	totalUncledLogS := big.NewInt(0)
 	for _, uncle := range uncles {
@@ -149,7 +149,7 @@ func (blake3pow *Blake3pow) UncledLogS(block *types.Block) *big.Int {
 	return totalUncledLogS
 }
 
-func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -175,7 +175,7 @@ func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, he
 
 // CalcRank returns the rank of the block within the hierarchy of chains, this
 // determines the level of the interlink
-func (blake3pow *Blake3pow) CalcRank(chain consensus.GenesisReader, header *types.Header) (int, error) {
+func (blake3pow *Blake3pow) CalcRank(chain consensus.GenesisReader, header *types.WorkObject) (int, error) {
 	if chain.IsGenesisHash(header.Hash()) {
 		return 0, nil
 	}
