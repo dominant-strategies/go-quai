@@ -9,6 +9,34 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
+func TestCanonicalHashStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	emptyHash := common.Hash{}
+	hash := common.Hash{1}
+	number := uint64(1)
+
+	if entry := ReadCanonicalHash(db, number); entry != emptyHash {
+		t.Fatalf("Non existent canonical hash returned: %v", entry)
+	}
+
+	t.Log("Canonical Hash stored", hash)
+	WriteCanonicalHash(db, hash, number)
+
+	if entry := ReadCanonicalHash(db, number); entry == emptyHash {
+		t.Fatalf("Stored canonical hash not found with number %d", number)
+	} else if entry != hash {
+		t.Fatalf("Retrieved canonical hash mismatch: have %v, want %v", entry, hash)
+	}
+
+	DeleteCanonicalHash(db, number)
+
+	if entry := ReadCanonicalHash(db, number); entry != emptyHash {
+		t.Fatalf("Deleted canonical hash returned: %v", entry)
+	}
+
+}
+
 // Tests block header storage and retrieval operations.
 func TestHeaderStorage(t *testing.T) {
 	db := NewMemoryDatabase()
