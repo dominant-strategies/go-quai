@@ -75,9 +75,6 @@ func (p *P2PNode) eventLoop() {
 
 				if e.Connectedness == network.NotConnected {
 					p.peerManager.RemovePeer(peerID)
-				} else {
-					// Necessary so that the peer manager can return this peer for future queries if it hasn't been scored yet
-					p.peerManager.AddPeer(peerID)
 				}
 			case *event.EvtNATDeviceTypeChanged:
 				log.Global.Debugf("Event `NAT device type changed` - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
