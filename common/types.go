@@ -433,6 +433,25 @@ func (loc Location) SubInSlice(slice Location) Location {
 	return subLoc
 }
 
+// GetDoms returns the dom locations that must be running for a given location
+// For example:
+//   - if a region-0 calls GetDoms() the result will be
+//     [prime, region-0]
+//   - if a zone-0-0 calls GetDoms() the result will be
+//     [prime, region-0, zone-0-0]
+func (loc Location) GetDoms() []Location {
+	var dominantLocations []Location
+
+	// Always start with the prime location
+	dominantLocations = append(dominantLocations, Location{})
+
+	for i := range loc {
+		dominantLocations = append(dominantLocations, loc[:i+1])
+	}
+
+	return dominantLocations
+}
+
 func (loc Location) InSameSliceAs(cmp Location) bool {
 	// Figure out which location is shorter
 	shorter := loc
