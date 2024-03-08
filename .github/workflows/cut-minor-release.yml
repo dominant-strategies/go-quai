@@ -10,7 +10,7 @@ jobs:
   call-common-workflow:
     uses: dominant-strategies/quai-cicd/.github/workflows/cut-release-common.yml@main
     with:
-      branch: main
+      branch: ${{ github.event.inputs.branch }}
       needs_build: true
       build_command: "[ -f network.env.dist ] && mv network.env.dist network.env; make go-quai"
       needs_docker: false
