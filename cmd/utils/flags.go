@@ -859,7 +859,7 @@ func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location) {
 	switch nodeLocation.Context() {
 	case common.PRIME_CTX:
 		subUrls := []string{}
-		regionsRunning := getRegionsRunning(slicesRunning)
+		regionsRunning := GetRunningRegions(slicesRunning)
 		for _, region := range regionsRunning {
 			subUrls = append(subUrls, fmt.Sprintf("ws://127.0.0.1:%d", 8002+int(region)))
 		}

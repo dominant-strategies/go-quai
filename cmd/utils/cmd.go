@@ -58,25 +58,25 @@ func StartQuaiBackend(ctx context.Context, p2p quai.NetworkingAPI, logLevel stri
 	// Set the p2p backend inside the quaiBackend
 	quaiBackend.SetP2PApiBackend(p2p)
 
-	slicesRunning := getSlicesRunning()
-	regionsRunning := getRegionsRunning(slicesRunning)
+	runningSlices := GetRunningZones()
+	runningRegions := GetRunningRegions(runningSlices)
 
 	// Start nodes in separate goroutines
-	startNode("nodelogs/prime.log", nil, slicesRunning)
-	for _, region := range regionsRunning {
+	startNode("nodelogs/prime.log", nil, runningSlices)
+	for _, region := range runningRegions {
 		nodelogsFileName := "nodelogs/region-" + fmt.Sprintf("%d", region) + ".log"
-		startNode(nodelogsFileName, common.Location{region}, slicesRunning)
+		startNode(nodelogsFileName, common.Location{region}, runningSlices)
 	}
-	for _, slice := range slicesRunning {
+	for _, slice := range runningSlices {
 		nodelogsFileName := "nodelogs/zone-" + fmt.Sprintf("%d", slice[0]) + "-" + fmt.Sprintf("%d", slice[1]) + ".log"
-		startNode(nodelogsFileName, slice, slicesRunning)
+		startNode(nodelogsFileName, slice, runningSlices)
 	}
 
 	return quaiBackend, nil
 }
 
-// setSlicesRunning sets the slices running flag
-func getSlicesRunning() []common.Location {
+// GetRunningZones returns the slices that are processing state (which are only zones)
+func GetRunningZones() []common.Location {
 	slices := strings.Split(viper.GetString(SlicesRunningFlag.Name), ",")
 
 	// Sanity checks
@@ -86,22 +86,22 @@ func getSlicesRunning() []common.Location {
 	if len(slices) > common.NumRegionsInPrime*common.NumZonesInRegion {
 		Fatalf("number of slices exceed the current ontology")
 	}
-	slicesRunning := []common.Location{}
+	runningSlices := []common.Location{}
 	for _, slice := range slices {
-		slicesRunning = append(slicesRunning, common.Location{slice[1] - 48, slice[3] - 48})
+		runningSlices = append(runningSlices, common.Location{slice[1] - 48, slice[3] - 48})
 	}
-	return slicesRunning
+	return runningSlices
 }
 
 // getRegionsRunning returns the regions running
-func getRegionsRunning(slicesRunning []common.Location) []byte {
-	regionsRunning := []byte{}
-	for _, slice := range slicesRunning {
-		if !slices.Contains(regionsRunning, slice[0]) {
-			regionsRunning = append(regionsRunning, slice[0])
+func GetRunningRegions(runningSlices []common.Location) []byte {
+	runningRegions := []byte{}
+	for _, slice := range runningSlices {
+		if !slices.Contains(runningRegions, slice[0]) {
+			runningRegions = append(runningRegions, slice[0])
 		}
 	}
-	return regionsRunning
+	return runningRegions
 }
 
 func StartNode(stack *node.Node) {
