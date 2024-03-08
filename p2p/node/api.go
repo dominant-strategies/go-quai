@@ -2,6 +2,7 @@ package node
 
 import (
 	"math/big"
+	"reflect"
 	"sync"
 	"time"
 
@@ -159,12 +160,13 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 		// Mark this peer as behaving well
 		p.peerManager.MarkResponsivePeer(peerID)
 	} else {
+		datatypeType := reflect.TypeOf(datatype).String()
 		log.Global.WithFields(log.Fields{
 			"peerId":   peerID,
 			"location": location.Name(),
 			"data":     data,
-			"datatype": datatype,
-		}).Error("Error requesting the data from peer")
+			"datatype": datatypeType,
+		}).Error("Error requesting the data from peer: " + err.Error())
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID)
 	}

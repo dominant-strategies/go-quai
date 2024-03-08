@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"reflect"
 
 	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -18,11 +19,12 @@ import (
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
 func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data interface{}, datatype interface{}) (interface{}, error) {
+	datatypeType := reflect.TypeOf(datatype).String()
 	log.Global.WithFields(log.Fields{
 		"peerId":   peerID,
 		"location": location.Name(),
 		"data":     data,
-		"datatype": datatype,
+		"datatype": datatypeType,
 	}).Trace("Requesting the data from peer")
 	stream, err := p.NewStream(peerID)
 	if err != nil {
@@ -39,18 +41,21 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	// Create the corresponding data request
 	requestBytes, err := pb.EncodeQuaiRequest(id, location, data, datatype)
 	if err != nil {
+		log.Global.Errorf("Failed to encode request: %v", err)
 		return nil, err
 	}
 
 	// Send the request to the peer
 	err = common.WriteMessageToStream(stream, requestBytes)
 	if err != nil {
+		log.Global.Errorf("Failed to send request: %v", err)
 		return nil, err
 	}
 
 	// Get appropriate channel and wait for response
 	dataChan, err := p.requestManager.GetRequestChan(id)
 	if err != nil {
+		log.Global.Errorf("Failed to get request channel: %v", err)
 		return nil, err
 	}
 	recvdType := <-dataChan
@@ -81,7 +86,8 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 			return trieNode, nil
 		}
 	default:
-		log.Global.Warn("peer returned unexpected type")
+		recvdTypeType := reflect.TypeOf(recvdType).String()
+		log.Global.Warnf("peer returned unexpected type: %s", recvdTypeType)
 	}
 
 	// If this peer responded with an invalid response, ban them for misbehaving.

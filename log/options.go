@@ -41,6 +41,7 @@ func WithLevel(level string) Options {
 			FullTimestamp:   true,
 			TimestampFormat: "01-02|15:04:05.000",
 		}
+		formatter.CallerPrettyfier = callerPrettyfier
 		logger.SetFormatter(formatter)
 	}
 }
@@ -144,5 +145,10 @@ func callerPrettyfier(f *runtime.Frame) (string, string) {
 // The 2nd argument indicates the number of parts to return
 func formatFilePath(path string, parts int) string {
 	arr := strings.Split(path, "/")
-	return strings.Join(arr[len(arr)-parts:], "/")
+	start := len(arr) - parts
+	if start < 0 {
+		start = 0
+	}
+	return strings.Join(arr[start:], "/")
+
 }

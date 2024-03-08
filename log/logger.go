@@ -44,6 +44,12 @@ func SetGlobalLogger(logFilename string, logLevel string) {
 	if err != nil {
 		level = defaultLogLevel
 	}
+
+	// if log level is debug or trace, set the caller prettyfier
+	if level == logrus.DebugLevel || level == logrus.TraceLevel {
+		logrus.SetReportCaller(true)
+	}
+
 	Global.SetLevel(level)
 
 	if logFilename == "" {
@@ -62,10 +68,25 @@ func SetGlobalLogger(logFilename string, logLevel string) {
 	}
 	Global.SetOutput(io.MultiWriter(output, os.Stdout))
 
+	formatter := &logrus.TextFormatter{
+		ForceColors:     true,
+		PadLevelText:    true,
+		FullTimestamp:   true,
+		TimestampFormat: "01-02|15:04:05.000",
+	}
+	formatter.CallerPrettyfier = callerPrettyfier
+
+	Global.SetFormatter(formatter)
+
+	// Set runtime caller
+	logrus.SetReportCaller(true)
+	Global.ReportCaller = true
+
 	Global.WithFields(Fields{
 		"path":  logFilename,
 		"level": level.String(),
 	}).Info("Global logger started")
+
 }
 
 func NewLogger(logFilename string, logLevel string) *logrus.Logger {
@@ -106,5 +127,20 @@ func createStandardLogger(logFilename string, logLevel string, stdOut bool) *log
 		level = defaultLogLevel
 	}
 	logger.SetLevel(level)
+
+	formatter := &logrus.TextFormatter{
+		ForceColors:     true,
+		PadLevelText:    true,
+		FullTimestamp:   true,
+		TimestampFormat: "01-02|15:04:05.000",
+	}
+	formatter.CallerPrettyfier = callerPrettyfier
+
+	logger.SetFormatter(formatter)
+
+	// Set runtime caller
+	logrus.SetReportCaller(true)
+	logger.ReportCaller = true
+
 	return logger
 }
