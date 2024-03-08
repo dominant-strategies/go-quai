@@ -29,6 +29,7 @@ type PeerInfo struct {
 type PeerDB struct {
 	db          *leveldb.DB
 	peerCounter int
+	mu          sync.Mutex
 }
 
 // Returns a new PeerDB instance
@@ -58,5 +59,6 @@ func NewPeerDB(dbDirName string) (*PeerDB, error) {
 	return &PeerDB{
 		db:          db,
 		peerCounter: peerCounter,
+		mu:          sync.Mutex{},
 	}, nil
 }

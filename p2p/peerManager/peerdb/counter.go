@@ -17,10 +17,14 @@ func initCounter(db *leveldb.DB) int {
 }
 
 func (pdb *PeerDB) incrementPeerCount() {
+	pdb.mu.Lock()
+	defer pdb.mu.Unlock()
 	pdb.peerCounter++
 }
 
 func (pdb *PeerDB) decrementPeerCount() {
+	pdb.mu.Lock()
+	defer pdb.mu.Unlock()
 	if pdb.peerCounter == 0 {
 		log.Global.Errorf("Peer counter is already at 0")
 		return
