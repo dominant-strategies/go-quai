@@ -54,13 +54,13 @@ type NetworkingAPI interface {
 
 	// Method to request data from the network
 	// Specify location, data hash, and data type to request
-	Request(common.Location, interface{}, interface{}) chan interface{}
+	Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{}
 
 	// Methods to report a peer to the P2PClient as behaving maliciously
 	// Should be called whenever a peer sends us data that is acceptably lively
-	MarkLivelyPeer(core.PeerID)
+	MarkLivelyPeer(core.PeerID, common.Location)
 	// Should be called whenever a peer sends us data that is stale or latent
-	MarkLatentPeer(core.PeerID)
+	MarkLatentPeer(core.PeerID, common.Location)
 
 	// Protects the peer's connection from being pruned
 	ProtectPeer(core.PeerID)
