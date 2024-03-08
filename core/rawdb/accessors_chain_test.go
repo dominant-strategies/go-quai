@@ -46,6 +46,7 @@ func TestHeaderStorage(t *testing.T) {
 	header.SetParentHash(common.Hash{1}, common.ZONE_CTX)
 	header.SetBaseFee(big.NewInt(1))
 	header.SetLocation(common.Location{0, 0})
+	header.SetNumber(big.NewInt(1), common.ZONE_CTX)
 	header.SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 0}))
 
 	if entry := ReadHeader(db, header.Hash(), common.ZONE_CTX); entry != nil {
@@ -59,6 +60,22 @@ func TestHeaderStorage(t *testing.T) {
 	} else if entry.Hash() != header.Hash() {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
 	}
+
+	// Verify header number
+	if number := ReadHeaderNumber(db, header.Hash()); *number != uint64(1) {
+		t.Fatalf("Retrieved header number mismatch: have %v, want %v", number, big.NewInt(1))
+	}
+	// Modify the header number and check if it was updated
+	WriteHeaderNumber(db, header.Hash(), uint64(2))
+	if number := ReadHeaderNumber(db, header.Hash()); *number != uint64(2) {
+		t.Fatalf("Retrieved header number mismatch: have %v, want %v", number, big.NewInt(1))
+	}
+
+	DeleteHeaderNumber(db, header.Hash())
+	if number := ReadHeaderNumber(db, header.Hash()); number != nil {
+		t.Fatalf("Deleted header number returned: %v", number)
+	}
+
 	// Delete the header and verify the execution
 	DeleteHeader(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64())
 	if entry := ReadHeader(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64()); entry != nil {
