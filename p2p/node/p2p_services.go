@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -53,10 +54,21 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	if err != nil {
 		return nil, err
 	}
-	recvdType := <-dataChan
+	var recvdType interface{}
+	select {
+	case recvdType = <-dataChan:
+		break
+	case <-time.After(requestManager.C_requestTimeout):
+		log.Global.WithFields(log.Fields{
+			"peerId": peerID,
+			"error":  err,
+		}).Warn("Request failed")
+		p.peerManager.MarkUnresponsivePeer(peerID, location)
+		return nil, nil
+	}
 
 	// Remove request ID from the map of pending requests
-	p.requestManager.CloseRequest(id)
+	defer p.requestManager.CloseRequest(id)
 
 	// Check the received data type & hash matches the request
 	switch datatype.(type) {

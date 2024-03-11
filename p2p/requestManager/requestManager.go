@@ -4,8 +4,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
+)
+
+const (
+	C_requestTimeout = 10 * time.Second
 )
 
 var (
