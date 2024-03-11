@@ -41,6 +41,7 @@ message ProtoHeader {
   optional common.ProtoHash mix_hash = 20;
   optional uint64 nonce = 21;
   optional common.ProtoHash utxo_root = 22;
+  optional common.ProtoHash etx_set_hash = 23;
 }
 
 message ProtoTransaction {
@@ -115,12 +116,9 @@ message ProtoTermini {
   repeated common.ProtoHash sub_termini = 2;
 }
 
-message ProtoEtxSet { repeated ProtoEtxSetEntry etx_set = 1; }
-
-message ProtoEtxSetEntry {
-  optional uint64 height = 1;
-  optional ProtoTransaction etx = 2;
-  optional common.ProtoHash etx_hash = 3;
+message ProtoEtxSet {
+  repeated ProtoTransaction etxs = 1; 
+  optional bytes etx_hashes = 2;
 }
 
 message ProtoPendingEtxs {

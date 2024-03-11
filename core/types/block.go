@@ -34,17 +34,19 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 var (
-	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = RlpHash([]*Header(nil))
-	EmptyBodyHash  = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
-	big2e256       = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
-	hasher         = blake3.New(32, nil)
-	hasherMu       sync.RWMutex
+	EmptyRootHash   = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyUncleHash  = RlpHash([]*Header(nil))
+	EmptyBodyHash   = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
+	EmptyEtxSetHash = crypto.Keccak256Hash([]byte{})
+	big2e256        = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
+	hasher          = blake3.New(32, nil)
+	hasherMu        sync.RWMutex
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -90,6 +92,7 @@ type Header struct {
 	utxoRoot      common.Hash     `json:"utxoRoot"               gencodec:"required"`
 	txHash        common.Hash     `json:"transactionsRoot"     gencodec:"required"`
 	etxHash       common.Hash     `json:"extTransactionsRoot"  gencodec:"required"`
+	etxSetHash    common.Hash     `json:"etxSetHash"        gencodec:"required"`
 	etxRollupHash common.Hash     `json:"extRollupRoot"        gencodec:"required"`
 	manifestHash  []common.Hash   `json:"manifestHash"         gencodec:"required"`
 	receiptHash   common.Hash     `json:"receiptsRoot"         gencodec:"required"`
@@ -136,6 +139,7 @@ type extheader struct {
 	UTXORoot      common.Hash
 	TxHash        common.Hash
 	EtxHash       common.Hash
+	EtxSetHash    common.Hash
 	EtxRollupHash common.Hash
 	ManifestHash  []common.Hash
 	ReceiptHash   common.Hash
@@ -167,6 +171,7 @@ func EmptyHeader() *Header {
 	h.mixHash = EmptyRootHash
 	h.txHash = EmptyRootHash
 	h.etxHash = EmptyRootHash
+	h.etxSetHash = EmptyEtxSetHash
 	h.etxRollupHash = EmptyRootHash
 	h.uncleHash = EmptyUncleHash
 	h.baseFee = big.NewInt(0)
@@ -194,6 +199,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	h.utxoRoot = eh.UTXORoot
 	h.txHash = eh.TxHash
 	h.etxHash = eh.EtxHash
+	h.etxSetHash = eh.EtxSetHash
 	h.etxRollupHash = eh.EtxRollupHash
 	h.manifestHash = eh.ManifestHash
 	h.receiptHash = eh.ReceiptHash
@@ -223,6 +229,7 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		UTXORoot:      h.utxoRoot,
 		TxHash:        h.txHash,
 		EtxHash:       h.etxHash,
+		EtxSetHash:    h.etxSetHash,
 		EtxRollupHash: h.etxRollupHash,
 		ManifestHash:  h.manifestHash,
 		ReceiptHash:   h.receiptHash,
@@ -252,6 +259,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	utxoRoot := common.ProtoHash{Value: h.UTXORoot().Bytes()}
 	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
 	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
+	etxSetHash := common.ProtoHash{Value: h.EtxSetHash().Bytes()}
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
 	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
@@ -267,6 +275,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		UtxoRoot:      &utxoRoot,
 		TxHash:        &txHash,
 		EtxHash:       &etxhash,
+		EtxSetHash:    &etxSetHash,
 		EtxRollupHash: &etxRollupHash,
 		ReceiptHash:   &receiptHash,
 		Difficulty:    h.Difficulty().Bytes(),
@@ -318,6 +327,9 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	}
 	if protoHeader.EtxHash == nil {
 		return errors.New("missing required field 'EtxHash' in Header")
+	}
+	if protoHeader.EtxSetHash == nil {
+		return errors.New("missing required field 'EtxSetHash' in Header")
 	}
 	if protoHeader.EtxRollupHash == nil {
 		return errors.New("missing required field 'EtxRollupHash' in Header")
@@ -375,6 +387,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	h.SetTxHash(common.BytesToHash(protoHeader.GetTxHash().GetValue()))
 	h.SetReceiptHash(common.BytesToHash(protoHeader.GetReceiptHash().GetValue()))
 	h.SetEtxHash(common.BytesToHash(protoHeader.GetEtxHash().GetValue()))
+	h.SetEtxSetHash(common.BytesToHash(protoHeader.GetEtxSetHash().GetValue()))
 	h.SetEtxRollupHash(common.BytesToHash(protoHeader.GetEtxRollupHash().GetValue()))
 	h.SetDifficulty(new(big.Int).SetBytes(protoHeader.GetDifficulty()))
 	h.SetGasLimit(protoHeader.GetGasLimit())
@@ -413,6 +426,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"transactionsRoot":    h.TxHash(),
 		"receiptsRoot":        h.ReceiptHash(),
 		"extTransactionsRoot": h.EtxHash(),
+		"etxSetHash":          h.EtxSetHash(),
 		"extRollupRoot":       h.EtxRollupHash(),
 		"manifestHash":        h.ManifestHashArray(),
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
@@ -461,6 +475,9 @@ func (h *Header) TxHash() common.Hash {
 }
 func (h *Header) EtxHash() common.Hash {
 	return h.etxHash
+}
+func (h *Header) EtxSetHash() common.Hash {
+	return h.etxSetHash
 }
 func (h *Header) EtxRollupHash() common.Hash {
 	return h.etxRollupHash
@@ -536,6 +553,11 @@ func (h *Header) SetEtxHash(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.etxHash = val
+}
+func (h *Header) SetEtxSetHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.etxSetHash = val
 }
 func (h *Header) SetEtxRollupHash(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -627,6 +649,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 	utxoRoot := common.ProtoHash{Value: h.UTXORoot().Bytes()}
 	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
 	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
+	etxSetHash := common.ProtoHash{Value: h.EtxSetHash().Bytes()}
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
 	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
@@ -641,6 +664,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		UtxoRoot:      &utxoRoot,
 		TxHash:        &txHash,
 		EtxHash:       &etxhash,
+		EtxSetHash:    &etxSetHash,
 		EtxRollupHash: &etxRollupHash,
 		ReceiptHash:   &receiptHash,
 		Difficulty:    h.Difficulty().Bytes(),
@@ -1001,6 +1025,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetUTXORoot(h.UTXORoot())
 	cpy.SetTxHash(h.TxHash())
 	cpy.SetEtxHash(h.EtxHash())
+	cpy.SetEtxSetHash(h.EtxSetHash())
 	cpy.SetEtxRollupHash(h.EtxRollupHash())
 	cpy.SetReceiptHash(h.ReceiptHash())
 	if len(h.extra) > 0 {
@@ -1084,6 +1109,7 @@ func (b *Block) EVMRoot() common.Hash                 { return b.header.EVMRoot(
 func (b *Block) UTXORoot() common.Hash                { return b.header.UTXORoot() }
 func (b *Block) TxHash() common.Hash                  { return b.header.TxHash() }
 func (b *Block) EtxHash() common.Hash                 { return b.header.EtxHash() }
+func (b *Block) EtxSetHash() common.Hash              { return b.header.EtxSetHash() }
 func (b *Block) EtxRollupHash() common.Hash           { return b.header.EtxRollupHash() }
 func (b *Block) ManifestHash(nodeCtx int) common.Hash { return b.header.ManifestHash(nodeCtx) }
 func (b *Block) ReceiptHash() common.Hash             { return b.header.ReceiptHash() }

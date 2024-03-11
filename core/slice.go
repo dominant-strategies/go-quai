@@ -1303,6 +1303,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetUncleHash(header.UncleHash())
 		combinedPendingHeader.SetTxHash(header.TxHash())
 		combinedPendingHeader.SetEtxHash(header.EtxHash())
+		combinedPendingHeader.SetEtxSetHash(header.EtxSetHash())
 		combinedPendingHeader.SetReceiptHash(header.ReceiptHash())
 		combinedPendingHeader.SetEVMRoot(header.EVMRoot())
 		combinedPendingHeader.SetUTXORoot(header.UTXORoot())

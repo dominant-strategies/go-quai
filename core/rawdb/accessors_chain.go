@@ -1175,16 +1175,20 @@ func WriteEtxSetProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, 
 }
 
 // ReadEtxSet retreives the EtxSet corresponding to a given block
-func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) types.EtxSet {
+func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64, location common.Location) *types.EtxSet {
 	data, err := ReadEtxSetProto(db, hash, number)
 	if err != nil {
+		log.Global.WithError(err).Error("Failed to read etx set")
 		return nil
 	}
 	protoEtxSet := new(types.ProtoEtxSet)
 	if err := proto.Unmarshal(data, protoEtxSet); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal etx set")
 	}
-	etxSet := make(types.EtxSet)
+	etxSet := types.EtxSet{
+		ETXs:      make([]*types.Transaction, 0, len(protoEtxSet.Etxs)),
+		ETXHashes: make([]byte, 0),
+	}
 	err = etxSet.ProtoDecode(protoEtxSet, location)
 	if err != nil {
 		log.Global.WithFields(log.Fields{
@@ -1193,11 +1197,11 @@ func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64, location commo
 		}).Error("Invalid etx set Proto")
 		return nil
 	}
-	return etxSet
+	return &etxSet
 }
 
 // WriteEtxSet stores the EtxSet corresponding to a given block
-func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet types.EtxSet) {
+func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet *types.EtxSet) {
 	protoEtxSet := etxSet.ProtoEncode()
 
 	data, err := proto.Marshal(protoEtxSet)

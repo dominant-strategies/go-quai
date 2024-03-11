@@ -23,6 +23,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		UTXORoot		  common.Hash	 `json:"utxoRoot"              gencodec:"required"`
 		TxHash        common.Hash    `json:"transactionsRoot"    gencodec:"required"`
 		EtxHash       common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
+		EtxSetHash	common.Hash    `json:"etxSetHash"          gencodec:"required"`
 		EtxRollupHash common.Hash    `json:"extRollupRoot"       gencodec:"required"`
 		ManifestHash  []common.Hash  `json:"manifestHash"        gencodec:"required"`
 		ReceiptHash   common.Hash    `json:"receiptsRoot"        gencodec:"required"`
@@ -58,6 +59,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.UTXORoot = h.UTXORoot()
 	enc.TxHash = h.TxHash()
 	enc.EtxHash = h.EtxHash()
+	enc.EtxSetHash = h.EtxSetHash()
 	enc.EtxRollupHash = h.EtxRollupHash()
 	enc.ReceiptHash = h.ReceiptHash()
 	enc.Difficulty = (*hexutil.Big)(h.Difficulty())
@@ -85,6 +87,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		TxHash        *common.Hash    `json:"transactionsRoot"    gencodec:"required"`
 		ReceiptHash   *common.Hash    `json:"receiptsRoot"        gencodec:"required"`
 		EtxHash       *common.Hash    `json:"extTransactionsRoot" gencodec:"required"`
+		EtxSetHash    *common.Hash    `json:"etxSetHash"          gencodec:"required"`
 		EtxRollupHash *common.Hash    `json:"extRollupRoot"       gencodec:"required"`
 		ManifestHash  []common.Hash   `json:"manifestHash"        gencodec:"required"`
 		Difficulty    *hexutil.Big    `json:"difficulty"          gencodec:"required"`
@@ -123,6 +126,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.EtxHash == nil {
 		return errors.New("missing required field 'extTransactionsRoot' for Header")
+	}
+	if dec.EtxSetHash == nil {
+		return errors.New("missing required field 'etxSetHash' for Header")
 	}
 	if dec.EtxRollupHash == nil {
 		return errors.New("missing required field 'extRollupRoot' for Header")
@@ -195,6 +201,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetTxHash(*dec.TxHash)
 	h.SetReceiptHash(*dec.ReceiptHash)
 	h.SetEtxHash(*dec.EtxHash)
+	h.SetEtxSetHash(*dec.EtxSetHash)
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
 	h.SetDifficulty((*big.Int)(dec.Difficulty))
 	h.SetGasLimit(uint64(*dec.GasLimit))

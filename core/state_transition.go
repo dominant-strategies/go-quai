@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
 	cmath "github.com/dominant-strategies/go-quai/common/math"
@@ -228,11 +229,17 @@ func (st *StateTransition) buyGas() error {
 // subGasETX subtracts the gas for an ETX from the gas pool and adds it to the total gas used.
 // The ETX does not pay for the gas.
 func (st *StateTransition) subGasETX() error {
+	maxEtxGasLimit := st.evm.Context.GasLimit / params.MinimumEtxGasDivisor
+	if st.msg.Gas() > maxEtxGasLimit {
+		if err := st.gp.SubGas(params.TxGas); err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: have %d, want %d", ErrEtxGasLimitReached, st.msg.Gas(), maxEtxGasLimit)
+	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
 	}
 	st.gas += st.msg.Gas()
-
 	st.initialGas = st.msg.Gas()
 	return nil
 }
@@ -311,7 +318,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 	} else if err := st.subGasETX(); err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), ErrEtxGasLimitReached.Error()) {
+			return &ExecutionResult{
+				UsedGas:      params.TxGas,
+				Err:          err,
+				ReturnData:   []byte{},
+				Etxs:         nil,
+				ContractAddr: nil,
+			}, nil
+		} else {
+			return nil, err
+		}
 	}
 
 	msg := st.msg

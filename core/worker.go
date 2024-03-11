@@ -553,13 +553,19 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 		work.utxoFees = big.NewInt(0)
 		if fill {
 			start := time.Now()
-			w.fillTransactions(interrupt, work, block)
+			etxSet := w.fillTransactions(interrupt, work, block)
 			w.fillTransactionsRollingAverage.Add(time.Since(start))
 			w.logger.WithFields(log.Fields{
 				"count":   len(work.txs),
 				"elapsed": common.PrettyDuration(time.Since(start)),
 				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
 			}).Info("Filled and sorted pending transactions")
+			// Set the etx set commitment in the header
+			if etxSet != nil {
+				work.header.SetEtxHash(etxSet.Hash())
+			} else {
+				work.header.SetEtxHash(types.EmptyEtxSetHash)
+			}
 		}
 		if coinbase.IsInQiLedgerScope() {
 			coinbaseTx, err := createCoinbaseTxWithFees(work.header, work.utxoFees, work.state)
@@ -737,13 +743,39 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	return nil, errors.New("error finding transaction")
 }
 
-func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
+func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(GasPool).AddGas(gasLimit())
 	}
 	var coalescedLogs []*types.Log
-
+	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
+	for _, tx := range etxs {
+		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
+			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
+		}
+		if env.gasPool.Gas() < params.TxGas {
+			w.logger.WithFields(log.Fields{
+				"have": env.gasPool,
+				"want": params.TxGas,
+			}).Trace("Not enough gas for further transactions")
+			break
+		}
+		// Add ETXs until minimum gas is used
+		if env.header.GasUsed() >= minEtxGas {
+			break
+		}
+		if env.header.GasUsed() > minEtxGas*params.MaximumEtxGasMultiplier { // sanity check, this should never happen
+			log.Global.WithField("Gas Used", env.header.GasUsed()).Error("Block uses more gas than maximum ETX gas")
+			return true
+		}
+		env.state.Prepare(tx.Hash(), env.tcount)
+		logs, err := w.commitTransaction(env, tx)
+		if err == nil {
+			coalescedLogs = append(coalescedLogs, logs...)
+			env.tcount++
+		}
+	}
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -990,41 +1022,39 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.Block) {
+func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.Block) *types.EtxSet {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
+	etxs := make([]*types.Transaction, 0)
 	etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64(w.hc.NodeCtx()), w.hc.NodeLocation())
-	if etxSet == nil {
-		return
-	}
-	etxSet.Update(types.Transactions{}, block.NumberU64(w.hc.NodeCtx())+1, w.hc.NodeLocation()) // Prune any expired ETXs
-	etxs := make([]*types.Transaction, 0, len(etxSet))
-
-	for _, entry := range etxSet {
-		tx := entry.ETX
-		if tx.ETXSender().Location().Equal(w.chainConfig.Location) { // Sanity check
-			w.logger.WithFields(log.Fields{
-				"tx":     tx.Hash().String(),
-				"sender": tx.ETXSender().String(),
-			}).Error("ETX sender is in our location!")
-			continue // skip this tx
+	if etxSet != nil {
+		etxs = make([]*types.Transaction, 0, len(etxSet.ETXs))
+		for _, entry := range etxSet.ETXs {
+			if entry.ETXSender().Location().Equal(w.chainConfig.Location) { // Sanity check. This is unnecessary and should be removed.
+				w.logger.WithFields(log.Fields{
+					"tx":     entry.Hash().String(),
+					"sender": entry.ETXSender().String(),
+				}).Error("ETX sender is in our location!")
+				continue // skip this tx
+			}
+			etxs = append(etxs, entry)
 		}
-		etxs = append(etxs, &tx)
 	}
 
 	pending, err := w.txPool.TxPoolPending(true)
 	if err != nil {
-		return
+		return nil
 	}
 
 	pendingQiTxs := w.txPool.UTXOPoolPending()
 
 	if len(pending) > 0 || len(pendingQiTxs) > 0 || len(etxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, etxs, pendingQiTxs, pending, env.header.BaseFee(), true)
-		if w.commitTransactions(env, txs, interrupt) {
-			return
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.header.BaseFee(), true)
+		if w.commitTransactions(env, etxs, txs, interrupt) {
+			return etxSet
 		}
 	}
+	return etxSet
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
@@ -1265,6 +1295,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	if txFeeInQit.Cmp(minimumFee) < 0 {
 		return fmt.Errorf("tx %032x has insufficient fee for base fee of %d and gas of %d", tx.Hash(), baseFeeInQi.Uint64(), txGas)
 	}
+	log.Global.Infof("Minimum fee: %d", minimumFee.Int64())
 	// Miner gets remainder of fee after base fee
 	txFeeInQit.Sub(txFeeInQit, minimumFee)
 

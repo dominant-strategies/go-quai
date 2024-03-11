@@ -170,7 +170,11 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.Gas = &gas
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		protoTx.Value = tx.Value().Bytes()
-		protoTx.Data = tx.Data()
+		if tx.Data() == nil {
+			protoTx.Data = []byte{}
+		} else {
+			protoTx.Data = tx.Data()
+		}
 		protoTx.To = tx.To().Bytes()
 		protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
 		protoTx.GasTipCap = tx.GasTipCap().Bytes()
@@ -182,7 +186,11 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.EtxGasLimit = &etxGasLimit
 		protoTx.EtxGasPrice = tx.ETXGasPrice().Bytes()
 		protoTx.EtxGasTip = tx.ETXGasTip().Bytes()
-		protoTx.EtxData = tx.ETXData()
+		if tx.ETXData() == nil {
+			protoTx.EtxData = []byte{}
+		} else {
+			protoTx.EtxData = tx.ETXData()
+		}
 		protoTx.EtxAccessList = tx.ETXAccessList().ProtoEncode()
 	case 3:
 		var err error
@@ -468,7 +476,11 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		protoTxSigningData.Gas = &gas
 		protoTxSigningData.AccessList = tx.AccessList().ProtoEncode()
 		protoTxSigningData.Value = tx.Value().Bytes()
-		protoTxSigningData.Data = tx.Data()
+		if tx.Data() == nil {
+			protoTxSigningData.Data = []byte{}
+		} else {
+			protoTxSigningData.Data = tx.Data()
+		}
 		protoTxSigningData.To = tx.To().Bytes()
 		protoTxSigningData.GasFeeCap = tx.GasFeeCap().Bytes()
 		protoTxSigningData.GasTipCap = tx.GasTipCap().Bytes()
@@ -476,7 +488,11 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		protoTxSigningData.EtxGasLimit = &etxGasLimit
 		protoTxSigningData.EtxGasPrice = tx.ETXGasPrice().Bytes()
 		protoTxSigningData.EtxGasTip = tx.ETXGasTip().Bytes()
-		protoTxSigningData.EtxData = tx.ETXData()
+		if tx.ETXData() == nil {
+			protoTxSigningData.EtxData = []byte{}
+		} else {
+			protoTxSigningData.EtxData = tx.ETXData()
+		}
 		protoTxSigningData.EtxAccessList = tx.ETXAccessList().ProtoEncode()
 	case 3:
 		txType := uint64(tx.Type())
@@ -1018,14 +1034,9 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, etxs []*Transaction, qiTxs map[common.Hash]*TxWithMinerFee, txs map[common.AddressBytes]Transactions, baseFee *big.Int, sort bool) *TransactionsByPriceAndNonce {
+func NewTransactionsByPriceAndNonce(signer Signer, qiTxs map[common.Hash]*TxWithMinerFee, txs map[common.AddressBytes]Transactions, baseFee *big.Int, sort bool) *TransactionsByPriceAndNonce {
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByPriceAndTime, 0, len(txs))
-	// Push inbound ETXs to the front. They no longer have any associated fees.
-	// [Some amount of] ETXs must be processed before regular txs by consensus.
-	for _, etx := range etxs {
-		heads = append(heads, &TxWithMinerFee{etx, new(big.Int)})
-	}
 
 	for from, accTxs := range txs {
 		acc, err := Sender(signer, accTxs[0])
