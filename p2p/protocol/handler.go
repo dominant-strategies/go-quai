@@ -40,22 +40,26 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			continue
 		}
 
-		quaiMsg, err := pb.DecodeQuaiMessage(data)
-		if err != nil {
-			log.Global.Errorf("error decoding quai message: %s", err)
-			continue
-		}
+		go handleMessage(data, stream, node)
+	}
+}
 
-		switch {
-		case quaiMsg.GetRequest() != nil:
-			handleRequest(quaiMsg.GetRequest(), stream, node)
+func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
+	quaiMsg, err := pb.DecodeQuaiMessage(data)
+	if err != nil {
+		log.Global.Errorf("error decoding quai message: %s", err)
+		return
+	}
 
-		case quaiMsg.GetResponse() != nil:
-			handleResponse(quaiMsg.GetResponse(), stream, node)
+	switch {
+	case quaiMsg.GetRequest() != nil:
+		handleRequest(quaiMsg.GetRequest(), stream, node)
 
-		default:
-			log.Global.WithField("quaiMsg", quaiMsg).Errorf("unsupported quai message type")
-		}
+	case quaiMsg.GetResponse() != nil:
+		handleResponse(quaiMsg.GetResponse(), node)
+
+	default:
+		log.Global.WithField("quaiMsg", quaiMsg).Errorf("unsupported quai message type")
 	}
 }
 
@@ -133,7 +137,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 	}
 }
 
-func handleResponse(quaiResp *pb.QuaiResponseMessage, stream network.Stream, node QuaiP2PNode) {
+func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 	recvdID, recvdType, err := pb.DecodeQuaiResponse(quaiResp)
 	if err != nil {
 		log.Global.WithField(
