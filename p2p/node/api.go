@@ -152,16 +152,16 @@ func (p *P2PNode) queryDHT(location common.Location, data interface{}, datatype 
 }
 
 func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data interface{}, dataType interface{}, resultChan chan interface{}) {
+	var recvd interface{}
+	var err error
 	// Ask peer and wait for response
-	if recvd, err := p.requestFromPeer(peerID, location, data, dataType); err == nil {
+	if recvd, err = p.requestFromPeer(peerID, location, data, dataType); err == nil {
 		log.Global.WithFields(log.Fields{
 			"data":     data,
 			"dataType": dataType,
 			"peerId":   peerID,
 			"location": location.Name(),
 		}).Trace("Received data from peer")
-		// send the block to the result channel
-		resultChan <- recvd
 
 		// Mark this peer as behaving well
 		p.peerManager.MarkResponsivePeer(peerID, location)
@@ -176,13 +176,15 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID, location)
 	}
+	// send the block to the result channel
+	resultChan <- recvd
 }
 
 // Request a data from the network for the specified slice
 func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
 	resultChan := make(chan interface{}, 1)
 
-	p.requestFromPeers(location, requestData, responseDataType, resultChan)
+	go p.requestFromPeers(location, requestData, responseDataType, resultChan)
 	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
 	// Right now this creates too many streams, so don't call this until we have a better solution
 	// p.queryDHT(location, requestData, responseDataType, resultChan)
