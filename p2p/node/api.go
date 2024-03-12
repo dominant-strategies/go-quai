@@ -159,7 +159,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 			"dataType": dataType,
 			"peerId":   peerID,
 			"location": location.Name(),
-		}).Warn("Received data from peer")
+		}).Trace("Received data from peer")
 		// send the block to the result channel
 		resultChan <- recvd
 

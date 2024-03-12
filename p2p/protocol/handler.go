@@ -69,19 +69,19 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 	switch query.(type) {
 	case *common.Hash:
 		log.Global.WithFields(log.Fields{
-			"requestID": id,
+			"requestID":   id,
 			"decodedType": decodedType,
-			"location":  loc,
-			"hash":      query,
-			"peer":      stream.Conn().RemotePeer(),
+			"location":    loc,
+			"hash":        query,
+			"peer":        stream.Conn().RemotePeer(),
 		}).Debug("Received request by hash to handle")
 	case *big.Int:
 		log.Global.WithFields(log.Fields{
-			"requestID": id,
+			"requestID":   id,
 			"decodedType": decodedType,
-			"location":  loc,
-			"hash":      query,
-			"peer":      stream.Conn().RemotePeer(),
+			"location":    loc,
+			"number":      query,
+			"peer":        stream.Conn().RemotePeer(),
 		}).Debug("Received request by number to handle")
 	default:
 		log.Global.Errorf("unsupported request input data field type: %T", query)

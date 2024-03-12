@@ -612,7 +612,7 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 	key := pendingHeaderKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
-		log.Global.WithField("key", key).Debug("Pending Header is nil")
+		log.Global.WithField("hash", hash).Debug("Pending Header is nil")
 		return nil
 	}
 
