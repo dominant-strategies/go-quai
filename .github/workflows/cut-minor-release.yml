@@ -17,6 +17,7 @@ jobs:
       include_chart: false
       cloud_deploy: false
       skip_deploy: true
+      update_version: true
     secrets:
       GH_PAT: ${{ secrets.GH_PAT }}
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY2 }}
