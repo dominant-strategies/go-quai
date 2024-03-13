@@ -91,7 +91,7 @@ func TestInboundEtxsStorage(t *testing.T) {
 	location := common.Location{0, 0}
 
 	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
-	inner := &types.InternalTx{
+	inner := &types.QuaiTx{
 		ChainID:    new(big.Int).SetUint64(1),
 		Nonce:      uint64(0),
 		GasTipCap:  new(big.Int).SetUint64(0),

@@ -45,7 +45,7 @@ var (
 
 // Transaction types.
 const (
-	InternalTxType = iota
+	QuaiTxType = iota
 	ExternalTxType
 	InternalToExternalTxType
 	QiTxType
@@ -79,7 +79,7 @@ func (tx *Transaction) SetInner(inner TxData) {
 
 // TxData is the underlying data of a transaction.
 //
-// This is implemented by InternalTx, ExternalTx, InternalToExternal, and QiTx.
+// This is implemented by QuaiTx, ExternalTx, InternalToExternal, and QiTx.
 type TxData interface {
 	txType() byte // returns the type ID
 	copy() TxData // creates a deep copy and initializes all fields
@@ -241,7 +241,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.Data == nil {
 			return errors.New("missing required field 'Data' in ProtoTransaction")
 		}
-		var itx InternalTx
+		var itx QuaiTx
 		itx.AccessList = AccessList{}
 		itx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
 		if protoTx.To == nil {
@@ -262,15 +262,15 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		itx.Data = protoTx.GetData()
 		if protoTx.V == nil {
-			return errors.New("missing required field 'V' in InternalTx")
+			return errors.New("missing required field 'V' in QuaiTx")
 		}
 		itx.V = new(big.Int).SetBytes(protoTx.GetV())
 		if protoTx.R == nil {
-			return errors.New("missing required field 'R' in InternalTx")
+			return errors.New("missing required field 'R' in QuaiTx")
 		}
 		itx.R = new(big.Int).SetBytes(protoTx.GetR())
 		if protoTx.S == nil {
-			return errors.New("missing required field 'S' in InternalTx")
+			return errors.New("missing required field 'S' in QuaiTx")
 		}
 		itx.S = new(big.Int).SetBytes(protoTx.GetS())
 		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
@@ -309,7 +309,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		etx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
 		to := common.BytesToAddress(protoTx.GetTo(), location)
 		etx.To = &to
-		etx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
 
 		etx.Gas = protoTx.GetGas()
 		etx.Data = protoTx.GetData()
@@ -573,8 +572,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		return nil, errEmptyTypedTx
 	}
 	switch b[0] {
-	case InternalTxType:
-		var inner InternalTx
+	case QuaiTxType:
+		var inner QuaiTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	case ExternalTxType:

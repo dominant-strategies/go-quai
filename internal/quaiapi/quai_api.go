@@ -453,7 +453,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 			return 0, err
 		}
 		return hexutil.Uint64(params.TxGas + params.ETXGas), nil
-	case types.InternalTxType:
+	case types.QuaiTxType:
 		return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 	default:
 		return 0, errors.New("unsupported tx type")

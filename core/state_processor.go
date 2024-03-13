@@ -237,7 +237,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 	numInternalTxs := 0
 	p.hc.pool.SendersMutex.RLock()
 	for _, tx := range block.Transactions() { // get all senders of internal txs from cache - easier on the SendersMutex to do it all at once here
-		if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
+		if tx.Type() == types.QuaiTxType || tx.Type() == types.InternalToExternalTxType {
 			numInternalTxs++
 			if sender, ok := p.hc.pool.GetSenderThreadUnsafe(tx.Hash()); ok {
 				senders[tx.Hash()] = &sender // This pointer must never be modified
@@ -327,7 +327,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 				timeEtxDelta := time.Since(startTimeEtx)
 				timeEtx += timeEtxDelta
 			}
-		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
+		} else if tx.Type() == types.QuaiTxType || tx.Type() == types.InternalToExternalTxType {
 			startTimeTx := time.Now()
 
 			receipt, err = applyTransaction(msg, parent.Header(), p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
@@ -583,7 +583,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 			}
 
 			// We should require some kind of extra fee here
-			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: &chainId}
+			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
 			etx := types.NewTx(&etxInner)
 			primeTerminus := currentHeader.PrimeTerminus()
 			primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
