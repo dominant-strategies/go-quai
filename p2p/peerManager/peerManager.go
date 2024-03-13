@@ -218,6 +218,9 @@ func severStream(key interface{}, value interface{}) {
 	if err != nil {
 		log.Global.WithField("err", err).Error("Failed to close stream")
 	}
+	if streamMetrics != nil {
+		streamMetrics.WithLabelValues("NumStreams").Dec()
+	}
 }
 
 func (pm *BasicPeerManager) SetP2PBackend(host quaiprotocol.QuaiP2PNode) {

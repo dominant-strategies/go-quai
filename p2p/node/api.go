@@ -163,11 +163,6 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 			"location": location.Name(),
 		}).Trace("Received data from peer")
 
-		if streamMetrics != nil {
-			// Mark the stream as closed
-			streamMetrics.WithLabelValues("NumStreams").Dec()
-		}
-
 		// Mark this peer as behaving well
 		p.peerManager.MarkResponsivePeer(peerID, location)
 	} else {
