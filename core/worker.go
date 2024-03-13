@@ -743,7 +743,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	return nil, errors.New("error finding transaction")
 }
 
-func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
+func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(GasPool).AddGas(gasLimit())
@@ -767,6 +767,11 @@ func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction,
 		}
 		if env.header.GasUsed() > minEtxGas*params.MaximumEtxGasMultiplier { // sanity check, this should never happen
 			log.Global.WithField("Gas Used", env.header.GasUsed()).Error("Block uses more gas than maximum ETX gas")
+			return true
+		}
+		hash := etxSet.Pop()
+		if hash != tx.Hash() { // sanity check, this should never happen
+			log.Global.Errorf("ETX hash from set %032x does not match transaction hash %032x", hash, tx.Hash())
 			return true
 		}
 		env.state.Prepare(tx.Hash(), env.tcount)
@@ -1028,8 +1033,20 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	etxs := make([]*types.Transaction, 0)
 	etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64(w.hc.NodeCtx()), w.hc.NodeLocation())
 	if etxSet != nil {
-		etxs = make([]*types.Transaction, 0, len(etxSet.ETXs))
-		for _, entry := range etxSet.ETXs {
+		etxs = make([]*types.Transaction, 0, len(etxSet.ETXHashes)/common.HashLength)
+		maxEtxGas := (env.header.GasLimit() / params.MinimumEtxGasDivisor) * params.MaximumEtxGasMultiplier
+		totalGasEstimate := uint64(0)
+		index := 0
+		for {
+			hash := etxSet.GetHashAtIndex(index)
+			if (hash == common.Hash{}) { // no more ETXs
+				break
+			}
+			entry := rawdb.ReadETX(w.hc.bc.db, hash, w.hc.NodeLocation())
+			if entry == nil {
+				log.Global.Errorf("ETX %s not found in the database!", hash.String())
+				break
+			}
 			if entry.ETXSender().Location().Equal(w.chainConfig.Location) { // Sanity check. This is unnecessary and should be removed.
 				w.logger.WithFields(log.Fields{
 					"tx":     entry.Hash().String(),
@@ -1038,6 +1055,10 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 				continue // skip this tx
 			}
 			etxs = append(etxs, entry)
+			if totalGasEstimate += entry.Gas(); totalGasEstimate > maxEtxGas { // We don't need to load any more ETXs after this limit
+				break
+			}
+			index++
 		}
 	}
 
@@ -1050,7 +1071,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 
 	if len(pending) > 0 || len(pendingQiTxs) > 0 || len(etxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.header.BaseFee(), true)
-		if w.commitTransactions(env, etxs, txs, interrupt) {
+		if w.commitTransactions(env, etxs, txs, etxSet, interrupt) {
 			return etxSet
 		}
 	}
@@ -1271,7 +1292,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: w.chainConfig.ChainID}
 			etx := types.NewTx(&etxInner)
 			etxs = append(etxs, etx)
-			w.logger.Info("Added UTXO ETX to block")
+			w.logger.Debug("Added UTXO ETX to block")
 		} else {
 			// This output creates a normal UTXO
 			utxo := types.NewUtxoEntry(&txOut)

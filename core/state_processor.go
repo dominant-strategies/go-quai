@@ -291,16 +291,16 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 		if tx.Type() == types.ExternalTxType {
 			startTimeEtx := time.Now()
 			// ETXs MUST be included in order, so popping the first from the queue must equal the first in the block
-			etx := etxSet.Pop()
-			if etx.Hash() != tx.Hash() {
+			etxHash := etxSet.Pop()
+			if etxHash != tx.Hash() {
 				return nil, nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x is not in order or not found in unspent etx set", tx.Hash())
 			}
-			if etx.To().IsInQiLedgerScope() {
-				if etx.Value().Int64() > types.MaxDenomination { // sanity check
-					return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", etx.Hash(), etx.Value().Int64())
+			if tx.To().IsInQiLedgerScope() {
+				if tx.Value().Int64() > types.MaxDenomination { // sanity check
+					return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", tx.Hash(), tx.Value().Int64())
 				}
 				// There are no more checks to be made as the ETX is worked so add it to the set
-				statedb.CreateUTXO(etx.OriginatingTxHash(), etx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(etx.Value().Int64()), etx.To().Bytes())))
+				statedb.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes())))
 				if err := gp.SubGas(params.CallValueTransferGas); err != nil {
 					return nil, nil, nil, nil, 0, err
 				}
@@ -310,11 +310,11 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 				timeEtx += timeEtxDelta
 				continue
 			} else {
-				prevZeroBal := prepareApplyETX(statedb, etx, nodeLocation)
-				receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, etx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
+				prevZeroBal := prepareApplyETX(statedb, tx, nodeLocation)
+				receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 				statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 				if err != nil {
-					return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, etx.Hash().Hex(), err)
+					return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
 				totalEtxGas += receipt.GasUsed
 				timeEtxDelta := time.Since(startTimeEtx)
@@ -578,7 +578,7 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.H
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: &chainId}
 			etx := types.NewTx(&etxInner)
 			etxs = append(etxs, etx)
-			log.Global.Info("Added UTXO ETX to ETX list")
+			log.Global.Debug("Added UTXO ETX to ETX list")
 		} else {
 			// This output creates a normal UTXO
 			utxo := types.NewUtxoEntry(&txOut)
@@ -691,7 +691,9 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	// Update the set of inbound ETXs which may be mined in the next block
 	// These new inbounds are not included in the ETX hash of the current block
 	// because they are not known a-priori
-	etxSet.Update(newInboundEtxs, block.NumberU64(nodeCtx), p.hc.NodeLocation())
+	etxSet.Update(newInboundEtxs, p.hc.NodeLocation(), func(hash common.Hash, etx *types.Transaction) {
+		rawdb.WriteETX(batch, hash, etx) // This must be done because of rawdb <-> types import cycle
+	})
 	rawdb.WriteEtxSet(batch, header.Hash(), header.NumberU64(nodeCtx), etxSet)
 	time12 := common.PrettyDuration(time.Since(start))
 
@@ -935,7 +937,9 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			return nil, errors.New("etxSet set is nil in StateProcessor")
 		}
 		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash(), p.hc.NodeLocation())
-		etxSet.Update(inboundEtxs, current.NumberU64(nodeCtx), nodeLocation)
+		etxSet.Update(inboundEtxs, nodeLocation, func(hash common.Hash, etx *types.Transaction) {
+			rawdb.WriteETX(rawdb.NewMemoryDatabase(), hash, etx)
+		})
 
 		currentBlock := rawdb.ReadBlock(p.hc.bc.db, current.Hash(), current.NumberU64(nodeCtx), p.hc.NodeLocation())
 		if currentBlock == nil {

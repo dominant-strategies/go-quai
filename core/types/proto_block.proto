@@ -117,8 +117,7 @@ message ProtoTermini {
 }
 
 message ProtoEtxSet {
-  repeated ProtoTransaction etxs = 1; 
-  optional bytes etx_hashes = 2;
+  optional bytes etx_hashes = 1;
 }
 
 message ProtoPendingEtxs {
