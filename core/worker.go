@@ -1299,7 +1299,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			}
 
 			// We should require some kind of extra fee here
-			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: w.chainConfig.ChainID}
+			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
 			etx := types.NewTx(&etxInner)
 			etxs = append(etxs, etx)
 			w.logger.Debug("Added UTXO ETX to block")

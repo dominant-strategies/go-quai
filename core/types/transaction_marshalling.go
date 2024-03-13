@@ -74,7 +74,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 
 	// Other fields are set conditionally depending on tx type.
 	switch tx := t.inner.(type) {
-	case *InternalTx:
+	case *QuaiTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
@@ -88,7 +88,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
 	case *ExternalTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
 		enc.OriginatingTxHash = &tx.OriginatingTxHash
 		index := hexutil.Uint64(tx.ETXIndex)
@@ -136,8 +135,8 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	// Decode / verify fields according to transaction type.
 	var inner TxData
 	switch dec.Type {
-	case InternalTxType:
-		var itx InternalTx
+	case QuaiTxType:
+		var itx QuaiTx
 		inner = &itx
 		if dec.AccessList == nil {
 			return errors.New("missing required field 'accessList' in internal transaction")
@@ -203,10 +202,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.To != nil {
 			etx.To = dec.To
 		}
-		if dec.ChainID == nil {
-			return errors.New("missing required field 'chainId' in external transaction")
-		}
-		etx.ChainID = (*big.Int)(dec.ChainID)
 		if dec.OriginatingTxHash == nil {
 			return errors.New("missing required field 'originatingTxHash' in external transaction")
 		}

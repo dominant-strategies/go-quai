@@ -1069,7 +1069,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	signer := types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
 	from, _ := types.Sender(signer, tx)
 	switch tx.Type() {
-	case types.InternalTxType:
+	case types.QuaiTxType:
 		result = &RPCTransaction{
 			Type:      hexutil.Uint64(tx.Type()),
 			From:      &from,

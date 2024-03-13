@@ -23,7 +23,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 )
 
-type InternalTx struct {
+type QuaiTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
 	GasTipCap  *big.Int
@@ -41,8 +41,8 @@ type InternalTx struct {
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
-func (tx *InternalTx) copy() TxData {
-	cpy := &InternalTx{
+func (tx *QuaiTx) copy() TxData {
+	cpy := &QuaiTx{
 		Nonce: tx.Nonce,
 		To:    tx.To, // TODO: copy pointed-to address
 		Data:  common.CopyBytes(tx.Data),
@@ -83,42 +83,42 @@ func (tx *InternalTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *InternalTx) txType() byte              { return InternalTxType }
-func (tx *InternalTx) chainID() *big.Int         { return tx.ChainID }
-func (tx *InternalTx) protected() bool           { return true }
-func (tx *InternalTx) accessList() AccessList    { return tx.AccessList }
-func (tx *InternalTx) data() []byte              { return tx.Data }
-func (tx *InternalTx) gas() uint64               { return tx.Gas }
-func (tx *InternalTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *InternalTx) gasTipCap() *big.Int       { return tx.GasTipCap }
-func (tx *InternalTx) gasPrice() *big.Int        { return tx.GasFeeCap }
-func (tx *InternalTx) value() *big.Int           { return tx.Value }
-func (tx *InternalTx) nonce() uint64             { return tx.Nonce }
-func (tx *InternalTx) to() *common.Address       { return tx.To }
-func (tx *InternalTx) etxGasLimit() uint64       { panic("internal TX does not have etxGasLimit") }
-func (tx *InternalTx) etxGasPrice() *big.Int     { panic("internal TX does not have etxGasPrice") }
-func (tx *InternalTx) etxGasTip() *big.Int       { panic("internal TX does not have etxGasTip") }
-func (tx *InternalTx) etxData() []byte           { panic("internal TX does not have etxData") }
-func (tx *InternalTx) etxAccessList() AccessList { panic("internal TX does not have etxAccessList") }
-func (tx *InternalTx) etxSender() common.Address { panic("internal TX does not have etxSender") }
-func (tx *InternalTx) originatingTxHash() common.Hash {
+func (tx *QuaiTx) txType() byte              { return QuaiTxType }
+func (tx *QuaiTx) chainID() *big.Int         { return tx.ChainID }
+func (tx *QuaiTx) protected() bool           { return true }
+func (tx *QuaiTx) accessList() AccessList    { return tx.AccessList }
+func (tx *QuaiTx) data() []byte              { return tx.Data }
+func (tx *QuaiTx) gas() uint64               { return tx.Gas }
+func (tx *QuaiTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
+func (tx *QuaiTx) gasTipCap() *big.Int       { return tx.GasTipCap }
+func (tx *QuaiTx) gasPrice() *big.Int        { return tx.GasFeeCap }
+func (tx *QuaiTx) value() *big.Int           { return tx.Value }
+func (tx *QuaiTx) nonce() uint64             { return tx.Nonce }
+func (tx *QuaiTx) to() *common.Address       { return tx.To }
+func (tx *QuaiTx) etxGasLimit() uint64       { panic("internal TX does not have etxGasLimit") }
+func (tx *QuaiTx) etxGasPrice() *big.Int     { panic("internal TX does not have etxGasPrice") }
+func (tx *QuaiTx) etxGasTip() *big.Int       { panic("internal TX does not have etxGasTip") }
+func (tx *QuaiTx) etxData() []byte           { panic("internal TX does not have etxData") }
+func (tx *QuaiTx) etxAccessList() AccessList { panic("internal TX does not have etxAccessList") }
+func (tx *QuaiTx) etxSender() common.Address { panic("internal TX does not have etxSender") }
+func (tx *QuaiTx) originatingTxHash() common.Hash {
 	panic("internal TX does not have originatingTxHash")
 }
-func (tx *InternalTx) etxIndex() uint16 { panic("internal TX does not have etxIndex") }
-func (tx *InternalTx) txIn() TxIns      { panic("internal TX does not have txIn") }
-func (tx *InternalTx) txOut() TxOuts    { panic("internal TX does not have txOut") }
-func (tx *InternalTx) getSchnorrSignature() *schnorr.Signature {
+func (tx *QuaiTx) etxIndex() uint16 { panic("internal TX does not have etxIndex") }
+func (tx *QuaiTx) txIn() TxIns      { panic("internal TX does not have txIn") }
+func (tx *QuaiTx) txOut() TxOuts    { panic("internal TX does not have txOut") }
+func (tx *QuaiTx) getSchnorrSignature() *schnorr.Signature {
 	panic("internal TX does not have getSchnorrSignature")
 }
 
-func (tx *InternalTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
+func (tx *QuaiTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *InternalTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
+func (tx *QuaiTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }
 
-func (tx *InternalTx) setTo(to common.Address) {
+func (tx *QuaiTx) setTo(to common.Address) {
 	tx.To = &to
 }

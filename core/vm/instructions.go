@@ -905,7 +905,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, ChainID: interpreter.evm.chainConfig.ChainID}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList}
 	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()
