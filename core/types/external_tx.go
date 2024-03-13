@@ -10,7 +10,6 @@ import (
 )
 
 type ExternalTx struct {
-	ChainID           *big.Int
 	OriginatingTxHash common.Hash
 	ETXIndex          uint16
 	Gas               uint64
@@ -146,21 +145,17 @@ func (tx *ExternalTx) copy() TxData {
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
-		ChainID:    new(big.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
-	}
-	if tx.ChainID != nil {
-		cpy.ChainID.Set(tx.ChainID)
 	}
 	return cpy
 }
 
 // accessors for innerTx.
 func (tx *ExternalTx) txType() byte                   { return ExternalTxType }
-func (tx *ExternalTx) chainID() *big.Int              { return tx.ChainID }
+func (tx *ExternalTx) chainID() *big.Int              { panic("external TX does not have chainid") }
 func (tx *ExternalTx) protected() bool                { return true }
 func (tx *ExternalTx) accessList() AccessList         { return tx.AccessList }
 func (tx *ExternalTx) data() []byte                   { return tx.Data }

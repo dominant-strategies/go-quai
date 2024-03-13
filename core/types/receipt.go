@@ -107,7 +107,7 @@ type storedReceiptRLP struct {
 // Deprecated: create receipts using a struct literal instead.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	r := &Receipt{
-		Type:              InternalTxType,
+		Type:              QuaiTxType,
 		PostState:         common.CopyBytes(root),
 		CumulativeGasUsed: cumulativeGasUsed,
 	}
@@ -355,7 +355,7 @@ func (rs Receipts) Len() int { return len(rs) }
 
 // Supported returns true if the receipt type is supported
 func (r Receipt) Supported() bool {
-	return r.Type == InternalTxType || r.Type == ExternalTxType || r.Type == InternalToExternalTxType
+	return r.Type == QuaiTxType || r.Type == ExternalTxType || r.Type == InternalToExternalTxType
 }
 
 // EncodeIndex encodes the i'th receipt to w.

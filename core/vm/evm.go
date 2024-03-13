@@ -639,7 +639,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 		return []byte{}, 0, fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
 	}
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: evm.ETXGasLimit, Data: evm.ETXData, AccessList: evm.ETXAccessList, ChainID: evm.chainConfig.ChainID}
+	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: evm.ETXGasLimit, Data: evm.ETXData, AccessList: evm.ETXAccessList}
 	etx := types.NewTx(&etxInner)
 
 	// check if the etx is eligible to be sent to the to location

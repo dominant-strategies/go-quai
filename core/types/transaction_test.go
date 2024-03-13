@@ -12,7 +12,7 @@ import (
 func TestTransactionProtoEncodeDecode(t *testing.T) {
 	// Create a new transaction
 	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
-	inner := &InternalTx{
+	inner := &QuaiTx{
 		ChainID:    new(big.Int).SetUint64(1),
 		Nonce:      uint64(0),
 		GasTipCap:  new(big.Int).SetUint64(0),
@@ -107,7 +107,7 @@ func TestUTXOTransactionEncode(t *testing.T) {
 func TestTransactionHashing(t *testing.T) {
 	// Create a new transaction
 	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
-	inner := &InternalTx{
+	inner := &QuaiTx{
 		ChainID:    new(big.Int).SetUint64(1),
 		Nonce:      uint64(0),
 		GasTipCap:  new(big.Int).SetUint64(0),
