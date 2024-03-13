@@ -904,3 +904,37 @@ func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() int {
 	// TODO: Implement this
 	return 0
 }
+
+// Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
+func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockRef interface{}, qiAmount uint64) *big.Int {
+	var header *types.Header
+	var err error
+	switch b := blockRef.(type) {
+	case common.Hash:
+		header, err = s.b.HeaderByHash(ctx, b)
+	case uint64:
+		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(b))
+	}
+	if err != nil {
+		return nil
+	}
+
+	return misc.QiToQuai(header, new(big.Int).SetUint64(qiAmount))
+}
+
+// Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
+func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockRef interface{}, quaiAmount uint64) *big.Int {
+	var header *types.Header
+	var err error
+	switch b := blockRef.(type) {
+	case common.Hash:
+		header, err = s.b.HeaderByHash(ctx, b)
+	case uint64:
+		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(b))
+	}
+	if err != nil {
+		return nil
+	}
+
+	return misc.QuaiToQi(header, new(big.Int).SetUint64(quaiAmount))
+}

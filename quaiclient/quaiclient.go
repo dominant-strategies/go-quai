@@ -387,3 +387,23 @@ func (ec *Client) BaseFee(ctx context.Context, txType bool) (*big.Int, error) {
 	}
 	return (*big.Int)(&hex), nil
 }
+
+// QiRateAtBlock returns the number of Quai needed for a Qi at a given block number or hash.
+func (ec *Client) QiRateAtBlock(ctx context.Context, block interface{}) (*big.Int, error) {
+	var hex hexutil.Big
+	err := ec.c.CallContext(ctx, &hex, "quai_qiRateAtBlock", block)
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(&hex), nil
+}
+
+// QuaiRateAtBlock returns the number of Qi needed for a Quai at a given block number or hash.
+func (ec *Client) QuaiRateAtBlock(ctx context.Context, block interface{}) (*big.Int, error) {
+	var hex hexutil.Big
+	err := ec.c.CallContext(ctx, &hex, "quai_quaiRateAtBlock", block)
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(&hex), nil
+}
