@@ -49,12 +49,20 @@ func TestHeaderStorage(t *testing.T) {
 	header.SetNumber(big.NewInt(1), common.ZONE_CTX)
 	header.SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 0}))
 
+	if HasHeader(db, header.Hash(), common.ZONE_CTX) {
+		t.Fatal("Non existent header returned")
+	}
 	if entry := ReadHeader(db, header.Hash(), common.ZONE_CTX); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
-	t.Log("Header Hash stored", header.Hash())
-	// Write and verify the header in the database
+
 	WriteHeader(db, header, common.ZONE_CTX)
+	t.Log("Header Hash stored", header.Hash())
+
+	if HasHeader(db, header.Hash(), common.ZONE_CTX) {
+		t.Fatal("HasHeader returned false")
+	}
+
 	if entry := ReadHeader(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64()); entry == nil {
 		t.Fatalf("Stored header not found with hash %s", entry.Hash())
 	} else if entry.Hash() != header.Hash() {
@@ -83,13 +91,143 @@ func TestHeaderStorage(t *testing.T) {
 	}
 }
 
+func TestHeadHeaderStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	emptyHash := common.Hash{}
+	if entry := ReadHeadHeaderHash(db); entry != emptyHash {
+		t.Fatalf("Non existent head header hash returned: %v", entry)
+	}
+
+	hash := common.Hash{1}
+	WriteHeadHeaderHash(db, hash)
+
+	if entry := ReadHeadHeaderHash(db); entry != hash {
+		t.Fatalf("Stored head header hash not found: %v", entry)
+	}
+}
+
+func TestHeadBlockStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	emptyHash := common.Hash{}
+	if entry := ReadHeadBlockHash(db); entry != emptyHash {
+		t.Fatalf("Non existent head block hash returned: %v", entry)
+	}
+
+	hash := common.Hash{1}
+	WriteHeadBlockHash(db, hash)
+
+	if entry := ReadHeadBlockHash(db); entry != hash {
+		t.Fatalf("Stored head block hash not found: %v", entry)
+	}
+}
+
+func TestLastPivotStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadLastPivotNumber(db); entry != nil {
+		t.Fatalf("Non existent last pivot number returned: %v", entry)
+	}
+
+	WriteLastPivotNumber(db, uint64(1))
+
+	if entry := ReadLastPivotNumber(db); *entry != uint64(1) {
+		t.Fatalf("Stored last pivot not found: %v", entry)
+	}
+}
+
+func TestFastTrieStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadFastTrieProgress(db); entry != 0 {
+		t.Fatalf("Non existent fast trie returned: %v", entry)
+	}
+
+	WriteFastTrieProgress(db, uint64(1))
+
+	if entry := ReadFastTrieProgress(db); entry != uint64(1) {
+		t.Fatalf("Stored fast trie not found: %v", entry)
+	}
+}
+
+func TestTxIndexTailStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadTxIndexTail(db); entry != nil {
+		t.Fatalf("Non existent tx index returned: %v", entry)
+	}
+
+	WriteTxIndexTail(db, uint64(1))
+
+	if entry := ReadTxIndexTail(db); *entry != uint64(1) {
+		t.Fatalf("Stored tx index not found: %v", entry)
+	}
+}
+
+func TestFastTxLookupStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadFastTxLookupLimit(db); entry != nil {
+		t.Fatalf("Non existent fast tx lookup returned: %v", entry)
+	}
+
+	WriteFastTxLookupLimit(db, uint64(1))
+
+	if entry := ReadFastTxLookupLimit(db); *entry != uint64(1) {
+		t.Fatalf("Stored fast tx lookup not found: %v", entry)
+	}
+}
+
+func TestPbCacheStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadPbCacheBody(db, common.Hash{1}, common.Location{0, 0}); entry != nil {
+		t.Fatalf("Non existent pb cache body returned: %v", entry)
+	}
+
+	WritePbCacheBody(db, common.Hash{1}, &types.Body{})
+
+	if entry := ReadPbCacheBody(db, common.Hash{1}, common.Location{0, 0}); entry == nil {
+		t.Fatalf("Stored pb cache body not found: %v", entry)
+	}
+
+	DeletePbCacheBody(db, common.Hash{1})
+
+	if entry := ReadPbCacheBody(db, common.Hash{1}, common.Location{0, 0}); entry != nil {
+		t.Fatalf("Deleted pb cache body returned: %v", entry)
+	}
+}
+
+func TestPbBodyKeysStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	hashes := common.Hashes{{1}, {2}}
+
+	if entry := ReadPbBodyKeys(db); entry != nil {
+		t.Fatalf("Non existent pb  bodyKeys returned: %v", entry)
+	}
+
+	WritePbBodyKeys(db, hashes)
+
+	if entry := ReadPbBodyKeys(db); hashes[0] != entry[0] || hashes[1] != entry[1] {
+		t.Fatalf("Stored pb  bodyKeys not found: %v", entry)
+	}
+
+	DeleteAllPbBodyKeys(db)
+
+	if entry := ReadPbBodyKeys(db); entry != nil {
+		t.Fatalf("Deleted pb  bodyKeys returned: %v", entry)
+	}
+}
+
 // Tests termini storage and retrieval operations.
 func TestTerminiStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Create a test termini to move around the database and make sure it's really new
 	termini := types.EmptyTermini()
-	termini.SetDomTermini([]common.Hash{common.Hash{1}, common.Hash{2}})
+	termini.SetDomTermini(common.Hashes{{1}, {2}})
 	hash := types.EmptyRootHash
 	if entry := ReadTermini(db, hash); entry != nil {
 		t.Fatalf("Non existent termini returned: %v", entry)
@@ -104,6 +242,31 @@ func TestTerminiStorage(t *testing.T) {
 	DeleteTermini(db, hash)
 	if entry := ReadTermini(db, hash); entry != nil {
 		t.Fatalf("Deleted termini returned: %v", entry)
+	}
+}
+
+func TestPendingHeaderStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadPendingHeader(db, common.Hash{1}); entry != nil {
+		t.Fatalf("Non existent pending header returned: %v", entry)
+	}
+
+	emptyHeader := types.EmptyHeader()
+
+	emptyPendingHeader := types.EmptyPendingHeader()
+	emptyPendingHeader.SetHeader(emptyHeader)
+
+	WritePendingHeader(db, common.Hash{1}, emptyPendingHeader)
+
+	if entry := ReadPendingHeader(db, common.Hash{1}); entry == nil {
+		t.Fatalf("Stored pb  bodyKeys not found: %v", entry)
+	}
+
+	DeletePendingHeader(db, common.Hash{1})
+
+	if entry := ReadPendingHeader(db, common.Hash{1}); entry != nil {
+		t.Fatalf("Deleted pb  bodyKeys returned: %v", entry)
 	}
 }
 
