@@ -47,7 +47,6 @@ var (
 const (
 	QuaiTxType = iota
 	ExternalTxType
-	InternalToExternalTxType
 	QiTxType
 )
 
@@ -94,17 +93,11 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
-	etxGasLimit() uint64
-	etxGasPrice() *big.Int
-	etxGasTip() *big.Int
-	etxData() []byte
-	etxAccessList() AccessList
 	etxSender() common.Address
 	originatingTxHash() common.Hash
 	etxIndex() uint16
 	txIn() TxIns
 	txOut() TxOuts
-
 	getEcdsaSignatureValues() (v, r, s *big.Int)
 	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
 	setTo(to common.Address)
@@ -123,7 +116,6 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 	// Encoding common fields to all the tx types
 	txType := uint64(tx.Type())
 	protoTx.Type = &txType
-	protoTx.ChainId = tx.ChainId().Bytes()
 
 	// Other fields are set conditionally depending on tx type.
 	switch tx.Type() {
@@ -148,6 +140,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.V = V.Bytes()
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
+		protoTx.ChainId = tx.ChainId().Bytes()
 	case 1:
 		gas := tx.Gas()
 		protoTx.Gas = &gas
@@ -164,35 +157,6 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.EtxIndex = &etxIndex
 		protoTx.EtxSender = tx.ETXSender().Bytes()
 	case 2:
-		gas := tx.Gas()
-		nonce := tx.Nonce()
-		protoTx.Nonce = &nonce
-		protoTx.Gas = &gas
-		protoTx.AccessList = tx.AccessList().ProtoEncode()
-		protoTx.Value = tx.Value().Bytes()
-		if tx.Data() == nil {
-			protoTx.Data = []byte{}
-		} else {
-			protoTx.Data = tx.Data()
-		}
-		protoTx.To = tx.To().Bytes()
-		protoTx.GasFeeCap = tx.GasFeeCap().Bytes()
-		protoTx.GasTipCap = tx.GasTipCap().Bytes()
-		V, R, S := tx.GetEcdsaSignatureValues()
-		protoTx.V = V.Bytes()
-		protoTx.R = R.Bytes()
-		protoTx.S = S.Bytes()
-		etxGasLimit := tx.ETXGasLimit()
-		protoTx.EtxGasLimit = &etxGasLimit
-		protoTx.EtxGasPrice = tx.ETXGasPrice().Bytes()
-		protoTx.EtxGasTip = tx.ETXGasTip().Bytes()
-		if tx.ETXData() == nil {
-			protoTx.EtxData = []byte{}
-		} else {
-			protoTx.EtxData = tx.ETXData()
-		}
-		protoTx.EtxAccessList = tx.ETXAccessList().ProtoEncode()
-	case 3:
 		var err error
 		protoTx.TxIns, err = tx.TxIn().ProtoEncode()
 		if err != nil {
@@ -203,6 +167,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 			return nil, err
 		}
 		protoTx.Signature = tx.GetSchnorrSignature().Serialize()
+		protoTx.ChainId = tx.ChainId().Bytes()
 	}
 	return protoTx, nil
 }
@@ -211,9 +176,6 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Location) error {
 	if protoTx.Type == nil {
 		return errors.New("missing required field 'Type' in ProtoTransaction")
-	}
-	if protoTx.ChainId == nil {
-		return errors.New("missing required field 'ChainId' in ProtoTransaction")
 	}
 
 	txType := protoTx.GetType()
@@ -240,6 +202,9 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		if protoTx.Data == nil {
 			return errors.New("missing required field 'Data' in ProtoTransaction")
+		}
+		if protoTx.ChainId == nil {
+			return errors.New("missing required field 'ChainId' in ProtoTransaction")
 		}
 		var itx QuaiTx
 		itx.AccessList = AccessList{}
@@ -320,84 +285,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		tx.SetInner(&etx)
 
 	case 2:
-		if protoTx.Nonce == nil {
-			return errors.New("missing required field 'Nonce' in ProtoTransaction")
-		}
-		if protoTx.Gas == nil {
-			return errors.New("missing required field 'Gas' in ProtoTransaction")
-		}
-		if protoTx.AccessList == nil {
-			return errors.New("missing required field 'AccessList' in ProtoTransaction")
-		}
-		if protoTx.Value == nil {
-			return errors.New("missing required field 'Value' in ProtoTransaction")
-		}
-		if protoTx.Data == nil {
-			return errors.New("missing required field 'Data' in ProtoTransaction")
-		}
-		if protoTx.To == nil {
-			return errors.New("missing required field 'To' in ProtoTransaction")
-		}
-		if protoTx.GasFeeCap == nil {
-			return errors.New("missing required field 'GasFeeCap' in ProtoTransaction")
-		}
-		if protoTx.GasTipCap == nil {
-			return errors.New("missing required field 'GasTipCap' in ProtoTransaction")
-		}
-		var ietx InternalToExternalTx
-		ietx.AccessList = AccessList{}
-		ietx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
-		to := common.BytesToAddress(protoTx.GetTo(), location)
-		ietx.To = &to
-		ietx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
-		ietx.Nonce = protoTx.GetNonce()
-		ietx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
-		ietx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
-		ietx.Gas = protoTx.GetGas()
-		ietx.Value = new(big.Int).SetBytes(protoTx.GetValue())
-		ietx.Data = protoTx.GetData()
-		if protoTx.V == nil {
-			return errors.New("missing required field 'V' in InternalToExternalTx")
-		}
-		ietx.V = new(big.Int).SetBytes(protoTx.GetV())
-		if protoTx.R == nil {
-			return errors.New("missing required field 'R' in InternalToExternalTx")
-		}
-		ietx.R = new(big.Int).SetBytes(protoTx.GetR())
-		if protoTx.S == nil {
-			return errors.New("missing required field 'S' in InternalToExternalTx")
-		}
-		ietx.S = new(big.Int).SetBytes(protoTx.GetS())
-		withSignature := ietx.V.Sign() != 0 || ietx.R.Sign() != 0 || ietx.S.Sign() != 0
-		if withSignature {
-			if err := sanityCheckSignature(ietx.V, ietx.R, ietx.S); err != nil {
-				return err
-			}
-		}
-		if protoTx.EtxAccessList == nil {
-			return errors.New("missing required field 'EtxAccessList' in InternalToExternalTx")
-		}
-		ietx.ETXAccessList = AccessList{}
-		ietx.ETXAccessList.ProtoDecode(protoTx.GetEtxAccessList(), location)
-		if protoTx.EtxGasLimit == nil {
-			return errors.New("missing required field 'EtxGasLimit' in InternalToExternalTx")
-		}
-		ietx.ETXGasLimit = protoTx.GetEtxGasLimit()
-		if protoTx.EtxGasPrice == nil {
-			return errors.New("missing required field 'EtxGasPrice' in InternalToExternalTx")
-		}
-		ietx.ETXGasPrice = new(big.Int).SetBytes(protoTx.GetEtxGasPrice())
-		if protoTx.EtxGasTip == nil {
-			return errors.New("missing required field 'EtxGasTip' in InternalToExternalTx")
-		}
-		ietx.ETXGasTip = new(big.Int).SetBytes(protoTx.GetEtxGasTip())
-		if protoTx.EtxData == nil {
-			return errors.New("missing required field 'EtxData' in InternalToExternalTx")
-		}
-		ietx.ETXData = protoTx.GetEtxData()
-
-		tx.SetInner(&ietx)
-	case 3:
 		if protoTx.TxIns == nil {
 			return errors.New("missing required field 'TxIns' in ProtoTransaction")
 		}
@@ -406,6 +293,9 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		if protoTx.Signature == nil {
 			return errors.New("missing required field 'Signature' in ProtoTransaction")
+		}
+		if protoTx.ChainId == nil {
+			return errors.New("missing required field 'ChainId' in ProtoTransaction")
 		}
 		var qiTx QiTx
 		qiTx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
@@ -466,34 +356,6 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 	case 1:
 		return protoTxSigningData
 	case 2:
-		txType := uint64(tx.Type())
-		protoTxSigningData.Type = &txType
-		protoTxSigningData.ChainId = tx.ChainId().Bytes()
-		gas := tx.Gas()
-		nonce := tx.Nonce()
-		protoTxSigningData.Nonce = &nonce
-		protoTxSigningData.Gas = &gas
-		protoTxSigningData.AccessList = tx.AccessList().ProtoEncode()
-		protoTxSigningData.Value = tx.Value().Bytes()
-		if tx.Data() == nil {
-			protoTxSigningData.Data = []byte{}
-		} else {
-			protoTxSigningData.Data = tx.Data()
-		}
-		protoTxSigningData.To = tx.To().Bytes()
-		protoTxSigningData.GasFeeCap = tx.GasFeeCap().Bytes()
-		protoTxSigningData.GasTipCap = tx.GasTipCap().Bytes()
-		etxGasLimit := tx.ETXGasLimit()
-		protoTxSigningData.EtxGasLimit = &etxGasLimit
-		protoTxSigningData.EtxGasPrice = tx.ETXGasPrice().Bytes()
-		protoTxSigningData.EtxGasTip = tx.ETXGasTip().Bytes()
-		if tx.ETXData() == nil {
-			protoTxSigningData.EtxData = []byte{}
-		} else {
-			protoTxSigningData.EtxData = tx.ETXData()
-		}
-		protoTxSigningData.EtxAccessList = tx.ETXAccessList().ProtoEncode()
-	case 3:
 		txType := uint64(tx.Type())
 		protoTxSigningData.Type = &txType
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
@@ -580,10 +442,6 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner ExternalTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
-	case InternalToExternalTxType:
-		var inner InternalToExternalTx
-		err := rlp.DecodeBytes(b[1:], &inner)
-		return &inner, err
 	case QiTxType:
 		var wire WireQiTx
 		err := rlp.DecodeBytes(b[1:], &wire)
@@ -651,26 +509,9 @@ func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.g
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
-// ETXGasLimit returns the fee cap per gas of the transaction.
-func (tx *Transaction) ETXGasLimit() uint64 { return tx.inner.etxGasLimit() }
-
-// ETXGasPrice returns the gas price of the external transaction.
-func (tx *Transaction) ETXGasPrice() *big.Int { return new(big.Int).Set(tx.inner.etxGasPrice()) }
-
-// ETXGasTip returns the gasTipCap per gas of the external transaction.
-func (tx *Transaction) ETXGasTip() *big.Int { return new(big.Int).Set(tx.inner.etxGasTip()) }
-
-// ETXData returns the input data of the external transaction.
-func (tx *Transaction) ETXData() []byte { return tx.inner.etxData() }
-
-// ETXAccessList returns the access list of the transaction.
-func (tx *Transaction) ETXAccessList() AccessList { return tx.inner.etxAccessList() }
-
 // Nonce returns the sender account nonce of the transaction.
-func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
-
-func (tx *Transaction) ETXSender() common.Address { return tx.inner.etxSender() }
-
+func (tx *Transaction) Nonce() uint64                  { return tx.inner.nonce() }
+func (tx *Transaction) ETXSender() common.Address      { return tx.inner.etxSender() }
 func (tx *Transaction) OriginatingTxHash() common.Hash { return tx.inner.originatingTxHash() }
 
 func (tx *Transaction) ETXIndex() uint16 { return tx.inner.etxIndex() }
@@ -681,11 +522,6 @@ func (tx *Transaction) TxIn() TxIns { return tx.inner.txIn() }
 
 func (tx *Transaction) GetSchnorrSignature() *schnorr.Signature {
 	return tx.inner.getSchnorrSignature()
-}
-
-func (tx *Transaction) IsInternalToExternalTx() (inner *InternalToExternalTx, ok bool) {
-	inner, ok = tx.inner.(*InternalToExternalTx)
-	return
 }
 
 func (tx *Transaction) From() *common.Address {
@@ -1123,25 +959,20 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to            *common.Address
-	from          common.Address
-	nonce         uint64
-	amount        *big.Int
-	gasLimit      uint64
-	gasPrice      *big.Int
-	gasFeeCap     *big.Int
-	gasTipCap     *big.Int
-	data          []byte
-	accessList    AccessList
-	isETX         bool
-	etxsender     common.Address // only used in ETX
-	txtype        byte
-	hash          common.Hash
-	etxGasLimit   uint64
-	etxGasPrice   *big.Int
-	etxGasTip     *big.Int
-	etxData       []byte
-	etxAccessList AccessList
+	to         *common.Address
+	from       common.Address
+	nonce      uint64
+	amount     *big.Int
+	gasLimit   uint64
+	gasPrice   *big.Int
+	gasFeeCap  *big.Int
+	gasTipCap  *big.Int
+	data       []byte
+	accessList AccessList
+	isETX      bool
+	etxsender  common.Address // only used in ETX
+	txtype     byte
+	hash       common.Hash
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isETX bool) Message {
@@ -1189,13 +1020,6 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		msg.from, err = Sender(s, tx)
 		msg.nonce = tx.Nonce()
 	}
-	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
-		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
-		msg.etxGasPrice = internalToExternalTx.ETXGasPrice
-		msg.etxGasTip = internalToExternalTx.ETXGasTip
-		msg.etxData = internalToExternalTx.ETXData
-		msg.etxAccessList = internalToExternalTx.ETXAccessList
-	}
 	return msg, err
 }
 
@@ -1231,13 +1055,6 @@ func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *c
 		}
 		msg.nonce = tx.Nonce()
 	}
-	if internalToExternalTx, ok := tx.IsInternalToExternalTx(); ok {
-		msg.etxGasLimit = internalToExternalTx.ETXGasLimit
-		msg.etxGasPrice = internalToExternalTx.ETXGasPrice
-		msg.etxGasTip = internalToExternalTx.ETXGasTip
-		msg.etxData = internalToExternalTx.ETXData
-		msg.etxAccessList = internalToExternalTx.ETXAccessList
-	}
 	return msg, err
 }
 
@@ -1255,11 +1072,6 @@ func (m Message) IsETX() bool               { return m.isETX }
 func (m Message) ETXSender() common.Address { return m.etxsender }
 func (m Message) Type() byte                { return m.txtype }
 func (m Message) Hash() common.Hash         { return m.hash }
-func (m Message) ETXGasLimit() uint64       { return m.etxGasLimit }
-func (m Message) ETXGasPrice() *big.Int     { return m.etxGasPrice }
-func (m Message) ETXGasTip() *big.Int       { return m.etxGasTip }
-func (m Message) ETXData() []byte           { return m.etxData }
-func (m Message) ETXAccessList() AccessList { return m.etxAccessList }
 
 // AccessList is an access list.
 type AccessList []AccessTuple

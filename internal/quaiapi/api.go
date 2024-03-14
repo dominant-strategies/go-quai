@@ -1029,15 +1029,8 @@ type RPCTransaction struct {
 	UTXOSignature     hexutil.Bytes     `json:"utxoSignature,omitempty"`
 	OriginatingTxHash *common.Hash      `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64   `json:"etxIndex,omitempty"`
-
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
-
-	ETXGasLimit   hexutil.Uint64    `json:"etxGasLimit,omitempty"`
-	ETXGasPrice   *hexutil.Big      `json:"etxGasPrice,omitempty"`
-	ETXGasTip     *hexutil.Big      `json:"etxGasTip,omitempty"`
-	ETXData       *hexutil.Bytes    `json:"etxData,omitempty"`
-	ETXAccessList *types.AccessList `json:"etxAccessList,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1062,14 +1055,14 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		return result
 	}
 
-	// Determine the signer. For replay-protected transactions, use the most permissive
-	// signer, because we assume that signers are backwards-compatible with old
-	// transactions. For non-protected transactions, the signer is used
-	// because the return value of ChainId is zero for those transactions.
-	signer := types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
-	from, _ := types.Sender(signer, tx)
 	switch tx.Type() {
 	case types.QuaiTxType:
+		// Determine the signer. For replay-protected transactions, use the most permissive
+		// signer, because we assume that signers are backwards-compatible with old
+		// transactions. For non-protected transactions, the signer is used
+		// because the return value of ChainId is zero for those transactions.
+		signer := types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
+		from, _ := types.Sender(signer, tx)
 		result = &RPCTransaction{
 			Type:      hexutil.Uint64(tx.Type()),
 			From:      &from,
@@ -1085,13 +1078,12 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		}
 	case types.ExternalTxType:
 		result = &RPCTransaction{
-			Type:    hexutil.Uint64(tx.Type()),
-			Gas:     hexutil.Uint64(tx.Gas()),
-			Hash:    tx.Hash(),
-			Input:   hexutil.Bytes(tx.Data()),
-			To:      tx.To(),
-			Value:   (*hexutil.Big)(tx.Value()),
-			ChainID: (*hexutil.Big)(tx.ChainId()),
+			Type:  hexutil.Uint64(tx.Type()),
+			Gas:   hexutil.Uint64(tx.Gas()),
+			Hash:  tx.Hash(),
+			Input: hexutil.Bytes(tx.Data()),
+			To:    tx.To(),
+			Value: (*hexutil.Big)(tx.Value()),
 		}
 		originatingTxHash := tx.OriginatingTxHash()
 		etxIndex := uint64(tx.ETXIndex())
@@ -1099,27 +1091,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.OriginatingTxHash = &originatingTxHash
 		result.Sender = &sender
 		result.ETXIndex = (*hexutil.Uint64)(&etxIndex)
-	case types.InternalToExternalTxType:
-		result = &RPCTransaction{
-			Type:        hexutil.Uint64(tx.Type()),
-			From:        &from,
-			Gas:         hexutil.Uint64(tx.Gas()),
-			Hash:        tx.Hash(),
-			Input:       hexutil.Bytes(tx.Data()),
-			Nonce:       hexutil.Uint64(tx.Nonce()),
-			To:          tx.To(),
-			Value:       (*hexutil.Big)(tx.Value()),
-			ChainID:     (*hexutil.Big)(tx.ChainId()),
-			GasFeeCap:   (*hexutil.Big)(tx.GasFeeCap()),
-			GasTipCap:   (*hexutil.Big)(tx.GasTipCap()),
-			ETXGasLimit: (hexutil.Uint64)(tx.ETXGasLimit()),
-			ETXGasPrice: (*hexutil.Big)(tx.ETXGasPrice()),
-			ETXGasTip:   (*hexutil.Big)(tx.ETXGasTip()),
-		}
-		data := tx.ETXData()
-		result.ETXData = (*hexutil.Bytes)(&data)
-		eal := tx.ETXAccessList()
-		result.ETXAccessList = &eal
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
