@@ -64,20 +64,15 @@ message ProtoTransaction {
   optional bytes gas_fee_cap = 8;
   optional bytes gas_tip_cap = 9;
   optional ProtoAccessList access_list = 10;
-  optional uint64 etx_gas_limit = 11;
-  optional bytes etx_gas_price = 12;
-  optional bytes etx_gas_tip = 13;
-  optional bytes etx_data = 14;
-  optional ProtoAccessList etx_access_list = 15;
-  optional bytes v = 16;
-  optional bytes r = 17;
-  optional bytes s = 18;
-  optional common.ProtoHash originating_tx_hash = 19;
-  optional uint32 etx_index = 20;
-  optional bytes etx_sender = 21;
-  optional ProtoTxIns tx_ins = 22;
-  optional ProtoTxOuts tx_outs = 23;
-  optional bytes signature = 24;
+  optional bytes v = 11;
+  optional bytes r = 12;
+  optional bytes s = 13;
+  optional common.ProtoHash originating_tx_hash = 14;
+  optional uint32 etx_index = 15;
+  optional ProtoTxIns tx_ins = 16;
+  optional ProtoTxOuts tx_outs = 17;
+  optional bytes signature = 18;
+  optional bytes etx_sender = 19;
 }
 
 message ProtoTransactions { repeated ProtoTransaction transactions = 1; }

@@ -92,17 +92,13 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin        common.Address // Provides information for ORIGIN
-	GasPrice      *big.Int       // Provides information for GASPRICE
-	ETXSender     common.Address // Original sender of the ETX
-	TxType        byte
-	ETXGasLimit   uint64
-	Hash          common.Hash
-	ETXGasPrice   *big.Int
-	ETXGasTip     *big.Int
-	TXGasTip      *big.Int
-	ETXData       []byte
-	ETXAccessList types.AccessList
+	Origin     common.Address // Provides information for ORIGIN
+	GasPrice   *big.Int       // Provides information for GASPRICE
+	TxType     byte
+	Hash       common.Hash
+	TXGasTip   *big.Int
+	AccessList types.AccessList
+	ETXSender  common.Address // Original sender of the ETX
 }
 
 // EVM is the Quai Virtual Machine base object and provides
@@ -202,13 +198,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
-	if evm.TxType == types.InternalToExternalTxType {
-		return evm.CreateETX(addr, caller.Address(), gas, value)
-	}
 	internalAddr, err := addr.InternalAndQuaiAddress()
 	if err != nil {
-		// We might want to return zero leftOverGas here, but we're being nice
-		return nil, gas, err
+		return evm.CreateETX(addr, caller.Address(), gas, value, input)
 	}
 	if !evm.StateDB.Exist(internalAddr) {
 		if !isPrecompile && value.Sign() == 0 {
@@ -599,7 +591,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
 }
 
-func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas uint64, value *big.Int, data []byte) (ret []byte, leftOverGas uint64, err error) {
 
 	// Verify address is not in context
 	if common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
@@ -616,21 +608,22 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %s", err.Error())
 	}
 
-	if err := evm.ValidateETXGasPriceAndTip(fromAddr, toAddr, evm.ETXGasPrice, evm.ETXGasTip); err != nil {
+	if err := evm.ValidateETXGasPriceAndTip(fromAddr, toAddr, evm.GasPrice, evm.TXGasTip); err != nil {
 		return []byte{}, 0, err
 	}
 
-	fee := big.NewInt(0)
-	fee.Add(evm.ETXGasTip, evm.ETXGasPrice)
-	fee.Mul(fee, big.NewInt(int64(evm.ETXGasLimit)))
-	total := big.NewInt(0)
-	total.Add(value, fee)
-	// Fail if we're trying to transfer more than the available balance
-	if total.Sign() == 0 || !evm.Context.CanTransfer(evm.StateDB, fromAddr, total) {
-		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d", fromAddr, total.Uint64())
+	gas = gas - params.ETXGas
+
+	if gas < params.TxGas { // ETX must have enough gas to create a transaction
+		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas for ETX, required amount: %d", gas, params.TxGas)
 	}
 
-	evm.StateDB.SubBalance(fromInternal, total)
+	// Fail if we're trying to transfer more than the available balance
+	if !evm.Context.CanTransfer(evm.StateDB, fromAddr, value) {
+		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d", fromAddr, value.Uint64())
+	}
+
+	evm.StateDB.SubBalance(fromInternal, value)
 
 	evm.ETXCacheLock.RLock()
 	index := len(evm.ETXCache) // this is virtually guaranteed to be zero, but the logic is the same as opETX
@@ -639,7 +632,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 		return []byte{}, 0, fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
 	}
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: evm.ETXGasLimit, Data: evm.ETXData, AccessList: evm.ETXAccessList}
+	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: gas, Data: data, AccessList: evm.AccessList}
 	etx := types.NewTx(&etxInner)
 
 	// check if the etx is eligible to be sent to the to location
@@ -651,7 +644,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	evm.ETXCache = append(evm.ETXCache, etx)
 	evm.ETXCacheLock.Unlock()
 
-	return []byte{}, gas - params.ETXGas, nil
+	return []byte{}, 0, nil // all leftover gas goes to the ETX
 }
 
 // Emitted ETXs must include some multiple of BaseFee as miner tip, to
@@ -667,6 +660,7 @@ func calcEtxFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
 
 // Validate ETX gas price and tip
 func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr, toAddr common.Address, etxGasPrice *big.Int, etxGasTip *big.Int) error {
+	return nil
 	if l := etxGasPrice.BitLen(); l > 256 {
 		return fmt.Errorf("max fee per gas higher than 2^256-1: address %v, etxGasPrice bit length: %d",
 			fromAddr, l)

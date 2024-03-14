@@ -355,7 +355,7 @@ func (rs Receipts) Len() int { return len(rs) }
 
 // Supported returns true if the receipt type is supported
 func (r Receipt) Supported() bool {
-	return r.Type == QuaiTxType || r.Type == ExternalTxType || r.Type == InternalToExternalTxType
+	return r.Type == QuaiTxType || r.Type == ExternalTxType
 }
 
 // EncodeIndex encodes the i'th receipt to w.

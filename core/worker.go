@@ -617,6 +617,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, s
 			"gas":        block.GasUsed(),
 			"fees":       totalFees(block, work.receipts),
 			"elapsed":    common.PrettyDuration(time.Since(start)),
+			"utxoRoot":   block.UTXORoot(),
 			"etxSetHash": block.EtxSetHash(),
 		}).Debug("Commit new sealing work")
 	}
@@ -1174,13 +1175,6 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 			if entry == nil {
 				log.Global.Errorf("ETX %s not found in the database!", hash.String())
 				break
-			}
-			if entry.ETXSender().Location().Equal(w.chainConfig.Location) { // Sanity check. This is unnecessary and should be removed.
-				w.logger.WithFields(log.Fields{
-					"tx":     entry.Hash().String(),
-					"sender": entry.ETXSender().String(),
-				}).Error("ETX sender is in our location!")
-				continue // skip this tx
 			}
 			etxs = append(etxs, entry)
 			if totalGasEstimate += entry.Gas(); totalGasEstimate > maxEtxGas { // We don't need to load any more ETXs after this limit

@@ -95,11 +95,6 @@ func (tx *QuaiTx) gasPrice() *big.Int        { return tx.GasFeeCap }
 func (tx *QuaiTx) value() *big.Int           { return tx.Value }
 func (tx *QuaiTx) nonce() uint64             { return tx.Nonce }
 func (tx *QuaiTx) to() *common.Address       { return tx.To }
-func (tx *QuaiTx) etxGasLimit() uint64       { panic("internal TX does not have etxGasLimit") }
-func (tx *QuaiTx) etxGasPrice() *big.Int     { panic("internal TX does not have etxGasPrice") }
-func (tx *QuaiTx) etxGasTip() *big.Int       { panic("internal TX does not have etxGasTip") }
-func (tx *QuaiTx) etxData() []byte           { panic("internal TX does not have etxData") }
-func (tx *QuaiTx) etxAccessList() AccessList { panic("internal TX does not have etxAccessList") }
 func (tx *QuaiTx) etxSender() common.Address { panic("internal TX does not have etxSender") }
 func (tx *QuaiTx) originatingTxHash() common.Hash {
 	panic("internal TX does not have originatingTxHash")
