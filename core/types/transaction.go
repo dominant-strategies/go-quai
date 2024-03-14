@@ -622,13 +622,57 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 }
 
 // Hash returns the transaction hash.
-func (tx *Transaction) Hash() (h common.Hash) {
+func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
 	protoTx, _ := tx.ProtoEncode()
 	data, _ := proto.Marshal(protoTx)
 	h = crypto.Keccak256Hash(data)
+	switch tx.Type() {
+	case QuaiTxType:
+		if len(location) == 2 {
+			origin := (uint8(location[0]) * 16) + uint8(location[1])
+			h[0] = origin
+			h[1] &= 0x7F // 01111111 in binary (set first bit to 0)
+			h[2] = origin
+			h[3] &= 0x7F
+		} else {
+			from, err := Sender(NewSigner(tx.ChainId(), common.Location{0, 0}), tx) // location not important when performing ecrecover
+			if err != nil {
+				panic("failed to get transaction sender!")
+			}
+			location := *from.Location()
+			origin := (uint8(location[0]) * 16) + uint8(location[1])
+			h[0] = origin
+			h[1] &= 0x7F
+			h[2] = origin
+			h[3] &= 0x7F
+		}
+	case ExternalTxType:
+		origin := tx.OriginatingTxHash().Bytes()[2] // destination of the originating tx
+		destLoc := *tx.To().Location()
+		destination := (uint8(destLoc[0]) * 16) + uint8(destLoc[1])
+		h[0] = origin
+		if tx.ETXSender().IsInQiLedgerScope() {
+			h[1] |= 0x80 // 10000000 in binary (set first bit to 1)
+		} else {
+			h[1] &= 0x7F // 01111111 in binary (set first bit to 0)
+		}
+		h[2] = destination
+		if tx.To().IsInQiLedgerScope() {
+			h[3] |= 0x80
+		} else {
+			h[3] &= 0x7F
+		}
+	case QiTxType:
+		// the origin of this tx is the *destination* of the utxos being spent
+		origin := tx.TxIn()[0].PreviousOutPoint.TxHash[1]
+		h[0] = origin
+		h[1] |= 0x80 // 10000000 in binary (set first bit to 1)
+		h[2] = origin
+		h[3] |= 0x80
+	}
 	tx.hash.Store(h)
 	return h
 }

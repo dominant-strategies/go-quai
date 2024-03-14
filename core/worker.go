@@ -1338,18 +1338,17 @@ func (w *worker) CurrentInfo(header *types.Header) bool {
 }
 
 func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
-
+	location := w.hc.NodeLocation()
 	if tx.Type() != types.QiTxType {
 		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
 	}
-	if types.IsCoinBaseTx(tx, env.header.ParentHash(w.hc.NodeCtx())) {
+	if types.IsCoinBaseTx(tx, env.header.ParentHash(w.hc.NodeCtx()), location) {
 		return fmt.Errorf("tx %032x is a coinbase QiTx", tx.Hash())
 	}
 	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
 
-	location := w.hc.NodeLocation()
 	txGas := types.CalculateQiTxGas(tx)
 
 	gasUsed := env.header.GasUsed()
@@ -1479,9 +1478,13 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 // is nil, the coinbase transaction will instead be redeemable by anyone.
 func createCoinbaseTxWithFees(header *types.Header, fees *big.Int, state *state.StateDB) (*types.Transaction, error) {
 	parentHash := header.ParentHash(header.Location().Context()) // all blocks should have zone location and context
+
+	// The coinbase transaction input must be the parent hash encoded with the proper origin location
+	origin := (uint8(header.Location()[0]) * 16) + uint8(header.Location()[1])
+	parentHash[0] = origin
+	parentHash[1] = origin
 	in := types.TxIn{
-		// Coinbase transactions have no inputs, so previous outpoint is
-		// zero hash and max index.
+		// Coinbase transaction input is parent hash with max output index
 		PreviousOutPoint: *types.NewOutPoint(&parentHash, types.MaxOutputIndex),
 	}
 
