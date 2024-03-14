@@ -269,7 +269,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
-			if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx)) {
+			if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
 				// coinbase tx currently exempt from gas and outputs are added after all txs are processed
 				continue
 			}
@@ -346,7 +346,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 
 	qiTransactions := block.QiTransactions()
 	// Coinbase check
-	if len(qiTransactions) > 0 && types.IsCoinBaseTx(qiTransactions[0], header.ParentHash(nodeCtx)) {
+	if len(qiTransactions) > 0 && types.IsCoinBaseTx(qiTransactions[0], header.ParentHash(nodeCtx), nodeLocation) {
 		totalCoinbaseOut := big.NewInt(0)
 		for _, txOut := range qiTransactions[0].TxOut() {
 			totalCoinbaseOut.Add(totalCoinbaseOut, types.Denominations[txOut.Denomination])
