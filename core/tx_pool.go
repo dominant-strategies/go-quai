@@ -1052,10 +1052,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 				errs[i] = err
 			}
 			continue
-		} else if tx.Type() == types.InternalToExternalTxType && tx.To() == nil {
-			errs[i] = errors.New("to address is nil in InternalToExternalTx") // remove this check when InternalToExternalTx is removed
-			invalidTxMeter.Add(1)
-			continue
 		}
 		if tx.To() != nil && tx.To().IsInQiLedgerScope() {
 			errs[i] = common.MakeErrQiAddress(tx.To().Hex())
