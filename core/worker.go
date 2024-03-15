@@ -562,9 +562,9 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 			}).Info("Filled and sorted pending transactions")
 			// Set the etx set commitment in the header
 			if etxSet != nil {
-				work.header.SetEtxHash(etxSet.Hash())
+				work.header.SetEtxSetHash(etxSet.Hash())
 			} else {
-				work.header.SetEtxHash(types.EmptyEtxSetHash)
+				work.header.SetEtxSetHash(types.EmptyEtxSetHash)
 			}
 		}
 		if coinbase.IsInQiLedgerScope() {
@@ -594,26 +594,28 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, s
 	work.uncleMu.RLock()
 	if w.CurrentInfo(block.Header()) {
 		w.logger.WithFields(log.Fields{
-			"number":   block.Number(w.hc.NodeCtx()),
-			"sealhash": block.Header().SealHash(),
-			"uncles":   len(work.uncles),
-			"txs":      len(work.txs),
-			"etxs":     len(block.ExtTransactions()),
-			"gas":      block.GasUsed(),
-			"fees":     totalFees(block, work.receipts),
-			"elapsed":  common.PrettyDuration(time.Since(start)),
-			"utxoRoot": block.UTXORoot(),
+			"number":     block.Number(w.hc.NodeCtx()),
+			"sealhash":   block.Header().SealHash(),
+			"uncles":     len(work.uncles),
+			"txs":        len(work.txs),
+			"etxs":       len(block.ExtTransactions()),
+			"gas":        block.GasUsed(),
+			"fees":       totalFees(block, work.receipts),
+			"elapsed":    common.PrettyDuration(time.Since(start)),
+			"utxoRoot":   block.UTXORoot(),
+			"etxSetHash": block.EtxSetHash(),
 		}).Info("Commit new sealing work")
 	} else {
 		w.logger.WithFields(log.Fields{
-			"number":   block.Number(w.hc.NodeCtx()),
-			"sealhash": block.Header().SealHash(),
-			"uncles":   len(work.uncles),
-			"txs":      len(work.txs),
-			"etxs":     len(block.ExtTransactions()),
-			"gas":      block.GasUsed(),
-			"fees":     totalFees(block, work.receipts),
-			"elapsed":  common.PrettyDuration(time.Since(start)),
+			"number":     block.Number(w.hc.NodeCtx()),
+			"sealhash":   block.Header().SealHash(),
+			"uncles":     len(work.uncles),
+			"txs":        len(work.txs),
+			"etxs":       len(block.ExtTransactions()),
+			"gas":        block.GasUsed(),
+			"fees":       totalFees(block, work.receipts),
+			"elapsed":    common.PrettyDuration(time.Since(start)),
+			"etxSetHash": block.EtxSetHash(),
 		}).Debug("Commit new sealing work")
 	}
 	work.uncleMu.RUnlock()
