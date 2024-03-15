@@ -426,6 +426,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"gas":        block.GasUsed(),
 		"gasLimit":   block.GasLimit(),
 		"evmRoot":    block.EVMRoot(),
+		"etxSetHash": block.EtxSetHash(),
 		"order":      order,
 		"location":   block.Header().Location(),
 		"elapsed":    common.PrettyDuration(time.Since(start)),
