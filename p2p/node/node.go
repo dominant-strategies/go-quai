@@ -210,6 +210,19 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	return p2p, nil
 }
 
+func initializeCaches(locations []common.Location) map[string]map[string]*lru.Cache[common.Hash, interface{}] {
+	caches := make(map[string]map[string]*lru.Cache[common.Hash, interface{}])
+	for _, location := range locations {
+		locCache := map[string]*lru.Cache[common.Hash, interface{}]{
+			"blocks":       createCache(c_defaultCacheSize),
+			"transactions": createCache(c_defaultCacheSize),
+			"headers":      createCache(c_defaultCacheSize),
+		}
+		caches[location.Name()] = locCache
+	}
+	return caches
+}
+
 func createCache(size int) *lru.Cache[common.Hash, interface{}] {
 	cache, err := lru.New[common.Hash, interface{}](size) // Assuming a fixed size of 10 for each cache
 	if err != nil {

@@ -573,3 +573,24 @@ func ZeroAddress(nodeLocation Location) Address {
 	internal := InternalAddress{nodeLocation.BytePrefix()}
 	return Address{&internal}
 }
+
+// GenerateLocations generates a logical sequence of locations
+func GenerateLocations(maxRegions, zonesPerRegion int) []Location {
+	var locations []Location
+
+	// Prime location
+	locations = append(locations, Location{})
+
+	// Iterate over each region
+	for regionIndex := 0; regionIndex < maxRegions; regionIndex++ {
+		// Add region
+		locations = append(locations, Location{byte(regionIndex)})
+
+		// Add zones for the current region
+		for zoneIndex := 0; zoneIndex < zonesPerRegion; zoneIndex++ {
+			locations = append(locations, Location{byte(regionIndex), byte(zoneIndex)})
+		}
+	}
+
+	return locations
+}
