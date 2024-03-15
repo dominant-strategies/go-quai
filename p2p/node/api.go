@@ -183,6 +183,14 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 // Request a data from the network for the specified slice
 func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
 	resultChan := make(chan interface{}, 1)
+	// If it is a hash, first check to see if it is contained in the caches
+	if hash, ok := requestData.(common.Hash); ok {
+		result, ok := p.cacheGet(hash, responseDataType, location)
+		if ok {
+			resultChan <- result
+			return resultChan
+		}
+	}
 
 	go p.requestFromPeers(location, requestData, responseDataType, resultChan)
 	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
@@ -271,7 +279,7 @@ func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.
 func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, data interface{}, nodeLocation common.Location) {
 	switch v := data.(type) {
 	case types.Block:
-		p.cacheAdd(v.Hash(), &v)
+		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	// TODO: send it to consensus
 	case types.Transaction:
 	default:

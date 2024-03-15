@@ -60,7 +60,7 @@ type P2PNode struct {
 	requestManager requestManager.RequestManager
 
 	// Caches for each type of data we may receive
-	cache map[string]*lru.Cache[common.Hash, interface{}]
+	cache map[string]map[string]*lru.Cache[common.Hash, interface{}]
 
 	// runtime context
 	ctx context.Context
@@ -187,12 +187,6 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
-	cache := map[string]*lru.Cache[common.Hash, interface{}]{
-		"blocks":       createCache(c_defaultCacheSize),
-		"transactions": createCache(c_defaultCacheSize),
-		"headers":      createCache(c_defaultCacheSize),
-	}
-
 	p2p := &P2PNode{
 		ctx:            ctx,
 		Host:           host,
@@ -201,7 +195,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		pubsub:         ps,
 		peerManager:    peerMgr,
 		requestManager: requestManager.NewManager(),
-		cache:          cache,
+		cache:          initializeCaches(common.GenerateLocations(common.NumRegionsInPrime, common.NumZonesInRegion)),
 	}
 
 	// Set the peer manager's backend to the host
@@ -237,14 +231,14 @@ func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
 }
 
 // Helper to access the corresponding data cache
-func (p *P2PNode) pickCache(datatype interface{}) *lru.Cache[common.Hash, interface{}] {
+func (p *P2PNode) pickCache(datatype interface{}, location common.Location) *lru.Cache[common.Hash, interface{}] {
 	switch datatype.(type) {
 	case *types.Block:
-		return p.cache["blocks"]
+		return p.cache[location.Name()]["blocks"]
 	case *types.Transaction:
-		return p.cache["transactions"]
+		return p.cache[location.Name()]["transactions"]
 	case *types.Header:
-		return p.cache["headers"]
+		return p.cache[location.Name()]["headers"]
 	default:
 		log.Global.Fatalf("unsupported type")
 		return nil
@@ -252,13 +246,13 @@ func (p *P2PNode) pickCache(datatype interface{}) *lru.Cache[common.Hash, interf
 }
 
 // Add a datagram into the corresponding cache
-func (p *P2PNode) cacheAdd(hash common.Hash, data interface{}) {
-	cache := p.pickCache(data)
+func (p *P2PNode) cacheAdd(hash common.Hash, data interface{}, location common.Location) {
+	cache := p.pickCache(data, location)
 	cache.Add(hash, data)
 }
 
 // Get a datagram from the corresponding cache
-func (p *P2PNode) cacheGet(hash common.Hash, datatype interface{}) (interface{}, bool) {
-	cache := p.pickCache(datatype)
+func (p *P2PNode) cacheGet(hash common.Hash, datatype interface{}, location common.Location) (interface{}, bool) {
+	cache := p.pickCache(datatype, location)
 	return cache.Get(hash)
 }
