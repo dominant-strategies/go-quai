@@ -22,9 +22,6 @@ func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 	if _, err := io.ReadFull(stream, lenBytes); err != nil {
 		return nil, errors.Wrap(err, "failed to read message length")
 	}
-	if messageMetrics != nil {
-		messageMetrics.WithLabelValues("received").Inc()
-	}
 	msgLen := binary.BigEndian.Uint32(lenBytes)
 
 	// Now read the message
@@ -33,6 +30,9 @@ func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 		return nil, errors.Wrap(err, "failed to read message")
 	}
 
+	if messageMetrics != nil {
+		messageMetrics.WithLabelValues("received").Inc()
+	}
 	return data, nil
 }
 
@@ -55,6 +55,10 @@ func WriteMessageToStream(stream network.Stream, msg []byte) error {
 	_, err := stream.Write(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to write message to stream")
+	}
+
+	if messageMetrics != nil {
+		messageMetrics.WithLabelValues("sent").Inc()
 	}
 	return nil
 }

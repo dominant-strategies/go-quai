@@ -172,6 +172,9 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 		if err != nil {
 			return id, nil, err
 		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("blocks").Inc()
+		}
 		return id, block, nil
 	case *QuaiResponseMessage_Header:
 		protoHeader := respMsg.GetHeader()
@@ -180,6 +183,9 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 		if err != nil {
 			return id, nil, err
 		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("headers").Inc()
+		}
 		return id, header, nil
 	case *QuaiResponseMessage_Transaction:
 		protoTransaction := respMsg.GetTransaction()
@@ -187,6 +193,9 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 		err := transaction.ProtoDecode(protoTransaction, *sourceLocation)
 		if err != nil {
 			return id, nil, err
+		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("transactions").Inc()
 		}
 		return id, transaction, nil
 	case *QuaiResponseMessage_BlockHash:
