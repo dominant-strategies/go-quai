@@ -233,7 +233,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet types.EtxSet) (types
 			if sender, ok := p.hc.pool.GetSenderThreadUnsafe(tx.Hash()); ok {
 				senders[tx.Hash()] = &sender // This pointer must never be modified
 			} else {
-				// TODO: calcuate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
+				// TODO: calculate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
 			}
 		}
 	}

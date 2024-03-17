@@ -424,7 +424,7 @@ func (w *worker) StorePendingBlockBody() {
 	rawdb.WritePbBodyKeys(w.workerDb, pendingBlockBodyKeys)
 }
 
-// asyncStateLoop updates the state root for a block and returns the state udpate in a channel
+// asyncStateLoop updates the state root for a block and returns the state update in a channel
 func (w *worker) asyncStateLoop() {
 	defer w.wg.Done() // decrement the wait group after the close of the loop
 
@@ -459,7 +459,7 @@ func (w *worker) asyncStateLoop() {
 	}
 }
 
-// GeneratePendingBlock generates pending block given a commited block.
+// GeneratePendingBlock generates pending block given a committed block.
 func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.Header, error) {
 	nodeCtx := common.NodeLocation.Context()
 

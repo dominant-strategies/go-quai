@@ -24,7 +24,7 @@ type ExternalTx struct {
 	// from chain consensus and not from an account signature.
 	//
 	// Before an ETX can be processed at the destination chain, the ETX must
-	// become referencable through block manifests, thereby guaranteeing that
+	// become referenceable through block manifests, thereby guaranteeing that
 	// the origin chain indeed confirmed emission of that ETX.
 }
 

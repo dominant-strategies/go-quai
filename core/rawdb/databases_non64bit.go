@@ -24,7 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
-// Pebble is unsuported on 32bit architecture
+// Pebble is unsupported on 32bit architecture
 const PebbleEnabled = false
 
 // NewPebbleDBDatabase creates a persistent key-value database without a freezer
