@@ -943,6 +943,18 @@ type extblock struct {
 	SubManifest BlockManifest
 }
 
+func EmptyBlock() *Block {
+	b := &Block{header: EmptyHeader()}
+	b.header.SetTxHash(EmptyRootHash)
+	b.header.SetReceiptHash(EmptyRootHash)
+	b.header.SetUncleHash(EmptyUncleHash)
+	b.header.SetEtxHash(EmptyRootHash)
+	b.header.SetEtxRollupHash(EmptyRootHash)
+	b.subManifest = make(BlockManifest, 0)
+
+	return b
+}
+
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher, nodeCtx int) *Block {
 	b := &Block{header: CopyHeader(header)}
 

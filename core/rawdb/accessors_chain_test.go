@@ -410,6 +410,41 @@ func TestBodyAndReceiptsStorage(t *testing.T) {
 	}
 }
 
+func TestBlockStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	location := common.Location{0, 0}
+	block := types.EmptyBlock()
+	block.Header().SetNumber(big.NewInt(1), common.ZONE_CTX)
+	hash := block.Hash()
+	number := block.NumberU64(common.ZONE_CTX)
+
+	if entry := ReadBlock(db, hash, number, location); entry != nil {
+		t.Fatalf("Non existent block returned: %v", entry)
+	}
+
+	WriteBlock(db, block, common.ZONE_CTX)
+
+	if entry := ReadBlock(db, hash, number, location); entry == nil {
+		t.Fatalf("Stored block not found: %v", entry)
+	}
+
+	DeleteBlock(db, hash, number)
+
+	if entry := ReadBlock(db, hash, number, common.Location{0, 0}); entry != nil {
+		t.Fatalf("Deleted block returned: %v", entry)
+	}
+
+	WriteBlock(db, block, common.ZONE_CTX)
+
+	DeleteBlockWithoutNumber(db, hash, number)
+
+	if entry := ReadHeaderNumber(db, hash); *entry != number {
+		t.Fatalf("Failed to return block number: %v", entry)
+
+	}
+}
+
 // Tests inbound etx storage and retrieval operations.
 func TestInboundEtxsStorage(t *testing.T) {
 	db := NewMemoryDatabase()
