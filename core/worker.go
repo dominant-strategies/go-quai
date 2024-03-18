@@ -551,21 +551,21 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(nil, work, block)
 		work.utxoFees = big.NewInt(0)
+		start := time.Now()
+		etxSet := w.fillTransactions(interrupt, work, block, fill)
 		if fill {
-			start := time.Now()
-			etxSet := w.fillTransactions(interrupt, work, block)
 			w.fillTransactionsRollingAverage.Add(time.Since(start))
 			w.logger.WithFields(log.Fields{
 				"count":   len(work.txs),
 				"elapsed": common.PrettyDuration(time.Since(start)),
 				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
 			}).Info("Filled and sorted pending transactions")
-			// Set the etx set commitment in the header
-			if etxSet != nil {
-				work.header.SetEtxSetHash(etxSet.Hash())
-			} else {
-				work.header.SetEtxSetHash(types.EmptyEtxSetHash)
-			}
+		}
+		// Set the etx set commitment in the header
+		if etxSet != nil {
+			work.header.SetEtxSetHash(etxSet.Hash())
+		} else {
+			work.header.SetEtxSetHash(types.EmptyEtxSetHash)
 		}
 		if coinbase.IsInQiLedgerScope() {
 			coinbaseTx, err := createCoinbaseTxWithFees(work.header, work.utxoFees, work.state)
@@ -595,6 +595,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, s
 	if w.CurrentInfo(block.Header()) {
 		w.logger.WithFields(log.Fields{
 			"number":     block.Number(w.hc.NodeCtx()),
+			"parent":     block.ParentHash(w.hc.NodeCtx()),
 			"sealhash":   block.Header().SealHash(),
 			"uncles":     len(work.uncles),
 			"txs":        len(work.txs),
@@ -608,6 +609,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.Block, s
 	} else {
 		w.logger.WithFields(log.Fields{
 			"number":     block.Number(w.hc.NodeCtx()),
+			"parent":     block.ParentHash(w.hc.NodeCtx()),
 			"sealhash":   block.Header().SealHash(),
 			"uncles":     len(work.uncles),
 			"txs":        len(work.txs),
@@ -1029,7 +1031,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.Block) *types.EtxSet {
+func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.Block, fill bool) *types.EtxSet {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	etxs := make([]*types.Transaction, 0)
@@ -1062,6 +1064,12 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 			}
 			index++
 		}
+	}
+	if !fill {
+		if len(etxs) > 0 {
+			w.commitTransactions(env, etxs, &types.TransactionsByPriceAndNonce{}, etxSet, interrupt)
+		}
+		return etxSet
 	}
 
 	pending, err := w.txPool.TxPoolPending(true)

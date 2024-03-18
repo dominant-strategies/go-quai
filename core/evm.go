@@ -32,7 +32,11 @@ type ChainContext interface {
 	// Engine retrieves the chain's consensus engine.
 	Engine() consensus.Engine
 
-	// GetHeader returns the hash corresponding to their hash.
+	// GetHeader returns a block header from the database by hash.
+	// The header might not be on the canonical chain.
+	GetHeaderOrCandidate(common.Hash, uint64) *types.Header
+
+	// GetHeader returns a block header in the canonical chain from the database by hash.
 	GetHeader(common.Hash, uint64) *types.Header
 
 	// NodeCtx returns the context of the running node
@@ -58,11 +62,11 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 
 	timestamp := header.Time() // base case, should only be the case in genesis block or before forkBlock (in testnet)
 	if header.Number(chain.NodeCtx()).Uint64() != 0 {
-		parent := chain.GetHeader(header.ParentHash(chain.NodeCtx()), header.Number(chain.NodeCtx()).Uint64()-1)
+		parent := chain.GetHeaderOrCandidate(header.ParentHash(chain.NodeCtx()), header.Number(chain.NodeCtx()).Uint64()-1)
 		if parent != nil {
 			timestamp = parent.Time()
 		} else {
-			log.Global.Fatal("Parent is nil, panic", "headerHash", header.Hash(), "parentHash", header.ParentHash(chain.NodeCtx()), "number", header.Number(chain.NodeCtx()).Uint64())
+			log.Global.Fatal("Parent is not in the db, panic", "headerHash", header.Hash(), "parentHash", header.ParentHash(chain.NodeCtx()), "number", header.Number(chain.NodeCtx()).Uint64())
 		}
 	}
 
