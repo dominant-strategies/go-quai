@@ -7,6 +7,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 func TestCanonicalHashStorage(t *testing.T) {
@@ -335,6 +336,77 @@ func TestHeadsHashesStorage(t *testing.T) {
 
 	if entry := ReadHeadsHashes(db); len(entry) != 0 {
 		t.Fatalf("Deleted heads hashes returned: %v", entry)
+	}
+}
+
+func TestBodyAndReceiptsStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	location := common.Location{0, 0}
+	hash := common.Hash{1}
+	number := uint64(1)
+
+	//Body
+	if HasBody(db, common.Hash{1}, uint64(1)) {
+		t.Fatal("Non existent body returned")
+	}
+
+	if entry := ReadBody(db, hash, number, location); entry != nil {
+		t.Fatalf("Non existent body returned: %v", entry)
+	}
+
+	inner := &types.InternalTx{
+		V: new(big.Int).SetUint64(1),
+		R: new(big.Int).SetUint64(1),
+		S: new(big.Int).SetUint64(1),
+	}
+	transaction := types.NewTx(inner)
+	emptyBody := &types.Body{
+		Transactions:    types.Transactions{transaction},
+		Uncles:          []*types.Header{},
+		ExtTransactions: types.Transactions{},
+		SubManifest:     types.BlockManifest{},
+	}
+
+	WriteBody(db, hash, number, emptyBody)
+
+	if entry := ReadBody(db, hash, number, location); entry == nil {
+		t.Fatalf("Stored body not found: %v", entry)
+	}
+
+	//Receipts
+
+	if HasReceipts(db, hash, number) {
+		t.Fatal("Non existent header returned")
+	}
+
+	config := &params.ChainConfig{Location: location}
+
+	if entry := ReadReceipts(db, hash, number, config); entry != nil {
+		t.Fatalf("Non existent receipts returned: %v", entry)
+	}
+
+	receipts := types.Receipts{types.NewReceipt([]byte{1}, false, uint64(1))}
+	WriteReceipts(db, hash, number, receipts)
+
+	if entry := ReadReceipts(db, hash, number, config); entry == nil {
+		t.Fatal("Stored Receipts not found")
+	}
+
+	// TestDelete
+
+	// Receipts
+	DeleteReceipts(db, hash, number)
+
+	if entry := ReadReceipts(db, hash, number, config); entry != nil {
+		t.Fatalf("Deleted receipts returned: %v", entry)
+	}
+
+	// Body
+	DeleteBody(db, hash, number)
+
+	if entry := ReadBody(db, hash, number, location); entry != nil {
+		t.Fatalf("Deleted body returned: %v", entry)
 	}
 }
 
