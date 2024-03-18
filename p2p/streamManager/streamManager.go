@@ -3,6 +3,7 @@ package streamManager
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
@@ -15,7 +16,7 @@ import (
 
 const (
 	// The number of peers to return when querying for peers
-	C_peerCount               = 3
+	C_peerCount = 3
 
 	// The amount of redundancy for open streams
 	// c_peerCount * c_streamReplicationFactor = total number of open streams
@@ -41,6 +42,7 @@ type basicStreamManager struct {
 	ctx         context.Context
 	streamCache *lru.Cache
 	p2pBackend  quaiprotocol.QuaiP2PNode
+	mu          sync.Mutex
 }
 
 func NewStreamManager() (StreamManager, error) {
@@ -68,6 +70,9 @@ func severStream(key interface{}, value interface{}) {
 }
 
 func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
 	stream, ok := sm.streamCache.Get(peerID)
 	if ok {
 		log.Global.WithField("peerID", peerID).Debug("Pruned connection with peer")
@@ -79,6 +84,9 @@ func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
 }
 
 func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
 	stream, ok := sm.streamCache.Get(peerID)
 	var err error
 	if !ok {
