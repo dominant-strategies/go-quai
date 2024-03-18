@@ -317,6 +317,26 @@ func TestEtxSetStorage(t *testing.T) {
 		t.Fatalf("Deleted etxSet returned: %v", entry)
 	}
 }
+func TestHeadsHashesStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadHeadsHashes(db); len(entry) != 0 {
+		t.Fatalf("Non existent heads hashes returned: %v", entry)
+	}
+
+	hashes := common.Hashes{{1}, {2}}
+	WriteHeadsHashes(db, hashes)
+
+	if entry := ReadHeadsHashes(db); entry[0] != hashes[0] || entry[1] != hashes[1] {
+		t.Fatalf("Stored heads hashes not found: %v", entry)
+	}
+
+	DeleteAllHeadsHashes(db)
+
+	if entry := ReadHeadsHashes(db); len(entry) != 0 {
+		t.Fatalf("Deleted heads hashes returned: %v", entry)
+	}
+}
 
 // Tests inbound etx storage and retrieval operations.
 func TestInboundEtxsStorage(t *testing.T) {
