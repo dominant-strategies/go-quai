@@ -445,6 +445,44 @@ func TestBlockStorage(t *testing.T) {
 	}
 }
 
+func TestBadBlockStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	location := common.Location{0, 0}
+	block := types.EmptyBlock()
+	block.Header().SetNumber(big.NewInt(1), common.ZONE_CTX)
+	block.Header().SetLocation(location)
+	block.Header().SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 0}))
+	hash := block.Hash()
+
+	if entry := ReadBadBlock(db, hash, location); entry != nil {
+		t.Fatalf("Non existent bad block returned: %v", entry)
+	}
+
+	WriteBadBlock(db, block, location)
+
+	if entry := ReadBadBlock(db, hash, location); entry.Hash() != block.Hash() {
+		t.Fatalf("Stored bad block not found: %v", entry)
+	}
+
+	block2 := types.EmptyBlock()
+	block2.Header().SetNumber(big.NewInt(2), common.ZONE_CTX)
+	block2.Header().SetLocation(location)
+	block2.Header().SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 0}))
+
+	WriteBadBlock(db, block2, location)
+
+	if entry := ReadAllBadBlocks(db, location); entry[1].Hash() != block.Hash() || entry[0].Hash() != block2.Hash() {
+		t.Fatalf("Stored bad block not found: %v", entry)
+	}
+
+	DeleteBadBlocks(db)
+
+	if entry := ReadAllBadBlocks(db, location); len(entry) != 0 {
+		t.Fatalf("Failed to delete bad blocks: %v", entry)
+	}
+}
+
 // Tests inbound etx storage and retrieval operations.
 func TestInboundEtxsStorage(t *testing.T) {
 	db := NewMemoryDatabase()
