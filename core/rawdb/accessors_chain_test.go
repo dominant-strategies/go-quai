@@ -484,6 +484,30 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 }
 
+func TestManifestStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	hash := common.Hash{1}
+	manifest := types.BlockManifest{common.Hash{2}}
+
+	if entry := ReadManifest(db, hash); entry != nil {
+		t.Fatalf("Non existent manifest returned: %v", entry)
+	}
+
+	WriteManifest(db, hash, manifest)
+
+	if entry := ReadManifest(db, hash); entry[0] != manifest[0] {
+		t.Fatalf("Stored manifest not found: %v", entry)
+	}
+
+	DeleteManifest(db, hash)
+
+	if entry := ReadManifest(db, hash); entry != nil {
+		t.Fatalf("Deleted manifest returned: %v", entry)
+	}
+
+}
+
 func TestBloomStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
