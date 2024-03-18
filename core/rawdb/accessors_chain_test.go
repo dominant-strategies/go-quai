@@ -484,6 +484,27 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 }
 
+func TestBadHashesListStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadBadHashesList(db); entry != nil {
+		t.Fatalf("Non existent bad hashes list returned: %v", entry)
+	}
+
+	hashes := common.Hashes{{1}, {2}}
+	WriteBadHashesList(db, hashes)
+
+	if entry := ReadBadHashesList(db); entry[0] != hashes[0] || entry[1] != hashes[1] {
+		t.Fatalf("Stored bad hashes list not found: %v", entry)
+	}
+
+	DeleteBadHashesList(db)
+
+	if entry := ReadBadHashesList(db); entry != nil {
+		t.Fatalf("Deleted bad hashes list returned: %v", entry)
+	}
+}
+
 // Tests inbound etx storage and retrieval operations.
 func TestInboundEtxsStorage(t *testing.T) {
 	db := NewMemoryDatabase()
