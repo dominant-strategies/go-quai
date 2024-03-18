@@ -69,6 +69,11 @@ type PeerManager interface {
 	UnblockPeer(p peer.ID) error
 	UnblockSubnet(ipnet *net.IPNet) error
 
+	// Sets the ID for the node running the peer manager
+	SetSelfID(p2p.PeerID)
+	// Sets the P2P backend for the peer manager
+	SetP2PBackend(quaiprotocol.QuaiP2PNode)
+
 	// Removes a peer from all the quality buckets
 	RemovePeer(p2p.PeerID) error
 	// Returns an existing stream with that peer or opens a new one
@@ -116,7 +121,7 @@ type BasicPeerManager struct {
 	ctx context.Context
 }
 
-func NewManager(ctx context.Context, low int, high int, datastore datastore.Datastore) (*BasicPeerManager, error) {
+func NewManager(ctx context.Context, low int, high int, datastore datastore.Datastore) (PeerManager, error) {
 	mgr, err := basicConnMgr.NewConnManager(low, high)
 	if err != nil {
 		return nil, err
