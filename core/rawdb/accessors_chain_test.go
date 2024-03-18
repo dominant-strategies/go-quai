@@ -318,6 +318,7 @@ func TestEtxSetStorage(t *testing.T) {
 		t.Fatalf("Deleted etxSet returned: %v", entry)
 	}
 }
+
 func TestHeadsHashesStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
@@ -523,5 +524,28 @@ func TestInboundEtxsStorage(t *testing.T) {
 	DeleteInboundEtxs(db, hash)
 	if entry := ReadInboundEtxs(db, hash, location); entry != nil {
 		t.Fatalf("Deleted InboundEtxs returned: %v", entry)
+	}
+}
+
+func TestAddressUtxosStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+	address := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
+
+	if entry := ReadAddressUtxos(db, address); len(entry) != 0 {
+		t.Fatalf("Non existent address utxos returned: %v", entry)
+	}
+
+	utxos := []*types.UtxoEntry{{Denomination: 1, Address: address.Bytes()}}
+
+	WriteAddressUtxos(db, address, utxos)
+
+	if entry := ReadAddressUtxos(db, address); entry[0].Denomination != utxos[0].Denomination {
+		t.Fatalf("Stored address utxo not found: %v", entry)
+	}
+
+	DeleteAddressUtxos(db, address)
+
+	if entry := ReadAddressUtxos(db, address); len(entry) != 0 {
+		t.Fatalf("Deleted address utxos returned: %v", entry)
 	}
 }
