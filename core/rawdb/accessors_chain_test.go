@@ -484,6 +484,36 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 }
 
+func TestPendingEtxsRollupStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	location := common.Location{0, 0}
+	header := types.EmptyHeader()
+	header.SetLocation(location)
+
+	etxRollup := types.PendingEtxsRollup{
+		Header:     header,
+		EtxsRollup: types.Transactions{},
+	}
+
+	if entry := ReadPendingEtxsRollup(db, header.Hash(), location); entry != nil {
+		t.Fatalf("Non existent pending etx rollup returned: %v", entry)
+	}
+
+	WritePendingEtxsRollup(db, etxRollup)
+
+	if entry := ReadPendingEtxsRollup(db, header.Hash(), location); entry == nil {
+		t.Fatalf("Stored pending etx rollup not found: %v", entry)
+	}
+
+	DeletePendingEtxsRollup(db, header.Hash())
+
+	if entry := ReadPendingEtxsRollup(db, header.Hash(), location); entry != nil {
+		t.Fatalf("Deleted pending etx rollup returned: %v", entry)
+	}
+
+}
+
 func TestManifestStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
