@@ -270,6 +270,30 @@ func TestPendingHeaderStorage(t *testing.T) {
 	}
 }
 
+func TestBestPhKeyStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	emptyHash := common.Hash{}
+
+	if entry := ReadBestPhKey(db); entry != emptyHash {
+		t.Fatalf("Non existent best phKey returned: %v", entry)
+	}
+
+	hash := common.Hash{1}
+
+	WriteBestPhKey(db, hash)
+
+	if entry := ReadBestPhKey(db); entry != hash {
+		t.Fatalf("Stored best phKey not found: %v", entry)
+	}
+
+	DeleteBestPhKey(db)
+
+	if entry := ReadBestPhKey(db); entry != emptyHash {
+		t.Fatalf("Failed to delete key: %v", entry)
+	}
+}
+
 func TestEtxSetStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
