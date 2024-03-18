@@ -173,6 +173,16 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 // to keep the baseline gas close to the provided target, and increase it towards
 // the target if the baseline gas is lower.
 func CalcGasLimit(parent *types.Header, gasCeil uint64) uint64 {
+	// No Gas for TimeToStartTx days worth of zone blocks, this gives enough time to
+	// onboard new miners into the slice
+	if parent.NumberU64(common.ZONE_CTX) < params.TimeToStartTx {
+		return 0
+	}
+
+	// If parent gas is zero and we have passed the 5 day threshold, we can set the first block gas limit to min gas limit
+	if parent.GasLimit() == 0 {
+		return params.MinGasLimit
+	}
 
 	parentGasLimit := parent.GasLimit()
 
