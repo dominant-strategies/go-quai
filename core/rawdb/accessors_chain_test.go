@@ -484,6 +484,27 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 }
 
+func TestBloomStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadBloom(db, common.Hash{1}); entry != nil {
+		t.Fatalf("Non existent bloom returned: %v", entry)
+	}
+
+	bloom := types.BytesToBloom([]byte{1})
+	WriteBloom(db, common.Hash{1}, bloom)
+
+	if entry := ReadBloom(db, common.Hash{1}); *entry != bloom {
+		t.Fatalf("Stored bloom not found: %v", entry)
+	}
+
+	DeleteBloom(db, common.Hash{1}, 1)
+
+	if entry := ReadBloom(db, common.Hash{1}); entry != nil {
+		t.Fatalf("Deleted bloom returned: %v", entry)
+	}
+}
+
 func TestBadHashesListStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
