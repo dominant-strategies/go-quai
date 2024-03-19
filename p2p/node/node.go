@@ -23,6 +23,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/node/dhtstorage"
 	"github.com/dominant-strategies/go-quai/p2p/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
@@ -91,6 +92,12 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		return nil, err
 	}
 
+	// create a DHT storage instance
+	ds, err := dhtstorage.NewDHTStorage()
+	if err != nil {
+		log.Global.Fatalf("error creating DHT storage: %s", err)
+	}
+
 	// Create the libp2p host
 	var dht *dual.DHT
 	host, err := libp2p.New(
@@ -148,6 +155,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 					}),
 					kaddht.ProtocolPrefix("/quai"),
 					kaddht.RoutingTableRefreshPeriod(1*time.Minute),
+					kaddht.Datastore(ds),
 				),
 			)
 			return dht, err
