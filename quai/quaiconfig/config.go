@@ -181,6 +181,9 @@ type Config struct {
 
 	// IndexAddressUtxos enables or disables address utxo indexing
 	IndexAddressUtxos bool
+
+	// DefaultGenesisHash is the hard coded genesis hash
+	DefaultGenesisHash common.Hash
 }
 
 // CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.

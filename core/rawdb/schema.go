@@ -80,6 +80,9 @@ var (
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
+	// genesisHashesKey tracks the list of genesis hashes
+	genesisHashesKey = []byte("GenesisHashes")
+
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
 	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
@@ -112,6 +115,9 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
+
+	expansionStatusPrefix = []byte("exp") // ExpansionStatusPrefix + block hash -> ExpansionStatus
+	efficiencyScorePrefix = []byte("es")  // EfficiencyScorePrefix + block hash -> EfficiencyScore
 
 	preimagePrefix = []byte("secure-key-")  // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("quai-config-") // config prefix for the db
@@ -281,6 +287,16 @@ func preimageKey(hash common.Hash) []byte {
 // codeKey = CodePrefix + hash
 func codeKey(hash common.Hash) []byte {
 	return append(CodePrefix, hash.Bytes()...)
+}
+
+// expansionStatusKey = expansionStatusPrefix + hash
+func expansionStatusKey(hash common.Hash) []byte {
+	return append(expansionStatusPrefix, hash.Bytes()...)
+}
+
+// efficiencyScoreKey = efficiencyScorePrefix + hash
+func efficiencyScoreKey(hash common.Hash) []byte {
+	return append(efficiencyScorePrefix, hash.Bytes()...)
 }
 
 // IsCodeKey reports whether the given byte slice is the key of contract code,

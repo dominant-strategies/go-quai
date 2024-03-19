@@ -41,4 +41,10 @@ type ChainSideEvent struct {
 	ResetUncles bool
 }
 
-type ChainHeadEvent struct{ Block *types.Block }
+type ChainHeadEvent struct {
+	Block *types.Block
+}
+
+type ExpansionEvent struct {
+	Block *types.Block
+}

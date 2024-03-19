@@ -683,6 +683,9 @@ func (h *Header) SetNonce(val BlockNonce) {
 func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
 func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
 func (h *Header) NumberArray() []*big.Int          { return h.number }
+func (h *Header) ParentUncledSubDeltaSArray() []*big.Int {
+	return h.parentUncledSubDeltaS
+}
 
 // ProtoEncode serializes s into the Quai Proto sealData format
 func (h *Header) SealEncode() *ProtoHeader {
@@ -1451,8 +1454,8 @@ func CopyTermini(termini Termini) Termini {
 
 func EmptyTermini() Termini {
 	termini := Termini{}
-	termini.subTermini = make([]common.Hash, common.HierarchyDepth)
-	termini.domTermini = make([]common.Hash, common.HierarchyDepth)
+	termini.subTermini = make([]common.Hash, common.MaxWidth)
+	termini.domTermini = make([]common.Hash, common.MaxWidth)
 	return termini
 }
 
@@ -1481,14 +1484,14 @@ func (t *Termini) SetDomTerminiAtIndex(val common.Hash, index int) {
 }
 
 func (t *Termini) SetSubTermini(subTermini []common.Hash) {
-	t.subTermini = make([]common.Hash, len(subTermini))
+	t.subTermini = make([]common.Hash, common.MaxWidth)
 	for i := 0; i < len(subTermini); i++ {
 		t.subTermini[i] = subTermini[i]
 	}
 }
 
 func (t *Termini) SetDomTermini(domTermini []common.Hash) {
-	t.domTermini = make([]common.Hash, len(domTermini))
+	t.domTermini = make([]common.Hash, common.MaxWidth)
 	for i := 0; i < len(domTermini); i++ {
 		t.domTermini[i] = domTermini[i]
 	}
@@ -1502,11 +1505,11 @@ func (t *Termini) IsValid() bool {
 	if t == nil {
 		return false
 	}
-	if len(t.subTermini) != common.NumZonesInRegion {
+	if len(t.subTermini) != common.MaxWidth {
 		return false
 	}
 
-	if len(t.domTermini) != common.NumZonesInRegion {
+	if len(t.domTermini) != common.MaxWidth {
 		return false
 	}
 
@@ -1539,11 +1542,11 @@ func (t Termini) EncodeRLP(w io.Writer) error {
 
 // ProtoEncode serializes t into the Quai Proto Termini format
 func (t Termini) ProtoEncode() *ProtoTermini {
-	domtermini := make([]*common.ProtoHash, len(t.domTermini))
+	domtermini := make([]*common.ProtoHash, common.MaxWidth)
 	for i, hash := range t.domTermini {
 		domtermini[i] = hash.ProtoEncode()
 	}
-	subtermini := make([]*common.ProtoHash, len(t.subTermini))
+	subtermini := make([]*common.ProtoHash, common.MaxWidth)
 	for i, hash := range t.subTermini {
 		subtermini[i] = hash.ProtoEncode()
 	}

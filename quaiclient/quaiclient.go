@@ -163,8 +163,9 @@ func (ec *Client) RequestDomToAppendOrFetch(ctx context.Context, hash common.Has
 	ec.c.CallContext(ctx, nil, "quai_requestDomToAppendOrFetch", data)
 }
 
-func (ec *Client) NewGenesisPendingHeader(ctx context.Context, header *types.Header) {
-	ec.c.CallContext(ctx, nil, "quai_newGenesisPendingHeader", header.RPCMarshalHeader())
+func (ec *Client) NewGenesisPendingHeader(ctx context.Context, header *types.Header, domTerminus common.Hash, genesisHash common.Hash) {
+	fields := map[string]interface{}{"header": header.RPCMarshalHeader(), "domTerminus": domTerminus, "genesisHash": genesisHash}
+	ec.c.CallContext(ctx, nil, "quai_newGenesisPendingHeader", fields)
 }
 
 // GetManifest will get the block manifest ending with the parent hash

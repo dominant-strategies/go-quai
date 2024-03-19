@@ -134,6 +134,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	emittedEtxs = append(emittedEtxs, utxoEtxs...)
 	time6 := common.PrettyDuration(time.Since(start))
+
 	// Confirm the ETXs emitted by the transactions in this block exactly match the
 	// ETXs given in the block body
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {

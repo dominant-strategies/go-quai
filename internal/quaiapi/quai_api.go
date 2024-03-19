@@ -766,12 +766,19 @@ func (s *PublicBlockChainQuaiAPI) RequestDomToAppendOrFetch(ctx context.Context,
 	}
 	s.b.RequestDomToAppendOrFetch(requestDom.Hash, requestDom.Entropy, requestDom.Order)
 }
+
+type NewGenesisPendingHeaderArgs struct {
+	PendingHeader *types.Header `json:"header"`
+	Hash          common.Hash   `json:"genesisHash"`
+	DomTerminus   common.Hash   `json:"domTerminus"`
+}
+
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
-	var pendingHeader *types.Header
-	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
+	var genesis NewGenesisPendingHeaderArgs
+	if err := json.Unmarshal(raw, &genesis); err != nil {
 		return
 	}
-	s.b.NewGenesisPendingHeader(pendingHeader)
+	s.b.NewGenesisPendingHeader(genesis.PendingHeader, genesis.DomTerminus, genesis.Hash)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {

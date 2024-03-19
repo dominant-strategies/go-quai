@@ -53,8 +53,9 @@ type pEtxRetry struct {
 type Slice struct {
 	hc *HeaderChain
 
-	txPool *TxPool
-	miner  *Miner
+	txPool        *TxPool
+	miner         *Miner
+	expansionFeed event.Feed
 
 	sliceDb ethdb.Database
 	config  *params.ChainConfig
@@ -85,7 +86,7 @@ type Slice struct {
 	logger         *log.Logger
 }
 
-func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, indexerConfig *IndexerConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.Header) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.Block, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, indexerConfig *IndexerConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
 	nodeCtx := chainConfig.Location.Context()
 	sl := &Slice{
 		config:         chainConfig,
@@ -96,8 +97,12 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		logger:         logger,
 	}
 
+	// This only happens during the expansion
+	if genesisBlock != nil {
+		sl.AddGenesisHash(genesisBlock.Hash())
+	}
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, chainConfig, cacheConfig, txLookupLimit, indexerConfig, vmConfig, slicesRunning, logger)
+	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, chainConfig, cacheConfig, txLookupLimit, indexerConfig, vmConfig, slicesRunning, currentExpansionNumber, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -118,10 +123,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.inboundEtxsCache, _ = lru.New(c_inboundEtxCacheSize)
 
 	// only set the subClients if the chain is not Zone
-	sl.subClients = make([]*quaiclient.Client, len(subClientUrls))
+	sl.subClients = make([]*quaiclient.Client, common.MaxWidth)
 	if nodeCtx != common.ZONE_CTX {
 		go func() {
-			sl.subClients = makeSubClients(subClientUrls, sl.logger)
+			sl.makeSubClients(subClientUrls, sl.logger)
 		}()
 	}
 
@@ -132,8 +137,13 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		}()
 	}
 
-	if err := sl.init(genesis); err != nil {
+	if err := sl.init(); err != nil {
 		return nil, err
+	}
+
+	// This only happens during the expansion
+	if genesisBlock != nil {
+		sl.WriteGenesisBlock(genesisBlock, chainConfig.Location)
 	}
 
 	sl.CheckForBadHashAndRecover()
@@ -153,7 +163,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	nodeCtx := sl.NodeCtx()
 
-	if header.Hash() == sl.config.GenesisHash {
+	if sl.hc.IsGenesisHash(header.Hash()) {
 		return nil, false, false, nil
 	}
 
@@ -186,6 +196,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if err != nil {
 		return nil, false, false, err
 	}
+
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64(nodeCtx)) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) {
 		sl.logger.WithField("hash", header.Hash()).Debug("Block has already been appended")
@@ -312,10 +323,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	if nodeCtx == common.ZONE_CTX {
 		bestPh, exist = sl.readPhCache(sl.bestPhKey)
 		if !exist {
-			sl.WriteBestPhKey(sl.config.GenesisHash)
-			sl.writePhCache(block.Hash(), pendingHeaderWithTermini)
-			bestPh = types.EmptyPendingHeader()
-			sl.logger.WithField("key", sl.bestPhKey).Warn("BestPh Key does not exist")
+			sl.logger.WithField("key", sl.bestPhKey).Fatal("BestPh Key does not exist")
 		}
 
 		time8 = common.PrettyDuration(time.Since(start))
@@ -333,7 +341,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 			rawdb.WriteInboundEtxs(sl.sliceDb, block.Hash(), newInboundEtxs)
 		}
 
-		setHead = sl.poem(sl.engine.TotalLogS(block.Header()), sl.engine.TotalLogS(sl.hc.CurrentHeader()))
+		setHead = sl.poem(sl.engine.TotalLogS(sl.hc, block.Header()), sl.engine.TotalLogS(sl.hc, sl.hc.CurrentHeader()))
 
 		if subReorg || (sl.hc.CurrentHeader().NumberU64(nodeCtx) < block.NumberU64(nodeCtx)+c_currentStateComputeWindow) {
 			err := sl.hc.SetCurrentState(block.Header())
@@ -358,7 +366,11 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 	var updateDom bool
 	if subReorg {
 		if order == common.ZONE_CTX && pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()) != bestPh.Termini().DomTerminus(sl.NodeLocation()) {
-			updateDom = true
+			// TODO: This check has to be rethought
+			if !sl.hc.IsGenesisHash(pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation())) &&
+				!sl.hc.IsGenesisHash(bestPh.Termini().DomTerminus(sl.NodeLocation())) {
+				updateDom = true
+			}
 		}
 		sl.logger.WithFields(log.Fields{
 			"NumberArray": pendingHeaderWithTermini.Header().NumberArray(),
@@ -389,6 +401,15 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	if subReorg {
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	}
+
+	// If efficiency score changed on this block compared to the parent block
+	// we trigger the expansion using the expansion feed
+	if nodeCtx == common.PRIME_CTX {
+		parent := sl.hc.GetHeaderByHash(block.ParentHash(nodeCtx))
+		if header.ExpansionNumber() > parent.ExpansionNumber() {
+			sl.expansionFeed.Send(ExpansionEvent{block})
+		}
 	}
 
 	// Relay the new pendingHeader
@@ -427,7 +448,6 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 		"gas":        block.GasUsed(),
 		"gasLimit":   block.GasLimit(),
 		"evmRoot":    block.EVMRoot(),
-		"etxSetHash": block.EtxSetHash(),
 		"order":      order,
 		"location":   block.Header().Location(),
 		"elapsed":    common.PrettyDuration(time.Since(start)),
@@ -659,12 +679,12 @@ func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini types
 		localPendingHeader = types.EmptyHeader()
 		localPendingHeader.SetParentHash(block.Hash(), nodeCtx)
 		localPendingHeader.SetNumber(big.NewInt(int64(block.NumberU64(nodeCtx))+1), nodeCtx)
-		localPendingHeader.SetParentEntropy(sl.engine.TotalLogS(block.Header()), nodeCtx)
+		localPendingHeader.SetParentEntropy(sl.engine.TotalLogS(sl.hc, block.Header()), nodeCtx)
 		if nodeCtx != common.PRIME_CTX {
 			if domOrigin {
 				localPendingHeader.SetParentDeltaS(big.NewInt(0), nodeCtx)
 			} else {
-				localPendingHeader.SetParentDeltaS(sl.engine.DeltaLogS(block.Header()), nodeCtx)
+				localPendingHeader.SetParentDeltaS(sl.engine.DeltaLogS(sl.hc, block.Header()), nodeCtx)
 			}
 		}
 
@@ -719,19 +739,15 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.Block, location common.L
 	// method for more explanation.
 	newlyConfirmedEtxs := newInboundEtxs.FilterConfirmationCtx(nodeCtx, nodeLocation)
 
-	// Terminate the search if we reached genesis
-	if block.NumberU64(nodeCtx) == 0 {
-		if block.Hash() != sl.config.GenesisHash {
-			return nil, nil, fmt.Errorf("terminated search on bad genesis, block0 hash: %s", block.Hash().String())
-		} else {
-			return newlyConfirmedEtxs, subRollup, nil
-		}
-	}
 	ancHash := block.ParentHash(nodeCtx)
 	ancNum := block.NumberU64(nodeCtx) - 1
 	ancestor := sl.hc.GetBlock(ancHash, ancNum)
 	if ancestor == nil {
 		return nil, nil, fmt.Errorf("unable to find ancestor, hash: %s", ancHash.String())
+	}
+
+	if sl.hc.IsGenesisHash(ancHash) {
+		return newlyConfirmedEtxs, subRollup, nil
 	}
 
 	// Terminate the search when we find a block produced by the same sub
@@ -780,7 +796,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.Header, domTerminus commo
 
 	// Check for a graph cyclic reference
 	if domOrigin {
-		if termini.DomTerminus(nodeLocation) != domTerminus {
+		if !sl.hc.IsGenesisHash(termini.DomTerminus(nodeLocation)) && termini.DomTerminus(nodeLocation) != domTerminus {
 			sl.logger.WithFields(log.Fields{
 				"block number": header.NumberArray(),
 				"hash":         header.Hash(),
@@ -1012,16 +1028,20 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if nodeCtx == common.ZONE_CTX && exists && sl.bestPhKey != localPendingHeader.Termini().DomTerminus(nodeLocation) && !sl.poem(newEntropy, bestPh.Header().ParentEntropy(nodeCtx)) {
-			sl.logger.WithFields(log.Fields{
-				"local dom terminus": localPendingHeader.Termini().DomTerminus(nodeLocation),
-				"Number":             combinedPendingHeader.NumberArray(),
-				"best ph key":        sl.bestPhKey,
-				"number":             bestPh.Header().NumberArray(),
-				"newentropy":         newEntropy,
-			}).Warn("Subrelay Rejected")
-			sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localTermini), false, nil, sl.poem(newEntropy, localPendingHeader.Header().ParentEntropy(nodeCtx)), location)
-			go sl.domClient.UpdateDom(context.Background(), localPendingHeader.Termini().DomTerminus(nodeLocation), bestPh, sl.NodeLocation())
-			return nil
+			if !sl.hc.IsGenesisHash(sl.bestPhKey) &&
+				!sl.hc.IsGenesisHash(localPendingHeader.Termini().DomTerminus(nodeLocation)) &&
+				!sl.hc.IsGenesisHash(localPendingHeader.Header().PrimeTerminus()) {
+				sl.logger.WithFields(log.Fields{
+					"local dom terminus": localPendingHeader.Termini().DomTerminus(nodeLocation),
+					"Number":             combinedPendingHeader.NumberArray(),
+					"best ph key":        sl.bestPhKey,
+					"number":             bestPh.Header().NumberArray(),
+					"newentropy":         newEntropy,
+				}).Warn("Subrelay Rejected")
+				sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localTermini), false, nil, sl.poem(newEntropy, localPendingHeader.Header().ParentEntropy(nodeCtx)), location)
+				go sl.domClient.UpdateDom(context.Background(), localPendingHeader.Termini().DomTerminus(nodeLocation), bestPh, sl.NodeLocation())
+				return nil
+			}
 		}
 		// Pick the head
 		if subReorg {
@@ -1116,8 +1136,8 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		cachedTermini = types.CopyTermini(ph.Termini())
 	} else {
 		parentHeader := sl.hc.GetHeaderOrCandidateByHash(pendingHeaderWithTermini.Header().ParentHash(nodeCtx))
-		if parentHeader.Hash() == sl.config.GenesisHash {
-			ph, _ = sl.readPhCache(sl.config.GenesisHash)
+		if sl.hc.IsGenesisHash(parentHeader.Hash()) {
+			ph, _ = sl.readPhCache(parentHeader.Hash())
 			cachedTermini = types.CopyTermini(ph.Termini())
 		} else {
 			localTermini := sl.hc.GetTerminiByHash(parentHeader.ParentHash(nodeCtx))
@@ -1156,12 +1176,14 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 
 // init checks if the headerchain is empty and if it's empty appends the Knot
 // otherwise loads the last stored state of the chain.
-func (sl *Slice) init(genesis *Genesis) error {
+func (sl *Slice) init() error {
+
 	// Even though the genesis block cannot have any ETXs, we still need an empty
 	// pending ETX entry for that block hash, so that the state processor can build
 	// on it
-	genesisHash := sl.Config().GenesisHash
-	genesisHeader := sl.hc.GetHeader(genesisHash, 0)
+	genesisHashes := sl.hc.GetGenesisHashes()
+	genesisHash := genesisHashes[0]
+	genesisHeader := sl.hc.GetHeaderByHash(genesisHash)
 	if genesisHeader == nil {
 		return errors.New("failed to get genesis header")
 	}
@@ -1186,7 +1208,6 @@ func (sl *Slice) init(genesis *Genesis) error {
 
 		// Append each of the knot blocks
 		sl.WriteBestPhKey(genesisHash)
-		sl.hc.SetCurrentHeader(genesisHeader)
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}
 		err := sl.hc.AddPendingEtxs(types.PendingEtxs{genesisHeader, emptyPendingEtxs})
@@ -1202,9 +1223,11 @@ func (sl *Slice) init(genesis *Genesis) error {
 			return err
 		}
 		rawdb.WriteEtxSet(sl.sliceDb, genesisHash, 0, types.NewEtxSet())
+		// This is just done for the startup process
+		sl.hc.SetCurrentHeader(genesisHeader)
 
 		if sl.NodeLocation().Context() == common.PRIME_CTX {
-			go sl.NewGenesisPendingHeader(nil)
+			go sl.NewGenesisPendingHeader(nil, genesisHash, genesisHash)
 		}
 	} else { // load the phCache and slice current pending header hash
 		if err := sl.loadLastState(); err != nil {
@@ -1300,6 +1323,12 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
 	combinedPendingHeader.SetParentUncledSubDeltaS(header.ParentUncledSubDeltaS(index), index)
 
+	if index == common.PRIME_CTX {
+		combinedPendingHeader.SetEfficiencyScore(header.EfficiencyScore())
+		combinedPendingHeader.SetThresholdCount(header.ThresholdCount())
+		combinedPendingHeader.SetExpansionNumber(header.ExpansionNumber())
+	}
+
 	if inSlice {
 		combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.SetDifficulty(header.Difficulty())
@@ -1322,18 +1351,56 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 }
 
 func (sl *Slice) IsSubClientsEmpty() bool {
-	for _, client := range sl.subClients {
-		if client == nil {
-			return true
+	activeRegions, _ := common.GetHierarchySizeForExpansionNumber(sl.hc.currentExpansionNumber)
+	switch sl.NodeCtx() {
+	case common.PRIME_CTX:
+		for i := 0; i < int(activeRegions); i++ {
+			if sl.subClients[i] == nil {
+				return true
+			}
+		}
+	case common.REGION_CTX:
+		for _, slice := range sl.ActiveSlices() {
+			if sl.subClients[slice.Zone()] == nil {
+				return true
+			}
 		}
 	}
 	return false
 }
 
+// ActiveSlices returns the active slices for the current expansion number
+func (sl *Slice) ActiveSlices() []common.Location {
+	currentRegions, currentZones := common.GetHierarchySizeForExpansionNumber(sl.hc.currentExpansionNumber)
+	activeSlices := []common.Location{}
+	for i := 0; i < int(currentRegions); i++ {
+		for j := 0; j < int(currentZones); j++ {
+			activeSlices = append(activeSlices, common.Location{byte(i), byte(j)})
+		}
+	}
+	return activeSlices
+}
+
+func (sl *Slice) WriteGenesisBlock(block *types.Block, location common.Location) {
+	rawdb.WriteManifest(sl.sliceDb, block.Hash(), types.BlockManifest{block.Hash()})
+	sl.WriteBestPhKey(block.Hash())
+	// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
+	emptyPendingEtxs := types.Transactions{}
+	sl.hc.AddPendingEtxs(types.PendingEtxs{block.Header(), emptyPendingEtxs})
+	sl.AddPendingEtxsRollup(types.PendingEtxsRollup{block.Header(), emptyPendingEtxs})
+	sl.hc.AddBloom(types.Bloom{}, block.Hash())
+	sl.hc.currentHeader.Store(block.Header())
+	rawdb.WriteEtxSet(sl.sliceDb, block.Hash(), block.NumberU64(sl.NodeCtx()), types.NewEtxSet())
+}
+
 // NewGenesisPendingHeader creates a pending header on the genesis block
-func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
+func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header, domTerminus common.Hash, genesisHash common.Hash) {
 	nodeCtx := sl.NodeLocation().Context()
 
+	if nodeCtx == common.ZONE_CTX && !sl.hc.Empty() {
+		return
+	}
+	// Wait until the subclients are all initialized
 	if nodeCtx != common.ZONE_CTX {
 		for sl.IsSubClientsEmpty() {
 			if !sl.IsSubClientsEmpty() {
@@ -1342,14 +1409,42 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 		}
 	}
 
-	genesisHash := sl.config.GenesisHash
+	// get the genesis block to start from
+	genesisBlock := sl.hc.GetBlockByHash(genesisHash)
+	genesisTermini := types.EmptyTermini()
+	for i := 0; i < len(genesisTermini.SubTermini()); i++ {
+		genesisTermini.SetSubTerminiAtIndex(genesisHash, i)
+	}
+	for i := 0; i < len(genesisTermini.DomTermini()); i++ {
+		genesisTermini.SetDomTerminiAtIndex(genesisHash, i)
+	}
+
 	// Upate the local pending header
-	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(sl.hc.GetBlockByHash(genesisHash), false)
-	if err != nil {
-		sl.logger.WithFields(log.Fields{
-			"err": err,
-		}).Warn("Error generating the New Genesis Pending Header")
-		return
+	var localPendingHeader *types.Header
+	var err error
+	var termini types.Termini
+	log.Global.Infof("NewGenesisPendingHeader location: %v, genesis hash %s", sl.NodeLocation(), genesisHash)
+	if sl.hc.IsGenesisHash(genesisHash) {
+		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(genesisBlock, false)
+		if err != nil {
+			sl.logger.WithFields(log.Fields{
+				"err": err,
+			}).Warn("Error generating the New Genesis Pending Header")
+			return
+		}
+		termini = genesisTermini
+	} else {
+		localPendingHeaderWithTermini, exists := sl.readPhCache(domTerminus)
+		if !exists {
+			log.Global.Errorf("Genesis pending header not found in node location %v cache %v", sl.NodeLocation(), domTerminus)
+		}
+		localPendingHeader = localPendingHeaderWithTermini.Header()
+		termini = localPendingHeaderWithTermini.Termini()
+	}
+
+	if sl.hc.IsGenesisHash(genesisHash) {
+		// This only happens during the expansion
+		sl.WriteBestPhKey(genesisHash)
 	}
 
 	if nodeCtx != common.ZONE_CTX {
@@ -1364,25 +1459,19 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	}
 
 	if nodeCtx != common.ZONE_CTX {
-		for _, client := range sl.subClients {
+		for i, client := range sl.subClients {
 			if client != nil {
-				client.NewGenesisPendingHeader(context.Background(), domPendingHeader)
+				client.NewGenesisPendingHeader(context.Background(), domPendingHeader, termini.SubTerminiAtIndex(i), genesisHash)
 				if err != nil {
 					return
 				}
 			}
 		}
 	}
-	genesisTermini := types.EmptyTermini()
-	for i := 0; i < len(genesisTermini.SubTermini()); i++ {
-		genesisTermini.SetSubTerminiAtIndex(genesisHash, i)
-	}
-	for i := 0; i < len(genesisTermini.DomTermini()); i++ {
-		genesisTermini.SetDomTerminiAtIndex(genesisHash, i)
-	}
+
 	if sl.hc.Empty() {
 		domPendingHeader.SetTime(uint64(time.Now().Unix()))
-		sl.phCache.Add(sl.config.GenesisHash, types.NewPendingHeader(domPendingHeader, genesisTermini))
+		sl.writePhCache(genesisHash, types.NewPendingHeader(domPendingHeader, genesisTermini))
 	}
 }
 
@@ -1407,8 +1496,7 @@ func makeDomClient(domurl string, logger *log.Logger) *quaiclient.Client {
 }
 
 // MakeSubClients creates the quaiclient for the given suburls
-func makeSubClients(suburls []string, logger *log.Logger) []*quaiclient.Client {
-	subClients := make([]*quaiclient.Client, len(suburls))
+func (sl *Slice) makeSubClients(suburls []string, logger *log.Logger) {
 	for i, suburl := range suburls {
 		if suburl != "" {
 			subClient, err := quaiclient.Dial(suburl, logger)
@@ -1418,10 +1506,21 @@ func makeSubClients(suburls []string, logger *log.Logger) []*quaiclient.Client {
 					"err":   err,
 				}).Fatal("Error connecting to the subordinate go-quai client")
 			}
-			subClients[i] = subClient
+			sl.subClients[i] = subClient
 		}
 	}
-	return subClients
+}
+
+// SetSubClient sets the subClient for the given location
+func (sl *Slice) SetSubClient(client *quaiclient.Client, location common.Location) {
+	switch sl.NodeCtx() {
+	case common.PRIME_CTX:
+		sl.subClients[location.Region()] = client
+	case common.REGION_CTX:
+		sl.subClients[location.Zone()] = client
+	default:
+		sl.logger.WithField("cannot set sub client in zone", location).Fatal("Invalid location")
+	}
 }
 
 // loadLastState loads the phCache and the slice pending header hash from the db.
@@ -1490,7 +1589,7 @@ func (sl *Slice) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 }
 
 func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error {
-	if !pEtxsRollup.IsValid(trie.NewStackTrie(nil)) {
+	if !pEtxsRollup.IsValid(trie.NewStackTrie(nil)) && !sl.hc.IsGenesisHash(pEtxsRollup.Header.Hash()) {
 		sl.logger.Info("PendingEtxRollup is invalid")
 		return ErrPendingEtxRollupNotValid
 	}
@@ -1598,7 +1697,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 		badHashes = append(badHashes, header.Hash())
 		parent := sl.hc.GetHeader(header.ParentHash(nodeCtx), header.NumberU64(nodeCtx)-1)
 		header = parent
-		if header.Hash() == hash || header.Hash() == sl.config.GenesisHash {
+		if header.Hash() == hash || sl.hc.IsGenesisHash(header.Hash()) {
 			break
 		}
 	}
@@ -1617,15 +1716,16 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 
 func (sl *Slice) GenerateRecoveryPendingHeader(pendingHeader *types.Header, checkPointHashes types.Termini) error {
 	nodeCtx := sl.NodeCtx()
+	regions, zones := common.GetHierarchySizeForExpansionNumber(sl.hc.currentExpansionNumber)
 	if nodeCtx == common.PRIME_CTX {
-		for i := 0; i < common.NumRegionsInPrime; i++ {
+		for i := 0; i < int(regions); i++ {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), pendingHeader, checkPointHashes)
 			}
 		}
 	} else if nodeCtx == common.REGION_CTX {
 		newPendingHeader := sl.SetHeadBackToRecoveryState(pendingHeader, checkPointHashes.SubTerminiAtIndex(sl.NodeLocation().Region()))
-		for i := 0; i < common.NumZonesInRegion; i++ {
+		for i := 0; i < int(zones); i++ {
 			if sl.subClients[i] != nil {
 				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), newPendingHeader.Header(), newPendingHeader.Termini())
 			}
@@ -1701,4 +1801,37 @@ func (sl *Slice) NodeCtx() int {
 
 func (sl *Slice) GetSlicesRunning() []common.Location {
 	return sl.hc.SlicesRunning()
+}
+
+////// Expansion related logic
+
+const (
+	ExpansionNotTriggered = iota
+	ExpansionTriggered
+	ExpansionConfirmed
+	ExpansionCompleted
+)
+
+func (sl *Slice) SetCurrentExpansionNumber(expansionNumber uint8) {
+	sl.hc.SetCurrentExpansionNumber(expansionNumber)
+}
+
+// AddGenesisHash appends the given hash to the genesis hash list
+func (sl *Slice) AddGenesisHash(hash common.Hash) {
+	genesisHashes := rawdb.ReadGenesisHashes(sl.sliceDb)
+	genesisHashes = append(genesisHashes, hash)
+
+	// write the genesis hash to the database
+	rawdb.WriteGenesisHashes(sl.sliceDb, genesisHashes)
+}
+
+// AddGenesisPendingEtxs adds the genesis pending etxs to the db
+func (sl *Slice) AddGenesisPendingEtxs(block *types.Block) {
+	sl.hc.pendingEtxs.Add(block.Hash(), types.PendingEtxs{block.Header(), types.Transactions{}})
+	rawdb.WritePendingEtxs(sl.sliceDb, types.PendingEtxs{block.Header(), types.Transactions{}})
+}
+
+// SubscribeExpansionEvent subscribes to the expansion feed
+func (sl *Slice) SubscribeExpansionEvent(ch chan<- ExpansionEvent) event.Subscription {
+	return sl.scope.Track(sl.expansionFeed.Subscribe(ch))
 }

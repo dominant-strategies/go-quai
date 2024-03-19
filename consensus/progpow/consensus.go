@@ -272,7 +272,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		return fmt.Errorf("block location is not in the same slice as the node location")
 	}
 	// Verify that the parent entropy is calculated correctly on the header
-	parentEntropy := progpow.TotalLogS(parent)
+	parentEntropy := progpow.TotalLogS(chain, parent)
 	if parentEntropy.Cmp(header.ParentEntropy(nodeCtx)) != 0 {
 		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(nodeCtx), parentEntropy)
 	}
@@ -285,7 +285,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), common.Big0)
 			}
 		} else {
-			parentDeltaS := progpow.DeltaLogS(parent)
+			parentDeltaS := progpow.DeltaLogS(chain, parent)
 			if parentDeltaS.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), parentDeltaS)
 			}
@@ -300,7 +300,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), common.Big0)
 			}
 		} else {
-			expectedParentUncledSubDeltaS := progpow.UncledSubDeltaLogS(parent)
+			expectedParentUncledSubDeltaS := progpow.UncledSubDeltaLogS(chain, parent)
 			if expectedParentUncledSubDeltaS.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
 				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), expectedParentUncledSubDeltaS)
 			}
@@ -394,7 +394,12 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 	}
 	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number(nodeCtx), parent.Number(nodeCtx)); diff.Cmp(big.NewInt(1)) != 0 {
+	parentNumber := parent.Number(nodeCtx)
+	if chain.IsGenesisHash(parent.Hash()) {
+		parentNumber = big.NewInt(0)
+	}
+	// Verify that the block number is parent's +1
+	if diff := new(big.Int).Sub(header.Number(nodeCtx), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
 	return nil
@@ -416,11 +421,12 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 	///// k = Floor(BinaryLog(parent.Difficulty()))/(DurationLimit*DifficultyAdjustmentFactor*AdjustmentPeriod)
 	///// Difficulty = Max(parent.Difficulty() + e * k, MinimumDifficulty)
 
-	if parent.Hash() == chain.Config().GenesisHash {
-		return parent.Difficulty()
+	if chain.IsGenesisHash(parent.Hash()) {
+		// Genesis Difficulty is the difficulty in the Genesis Block divided by the number of total slices active
+		return new(big.Int).Div(parent.Difficulty(), big.NewInt(int64((progpow.NodeLocation().Region()+1)*(progpow.NodeLocation().Zone()+1))))
 	}
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash(nodeCtx))
-	if parentOfParent == nil || parentOfParent.Hash() == chain.Config().GenesisHash {
+	if parentOfParent == nil || chain.IsGenesisHash(parentOfParent.Hash()) {
 		return parent.Difficulty()
 	}
 
@@ -539,7 +545,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 	nodeLocation := progpow.NodeLocation()
 	nodeCtx := progpow.NodeLocation().Context()
 
-	if nodeCtx == common.ZONE_CTX && header.ParentHash(nodeCtx) == chain.Config().GenesisHash {
+	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_"+nodeLocation.Name()+".json", progpow.logger)
 		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 

@@ -645,9 +645,9 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 // encourage processing at the destination.
 func calcEtxFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
 	confirmationCtx := fromAddr.Location().CommonDom(*toAddr.Location()).Context()
-	multiplier := big.NewInt(common.NumZonesInRegion)
+	multiplier := big.NewInt(common.MaxRegions) //  TODO:  calculation  should be based on the current  expansion  number
 	if confirmationCtx == common.PRIME_CTX {
-		multiplier = big.NewInt(0).Mul(multiplier, big.NewInt(common.NumRegionsInPrime))
+		multiplier = big.NewInt(0).Mul(multiplier, big.NewInt(common.MaxZones))
 	}
 	return multiplier
 }

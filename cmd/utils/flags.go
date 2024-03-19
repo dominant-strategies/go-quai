@@ -863,24 +863,21 @@ func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *log
 }
 
 // setSubUrls sets the subordinate chain urls
-func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location) {
+func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location, currentExpansionNumber uint8) {
 	// only set the sub urls if its not the zone
-	slicesRunning := cfg.SlicesRunning
+	currentRegions, currentZones := common.GetHierarchySizeForExpansionNumber(currentExpansionNumber)
 	switch nodeLocation.Context() {
 	case common.PRIME_CTX:
-		subUrls := []string{}
-		regionsRunning := GetRunningRegions(slicesRunning)
-		for _, region := range regionsRunning {
-			subUrls = append(subUrls, fmt.Sprintf("ws://127.0.0.1:%d", 8002+int(region)))
+		subUrls := make([]string, common.MaxWidth)
+		for i := 0; i < int(currentRegions); i++ {
+			subUrls[i] = fmt.Sprintf("ws://127.0.0.1:%d", 8002+int(i))
 		}
 		cfg.SubUrls = subUrls
 	case common.REGION_CTX:
-		suburls := []string{}
+		suburls := make([]string, common.MaxWidth)
 		// Add the zones belonging to the region into the suburls list
-		for _, slice := range slicesRunning {
-			if slice.Region() == nodeLocation.Region() {
-				suburls = append(suburls, fmt.Sprintf("ws://127.0.0.1:%d", 8100+20*slice.Region()+slice.Zone()))
-			}
+		for i := 0; i < int(currentZones); i++ {
+			suburls[i] = fmt.Sprintf("ws://127.0.0.1:%d", 8100+20*nodeLocation.Region()+i)
 		}
 		cfg.SubUrls = suburls
 	}
@@ -1232,7 +1229,7 @@ func EnablePprof() {
 }
 
 // SetQuaiConfig applies quai-related command line flags to the config.
-func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []common.Location, nodeLocation common.Location, logger *log.Logger) {
+func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []common.Location, nodeLocation common.Location, currentExpansionNumber uint8, logger *log.Logger) {
 	cfg.NodeLocation = nodeLocation
 	cfg.SlicesRunning = slicesRunning
 
@@ -1257,7 +1254,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	setDomUrl(cfg, nodeLocation, logger)
 
 	// set the subordinate chain websocket urls
-	setSubUrls(cfg, nodeLocation)
+	setSubUrls(cfg, nodeLocation, currentExpansionNumber)
 
 	// set the gas limit ceil
 	setGasLimitCeil(cfg)
@@ -1357,26 +1354,52 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 			cfg.NetworkId = 1
 		}
 		cfg.Genesis = core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "progpow" {
+			cfg.DefaultGenesisHash = params.ProgpowColosseumGenesisHash
+		} else {
+			cfg.DefaultGenesisHash = params.Blake3PowColosseumGenesisHash
+		}
+
 	case params.GardenName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 2
 		}
 		cfg.Genesis = core.DefaultGardenGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "progpow" {
+			cfg.DefaultGenesisHash = params.ProgpowGardenGenesisHash
+		} else {
+			cfg.DefaultGenesisHash = params.Blake3PowGardenGenesisHash
+		}
 	case params.OrchardName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "progpow" {
+			cfg.DefaultGenesisHash = params.ProgpowOrchardGenesisHash
+		} else {
+			cfg.DefaultGenesisHash = params.Blake3PowOrchardGenesisHash
+		}
 	case params.LocalName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultLocalGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "progpow" {
+			cfg.DefaultGenesisHash = params.ProgpowLocalGenesisHash
+		} else {
+			cfg.DefaultGenesisHash = params.Blake3PowLocalGenesisHash
+		}
 	case params.LighthouseName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
 		cfg.Genesis = core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine)
+		if cfg.ConsensusEngine == "progpow" {
+			cfg.DefaultGenesisHash = params.ProgpowLighthouseGenesisHash
+		} else {
+			cfg.DefaultGenesisHash = params.Blake3PowLighthouseGenesisHash
+		}
 	case params.DevName:
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1399,9 +1422,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		cfg.Genesis.Nonce = viper.GetUint64(GenesisNonceFlag.Name)
 	}
 
-	logger.WithField("node", cfg.Genesis.Config.Location).Info("Setting genesis Location")
 	cfg.Genesis.Config.Location = nodeLocation
-	logger.WithField("genesis", cfg.Genesis.Config.Location).Info("Location after setting")
 }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {

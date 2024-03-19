@@ -107,7 +107,7 @@ func (b *BlockGen) AddTxWithChain(hc *HeaderChain, tx *types.Transaction, etxRLi
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
 	coinbase := b.header.Coinbase()
 	gasUsed := b.header.GasUsed()
-	receipt, err := ApplyTransaction(b.config, hc, &coinbase, b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{}, etxRLimit, etxPLimit, hc.logger)
+	receipt, err := ApplyTransaction(b.config, nil, hc, &coinbase, b.gasPool, b.statedb, b.header, tx, &gasUsed, vm.Config{}, etxRLimit, etxPLimit, hc.logger)
 	if err != nil {
 		panic(err)
 	}
@@ -322,3 +322,4 @@ func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Bloc
 func (cr *fakeChainReader) GetTerminiByHash(hash common.Hash) *types.Termini        { return nil }
 func (cr *fakeChainReader) ProcessingState() bool                                   { return false }
 func (cr *fakeChainReader) ComputeEfficiencyScore(header *types.Header) uint16      { return 0 }
+func (cr *fakeChainReader) IsGenesisHash(hash common.Hash) bool                     { return false }

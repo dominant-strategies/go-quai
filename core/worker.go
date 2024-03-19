@@ -528,7 +528,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	start := time.Now()
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
-	if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) {
+	if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) && w.hc.ProcessingState() {
 		w.logger.Error("Refusing to mine without etherbase")
 		return nil, errors.New("etherbase not found")
 	} else if w.coinbase.Equal(common.Address{}) {
@@ -644,7 +644,13 @@ func (w *worker) eventExitLoop() {
 func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
-	state, err := w.hc.bc.processor.StateAt(parent.EVMRoot(), parent.UTXORoot())
+	evmRoot := parent.EVMRoot()
+	utxoRoot := parent.UTXORoot()
+	if w.hc.IsGenesisHash(parent.Hash()) {
+		evmRoot = types.EmptyRootHash
+		utxoRoot = types.EmptyRootHash
+	}
+	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -703,7 +709,7 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	return nil
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
+func (w *worker) commitTransaction(env *environment, parent *types.Header, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
 		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
 			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
@@ -722,7 +728,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		snap := env.state.Snapshot()
 		// retrieve the gas used int and pass in the reference to the ApplyTransaction
 		gasUsed := env.header.GasUsed()
-		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+		receipt, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
 		if err != nil {
 			w.logger.WithFields(log.Fields{
 				"err":     err,
@@ -733,21 +739,21 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 			env.state.RevertToSnapshot(snap)
 			return nil, err
 		}
+		if receipt.Status == types.ReceiptStatusSuccessful {
+			env.etxs = append(env.etxs, receipt.Etxs...)
+		}
 		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
 		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
 		// was possible.
 		env.header.SetGasUsed(gasUsed)
 		env.txs = append(env.txs, tx)
 		env.receipts = append(env.receipts, receipt)
-		if receipt.Status == types.ReceiptStatusSuccessful {
-			env.etxs = append(env.etxs, receipt.Etxs...)
-		}
 		return receipt.Logs, nil
 	}
 	return nil, errors.New("error finding transaction")
 }
 
-func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
+func (w *worker) commitTransactions(env *environment, parent *types.Header, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(GasPool).AddGas(gasLimit())
@@ -779,7 +785,7 @@ func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction,
 			return true
 		}
 		env.state.Prepare(tx.Hash(), env.tcount)
-		logs, err := w.commitTransaction(env, tx)
+		logs, err := w.commitTransaction(env, parent, tx)
 		if err == nil {
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
@@ -842,7 +848,7 @@ func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction,
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, tx)
+		logs, err := w.commitTransaction(env, parent, tx)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -952,39 +958,42 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	num := parent.Number(nodeCtx)
 	header := types.EmptyHeader()
 	header.SetParentHash(block.Header().Hash(), nodeCtx)
-	header.SetNumber(big.NewInt(int64(num.Uint64())+1), nodeCtx)
+	if w.hc.IsGenesisHash(parent.Hash()) {
+		header.SetNumber(big.NewInt(1), nodeCtx)
+	} else {
+		header.SetNumber(big.NewInt(int64(num.Uint64())+1), nodeCtx)
+	}
 	header.SetTime(timestamp)
 	header.SetLocation(w.hc.NodeLocation())
 
 	// Only calculate entropy if the parent is not the genesis block
-	if parent.Hash() != w.hc.config.GenesisHash {
-		_, order, err := w.engine.CalcOrder(parent.Header())
-		if err != nil {
-			return nil, err
-		}
+	_, order, err := w.engine.CalcOrder(parent.Header())
+	if err != nil {
+		return nil, err
+	}
+	if !w.hc.IsGenesisHash(parent.Hash()) {
 		// Set the parent delta S prior to sending to sub
 		if nodeCtx != common.PRIME_CTX {
 			if order < nodeCtx {
 				header.SetParentDeltaS(big.NewInt(0), nodeCtx)
 			} else {
-				header.SetParentDeltaS(w.engine.DeltaLogS(parent.Header()), nodeCtx)
+				header.SetParentDeltaS(w.engine.DeltaLogS(w.hc, parent.Header()), nodeCtx)
 			}
 		}
-		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()), nodeCtx)
+		header.SetParentEntropy(w.engine.TotalLogS(w.hc, parent.Header()), nodeCtx)
+	} else {
+		header.SetParentEntropy(big.NewInt(0), nodeCtx)
+		header.SetParentDeltaS(big.NewInt(0), nodeCtx)
 	}
 
 	// Only calculate entropy if the parent is not the genesis block
-	if parent.Hash() != w.hc.config.GenesisHash {
-		_, order, err := w.engine.CalcOrder(parent.Header())
-		if err != nil {
-			return nil, err
-		}
+	if !w.hc.IsGenesisHash(parent.Hash()) {
 		// Set the parent delta S prior to sending to sub
 		if nodeCtx != common.PRIME_CTX {
 			if order < nodeCtx {
 				header.SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
 			} else {
-				header.SetParentUncledSubDeltaS(w.engine.UncledSubDeltaLogS(parent.Header()), nodeCtx)
+				header.SetParentUncledSubDeltaS(w.engine.UncledSubDeltaLogS(w.hc, parent.Header()), nodeCtx)
 			}
 		}
 	} else {
@@ -1128,7 +1137,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	}
 	if !fill {
 		if len(etxs) > 0 {
-			w.commitTransactions(env, etxs, &types.TransactionsByPriceAndNonce{}, etxSet, interrupt)
+			w.commitTransactions(env, block.Header(), etxs, &types.TransactionsByPriceAndNonce{}, etxSet, interrupt)
 		}
 		return etxSet
 	}
@@ -1142,7 +1151,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 
 	if len(pending) > 0 || len(pendingQiTxs) > 0 || len(etxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.header.BaseFee(), true)
-		if w.commitTransactions(env, etxs, txs, etxSet, interrupt) {
+		if w.commitTransactions(env, block.Header(), etxs, txs, etxSet, interrupt) {
 			return etxSet
 		}
 	}

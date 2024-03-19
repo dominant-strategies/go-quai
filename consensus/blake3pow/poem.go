@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 	"modernc.org/mathutil"
@@ -13,7 +14,7 @@ import (
 func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
-		return common.Big0, common.PRIME_CTX, nil
+		return big0, common.PRIME_CTX, nil
 	}
 
 	// Verify the seal and get the powHash for the given header
@@ -65,7 +66,11 @@ func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (blake3pow *Blake3pow) TotalLogS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	// Treating the genesis block differntly
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	intrinsicS, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -103,7 +108,11 @@ func (blake3pow *Blake3pow) TotalLogPhS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) DeltaLogS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) DeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	// Treating the genesis block differntly
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	intrinsicS, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -138,7 +147,11 @@ func (blake3pow *Blake3pow) UncledLogS(block *types.Block) *big.Int {
 	return totalUncledLogS
 }
 
-func (blake3pow *Blake3pow) UncledSubDeltaLogS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	// Treating the genesis block differntly
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	_, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)

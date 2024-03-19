@@ -18,6 +18,7 @@
 package quai
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"sync"
@@ -80,7 +81,7 @@ type Quai struct {
 
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
-func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, logger *log.Logger) (*Quai, error) {
+func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, genesisBlock *types.Block, logger *log.Logger) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
 		logger.WithFields(log.Fields{
@@ -108,9 +109,32 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.NodeLocation, logger)
-	if genesisErr != nil {
-		return nil, genesisErr
+	// Only run the genesis block setup for Prime and region-0 and zone-0-0, for everything else it is setup through the expansion trigger
+	chainConfig := config.Genesis.Config
+	if (config.NodeLocation.Context() == common.PRIME_CTX) ||
+		(config.NodeLocation.Region() == 0 && nodeCtx == common.REGION_CTX) ||
+		(bytes.Equal(config.NodeLocation, common.Location{0, 0}) && nodeCtx == common.ZONE_CTX) {
+		var genesisErr error
+		chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.NodeLocation, logger)
+		if genesisErr != nil {
+			return nil, genesisErr
+		}
+	} else {
+		// This only happens during the expansion
+		if genesisBlock != nil {
+			// write the block to the database
+			rawdb.WriteBlock(chainDb, genesisBlock, nodeCtx)
+			rawdb.WriteHeadBlockHash(chainDb, genesisBlock.Hash())
+			// Initialize slice state for genesis knot
+			genesisTermini := types.EmptyTermini()
+			for i := 0; i < len(genesisTermini.SubTermini()); i++ {
+				genesisTermini.SetSubTerminiAtIndex(genesisBlock.Hash(), i)
+			}
+			for i := 0; i < len(genesisTermini.DomTermini()); i++ {
+				genesisTermini.SetDomTerminiAtIndex(genesisBlock.Hash(), i)
+			}
+			rawdb.WriteTermini(chainDb, genesisBlock.Hash(), genesisTermini)
+		}
 	}
 
 	logger.WithField("location", &chainConfig).Warn("Memory location of chainConfig")
@@ -135,13 +159,13 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		ConsensusEngine: chainConfig.ConsensusEngine,
 		Blake3Pow:       chainConfig.Blake3Pow,
 		Progpow:         chainConfig.Progpow,
-		GenesisHash:     chainConfig.GenesisHash,
 		Location:        chainConfig.Location,
 	}
 	chainConfig = &newChainConfig
 
 	logger.WithField("chainConfig", config.NodeLocation).Info("Chain Config")
 	chainConfig.Location = config.NodeLocation // TODO: See why this is necessary
+	chainConfig.DefaultGenesisHash = config.DefaultGenesisHash
 	logger.WithFields(log.Fields{
 		"Ctx":          nodeCtx,
 		"NodeLocation": config.NodeLocation,
@@ -214,7 +238,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	}
 
 	logger.WithField("url", quai.config.DomUrl).Info("Dom client")
-	quai.core, err = core.NewCore(chainDb, &config.Miner, quai.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, quai.config.SlicesRunning, quai.config.DomUrl, quai.config.SubUrls, quai.engine, cacheConfig, vmConfig, indexerConfig, config.Genesis, logger)
+	quai.core, err = core.NewCore(chainDb, &config.Miner, quai.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, quai.config.SlicesRunning, currentExpansionNumber, genesisBlock, quai.config.DomUrl, quai.config.SubUrls, quai.engine, cacheConfig, vmConfig, indexerConfig, config.Genesis, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -227,10 +251,6 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 
 	// Set the p2p Networking API
 	quai.p2p = p2p
-	// Subscribe to the Blocks subscription
-	quai.p2p.Subscribe(config.NodeLocation, &types.Block{})
-	quai.p2p.Subscribe(config.NodeLocation, common.Hash{})
-	quai.p2p.Subscribe(config.NodeLocation, &types.Transaction{})
 
 	quai.handler = newHandler(quai.p2p, quai.core, config.NodeLocation)
 	// Start the handler

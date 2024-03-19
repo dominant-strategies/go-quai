@@ -46,6 +46,8 @@ type HeaderChain struct {
 	engine consensus.Engine
 	pool   *TxPool
 
+	currentExpansionNumber uint8
+
 	chainHeadFeed event.Feed
 	chainSideFeed event.Feed
 	scope         event.SubscriptionScope
@@ -80,22 +82,45 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, indexerConfig *IndexerConfig, vmConfig vm.Config, slicesRunning []common.Location, logger *log.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, indexerConfig *IndexerConfig, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 	nodeCtx := chainConfig.Location.Context()
 
 	hc := &HeaderChain{
-		config:          chainConfig,
-		headerDb:        db,
-		headerCache:     headerCache,
-		numberCache:     numberCache,
-		engine:          engine,
-		slicesRunning:   slicesRunning,
-		fetchPEtxRollup: pEtxsRollupFetcher,
-		fetchPEtx:       pEtxsFetcher,
-		logger:          logger,
-		indexerConfig:   indexerConfig,
+		config:                 chainConfig,
+		headerDb:               db,
+		headerCache:            headerCache,
+		numberCache:            numberCache,
+		engine:                 engine,
+		slicesRunning:          slicesRunning,
+		fetchPEtxRollup:        pEtxsRollupFetcher,
+		fetchPEtx:              pEtxsFetcher,
+		logger:                 logger,
+		indexerConfig:          indexerConfig,
+		currentExpansionNumber: currentExpansionNumber,
+	}
+
+	genesisHash := hc.GetGenesisHashes()[0]
+	hc.genesisHeader = hc.GetHeaderByHash(genesisHash)
+	if bytes.Equal(chainConfig.Location, common.Location{0, 0}) {
+		if hc.genesisHeader == nil {
+			return nil, ErrNoGenesis
+		}
+		if hc.genesisHeader.Hash() != hc.config.DefaultGenesisHash {
+			return nil, fmt.Errorf("genesis hash mismatch: have %x, want %x", hc.genesisHeader.Hash(), genesisHash)
+		}
+	}
+	hc.logger.WithField("Hash", hc.genesisHeader.Hash()).Info("Genesis")
+	//Load any state that is in our db
+	if err := hc.loadLastState(); err != nil {
+		return nil, err
+	}
+
+	var err error
+	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
+	if err != nil {
+		return nil, err
 	}
 
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
@@ -112,25 +137,6 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 
 	subRollupCache, _ := lru.New(c_subRollupCacheSize)
 	hc.subRollupCache = subRollupCache
-
-	hc.genesisHeader = hc.GetHeaderByNumber(0)
-	if hc.genesisHeader.Hash() != chainConfig.GenesisHash {
-		return nil, fmt.Errorf("genesis block mismatch: have %x, want %x", hc.genesisHeader.Hash(), chainConfig.GenesisHash)
-	}
-	hc.logger.WithField("Hash", hc.genesisHeader.Hash()).Info("Genesis")
-	if hc.genesisHeader == nil {
-		return nil, ErrNoGenesis
-	}
-	//Load any state that is in our db
-	if err := hc.loadLastState(); err != nil {
-		return nil, err
-	}
-
-	var err error
-	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
-	if err != nil {
-		return nil, err
-	}
 
 	// Initialize the heads slice
 	heads := make([]*types.Header, 0)
@@ -229,7 +235,7 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 // Collect all emmitted ETXs since the last coincident block, but excluding
 // those emitted in this block
 func (hc *HeaderChain) CollectEtxRollup(b *types.Block) (types.Transactions, error) {
-	if b.NumberU64(hc.NodeCtx()) == 0 && b.Hash() == hc.config.GenesisHash {
+	if hc.IsGenesisHash(b.Hash()) {
 		return b.ExtTransactions(), nil
 	}
 	parent := hc.GetBlock(b.ParentHash(hc.NodeCtx()), b.NumberU64(hc.NodeCtx())-1)
@@ -243,12 +249,8 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.Block) (types.Transact
 	// Initialize the rollup with ETXs emitted by this block
 	newEtxs := b.ExtTransactions()
 	// Terminate the search if we reached genesis
-	if b.NumberU64(hc.NodeCtx()) == 0 {
-		if b.Hash() != hc.config.GenesisHash {
-			return nil, fmt.Errorf("manifest builds on incorrect genesis, block0 hash: %s", b.Hash().String())
-		} else {
-			return newEtxs, nil
-		}
+	if hc.IsGenesisHash(b.Hash()) {
+		return newEtxs, nil
 	}
 	// Terminate the search on coincidence with dom chain
 	if hc.engine.IsDomCoincident(hc, b.Header()) {
@@ -358,12 +360,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 			break
 		}
 		hashStack = append(hashStack, newHeader)
-		newHeader = hc.GetHeader(newHeader.ParentHash(hc.NodeCtx()), newHeader.NumberU64(hc.NodeCtx())-1)
+		newHeader = hc.GetHeaderByHash(newHeader.ParentHash(hc.NodeCtx()))
 		if newHeader == nil {
 			return ErrSubNotSyncedToDom
 		}
 		// genesis check to not delete the genesis block
-		if newHeader.Hash() == hc.config.GenesisHash {
+		if hc.IsGenesisHash(newHeader.Hash()) {
 			break
 		}
 	}
@@ -374,12 +376,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) error {
 		}
 		prevHashStack = append(prevHashStack, prevHeader)
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64(hc.NodeCtx()))
-		prevHeader = hc.GetHeader(prevHeader.ParentHash(hc.NodeCtx()), prevHeader.NumberU64(hc.NodeCtx())-1)
+		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
 		if prevHeader == nil {
 			return errors.New("Could not find previously canonical header during reorg")
 		}
 		// genesis check to not delete the genesis block
-		if prevHeader.Hash() == hc.config.GenesisHash {
+		if hc.IsGenesisHash(prevHeader.Hash()) {
 			break
 		}
 	}
@@ -421,9 +423,12 @@ func (hc *HeaderChain) SetCurrentState(head *types.Header) error {
 	var headersWithoutState []*types.Header
 	for {
 		headersWithoutState = append(headersWithoutState, current)
-		header := hc.GetHeader(current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
+		header := hc.GetHeaderByHash(current.ParentHash(nodeCtx))
 		if header == nil {
 			return ErrSubNotSyncedToDom
+		}
+		if hc.IsGenesisHash(header.Hash()) {
+			break
 		}
 		// Checking of the Etx set exists makes sure that we have processed the
 		// state of the parent block
@@ -473,17 +478,20 @@ func (hc *HeaderChain) findCommonAncestor(header *types.Header) *types.Header {
 		if current == nil {
 			return nil
 		}
+		if hc.IsGenesisHash(current.Hash()) {
+			return current
+		}
 		canonicalHash := rawdb.ReadCanonicalHash(hc.headerDb, current.NumberU64(hc.NodeCtx()))
 		if canonicalHash == current.Hash() {
 			return hc.GetHeaderByHash(canonicalHash)
 		}
-		current = hc.GetHeader(current.ParentHash(hc.NodeCtx()), current.NumberU64(hc.NodeCtx())-1)
+		current = hc.GetHeaderByHash(current.ParentHash(hc.NodeCtx()))
 	}
 
 }
 
 func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
-	if !pEtxs.IsValid(trie.NewStackTrie(nil)) {
+	if !pEtxs.IsValid(trie.NewStackTrie(nil)) && !hc.IsGenesisHash(pEtxs.Header.Hash()) {
 		hc.logger.Info("PendingEtx is not valid")
 		return ErrPendingEtxNotValid
 	}
@@ -570,9 +578,8 @@ func (hc *HeaderChain) Stop() {
 
 // Empty checks if the headerchain is empty.
 func (hc *HeaderChain) Empty() bool {
-	genesis := hc.config.GenesisHash
 	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(hc.headerDb)} {
-		if hash != genesis {
+		if !hc.IsGenesisHash(hash) {
 			return false
 		}
 	}
@@ -804,17 +811,6 @@ func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 func (hc *HeaderChain) CheckContext(context int) error {
 	if context < 0 || context > common.HierarchyDepth {
 		return errors.New("the provided path is outside the allowable range")
-	}
-	return nil
-}
-
-// CheckLocationRange checks to make sure the range of r and z are valid
-func (hc *HeaderChain) CheckLocationRange(location []byte) error {
-	if int(location[0]) < 1 || int(location[0]) > common.NumRegionsInPrime {
-		return errors.New("the provided location is outside the allowable region range")
-	}
-	if int(location[1]) < 1 || int(location[1]) > common.NumZonesInRegion {
-		return errors.New("the provided location is outside the allowable zone range")
 	}
 	return nil
 }
@@ -1083,4 +1079,37 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.Header) uint16 {
 	// Calculate the exponential moving average
 	ewma := (uint16(efficiencyScore.Uint64()) + parent.EfficiencyScore()*params.TREE_EXPANSION_FILTER_ALPHA) / 10
 	return ewma
+}
+
+// IsGenesisHash checks if a hash is a genesis hash
+func (hc *HeaderChain) IsGenesisHash(hash common.Hash) bool {
+	genesisHashes := rawdb.ReadGenesisHashes(hc.headerDb)
+	for _, genesisHash := range genesisHashes {
+		if hash == genesisHash {
+			return true
+		}
+	}
+	return false
+}
+
+// AddGenesisHash appends the given hash to the genesis hash list
+func (hc *HeaderChain) AddGenesisHash(hash common.Hash) {
+	genesisHashes := rawdb.ReadGenesisHashes(hc.headerDb)
+	genesisHashes = append(genesisHashes, hash)
+
+	// write the genesis hash to the database
+	rawdb.WriteGenesisHashes(hc.headerDb, genesisHashes)
+}
+
+// GetGenesisHashes returns the genesis hashes stored
+func (hc *HeaderChain) GetGenesisHashes() []common.Hash {
+	return rawdb.ReadGenesisHashes(hc.headerDb)
+}
+
+func (hc *HeaderChain) SetCurrentExpansionNumber(expansionNumber uint8) {
+	hc.currentExpansionNumber = expansionNumber
+}
+
+func (hc *HeaderChain) GetExpansionNumber() uint8 {
+	return hc.currentExpansionNumber
 }

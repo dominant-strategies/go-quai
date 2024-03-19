@@ -53,6 +53,9 @@ type ChainHeaderReader interface {
 
 	// ComputeEfficiencyScore returns the efficiency score computed at each prime block
 	ComputeEfficiencyScore(header *types.Header) uint16
+
+	// IsGenesisHash returns true if the given hash is the genesis block hash.
+	IsGenesisHash(hash common.Hash) bool
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -62,6 +65,11 @@ type ChainReader interface {
 
 	// GetBlock retrieves a block from the database by hash and number.
 	GetBlock(hash common.Hash, number uint64) *types.Block
+}
+
+type GenesisReader interface {
+	// IsGenesisHash returns true if the given hash is the genesis block hash.
+	IsGenesisHash(hash common.Hash) bool
 }
 
 // Engine is an algorithm agnostic consensus engine.
@@ -78,19 +86,19 @@ type Engine interface {
 	CalcOrder(header *types.Header) (*big.Int, int, error)
 
 	// TotalLogS returns the log of the total entropy reduction if the chain since genesis to the given header
-	TotalLogS(header *types.Header) *big.Int
+	TotalLogS(chain GenesisReader, header *types.Header) *big.Int
 
 	// TotalLogPhS returns the log of the total entropy reduction if the chain since genesis for a pending header
 	TotalLogPhS(header *types.Header) *big.Int
 
 	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
-	DeltaLogS(header *types.Header) *big.Int
+	DeltaLogS(chain GenesisReader, header *types.Header) *big.Int
 
 	// UncledLogS returns the log of the entropy reduction by uncles referenced in the block
 	UncledLogS(block *types.Block) *big.Int
 
 	// UncledUncledSubDeltaLogS returns the log of the uncled entropy reduction  since the past coincident
-	UncledSubDeltaLogS(header *types.Header) *big.Int
+	UncledSubDeltaLogS(chain GenesisReader, header *types.Header) *big.Int
 
 	ComputePowLight(header *types.Header) (mixHash, powHash common.Hash)
 

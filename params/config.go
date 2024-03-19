@@ -53,68 +53,58 @@ const (
 var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ProgpowColosseumChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(9000),
-		Progpow:     new(ProgpowConfig),
-		GenesisHash: ProgpowColosseumGenesisHash,
+		ChainID: big.NewInt(9000),
+		Progpow: new(ProgpowConfig),
 	}
 
 	Blake3PowColosseumChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(9000),
-		Blake3Pow:   new(Blake3powConfig),
-		GenesisHash: Blake3PowColosseumGenesisHash,
+		ChainID:   big.NewInt(9000),
+		Blake3Pow: new(Blake3powConfig),
 	}
 
 	// GardenChainConfig contains the chain parameters to run a node on the Garden test network.
 	ProgpowGardenChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(12000),
-		Progpow:     new(ProgpowConfig),
-		GenesisHash: ProgpowGardenGenesisHash,
+		ChainID: big.NewInt(12000),
+		Progpow: new(ProgpowConfig),
 	}
 
 	Blake3PowGardenChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(12000),
-		Blake3Pow:   new(Blake3powConfig),
-		GenesisHash: Blake3PowGardenGenesisHash,
+		ChainID:   big.NewInt(12000),
+		Blake3Pow: new(Blake3powConfig),
 	}
 
 	// OrchardChainConfig contains the chain parameters to run a node on the Orchard test network.
 	ProgpowOrchardChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(15000),
-		Progpow:     new(ProgpowConfig),
-		GenesisHash: ProgpowOrchardGenesisHash,
+		ChainID: big.NewInt(15000),
+		Progpow: new(ProgpowConfig),
 	}
 
 	Blake3PowOrchardChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(15000),
-		Blake3Pow:   new(Blake3powConfig),
-		GenesisHash: Blake3PowOrchardGenesisHash,
+		ChainID:   big.NewInt(15000),
+		Blake3Pow: new(Blake3powConfig),
 	}
 
 	// LighthouseChainConfig contains the chain parameters to run a node on the Lighthouse test network.
 	ProgpowLighthouseChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(17000),
-		Blake3Pow:   new(Blake3powConfig),
-		Progpow:     new(ProgpowConfig),
-		GenesisHash: ProgpowLighthouseGenesisHash,
+		ChainID:   big.NewInt(17000),
+		Blake3Pow: new(Blake3powConfig),
+		Progpow:   new(ProgpowConfig),
 	}
 
 	Blake3PowLighthouseChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(17000),
-		Blake3Pow:   new(Blake3powConfig),
-		GenesisHash: Blake3PowLighthouseGenesisHash,
+		ChainID:   big.NewInt(17000),
+		Blake3Pow: new(Blake3powConfig),
 	}
 
 	// LocalChainConfig contains the chain parameters to run a node on the Local test network.
 	ProgpowLocalChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(1337),
-		Progpow:     new(ProgpowConfig),
-		GenesisHash: ProgpowLocalGenesisHash,
+		ChainID: big.NewInt(1337),
+		Progpow: new(ProgpowConfig),
 	}
 
 	Blake3PowLocalChainConfig = &ChainConfig{
-		ChainID:     big.NewInt(1337),
-		Blake3Pow:   new(Blake3powConfig),
-		GenesisHash: Blake3PowLocalGenesisHash,
+		ChainID:   big.NewInt(1337),
+		Blake3Pow: new(Blake3powConfig),
 	}
 
 	// AllProgpowProtocolChanges contains every protocol change introduced
@@ -122,9 +112,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}, common.Location{}}
+	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Hash{}, common.Location{}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -136,11 +126,11 @@ var (
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// Various consensus engines
-	ConsensusEngine string
-	Blake3Pow       *Blake3powConfig `json:"blake3pow,omitempty"`
-	Progpow         *ProgpowConfig   `json:"progpow,omitempty"`
-	GenesisHash     common.Hash
-	Location        common.Location
+	ConsensusEngine    string
+	Blake3Pow          *Blake3powConfig `json:"blake3pow,omitempty"`
+	Progpow            *ProgpowConfig   `json:"progpow,omitempty"`
+	Location           common.Location
+	DefaultGenesisHash common.Hash
 }
 
 // SetLocation sets the location on the chain config

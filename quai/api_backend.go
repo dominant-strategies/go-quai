@@ -34,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
+	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -505,8 +506,16 @@ func (b *QuaiAPIBackend) ProcessingState() bool {
 	return b.quai.core.ProcessingState()
 }
 
-func (b *QuaiAPIBackend) NewGenesisPendingHeader(pendingHeader *types.Header) {
-	b.quai.core.NewGenesisPendigHeader(pendingHeader)
+func (b *QuaiAPIBackend) NewGenesisPendingHeader(pendingHeader *types.Header, domTerminus common.Hash, genesisHash common.Hash) {
+	b.quai.core.NewGenesisPendigHeader(pendingHeader, domTerminus, genesisHash)
+}
+
+func (b *QuaiAPIBackend) SetCurrentExpansionNumber(expansionNumber uint8) {
+	b.quai.core.SetCurrentExpansionNumber(expansionNumber)
+}
+
+func (b *QuaiAPIBackend) WriteGenesisBlock(block *types.Block, location common.Location) {
+	b.quai.core.WriteGenesisBlock(block, location)
 }
 
 func (b *QuaiAPIBackend) GetPendingHeader() (*types.Header, error) {
@@ -555,6 +564,18 @@ func (b *QuaiAPIBackend) Logger() *log.Logger {
 
 func (b *QuaiAPIBackend) GetSlicesRunning() []common.Location {
 	return b.quai.core.GetSlicesRunning()
+}
+
+func (b *QuaiAPIBackend) SetSubClient(client *quaiclient.Client, location common.Location) {
+	b.quai.core.SetSubClient(client, location)
+}
+
+func (b *QuaiAPIBackend) AddGenesisPendingEtxs(block *types.Block) {
+	b.quai.core.AddGenesisPendingEtxs(block)
+}
+
+func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription {
+	return b.quai.core.SubscribeExpansionEvent(ch)
 }
 
 // ///////////////////////////

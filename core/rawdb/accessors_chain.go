@@ -1562,3 +1562,38 @@ func DeleteAddressUtxos(db ethdb.KeyValueWriter, address common.Address) {
 		log.Global.WithField("err", err).Fatal("Failed to delete utxos")
 	}
 }
+
+func WriteGenesisHashes(db ethdb.KeyValueWriter, hashes common.Hashes) {
+	protoHashes := hashes.ProtoEncode()
+	data, err := proto.Marshal(protoHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal genesis hashes")
+	}
+
+	if err := db.Put(genesisHashesKey, data); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to store genesis hashes")
+	}
+}
+
+func ReadGenesisHashes(db ethdb.Reader) common.Hashes {
+	data, _ := db.Get(genesisHashesKey)
+	if len(data) == 0 {
+		return common.Hashes{}
+	}
+	protoHashes := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal genesis hashes")
+	}
+
+	hashes := common.Hashes{}
+	hashes.ProtoDecode(protoHashes)
+
+	return hashes
+}
+
+func DeleteGenesisHashes(db ethdb.KeyValueWriter) {
+	if err := db.Delete(genesisHashesKey); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to delete genesis hashes")
+	}
+}
