@@ -484,6 +484,52 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 }
 
+func TestPendingEtxStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	header := types.EmptyHeader()
+	header.SetLocation(common.Location{0, 0})
+
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{1, 1})
+
+	transaction := types.NewTx(&types.ExternalTx{
+		ChainID:           new(big.Int).SetUint64(1),
+		OriginatingTxHash: common.Hash{1},
+		ETXIndex:          uint16(1),
+		Gas:               uint64(1),
+		To:                &address,
+		Value:             new(big.Int).SetUint64(1),
+		Data:              []byte{},
+		AccessList:        nil,
+		Sender:            address,
+	})
+
+	if entry := ReadPendingEtxs(db, header.Hash()); entry != nil {
+		t.Fatalf("Non existent pending etx returned: %v", entry)
+	}
+
+	etx := types.PendingEtxs{
+		Header: header,
+		Etxs:   types.Transactions{transaction},
+	}
+
+	WritePendingEtxs(db, etx)
+
+	test := ReadPendingEtxs(db, header.Hash())
+	t.Log(test)
+
+	if entry := ReadPendingEtxs(db, header.Hash()); entry.Etxs[0].Hash() != transaction.Hash() {
+		t.Fatalf("Stored pending etx not found: %v", entry)
+	}
+
+	DeletePendingEtxs(db, header.Hash())
+
+	if entry := ReadPendingEtxs(db, header.Hash()); entry != nil {
+		t.Fatalf("Deleted pending etx returned: %v", entry)
+	}
+
+}
+
 func TestPendingEtxsRollupStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
