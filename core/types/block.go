@@ -44,6 +44,7 @@ var (
 	EmptyUncleHash  = RlpHash([]*Header(nil))
 	EmptyBodyHash   = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
 	EmptyEtxSetHash = crypto.Keccak256Hash([]byte{})
+	EmptyHash       = common.Hash{}
 	big2e256        = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) // 2^256
 	hasher          = blake3.New(32, nil)
 	hasherMu        sync.RWMutex
@@ -85,29 +86,36 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Quai blockchain.
 type Header struct {
-	parentHash    []common.Hash   `json:"parentHash"           gencodec:"required"`
-	uncleHash     common.Hash     `json:"sha3Uncles"           gencodec:"required"`
-	coinbase      common.Address  `json:"miner"                gencodec:"required"`
-	evmRoot       common.Hash     `json:"evmRoot"            gencodec:"required"`
-	utxoRoot      common.Hash     `json:"utxoRoot"               gencodec:"required"`
-	txHash        common.Hash     `json:"transactionsRoot"     gencodec:"required"`
-	etxHash       common.Hash     `json:"extTransactionsRoot"  gencodec:"required"`
-	etxSetHash    common.Hash     `json:"etxSetHash"        gencodec:"required"`
-	etxRollupHash common.Hash     `json:"extRollupRoot"        gencodec:"required"`
-	manifestHash  []common.Hash   `json:"manifestHash"         gencodec:"required"`
-	receiptHash   common.Hash     `json:"receiptsRoot"         gencodec:"required"`
-	difficulty    *big.Int        `json:"difficulty"           gencodec:"required"`
-	parentEntropy []*big.Int      `json:"parentEntropy"        gencodec:"required"`
-	parentDeltaS  []*big.Int      `json:"parentDeltaS"         gencodec:"required"`
-	number        []*big.Int      `json:"number"               gencodec:"required"`
-	gasLimit      uint64          `json:"gasLimit"             gencodec:"required"`
-	gasUsed       uint64          `json:"gasUsed"              gencodec:"required"`
-	baseFee       *big.Int        `json:"baseFeePerGas"        gencodec:"required"`
-	location      common.Location `json:"location"             gencodec:"required"`
-	time          uint64          `json:"timestamp"            gencodec:"required"`
-	extra         []byte          `json:"extraData"            gencodec:"required"`
-	mixHash       common.Hash     `json:"mixHash"              gencodec:"required"`
-	nonce         BlockNonce      `json:"nonce"`
+	parentHash            []common.Hash   `json:"parentHash"            gencodec:"required"`
+	uncleHash             common.Hash     `json:"sha3Uncles"            gencodec:"required"`
+	coinbase              common.Address  `json:"miner"                 gencodec:"required"`
+	evmRoot               common.Hash     `json:"evmRoot"               gencodec:"required"`
+	utxoRoot              common.Hash     `json:"utxoRoot"              gencodec:"required"`
+	txHash                common.Hash     `json:"transactionsRoot"      gencodec:"required"`
+	etxHash               common.Hash     `json:"extTransactionsRoot"   gencodec:"required"`
+	etxSetHash            common.Hash     `json:"etxSetHash"            gencodec:"required"`
+	etxRollupHash         common.Hash     `json:"extRollupRoot"         gencodec:"required"`
+	manifestHash          []common.Hash   `json:"manifestHash"          gencodec:"required"`
+	receiptHash           common.Hash     `json:"receiptsRoot"          gencodec:"required"`
+	difficulty            *big.Int        `json:"difficulty"            gencodec:"required"`
+	parentEntropy         []*big.Int      `json:"parentEntropy"         gencodec:"required"`
+	parentDeltaS          []*big.Int      `json:"parentDeltaS"          gencodec:"required"`
+	parentUncledSubDeltaS []*big.Int      `json:"parentUncledSubDeltaS" gencodec:"required"`
+	efficiencyScore       uint16          `json:"efficiencyScore"       gencodec:"required"`
+	thresholdCount        uint16          `json:"thresholdCount"        gencodec:"required"`
+	expansionNumber       uint8           `json:"expansionNumber"     	gencodec:"required"`
+	etxEligibleSlices     common.Hash     `json:"etxEligibleSlices"     gencodec:"required"`
+	primeTerminus         common.Hash     `json:"primeTerminus"         gencodec:"required"`
+	uncledS               *big.Int        `json:"uncledLogS"            gencodec:"required"`
+	number                []*big.Int      `json:"number"                gencodec:"required"`
+	gasLimit              uint64          `json:"gasLimit"              gencodec:"required"`
+	gasUsed               uint64          `json:"gasUsed"               gencodec:"required"`
+	baseFee               *big.Int        `json:"baseFeePerGas"         gencodec:"required"`
+	location              common.Location `json:"location"              gencodec:"required"`
+	time                  uint64          `json:"timestamp"             gencodec:"required"`
+	extra                 []byte          `json:"extraData"             gencodec:"required"`
+	mixHash               common.Hash     `json:"mixHash"               gencodec:"required"`
+	nonce                 BlockNonce      `json:"nonce"`
 
 	// caches
 	hash      atomic.Value
@@ -118,16 +126,19 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty    *hexutil.Big
-	Number        []*hexutil.Big
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	BaseFee       *hexutil.Big
-	ParentEntropy []*hexutil.Big
-	ParentDeltaS  []*hexutil.Big
-	Time          hexutil.Uint64
-	Extra         hexutil.Bytes
-	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty            *hexutil.Big
+	Number                []*hexutil.Big
+	GasLimit              hexutil.Uint64
+	GasUsed               hexutil.Uint64
+	BaseFee               *hexutil.Big
+	ParentEntropy         []*hexutil.Big
+	ParentDeltaS          []*hexutil.Big
+	ParentUncledS         []*hexutil.Big
+	ParentUncledSubDeltaS []*hexutil.Big
+	UncledS               *hexutil.Big
+	Time                  hexutil.Uint64
+	Extr                  hexutil.Bytes
+	Hash                  common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // Construct an empty header
@@ -137,8 +148,10 @@ func EmptyHeader() *Header {
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
+	h.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 	h.difficulty = big.NewInt(0)
+	h.uncledS = big.NewInt(0)
 	h.evmRoot = EmptyRootHash
 	h.utxoRoot = EmptyRootHash
 	h.mixHash = EmptyRootHash
@@ -149,11 +162,17 @@ func EmptyHeader() *Header {
 	h.uncleHash = EmptyUncleHash
 	h.baseFee = big.NewInt(0)
 	h.extra = []byte{}
+	h.efficiencyScore = 0
+	h.thresholdCount = 0
+	h.expansionNumber = 0
+	h.etxEligibleSlices = EmptyHash
+	h.primeTerminus = EmptyRootHash
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
 		h.parentEntropy[i] = big.NewInt(0)
 		h.parentDeltaS[i] = big.NewInt(0)
+		h.parentUncledSubDeltaS[i] = big.NewInt(0)
 		h.number[i] = big.NewInt(0)
 	}
 	return h
@@ -174,30 +193,39 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
 	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
+	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
+	efficiencyScore := uint64(h.EfficiencyScore())
+	thresholdCount := uint64(h.ThresholdCount())
+	expansionNumber := uint64(h.ExpansionNumber())
 	time := h.Time()
 	nonce := h.Nonce().Uint64()
 
 	protoHeader := &ProtoHeader{
-		UncleHash:     &uncleHash,
-		Coinbase:      h.Coinbase().Bytes(),
-		EvmRoot:       &evmRoot,
-		UtxoRoot:      &utxoRoot,
-		TxHash:        &txHash,
-		EtxHash:       &etxhash,
-		EtxSetHash:    &etxSetHash,
-		EtxRollupHash: &etxRollupHash,
-		ReceiptHash:   &receiptHash,
-		Difficulty:    h.Difficulty().Bytes(),
-		GasLimit:      &gasLimit,
-		GasUsed:       &gasUsed,
-		BaseFee:       h.BaseFee().Bytes(),
-		Location:      h.Location().ProtoEncode(),
-		Time:          &time,
-		Extra:         h.Extra(),
-		MixHash:       &mixHash,
-		Nonce:         &nonce,
+		UncleHash:       &uncleHash,
+		Coinbase:        h.Coinbase().Bytes(),
+		EvmRoot:         &evmRoot,
+		UtxoRoot:        &utxoRoot,
+		TxHash:          &txHash,
+		EtxHash:         &etxhash,
+		EtxSetHash:      &etxSetHash,
+		EtxRollupHash:   &etxRollupHash,
+		ReceiptHash:     &receiptHash,
+		PrimeTerminus:   &primeTerminus,
+		Difficulty:      h.Difficulty().Bytes(),
+		UncledS:         h.UncledS().Bytes(),
+		GasLimit:        &gasLimit,
+		GasUsed:         &gasUsed,
+		EfficiencyScore: &efficiencyScore,
+		ThresholdCount:  &thresholdCount,
+		ExpansionNumber: &expansionNumber,
+		BaseFee:         h.BaseFee().Bytes(),
+		Location:        h.Location().ProtoEncode(),
+		Time:            &time,
+		Extra:           h.Extra(),
+		MixHash:         &mixHash,
+		Nonce:           &nonce,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -208,6 +236,9 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		}
 		if h.ParentDeltaS(i) != nil {
 			protoHeader.ParentDeltaS = append(protoHeader.ParentDeltaS, h.ParentDeltaS(i).Bytes())
+		}
+		if h.ParentUncledSubDeltaS(i) != nil {
+			protoHeader.ParentUncledSubDeltaS = append(protoHeader.ParentUncledSubDeltaS, h.ParentUncledSubDeltaS(i).Bytes())
 		}
 		if h.Number(i) != nil {
 			protoHeader.Number = append(protoHeader.Number, h.Number(i).Bytes())
@@ -251,6 +282,9 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	if protoHeader.ReceiptHash == nil {
 		return errors.New("missing required field 'ReceiptHash' in Header")
 	}
+	if protoHeader.PrimeTerminus == nil {
+		return errors.New("missing required field 'PrimeTerminus' in Header")
+	}
 	if protoHeader.Difficulty == nil {
 		return errors.New("missing required field 'Difficulty' in Header")
 	}
@@ -266,6 +300,12 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	if protoHeader.ParentDeltaS == nil {
 		return errors.New("missing required field 'ParentDeltaS' in Header")
 	}
+	if protoHeader.ParentUncledSubDeltaS == nil {
+		return errors.New("missing required field 'ParentUncledSubDeltaS' in Header")
+	}
+	if protoHeader.UncledS == nil {
+		return errors.New("missing required field 'UncledS' in Header")
+	}
 	if protoHeader.Number == nil {
 		return errors.New("missing required field 'Number' in Header")
 	}
@@ -275,12 +315,28 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	if protoHeader.MixHash == nil {
 		return errors.New("missing required field 'MixHash' in Header")
 	}
+	if protoHeader.EfficiencyScore == nil {
+		return errors.New("missing required field 'EfficiencyScore' in Header")
+	}
+	if protoHeader.ThresholdCount == nil {
+		return errors.New("missing required field 'ThresholdCount' in Header")
+	}
+	if protoHeader.ExpansionNumber == nil {
+		return errors.New("missing required field 'ExpansionNumber' in Header")
+	}
+	if protoHeader.EtxEligibleSlices == nil {
+		return errors.New("missing required field 'EtxEligibleSlices' in Header")
+	}
+	if protoHeader.PrimeTerminus == nil {
+		return errors.New("missing required field 'PrimeTerminus' in Header")
+	}
 
 	// Initialize the array fields before setting
 	h.parentHash = make([]common.Hash, common.HierarchyDepth)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
+	h.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth)
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -288,6 +344,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 		h.SetManifestHash(common.BytesToHash(protoHeader.GetManifestHash()[i].GetValue()), i)
 		h.SetParentEntropy(new(big.Int).SetBytes(protoHeader.GetParentEntropy()[i]), i)
 		h.SetParentDeltaS(new(big.Int).SetBytes(protoHeader.GetParentDeltaS()[i]), i)
+		h.SetParentUncledSubDeltaS(new(big.Int).SetBytes(protoHeader.GetParentUncledSubDeltaS()[i]), i)
 		h.SetNumber(new(big.Int).SetBytes(protoHeader.GetNumber()[i]), i)
 	}
 
@@ -300,7 +357,9 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	h.SetEtxHash(common.BytesToHash(protoHeader.GetEtxHash().GetValue()))
 	h.SetEtxSetHash(common.BytesToHash(protoHeader.GetEtxSetHash().GetValue()))
 	h.SetEtxRollupHash(common.BytesToHash(protoHeader.GetEtxRollupHash().GetValue()))
+	h.SetPrimeTerminus(common.BytesToHash(protoHeader.GetPrimeTerminus().GetValue()))
 	h.SetDifficulty(new(big.Int).SetBytes(protoHeader.GetDifficulty()))
+	h.SetUncledS(new(big.Int).SetBytes(protoHeader.GetUncledS()))
 	h.SetGasLimit(protoHeader.GetGasLimit())
 	h.SetGasUsed(protoHeader.GetGasUsed())
 	h.SetBaseFee(new(big.Int).SetBytes(protoHeader.GetBaseFee()))
@@ -309,6 +368,10 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	h.SetMixHash(common.BytesToHash(protoHeader.GetMixHash().GetValue()))
 	h.SetNonce(uint64ToByteArr(protoHeader.GetNonce()))
 	h.SetLocation(protoHeader.GetLocation().GetValue())
+	h.SetEfficiencyScore(uint16(protoHeader.GetEfficiencyScore()))
+	h.SetThresholdCount(uint16(protoHeader.GetThresholdCount()))
+	h.SetExpansionNumber(uint8(protoHeader.GetExpansionNumber()))
+	h.SetEtxEligibleSlices(common.BytesToHash(protoHeader.GetEtxEligibleSlices().GetValue()))
 
 	return nil
 }
@@ -326,6 +389,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"hash":                h.Hash(),
 		"parentHash":          h.ParentHashArray(),
 		"difficulty":          (*hexutil.Big)(h.Difficulty()),
+		"uncledS":             (*hexutil.Big)(h.UncledS()),
 		"nonce":               h.Nonce(),
 		"sha3Uncles":          h.UncleHash(),
 		"evmRoot":             h.EVMRoot(),
@@ -339,24 +403,34 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"extTransactionsRoot": h.EtxHash(),
 		"etxSetHash":          h.EtxSetHash(),
 		"extRollupRoot":       h.EtxRollupHash(),
+		"primeTerminus":       h.PrimeTerminus(),
 		"manifestHash":        h.ManifestHashArray(),
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
 		"gasUsed":             hexutil.Uint(h.GasUsed()),
 		"location":            hexutil.Bytes(h.Location()),
 		"mixHash":             h.MixHash(),
+		"efficiencyScore":     hexutil.Uint64(h.EfficiencyScore()),
+		"thresholdCount":      hexutil.Uint64(h.ThresholdCount()),
+		"expansionNumber":     hexutil.Uint64(h.ExpansionNumber()),
+		"etxEligibleSlices":   h.EtxEligibleSlices(),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
 	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
 	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
+	parentUncledS := make([]*hexutil.Big, common.HierarchyDepth)
+	parentUncledSubDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		number[i] = (*hexutil.Big)(h.Number(i))
 		parentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
 		parentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
+		parentUncledSubDeltaS[i] = (*hexutil.Big)(h.ParentUncledSubDeltaS(i))
 	}
 	result["number"] = number
 	result["parentEntropy"] = parentEntropy
 	result["parentDeltaS"] = parentDeltaS
+	result["parentUncledS"] = parentUncledS
+	result["parentUncledSubDeltaS"] = parentUncledSubDeltaS
 
 	if h.BaseFee() != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(h.BaseFee())
@@ -399,6 +473,12 @@ func (h *Header) ParentEntropy(nodeCtx int) *big.Int {
 func (h *Header) ParentDeltaS(nodeCtx int) *big.Int {
 	return h.parentDeltaS[nodeCtx]
 }
+func (h *Header) ParentUncledSubDeltaS(nodeCtx int) *big.Int {
+	return h.parentUncledSubDeltaS[nodeCtx]
+}
+func (h *Header) UncledS() *big.Int {
+	return h.uncledS
+}
 func (h *Header) ManifestHash(nodeCtx int) common.Hash {
 	return h.manifestHash[nodeCtx]
 }
@@ -420,15 +500,28 @@ func (h *Header) GasLimit() uint64 {
 func (h *Header) GasUsed() uint64 {
 	return h.gasUsed
 }
+func (h *Header) EfficiencyScore() uint16 {
+	return h.efficiencyScore
+}
+func (h *Header) ThresholdCount() uint16 {
+	return h.thresholdCount
+}
+func (h *Header) ExpansionNumber() uint8 {
+	return h.expansionNumber
+}
+func (h *Header) EtxEligibleSlices() common.Hash {
+	return h.etxEligibleSlices
+}
 func (h *Header) BaseFee() *big.Int {
 	return h.baseFee
 }
-func (h *Header) Location() common.Location { return h.location }
-func (h *Header) Time() uint64              { return h.time }
-func (h *Header) Extra() []byte             { return common.CopyBytes(h.extra) }
-func (h *Header) MixHash() common.Hash      { return h.mixHash }
-func (h *Header) Nonce() BlockNonce         { return h.nonce }
-func (h *Header) NonceU64() uint64          { return binary.BigEndian.Uint64(h.nonce[:]) }
+func (h *Header) Location() common.Location  { return h.location }
+func (h *Header) Time() uint64               { return h.time }
+func (h *Header) Extra() []byte              { return common.CopyBytes(h.extra) }
+func (h *Header) MixHash() common.Hash       { return h.mixHash }
+func (h *Header) PrimeTerminus() common.Hash { return h.primeTerminus }
+func (h *Header) Nonce() BlockNonce          { return h.nonce }
+func (h *Header) NonceU64() uint64           { return binary.BigEndian.Uint64(h.nonce[:]) }
 
 func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -475,6 +568,11 @@ func (h *Header) SetEtxRollupHash(val common.Hash) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.etxRollupHash = val
 }
+func (h *Header) SetPrimeTerminus(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.primeTerminus = val
+}
 
 func (h *Header) SetParentEntropy(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -486,6 +584,12 @@ func (h *Header) SetParentDeltaS(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.parentDeltaS[nodeCtx] = val
+}
+
+func (h *Header) SetParentUncledSubDeltaS(val *big.Int, nodeCtx int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.parentUncledSubDeltaS[nodeCtx] = val
 }
 
 func (h *Header) SetManifestHash(val common.Hash, nodeCtx int) {
@@ -503,6 +607,11 @@ func (h *Header) SetDifficulty(val *big.Int) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.difficulty = new(big.Int).Set(val)
 }
+func (h *Header) SetUncledS(val *big.Int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.uncledS = new(big.Int).Set(val)
+}
 func (h *Header) SetNumber(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
@@ -517,6 +626,26 @@ func (h *Header) SetGasUsed(val uint64) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.gasUsed = val
+}
+func (h *Header) SetEfficiencyScore(val uint16) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.efficiencyScore = val
+}
+func (h *Header) SetThresholdCount(val uint16) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.thresholdCount = val
+}
+func (h *Header) SetExpansionNumber(val uint8) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.expansionNumber = val
+}
+func (h *Header) SetEtxEligibleSlices(val common.Hash) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.etxEligibleSlices = val
 }
 func (h *Header) SetBaseFee(val *big.Int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -563,27 +692,38 @@ func (h *Header) SealEncode() *ProtoHeader {
 	etxSetHash := common.ProtoHash{Value: h.EtxSetHash().Bytes()}
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
+	etxEligibleSlices := common.ProtoHash{Value: h.EtxEligibleSlices().Bytes()}
+	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
+	efficiencyScore := uint64(h.EfficiencyScore())
+	thresholdCount := uint64(h.ThresholdCount())
+	expansionNumber := uint64(h.ExpansionNumber())
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
 	time := h.Time()
 
 	protoSealData := &ProtoHeader{
-		UncleHash:     &uncleHash,
-		Coinbase:      h.Coinbase().Bytes(),
-		EvmRoot:       &evmRoot,
-		UtxoRoot:      &utxoRoot,
-		TxHash:        &txHash,
-		EtxHash:       &etxhash,
-		EtxSetHash:    &etxSetHash,
-		EtxRollupHash: &etxRollupHash,
-		ReceiptHash:   &receiptHash,
-		Difficulty:    h.Difficulty().Bytes(),
-		GasLimit:      &gasLimit,
-		GasUsed:       &gasUsed,
-		BaseFee:       h.BaseFee().Bytes(),
-		Location:      h.Location().ProtoEncode(),
-		Time:          &time,
-		Extra:         h.Extra(),
+		UncleHash:         &uncleHash,
+		Coinbase:          h.Coinbase().Bytes(),
+		EvmRoot:           &evmRoot,
+		UtxoRoot:          &utxoRoot,
+		TxHash:            &txHash,
+		EtxHash:           &etxhash,
+		EtxSetHash:        &etxSetHash,
+		EtxRollupHash:     &etxRollupHash,
+		ReceiptHash:       &receiptHash,
+		Difficulty:        h.Difficulty().Bytes(),
+		GasLimit:          &gasLimit,
+		GasUsed:           &gasUsed,
+		BaseFee:           h.BaseFee().Bytes(),
+		UncledS:           h.UncledS().Bytes(),
+		PrimeTerminus:     &primeTerminus,
+		EtxEligibleSlices: &etxEligibleSlices,
+		EfficiencyScore:   &efficiencyScore,
+		ThresholdCount:    &thresholdCount,
+		ExpansionNumber:   &expansionNumber,
+		Location:          h.Location().ProtoEncode(),
+		Time:              &time,
+		Extra:             h.Extra(),
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -920,14 +1060,17 @@ func CopyHeader(h *Header) *Header {
 	cpy.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.parentEntropy = make([]*big.Int, common.HierarchyDepth)
 	cpy.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
+	cpy.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		cpy.SetParentHash(h.ParentHash(i), i)
 		cpy.SetManifestHash(h.ManifestHash(i), i)
 		cpy.SetParentEntropy(h.ParentEntropy(i), i)
 		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
+		cpy.SetParentUncledSubDeltaS(h.ParentUncledSubDeltaS(i), i)
 		cpy.SetNumber(h.Number(i), i)
 	}
+	cpy.SetUncledS(h.UncledS())
 	cpy.SetUncleHash(h.UncleHash())
 	cpy.SetCoinbase(h.Coinbase())
 	cpy.SetEVMRoot(h.EVMRoot())
@@ -937,6 +1080,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetEtxSetHash(h.EtxSetHash())
 	cpy.SetEtxRollupHash(h.EtxRollupHash())
 	cpy.SetReceiptHash(h.ReceiptHash())
+	cpy.SetPrimeTerminus(h.PrimeTerminus())
 	if len(h.extra) > 0 {
 		cpy.extra = make([]byte, len(h.extra))
 		copy(cpy.extra, h.extra)
@@ -944,6 +1088,10 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetDifficulty(h.Difficulty())
 	cpy.SetGasLimit(h.GasLimit())
 	cpy.SetGasUsed(h.GasUsed())
+	cpy.SetEfficiencyScore(h.EfficiencyScore())
+	cpy.SetThresholdCount(h.ThresholdCount())
+	cpy.SetExpansionNumber(h.ExpansionNumber())
+	cpy.SetEtxEligibleSlices(h.EtxEligibleSlices())
 	cpy.SetBaseFee(h.BaseFee())
 	cpy.SetLocation(h.location)
 	cpy.SetTime(h.time)

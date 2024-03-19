@@ -31,17 +31,24 @@ message ProtoHeader {
   optional bytes difficulty = 10;
   repeated bytes parent_entropy = 11;
   repeated bytes parent_delta_s = 12;
-  repeated bytes number = 13;
-  optional uint64 gas_limit = 14;
-  optional uint64 gas_used = 15;
-  optional bytes base_fee = 16;
-  optional common.ProtoLocation location = 17;
-  optional uint64 time = 18;
-  optional bytes extra = 19;
-  optional common.ProtoHash mix_hash = 20;
-  optional uint64 nonce = 21;
-  optional common.ProtoHash utxo_root = 22;
-  optional common.ProtoHash etx_set_hash = 23;
+  repeated bytes parent_uncled_sub_delta_s = 13;
+  optional bytes uncled_s = 14;
+  repeated bytes number = 15;
+  optional uint64 gas_limit = 16;
+  optional uint64 gas_used = 17;
+  optional bytes base_fee = 18;
+  optional common.ProtoLocation location = 19;
+  optional uint64 time = 20;
+  optional bytes extra = 21;
+  optional common.ProtoHash mix_hash = 22;
+  optional uint64 nonce = 23;
+  optional common.ProtoHash utxo_root = 24;
+  optional common.ProtoHash etx_set_hash = 25;
+  optional uint64 efficiency_score = 26;
+  optional uint64 threshold_count = 27;
+  optional uint64 expansion_number = 28;
+  optional common.ProtoHash etx_eligible_slices = 29;
+  optional common.ProtoHash prime_terminus = 30;
 }
 
 message ProtoTransaction {
@@ -116,9 +123,7 @@ message ProtoTermini {
   repeated common.ProtoHash sub_termini = 2;
 }
 
-message ProtoEtxSet {
-  optional bytes etx_hashes = 1;
-}
+message ProtoEtxSet { optional bytes etx_hashes = 1; }
 
 message ProtoPendingEtxs {
   optional ProtoHeader header = 1;
