@@ -121,3 +121,39 @@ func (blake3pow *Blake3pow) DeltaLogS(header *types.Header) *big.Int {
 	}
 	return big.NewInt(0)
 }
+
+func (blake3pow *Blake3pow) UncledLogS(block *types.Block) *big.Int {
+	uncles := block.Uncles()
+	totalUncledLogS := big.NewInt(0)
+	for _, uncle := range uncles {
+		// Verify the seal and get the powHash for the given header
+		err := blake3pow.verifySeal(uncle)
+		if err != nil {
+			continue
+		}
+		// Get entropy reduction of this header
+		intrinsicS := blake3pow.IntrinsicLogS(uncle.Hash())
+		totalUncledLogS.Add(totalUncledLogS, intrinsicS)
+	}
+	return totalUncledLogS
+}
+
+func (blake3pow *Blake3pow) UncledSubDeltaLogS(header *types.Header) *big.Int {
+	_, order, err := blake3pow.CalcOrder(header)
+	if err != nil {
+		return big.NewInt(0)
+	}
+	uncledLogS := header.UncledS()
+	switch order {
+	case common.PRIME_CTX:
+		return big.NewInt(0)
+	case common.REGION_CTX:
+		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.REGION_CTX), header.ParentUncledSubDeltaS(common.ZONE_CTX))
+		totalDeltaS = new(big.Int).Add(totalDeltaS, uncledLogS)
+		return totalDeltaS
+	case common.ZONE_CTX:
+		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.ZONE_CTX), uncledLogS)
+		return totalDeltaS
+	}
+	return big.NewInt(0)
+}
