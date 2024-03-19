@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -85,8 +86,8 @@ type IndexerConfig struct {
 	IndexAddressUtxos bool
 }
 
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, indexerConfig *IndexerConfig, genesis *Genesis, logger *log.Logger) (*Core, error) {
-	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, domClientUrl, subClientUrls, engine, cacheConfig, indexerConfig, vmConfig, genesis, logger)
+func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.Header) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.Block, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, indexerConfig *IndexerConfig, genesis *Genesis, logger *log.Logger) (*Core, error) {
+	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, currentExpansionNumber, genesisBlock, domClientUrl, subClientUrls, engine, cacheConfig, indexerConfig, vmConfig, genesis, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +395,7 @@ func (c *Core) addToQueueIfNotAppended(block *types.Block) {
 
 // SetSyncTarget sets the sync target entropy based on the prime blocks
 func (c *Core) SetSyncTarget(header *types.Header) {
-	if c.sl.subClients == nil || header.Hash() == c.sl.config.GenesisHash {
+	if c.sl.subClients == nil || c.IsGenesisHash(header.Hash()) {
 		return
 	}
 
@@ -604,7 +605,7 @@ func (c *Core) WriteBlock(block *types.Block) {
 			return
 		}
 		if order == nodeCtx {
-			parentHeader := c.GetHeader(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
+			parentHeader := c.GetHeaderByHash(block.ParentHash(nodeCtx))
 			if parentHeader != nil {
 				c.sl.WriteBlock(block)
 				c.InsertChain([]*types.Block{block})
@@ -694,8 +695,16 @@ func (c *Core) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHea
 	c.sl.UpdateDom(oldTerminus, pendingHeader, location)
 }
 
-func (c *Core) NewGenesisPendigHeader(pendingHeader *types.Header) {
-	c.sl.NewGenesisPendingHeader(pendingHeader)
+func (c *Core) NewGenesisPendigHeader(pendingHeader *types.Header, domTerminus common.Hash, genesisHash common.Hash) {
+	c.sl.NewGenesisPendingHeader(pendingHeader, domTerminus, genesisHash)
+}
+
+func (c *Core) SetCurrentExpansionNumber(expansionNumber uint8) {
+	c.sl.SetCurrentExpansionNumber(expansionNumber)
+}
+
+func (c *Core) WriteGenesisBlock(block *types.Block, location common.Location) {
+	c.sl.WriteGenesisBlock(block, location)
 }
 
 func (c *Core) GetPendingHeader() (*types.Header, error) {
@@ -766,6 +775,18 @@ func (c *Core) GetSlicesRunning() []common.Location {
 	return c.sl.GetSlicesRunning()
 }
 
+func (c *Core) SetSubClient(client *quaiclient.Client, location common.Location) {
+	c.sl.SetSubClient(client, location)
+}
+
+func (c *Core) AddGenesisPendingEtxs(block *types.Block) {
+	c.sl.AddGenesisPendingEtxs(block)
+}
+
+func (c *Core) SubscribeExpansionEvent(ch chan<- ExpansionEvent) event.Subscription {
+	return c.sl.SubscribeExpansionEvent(ch)
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//
@@ -778,7 +799,7 @@ func (c *Core) GetBlock(hash common.Hash, number uint64) *types.Block {
 
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (c *Core) GetBlockByHash(hash common.Hash) *types.Block {
-	return c.sl.hc.GetBlockByHash(hash)
+	return c.sl.hc.GetBlockOrCandidateByHash(hash)
 }
 
 // GetBlockOrCandidateByHash retrieves a block from the database by hash, caching it if found.
@@ -835,12 +856,12 @@ func (c *Core) CurrentHeader() *types.Header {
 
 // CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
 func (c *Core) CurrentLogEntropy() *big.Int {
-	return c.engine.TotalLogS(c.sl.hc.CurrentHeader())
+	return c.engine.TotalLogS(c, c.sl.hc.CurrentHeader())
 }
 
 // TotalLogS returns the total entropy reduction if the chain since genesis to the given header
 func (c *Core) TotalLogS(header *types.Header) *big.Int {
-	return c.engine.TotalLogS(header)
+	return c.engine.TotalLogS(c, header)
 }
 
 // CalcOrder returns the order of the block within the hierarchy of chains
@@ -935,6 +956,15 @@ func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscript
 // there is no guarantee for this data to be accurate
 func (c *Core) ComputeEfficiencyScore(header *types.Header) uint16 {
 	return c.sl.hc.ComputeEfficiencyScore(header)
+}
+
+// IsGenesisHash checks if a hash is the genesis block hash.
+func (c *Core) IsGenesisHash(hash common.Hash) bool {
+	return c.sl.hc.IsGenesisHash(hash)
+}
+
+func (c *Core) GetExpansionNumber() uint8 {
+	return c.sl.hc.GetExpansionNumber()
 }
 
 //--------------------//

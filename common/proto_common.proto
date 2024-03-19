@@ -11,3 +11,9 @@ message ProtoHash { bytes value = 1; }
 message ProtoHashes { repeated ProtoHash hashes = 1; }
 
 message ProtoAddress { bytes value = 1; }
+
+message ProtoNumber { uint64 value = 1; }
+
+message ProtoLocations { repeated ProtoLocation locations = 1; }
+
+message ProtoBigInt { bytes value = 1; }

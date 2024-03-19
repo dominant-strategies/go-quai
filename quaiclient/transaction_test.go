@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	location     = common.Location{0, 0}
+	location     = common.Location{0, 1}
 	PARAMS       = params.ChainConfig{ChainID: big.NewInt(1337), Location: location}
-	wsUrl        = "ws://localhost:8100"
+	wsUrl        = "ws://localhost:8101"
 	wsUrlCyprus2 = "ws://localhost:8101"
 	MINERTIP     = big.NewInt(1 * params.GWei)
 	BASEFEE      = big.NewInt(1 * params.GWei)
@@ -24,8 +24,8 @@ var (
 )
 
 func TestETX(t *testing.T) {
-	fromAddress := common.HexToAddress("0x007c0C63038D8E099D6CDe00BBec41ca0d940D40", location)
-	privKey, err := crypto.ToECDSA(common.FromHex("0xbc3f120802d74ee0136ab537bc423f9ae8b45a5da12298133790d939473c021c"))
+	fromAddress := common.HexToAddress("0x016E397cf93239A46Ef94Abf3676cb541013F5Fa", location)
+	privKey, err := crypto.ToECDSA(common.FromHex("0x178bc73569bc321f3941936fa8d5f118cfe6a1fadccbffa329e95dd4692ee2fe"))
 	if err != nil {
 		t.Fatalf("Failed to convert private key to ECDSA: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestETX(t *testing.T) {
 		t.Fail()
 	}
 
-	inner_tx := types.InternalToExternalTx{ChainID: PARAMS.ChainID, Nonce: nonce, GasTipCap: MINERTIP, GasFeeCap: BASEFEE, ETXGasPrice: big.NewInt(9 * params.GWei), ETXGasLimit: 21000, ETXGasTip: big.NewInt(9 * params.GWei), Gas: GAS * 3, To: &to, Value: VALUE, Data: nil, AccessList: types.AccessList{}}
+	inner_tx := types.InternalToExternalTx{ChainID: PARAMS.ChainID, Nonce: nonce, GasTipCap: MINERTIP, Data: []byte{}, ETXData: []byte{}, GasFeeCap: BASEFEE, ETXGasPrice: big.NewInt(500 * params.GWei), ETXGasLimit: 21000, ETXGasTip: big.NewInt(500 * params.GWei), Gas: GAS * 3, To: &to, Value: VALUE, AccessList: types.AccessList{}}
 	tx := types.NewTx(&inner_tx)
 	t.Log(tx.Hash().String())
 

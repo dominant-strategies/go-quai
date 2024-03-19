@@ -271,7 +271,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	}
 
 	// Verify that the parent entropy is calculated correctly on the header
-	parentEntropy := blake3pow.TotalLogS(parent)
+	parentEntropy := blake3pow.TotalLogS(chain, parent)
 	if parentEntropy.Cmp(header.ParentEntropy(nodeCtx)) != 0 {
 		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(nodeCtx), parentEntropy)
 	}
@@ -285,7 +285,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), common.Big0)
 			}
 		} else {
-			parentDeltaS := blake3pow.DeltaLogS(parent)
+			parentDeltaS := blake3pow.DeltaLogS(chain, parent)
 			if parentDeltaS.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), parentDeltaS)
 			}
@@ -301,7 +301,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), common.Big0)
 			}
 		} else {
-			expectedParentUncledSubDeltaS := blake3pow.UncledSubDeltaLogS(parent)
+			expectedParentUncledSubDeltaS := blake3pow.UncledSubDeltaLogS(chain, parent)
 			if expectedParentUncledSubDeltaS.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
 				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), expectedParentUncledSubDeltaS)
 			}
@@ -398,7 +398,11 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		}
 	}
 	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number(nodeCtx), parent.Number(nodeCtx)); diff.Cmp(big.NewInt(1)) != 0 {
+	parentNumber := parent.Number(nodeCtx)
+	if chain.IsGenesisHash(parent.Hash()) {
+		parentNumber = big.NewInt(0)
+	}
+	if diff := new(big.Int).Sub(header.Number(nodeCtx), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
 	return nil
@@ -420,12 +424,13 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	///// k = Floor(BinaryLog(parent.Difficulty()))/(DurationLimit*DifficultyAdjustmentFactor*AdjustmentPeriod)
 	///// Difficulty = Max(parent.Difficulty() + e * k, MinimumDifficulty)
 
-	if parent.Hash() == chain.Config().GenesisHash {
-		return parent.Difficulty()
+	if chain.IsGenesisHash(parent.Hash()) {
+		// Divide the parent difficulty by the number of slices running at the time of expansion
+		return new(big.Int).Div(parent.Difficulty(), big.NewInt(int64((blake3pow.NodeLocation().Region()+1)*(blake3pow.NodeLocation().Zone()+1))))
 	}
 
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash(nodeCtx))
-	if parentOfParent == nil || parentOfParent.Hash() == chain.Config().GenesisHash {
+	if parentOfParent == nil || chain.IsGenesisHash(parentOfParent.Hash()) {
 		return parent.Difficulty()
 	}
 
@@ -505,7 +510,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles, blake3pow.logger)
 
-	if nodeCtx == common.ZONE_CTX && header.ParentHash(nodeCtx) == chain.Config().GenesisHash {
+	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_"+nodeLocation.Name()+".json", blake3pow.logger)
 		blake3pow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 
@@ -545,6 +550,11 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil), nodeCtx), nil
+}
+
+// NodeLocation returns the location of the node
+func (blake3pow *Blake3pow) NodeLocation() common.Location {
+	return blake3pow.config.NodeLocation
 }
 
 func (blake3pow *Blake3pow) ComputePowLight(header *types.Header) (common.Hash, common.Hash) {

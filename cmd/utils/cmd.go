@@ -1,18 +1,17 @@
 package utils
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
@@ -21,58 +20,25 @@ import (
 	"github.com/dominant-strategies/go-quai/quai"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/dominant-strategies/go-quai/quaistats"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// Create a new instance of the QuaiBackend consensus service
-func StartQuaiBackend(ctx context.Context, p2p quai.NetworkingAPI, logLevel string, nodeWG *sync.WaitGroup) (*quai.QuaiBackend, error) {
-	quaiBackend, _ := quai.NewQuaiBackend()
-	startNode := func(logPath string, location common.Location, slicesRunning []common.Location) {
-		nodeWG.Add(1)
-		go func() {
-			defer nodeWG.Done()
-			logger := log.NewLogger(logPath, logLevel)
-			logger.Info("Starting Node at location", "location", location)
-			stack, apiBackend := makeFullNode(p2p, location, slicesRunning, logger)
-			quaiBackend.SetApiBackend(apiBackend, location)
-			StartNode(stack)
-			// Create a channel to signal when stack.Wait() is done
-			done := make(chan struct{})
-			go func() {
-				stack.Wait()
-				close(done)
-			}()
-
-			select {
-			case <-done:
-				logger.Info("Node stopped normally")
-				stack.Close()
-				return
-			case <-ctx.Done():
-				logger.Info("Context cancelled, shutting down node")
-				stack.Close()
-				return
-			}
-		}()
+func OpenBackendDB() (*leveldb.DB, error) {
+	dataDir := viper.GetString(DataDirFlag.Name)
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		err := os.MkdirAll(dataDir, 0755)
+		if err != nil {
+			log.Global.Errorf("error creating data directory: %s", err)
+			return nil, err
+		}
 	}
+	dbPath := dataDir + "quaibackend"
 
-	// Set the p2p backend inside the quaiBackend
-	quaiBackend.SetP2PApiBackend(p2p)
-
-	runningSlices := GetRunningZones()
-	runningRegions := GetRunningRegions(runningSlices)
-
-	// Start nodes in separate goroutines
-	startNode("nodelogs/prime.log", nil, runningSlices)
-	for _, region := range runningRegions {
-		nodelogsFileName := "nodelogs/region-" + fmt.Sprintf("%d", region) + ".log"
-		startNode(nodelogsFileName, common.Location{region}, runningSlices)
+	db, err := leveldb.OpenFile(dbPath, nil)
+	if err != nil {
+		return nil, err
 	}
-	for _, slice := range runningSlices {
-		nodelogsFileName := "nodelogs/zone-" + fmt.Sprintf("%d", slice[0]) + "-" + fmt.Sprintf("%d", slice[1]) + ".log"
-		startNode(nodelogsFileName, slice, runningSlices)
-	}
-
-	return quaiBackend, nil
+	return db, err
 }
 
 // GetRunningZones returns the slices that are processing state (which are only zones)
@@ -83,12 +49,13 @@ func GetRunningZones() []common.Location {
 	if slices[0] == "" {
 		Fatalf("no slices are specified")
 	}
-	if len(slices) > common.NumRegionsInPrime*common.NumZonesInRegion {
-		Fatalf("number of slices exceed the current ontology")
-	}
 	runningSlices := []common.Location{}
 	for _, slice := range slices {
-		runningSlices = append(runningSlices, common.Location{slice[1] - 48, slice[3] - 48})
+		location := common.Location{slice[1] - 48, slice[3] - 48}
+		if location.Region() > common.MaxRegions || location.Zone() > common.MaxZones {
+			Fatalf("invalid slice: %s", location)
+		}
+		runningSlices = append(runningSlices, location)
 	}
 	return runningSlices
 }
@@ -112,7 +79,7 @@ func StartNode(stack *node.Node) {
 }
 
 // makeConfigNode loads quai configuration and creates a blank node instance.
-func makeConfigNode(slicesRunning []common.Location, nodeLocation common.Location, logger *log.Logger) (*node.Node, quaiconfig.QuaiConfig) {
+func makeConfigNode(slicesRunning []common.Location, nodeLocation common.Location, currentExpansionNumber uint8, logger *log.Logger) (*node.Node, quaiconfig.QuaiConfig) {
 	// Load defaults.
 	cfg := quaiconfig.QuaiConfig{
 		Quai:    quaiconfig.Defaults,
@@ -130,7 +97,7 @@ func makeConfigNode(slicesRunning []common.Location, nodeLocation common.Locatio
 	if err != nil {
 		Fatalf("Failed to create the protocol stack: %v", err)
 	}
-	SetQuaiConfig(stack, &cfg.Quai, slicesRunning, nodeLocation, logger)
+	SetQuaiConfig(stack, &cfg.Quai, slicesRunning, nodeLocation, currentExpansionNumber, logger)
 
 	// TODO: Apply stats
 	if viper.IsSet(QuaiStatsURLFlag.Name) {
@@ -150,9 +117,9 @@ func defaultNodeConfig() node.Config {
 }
 
 // makeFullNode loads quai configuration and creates the Quai backend.
-func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRunning []common.Location, logger *log.Logger) (*node.Node, quaiapi.Backend) {
-	stack, cfg := makeConfigNode(slicesRunning, nodeLocation, logger)
-	backend, _ := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), logger)
+func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.Block, logger *log.Logger) (*node.Node, quaiapi.Backend) {
+	stack, cfg := makeConfigNode(slicesRunning, nodeLocation, currentExpansionNumber, logger)
+	backend, _ := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), currentExpansionNumber, genesisBlock, logger)
 	sendfullstats := viper.GetBool(SendFullStatsFlag.Name)
 	// Add the Quai Stats daemon if requested.
 	if cfg.Quaistats.URL != "" {
@@ -164,8 +131,8 @@ func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRu
 // RegisterQuaiService adds a Quai client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, logger *log.Logger) (quaiapi.Backend, error) {
-	backend, err := quai.New(stack, p2p, &cfg, nodeCtx, logger)
+func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, genesisBlock *types.Block, logger *log.Logger) (quaiapi.Backend, error) {
+	backend, err := quai.New(stack, p2p, &cfg, nodeCtx, currentExpansionNumber, genesisBlock, logger)
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)
 	}

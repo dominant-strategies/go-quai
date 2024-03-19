@@ -85,15 +85,16 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
-	// create instance of consensus backend
-	var nodeWG sync.WaitGroup
-	consensus, err := utils.StartQuaiBackend(ctx, node, logLevel, &nodeWG)
+	// Start the  hierarchical co-ordinator
+	var nodeWg sync.WaitGroup
+	hc := utils.NewHierarchicalCoordinator(node, logLevel, &nodeWg)
+	err = hc.StartHierarchicalCoordinator()
 	if err != nil {
-		log.Global.WithField("error", err).Fatal("error creating consensus backend")
+		log.Global.WithField("error", err).Fatal("error starting hierarchical coordinator")
 	}
 
 	// start the p2p node
-	node.SetConsensusBackend(consensus)
+	node.SetConsensusBackend(hc.ConsensusBackend())
 	if err := node.Start(); err != nil {
 		log.Global.WithField("error", err).Fatal("error starting node")
 	}
@@ -110,7 +111,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 	<-ch
 	log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
 	cancel()
-	nodeWG.Wait()
+	// stop the hierarchical co-ordinator
+	hc.Stop()
 	if err := node.Stop(); err != nil {
 		panic(err)
 	}

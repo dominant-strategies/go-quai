@@ -218,8 +218,14 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 
+	parentEvmRoot := parent.Header().EVMRoot()
+	parentUtxoRoot := parent.Header().UTXORoot()
+	if p.hc.IsGenesisHash(parent.Hash()) {
+		parentEvmRoot = types.EmptyRootHash
+		parentUtxoRoot = types.EmptyRootHash
+	}
 	// Initialize a statedb
-	statedb, err := state.New(parent.Header().EVMRoot(), parent.Header().UTXORoot(), p.stateCache, p.utxoCache, p.snaps, nodeLocation)
+	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, p.stateCache, p.utxoCache, p.snaps, nodeLocation)
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, err
 	}
@@ -275,6 +281,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 			totalFees.Add(totalFees, fees)
 			continue
 		}
+
 		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
 		if err != nil {
 			return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -311,7 +318,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 				continue
 			} else {
 				prevZeroBal := prepareApplyETX(statedb, tx, nodeLocation)
-				receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
+				receipt, err = applyTransaction(msg, parent.Header(), p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 				statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 				if err != nil {
 					return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -323,7 +330,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 		} else if tx.Type() == types.InternalTxType || tx.Type() == types.InternalToExternalTxType {
 			startTimeTx := time.Now()
 
-			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
+			receipt, err = applyTransaction(msg, parent.Header(), p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -407,7 +414,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 	return receipts, qiEtxs, allLogs, statedb, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
+func applyTransaction(msg types.Message, parent *types.Header, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
 	nodeLocation := config.Location
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
@@ -418,6 +425,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	if err != nil {
 		return nil, err
 	}
+
 	var ETXRCount int
 	var ETXPCount int
 	for _, tx := range result.Etxs {
@@ -635,7 +643,17 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 	start := time.Now()
 	blockHash := block.Hash()
 	header := types.CopyHeader(block.Header())
-	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1, p.hc.NodeLocation())
+
+	parentHash := block.ParentHash(nodeCtx)
+	parentNumber := block.NumberU64(nodeCtx) - 1
+	if p.hc.IsGenesisHash(block.ParentHash(nodeCtx)) {
+		parent := p.hc.GetHeaderByHash(parentHash)
+		if parent == nil {
+			return nil, errors.New("failed to load parent block")
+		}
+		parentNumber = parent.NumberU64(nodeCtx)
+	}
+	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, parentHash, parentNumber, p.hc.NodeLocation())
 	time1 := common.PrettyDuration(time.Since(start))
 	if etxSet == nil {
 		return nil, errors.New("failed to load etx set")
@@ -719,7 +737,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.Block, newInbound
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, parent *types.Header, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
 	nodeCtx := config.Location.Context()
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
@@ -730,11 +748,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, tx, config.Location)
-		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
+		receipt, err := applyTransaction(msg, parent, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
 		statedb.SetBalance(common.ZeroInternal(config.Location), prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
 	}
-	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
+	return applyTransaction(msg, parent, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
 }
 
 // GetVMConfig returns the block chain VM config.
@@ -932,7 +950,13 @@ func (p *StateProcessor) StateAtBlock(block *types.Block, reexec uint64, base *s
 			logged = time.Now()
 		}
 
-		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1, p.hc.NodeLocation())
+		parentHash := current.ParentHash(nodeCtx)
+		parentNumber := current.NumberU64(nodeCtx) - 1
+		if p.hc.IsGenesisHash(parentHash) {
+			parent := p.hc.GetHeaderByHash(parentHash)
+			parentNumber = parent.NumberU64(nodeCtx)
+		}
+		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, parentHash, parentNumber, p.hc.NodeLocation())
 		if etxSet == nil {
 			return nil, errors.New("etxSet set is nil in StateProcessor")
 		}

@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 	"modernc.org/mathutil"
@@ -12,6 +13,7 @@ import (
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 	nodeCtx := progpow.config.NodeLocation.Context()
+	// Except for the slice [0,0] have to check if the header hash is the genesis hash
 	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
 	}
@@ -65,7 +67,10 @@ func (progpow *Progpow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (progpow *Progpow) TotalLogS(header *types.Header) *big.Int {
+func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	intrinsicS, order, err := progpow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -103,7 +108,7 @@ func (progpow *Progpow) TotalLogPhS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) DeltaLogS(header *types.Header) *big.Int {
+func (progpow *Progpow) DeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
 	intrinsicS, order, err := progpow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -138,7 +143,11 @@ func (progpow *Progpow) UncledLogS(block *types.Block) *big.Int {
 	return totalUncledLogS
 }
 
-func (progpow *Progpow) UncledSubDeltaLogS(header *types.Header) *big.Int {
+func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	// Treating the genesis block differntly
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	_, order, err := progpow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
