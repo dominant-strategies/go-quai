@@ -1070,3 +1070,17 @@ func (hc *HeaderChain) InitializeAddressUtxoCache() error {
 	hc.logger.Info("Finished initializing address utxo cache", "duration", time.Since(start))
 	return nil
 }
+
+// ComputeEfficiencyScore calculates the efficiency score for the given header
+func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.Header) uint16 {
+	deltaS := new(big.Int).Add(parent.ParentDeltaS(common.REGION_CTX), parent.ParentDeltaS(common.ZONE_CTX))
+	uncledDeltaS := new(big.Int).Add(parent.ParentUncledSubDeltaS(common.REGION_CTX), parent.ParentUncledSubDeltaS(common.ZONE_CTX))
+
+	// Take the ratio of deltaS to the uncledDeltaS in percentage
+	efficiencyScore := uncledDeltaS.Mul(uncledDeltaS, big.NewInt(100))
+	efficiencyScore.Div(efficiencyScore, deltaS)
+
+	// Calculate the exponential moving average
+	ewma := (uint16(efficiencyScore.Uint64()) + parent.EfficiencyScore()*params.TREE_EXPANSION_FILTER_ALPHA) / 10
+	return ewma
+}

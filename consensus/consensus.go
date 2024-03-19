@@ -50,6 +50,9 @@ type ChainHeaderReader interface {
 
 	// ProcessingState returns true for slices that are running
 	ProcessingState() bool
+
+	// ComputeEfficiencyScore returns the efficiency score computed at each prime block
+	ComputeEfficiencyScore(header *types.Header) uint16
 }
 
 // ChainReader defines a small collection of methods needed to access the local
