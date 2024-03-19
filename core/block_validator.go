@@ -151,7 +151,12 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		if block.EtxSetHash() != types.EmptyEtxSetHash {
 			return fmt.Errorf("expected ETX Set hash %x does not match block ETXSetHash %x", types.EmptyRootHash, block.EtxSetHash())
 		}
+	}
 
+	// Check that the UncledS in the header matches the S from the block
+	expectedUncledS := v.engine.UncledLogS(block)
+	if expectedUncledS.Cmp(header.UncledS()) != 0 {
+		return fmt.Errorf("invalid uncledS (remote: %x local: %x)", header.UncledS(), expectedUncledS)
 	}
 	v.hc.logger.WithFields(log.Fields{
 		"t1": time1,

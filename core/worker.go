@@ -973,6 +973,24 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()), nodeCtx)
 	}
 
+	// Only calculate entropy if the parent is not the genesis block
+	if parent.Hash() != w.hc.config.GenesisHash {
+		_, order, err := w.engine.CalcOrder(parent.Header())
+		if err != nil {
+			return nil, err
+		}
+		// Set the parent delta S prior to sending to sub
+		if nodeCtx != common.PRIME_CTX {
+			if order < nodeCtx {
+				header.SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
+			} else {
+				header.SetParentUncledSubDeltaS(w.engine.UncledSubDeltaLogS(parent.Header()), nodeCtx)
+			}
+		}
+	} else {
+		header.SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
+	}
+
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		header.SetExtra(w.extra)
@@ -1125,6 +1143,11 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 	block, err := w.engine.FinalizeAndAssemble(chain, header, state, txs, uncles, etxs, subManifest, receipts)
 	if err != nil {
 		return nil, err
+	}
+
+	// Once the uncles list is assembled in the block
+	if nodeCtx == common.ZONE_CTX {
+		block.Header().SetUncledS(w.engine.UncledLogS(block))
 	}
 
 	manifestHash := w.ComputeManifestHash(parent.Header())

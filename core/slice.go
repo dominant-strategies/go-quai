@@ -1297,10 +1297,12 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 	combinedPendingHeader.SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.SetParentEntropy(header.ParentEntropy(index), index)
 	combinedPendingHeader.SetParentDeltaS(header.ParentDeltaS(index), index)
+	combinedPendingHeader.SetParentUncledSubDeltaS(header.ParentUncledSubDeltaS(index), index)
 
 	if inSlice {
 		combinedPendingHeader.SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.SetDifficulty(header.Difficulty())
+		combinedPendingHeader.SetUncledS(header.UncledS())
 		combinedPendingHeader.SetUncleHash(header.UncleHash())
 		combinedPendingHeader.SetTxHash(header.TxHash())
 		combinedPendingHeader.SetEtxHash(header.EtxHash())

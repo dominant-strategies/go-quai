@@ -291,6 +291,21 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			}
 		}
 	}
+	// If not prime, verify the parentUncledSubDeltaS field as well
+	if nodeCtx > common.PRIME_CTX {
+		_, parentOrder, _ := progpow.CalcOrder(parent)
+		// If parent was dom, parent uncled sub deltaS is zero and otherwise should be the calc parent uncled sub delta s on the parent
+		if parentOrder < nodeCtx {
+			if common.Big0.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), common.Big0)
+			}
+		} else {
+			expectedParentUncledSubDeltaS := progpow.UncledSubDeltaLogS(parent)
+			if expectedParentUncledSubDeltaS.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), expectedParentUncledSubDeltaS)
+			}
+		}
+	}
 	if nodeCtx == common.ZONE_CTX {
 		// check if the header coinbase is in scope
 		_, err := header.Coinbase().InternalAddress()

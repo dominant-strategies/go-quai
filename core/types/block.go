@@ -193,6 +193,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
 	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
+	etxEligibleSlices := common.ProtoHash{Value: h.EtxEligibleSlices().Bytes()}
 	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
@@ -203,29 +204,30 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	nonce := h.Nonce().Uint64()
 
 	protoHeader := &ProtoHeader{
-		UncleHash:       &uncleHash,
-		Coinbase:        h.Coinbase().Bytes(),
-		EvmRoot:         &evmRoot,
-		UtxoRoot:        &utxoRoot,
-		TxHash:          &txHash,
-		EtxHash:         &etxhash,
-		EtxSetHash:      &etxSetHash,
-		EtxRollupHash:   &etxRollupHash,
-		ReceiptHash:     &receiptHash,
-		PrimeTerminus:   &primeTerminus,
-		Difficulty:      h.Difficulty().Bytes(),
-		UncledS:         h.UncledS().Bytes(),
-		GasLimit:        &gasLimit,
-		GasUsed:         &gasUsed,
-		EfficiencyScore: &efficiencyScore,
-		ThresholdCount:  &thresholdCount,
-		ExpansionNumber: &expansionNumber,
-		BaseFee:         h.BaseFee().Bytes(),
-		Location:        h.Location().ProtoEncode(),
-		Time:            &time,
-		Extra:           h.Extra(),
-		MixHash:         &mixHash,
-		Nonce:           &nonce,
+		UncleHash:         &uncleHash,
+		Coinbase:          h.Coinbase().Bytes(),
+		EvmRoot:           &evmRoot,
+		UtxoRoot:          &utxoRoot,
+		TxHash:            &txHash,
+		EtxHash:           &etxhash,
+		EtxSetHash:        &etxSetHash,
+		EtxRollupHash:     &etxRollupHash,
+		ReceiptHash:       &receiptHash,
+		PrimeTerminus:     &primeTerminus,
+		EtxEligibleSlices: &etxEligibleSlices,
+		Difficulty:        h.Difficulty().Bytes(),
+		UncledS:           h.UncledS().Bytes(),
+		GasLimit:          &gasLimit,
+		GasUsed:           &gasUsed,
+		EfficiencyScore:   &efficiencyScore,
+		ThresholdCount:    &thresholdCount,
+		ExpansionNumber:   &expansionNumber,
+		BaseFee:           h.BaseFee().Bytes(),
+		Location:          h.Location().ProtoEncode(),
+		Time:              &time,
+		Extra:             h.Extra(),
+		MixHash:           &mixHash,
+		Nonce:             &nonce,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {

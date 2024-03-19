@@ -83,6 +83,12 @@ type Engine interface {
 	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
 	DeltaLogS(header *types.Header) *big.Int
 
+	// UncledLogS returns the log of the entropy reduction by uncles referenced in the block
+	UncledLogS(block *types.Block) *big.Int
+
+	// UncledUncledSubDeltaLogS returns the log of the uncled entropy reduction  since the past coincident
+	UncledSubDeltaLogS(header *types.Header) *big.Int
+
 	ComputePowLight(header *types.Header) (mixHash, powHash common.Hash)
 
 	// VerifyHeader checks whether a header conforms to the consensus rules of a
