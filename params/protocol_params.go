@@ -142,6 +142,34 @@ const (
 	MaxAddressGrindAttempts int = 1000 // Maximum number of attempts to grind an address to a valid one
 	MinimumEtxGasDivisor        = 5    // The divisor for the minimum gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor)
 	MaximumEtxGasMultiplier     = 2    // Multiplied with the minimum ETX gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor) * MaximumEtxGasMultiplier
+
+	// Dynamic Expansion parameters
+
+	//  This is the threshold (range 0-100) above which the
+	// score will begin the tree expansion decision process. This threshold should be
+	// 	chosen high enough to not be easily triggered by minor changes in node
+	// 	operating behavior, but not so high that the security efficiency becomes
+	// 	unacceptably low.
+	TREE_EXPANSION_THRESHOLD uint16 = 15
+
+	// This is the smoothing factor (range 0-1) used by each zone in its low-pass
+	// filter to gather a long running average of the zone's security efficiency
+	// score. Choosing a larger will make the filter less responsive; the tree
+	// expansion algorithm will be less susceptible to short term variations in the
+	// efficiency score, but will take longer to decide to trigger an expansion when
+	// one becomes necessary.
+	TREE_EXPANSION_FILTER_ALPHA uint16 = 9
+
+	//  Once all chains have confirmed above TREE_EXPANSION_THRESHOLD, this is
+	//  the number of consecutive prime blocks that must remain above the
+	//  threshold to confirm the decision to expand the tree.
+	TREE_EXPANSION_TRIGGER_WINDOW uint16 = 144
+
+	// Once the network has confirmed the decision to expand the tree, this is
+	// the number of prime blocks to wait until the expansion is activated. This
+	// should be chosen to give node operators some time to adjust their
+	// infrastructure, if needed, to account for the upcoming network change.
+	TREE_EXPANSION_WAIT_COUNT = 1024
 )
 
 var (

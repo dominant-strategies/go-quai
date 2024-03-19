@@ -42,6 +42,7 @@ const (
 	c_pEtxRetryThreshold              = 100 // Number of pEtxNotFound return on a dom block before asking for pEtx/Rollup from sub
 	c_currentStateComputeWindow       = 20  // Number of blocks around the current header the state generation is always done
 	c_inboundEtxCacheSize             = 10  // Number of inboundEtxs to keep in cache so that, we don't recompute it every time dom is processed
+
 )
 
 type pEtxRetry struct {

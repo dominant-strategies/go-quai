@@ -991,6 +991,49 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		header.SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
 	}
 
+	// calculate the expansion values - except for the etxEligibleSlices, the
+	// zones cannot modify any of the other fields its done in prime
+	if nodeCtx == common.PRIME_CTX {
+		if parent.NumberU64(common.PRIME_CTX) == 0 {
+			header.SetEfficiencyScore(0)
+			header.SetThresholdCount(0)
+			header.SetExpansionNumber(0)
+		} else {
+			// compute the efficiency score at each prime block
+			efficiencyScore := w.hc.ComputeEfficiencyScore(parent.Header())
+			header.SetEfficiencyScore(efficiencyScore)
+
+			// If the threshold count is zero we have not started considering for the
+			// expansion
+			if parent.Header().ThresholdCount() == 0 {
+				if efficiencyScore > params.TREE_EXPANSION_THRESHOLD {
+					header.SetThresholdCount(parent.Header().ThresholdCount() + 1)
+				} else {
+					header.SetThresholdCount(0)
+				}
+			} else {
+				// If the efficiency score goes below the threshold,  and we still have
+				// not triggered the expansion, reset the threshold count or if we go
+				// past the tree expansion trigger window we have to reset the
+				// threshold count
+				if (parent.Header().ThresholdCount() < params.TREE_EXPANSION_TRIGGER_WINDOW && efficiencyScore < params.TREE_EXPANSION_THRESHOLD) ||
+					parent.Header().ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+					header.SetThresholdCount(0)
+				} else {
+					header.SetThresholdCount(parent.Header().ThresholdCount() + 1)
+				}
+			}
+
+			// Expansion happens when the threshold count is greater than the
+			// expansion threshold and we cross the tree expansion trigger window
+			if parent.Header().ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+				header.SetExpansionNumber(parent.Header().ExpansionNumber() + 1)
+			} else {
+				header.SetExpansionNumber(parent.Header().ExpansionNumber())
+			}
+		}
+	}
+
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		header.SetExtra(w.extra)

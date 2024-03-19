@@ -930,6 +930,13 @@ func (c *Core) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscript
 	return c.sl.hc.SubscribeChainSideEvent(ch)
 }
 
+// ComputeEfficiencyScore computes the efficiency score for the given prime
+// block This data is is only valid if called from Prime context, otherwise
+// there is no guarantee for this data to be accurate
+func (c *Core) ComputeEfficiencyScore(header *types.Header) uint16 {
+	return c.sl.hc.ComputeEfficiencyScore(header)
+}
+
 //--------------------//
 // BlockChain methods //
 //--------------------//

@@ -321,3 +321,4 @@ func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Hea
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
 func (cr *fakeChainReader) GetTerminiByHash(hash common.Hash) *types.Termini        { return nil }
 func (cr *fakeChainReader) ProcessingState() bool                                   { return false }
+func (cr *fakeChainReader) ComputeEfficiencyScore(header *types.Header) uint16      { return 0 }
