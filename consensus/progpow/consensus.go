@@ -360,6 +360,17 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			}
 		}
 	}
+	// verify the etx eligible slices in zone and prime ctx
+	if nodeCtx == common.PRIME_CTX {
+		var expectedEtxEligibleSlices common.Hash
+		if !chain.IsGenesisHash(parent.Hash()) {
+			expectedEtxEligibleSlices = chain.UpdateEtxEligibleSlices(parent, parent.Location())
+		}
+		if header.EtxEligibleSlices() != expectedEtxEligibleSlices {
+			return fmt.Errorf("invalid etx eligible slices: have %v, want %v", header.EtxEligibleSlices(), expectedEtxEligibleSlices)
+		}
+	}
+
 	if nodeCtx == common.ZONE_CTX {
 		// check if the header coinbase is in scope
 		_, err := header.Coinbase().InternalAddress()

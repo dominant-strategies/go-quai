@@ -323,3 +323,9 @@ func (cr *fakeChainReader) GetTerminiByHash(hash common.Hash) *types.Termini    
 func (cr *fakeChainReader) ProcessingState() bool                                   { return false }
 func (cr *fakeChainReader) ComputeEfficiencyScore(header *types.Header) uint16      { return 0 }
 func (cr *fakeChainReader) IsGenesisHash(hash common.Hash) bool                     { return false }
+func (cr *fakeChainReader) UpdateEtxEligibleSlices(header *types.Header, location common.Location) common.Hash {
+	return common.Hash{}
+}
+func (cr *fakeChainReader) IsSliceSetToReceiveEtx(header *types.Header, location common.Location) bool {
+	return false
+}

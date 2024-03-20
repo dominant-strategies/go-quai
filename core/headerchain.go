@@ -1083,6 +1083,35 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.Header) uint16 {
 	return ewma
 }
 
+// UpdateEtxEligibleSlices returns the updated etx eligible slices field
+func (hc *HeaderChain) UpdateEtxEligibleSlices(header *types.Header, location common.Location) common.Hash {
+	// After 5 days of the start of a new chain, the chain becomes eligible to receive etxs
+	position := location[0]*16 + location[1]
+	byteIndex := position / 8      // Find the byte index within the array
+	bitIndex := uint(position % 8) // Find the specific bit within the byte, cast to uint for bit operations
+	newHash := header.EtxEligibleSlices()
+	if header.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
+		// Set the position bit to 1
+		newHash[byteIndex] |= 1 << bitIndex
+	} else {
+		// Set the position bit to 0
+		newHash[byteIndex] &^= 1 << bitIndex
+	}
+	return newHash
+}
+
+// IsSliceSetToReceiveEtx returns true if the etx eligible slice is set to
+// receive etx for the given zone location
+func (hc *HeaderChain) IsSliceSetToReceiveEtx(header *types.Header, location common.Location) bool {
+	position := location[0]*16 + location[1]
+	// Calculate the index of the byte and the specific bit within that byte
+	byteIndex := position / 8      // Find the byte index within the array
+	bitIndex := uint(position % 8) // Find the specific bit within the byte, cast to uint for bit operations
+
+	// Check if the bit is set to 1
+	return header.EtxEligibleSlices()[byteIndex]&(1<<bitIndex) != 0
+}
+
 // IsGenesisHash checks if a hash is a genesis hash
 func (hc *HeaderChain) IsGenesisHash(hash common.Hash) bool {
 	genesisHashes := rawdb.ReadGenesisHashes(hc.headerDb)
@@ -1114,4 +1143,8 @@ func (hc *HeaderChain) SetCurrentExpansionNumber(expansionNumber uint8) {
 
 func (hc *HeaderChain) GetExpansionNumber() uint8 {
 	return hc.currentExpansionNumber
+}
+
+func (hc *HeaderChain) GetPrimeTerminus(header *types.Header) *types.Header {
+	return hc.GetHeaderByHash(header.PrimeTerminus())
 }

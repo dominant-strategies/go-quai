@@ -56,6 +56,9 @@ type ChainHeaderReader interface {
 
 	// IsGenesisHash returns true if the given hash is the genesis block hash.
 	IsGenesisHash(hash common.Hash) bool
+
+	// UpdateEtxEligibleSlices updates the etx eligible slice for the given zone location
+	UpdateEtxEligibleSlices(header *types.Header, location common.Location) common.Hash
 }
 
 // ChainReader defines a small collection of methods needed to access the local

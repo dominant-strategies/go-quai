@@ -1327,6 +1327,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetEfficiencyScore(header.EfficiencyScore())
 		combinedPendingHeader.SetThresholdCount(header.ThresholdCount())
 		combinedPendingHeader.SetExpansionNumber(header.ExpansionNumber())
+		combinedPendingHeader.SetEtxEligibleSlices(header.EtxEligibleSlices())
 	}
 
 	if inSlice {

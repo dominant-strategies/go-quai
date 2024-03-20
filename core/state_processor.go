@@ -426,6 +426,23 @@ func applyTransaction(msg types.Message, parent *types.Header, config *params.Ch
 		return nil, err
 	}
 
+	primeTerminus := bc.GetPrimeTerminus(parent)
+	if result != nil && len(result.Etxs) > 0 {
+		for _, etx := range result.Etxs {
+			if !bc.IsSliceSetToReceiveEtx(primeTerminus, *etx.To().Location()) {
+				result, err = &ExecutionResult{
+					UsedGas:      params.TxGas,
+					Err:          fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *etx.To().Location()),
+					ReturnData:   []byte{},
+					Etxs:         nil,
+					ContractAddr: nil,
+				}, nil
+				// If this transaction has many etxs, we can break and return and fail the transaction
+				break
+			}
+		}
+	}
+
 	var ETXRCount int
 	var ETXPCount int
 	for _, tx := range result.Etxs {
