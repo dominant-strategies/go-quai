@@ -21,8 +21,10 @@ func TestCanonicalHashStorage(t *testing.T) {
 		t.Fatalf("Non existent canonical hash returned: %v", entry)
 	}
 
-	t.Log("Canonical Hash stored", hash)
-	WriteCanonicalHash(db, hash, number)
+	// Fill database with testing data.
+	for i := uint64(1); i <= 5; i++ {
+		WriteCanonicalHash(db, common.Hash{1}, i)
+	}
 
 	if entry := ReadCanonicalHash(db, number); entry == emptyHash {
 		t.Fatalf("Stored canonical hash not found with number %d", number)
@@ -30,12 +32,33 @@ func TestCanonicalHashStorage(t *testing.T) {
 		t.Fatalf("Retrieved canonical hash mismatch: have %v, want %v", entry, hash)
 	}
 
-	DeleteCanonicalHash(db, number)
+	var cases = []struct {
+		from, to uint64
+		limit    int
+		expect   []uint64
+	}{
+		{1, 2, 0, nil},
+		{1, 3, 2, []uint64{1, 2}},
+		{2, 6, 6, []uint64{2, 3, 4, 5}},
+		{1, 6, 6, []uint64{1, 2, 3, 4, 5}},
+		{6, 7, 6, nil},
+	}
+
+	for i, c := range cases {
+		numbers, _ := ReadAllCanonicalHashes(db, c.from, c.to, c.limit)
+		if !reflect.DeepEqual(numbers, c.expect) {
+			t.Fatalf("Case %d failed, want %v, got %v", i, c.expect, numbers)
+		}
+	}
+
+	// Delete all data from database.
+	for i := uint64(1); i <= 5; i++ {
+		DeleteCanonicalHash(db, uint64(i))
+	}
 
 	if entry := ReadCanonicalHash(db, number); entry != emptyHash {
 		t.Fatalf("Deleted canonical hash returned: %v", entry)
 	}
-
 }
 
 // Tests block header storage and retrieval operations.
@@ -527,7 +550,6 @@ func TestPendingEtxStorage(t *testing.T) {
 	if entry := ReadPendingEtxs(db, header.Hash()); entry != nil {
 		t.Fatalf("Deleted pending etx returned: %v", entry)
 	}
-
 }
 
 func TestPendingEtxsRollupStorage(t *testing.T) {
@@ -557,7 +579,6 @@ func TestPendingEtxsRollupStorage(t *testing.T) {
 	if entry := ReadPendingEtxsRollup(db, header.Hash(), location); entry != nil {
 		t.Fatalf("Deleted pending etx rollup returned: %v", entry)
 	}
-
 }
 
 func TestManifestStorage(t *testing.T) {
@@ -581,7 +602,6 @@ func TestManifestStorage(t *testing.T) {
 	if entry := ReadManifest(db, hash); entry != nil {
 		t.Fatalf("Deleted manifest returned: %v", entry)
 	}
-
 }
 
 func TestBloomStorage(t *testing.T) {
