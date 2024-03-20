@@ -10,7 +10,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/docker/docker v20.10.27+incompatible
+	github.com/docker/docker v24.0.9+incompatible
 	github.com/dominant-strategies/bn256 v0.0.0-20220930122411-fbf930a7493d
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
@@ -89,9 +89,9 @@ require (
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771 // indirect
-	golang.org/x/net v0.10.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
