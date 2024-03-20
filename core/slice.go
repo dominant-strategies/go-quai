@@ -1345,6 +1345,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetGasLimit(header.GasLimit())
 		combinedPendingHeader.SetGasUsed(header.GasUsed())
 		combinedPendingHeader.SetExtra(header.Extra())
+		combinedPendingHeader.SetPrimeTerminus(header.PrimeTerminus())
 	}
 
 	return combinedPendingHeader

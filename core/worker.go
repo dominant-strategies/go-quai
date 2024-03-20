@@ -1043,6 +1043,21 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		}
 	}
 
+	// Compute the Prime Terminus
+	if nodeCtx == common.ZONE_CTX {
+		if order == common.PRIME_CTX {
+			// Set the prime terminus
+			header.SetPrimeTerminus(parent.Hash())
+		} else {
+			if w.hc.IsGenesisHash(parent.Hash()) {
+				header.SetPrimeTerminus(parent.Hash())
+			} else {
+				// carry the prime terminus from the parent block
+				header.SetPrimeTerminus(parent.Header().PrimeTerminus())
+			}
+		}
+	}
+
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		header.SetExtra(w.extra)
