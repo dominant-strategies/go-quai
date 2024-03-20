@@ -396,6 +396,20 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
 		}
+		var expectedPrimeTerminus common.Hash
+		_, parentOrder, _ := blake3pow.CalcOrder(parent)
+		if parentOrder == common.PRIME_CTX {
+			expectedPrimeTerminus = parent.Hash()
+		} else {
+			if chain.IsGenesisHash(parent.Hash()) {
+				expectedPrimeTerminus = parent.Hash()
+			} else {
+				expectedPrimeTerminus = parent.PrimeTerminus()
+			}
+		}
+		if header.PrimeTerminus() != expectedPrimeTerminus {
+			return fmt.Errorf("invalid primeTerminus: have %v, want %v", header.PrimeTerminus(), expectedPrimeTerminus)
+		}
 	}
 	// Verify that the block number is parent's +1
 	parentNumber := parent.Number(nodeCtx)
