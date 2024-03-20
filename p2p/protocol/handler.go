@@ -93,7 +93,25 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 
 	switch decodedType.(type) {
 	case *types.Block:
-		requestedHash := query.(*common.Hash)
+		requestedHash := &common.Hash{}
+		switch query := query.(type) {
+		case *common.Hash:
+			requestedHash = query
+		case *big.Int:
+			number := query
+			log.Global.Tracef("Looking hash for block %s and location %s", number.String(), loc.Name())
+			requestedHash = node.GetBlockHashByNumber(number, loc)
+			if requestedHash == nil {
+				log.Global.Debugf("block hash not found for block %s and location %s", number.String(), loc.Name())
+				// TODO: handle error
+				return
+			}
+			log.Global.Tracef("Found hash for block %s and location: %s", number.String(), loc.Name(), requestedHash)
+		default:
+			log.Global.Errorf("unsupported query type %v", query)
+			// TODO: handle error
+			return
+		}
 		err = handleBlockRequest(id, loc, *requestedHash, stream, node)
 		if err != nil {
 			log.Global.WithField("err", err).Error("error handling block request")
