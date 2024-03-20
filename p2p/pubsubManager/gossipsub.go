@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
@@ -24,6 +25,7 @@ type PubsubManager struct {
 	subscriptions map[string]*pubsub.Subscription
 	topics        map[string]*pubsub.Topic
 	consensus     quai.ConsensusAPI
+	genesis       common.Hash
 
 	// Callback function to handle received data
 	onReceived func(peer.ID, interface{}, common.Location)
@@ -43,22 +45,36 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 		make(map[string]*pubsub.Subscription),
 		make(map[string]*pubsub.Topic),
 		nil,
+		utils.MakeGenesis().ToHeader(0).Hash(),
 		nil,
 	}, nil
 }
 
 func (g *PubsubManager) SetQuaiBackend(consensus quai.ConsensusAPI) {
-	g.consensus = consensus
+	g.UnsubscribeAll()      // First unsubscribe from existing topics, if already registered
+	g.consensus = consensus // Set new backend
+
 }
 
 func (g *PubsubManager) Start(receiveCb func(peer.ID, interface{}, common.Location)) {
 	g.onReceived = receiveCb
 }
 
+func (g *PubsubManager) UnsubscribeAll() {
+	for k, sub := range g.subscriptions {
+		sub.Cancel()
+		delete(g.subscriptions, k)
+	}
+	for k, t := range g.topics {
+		t.Close()
+		delete(g.topics, k)
+	}
+}
+
 // subscribe to broadcasts of the given type of data
 func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}) error {
 	// build topic name
-	topicName, err := TopicName(location, datatype)
+	topicName, err := TopicName(g.genesis, location, datatype)
 	if err != nil {
 		return err
 	}
@@ -82,9 +98,9 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 		log.Global.Debugf("waiting for first message on subscription: %s", sub.Topic())
 		for {
 			msg, err := sub.Next(g.ctx)
-			if err != nil {
+			if err != nil || msg == nil {
 				// if context was cancelled, then we are shutting down
-				if g.ctx.Err() != nil {
+				if g.ctx.Err() != nil || msg == nil {
 					return
 				}
 				log.Global.Errorf("error getting next message from subscription: %s", err)
@@ -111,7 +127,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 
 // broadcasts data to subscribing peers
 func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}) error {
-	topicName, err := TopicName(location, datatype)
+	topicName, err := TopicName(g.genesis, location, datatype)
 	if err != nil {
 		return err
 	}
