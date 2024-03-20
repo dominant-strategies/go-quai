@@ -967,6 +967,22 @@ func (c *Core) GetExpansionNumber() uint8 {
 	return c.sl.hc.GetExpansionNumber()
 }
 
+func (c *Core) UpdateEtxEligibleSlices(header *types.Header, location common.Location) common.Hash {
+	return c.sl.hc.UpdateEtxEligibleSlices(header, location)
+}
+
+func (c *Core) IsSliceSetToReceiveEtx(header *types.Header, location common.Location) bool {
+	return c.sl.hc.IsSliceSetToReceiveEtx(header, location)
+}
+
+func (c *Core) GetPrimeTerminus(header *types.Header) *types.Header {
+	return c.sl.hc.GetPrimeTerminus(header)
+}
+
+func (c *Core) CheckIfEtxIsEligible(etxEligibleSlices common.Hash, location common.Location) bool {
+	return c.sl.hc.CheckIfEtxIsEligible(etxEligibleSlices, location)
+}
+
 //--------------------//
 // BlockChain methods //
 //--------------------//

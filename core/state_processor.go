@@ -273,7 +273,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 				// coinbase tx currently exempt from gas and outputs are added after all txs are processed
 				continue
 			}
-			fees, etxs, err := ProcessQiTx(tx, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
+			fees, etxs, err := ProcessQiTx(tx, p.hc, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -478,7 +478,7 @@ func applyTransaction(msg types.Message, parent *types.Header, config *params.Ch
 	return receipt, err
 }
 
-func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.Header, statedb *state.StateDB, gp *GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.Transaction, error) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, currentHeader *types.Header, statedb *state.StateDB, gp *GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.Transaction, error) {
 	// Sanity checks
 	if tx == nil || tx.Type() != types.QiTxType {
 		return nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
@@ -585,6 +585,11 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.H
 			// We should require some kind of extra fee here
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: &chainId}
 			etx := types.NewTx(&etxInner)
+			primeTerminus := currentHeader.PrimeTerminus()
+			primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
+			if !chain.CheckIfEtxIsEligible(primeTerminusHeader.PrimeTerminus(), *toAddr.Location()) {
+				return nil, nil, fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
+			}
 			etxs = append(etxs, etx)
 			log.Global.Debug("Added UTXO ETX to ETX list")
 		} else {

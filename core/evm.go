@@ -41,6 +41,16 @@ type ChainContext interface {
 
 	// NodeCtx returns the context of the running node
 	NodeCtx() int
+
+	// IsGenesisHash returns true if the given hash is the genesis block hash
+	IsGenesisHash(common.Hash) bool
+
+	// GetHeaderByHash returns a block header from the database by hash.
+	GetHeaderByHash(common.Hash) *types.Header
+
+	// CheckIfEtxIsEligible checks if the given slice is eligible to accept the
+	// etx based on the EtxEligibleSlices
+	CheckIfEtxIsEligible(common.Hash, common.Location) bool
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
@@ -70,16 +80,28 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		}
 	}
 
+	// Prime terminus determines which location is eligible to except the etx
+	primeTerminus := header.PrimeTerminus()
+	var etxEligibleSlices common.Hash
+	if chain.IsGenesisHash(primeTerminus) {
+		etxEligibleSlices = common.Hash{}
+	} else {
+		primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
+		etxEligibleSlices = primeTerminusHeader.EtxEligibleSlices()
+	}
+
 	return vm.BlockContext{
-		CanTransfer: CanTransfer,
-		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
-		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number(chain.NodeCtx())),
-		Time:        new(big.Int).SetUint64(timestamp),
-		Difficulty:  new(big.Int).Set(header.Difficulty()),
-		BaseFee:     baseFee,
-		GasLimit:    header.GasLimit(),
+		CanTransfer:        CanTransfer,
+		Transfer:           Transfer,
+		GetHash:            GetHashFn(header, chain),
+		Coinbase:           beneficiary,
+		BlockNumber:        new(big.Int).Set(header.Number(chain.NodeCtx())),
+		Time:               new(big.Int).SetUint64(timestamp),
+		Difficulty:         new(big.Int).Set(header.Difficulty()),
+		BaseFee:            baseFee,
+		GasLimit:           header.GasLimit(),
+		CheckIfEtxEligible: chain.CheckIfEtxIsEligible,
+		EtxEligibleSlices:  etxEligibleSlices,
 	}
 }
 

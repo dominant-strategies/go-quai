@@ -44,6 +44,9 @@ type (
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
+	// CheckIfEtXEligibleFunc checks if the given slice is eligible to accept
+	// the etx given the destination location and etx eligible slices hash
+	CheckIfEtxEligibleFunc func(common.Hash, common.Location) bool
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, common.Address) {
@@ -70,6 +73,8 @@ type BlockContext struct {
 	Transfer TransferFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
+	// CheckIfEtxEligible returns true if etx is eligible for the input location
+	CheckIfEtxEligible CheckIfEtxEligibleFunc
 
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
@@ -78,6 +83,9 @@ type BlockContext struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
+
+	// Prime Terminus information for the given block
+	EtxEligibleSlices common.Hash
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -633,6 +641,11 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	// create external transaction
 	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: evm.ETXGasLimit, Data: evm.ETXData, AccessList: evm.ETXAccessList, ChainID: evm.chainConfig.ChainID}
 	etx := types.NewTx(&etxInner)
+
+	// check if the etx is eligible to be sent to the to location
+	if !evm.Context.CheckIfEtxEligible(evm.Context.EtxEligibleSlices, *etx.To().Location()) {
+		return []byte{}, 0, fmt.Errorf("CreateETX error: ETX is not eligible to be sent to %x", etx.To())
+	}
 
 	evm.ETXCacheLock.Lock()
 	evm.ETXCache = append(evm.ETXCache, etx)

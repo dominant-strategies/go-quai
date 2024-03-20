@@ -1058,6 +1058,14 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		}
 	}
 
+	if nodeCtx == common.PRIME_CTX {
+		if w.hc.IsGenesisHash(parent.Hash()) {
+			header.SetEtxEligibleSlices(common.Hash{})
+		} else {
+			header.SetEtxEligibleSlices(w.hc.UpdateEtxEligibleSlices(parent.Header(), parent.Location()))
+		}
+	}
+
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		header.SetExtra(w.extra)
@@ -1391,6 +1399,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			// We should require some kind of extra fee here
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: w.chainConfig.ChainID}
 			etx := types.NewTx(&etxInner)
+			primeTerminus := w.hc.GetPrimeTerminus(env.header)
+			if !w.hc.IsSliceSetToReceiveEtx(primeTerminus, *toAddr.Location()) {
+				return fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
+			}
 			etxs = append(etxs, etx)
 			w.logger.Debug("Added UTXO ETX to block")
 		} else {

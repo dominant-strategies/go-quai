@@ -27,6 +27,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -146,6 +147,12 @@ type blockChain interface {
 	StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	IsGenesisHash(hash common.Hash) bool
+	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
+	Engine() consensus.Engine
+	GetHeaderOrCandidate(common.Hash, uint64) *types.Header
+	GetHeader(common.Hash, uint64) *types.Header
+	NodeCtx() int
+	GetHeaderByHash(common.Hash) *types.Header
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -1132,7 +1139,7 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 		etxPLimit = params.ETXPLimitMin
 	}
 	pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
-	fee, _, err := ProcessQiTx(tx, false, pool.chain.CurrentBlock().Header(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock().Header(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		pool.mu.RUnlock()
 		pool.logger.WithFields(logrus.Fields{
