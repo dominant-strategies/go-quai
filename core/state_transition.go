@@ -83,6 +83,7 @@ type Message interface {
 	ETXSender() common.Address
 	Type() byte
 	Hash() common.Hash
+	Lock() *big.Int
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -372,7 +373,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 		st.state.SetNonce(from, st.state.GetNonce(addr)+1)
-		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.msg.Lock())
 	}
 
 	// At this point, the execution completed, so the ETX cache can be dumped and reset
@@ -391,8 +392,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if coinbase.IsInQuaiLedgerScope() {
-		st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)) // todo: etxs no longer pay the miner a fee
+	if coinbase.IsInQuaiLedgerScope() && !st.msg.IsETX() {
+		st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 	}
 
 	return &ExecutionResult{

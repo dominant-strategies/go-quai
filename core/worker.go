@@ -707,15 +707,40 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
 		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
-			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
-				return nil, err
-			}
-			if tx.Value().Int64() > types.MaxDenomination {
-				return nil, fmt.Errorf("tx %032x emits UTXO with value greater than max denomination", tx.Hash())
-			}
-			env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes())))
 			gasUsed := env.header.GasUsed()
-			gasUsed += params.CallValueTransferGas
+			txGas := tx.Gas()
+			if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
+				lock := new(big.Int).Add(env.header.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
+				value := misc.QuaiToQi(env.header, tx.Value())
+				denominations := misc.FindMinDenominations(value)
+				for i, denomination := range denominations { // TODO: Decide maximum number of iterations
+					if denomination > types.MaxDenomination { // sanity check
+						return nil, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", tx.Hash(), tx.Value().Int64())
+					}
+					if txGas < params.CallValueTransferGas {
+						return nil, fmt.Errorf("conversion %032x emits UTXO with insufficient gas", tx.Hash())
+					}
+					txGas -= params.CallValueTransferGas
+					if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+						return nil, err
+					}
+					// the ETX hash is guaranteed to be unique
+					env.state.CreateUTXO(tx.Hash(), uint16(i), types.NewUtxoEntry(types.NewTxOut(denomination, tx.To().Bytes(), lock)))
+					gasUsed += params.CallValueTransferGas
+				}
+			} else {
+				if tx.Value().Int64() > types.MaxDenomination {
+					return nil, fmt.Errorf("tx %032x emits UTXO with value greater than max denomination", tx.Hash())
+				}
+				if txGas < params.CallValueTransferGas {
+					return nil, fmt.Errorf("conversion %032x emits UTXO with insufficient gas", tx.Hash())
+				}
+				if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+					return nil, err
+				}
+				env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes(), big.NewInt(0))))
+				gasUsed += params.CallValueTransferGas
+			}
 			env.header.SetGasUsed(gasUsed)
 			env.txs = append(env.txs, tx)
 			return []*types.Log{}, nil // need to make sure this does not modify receipt hash
@@ -1273,7 +1298,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
 
-		if !toAddr.Location().Equal(location) { // This output creates an ETX
+		if !toAddr.Location().Equal(location) || (toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope()) { // This output creates an ETX
 			// Cross-region?
 			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
 				ETXRCount++

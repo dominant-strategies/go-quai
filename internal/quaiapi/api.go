@@ -1533,11 +1533,6 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	if err != nil {
 		return common.Hash{}, err
 	}
-	if tx.Type() != types.QiTxType {
-		if tx.To() != nil && tx.To().IsInQiLedgerScope() { // change after adding Quai->Qi conversion tx type
-			return common.Hash{}, common.MakeErrQiAddress(tx.To().Hex())
-		}
-	}
 	return SubmitTransaction(ctx, s.b, tx)
 }
 

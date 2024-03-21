@@ -34,6 +34,9 @@ type StateDB interface {
 	GetNonce(common.InternalAddress) uint64
 	SetNonce(common.InternalAddress, uint64)
 
+	GetLock(common.InternalAddress) *big.Int
+	SetLock(common.InternalAddress, *big.Int)
+
 	GetCodeHash(common.InternalAddress) common.Hash
 	GetCode(common.InternalAddress) []byte
 	SetCode(common.InternalAddress, []byte)

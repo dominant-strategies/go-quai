@@ -102,6 +102,7 @@ func (s *stateObject) empty() bool {
 // These objects are stored in the main account trie.
 type Account struct {
 	Nonce    uint64
+	Lock     *big.Int // Block height the entry unlocks. 0 or nil = unlocked
 	Balance  *big.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
@@ -117,6 +118,9 @@ func newObject(db *StateDB, address common.InternalAddress, data Account) *state
 	}
 	if data.Root == (common.Hash{}) {
 		data.Root = emptyRoot
+	}
+	if data.Lock == nil {
+		data.Lock = new(big.Int)
 	}
 	return &stateObject{
 		db:             db,
@@ -441,6 +445,18 @@ func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
 }
 
+func (s *stateObject) SetLock(lock *big.Int) {
+	s.db.journal.append(lockChange{
+		account: &s.address,
+		prev:    new(big.Int).Set(s.data.Lock),
+	})
+	s.setLock(lock)
+}
+
+func (s *stateObject) setLock(lock *big.Int) {
+	s.data.Lock = lock
+}
+
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject := newObject(db, s.address, s.data)
 	if s.trie != nil {
@@ -532,6 +548,10 @@ func (s *stateObject) CodeHash() []byte {
 
 func (s *stateObject) Balance() *big.Int {
 	return s.data.Balance
+}
+
+func (s *stateObject) Lock() *big.Int {
+	return s.data.Lock
 }
 
 func (s *stateObject) Nonce() uint64 {

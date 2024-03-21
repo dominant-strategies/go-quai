@@ -298,6 +298,14 @@ func (s *StateDB) GetBalance(addr common.InternalAddress) *big.Int {
 	return common.Big0
 }
 
+func (s *StateDB) GetLock(addr common.InternalAddress) *big.Int {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Lock()
+	}
+	return nil
+}
+
 func (s *StateDB) GetNonce(addr common.InternalAddress) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
@@ -430,6 +438,13 @@ func (s *StateDB) SetBalance(addr common.InternalAddress, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)
+	}
+}
+
+func (s *StateDB) SetLock(addr common.InternalAddress, lock *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetLock(lock)
 	}
 }
 

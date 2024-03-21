@@ -296,21 +296,45 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 				return nil, nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x is not in order or not found in unspent etx set", tx.Hash())
 			}
 			if tx.To().IsInQiLedgerScope() {
-				if tx.Value().Int64() > types.MaxDenomination { // sanity check
-					return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", tx.Hash(), tx.Value().Int64())
+				if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi Conversion
+					lock := new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod))
+					value := misc.QuaiToQi(parent.Header(), tx.Value()) // change to prime terminus
+					denominations := misc.FindMinDenominations(value)
+					for i, denomination := range denominations { // TODO: Decide maximum number of iterations
+						if denomination > types.MaxDenomination { // sanity check
+							return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", tx.Hash(), tx.Value().Int64())
+						}
+						// the ETX hash is guaranteed to be unique
+						statedb.CreateUTXO(tx.Hash(), uint16(i), types.NewUtxoEntry(types.NewTxOut(denomination, tx.To().Bytes(), lock)))
+						if err := gp.SubGas(params.CallValueTransferGas); err != nil {
+							return nil, nil, nil, nil, 0, err
+						}
+						*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
+						totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
+					}
+				} else {
+					if tx.Value().Int64() > types.MaxDenomination { // sanity check
+						return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", tx.Hash(), tx.Value().Int64())
+					}
+
+					// There are no more checks to be made as the ETX is worked so add it to the set
+					statedb.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes(), big.NewInt(0))))
+					if err := gp.SubGas(params.CallValueTransferGas); err != nil {
+						return nil, nil, nil, nil, 0, err
+					}
+					*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
+					totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
 				}
-				// There are no more checks to be made as the ETX is worked so add it to the set
-				statedb.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes())))
-				if err := gp.SubGas(params.CallValueTransferGas); err != nil {
-					return nil, nil, nil, nil, 0, err
-				}
-				*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
-				totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
 				timeEtxDelta := time.Since(startTimeEtx)
 				timeEtx += timeEtxDelta
 				continue
 			} else {
-				prevZeroBal := prepareApplyETX(statedb, tx, nodeLocation)
+				if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
+					msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod)))
+					msg.SetValue(misc.QiToQuai(parent.Header(), tx.Value())) // change to prime terminus
+					msg.SetData([]byte{})                                    // data is not used in conversion
+				}
+				prevZeroBal := prepareApplyETX(statedb, msg.Value(), nodeLocation)
 				receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 				statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 				if err != nil {
@@ -558,7 +582,7 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.H
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
 
-		if !toAddr.Location().Equal(location) { // This output creates an ETX
+		if !toAddr.Location().Equal(location) || (toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope()) { // This output creates an ETX
 			// Cross-region?
 			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
 				ETXRCount++
@@ -725,11 +749,17 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if err != nil {
 		return nil, err
 	}
+	if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
+		parent := bc.GetHeaderOrCandidate(header.ParentHash(nodeCtx), header.NumberU64(nodeCtx)-1)
+		msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod)))
+		msg.SetValue(misc.QiToQuai(parent, tx.Value())) // change to prime terminus
+		msg.SetData([]byte{})                           // data is not used in conversion
+	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
-		prevZeroBal := prepareApplyETX(statedb, tx, config.Location)
+		prevZeroBal := prepareApplyETX(statedb, msg.Value(), config.Location)
 		receipt, err := applyTransaction(msg, config, bc, author, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, vmenv, etxRLimit, etxPLimit, logger)
 		statedb.SetBalance(common.ZeroInternal(config.Location), prevZeroBal) // Reset the balance to what it previously was (currently a failed external transaction removes all the sent coins from the supply and any residual balance is gone as well)
 		return receipt, err
@@ -1040,12 +1070,9 @@ func (p *StateProcessor) Stop() {
 	p.logger.Info("State Processor stopped")
 }
 
-func prepareApplyETX(statedb *state.StateDB, tx *types.Transaction, nodeLocation common.Location) *big.Int {
+func prepareApplyETX(statedb *state.StateDB, value *big.Int, nodeLocation common.Location) *big.Int {
 	prevZeroBal := statedb.GetBalance(common.ZeroInternal(nodeLocation)) // Get current zero address balance
-	fee := big.NewInt(0).Add(tx.GasFeeCap(), tx.GasTipCap())             // Add gas price cap to miner tip cap
-	fee.Mul(fee, big.NewInt(int64(tx.Gas())))                            // Multiply gas price by gas limit (may need to check for int64 overflow)
-	total := big.NewInt(0).Add(fee, tx.Value())                          // Add gas fee to value
-	statedb.SetBalance(common.ZeroInternal(nodeLocation), total)         // Use zero address at temp placeholder and set it to gas fee plus value
+	statedb.SetBalance(common.ZeroInternal(nodeLocation), value)         // Use zero address at temp placeholder and set it to value
 	return prevZeroBal
 }
 

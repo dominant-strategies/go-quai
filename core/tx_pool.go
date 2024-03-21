@@ -1045,11 +1045,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			}
 			continue
 		}
-		if tx.To() != nil && tx.To().IsInQiLedgerScope() {
-			errs[i] = common.MakeErrQiAddress(tx.To().Hex())
-			invalidTxMeter.Add(1)
-			continue
-		}
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock

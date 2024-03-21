@@ -142,6 +142,8 @@ const (
 	MaxAddressGrindAttempts int = 1000 // Maximum number of attempts to grind an address to a valid one
 	MinimumEtxGasDivisor        = 5    // The divisor for the minimum gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor)
 	MaximumEtxGasMultiplier     = 2    // Multiplied with the minimum ETX gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor) * MaximumEtxGasMultiplier
+
+	ConversionLockPeriod int64 = 10 // The number of zone blocks that a conversion output is locked for
 )
 
 var (

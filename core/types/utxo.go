@@ -165,6 +165,7 @@ func (txOuts *TxOuts) ProtoDecode(protoTxOuts *ProtoTxOuts) error {
 type TxOut struct {
 	Denomination uint8
 	Address      []byte
+	Lock         *big.Int // Block height the entry unlocks. 0 or nil = unlocked
 }
 
 func (txOut TxOut) ProtoEncode() (*ProtoTxOut, error) {
@@ -173,6 +174,11 @@ func (txOut TxOut) ProtoEncode() (*ProtoTxOut, error) {
 	denomination := uint32(txOut.Denomination)
 	protoTxOut.Denomination = &denomination
 	protoTxOut.Address = txOut.Address
+	if txOut.Lock == nil {
+		protoTxOut.Lock = big.NewInt(0).Bytes()
+	} else {
+		protoTxOut.Lock = txOut.Lock.Bytes()
+	}
 	return protoTxOut, nil
 }
 
@@ -183,14 +189,48 @@ func (txOut *TxOut) ProtoDecode(protoTxOut *ProtoTxOut) error {
 	}
 	txOut.Denomination = uint8(protoTxOut.GetDenomination())
 	txOut.Address = protoTxOut.Address
+	txOut.Lock = new(big.Int).SetBytes(protoTxOut.Lock)
 	return nil
 }
 
 // NewTxOut returns a new Qi transaction output with the provided
 // transaction value and address.
-func NewTxOut(denomination uint8, address []byte) *TxOut {
+func NewTxOut(denomination uint8, address []byte, lock *big.Int) *TxOut {
 	return &TxOut{
 		Denomination: denomination,
 		Address:      address,
+		Lock:         lock,
+	}
+}
+
+// UtxoEntry houses details about an individual transaction output in a utxo
+// view such as whether or not it was contained in a coinbase tx, the height of
+// the block that contains the tx, whether or not it is spent, its public key
+// script, and how much it pays.
+type UtxoEntry struct {
+	Denomination uint8
+	Address      []byte   // The address of the output holder.
+	Lock         *big.Int // Block height the entry unlocks. 0 = unlocked
+}
+
+// Clone returns a shallow copy of the utxo entry.
+func (entry *UtxoEntry) Clone() *UtxoEntry {
+	if entry == nil {
+		return nil
+	}
+
+	return &UtxoEntry{
+		Denomination: entry.Denomination,
+		Address:      entry.Address,
+		Lock:         new(big.Int).Set(entry.Lock),
+	}
+}
+
+// NewUtxoEntry returns a new UtxoEntry built from the arguments.
+func NewUtxoEntry(txOut *TxOut) *UtxoEntry {
+	return &UtxoEntry{
+		Denomination: txOut.Denomination,
+		Address:      txOut.Address,
+		Lock:         txOut.Lock,
 	}
 }

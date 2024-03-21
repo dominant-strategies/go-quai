@@ -176,7 +176,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, lock *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -246,6 +246,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// TODO: consider clearing up unused snapshots:
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
+	}
+	if lock != nil {
+		evm.StateDB.SetLock(internalAddr, lock)
 	}
 	return ret, gas, err
 }
@@ -586,11 +589,11 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas uint64, value *big.Int, data []byte) (ret []byte, leftOverGas uint64, err error) {
 
 	// Verify address is not in context
-	if common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
+	if toAddr.IsInQuaiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
 		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
 	}
-	if !toAddr.IsInQuaiLedgerScope() {
-		return []byte{}, 0, fmt.Errorf("%x is not in quai scope, but CreateETX was called", toAddr)
+	if toAddr.IsInQiLedgerScope() && !common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
+		return []byte{}, 0, fmt.Errorf("%x is in qi scope and is not in the same location, but CreateETX was called", toAddr)
 	}
 	if gas < params.ETXGas {
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
