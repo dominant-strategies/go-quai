@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package types
 
 import (
+	"errors"
 	"fmt"
 	"math"
 )
@@ -38,7 +39,7 @@ func (gp *GasPool) AddGas(amount uint64) *GasPool {
 // available and returns an error otherwise.
 func (gp *GasPool) SubGas(amount uint64) error {
 	if uint64(*gp) < amount {
-		return ErrGasLimitReached
+		return errors.New("gas limit reached")
 	}
 	*(*uint64)(gp) -= amount
 	return nil

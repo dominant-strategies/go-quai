@@ -66,7 +66,7 @@ type environment struct {
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	tcount    int            // tx count in cycle
-	gasPool   *GasPool       // available gas used to pack transactions
+	gasPool   *types.GasPool // available gas used to pack transactions
 	coinbase  common.Address
 	etxRLimit int // Remaining number of cross-region ETXs that can be included
 	etxPLimit int // Remaining number of cross-prime ETXs that can be included
@@ -736,17 +736,51 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
 		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
-			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
-				return nil, err
+			gasUsed := env.wo.GasUsed()
+			txGas := tx.Gas()
+			if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
+				lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
+				primeTerminus := w.hc.GetPrimeTerminus(env.wo)
+				if primeTerminus == nil {
+					return nil, errors.New("prime terminus not found")
+				}
+				value := misc.QuaiToQi(primeTerminus, tx.Value())
+				denominations := misc.FindMinDenominations(value)
+				outputIndex := uint16(0)
+
+				// Iterate over the denominations in descending order
+				for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+					// If the denomination count is zero, skip it
+					if denominations[uint8(denomination)] == 0 {
+						continue
+					}
+					for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
+						if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+							// No more gas, the rest of the denominations are lost but the tx is still valid
+							break
+						}
+						txGas -= params.CallValueTransferGas
+						if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+							return nil, err
+						}
+						gasUsed += params.CallValueTransferGas
+						// the ETX hash is guaranteed to be unique
+						if err := env.state.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))); err != nil {
+							return nil, err
+						}
+						outputIndex++
+					}
+				}
+			} else {
+				// This Qi ETX should cost more gas
+				if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+					return nil, err
+				}
+				if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), big.NewInt(0)))); err != nil {
+					return nil, err
+				}
+				gasUsed += params.CallValueTransferGas
 			}
-			if tx.Value().Int64() > types.MaxDenomination {
-				return nil, fmt.Errorf("tx %032x emits UTXO with value greater than max denomination", tx.Hash())
-			}
-			if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes()))); err != nil {
-				return nil, err
-			}
-			gasUsed := env.wo.Header().GasUsed()
-			gasUsed += params.CallValueTransferGas
 			env.wo.Header().SetGasUsed(gasUsed)
 			env.txs = append(env.txs, tx)
 			return []*types.Log{}, nil // need to make sure this does not modify receipt hash
@@ -782,7 +816,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
 	gasLimit := env.wo.GasLimit
 	if env.gasPool == nil {
-		env.gasPool = new(GasPool).AddGas(gasLimit())
+		env.gasPool = new(types.GasPool).AddGas(gasLimit())
 	}
 	var coalescedLogs []*types.Log
 	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
@@ -852,7 +886,15 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			break
 		}
 		if tx.Type() == types.QiTxType {
-			if err := w.processQiTx(tx, env); err != nil {
+			txGas := types.CalculateQiTxGas(tx)
+			if env.gasPool.Gas() < txGas {
+				w.logger.WithFields(log.Fields{
+					"have": env.gasPool,
+					"want": txGas,
+				}).Trace("Not enough gas for further transactions")
+				break
+			}
+			if err := w.processQiTx(tx, env, txGas); err != nil {
 				w.logger.WithFields(log.Fields{
 					"err": err,
 					"tx":  tx.Hash().Hex(),
@@ -1352,7 +1394,7 @@ func (w *worker) CurrentInfo(header *types.WorkObject) bool {
 	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }
 
-func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
+func (w *worker) processQiTx(tx *types.Transaction, env *environment, txGas uint64) error {
 	location := w.hc.NodeLocation()
 	if tx.Type() != types.QiTxType {
 		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
@@ -1363,18 +1405,26 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
+	gasUsed := env.wo.GasUsed()
+	gasUsed += txGas // the amount of block gas used in this transaction is only the txGas, regardless of ETXs emitted
+	if err := env.gasPool.SubGas(txGas); err != nil {
+		return err
+	}
+	if gasUsed > env.wo.GasLimit() {
+		return fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), gasUsed, env.wo.GasLimit())
+	}
 
-	txGas := types.CalculateQiTxGas(tx)
-
-	gasUsed := env.wo.Header().GasUsed()
-	gasUsed += txGas
 	addresses := make(map[common.AddressBytes]struct{})
 	totalQitIn := big.NewInt(0)
 	utxosDelete := make([]types.OutPoint, 0)
+	inputDenominations := make(map[uint8]uint64)
 	for _, txIn := range tx.TxIn() {
 		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
 			return fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		}
+		if utxo.Lock != nil && utxo.Lock.Cmp(env.wo.Number(w.hc.NodeCtx())) > 0 {
+			return fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String())
 		}
 
 		// Perform some spend processing logic
@@ -1386,6 +1436,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				types.MaxDenomination)
 			return errors.New(str)
 		}
+		inputDenominations[denomination] += 1
 		// Check for duplicate addresses. This also checks for duplicate inputs.
 		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
 			return errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
@@ -1396,11 +1447,17 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	}
 	var ETXRCount int
 	var ETXPCount int
-	etxs := make([]*types.Transaction, 0)
+	etxs := make([]*types.ExternalTx, 0)
 	totalQitOut := big.NewInt(0)
+	totalConvertQitOut := big.NewInt(0)
 	utxosCreate := make(map[types.OutPoint]*types.UtxoEntry)
+	conversion := false
+	var convertAddress common.Address
+	outputDenominations := make(map[uint8]uint64)
 	for txOutIdx, txOut := range tx.TxOut() {
-
+		if txOutIdx > types.MaxOutputIndex {
+			return errors.New("transaction has too many outputs")
+		}
 		if txOut.Denomination > types.MaxDenomination {
 			str := fmt.Sprintf("transaction output value of %v is "+
 				"higher than max allowed value of %v",
@@ -1408,16 +1465,26 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				types.MaxDenomination)
 			return errors.New(str)
 		}
+		outputDenominations[txOut.Denomination] += 1
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 		toAddr := common.BytesToAddress(txOut.Address, location)
-		if !toAddr.IsInQiLedgerScope() {
-			w.logger.Error(fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash()))
-			return fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
-		}
 		if _, exists := addresses[toAddr.Bytes20()]; exists {
 			return errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
+
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai conversion
+			conversion = true
+			convertAddress = toAddr
+			if txOut.Denomination < params.MinQiConversionDenomination {
+				w.logger.Error(fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), txOut.Denomination))
+				return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), txOut.Denomination)
+			}
+			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
+			outputDenominations[txOut.Denomination] -= 1                                        // This output no longer exists because it has been aggregated
+			delete(addresses, toAddr.Bytes20())
+			continue
+		}
 
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
 			// Cross-region?
@@ -1436,15 +1503,18 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				w.logger.Error(fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, env.etxPLimit))
 				return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
 			}
+			if !toAddr.IsInQiLedgerScope() {
+				w.logger.Error(fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash()))
+				return fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
+			}
 
 			// We should require some kind of extra fee here
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
-			etx := types.NewTx(&etxInner)
 			primeTerminus := w.hc.GetPrimeTerminus(env.wo)
 			if !w.hc.CheckIfEtxIsEligible(primeTerminus.EtxEligibleSlices(), *toAddr.Location()) {
 				return fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
 			}
-			etxs = append(etxs, etx)
+			etxs = append(etxs, &etxInner)
 			w.logger.Debug("Added UTXO ETX to block")
 		} else {
 			// This output creates a normal UTXO
@@ -1460,23 +1530,44 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 		return errors.New(str)
 	}
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
-	if err := env.gasPool.SubGas(txGas); err != nil {
-		return err
-	}
 	// Check tx against required base fee and gas
-	baseFeeInQi := misc.QuaiToQi(env.wo, env.wo.Header().BaseFee())
-	minimumFee := new(big.Int).Mul(baseFeeInQi, big.NewInt(int64(txGas)))
-	if txFeeInQit.Cmp(minimumFee) < 0 {
-		return fmt.Errorf("tx %032x has insufficient fee for base fee of %d and gas of %d", tx.Hash(), baseFeeInQi.Uint64(), txGas)
+	requiredGas := txGas + (uint64(len(etxs)) * params.TxGas) // Each ETX costs extra gas that is paid in the origin
+	if requiredGas < txGas {
+		// overflow
+		return fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
-	log.Global.Infof("Minimum fee: %d", minimumFee.Int64())
-	// Miner gets remainder of fee after base fee
+	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), env.wo.BaseFee())
+	minimumFee := misc.QuaiToQi(env.wo, minimumFeeInQuai)
+	if txFeeInQit.Cmp(minimumFee) < 0 {
+		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFee.Uint64())
+	}
+	// Miner gets remainder of fee after base fee, except in the convert case
 	txFeeInQit.Sub(txFeeInQit, minimumFee)
 
+	if conversion {
+		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
+		remainingTxFeeInQuai := misc.QiToQuai(env.wo, txFeeInQit)
+		// Fee is basefee * gas, so gas remaining is fee remaining / basefee
+		remainingGas := new(big.Int).Div(remainingTxFeeInQuai, env.wo.BaseFee())
+		if remainingGas.Uint64() > (env.wo.GasLimit() / params.MinimumEtxGasDivisor) {
+			// Limit ETX gas to max ETX gas limit (the rest is burned)
+			remainingGas = new(big.Int).SetUint64(env.wo.GasLimit() / params.MinimumEtxGasDivisor)
+		}
+		ETXPCount++ // conversion is technically a cross-prime ETX
+		if ETXPCount > env.etxPLimit {
+			w.logger.Error(fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, env.etxPLimit))
+			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
+		}
+		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
+		etxs = append(etxs, &etxInner)
+		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+	}
 	env.wo.Header().SetGasUsed(gasUsed)
 	env.etxRLimit -= ETXRCount
 	env.etxPLimit -= ETXPCount
-	env.etxs = append(env.etxs, etxs...)
+	for _, etx := range etxs {
+		env.etxs = append(env.etxs, types.NewTx(etx))
+	}
 	env.txs = append(env.txs, tx)
 	env.utxoFees.Add(env.utxoFees, txFeeInQit)
 	for _, utxo := range utxosDelete {

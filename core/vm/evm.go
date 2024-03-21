@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
 )
@@ -184,7 +185,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, lock *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -195,6 +196,33 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// Fail if we're trying to transfer more than the available balance
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
+	}
+	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
+	if addr.Equal(lockupContractAddress) {
+		gasUsed, err := RedeemQuai(evm.StateDB, caller.Address(), new(types.GasPool).AddGas(gas), evm.Context.BlockNumber, lockupContractAddress)
+		if gas > gasUsed {
+			gas = gas - gasUsed
+		} else {
+			gas = 0
+		}
+		if err != nil {
+			log.Global.Error("RedeemQuai failed", "err", err)
+		}
+		return []byte{}, gas, err
+	} else if lock != nil && lock.Sign() != 0 {
+		if err := evm.Context.Transfer(evm.StateDB, caller.Address(), lockupContractAddress, value); err != nil {
+			return nil, gas, err
+		}
+		gasUsed, err := AddNewLock(evm.StateDB, addr, new(types.GasPool).AddGas(gas), lock, evm.Context.BlockNumber, lockupContractAddress)
+		if gas > gasUsed {
+			gas = gas - gasUsed
+		} else {
+			gas = 0
+		}
+		if err != nil {
+			log.Global.Error("AddNewLock failed", "err", err)
+		}
+		return []byte{}, gas, err
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
@@ -594,11 +622,17 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas uint64, value *big.Int, data []byte) (ret []byte, leftOverGas uint64, err error) {
 
 	// Verify address is not in context
-	if common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
+	if toAddr.IsInQuaiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
 		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
 	}
-	if !toAddr.IsInQuaiLedgerScope() {
-		return []byte{}, 0, fmt.Errorf("%x is not in quai scope, but CreateETX was called", toAddr)
+	conversion := false
+	if toAddr.IsInQiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
+		conversion = true
+	}
+	if toAddr.IsInQiLedgerScope() && !common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
+		return []byte{}, 0, fmt.Errorf("%x is in qi scope and is not in the same location, but CreateETX was called", toAddr)
+	} else if conversion && value.Cmp(params.MinQuaiConversionAmount) < 0 {
+		return []byte{}, 0, fmt.Errorf("CreateETX conversion error: %d is not sufficient value, required amount: %d", value, params.MinQuaiConversionAmount)
 	}
 	if gas < params.ETXGas {
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
@@ -632,7 +666,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	etx := types.NewTx(&etxInner)
 
 	// check if the etx is eligible to be sent to the to location
-	if !evm.Context.CheckIfEtxEligible(evm.Context.EtxEligibleSlices, *etx.To().Location()) {
+	if !conversion && !evm.Context.CheckIfEtxEligible(evm.Context.EtxEligibleSlices, *etx.To().Location()) {
 		return []byte{}, 0, fmt.Errorf("CreateETX error: ETX is not eligible to be sent to %x", etx.To())
 	}
 

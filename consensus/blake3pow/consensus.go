@@ -14,6 +14,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	"modernc.org/mathutil"
@@ -549,6 +550,13 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 
 	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
+		// Create the lockup contract account
+		lockupContract, err := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}].InternalAndQuaiAddress()
+		if err != nil {
+			panic(err)
+		}
+		state.CreateAccount(lockupContract)
+
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_"+nodeLocation.Name()+".json", blake3pow.logger)
 		blake3pow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 
@@ -570,7 +578,6 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 				continue
 			}
 		}
-
 		core.AddGenesisUtxos(state, nodeLocation, blake3pow.logger)
 	}
 	header.Header().SetUTXORoot(state.UTXORoot())

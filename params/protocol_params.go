@@ -18,6 +18,8 @@ package params
 
 import (
 	"math/big"
+
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 const (
@@ -169,6 +171,10 @@ const (
 	// should be chosen to give node operators some time to adjust their
 	// infrastructure, if needed, to account for the upcoming network change.
 	TREE_EXPANSION_WAIT_COUNT = 1024
+
+	ConversionLockPeriod          int64 = 10 // The number of zone blocks that a conversion output is locked for
+	MinQiConversionDenomination         = 1
+	ConversionConfirmationContext       = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 )
 
 var (
@@ -194,4 +200,5 @@ var (
 	RegionEntropyTarget               = big.NewInt(21)                                              // This is TimeFactor*common.NumZonesInRegion
 	DifficultyAdjustmentPeriod        = big.NewInt(360)                                             // This is the number of blocks over which the average has to be taken
 	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
+	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(1), big.NewInt(GWei))           // 0.000000001 Quai
 )

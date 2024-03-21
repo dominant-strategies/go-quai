@@ -297,7 +297,6 @@ func (s *StateDB) GetBalance(addr common.InternalAddress) *big.Int {
 	}
 	return common.Big0
 }
-
 func (s *StateDB) GetNonce(addr common.InternalAddress) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
@@ -582,6 +581,9 @@ func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint16, utxo *types
 	// This check is largely redundant, but it's a good sanity check. Might be removed in the future.
 	if err := common.CheckIfBytesAreInternalAndQiAddress(utxo.Address, s.nodeLocation); err != nil {
 		return err
+	}
+	if utxo.Denomination > types.MaxDenomination { // sanity check
+		return fmt.Errorf("tx %032x emits UTXO with value %d greater than max denomination", txHash, utxo.Denomination)
 	}
 	data, err := rlp.EncodeToBytes(utxo)
 	if err != nil {

@@ -323,8 +323,8 @@ func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
 func (wo *WorkObject) QuaiTransactionsWithoutCoinbase() []*Transaction {
 	quaiTxs := make([]*Transaction, 0)
 	for i, t := range wo.Transactions() {
-		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) {
-			// ignore the Quai coinbase tx to comply with prior functionality as it is not a normal transaction
+		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) || t.Type() == QiTxType || (t.Type() == ExternalTxType && t.ETXSender().Location().Equal(*t.To().Location())) {
+			// ignore the Quai coinbase tx and Quai->Qi to comply with prior functionality as it is not a normal transaction
 			continue
 		}
 		if t.Type() != QiTxType {

@@ -43,7 +43,7 @@ func FindMinDenominations(reward *big.Int) map[uint8]uint8 {
 	amount := new(big.Int).Set(reward)
 
 	// Iterate over the denominations in descending order (by key)
-	for i := 15; i >= 0; i-- {
+	for i := types.MaxDenomination; i >= 0; i-- {
 		denom := types.Denominations[uint8(i)]
 
 		// Calculate the number of times the denomination fits into the remaining amount

@@ -167,4 +167,5 @@ message ProtoOutPoint {
 message ProtoTxOut {
   optional uint32 denomination = 1;
   optional bytes address = 2;
+  optional bytes lock = 3;
 }

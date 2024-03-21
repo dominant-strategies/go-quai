@@ -634,7 +634,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}()
 
 	// Execute the message.
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
+	gp := new(types.GasPool).AddGas(math.MaxUint64)
 	result, err := core.ApplyMessage(evm, msg, gp)
 	if err := vmError(); err != nil {
 		return nil, err
@@ -1256,7 +1256,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		res, err := core.ApplyMessage(vmenv, msg, new(types.GasPool).AddGas(msg.Gas()))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", msg, err)
 		}
@@ -1530,11 +1530,6 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
 	if err != nil {
 		return common.Hash{}, err
-	}
-	if tx.Type() != types.QiTxType {
-		if tx.To() != nil && tx.To().IsInQiLedgerScope() { // change after adding Quai->Qi conversion tx type
-			return common.Hash{}, common.MakeErrQiAddress(tx.To().Hex())
-		}
 	}
 	return SubmitTransaction(ctx, s.b, tx)
 }

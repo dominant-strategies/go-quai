@@ -29,6 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -546,7 +547,7 @@ func (tx *Transaction) To() *common.Address {
 	return &cpy
 }
 
-func (tx *Transaction) SetTo(addr common.Address) {
+func (tx *Transaction) SetGas(addr common.Address) {
 	tx.inner.setTo(addr)
 }
 
@@ -708,6 +709,10 @@ func (tx *Transaction) FromChain(nodeLocation common.Location) common.Location {
 func (tx *Transaction) ConfirmationCtx(nodeLocation common.Location) int {
 	if ctx := tx.confirmCtx.Load(); ctx != nil {
 		return ctx.(int)
+	}
+	if tx.ETXSender().Location().Equal(*tx.To().Location()) {
+		// If the ETX sender and the destination chain are the same, the ETX is a conversion tx
+		return params.ConversionConfirmationContext
 	}
 
 	ctx := tx.To().Location().CommonDom(tx.FromChain(nodeLocation)).Context()
@@ -1018,6 +1023,7 @@ type Message struct {
 	etxsender  common.Address // only used in ETX
 	txtype     byte
 	hash       common.Hash
+	lock       *big.Int
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isETX bool) Message {
@@ -1082,6 +1088,7 @@ func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *c
 		isETX:      false,
 		txtype:     tx.Type(),
 		hash:       tx.Hash(),
+		lock:       new(big.Int),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -1117,6 +1124,19 @@ func (m Message) IsETX() bool               { return m.isETX }
 func (m Message) ETXSender() common.Address { return m.etxsender }
 func (m Message) Type() byte                { return m.txtype }
 func (m Message) Hash() common.Hash         { return m.hash }
+func (m Message) Lock() *big.Int            { return m.lock }
+
+func (m *Message) SetValue(v *big.Int) {
+	m.amount = v
+}
+
+func (m *Message) SetLock(lock *big.Int) {
+	m.lock = lock
+}
+
+func (m *Message) SetData(data []byte) {
+	m.data = data
+}
 
 // AccessList is an access list.
 type AccessList []AccessTuple

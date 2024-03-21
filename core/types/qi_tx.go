@@ -121,6 +121,7 @@ func CalculateQiTxGas(transaction *Transaction) uint64 {
 	if transaction.Type() != QiTxType {
 		panic("CalculateQiTxGas called on a transaction that is not a Qi transaction")
 	}
+	// TODO: This should check for ETXs (and conversion) and calculate expected gas for those as well
 	return uint64(len(transaction.TxIn()))*params.SloadGas + uint64(len(transaction.TxOut()))*params.CallValueTransferGas + params.EcrecoverGas
 }
 

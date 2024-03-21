@@ -1053,11 +1053,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			}
 			continue
 		}
-		if tx.To() != nil && tx.To().IsInQiLedgerScope() {
-			errs[i] = common.MakeErrQiAddress(tx.To().Hex())
-			invalidTxMeter.Add(1)
-			continue
-		}
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock
@@ -1128,7 +1123,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 
 	location := pool.chainconfig.Location
 	currentBlock := pool.chain.CurrentBlock()
-	gp := GasPool(currentBlock.GasLimit())
+	gp := types.GasPool(currentBlock.GasLimit())
 	etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
 		etxRLimit = params.ETXRLimitMin
@@ -1142,11 +1137,13 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	}
 	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
-		pool.mu.RUnlock()
+		if grabLock {
+			pool.mu.RUnlock()
+		}
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"err": err,
-		}).Error("Invalid qi tx")
+		}).Error("Invalid Qi transaction")
 		return err
 	}
 	if grabLock {
