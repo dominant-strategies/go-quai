@@ -434,6 +434,48 @@ func TestBodyAndReceiptsStorage(t *testing.T) {
 	}
 }
 
+func TestBlockHashesIterator(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	if entry := ReadAllHashes(db, 1); len(entry) != 0 {
+		t.Fatalf("Non existent block hashes returned: %v", entry)
+	}
+
+	testCases := []struct {
+		blockHeight int64
+		blockAmount int64
+	}{
+		{1, 1},
+		{2, 2},
+		{3, 3},
+	}
+
+	hashes := make([]map[common.Hash]bool, len(testCases))
+
+	// Seed the database with test data
+	for i, tc := range testCases {
+		hashes[i] = make(map[common.Hash]bool)
+		for j := int64(1); j <= tc.blockAmount; j++ {
+			block := types.EmptyBlock()
+			block.Header().SetNumber(big.NewInt(int64(i+1)), common.ZONE_CTX)
+			// Change location from blocks on same height
+			block.Header().SetLocation(common.Location{0, byte(j)})
+			WriteBlock(db, block, common.ZONE_CTX)
+			// Store block hashes to verify later
+			hashes[i][block.Hash()] = true
+		}
+	}
+
+	for i := range testCases {
+		entry := ReadAllHashes(db, uint64(i+1))
+		for _, hash := range entry {
+			if !hashes[i][hash] {
+				t.Fatalf("Case %d failed, hash %v not found in entry", i+1, hash)
+			}
+		}
+	}
+}
+
 func TestBlockStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
