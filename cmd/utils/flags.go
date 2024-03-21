@@ -102,6 +102,7 @@ var NodeFlags = []Flag{
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
 	IndexAddressUtxos,
+	StartingExpansionNumberFlag,
 }
 
 var TXPoolFlags = []Flag{
@@ -545,6 +546,12 @@ var (
 		Name:  c_NodeFlagPrefix + "sendfullstats",
 		Value: false,
 		Usage: "Send full stats boolean flag for quaistats" + generateEnvDoc(c_NodeFlagPrefix+"sendfullstats"),
+	}
+
+	StartingExpansionNumberFlag = Flag{
+		Name:  c_NodeFlagPrefix + "starting-expansion-num",
+		Value: 0,
+		Usage: "Start the node at the expansion number preferred" + generateEnvDoc(c_NodeFlagPrefix+"starting-expansion-num"),
 	}
 )
 

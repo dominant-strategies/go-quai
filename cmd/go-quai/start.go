@@ -85,9 +85,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
+
+	var startingExpansionNumber uint64
+	if viper.IsSet(utils.StartingExpansionNumberFlag.Name) {
+		startingExpansionNumber = viper.GetUint64(utils.StartingExpansionNumberFlag.Name)
+	}
 	// Start the  hierarchical co-ordinator
 	var nodeWg sync.WaitGroup
-	hc := utils.NewHierarchicalCoordinator(node, logLevel, &nodeWg)
+	hc := utils.NewHierarchicalCoordinator(node, logLevel, &nodeWg, startingExpansionNumber)
 	err = hc.StartHierarchicalCoordinator()
 	if err != nil {
 		log.Global.WithField("error", err).Fatal("error starting hierarchical coordinator")
