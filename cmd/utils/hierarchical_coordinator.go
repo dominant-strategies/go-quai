@@ -48,7 +48,7 @@ type HierarchicalCoordinator struct {
 }
 
 // NewHierarchicalCoordinator creates a new instance of the HierarchicalCoordinator
-func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg *sync.WaitGroup) *HierarchicalCoordinator {
+func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg *sync.WaitGroup, startingExpansionNumber uint64) *HierarchicalCoordinator {
 	db, err := OpenBackendDB()
 	if err != nil {
 		log.Global.Fatal("Error opening the backend db")
@@ -62,7 +62,15 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 		treeExpansionTriggerStarted: false,
 		quitCh:                      make(chan struct{}),
 	}
+
+	if startingExpansionNumber > common.MaxExpansionNumber {
+		log.Global.Fatal("Starting expansion number is greater than the maximum expansion number")
+	}
+
 	expansionNumber := hc.readCurrentExpansionNumber()
+	if expansionNumber == 0 {
+		expansionNumber = startingExpansionNumber
+	}
 	hc.currentExpansionNumber = uint8(expansionNumber)
 
 	// Start the QuaiBackend and set the consensus backend

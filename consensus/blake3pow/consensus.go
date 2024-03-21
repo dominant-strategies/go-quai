@@ -368,6 +368,8 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		var expectedEtxEligibleSlices common.Hash
 		if !chain.IsGenesisHash(parent.Hash()) {
 			expectedEtxEligibleSlices = chain.UpdateEtxEligibleSlices(parent, parent.Location())
+		} else {
+			expectedEtxEligibleSlices = parent.EtxEligibleSlices()
 		}
 		if header.EtxEligibleSlices() != expectedEtxEligibleSlices {
 			return fmt.Errorf("invalid etx eligible slices: have %v, want %v", header.EtxEligibleSlices(), expectedEtxEligibleSlices)

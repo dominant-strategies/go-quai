@@ -1060,7 +1060,7 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 
 	if nodeCtx == common.PRIME_CTX {
 		if w.hc.IsGenesisHash(parent.Hash()) {
-			header.SetEtxEligibleSlices(common.Hash{})
+			header.SetEtxEligibleSlices(parent.Header().EtxEligibleSlices())
 		} else {
 			header.SetEtxEligibleSlices(w.hc.UpdateEtxEligibleSlices(parent.Header(), parent.Location()))
 		}

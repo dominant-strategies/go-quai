@@ -162,10 +162,10 @@ func (e *GenesisMismatchError) Error() string {
 //
 // The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, nodeLocation, logger)
+	return SetupGenesisBlockWithOverride(db, genesis, nodeLocation, 0, logger)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, startingExpansionNumber uint64, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -178,7 +178,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 		} else {
 			logger.Info("Writing custom genesis block")
 		}
-		block, err := genesis.Commit(db, nodeLocation)
+		block, err := genesis.Commit(db, nodeLocation, startingExpansionNumber)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -192,11 +192,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 			genesis = DefaultGenesisBlock()
 		}
 		// Ensure the stored genesis matches with the given one.
-		hash := genesis.ToBlock(nil).Hash()
+		hash := genesis.ToBlock(nil, startingExpansionNumber).Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
-		block, err := genesis.Commit(db, nodeLocation)
+		block, err := genesis.Commit(db, nodeLocation, startingExpansionNumber)
 		if err != nil {
 			return genesis.Config, hash, err
 		}
@@ -204,7 +204,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	}
 	// Check whether the genesis block is already written.
 	if genesis != nil {
-		hash := genesis.ToBlock(nil).Hash()
+		hash := genesis.ToBlock(nil, startingExpansionNumber).Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
@@ -267,7 +267,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
-func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
+func (g *Genesis) ToBlock(db ethdb.Database, startingExpansionNumber uint64) *types.Block {
 	head := types.EmptyHeader()
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
@@ -275,6 +275,16 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	head.SetDifficulty(g.Difficulty)
 	head.SetGasLimit(g.GasLimit)
 	head.SetGasUsed(0)
+	if startingExpansionNumber > 0 {
+		// Fill each byte with 0xFF to set all bits to 1
+		var etxEligibleSlices common.Hash
+		for i := 0; i < common.HashLength; i++ {
+			etxEligibleSlices[i] = 0xFF
+		}
+		head.SetEtxEligibleSlices(etxEligibleSlices)
+	} else {
+		head.SetEtxEligibleSlices(common.Hash{})
+	}
 	head.SetCoinbase(common.Zero)
 	head.SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
 	head.SetEtxSetHash(types.EmptyEtxSetHash)
@@ -291,9 +301,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location, startingExpansionNumber uint64) (*types.Block, error) {
 	nodeCtx := nodeLocation.Context()
-	block := g.ToBlock(db)
+	block := g.ToBlock(db, startingExpansionNumber)
 	if block.Number(nodeCtx).Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
@@ -315,7 +325,7 @@ func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location) (*type
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
 func (g *Genesis) MustCommit(db ethdb.Database, nodeLocation common.Location) *types.Block {
-	block, err := g.Commit(db, nodeLocation)
+	block, err := g.Commit(db, nodeLocation, 0)
 	if err != nil {
 		panic(err)
 	}

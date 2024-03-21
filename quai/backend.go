@@ -81,7 +81,7 @@ type Quai struct {
 
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
-func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, genesisBlock *types.Block, logger *log.Logger) (*Quai, error) {
+func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.Block, logger *log.Logger) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
 		logger.WithFields(log.Fields{
@@ -111,29 +111,39 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	}
 	// Only run the genesis block setup for Prime and region-0 and zone-0-0, for everything else it is setup through the expansion trigger
 	chainConfig := config.Genesis.Config
-	if (config.NodeLocation.Context() == common.PRIME_CTX) ||
-		(config.NodeLocation.Region() == 0 && nodeCtx == common.REGION_CTX) ||
-		(bytes.Equal(config.NodeLocation, common.Location{0, 0}) && nodeCtx == common.ZONE_CTX) {
+	// This is not the normal protocol start, starting the protocol at a
+	// different expansion number is only to run experiments
+	if startingExpansionNumber > 0 {
 		var genesisErr error
-		chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.NodeLocation, logger)
+		chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.NodeLocation, startingExpansionNumber, logger)
 		if genesisErr != nil {
 			return nil, genesisErr
 		}
 	} else {
-		// This only happens during the expansion
-		if genesisBlock != nil {
-			// write the block to the database
-			rawdb.WriteBlock(chainDb, genesisBlock, nodeCtx)
-			rawdb.WriteHeadBlockHash(chainDb, genesisBlock.Hash())
-			// Initialize slice state for genesis knot
-			genesisTermini := types.EmptyTermini()
-			for i := 0; i < len(genesisTermini.SubTermini()); i++ {
-				genesisTermini.SetSubTerminiAtIndex(genesisBlock.Hash(), i)
+		if (config.NodeLocation.Context() == common.PRIME_CTX) ||
+			(config.NodeLocation.Region() == 0 && nodeCtx == common.REGION_CTX) ||
+			(bytes.Equal(config.NodeLocation, common.Location{0, 0}) && nodeCtx == common.ZONE_CTX) {
+			var genesisErr error
+			chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.NodeLocation, startingExpansionNumber, logger)
+			if genesisErr != nil {
+				return nil, genesisErr
 			}
-			for i := 0; i < len(genesisTermini.DomTermini()); i++ {
-				genesisTermini.SetDomTerminiAtIndex(genesisBlock.Hash(), i)
+		} else {
+			// This only happens during the expansion
+			if genesisBlock != nil {
+				// write the block to the database
+				rawdb.WriteBlock(chainDb, genesisBlock, nodeCtx)
+				rawdb.WriteHeadBlockHash(chainDb, genesisBlock.Hash())
+				// Initialize slice state for genesis knot
+				genesisTermini := types.EmptyTermini()
+				for i := 0; i < len(genesisTermini.SubTermini()); i++ {
+					genesisTermini.SetSubTerminiAtIndex(genesisBlock.Hash(), i)
+				}
+				for i := 0; i < len(genesisTermini.DomTermini()); i++ {
+					genesisTermini.SetDomTerminiAtIndex(genesisBlock.Hash(), i)
+				}
+				rawdb.WriteTermini(chainDb, genesisBlock.Hash(), genesisTermini)
 			}
-			rawdb.WriteTermini(chainDb, genesisBlock.Hash(), genesisTermini)
 		}
 	}
 
