@@ -74,6 +74,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if viper.IsSet(utils.PprofFlag.Name) {
+		utils.EnablePprof()
+	}
+
 	// create a new p2p node
 	node, err := node.NewNode(ctx)
 	if err != nil {

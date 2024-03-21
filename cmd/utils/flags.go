@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
@@ -86,6 +89,7 @@ var NodeFlags = []Flag{
 	UnlockedAccountFlag,
 	PasswordFileFlag,
 	VMEnableDebugFlag,
+	PprofFlag,
 	InsecureUnlockAllowedFlag,
 	GpoBlocksFlag,
 	GpoPercentileFlag,
@@ -463,6 +467,12 @@ var (
 		Name:  c_NodeFlagPrefix + "vmdebug",
 		Value: false,
 		Usage: "Record information useful for VM and contract debugging" + generateEnvDoc(c_NodeFlagPrefix+"vmdebug"),
+	}
+
+	PprofFlag = Flag{
+		Name:  "pprof",
+		Value: false,
+		Usage: "Enable the pprof HTTP server",
 	}
 
 	InsecureUnlockAllowedFlag = Flag{
@@ -1212,10 +1222,20 @@ func CheckExclusive(args ...interface{}) {
 	}
 }
 
+func EnablePprof() {
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+	port := "8085"
+	go func() {
+		log.Global.Print(http.ListenAndServe("localhost:"+port, nil))
+	}()
+}
+
 // SetQuaiConfig applies quai-related command line flags to the config.
 func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []common.Location, nodeLocation common.Location, logger *log.Logger) {
 	cfg.NodeLocation = nodeLocation
 	cfg.SlicesRunning = slicesRunning
+
 	// only set etherbase if its a zone chain
 	if len(nodeLocation) == 2 {
 		setEtherbase(cfg)

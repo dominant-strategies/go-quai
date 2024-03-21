@@ -1,7 +1,9 @@
 build/bin/
 nodelogs/
+traces/
 /data/
 */config.toml
 */private.key
 .vscode/
 .idea*
+*.env
