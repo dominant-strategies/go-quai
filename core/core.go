@@ -762,8 +762,8 @@ func (c *Core) NodeCtx() int {
 	return c.sl.NodeCtx()
 }
 
-func (c *Core) GetSlicesRunning() []common.Location {
-	return c.sl.GetSlicesRunning()
+func (c *Core) GetRunningSlices() []common.Location {
+	return c.sl.GetRunningSlices()
 }
 
 //---------------------//

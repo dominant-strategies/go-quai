@@ -71,7 +71,7 @@ type HeaderChain struct {
 
 	headermu      sync.RWMutex
 	heads         []*types.Header
-	slicesRunning []common.Location
+	runningSlices []common.Location
 
 	logger *log.Logger
 
@@ -80,7 +80,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, indexerConfig *IndexerConfig, vmConfig vm.Config, slicesRunning []common.Location, logger *log.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, indexerConfig *IndexerConfig, vmConfig vm.Config, runningSlices []common.Location, logger *log.Logger) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 	nodeCtx := chainConfig.Location.Context()
@@ -91,7 +91,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		headerCache:     headerCache,
 		numberCache:     numberCache,
 		engine:          engine,
-		slicesRunning:   slicesRunning,
+		runningSlices:   runningSlices,
 		fetchPEtxRollup: pEtxsRollupFetcher,
 		fetchPEtx:       pEtxsFetcher,
 		logger:          logger,
@@ -127,7 +127,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	}
 
 	var err error
-	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning)
+	hc.bc, err = NewBodyDb(db, engine, hc, chainConfig, cacheConfig, txLookupLimit, vmConfig, runningSlices)
 	if err != nil {
 		return nil, err
 	}
@@ -1008,8 +1008,8 @@ func (hc *HeaderChain) StateAt(root common.Hash, utxoRoot common.Hash) (*state.S
 	return hc.bc.processor.StateAt(root, utxoRoot)
 }
 
-func (hc *HeaderChain) SlicesRunning() []common.Location {
-	return hc.slicesRunning
+func (hc *HeaderChain) RunningSlices() []common.Location {
+	return hc.runningSlices
 }
 
 // InitializeAddressUtxoCache initializes the address utxo cache.

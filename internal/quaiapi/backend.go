@@ -93,7 +93,7 @@ type Backend interface {
 	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
 	SetSyncTarget(header *types.Header)
 	ProcessingState() bool
-	GetSlicesRunning() []common.Location
+	GetRunningSlices() []common.Location
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
