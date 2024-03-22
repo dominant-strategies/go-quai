@@ -476,6 +476,45 @@ func TestBlockHashesIterator(t *testing.T) {
 	}
 }
 
+func TestCommonAncestor(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	// Write region block
+	regionBlock := types.EmptyBlock()
+	regionBlock.Header().SetNumber(big.NewInt(1), common.REGION_CTX)
+	regionBlock.Header().SetLocation(common.Location{0})
+	regionBlock.Header().SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0}))
+	WriteBlock(db, regionBlock, common.REGION_CTX)
+
+	//Write one block on zone 0 context
+	zone0Block := types.EmptyBlock()
+	zone0Block.Header().SetNumber(big.NewInt(2), common.ZONE_CTX)
+	zone0Block.Header().SetParentHash(regionBlock.Hash(), common.ZONE_CTX)
+	zone0Block.Header().SetLocation(common.Location{0, 0})
+	zone0Block.Header().SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 0}))
+	WriteBlock(db, zone0Block, common.ZONE_CTX)
+
+	//Write two blocks on zone 1 context
+	zone1Block1 := types.EmptyBlock()
+	zone1Block1.Header().SetNumber(big.NewInt(2), common.ZONE_CTX)
+	zone1Block1.Header().SetParentHash(regionBlock.Hash(), common.ZONE_CTX)
+	zone1Block1.Header().SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 1}))
+	zone1Block1.Header().SetLocation(common.Location{0, 1})
+	WriteBlock(db, zone1Block1, common.ZONE_CTX)
+
+	zone1Block2 := types.EmptyBlock()
+	zone1Block2.Header().SetNumber(big.NewInt(3), common.ZONE_CTX)
+	zone1Block2.Header().SetParentHash(zone1Block1.Hash(), common.ZONE_CTX)
+	zone1Block2.Header().SetCoinbase(common.HexToAddress("0x0000000000000000000000000000000000000000", common.Location{0, 1}))
+	zone1Block2.Header().SetLocation(common.Location{0, 1})
+	WriteBlock(db, zone1Block2, common.ZONE_CTX)
+
+	ancestor := FindCommonAncestor(db, zone0Block.Header(), zone1Block2.Header(), common.ZONE_CTX)
+	if ancestor.Hash() != regionBlock.Hash() {
+		t.Fatalf("Common ancestor not found: %v", ancestor)
+	}
+}
+
 func TestBlockStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
