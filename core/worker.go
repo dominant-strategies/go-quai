@@ -675,14 +675,6 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		etxRLimit: etxRLimit,
 		etxPLimit: etxPLimit,
 	}
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Hash(), 7) {
-		for _, uncle := range ancestor.Uncles() {
-			env.family.Add(uncle.Hash())
-		}
-		env.family.Add(ancestor.Hash())
-		env.ancestors.Add(ancestor.Hash())
-	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	return env, nil
@@ -693,6 +685,16 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	env.uncleMu.Lock()
 	defer env.uncleMu.Unlock()
 	hash := uncle.Hash()
+
+	// when 08 is processed ancestors contain 07 (quick block)
+	for _, ancestor := range w.hc.GetBlocksFromHash(env.header.ParentHash(common.ZONE_CTX), 7) {
+		for _, uncle := range ancestor.Uncles() {
+			env.family.Add(uncle.Hash())
+		}
+		env.family.Add(ancestor.Hash())
+		env.ancestors.Add(ancestor.Hash())
+	}
+
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
@@ -1254,6 +1256,8 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 // and returns the key to be used for the pendingBlockBodyCache.
 func (w *worker) getPendingBlockBodyKey(header *types.Header) common.Hash {
 	return types.RlpHash([]interface{}{
+		header.EVMRoot(),
+		header.UTXORoot(),
 		header.UncleHash(),
 		header.TxHash(),
 		header.EtxHash(),
