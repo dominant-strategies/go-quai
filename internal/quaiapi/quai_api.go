@@ -896,8 +896,14 @@ func (s *PublicBlockChainQuaiAPI) SetSyncTarget(ctx context.Context, raw json.Ra
 }
 
 // ListRunningZones returns the running locations where the node is serving data.
-func (s *PublicBlockChainQuaiAPI) ListRunningZones() []common.Location {
-	return s.b.GetRunningSlices()
+func (s *PublicBlockChainQuaiAPI) ListRunningZones() []uint64 {
+	runningZones := s.b.GetRunningSlices()
+	zonePrefixes := make([]uint64, len(runningZones))
+	for idx, loc := range runningZones {
+		var prefixNum uint64 = uint64(loc[0])<<4 + uint64(loc[1])
+		zonePrefixes[idx] = prefixNum
+	}
+	return zonePrefixes
 }
 
 func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() int {
