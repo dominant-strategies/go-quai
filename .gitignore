@@ -9,3 +9,4 @@ traces/
 *.env
 *.sh
 **/testdata/
+*.cov
