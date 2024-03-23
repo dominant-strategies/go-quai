@@ -1231,7 +1231,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	gasUsed += txGas
 	addresses := make(map[common.AddressBytes]struct{})
 	totalQitIn := big.NewInt(0)
-	utxosDelete := make([]*types.OutPoint, 0, len(tx.TxIn()))
+	utxosDelete := make([]types.OutPoint, 0)
 	for _, txIn := range tx.TxIn() {
 		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
@@ -1253,7 +1253,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 		}
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
-		utxosDelete = append(utxosDelete, &txIn.PreviousOutPoint)
+		utxosDelete = append(utxosDelete, txIn.PreviousOutPoint)
 	}
 	var ETXRCount int
 	var ETXPCount int
