@@ -31,6 +31,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -51,6 +52,7 @@ const (
 	MaxZones           = 16
 	MaxWidth           = 16
 	MaxExpansionNumber = 32
+	InterlinkDepth     = 4
 )
 
 var (
@@ -222,6 +224,13 @@ func (h *Hashes) ProtoDecode(hashes *ProtoHashes) {
 		res[i].ProtoDecode(hash)
 	}
 	*h = res
+}
+
+// Len returns the length of h.
+func (h Hashes) Len() int { return len(h) }
+
+func (h Hashes) EncodeIndex(i int, w *bytes.Buffer) {
+	rlp.Encode(w, h[i])
 }
 
 /////////// Address

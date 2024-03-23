@@ -32,6 +32,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ParentDeltaS  				[]*hexutil.Big 	`json:"parentDeltaS"					 	gencodec:"required"`
 		ParentUncledSubDeltaS []*hexutil.Big 	`json:"parentUncledSubDeltaS"   gencodec:"required"`
 		PrimeTerminus         common.Hash    	`json:"primeTerminus"           gencodec:"required"`
+		InterlinkRootHash     common.Hash    	`json:"interlinkRootHash"       gencodec:"required"`
 		UncledS 							*hexutil.Big 		`json:"uncledS"        					gencodec:"required"`
 		Number        				[]*hexutil.Big 	`json:"number"              		gencodec:"required"`
 		GasLimit      				hexutil.Uint64 	`json:"gasLimit"            		gencodec:"required"`
@@ -72,6 +73,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.EtxRollupHash = h.EtxRollupHash()
 	enc.ReceiptHash = h.ReceiptHash()
 	enc.PrimeTerminus = h.PrimeTerminus()
+	enc.InterlinkRootHash = h.InterlinkRootHash()
 	enc.Difficulty = (*hexutil.Big)(h.Difficulty())
 	enc.UncledS = (*hexutil.Big)(h.UncledS())
 	enc.GasLimit = hexutil.Uint64(h.GasLimit())
@@ -106,6 +108,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		EtxRollupHash					 *common.Hash   			 	`json:"extRollupRoot"      			 gencodec:"required"`
 		ManifestHash 					 []common.Hash  			 	`json:"manifestHash"       			 gencodec:"required"`
 		PrimeTerminus          *common.Hash           `json:"primeTerminus"            gencodec:"required"`
+		InterlinkRootHash      *common.Hash           `json:"interlinkRootHash"        gencodec:"required"`
 		Difficulty   					 *hexutil.Big   			 	`json:"difficulty"         			 gencodec:"required"`
 		ParentEntropy					 []*hexutil.Big 			 	`json:"parentEntropy"      			 gencodec:"required"`
 		ParentDeltaS 					 []*hexutil.Big 			 	`json:"parentDeltaS"       			 gencodec:"required"`
@@ -163,6 +166,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.PrimeTerminus == nil {
 		return errors.New("missing required field 'primeTerminus' for Header")
+	}
+	if dec.InterlinkRootHash == nil {
+		return errors.New("missing required field 'interlinkRootHash' for Header")
 	}
 	if dec.Difficulty == nil {
 		return errors.New("missing required field 'difficulty' for Header")
@@ -249,6 +255,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetEtxSetHash(*dec.EtxSetHash)
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
 	h.SetPrimeTerminus(*dec.PrimeTerminus)
+	h.SetInterlinkRootHash(*dec.InterlinkRootHash)
 	h.SetDifficulty((*big.Int)(dec.Difficulty))
 	h.SetUncledS((*big.Int)(dec.UncledS))
 	h.SetGasLimit(uint64(*dec.GasLimit))

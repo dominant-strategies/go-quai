@@ -1263,7 +1263,11 @@ func (sl *Slice) ConstructLocalBlock(header *types.Header) (*types.Block, error)
 	for i, blockHash := range pendingBlockBody.SubManifest {
 		subManifest[i] = blockHash
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest)
+	interlinkHashes := make(common.Hashes, len(pendingBlockBody.InterlinkHashes))
+	for i, interlinkhash := range pendingBlockBody.InterlinkHashes {
+		interlinkHashes[i] = interlinkhash
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest, interlinkHashes)
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err
 	} else {
@@ -1283,7 +1287,12 @@ func (sl *Slice) ConstructLocalMinedBlock(header *types.Header) (*types.Block, e
 			return nil, ErrBodyNotFound
 		}
 	} else {
-		pendingBlockBody = &types.Body{}
+		// If the context is PRIME, there is the interlink hashes that needs to be returned from the database
+		var interlinkHashes common.Hashes
+		if nodeCtx == common.PRIME_CTX {
+			interlinkHashes = rawdb.ReadInterlinkHashes(sl.sliceDb, header.ParentHash(common.PRIME_CTX))
+		}
+		pendingBlockBody = &types.Body{InterlinkHashes: interlinkHashes}
 	}
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(pendingBlockBody.Transactions))
@@ -1303,7 +1312,11 @@ func (sl *Slice) ConstructLocalMinedBlock(header *types.Header) (*types.Block, e
 	for i, blockHash := range pendingBlockBody.SubManifest {
 		subManifest[i] = blockHash
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest)
+	interlinkhashes := make(common.Hashes, len(pendingBlockBody.InterlinkHashes))
+	for i, interlinkhash := range pendingBlockBody.InterlinkHashes {
+		interlinkhashes[i] = interlinkhash
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, uncles, etxs, subManifest, interlinkhashes)
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err
 	} else {
@@ -1328,6 +1341,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 		combinedPendingHeader.SetThresholdCount(header.ThresholdCount())
 		combinedPendingHeader.SetExpansionNumber(header.ExpansionNumber())
 		combinedPendingHeader.SetEtxEligibleSlices(header.EtxEligibleSlices())
+		combinedPendingHeader.SetInterlinkRootHash(header.InterlinkRootHash())
 	}
 
 	if inSlice {

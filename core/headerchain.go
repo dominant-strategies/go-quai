@@ -299,6 +299,17 @@ func (hc *HeaderChain) AppendHeader(header *types.Header) error {
 		}
 	}
 
+	// Verify the Interlink root hash matches the interlink
+	if nodeCtx == common.PRIME_CTX {
+		interlinkHashes := rawdb.ReadInterlinkHashes(hc.headerDb, header.ParentHash(nodeCtx))
+		if interlinkHashes == nil {
+			return errors.New("interlink hashes not found")
+		}
+		if header.InterlinkRootHash() != types.DeriveSha(interlinkHashes, trie.NewStackTrie(nil)) {
+			return errors.New("interlink root hash does not match interlink")
+		}
+	}
+
 	return nil
 }
 func (hc *HeaderChain) ProcessingState() bool {

@@ -523,6 +523,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, nodeLocation 
 
 	fields["uncles"] = block.Uncles()
 	fields["subManifest"] = block.SubManifest()
+	fields["interlinkHashes"] = block.InterlinkHashes()
 
 	return fields, nil
 }
@@ -630,7 +631,7 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*type
 		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
 			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
 		}
-		return types.NewBlockWithHeader(b.Header()).WithBody(b.Transactions(), b.Uncles(), b.ExtTransactions(), subManifest), nil
+		return types.NewBlockWithHeader(b.Header()).WithBody(b.Transactions(), b.Uncles(), b.ExtTransactions(), subManifest, b.InterlinkHashes()), nil
 	}
 }
 

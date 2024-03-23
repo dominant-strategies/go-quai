@@ -106,6 +106,7 @@ type Header struct {
 	expansionNumber       uint8           `json:"expansionNumber"     	gencodec:"required"`
 	etxEligibleSlices     common.Hash     `json:"etxEligibleSlices"     gencodec:"required"`
 	primeTerminus         common.Hash     `json:"primeTerminus"         gencodec:"required"`
+	interlinkRootHash     common.Hash     `json:"interlinkRootHash"     gencodec:"required"`
 	uncledS               *big.Int        `json:"uncledLogS"            gencodec:"required"`
 	number                []*big.Int      `json:"number"                gencodec:"required"`
 	gasLimit              uint64          `json:"gasLimit"              gencodec:"required"`
@@ -167,6 +168,7 @@ func EmptyHeader() *Header {
 	h.expansionNumber = 0
 	h.etxEligibleSlices = EmptyHash
 	h.primeTerminus = EmptyRootHash
+	h.interlinkRootHash = EmptyRootHash
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
@@ -195,6 +197,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
 	etxEligibleSlices := common.ProtoHash{Value: h.EtxEligibleSlices().Bytes()}
 	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
+	interlinkRootHash := common.ProtoHash{Value: h.InterlinkRootHash().Bytes()}
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
 	efficiencyScore := uint64(h.EfficiencyScore())
@@ -214,6 +217,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		EtxRollupHash:     &etxRollupHash,
 		ReceiptHash:       &receiptHash,
 		PrimeTerminus:     &primeTerminus,
+		InterlinkRootHash: &interlinkRootHash,
 		EtxEligibleSlices: &etxEligibleSlices,
 		Difficulty:        h.Difficulty().Bytes(),
 		UncledS:           h.UncledS().Bytes(),
@@ -286,6 +290,9 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	}
 	if protoHeader.PrimeTerminus == nil {
 		return errors.New("missing required field 'PrimeTerminus' in Header")
+	}
+	if protoHeader.InterlinkRootHash == nil {
+		return errors.New("missing required field 'InterlinkRootHash' in Header")
 	}
 	if protoHeader.Difficulty == nil {
 		return errors.New("missing required field 'Difficulty' in Header")
@@ -360,6 +367,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader) error {
 	h.SetEtxSetHash(common.BytesToHash(protoHeader.GetEtxSetHash().GetValue()))
 	h.SetEtxRollupHash(common.BytesToHash(protoHeader.GetEtxRollupHash().GetValue()))
 	h.SetPrimeTerminus(common.BytesToHash(protoHeader.GetPrimeTerminus().GetValue()))
+	h.SetInterlinkRootHash(common.BytesToHash(protoHeader.GetInterlinkRootHash().GetValue()))
 	h.SetDifficulty(new(big.Int).SetBytes(protoHeader.GetDifficulty()))
 	h.SetUncledS(new(big.Int).SetBytes(protoHeader.GetUncledS()))
 	h.SetGasLimit(protoHeader.GetGasLimit())
@@ -406,6 +414,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"etxSetHash":          h.EtxSetHash(),
 		"extRollupRoot":       h.EtxRollupHash(),
 		"primeTerminus":       h.PrimeTerminus(),
+		"interlinkRootHash":   h.InterlinkRootHash(),
 		"manifestHash":        h.ManifestHashArray(),
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
 		"gasUsed":             hexutil.Uint(h.GasUsed()),
@@ -517,13 +526,14 @@ func (h *Header) EtxEligibleSlices() common.Hash {
 func (h *Header) BaseFee() *big.Int {
 	return h.baseFee
 }
-func (h *Header) Location() common.Location  { return h.location }
-func (h *Header) Time() uint64               { return h.time }
-func (h *Header) Extra() []byte              { return common.CopyBytes(h.extra) }
-func (h *Header) MixHash() common.Hash       { return h.mixHash }
-func (h *Header) PrimeTerminus() common.Hash { return h.primeTerminus }
-func (h *Header) Nonce() BlockNonce          { return h.nonce }
-func (h *Header) NonceU64() uint64           { return binary.BigEndian.Uint64(h.nonce[:]) }
+func (h *Header) Location() common.Location      { return h.location }
+func (h *Header) Time() uint64                   { return h.time }
+func (h *Header) Extra() []byte                  { return common.CopyBytes(h.extra) }
+func (h *Header) MixHash() common.Hash           { return h.mixHash }
+func (h *Header) PrimeTerminus() common.Hash     { return h.primeTerminus }
+func (h *Header) InterlinkRootHash() common.Hash { return h.interlinkRootHash }
+func (h *Header) Nonce() BlockNonce              { return h.nonce }
+func (h *Header) NonceU64() uint64               { return binary.BigEndian.Uint64(h.nonce[:]) }
 
 func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -574,6 +584,11 @@ func (h *Header) SetPrimeTerminus(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.primeTerminus = val
+}
+func (h *Header) SetInterlinkRootHash(val common.Hash) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.interlinkRootHash = val
 }
 
 func (h *Header) SetParentEntropy(val *big.Int, nodeCtx int) {
@@ -699,6 +714,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
 	etxEligibleSlices := common.ProtoHash{Value: h.EtxEligibleSlices().Bytes()}
 	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
+	interlinkRootHash := common.ProtoHash{Value: h.InterlinkRootHash().Bytes()}
 	efficiencyScore := uint64(h.EfficiencyScore())
 	thresholdCount := uint64(h.ThresholdCount())
 	expansionNumber := uint64(h.ExpansionNumber())
@@ -722,6 +738,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		BaseFee:           h.BaseFee().Bytes(),
 		UncledS:           h.UncledS().Bytes(),
 		PrimeTerminus:     &primeTerminus,
+		InterlinkRootHash: &interlinkRootHash,
 		EtxEligibleSlices: &etxEligibleSlices,
 		EfficiencyScore:   &efficiencyScore,
 		ThresholdCount:    &thresholdCount,
@@ -885,6 +902,7 @@ type Body struct {
 	Uncles          []*Header
 	ExtTransactions Transactions
 	SubManifest     BlockManifest
+	InterlinkHashes common.Hashes
 }
 
 // ProtoEncode serializes b into the Quai Proto Body format
@@ -909,12 +927,14 @@ func (b *Body) ProtoEncode() (*ProtoBody, error) {
 	if err != nil {
 		return nil, err
 	}
+	protoInterlinkHashes := b.InterlinkHashes.ProtoEncode()
 
 	return &ProtoBody{
-		Txs:      protoTransactions,
-		Uncles:   protoUncles,
-		Etxs:     protoExtTransactions,
-		Manifest: protoManifest,
+		Txs:             protoTransactions,
+		Uncles:          protoUncles,
+		Etxs:            protoExtTransactions,
+		Manifest:        protoManifest,
+		InterlinkHashes: protoInterlinkHashes,
 	}, nil
 }
 
@@ -931,6 +951,9 @@ func (b *Body) ProtoDecode(protoBody *ProtoBody, location common.Location) error
 	}
 	if protoBody.Manifest == nil {
 		return errors.New("missing required field 'Manifest' in Body")
+	}
+	if protoBody.InterlinkHashes == nil {
+		return errors.New("missing required field 'InterlinkHashes' in Body")
 	}
 
 	b.Transactions = Transactions{}
@@ -957,6 +980,9 @@ func (b *Body) ProtoDecode(protoBody *ProtoBody, location common.Location) error
 		}
 		b.Uncles[i] = uncle
 	}
+	b.InterlinkHashes = common.Hashes{}
+	b.InterlinkHashes.ProtoDecode(protoBody.GetInterlinkHashes())
+
 	return nil
 }
 
@@ -977,6 +1003,7 @@ type Block struct {
 	transactions    Transactions
 	extTransactions Transactions
 	subManifest     BlockManifest
+	interlinkHashes common.Hashes
 
 	// caches
 	size       atomic.Value
@@ -1128,6 +1155,7 @@ func (b *Block) ProtoDecode(protoBlock *ProtoBlock, location common.Location) er
 	b.extTransactions = body.ExtTransactions
 	b.uncles = body.Uncles
 	b.subManifest = body.SubManifest
+	b.interlinkHashes = body.InterlinkHashes
 	return nil
 }
 
@@ -1178,7 +1206,8 @@ func (b *Block) ExtTransaction(hash common.Hash) *Transaction {
 	}
 	return nil
 }
-func (b *Block) SubManifest() BlockManifest { return b.subManifest }
+func (b *Block) SubManifest() BlockManifest     { return b.subManifest }
+func (b *Block) InterlinkHashes() common.Hashes { return b.interlinkHashes }
 
 func (b *Block) Header() *Header { return b.header }
 
@@ -1205,7 +1234,7 @@ func (b *Block) QuaiTransactions() []*Transaction {
 
 // Body returns the non-header content of the block.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.extTransactions, b.subManifest}
+	return &Body{b.transactions, b.uncles, b.extTransactions, b.subManifest, b.interlinkHashes}
 }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding
@@ -1253,17 +1282,19 @@ func (b *Block) WithSeal(header *Header) *Block {
 }
 
 // WithBody returns a new block with the given transaction and uncle contents, for a single context
-func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, extTransactions []*Transaction, subManifest BlockManifest) *Block {
+func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, extTransactions []*Transaction, subManifest BlockManifest, interlinkHashes common.Hashes) *Block {
 	block := &Block{
 		header:          CopyHeader(b.header),
 		transactions:    make([]*Transaction, len(transactions)),
 		uncles:          make([]*Header, len(uncles)),
 		extTransactions: make([]*Transaction, len(extTransactions)),
 		subManifest:     make(BlockManifest, len(subManifest)),
+		interlinkHashes: make(common.Hashes, len(interlinkHashes)),
 	}
 	copy(block.transactions, transactions)
 	copy(block.extTransactions, extTransactions)
 	copy(block.subManifest, subManifest)
+	copy(block.interlinkHashes, interlinkHashes)
 	for i := range uncles {
 		block.uncles[i] = CopyHeader(uncles[i])
 	}

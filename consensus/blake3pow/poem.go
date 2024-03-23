@@ -1,6 +1,8 @@
 package blake3pow
 
 import (
+	"errors"
+	"math"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -169,4 +171,35 @@ func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, he
 		return totalDeltaS
 	}
 	return big.NewInt(0)
+}
+
+// CalcRank returns the rank of the block within the hierarchy of chains, this
+// determines the level of the interlink
+func (blake3pow *Blake3pow) CalcRank(chain consensus.GenesisReader, header *types.Header) (int, error) {
+	if chain.IsGenesisHash(header.Hash()) {
+		return 0, nil
+	}
+	_, order, err := blake3pow.CalcOrder(header)
+	if err != nil {
+		return 0, err
+	}
+	if order != common.PRIME_CTX {
+		return 0, errors.New("rank cannot be computed for a non-prime block")
+	}
+
+	powHash := header.Hash()
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
+	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+
+	intrinsicS := blake3pow.IntrinsicLogS(powHash)
+	for i := common.InterlinkDepth; i > 0; i-- {
+		extraBits := math.Pow(2, float64(i))
+		primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(big.NewInt(int64(extraBits))))
+		primeBlockEntropyThreshold = new(big.Int).Add(primeBlockEntropyThreshold, common.BitsToBigBits(params.PrimeEntropyTarget))
+		if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 {
+			return i, nil
+		}
+	}
+
+	return 0, nil
 }

@@ -16,6 +16,7 @@ message ProtoBody {
   optional ProtoHeaders uncles = 2;
   optional ProtoTransactions etxs = 3;
   optional ProtoManifest manifest = 4;
+  optional common.ProtoHashes interlink_hashes = 5;
 }
 
 message ProtoHeader {
@@ -49,6 +50,7 @@ message ProtoHeader {
   optional uint64 expansion_number = 28;
   optional common.ProtoHash etx_eligible_slices = 29;
   optional common.ProtoHash prime_terminus = 30;
+  optional common.ProtoHash interlink_root_hash = 31;
 }
 
 message ProtoTransaction {
