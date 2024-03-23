@@ -988,15 +988,6 @@ type Block struct {
 	ReceivedFrom interface{}
 }
 
-// "external" block encoding. used for eth protocol, etc.
-type extblock struct {
-	Header      *Header
-	Txs         []*Transaction
-	Uncles      []*Header
-	Etxs        []*Transaction
-	SubManifest BlockManifest
-}
-
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher, nodeCtx int) *Block {
 	b := &Block{header: CopyHeader(header)}
 
@@ -1102,29 +1093,6 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetTime(h.time)
 	cpy.SetNonce(h.nonce)
 	return &cpy
-}
-
-// DecodeRLP decodes the Quai RLP encoding into b.
-func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
-	_, size, _ := s.Kind()
-	if err := s.Decode(&eb); err != nil {
-		return err
-	}
-	b.header, b.uncles, b.transactions, b.extTransactions, b.subManifest = eb.Header, eb.Uncles, eb.Txs, eb.Etxs, eb.SubManifest
-	b.size.Store(common.StorageSize(rlp.ListSize(size)))
-	return nil
-}
-
-// EncodeRLP serializes b into the Quai RLP block format.
-func (b *Block) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, extblock{
-		Header:      b.header,
-		Txs:         b.transactions,
-		Uncles:      b.uncles,
-		Etxs:        b.extTransactions,
-		SubManifest: b.subManifest,
-	})
 }
 
 // ProtoEncode serializes h into the Quai Proto Block format

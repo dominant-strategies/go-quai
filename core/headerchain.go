@@ -855,23 +855,6 @@ func (hc *HeaderChain) Export(w io.Writer) error {
 
 // ExportN writes a subset of the active chain to the given writer.
 func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
-	hc.headermu.RLock()
-	defer hc.headermu.RUnlock()
-
-	if first > last {
-		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
-	}
-	hc.logger.WithField("count", last-first+1).Info("Exporting batch of blocks")
-
-	for nr := first; nr <= last; nr++ {
-		block := hc.GetBlockByNumber(nr)
-		if block == nil {
-			return fmt.Errorf("export failed on #%d: not found", nr)
-		}
-		if err := block.EncodeRLP(w); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
