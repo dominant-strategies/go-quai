@@ -79,6 +79,12 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			// If we have a subordinate chain, it is impossible for the subordinate manifest to be empty
 			return ErrBadSubManifest
 		}
+		if nodeCtx == common.PRIME_CTX {
+			interlinkRootHash := types.DeriveSha(block.InterlinkHashes(), trie.NewStackTrie(nil))
+			if interlinkRootHash != header.InterlinkRootHash() {
+				return ErrBadInterlink
+			}
+		}
 	} else {
 		// Header validity is known at this point, check the uncles and transactions
 		if err := v.engine.VerifyUncles(v.hc, block); err != nil {

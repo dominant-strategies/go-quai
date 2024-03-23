@@ -1068,6 +1068,35 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 		}
 	}
 
+	var interlinkHashes common.Hashes
+	if nodeCtx == common.PRIME_CTX {
+		if w.hc.IsGenesisHash(parent.Hash()) {
+			// On genesis, the interlink hashes are all the same and should start with genesis hash
+			interlinkHashes = common.Hashes{parent.Hash(), parent.Hash(), parent.Hash(), parent.Hash()}
+		} else {
+			// check if parent belongs to any interlink level
+			rank, err := w.engine.CalcRank(w.hc, parent.Header())
+			if err != nil {
+				return nil, err
+			}
+			if rank == 0 { // No change in the interlink hashes, so carry
+				interlinkHashes = parent.InterlinkHashes()
+			} else if rank > 0 && rank <= common.InterlinkDepth {
+				interlinkHashes = parent.InterlinkHashes()
+				// update the interlink hashes for each level below the rank
+				for i := 0; i < rank; i++ {
+					interlinkHashes[i] = parent.Hash()
+				}
+			} else {
+				w.logger.Error("Not possible to find rank greater than the max interlink levels")
+			}
+		}
+		// Store the interlink hashes in the database
+		rawdb.WriteInterlinkHashes(w.workerDb, parent.Hash(), interlinkHashes)
+		interlinkRootHash := types.DeriveSha(interlinkHashes, trie.NewStackTrie(nil))
+		header.SetInterlinkRootHash(interlinkRootHash)
+	}
+
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		header.SetExtra(w.extra)

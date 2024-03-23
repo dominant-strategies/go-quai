@@ -103,6 +103,9 @@ type Engine interface {
 	// UncledUncledSubDeltaLogS returns the log of the uncled entropy reduction  since the past coincident
 	UncledSubDeltaLogS(chain GenesisReader, header *types.Header) *big.Int
 
+	// CalcRank calculates the rank of the prime block
+	CalcRank(chain GenesisReader, header *types.Header) (int, error)
+
 	ComputePowLight(header *types.Header) (mixHash, powHash common.Hash)
 
 	// VerifyHeader checks whether a header conforms to the consensus rules of a

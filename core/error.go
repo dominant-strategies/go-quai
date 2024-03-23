@@ -50,6 +50,9 @@ var (
 	// ErrBadSubManifest is returned when a block's subordinate manifest does not match the subordinate manifest hash
 	ErrBadSubManifest = errors.New("subordinate manifest is incorrect")
 
+	// ErrBadInterlink is returned when a block's interlink does not match the interlink hash
+	ErrBadInterlink = errors.New("interlink is incorrect")
+
 	//ErrPendingBlock indicates the block couldn't yet be processed. This is likely due to missing information (ancestor, body, pendingEtxs, etc)
 	ErrPendingBlock = errors.New("block cannot be appended yet")
 

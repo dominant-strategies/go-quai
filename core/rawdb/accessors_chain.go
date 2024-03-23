@@ -881,7 +881,7 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64, location common
 	if body == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles, body.ExtTransactions, body.SubManifest)
+	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles, body.ExtTransactions, body.SubManifest, body.InterlinkHashes)
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
@@ -993,7 +993,7 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash, location common.Location) *
 	}
 	for _, bad := range *badBlocks {
 		if bad.Header.Hash() == hash {
-			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest)
+			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest, bad.Body.InterlinkHashes)
 		}
 	}
 	return nil
@@ -1020,7 +1020,7 @@ func ReadAllBadBlocks(db ethdb.Reader, location common.Location) []*types.Block 
 	}
 	var blocks []*types.Block
 	for _, bad := range *badBlocks {
-		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest))
+		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest, bad.Body.InterlinkHashes))
 	}
 	return blocks
 }
@@ -1404,6 +1404,42 @@ func WriteManifest(db ethdb.KeyValueWriter, hash common.Hash, manifest types.Blo
 func DeleteManifest(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(manifestKey(hash)); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to delete manifest")
+	}
+}
+
+// ReadInterlinkHashes retreives the interlinkhashes corresponding to a given block
+func ReadInterlinkHashes(db ethdb.Reader, hash common.Hash) common.Hashes {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(interlinkHashKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	protoInterlinkHashes := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoInterlinkHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal interlink hashes")
+	}
+	interlinkHashes := new(common.Hashes)
+	interlinkHashes.ProtoDecode(protoInterlinkHashes)
+	return *interlinkHashes
+}
+
+// WriteInterlinkHashes stores the interlink hashes corresponding to a given block
+func WriteInterlinkHashes(db ethdb.KeyValueWriter, hash common.Hash, interlinkHashes common.Hashes) {
+	protoInterlinkHashes := interlinkHashes.ProtoEncode()
+	data, err := proto.Marshal(protoInterlinkHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal interlink hashes")
+	}
+	if err := db.Put(interlinkHashKey(hash), data); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to store interlink hashes")
+	}
+}
+
+// DeleteInterlinkHashes removes interlinkHashes data associated with a block.
+func DeleteInterlinkHashes(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(interlinkHashKey(hash)); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to delete interlink hashes")
 	}
 }
 

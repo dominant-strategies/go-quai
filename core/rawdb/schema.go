@@ -108,6 +108,7 @@ var (
 	pendingEtxsPrefix       = []byte("pe")  // pendingEtxsPrefix + hash -> PendingEtxs at block
 	pendingEtxsRollupPrefix = []byte("pr")  // pendingEtxsRollupPrefix + hash -> PendingEtxsRollup at block
 	manifestPrefix          = []byte("ma")  // manifestPrefix + hash -> Manifest at block
+	interlinkPrefix         = []byte("il")  // interlinkPrefix + hash -> Interlink at block
 	bloomPrefix             = []byte("bl")  // bloomPrefix + hash -> bloom at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
@@ -335,6 +336,11 @@ func pendingEtxsRollupKey(hash common.Hash) []byte {
 // manifestKey = manifestPrefix + hash
 func manifestKey(hash common.Hash) []byte {
 	return append(manifestPrefix, hash.Bytes()...)
+}
+
+// interlinkHashKey = interlinkPrefix + hash
+func interlinkHashKey(hash common.Hash) []byte {
+	return append(interlinkPrefix, hash.Bytes()...)
 }
 
 func bloomKey(hash common.Hash) []byte {
