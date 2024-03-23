@@ -10,7 +10,7 @@ import (
 )
 
 // CalcOrder returns the order of the block within the hierarchy of chains
-func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, error) {
+func (blake3pow *Blake3pow) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
 		return common.Big0, common.PRIME_CTX, nil
@@ -65,7 +65,7 @@ func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (blake3pow *Blake3pow) TotalLogS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) TotalLogS(header *types.WorkObject) *big.Int {
 	intrinsicS, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -87,7 +87,7 @@ func (blake3pow *Blake3pow) TotalLogS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) TotalLogPhS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) TotalLogPhS(header *types.WorkObject) *big.Int {
 	switch blake3pow.config.NodeLocation.Context() {
 	case common.PRIME_CTX:
 		totalS := header.ParentEntropy(common.PRIME_CTX)
@@ -103,7 +103,7 @@ func (blake3pow *Blake3pow) TotalLogPhS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) DeltaLogS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) DeltaLogS(header *types.WorkObject) *big.Int {
 	intrinsicS, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)

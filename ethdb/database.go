@@ -19,6 +19,8 @@ package ethdb
 
 import (
 	"io"
+
+	"github.com/dominant-strategies/go-quai/common"
 )
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
@@ -28,6 +30,8 @@ type KeyValueReader interface {
 
 	// Get retrieves the given key if it's present in the key-value data store.
 	Get(key []byte) ([]byte, error)
+
+	Location() common.Location
 }
 
 // KeyValueWriter wraps the Put method of a backing data store.

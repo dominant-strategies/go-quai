@@ -17,22 +17,29 @@
 package rawdb
 
 import (
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
 // table is a wrapper around a database that prefixes each key access with a pre-
 // configured string.
 type table struct {
-	db     ethdb.Database
-	prefix string
+	db       ethdb.Database
+	prefix   string
+	location common.Location
 }
 
 // NewTable returns a database object that prefixes all keys with a given string.
-func NewTable(db ethdb.Database, prefix string) ethdb.Database {
+func NewTable(db ethdb.Database, prefix string, location common.Location) ethdb.Database {
 	return &table{
-		db:     db,
-		prefix: prefix,
+		db:       db,
+		prefix:   prefix,
+		location: location,
 	}
+}
+
+func (t *table) Location() common.Location {
+	return t.location
 }
 
 // Close is a noop to implement the Database interface.

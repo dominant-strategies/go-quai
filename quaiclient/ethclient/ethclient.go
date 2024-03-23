@@ -75,7 +75,7 @@ func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
 //
 // Note that loading full blocks requires two requests. Use HeaderByHash
 // if you don't need all transactions or uncle headers.
-func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
 	return ec.getBlock(ctx, "eth_getBlockByHash", hash, true)
 }
 
@@ -84,7 +84,7 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Blo
 //
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
-func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
+func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.WorkObject, error) {
 	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
 }
 
@@ -103,7 +103,7 @@ type rpcBlock struct {
 	SubManifest     types.BlockManifest `json:"manifest"`
 }
 
-func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
+func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.WorkObject, error) {
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, method, args...)
 	if err != nil {
@@ -112,7 +112,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		return nil, quai.NotFound
 	}
 	// Decode header and transactions.
-	var head *types.Header
+	var head *types.WorkObject
 	var body rpcBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return nil, err
@@ -121,9 +121,9 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		return nil, err
 	}
 	// Load uncles because they are not included in the block response.
-	var uncles []*types.Header
+	var uncles []*types.WorkObject
 	if len(body.UncleHashes) > 0 {
-		uncles = make([]*types.Header, len(body.UncleHashes))
+		uncles = make([]*types.WorkObject, len(body.UncleHashes))
 		reqs := make([]rpc.BatchElem, len(body.UncleHashes))
 		for i := range reqs {
 			reqs[i] = rpc.BatchElem{
@@ -165,7 +165,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	return types.NewBlockWithHeader(head).WithBody(txs, uncles, etxs, manifest), nil
+	return types.NewWorkObject(head.WorkObjectHeader(), types.NewWorkObjectBody(head, txs, etxs, uncles, manifest, nil, nil, 0), types.NewEmptyTx()), nil //TODO: mmtx don't know nodeCtx
 }
 
 // HeaderByHash returns the block header with the given hash.
@@ -322,12 +322,12 @@ func (ec *Client) SyncProgress(ctx context.Context) (*quai.SyncProgress, error) 
 
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
-func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
+func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
 // SubscribePendingHeader subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.Header) (quai.Subscription, error) {
+func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
 }
 
@@ -424,19 +424,13 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 }
 
 // GetPendingHeader gets the latest pending header from the chain.
-func (ec *Client) GetPendingHeader(ctx context.Context) (*types.Header, error) {
-	var pendingHeader *types.Header
+func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, error) {
+	var pendingHeader *types.WorkObject
 	err := ec.c.CallContext(ctx, &pendingHeader, "quai_getPendingHeader")
 	if err != nil {
 		return nil, err
 	}
 	return pendingHeader, nil
-}
-
-// ReceiveMinedHeader sends a mined block back to the node
-func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.Header) error {
-	data := header.RPCMarshalHeader()
-	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
 }
 
 // Contract Calling
@@ -504,7 +498,7 @@ func (ec *Client) EstimateGas(ctx context.Context, msg quai.CallMsg) (uint64, er
 //
 // If the transaction was a contract creation use the TransactionReceipt method to get the
 // contract address after the transaction has been mined.
-func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+func (ec *Client) SendTransaction(ctx context.Context, tx *types.WorkObject) error {
 	protoTx, err := tx.ProtoEncode()
 	if err != nil {
 		return err

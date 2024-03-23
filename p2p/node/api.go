@@ -260,7 +260,7 @@ func (p *P2PNode) Connect(pi peer.AddrInfo) error {
 
 // Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
 // Returns nil if the block is not found.
-func (p *P2PNode) GetBlock(hash common.Hash, location common.Location) *types.Block {
+func (p *P2PNode) GetWorkObject(hash common.Hash, location common.Location) *types.WorkObject {
 	return p.consensus.LookupBlock(hash, location)
 }
 
@@ -268,7 +268,7 @@ func (p *P2PNode) GetBlockHashByNumber(number *big.Int, location common.Location
 	return p.consensus.LookupBlockHashByNumber(number, location)
 }
 
-func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.Header {
+func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.WorkObject {
 	panic("TODO: implement")
 }
 
@@ -278,7 +278,7 @@ func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.
 
 func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, data interface{}, nodeLocation common.Location) {
 	switch v := data.(type) {
-	case types.Block:
+	case types.WorkObject:
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	// TODO: send it to consensus
 	case types.Transaction:

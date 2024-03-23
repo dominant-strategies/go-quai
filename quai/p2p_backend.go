@@ -78,8 +78,8 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 // Handle consensus data propagated to us from our peers
 func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, nodeLocation common.Location) bool {
 	switch data.(type) {
-	case types.Block:
-		block := data.(types.Block)
+	case types.WorkObject:
+		block := data.(types.WorkObject)
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
 			log.Global.Error("no backend found")
@@ -123,8 +123,8 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 		var data interface{}
 		data = msg.Message.GetData()
 		switch data.(type) {
-		case types.Block:
-			block := data.(types.Block)
+		case types.WorkObject:
+			block := data.(types.WorkObject)
 			backend := *qbe.GetBackend(block.Location())
 			if backend == nil {
 				log.Global.WithFields(log.Fields{
@@ -141,7 +141,7 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 	}
 }
 
-func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) *types.Block {
+func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) *types.WorkObject {
 	if qbe == nil {
 		return nil
 	}

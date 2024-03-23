@@ -28,20 +28,16 @@ message ProtoHeader {
   optional common.ProtoHash etx_rollup_hash = 7;
   repeated common.ProtoHash manifest_hash = 8;
   optional common.ProtoHash receipt_hash = 9;
-  optional bytes difficulty = 10;
-  repeated bytes parent_entropy = 11;
-  repeated bytes parent_delta_s = 12;
-  repeated bytes number = 13;
-  optional uint64 gas_limit = 14;
-  optional uint64 gas_used = 15;
-  optional bytes base_fee = 16;
-  optional common.ProtoLocation location = 17;
-  optional uint64 time = 18;
-  optional bytes extra = 19;
-  optional common.ProtoHash mix_hash = 20;
-  optional uint64 nonce = 21;
-  optional common.ProtoHash utxo_root = 22;
-  optional common.ProtoHash etx_set_hash = 23;
+  repeated bytes parent_entropy = 10;
+  repeated bytes parent_delta_s = 11;
+  repeated bytes number = 12;
+  optional uint64 gas_limit = 13;
+  optional uint64 gas_used = 14;
+  optional bytes base_fee = 15;
+  optional uint64 time = 16;
+  optional bytes extra = 17;
+  optional common.ProtoHash utxo_root = 18;
+  optional common.ProtoHash etx_set_hash = 19;
 }
 
 message ProtoTransaction {
@@ -79,6 +75,33 @@ message ProtoManifest { repeated common.ProtoHash manifest = 1; }
 
 message ProtoAccessList { repeated ProtoAccessTuple access_tuples = 1; }
 
+message ProtoWorkObjectHeader {
+  optional common.ProtoHash header_hash = 1;
+  optional common.ProtoHash parent_hash = 2;
+  optional bytes number = 3;
+  optional bytes difficulty = 4;
+  optional common.ProtoHash tx_hash = 5;
+  optional uint64 nonce = 6;
+  optional common.ProtoLocation location = 7;
+  optional common.ProtoHash mix_hash = 8;
+}
+
+message ProtoWorkObjectBody {
+  optional ProtoHeader header = 1;
+  optional ProtoTransactions transactions = 2;
+  optional ProtoTransactions ext_transactions = 3;
+  optional ProtoWorkObjects uncles = 4;
+  optional ProtoManifest manifest = 5;
+}
+
+message ProtoWorkObject {
+  optional ProtoWorkObjectHeader wo_header = 1;
+  optional ProtoWorkObjectBody wo_body = 2;
+  optional ProtoTransaction tx = 3;
+}
+
+message ProtoWorkObjects { repeated ProtoWorkObject work_objects = 1; }
+
 message ProtoAccessTuple {
   bytes address = 1;
   repeated common.ProtoHash storage_key = 2;
@@ -107,7 +130,7 @@ message ProtoLogForStorage {
 message ProtoLogsForStorage { repeated ProtoLogForStorage logs = 1; }
 
 message ProtoPendingHeader {
-  optional ProtoHeader header = 1;
+  optional ProtoWorkObject wo = 1;
   optional ProtoTermini termini = 2;
 }
 
@@ -121,12 +144,12 @@ message ProtoEtxSet {
 }
 
 message ProtoPendingEtxs {
-  optional ProtoHeader header = 1;
+  optional ProtoWorkObject header = 1;
   optional ProtoTransactions etxs = 2;
 }
 
 message ProtoPendingEtxsRollup {
-  optional ProtoHeader header = 1;
+  optional ProtoWorkObject header = 1;
   optional ProtoTransactions etxs_rollup = 2;
 }
 

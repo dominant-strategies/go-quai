@@ -37,7 +37,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/trie"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -267,8 +266,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
-func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
-	head := types.EmptyHeader()
+func (g *Genesis) ToBlock(db ethdb.Database) *types.WorkObject {
+	head := types.EmptyHeader(g.Config.Location.Context())
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
 	head.SetExtra(g.ExtraData)
@@ -286,23 +285,24 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.SetParentHash(common.Hash{}, i)
 	}
 
-	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil), g.Config.Location.Context())
+	return types.NewWorkObjectWithHeader(head, types.NewEmptyTx(), g.Config.Location.Context())
 }
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location) (*types.WorkObject, error) {
 	nodeCtx := nodeLocation.Context()
 	block := g.ToBlock(db)
 	if block.Number(nodeCtx).Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
+	log.Global.Warn("Committing genesis block", "hash", block.Hash(), "location", nodeLocation)
 	config := g.Config
 	if config == nil {
 		config = params.AllProgpowProtocolChanges
 	}
 	rawdb.WriteTermini(db, block.Hash(), types.EmptyTermini())
-	rawdb.WriteBlock(db, block, nodeCtx)
+	rawdb.WriteWorkObject(db, block.Hash(), block, types.BlockObject, nodeCtx)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(nodeCtx), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64(nodeCtx))
 	rawdb.WriteHeadBlockHash(db, block.Hash())
@@ -313,7 +313,7 @@ func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location) (*type
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database, nodeLocation common.Location) *types.Block {
+func (g *Genesis) MustCommit(db ethdb.Database, nodeLocation common.Location) *types.WorkObject {
 	block, err := g.Commit(db, nodeLocation)
 	if err != nil {
 		panic(err)
@@ -322,7 +322,7 @@ func (g *Genesis) MustCommit(db ethdb.Database, nodeLocation common.Location) *t
 }
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int, nodeLocation common.Location) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int, nodeLocation common.Location) *types.WorkObject {
 	g := Genesis{
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
@@ -423,7 +423,7 @@ func DefaultLocalGenesisBlock(consensusEngine string) *Genesis {
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 			GasLimit:   5000000,
-			Difficulty: big.NewInt(300000),
+			Difficulty: big.NewInt(30000),
 		}
 	}
 	return &Genesis{

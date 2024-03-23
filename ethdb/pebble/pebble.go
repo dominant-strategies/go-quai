@@ -69,6 +69,7 @@ type Database struct {
 	writeDelayStartTime time.Time     // The start time of the latest write stall
 	writeDelayCount     atomic.Int64  // Total number of write stall counts
 	writeDelayTime      atomic.Int64  // Total time spent in write stalls
+	location            common.Location
 }
 
 func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
@@ -103,7 +104,7 @@ func (d *Database) onWriteStallEnd() {
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger, location common.Location) (*Database, error) {
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
@@ -132,6 +133,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, l
 		fn:       file,
 		quitChan: make(chan chan error),
 		logger:   logger,
+		location: location,
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -280,6 +282,10 @@ func (d *Database) NewBatchWithSize(_ int) ethdb.Batch {
 		b:  d.db.NewBatch(),
 		db: d,
 	}
+}
+
+func (db *Database) Location() common.Location {
+	return db.location
 }
 
 // upperBound returns the upper bound for the given prefix

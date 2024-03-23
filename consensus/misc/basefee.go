@@ -25,7 +25,7 @@ import (
 )
 
 // CalcBaseFee calculates the basefee of the header taking into account the basefee ceiling
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
+func CalcBaseFee(config *params.ChainConfig, parent *types.WorkObject) *big.Int {
 	calculatedBaseFee := calcBaseFee(config, parent)
 	ceiling := big.NewInt(params.MaxBaseFee)
 	if calculatedBaseFee.Cmp(ceiling) > 0 {
@@ -35,7 +35,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 }
 
 // calcBaseFee calculates the basefee of the header.
-func calcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
+func calcBaseFee(config *params.ChainConfig, parent *types.WorkObject) *big.Int {
 	var (
 		parentGasTarget          = parent.GasLimit() / params.ElasticityMultiplier
 		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)

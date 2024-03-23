@@ -15,9 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/rpc"
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
@@ -170,7 +168,6 @@ type Progpow struct {
 	rand    *rand.Rand    // Properly seeded random source for nonces
 	threads int           // Number of threads to mine on if mining
 	update  chan struct{} // Notification channel to update mining parameters
-	remote  *remoteSealer
 
 	// The fields below are hooks for testing
 	shared    *Progpow      // Shared PoW verifier to avoid cache regeneration
@@ -206,7 +203,6 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 	if config.PowMode == ModeShared {
 		progpow.shared = sharedProgpow
 	}
-	progpow.remote = startRemoteSealer(progpow, notify, noverify)
 	return progpow
 }
 
@@ -265,19 +261,6 @@ func NewFullFaker() *Progpow {
 // in the same process.
 func NewShared() *Progpow {
 	return &Progpow{shared: sharedProgpow}
-}
-
-// Close closes the exit channel to notify all backend threads exiting.
-func (progpow *Progpow) Close() error {
-	progpow.closeOnce.Do(func() {
-		// Short circuit if the exit channel is not allocated.
-		if progpow.remote == nil {
-			return
-		}
-		close(progpow.remote.requestExit)
-		<-progpow.remote.exitCh
-	})
-	return nil
 }
 
 // lru tracks caches or datasets by their last use time, keeping at most N of them.
@@ -463,25 +446,5 @@ func (progpow *Progpow) SetThreads(threads int) {
 		case progpow.update <- struct{}{}:
 		default:
 		}
-	}
-}
-
-// APIs implements consensus.Engine, returning the user facing RPC APIs.
-func (progpow *Progpow) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	// In order to ensure backward compatibility, we exposes progpow RPC APIs
-	// to both eth and progpow namespaces.
-	return []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   &API{progpow},
-			Public:    true,
-		},
-		{
-			Namespace: "progpow",
-			Version:   "1.0",
-			Service:   &API{progpow},
-			Public:    true,
-		},
 	}
 }

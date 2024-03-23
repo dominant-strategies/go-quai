@@ -10,7 +10,7 @@ import (
 )
 
 // CalcOrder returns the order of the block within the hierarchy of chains
-func (progpow *Progpow) CalcOrder(header *types.Header) (*big.Int, int, error) {
+func (progpow *Progpow) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
 	nodeCtx := progpow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
@@ -65,7 +65,7 @@ func (progpow *Progpow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (progpow *Progpow) TotalLogS(header *types.Header) *big.Int {
+func (progpow *Progpow) TotalLogS(header *types.WorkObject) *big.Int {
 	intrinsicS, order, err := progpow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -87,7 +87,7 @@ func (progpow *Progpow) TotalLogS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) TotalLogPhS(header *types.Header) *big.Int {
+func (progpow *Progpow) TotalLogPhS(header *types.WorkObject) *big.Int {
 	switch progpow.config.NodeLocation.Context() {
 	case common.PRIME_CTX:
 		totalS := header.ParentEntropy(common.PRIME_CTX)
@@ -103,7 +103,7 @@ func (progpow *Progpow) TotalLogPhS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) DeltaLogS(header *types.Header) *big.Int {
+func (progpow *Progpow) DeltaLogS(header *types.WorkObject) *big.Int {
 	intrinsicS, order, err := progpow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)

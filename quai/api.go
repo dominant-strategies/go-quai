@@ -33,7 +33,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
@@ -173,7 +172,7 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 	return true, nil
 }
 
-func hasAllBlocks(chain *core.Core, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.Core, bs []*types.WorkObject) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash(), b.NumberU64(chain.NodeCtx())) {
 			return false
@@ -201,11 +200,11 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	// Run actual the import in pre-configured batches
 	stream := rlp.NewStream(reader, 0)
 
-	blocks, index := make([]*types.Block, 0, 2500), 0
+	blocks, index := make([]*types.WorkObject, 0, 2500), 0
 	for batch := 0; ; batch++ {
 		// Load a batch of blocks from the input file
 		for len(blocks) < cap(blocks) {
-			block := new(types.Block)
+			block := new(types.WorkObject)
 			if err := stream.Decode(block); err == io.EOF {
 				break
 			} else if err != nil {
@@ -252,7 +251,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 	if blockNr == rpc.PendingBlockNumber {
 		return state.Dump{}, nil
 	}
-	var block *types.Block
+	var block *types.WorkObject
 	if blockNr == rpc.LatestBlockNumber {
 		block = api.quai.core.CurrentBlock()
 	} else {
@@ -288,43 +287,6 @@ func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hex
 	return nil, errors.New("unknown preimage")
 }
 
-// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
-type BadBlockArgs struct {
-	Hash  common.Hash            `json:"hash"`
-	Block map[string]interface{} `json:"block"`
-	RLP   string                 `json:"rlp"`
-}
-
-// GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-// and returns them as a JSON list of block-hashes
-func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
-	var (
-		err     error
-		blocks  = rawdb.ReadAllBadBlocks(api.quai.chainDb, api.quai.config.NodeLocation)
-		results = make([]*BadBlockArgs, 0, len(blocks))
-	)
-	for _, block := range blocks {
-		var (
-			blockRlp  string
-			blockJSON map[string]interface{}
-		)
-		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
-			blockRlp = err.Error() // Hacky, but hey, it works
-		} else {
-			blockRlp = fmt.Sprintf("0x%x", rlpBytes)
-		}
-		if blockJSON, err = quaiapi.RPCMarshalBlock(block, true, true, api.quai.core.NodeLocation()); err != nil {
-			blockJSON = map[string]interface{}{"error": err.Error()}
-		}
-		results = append(results, &BadBlockArgs{
-			Hash:  block.Hash(),
-			RLP:   blockRlp,
-			Block: blockJSON,
-		})
-	}
-	return results, nil
-}
-
 // AccountRangeMaxResults is the maximum number of results to be returned per call
 const AccountRangeMaxResults = 256
 
@@ -340,7 +302,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 			// the miner and operate on those
 			stateDb = &state.StateDB{}
 		} else {
-			var block *types.Block
+			var block *types.WorkObject
 			if number == rpc.LatestBlockNumber {
 				block = api.quai.core.CurrentBlock()
 			} else {
@@ -444,7 +406,7 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 //
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
-	var startBlock, endBlock *types.Block
+	var startBlock, endBlock *types.WorkObject
 
 	startBlock = api.quai.core.GetBlockByNumber(startNum)
 	if startBlock == nil {
@@ -473,7 +435,7 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum 
 //
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
-	var startBlock, endBlock *types.Block
+	var startBlock, endBlock *types.WorkObject
 	startBlock = api.quai.core.GetBlockByHash(startHash)
 	if startBlock == nil {
 		return nil, fmt.Errorf("start block %x not found", startHash)
@@ -495,7 +457,7 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 	return api.getModifiedAccounts(startBlock, endBlock)
 }
 
-func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
+func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.WorkObject) ([]common.Address, error) {
 	nodeLocation := api.quai.core.NodeLocation()
 	nodeCtx := api.quai.core.NodeCtx()
 	if startBlock.NumberU64(nodeCtx) >= endBlock.NumberU64(nodeCtx) {

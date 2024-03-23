@@ -32,7 +32,7 @@ type ExternalTx struct {
 // PendingEtxsRollup is Header and EtxRollups of that header that should
 // be forward propagated
 type PendingEtxsRollup struct {
-	Header     *Header      `json:"header" gencodec:"required"`
+	Header     *WorkObject  `json:"header" gencodec:"required"`
 	EtxsRollup Transactions `json:"etxsrollup" gencodec:"required"`
 }
 
@@ -65,7 +65,7 @@ func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxs
 	if protoPendingEtxsRollup.Header == nil {
 		return errors.New("header is nil in ProtoDecode")
 	}
-	p.Header = new(Header)
+	p.Header = new(WorkObject)
 	err := p.Header.ProtoDecode(protoPendingEtxsRollup.GetHeader())
 	if err != nil {
 		return err
@@ -87,7 +87,7 @@ func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxs
 // itself, so the Etxs list will just contain the ETXs emitted directly in that
 // zone block (a.k.a. a singleton).
 type PendingEtxs struct {
-	Header *Header      `json:"header" gencodec:"required"`
+	Header *WorkObject  `json:"header" gencodec:"required"`
 	Etxs   Transactions `json:"etxs"   gencodec:"required"`
 }
 
@@ -120,7 +120,7 @@ func (p *PendingEtxs) ProtoDecode(protoPendingEtxs *ProtoPendingEtxs) error {
 	if protoPendingEtxs.Header == nil {
 		return errors.New("header is nil in ProtoDecode")
 	}
-	p.Header = new(Header)
+	p.Header = new(WorkObject)
 	err := p.Header.ProtoDecode(protoPendingEtxs.GetHeader())
 	if err != nil {
 		return err

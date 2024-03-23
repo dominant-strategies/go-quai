@@ -87,9 +87,9 @@ type Pruner struct {
 
 // NewPruner creates the pruner instance.
 func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64, logger *log.Logger, location common.Location) (*Pruner, error) {
-	headBlock := rawdb.ReadHeadBlock(db, location)
+	headBlock := rawdb.ReadHeadBlock(db)
 	if headBlock == nil {
-		return nil, errors.New("Failed to load head block")
+		return nil, errors.New("failed to load head block")
 	}
 	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.EVMRoot(), false, false)
 	if err != nil {
@@ -376,9 +376,9 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, loc
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
-	headBlock := rawdb.ReadHeadBlock(db, location)
+	headBlock := rawdb.ReadHeadBlock(db)
 	if headBlock == nil {
-		return errors.New("Failed to load head block")
+		return errors.New("failed to load head work object")
 	}
 	// Initialize the snapshot tree in recovery mode to handle this special case:
 	// - Users run the `prune-state` command multiple times
@@ -432,7 +432,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom, location common.L
 	if genesisHash == (common.Hash{}) {
 		return errors.New("missing genesis hash")
 	}
-	genesis := rawdb.ReadBlock(db, genesisHash, 0, location)
+	genesis := rawdb.ReadWorkObject(db, genesisHash, types.BlockObject)
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}

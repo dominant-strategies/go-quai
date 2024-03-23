@@ -10,7 +10,7 @@ import (
 
 const (
 	// Data types for gossipsub topics
-	C_blockType       = "blocks"
+	C_workObjectType  = "blocks"
 	C_transactionType = "transactions"
 	C_headerType      = "headers"
 	C_hashType        = "hash"
@@ -19,8 +19,8 @@ const (
 // gets the name of the topic for the given type of data
 func TopicName(location common.Location, data interface{}) (string, error) {
 	switch data.(type) {
-	case *types.Block:
-		return strings.Join([]string{location.Name(), C_blockType}, "/"), nil
+	case *types.WorkObject:
+		return strings.Join([]string{location.Name(), C_workObjectType}, "/"), nil
 	case common.Hash:
 		return strings.Join([]string{location.Name(), C_hashType}, "/"), nil
 	case *types.Transaction:

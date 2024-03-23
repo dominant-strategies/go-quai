@@ -28,7 +28,7 @@ type ConsensusAPI interface {
 
 	// Asks the consensus backend to lookup a block by hash and location.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.
-	LookupBlock(common.Hash, common.Location) *types.Block
+	LookupBlock(common.Hash, common.Location) *types.WorkObject
 
 	LookupBlockHashByNumber(*big.Int, common.Location) *common.Hash
 

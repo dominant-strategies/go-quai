@@ -65,13 +65,14 @@ type Database struct {
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
-	logger *log.Logger // Contextual logger tracking the database path
+	logger   *log.Logger // Contextual logger tracking the database path
+	location common.Location
 }
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger) (*Database, error) {
-	return NewCustom(file, namespace, func(options *opt.Options) {
+func New(file string, cache int, handles int, namespace string, readonly bool, logger *log.Logger, location common.Location) (*Database, error) {
+	return NewCustom(file, namespace, location, func(options *opt.Options) {
 		// Ensure we have some minimal caching and file guarantees
 		if cache < minCache {
 			cache = minCache
@@ -92,7 +93,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, l
 // NewCustom returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 // The customize function allows the caller to modify the leveldb options.
-func NewCustom(file string, namespace string, customize func(options *opt.Options), logger *log.Logger) (*Database, error) {
+func NewCustom(file string, namespace string, location common.Location, customize func(options *opt.Options), logger *log.Logger) (*Database, error) {
 	options := configureOptions(customize)
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
 	logCtx := []interface{}{"cache", common.StorageSize(usedCache), "handles", options.GetOpenFilesCacheCapacity()}
@@ -115,6 +116,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 		db:       db,
 		quitChan: make(chan chan error),
 		logger:   logger,
+		location: location,
 	}
 
 	// Start up the metrics gathering and return
@@ -133,6 +135,10 @@ func configureOptions(customizeFn func(*opt.Options)) *opt.Options {
 		customizeFn(options)
 	}
 	return options
+}
+
+func (db *Database) Location() common.Location {
+	return db.location
 }
 
 // Close stops the metrics collection, flushes any pending data to disk and closes

@@ -6,7 +6,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
-func CalculateReward(header *types.Header) *big.Int {
+func CalculateReward(header *types.WorkObject) *big.Int {
 	if header.Coinbase().IsInQiLedgerScope() {
 		return calculateQiReward(header)
 	} else {
@@ -15,24 +15,24 @@ func CalculateReward(header *types.Header) *big.Int {
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
-func QiToQuai(currentHeader *types.Header, qiAmt *big.Int) *big.Int {
+func QiToQuai(currentHeader *types.WorkObject, qiAmt *big.Int) *big.Int {
 	quaiPerQi := new(big.Int).Div(calculateQuaiReward(currentHeader), calculateQiReward(currentHeader))
 	return new(big.Int).Mul(qiAmt, quaiPerQi)
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
-func QuaiToQi(currentHeader *types.Header, quaiAmt *big.Int) *big.Int {
+func QuaiToQi(currentHeader *types.WorkObject, quaiAmt *big.Int) *big.Int {
 	qiPerQuai := new(big.Int).Div(calculateQiReward(currentHeader), calculateQuaiReward(currentHeader))
 	return new(big.Int).Mul(quaiAmt, qiPerQuai)
 }
 
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
-func calculateQuaiReward(header *types.Header) *big.Int {
+func calculateQuaiReward(header *types.WorkObject) *big.Int {
 	return big.NewInt(1000000000000000000)
 }
 
 // CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
-func calculateQiReward(header *types.Header) *big.Int {
+func calculateQiReward(header *types.WorkObject) *big.Int {
 	return big.NewInt(1000)
 }
 

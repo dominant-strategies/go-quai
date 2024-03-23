@@ -1431,7 +1431,7 @@ func MakeChainDatabase(stack *node.Node, readonly bool) ethdb.Database {
 		chainDb ethdb.Database
 	)
 	name := "chaindata"
-	chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, viper.GetString(AncientDirFlag.Name), "", readonly)
+	chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, viper.GetString(AncientDirFlag.Name), "", readonly, stack.Config().NodeLocation)
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}

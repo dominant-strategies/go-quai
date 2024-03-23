@@ -55,7 +55,7 @@ func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeCtx int, logg
 		size:   size,
 		logger: logger,
 	}
-	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix))
+	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix), db.Location())
 
 	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits", nodeCtx, logger)
 }
@@ -70,7 +70,7 @@ func (b *BloomIndexer) Reset(ctx context.Context, section uint64, lastSectionHea
 
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
-func (b *BloomIndexer) Process(ctx context.Context, header *types.Header, bloom types.Bloom) error {
+func (b *BloomIndexer) Process(ctx context.Context, header *types.WorkObject, bloom types.Bloom) error {
 	b.gen.AddBloom(uint(header.NumberU64(common.ZONE_CTX)-b.section*b.size), bloom)
 	b.head = header.Hash()
 	return nil

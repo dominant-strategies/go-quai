@@ -233,7 +233,7 @@ func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
 // Helper to access the corresponding data cache
 func (p *P2PNode) pickCache(datatype interface{}, location common.Location) *lru.Cache[common.Hash, interface{}] {
 	switch datatype.(type) {
-	case *types.Block:
+	case *types.WorkObject:
 		return p.cache[location.Name()]["blocks"]
 	case *types.Transaction:
 		return p.cache[location.Name()]["transactions"]

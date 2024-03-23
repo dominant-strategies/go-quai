@@ -28,6 +28,7 @@ import (
 
 	"github.com/prometheus/tsdb/fileutil"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
@@ -51,6 +52,7 @@ type Node struct {
 	http          *httpServer //
 	ws            *httpServer //
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
+	location      []byte
 
 	databases map[*closeTrackingDB]struct{} // All open databases
 }
@@ -471,7 +473,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 			Cache:     cache,
 			Handles:   handles,
 			ReadOnly:  readonly,
-		}, n.config.NodeLocation.Context(), n.logger)
+		}, n.config.NodeLocation.Context(), n.logger, n.config.NodeLocation)
 	}
 
 	if err == nil {
@@ -485,7 +487,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly bool) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient, namespace string, readonly bool, location common.Location) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -504,7 +506,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 			Cache:             cache,
 			Handles:           handles,
 			ReadOnly:          readonly,
-		}, n.config.NodeLocation.Context(), n.logger)
+		}, n.config.NodeLocation.Context(), n.logger, location)
 	}
 
 	if err == nil {

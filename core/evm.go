@@ -32,19 +32,19 @@ type ChainContext interface {
 	// Engine retrieves the chain's consensus engine.
 	Engine() consensus.Engine
 
+	// GetHeader returns the hash corresponding to their hash.
+	GetHeader(common.Hash, uint64) *types.WorkObject
+
 	// GetHeader returns a block header from the database by hash.
 	// The header might not be on the canonical chain.
-	GetHeaderOrCandidate(common.Hash, uint64) *types.Header
-
-	// GetHeader returns a block header in the canonical chain from the database by hash.
-	GetHeader(common.Hash, uint64) *types.Header
+	GetHeaderOrCandidate(common.Hash, uint64) *types.WorkObject
 
 	// NodeCtx returns the context of the running node
 	NodeCtx() int
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
+func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -73,7 +73,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
+		GetHash:     GetHashFn(header.Header(), chain),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number(chain.NodeCtx())),
 		Time:        new(big.Int).SetUint64(timestamp),

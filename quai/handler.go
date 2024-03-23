@@ -1,14 +1,15 @@
 package quai
 
 import (
+	"math/big"
+	"sync"
+	"time"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
-	"math/big"
-	"sync"
-	"time"
 )
 
 const (
@@ -80,10 +81,10 @@ func (h *handler) missingBlockLoop() {
 		select {
 		case blockRequest := <-h.missingBlockCh:
 			go func() {
-				resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.Block{})
+				resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObject{})
 				block := <-resultCh
 				if block != nil {
-					h.core.WriteBlock(block.(*types.Block))
+					h.core.WriteBlock(block.(*types.WorkObject))
 				}
 			}()
 		case <-h.missingBlockSub.Err():
@@ -133,10 +134,10 @@ func (h *handler) checkNextPrimeBlock() {
 						// appended database we ask the peer for the block with this hash
 						if block == nil {
 							go func() {
-								resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.Block{})
+								resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObject{})
 								block := <-resultCh
 								if block != nil {
-									h.core.WriteBlock(block.(*types.Block))
+									h.core.WriteBlock(block.(*types.WorkObject))
 								}
 							}()
 						}

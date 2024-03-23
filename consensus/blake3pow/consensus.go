@@ -64,13 +64,13 @@ var (
 
 // Author implements consensus.Engine, returning the header's coinbase as the
 // proof-of-work verified author of the block.
-func (blake3pow *Blake3pow) Author(header *types.Header) (common.Address, error) {
+func (blake3pow *Blake3pow) Author(header *types.WorkObject) (common.Address, error) {
 	return header.Coinbase(), nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Quai blake3pow engine.
-func (blake3pow *Blake3pow) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
+func (blake3pow *Blake3pow) VerifyHeader(chain consensus.ChainHeaderReader, header *types.WorkObject) error {
 	// If we're running a full engine faking, accept any input as valid
 	if blake3pow.config.PowMode == ModeFullFake {
 		return nil
@@ -92,7 +92,7 @@ func (blake3pow *Blake3pow) VerifyHeader(chain consensus.ChainHeaderReader, head
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
-func (blake3pow *Blake3pow) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
+func (blake3pow *Blake3pow) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.WorkObject) (chan<- struct{}, <-chan error) {
 	// If we're running a full engine faking, accept any input as valid
 	if blake3pow.config.PowMode == ModeFullFake || len(headers) == 0 {
 		abort, results := make(chan struct{}), make(chan error, len(headers))
@@ -155,9 +155,9 @@ func (blake3pow *Blake3pow) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 	return abort, errorsOut
 }
 
-func (blake3pow *Blake3pow) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int, unixNow int64) error {
+func (blake3pow *Blake3pow) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.WorkObject, index int, unixNow int64) error {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
-	var parent *types.Header
+	var parent *types.WorkObject
 	if index == 0 {
 		parent = chain.GetHeader(headers[0].ParentHash(nodeCtx), headers[0].NumberU64(nodeCtx)-1)
 	} else if headers[index-1].Hash() == headers[index].ParentHash(nodeCtx) {
@@ -171,7 +171,7 @@ func (blake3pow *Blake3pow) verifyHeaderWorker(chain consensus.ChainHeaderReader
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
 // rules of the stock Quai blake3pow engine.
-func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *types.WorkObject) error {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	// If we're running a full engine faking, accept any input as valid
 	if blake3pow.config.PowMode == ModeFullFake {
@@ -185,7 +185,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		return nil
 	}
 	// Gather the set of past uncles and ancestors
-	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
+	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.WorkObject)
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)
 	for i := 0; i < 7; i++ {
@@ -197,7 +197,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
 		if ancestorHeader.UncleHash() != types.EmptyUncleHash {
 			// Need to add those uncles to the banned list too
-			ancestor := chain.GetBlock(parent, number)
+			ancestor := chain.GetWorkObject(parent, number)
 			if ancestor == nil {
 				break
 			}
@@ -207,7 +207,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		}
 		parent, number = ancestorHeader.ParentHash(nodeCtx), number-1
 	}
-	ancestors[block.Hash()] = block.Header()
+	ancestors[block.Hash()] = block
 	uncles.Add(block.Hash())
 
 	// Verify each of the uncles that it's recent, but not an ancestor
@@ -234,7 +234,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules
-func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, uncle bool, unixNow int64) error {
+func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.WorkObject, uncle bool, unixNow int64) error { //TODO: mmtx add hash validation check for header in woHeader
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	// Ensure that the header's extra-data section is of a reasonable size
 	if uint64(len(header.Extra())) > params.MaximumExtraDataSize {
@@ -296,7 +296,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		// check if the header coinbase is in scope
 		_, err := header.Coinbase().InternalAddress()
 		if err != nil {
-			return fmt.Errorf("out-of-scope coinbase in the header")
+			return fmt.Errorf("out-of-scope coinbase in the header: %v location: %v nodeLocation: %v", header.Coinbase(), header.Location(), blake3pow.config.NodeLocation)
 		}
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)
@@ -335,7 +335,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.Header) *big.Int {
+func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.WorkObject) *big.Int {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 
 	if nodeCtx != common.ZONE_CTX {
@@ -380,7 +380,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	return x
 }
 
-func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.Header) bool {
+func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.WorkObject) bool {
 	_, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return false
@@ -389,14 +389,14 @@ func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, h
 }
 
 // VerifySeal returns the PowHash and the verifySeal output
-func (blake3pow *Blake3pow) VerifySeal(header *types.Header) (common.Hash, error) {
+func (blake3pow *Blake3pow) VerifySeal(header *types.WorkObject) (common.Hash, error) {
 	return header.Hash(), blake3pow.verifySeal(header)
 }
 
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual blake3pow cache for it, or alternatively using a full DAG
 // to make remote mining fast.
-func (blake3pow *Blake3pow) verifySeal(header *types.Header) error {
+func (blake3pow *Blake3pow) verifySeal(header *types.WorkObject) error {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	// If we're running a fake PoW, accept any seal as valid
 	if blake3pow.config.PowMode == ModeFake || blake3pow.config.PowMode == ModeFullFake {
@@ -420,14 +420,14 @@ func (blake3pow *Blake3pow) verifySeal(header *types.Header) error {
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the blake3pow protocol. The changes are done inline.
-func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header) error {
+func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *types.WorkObject, parent *types.WorkObject) error {
 	header.SetDifficulty(blake3pow.CalcDifficulty(chain, parent))
 	return nil
 }
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
-func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObject) {
 	nodeLocation := blake3pow.config.NodeLocation
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	// Accumulate any block and uncle rewards and commit the final state root
@@ -464,8 +464,11 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.Block, error) {
+func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObject, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.WorkObject, error) {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
+	if len(txs) > 0 {
+		fmt.Println("FinalizeAndAssemble: txs", len(txs))
+	}
 	if nodeCtx == common.ZONE_CTX && chain.ProcessingState() {
 		// Finalize block
 		blake3pow.Finalize(chain, header, state, txs, uncles)
@@ -475,14 +478,14 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 	return types.NewBlock(header, txs, uncles, etxs, subManifest, receipts, trie.NewStackTrie(nil), nodeCtx), nil
 }
 
-func (blake3pow *Blake3pow) ComputePowLight(header *types.Header) (common.Hash, common.Hash) {
+func (blake3pow *Blake3pow) ComputePowLight(header *types.WorkObject) (common.Hash, common.Hash) {
 	panic("compute pow light doesnt exist for blake3")
 }
 
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, logger *log.Logger) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.WorkObject, uncles []*types.WorkObject, logger *log.Logger) {
 	nodeCtx := config.Location.Context()
 	// Select the correct block reward based on chain progression
 	blockReward := misc.CalculateReward(header)
@@ -507,10 +510,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	reward := new(big.Int).Set(blockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
-		coinbase, err := uncle.Coinbase().InternalAddress()
+		coinbase, err := uncle.Header().Coinbase().InternalAddress()
 		if err != nil {
 			logger.WithFields(log.Fields{
-				"Address": uncle.Coinbase().String(),
+				"Address": uncle.Header().Coinbase().String(),
 				"Hash":    uncle.Hash().String(),
 			}).Error("Found uncle with out of scope coinbase, skipping reward")
 			continue
