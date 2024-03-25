@@ -652,7 +652,6 @@ func (h *Header) SealEncode() *ProtoHeader {
 	etxSetHash := common.ProtoHash{Value: h.EtxSetHash().Bytes()}
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
-	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
 	time := h.Time()
@@ -674,7 +673,6 @@ func (h *Header) SealEncode() *ProtoHeader {
 		Location:      h.Location().ProtoEncode(),
 		Time:          &time,
 		Extra:         h.Extra(),
-		MixHash:       &mixHash,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
