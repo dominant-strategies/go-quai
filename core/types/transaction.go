@@ -28,6 +28,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -699,6 +700,10 @@ func (tx *Transaction) FromChain(nodeLocation common.Location) common.Location {
 func (tx *Transaction) ConfirmationCtx(nodeLocation common.Location) int {
 	if ctx := tx.confirmCtx.Load(); ctx != nil {
 		return ctx.(int)
+	}
+	if tx.ETXSender().Location().Equal(*tx.To().Location()) {
+		// If the ETX sender and the destination chain are the same, the ETX is a conversion tx
+		return params.ConversionConfirmationContext
 	}
 
 	ctx := tx.To().Location().CommonDom(tx.FromChain(nodeLocation)).Context()

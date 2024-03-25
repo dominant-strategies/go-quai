@@ -1128,7 +1128,7 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"err": err,
-		}).Error("Invalid utxo tx")
+		}).Error("Invalid Qi transaction")
 		return err
 	}
 	pool.mu.RUnlock()

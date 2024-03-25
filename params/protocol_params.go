@@ -143,7 +143,9 @@ const (
 	MinimumEtxGasDivisor        = 5    // The divisor for the minimum gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor)
 	MaximumEtxGasMultiplier     = 2    // Multiplied with the minimum ETX gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor) * MaximumEtxGasMultiplier
 
-	ConversionLockPeriod int64 = 10 // The number of zone blocks that a conversion output is locked for
+	ConversionLockPeriod          int64 = 10 // The number of zone blocks that a conversion output is locked for
+	MinQiConversionDenomination         = 1
+	ConversionConfirmationContext       = common.REGION_CTX // A conversion requires a single coincident Dom confirmation
 )
 
 var (
@@ -163,8 +165,9 @@ var (
 	LighthouseDurationLimit           = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit                = big.NewInt(2)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TimeFactor                        = big.NewInt(7)
-	PrimeEntropyTarget                = big.NewInt(441) // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
-	RegionEntropyTarget               = big.NewInt(21)  // This is TimeFactor*common.NumZonesInRegion
-	DifficultyAdjustmentPeriod        = big.NewInt(360) // This is the number of blocks over which the average has to be taken
-	DifficultyAdjustmentFactor int64  = 40              // This is the factor that divides the log of the change in the difficulty
+	PrimeEntropyTarget                = big.NewInt(441)                                    // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
+	RegionEntropyTarget               = big.NewInt(21)                                     // This is TimeFactor*common.NumZonesInRegion
+	DifficultyAdjustmentPeriod        = big.NewInt(360)                                    // This is the number of blocks over which the average has to be taken
+	DifficultyAdjustmentFactor int64  = 40                                                 // This is the factor that divides the log of the change in the difficulty
+	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(1), big.NewInt(Ether)) // 1 Quai
 )

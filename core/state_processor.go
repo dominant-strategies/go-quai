@@ -306,6 +306,7 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 						}
 						// the ETX hash is guaranteed to be unique
 						statedb.CreateUTXO(tx.Hash(), uint16(i), types.NewUtxoEntry(types.NewTxOut(denomination, tx.To().Bytes(), lock)))
+						log.Global.Infof("Created UTXO for ETX %032x with denomination %d index %d lock %d", tx.Hash(), denomination, i, lock)
 						if err := gp.SubGas(params.CallValueTransferGas); err != nil {
 							return nil, nil, nil, nil, 0, err
 						}
@@ -331,8 +332,12 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 			} else {
 				if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
 					msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod)))
-					msg.SetValue(misc.QiToQuai(parent.Header(), tx.Value())) // change to prime terminus
-					msg.SetData([]byte{})                                    // data is not used in conversion
+					if tx.Value().Uint64() > types.MaxDenomination { // sanity check
+						return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits conversion UTXO with value %d greater than max denomination", tx.Hash(), tx.Value().Int64())
+					}
+					msg.SetValue(misc.QiToQuai(parent.Header(), types.Denominations[uint8(tx.Value().Uint64())])) // change to prime terminus
+					msg.SetData([]byte{})                                                                         // data is not used in conversion
+					log.Global.Infof("Converting Qi to Quai for ETX %032x with value %d lock %d", tx.Hash(), msg.Value().Int64(), msg.Lock().Int64())
 				}
 				prevZeroBal := prepareApplyETX(statedb, msg.Value(), nodeLocation)
 				receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
@@ -346,7 +351,12 @@ func (p *StateProcessor) Process(block *types.Block, etxSet *types.EtxSet) (type
 			}
 		} else if tx.Type() == types.QuaiTxType {
 			startTimeTx := time.Now()
-
+			from, _ := msg.From().InternalAndQuaiAddress()
+			if lock := statedb.GetLock(from); lock != nil && lock.Cmp(blockNumber) > 0 {
+				return nil, nil, nil, nil, 0, fmt.Errorf("tx %v is from an address with a lock that has not expired, lock height %s", tx.Hash().Hex(), lock.String())
+			} else if lock != nil && lock.Cmp(blockNumber) <= 0 {
+				statedb.SetLock(from, nil)
+			}
 			receipt, err = applyTransaction(msg, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -521,6 +531,9 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.H
 		if utxo == nil {
 			return nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		}
+		if utxo.Lock != nil && utxo.Lock.Cmp(currentHeader.Number(location.Context())) > 0 {
+			return nil, nil, fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String())
+		}
 		// Verify the pubkey
 		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
 		entryAddr := common.BytesToAddress(utxo.Address, location)
@@ -573,9 +586,7 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.H
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 
 		toAddr := common.BytesToAddress(txOut.Address, location)
-		if !toAddr.IsInQiLedgerScope() {
-			return nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
-		}
+
 		// Enforce no address reuse
 		if _, exists := addresses[toAddr.Bytes20()]; exists {
 			return nil, nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
@@ -596,6 +607,23 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.H
 			}
 			if ETXPCount > *etxPLimit {
 				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+			}
+			if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai Conversion
+				if txOut.Denomination < params.MinQiConversionDenomination {
+					return nil, nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination)
+				}
+				internal, _ := toAddr.InternalAndQuaiAddress()
+				if statedb.Exist(internal) {
+					return nil, nil, fmt.Errorf("tx %v emits UTXO with address %v that already exists in the Quai ledger", tx.Hash().Hex(), internal.String())
+				}
+				// We should require some kind of extra fee here
+				if updateState {
+					statedb.CreateAccount(internal)
+					// lock it almost indefinitely, until the ETX plays in the destination
+					statedb.SetLock(internal, new(big.Int).Add(currentHeader.Number(location.Context()), big.NewInt(params.ConversionLockPeriod*1000)))
+				}
+			} else if !toAddr.IsInQiLedgerScope() {
+				return nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
 			}
 
 			// We should require some kind of extra fee here
@@ -640,10 +668,11 @@ func ProcessQiTx(tx *types.Transaction, updateState bool, currentHeader *types.H
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
 	// Check tx against required base fee and gas
-	baseFeeInQi := misc.QuaiToQi(currentHeader, currentHeader.BaseFee())
-	minimumFee := new(big.Int).Mul(baseFeeInQi, big.NewInt(int64(txGas)))
+	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(txGas)), currentHeader.BaseFee())
+	minimumFee := misc.QuaiToQi(currentHeader, minimumFeeInQuai)
+	log.Global.Infof("Minimum fee for tx %032x is %d", tx.Hash(), minimumFee.Uint64())
 	if txFeeInQit.Cmp(minimumFee) < 0 {
-		return nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee of %d and gas of %d", tx.Hash(), baseFeeInQi.Uint64(), txGas)
+		return nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFee.Uint64())
 	}
 	// Miner gets remainder of fee after base fee
 	txFeeInQit.Sub(txFeeInQit, minimumFee)
@@ -749,11 +778,20 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if err != nil {
 		return nil, err
 	}
-	if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
+	if tx.Type() == types.ExternalTxType && tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
 		parent := bc.GetHeaderOrCandidate(header.ParentHash(nodeCtx), header.NumberU64(nodeCtx)-1)
 		msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod)))
-		msg.SetValue(misc.QiToQuai(parent, tx.Value())) // change to prime terminus
-		msg.SetData([]byte{})                           // data is not used in conversion
+		if tx.Value().Uint64() > types.MaxDenomination { // sanity check
+			return nil, fmt.Errorf("tx %v emits conversion UTXO with value %d greater than max denomination", tx.Hash().Hex(), tx.Value().Int64())
+		}
+		msg.SetValue(misc.QiToQuai(parent, types.Denominations[uint8(tx.Value().Uint64())])) // change to prime terminus
+		msg.SetData([]byte{})                                                                // data is not used in conversion
+	}
+	from, _ := msg.From().InternalAndQuaiAddress()
+	if lock := statedb.GetLock(from); lock != nil && lock.Cmp(header.Number(nodeCtx)) > 0 {
+		return nil, fmt.Errorf("tx %v is from an address with a lock that has not expired, lock height %s", tx.Hash().Hex(), lock.String())
+	} else if lock != nil && lock.Cmp(header.Number(nodeCtx)) <= 0 {
+		statedb.SetLock(from, nil)
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)

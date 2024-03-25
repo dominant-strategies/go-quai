@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 func CalculateReward(header *types.Header) *big.Int {
@@ -17,23 +18,31 @@ func CalculateReward(header *types.Header) *big.Int {
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
 func QiToQuai(currentHeader *types.Header, qiAmt *big.Int) *big.Int {
 	quaiPerQi := new(big.Int).Div(calculateQuaiReward(currentHeader), calculateQiReward(currentHeader))
+	result := new(big.Int).Mul(qiAmt, quaiPerQi)
+	if result.Cmp(big.NewInt(0)) == 0 {
+		return big.NewInt(1)
+	}
 	return new(big.Int).Mul(qiAmt, quaiPerQi)
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
 func QuaiToQi(currentHeader *types.Header, quaiAmt *big.Int) *big.Int {
 	qiPerQuai := new(big.Int).Div(calculateQiReward(currentHeader), calculateQuaiReward(currentHeader))
+	result := new(big.Int).Mul(quaiAmt, qiPerQuai)
+	if result.Cmp(types.Denominations[0]) < 0 {
+		return types.Denominations[0]
+	}
 	return new(big.Int).Mul(quaiAmt, qiPerQuai)
 }
 
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
 func calculateQuaiReward(header *types.Header) *big.Int {
-	return big.NewInt(1000000000000000000)
+	return big.NewInt(params.Ether)
 }
 
 // CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
 func calculateQiReward(header *types.Header) *big.Int {
-	return big.NewInt(1000)
+	return types.Denominations[types.MaxDenomination]
 }
 
 // FindMinDenominations finds the minimum number of denominations to make up the reward
@@ -43,7 +52,7 @@ func FindMinDenominations(reward *big.Int) map[uint8]uint8 {
 	amount := new(big.Int).Set(reward)
 
 	// Iterate over the denominations in descending order (by key)
-	for i := 15; i >= 0; i-- {
+	for i := types.MaxDenomination; i >= 0; i-- {
 		denom := types.Denominations[uint8(i)]
 
 		// Calculate the number of times the denomination fits into the remaining amount

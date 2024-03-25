@@ -872,7 +872,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	total := uint256.NewInt(0)
 	total.Add(&value, fee)
 	// Fail if we're trying to transfer more than the available balance
-	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
+	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig(), interpreter.evm.Context.BlockNumber) {
 		temp.Clear()
 		stack.push(&temp)
 		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
