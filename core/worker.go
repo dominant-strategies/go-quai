@@ -528,7 +528,7 @@ func (w *worker) GeneratePendingHeader(block *types.Block, fill bool) (*types.He
 	start := time.Now()
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
-	if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) {
+	if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) && w.hc.ProcessingState() {
 		w.logger.Error("Refusing to mine without etherbase")
 		return nil, errors.New("etherbase not found")
 	} else if w.coinbase.Equal(common.Address{}) {
@@ -644,7 +644,13 @@ func (w *worker) eventExitLoop() {
 func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
-	state, err := w.hc.bc.processor.StateAt(parent.EVMRoot(), parent.UTXORoot())
+	evmRoot := parent.EVMRoot()
+	utxoRoot := parent.UTXORoot()
+	if w.hc.IsGenesisHash(parent.Hash()) {
+		evmRoot = types.EmptyRootHash
+		utxoRoot = types.EmptyRootHash
+	}
+	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -669,14 +675,6 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		etxRLimit: etxRLimit,
 		etxPLimit: etxPLimit,
 	}
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Hash(), 7) {
-		for _, uncle := range ancestor.Uncles() {
-			env.family.Add(uncle.Hash())
-		}
-		env.family.Add(ancestor.Hash())
-		env.ancestors.Add(ancestor.Hash())
-	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	return env, nil
@@ -687,6 +685,16 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	env.uncleMu.Lock()
 	defer env.uncleMu.Unlock()
 	hash := uncle.Hash()
+
+	// when 08 is processed ancestors contain 07 (quick block)
+	for _, ancestor := range w.hc.GetBlocksFromHash(env.header.ParentHash(common.ZONE_CTX), 7) {
+		for _, uncle := range ancestor.Uncles() {
+			env.family.Add(uncle.Hash())
+		}
+		env.family.Add(ancestor.Hash())
+		env.ancestors.Add(ancestor.Hash())
+	}
+
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
@@ -703,7 +711,7 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	return nil
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
+func (w *worker) commitTransaction(env *environment, parent *types.Header, tx *types.Transaction) ([]*types.Log, error) {
 	if tx != nil {
 		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
 			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
@@ -722,7 +730,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		snap := env.state.Snapshot()
 		// retrieve the gas used int and pass in the reference to the ApplyTransaction
 		gasUsed := env.header.GasUsed()
-		receipt, err := ApplyTransaction(w.chainConfig, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+		receipt, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.header, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
 		if err != nil {
 			w.logger.WithFields(log.Fields{
 				"err":     err,
@@ -733,21 +741,23 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 			env.state.RevertToSnapshot(snap)
 			return nil, err
 		}
+		// check if the to location is valid if an etx is generated in the receipt
+		if receipt.Status == types.ReceiptStatusSuccessful {
+
+			env.etxs = append(env.etxs, receipt.Etxs...)
+		}
 		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
 		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
 		// was possible.
 		env.header.SetGasUsed(gasUsed)
 		env.txs = append(env.txs, tx)
 		env.receipts = append(env.receipts, receipt)
-		if receipt.Status == types.ReceiptStatusSuccessful {
-			env.etxs = append(env.etxs, receipt.Etxs...)
-		}
 		return receipt.Logs, nil
 	}
 	return nil, errors.New("error finding transaction")
 }
 
-func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
+func (w *worker) commitTransactions(env *environment, parent *types.Header, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(GasPool).AddGas(gasLimit())
@@ -779,7 +789,7 @@ func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction,
 			return true
 		}
 		env.state.Prepare(tx.Hash(), env.tcount)
-		logs, err := w.commitTransaction(env, tx)
+		logs, err := w.commitTransaction(env, parent, tx)
 		if err == nil {
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
@@ -842,7 +852,7 @@ func (w *worker) commitTransactions(env *environment, etxs []*types.Transaction,
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, tx)
+		logs, err := w.commitTransaction(env, parent, tx)
 		switch {
 		case errors.Is(err, ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -952,25 +962,112 @@ func (w *worker) prepareWork(genParams *generateParams, block *types.Block) (*en
 	num := parent.Number(nodeCtx)
 	header := types.EmptyHeader()
 	header.SetParentHash(block.Header().Hash(), nodeCtx)
-	header.SetNumber(big.NewInt(int64(num.Uint64())+1), nodeCtx)
+	if w.hc.IsGenesisHash(parent.Hash()) {
+		header.SetNumber(big.NewInt(1), nodeCtx)
+	} else {
+		header.SetNumber(big.NewInt(int64(num.Uint64())+1), nodeCtx)
+	}
 	header.SetTime(timestamp)
 	header.SetLocation(w.hc.NodeLocation())
 
 	// Only calculate entropy if the parent is not the genesis block
-	if parent.Hash() != w.hc.config.GenesisHash {
-		_, order, err := w.engine.CalcOrder(parent.Header())
-		if err != nil {
-			return nil, err
-		}
+	_, order, err := w.engine.CalcOrder(parent.Header())
+	if err != nil {
+		return nil, err
+	}
+	if !w.hc.IsGenesisHash(parent.Hash()) {
 		// Set the parent delta S prior to sending to sub
 		if nodeCtx != common.PRIME_CTX {
 			if order < nodeCtx {
 				header.SetParentDeltaS(big.NewInt(0), nodeCtx)
 			} else {
-				header.SetParentDeltaS(w.engine.DeltaLogS(parent.Header()), nodeCtx)
+				header.SetParentDeltaS(w.engine.DeltaLogS(w.hc, parent.Header()), nodeCtx)
 			}
 		}
-		header.SetParentEntropy(w.engine.TotalLogS(parent.Header()), nodeCtx)
+		header.SetParentEntropy(w.engine.TotalLogS(w.hc, parent.Header()), nodeCtx)
+	} else {
+		header.SetParentEntropy(big.NewInt(0), nodeCtx)
+		header.SetParentDeltaS(big.NewInt(0), nodeCtx)
+	}
+
+	// Only calculate entropy if the parent is not the genesis block
+	if !w.hc.IsGenesisHash(parent.Hash()) {
+		// Set the parent delta S prior to sending to sub
+		if nodeCtx != common.PRIME_CTX {
+			if order < nodeCtx {
+				header.SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
+			} else {
+				header.SetParentUncledSubDeltaS(w.engine.UncledSubDeltaLogS(w.hc, parent.Header()), nodeCtx)
+			}
+		}
+	} else {
+		header.SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
+	}
+
+	// calculate the expansion values - except for the etxEligibleSlices, the
+	// zones cannot modify any of the other fields its done in prime
+	if nodeCtx == common.PRIME_CTX {
+		if parent.NumberU64(common.PRIME_CTX) == 0 {
+			header.SetEfficiencyScore(0)
+			header.SetThresholdCount(0)
+			header.SetExpansionNumber(0)
+		} else {
+			// compute the efficiency score at each prime block
+			efficiencyScore := w.hc.ComputeEfficiencyScore(parent.Header())
+			header.SetEfficiencyScore(efficiencyScore)
+
+			// If the threshold count is zero we have not started considering for the
+			// expansion
+			if parent.Header().ThresholdCount() == 0 {
+				if efficiencyScore > params.TREE_EXPANSION_THRESHOLD {
+					header.SetThresholdCount(parent.Header().ThresholdCount() + 1)
+				} else {
+					header.SetThresholdCount(0)
+				}
+			} else {
+				// If the efficiency score goes below the threshold,  and we still have
+				// not triggered the expansion, reset the threshold count or if we go
+				// past the tree expansion trigger window we have to reset the
+				// threshold count
+				if (parent.Header().ThresholdCount() < params.TREE_EXPANSION_TRIGGER_WINDOW && efficiencyScore < params.TREE_EXPANSION_THRESHOLD) ||
+					parent.Header().ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+					header.SetThresholdCount(0)
+				} else {
+					header.SetThresholdCount(parent.Header().ThresholdCount() + 1)
+				}
+			}
+
+			// Expansion happens when the threshold count is greater than the
+			// expansion threshold and we cross the tree expansion trigger window
+			if parent.Header().ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+				header.SetExpansionNumber(parent.Header().ExpansionNumber() + 1)
+			} else {
+				header.SetExpansionNumber(parent.Header().ExpansionNumber())
+			}
+		}
+	}
+
+	// Compute the Prime Terminus
+	if nodeCtx == common.ZONE_CTX {
+		if order == common.PRIME_CTX {
+			// Set the prime terminus
+			header.SetPrimeTerminus(parent.Hash())
+		} else {
+			if w.hc.IsGenesisHash(parent.Hash()) {
+				header.SetPrimeTerminus(parent.Hash())
+			} else {
+				// carry the prime terminus from the parent block
+				header.SetPrimeTerminus(parent.Header().PrimeTerminus())
+			}
+		}
+	}
+
+	if nodeCtx == common.PRIME_CTX {
+		if w.hc.IsGenesisHash(parent.Hash()) {
+			header.SetEtxEligibleSlices(common.Hash{})
+		} else {
+			header.SetEtxEligibleSlices(w.hc.UpdateEtxEligibleSlices(parent.Header(), parent.Location()))
+		}
 	}
 
 	// Only zone should calculate state
@@ -1067,7 +1164,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	}
 	if !fill {
 		if len(etxs) > 0 {
-			w.commitTransactions(env, etxs, &types.TransactionsByPriceAndNonce{}, etxSet, interrupt)
+			w.commitTransactions(env, block.Header(), etxs, &types.TransactionsByPriceAndNonce{}, etxSet, interrupt)
 		}
 		return etxSet
 	}
@@ -1081,7 +1178,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 
 	if len(pending) > 0 || len(pendingQiTxs) > 0 || len(etxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.header.BaseFee(), true)
-		if w.commitTransactions(env, etxs, txs, etxSet, interrupt) {
+		if w.commitTransactions(env, block.Header(), etxs, txs, etxSet, interrupt) {
 			return etxSet
 		}
 	}
@@ -1127,6 +1224,11 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 		return nil, err
 	}
 
+	// Once the uncles list is assembled in the block
+	if nodeCtx == common.ZONE_CTX {
+		block.Header().SetUncledS(w.engine.UncledLogS(block))
+	}
+
 	manifestHash := w.ComputeManifestHash(parent.Header())
 
 	if w.hc.ProcessingState() {
@@ -1156,6 +1258,8 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, header *typ
 // and returns the key to be used for the pendingBlockBodyCache.
 func (w *worker) getPendingBlockBodyKey(header *types.Header) common.Hash {
 	return types.RlpHash([]interface{}{
+		header.EVMRoot(),
+		header.UTXORoot(),
 		header.UncleHash(),
 		header.TxHash(),
 		header.EtxHash(),
@@ -1301,6 +1405,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			// We should require some kind of extra fee here
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas, ChainID: w.chainConfig.ChainID}
 			etx := types.NewTx(&etxInner)
+			primeTerminus := w.hc.GetPrimeTerminus(env.header)
+			if !w.hc.IsSliceSetToReceiveEtx(primeTerminus, *toAddr.Location()) {
+				return fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
+			}
 			etxs = append(etxs, etx)
 			w.logger.Debug("Added UTXO ETX to block")
 		} else {

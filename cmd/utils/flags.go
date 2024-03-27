@@ -102,6 +102,7 @@ var NodeFlags = []Flag{
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
 	IndexAddressUtxos,
+	StartingExpansionNumberFlag,
 }
 
 var TXPoolFlags = []Flag{
@@ -546,6 +547,12 @@ var (
 		Value: false,
 		Usage: "Send full stats boolean flag for quaistats" + generateEnvDoc(c_NodeFlagPrefix+"sendfullstats"),
 	}
+
+	StartingExpansionNumberFlag = Flag{
+		Name:  c_NodeFlagPrefix + "starting-expansion-num",
+		Value: 0,
+		Usage: "Start the node at the expansion number preferred" + generateEnvDoc(c_NodeFlagPrefix+"starting-expansion-num"),
+	}
 )
 
 var (
@@ -863,24 +870,21 @@ func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *log
 }
 
 // setSubUrls sets the subordinate chain urls
-func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location) {
+func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location, currentExpansionNumber uint8) {
 	// only set the sub urls if its not the zone
-	slicesRunning := cfg.SlicesRunning
+	currentRegions, currentZones := common.GetHierarchySizeForExpansionNumber(currentExpansionNumber)
 	switch nodeLocation.Context() {
 	case common.PRIME_CTX:
-		subUrls := []string{}
-		regionsRunning := GetRunningRegions(slicesRunning)
-		for _, region := range regionsRunning {
-			subUrls = append(subUrls, fmt.Sprintf("ws://127.0.0.1:%d", 8002+int(region)))
+		subUrls := make([]string, common.MaxWidth)
+		for i := 0; i < int(currentRegions); i++ {
+			subUrls[i] = fmt.Sprintf("ws://127.0.0.1:%d", 8002+int(i))
 		}
 		cfg.SubUrls = subUrls
 	case common.REGION_CTX:
-		suburls := []string{}
+		suburls := make([]string, common.MaxWidth)
 		// Add the zones belonging to the region into the suburls list
-		for _, slice := range slicesRunning {
-			if slice.Region() == nodeLocation.Region() {
-				suburls = append(suburls, fmt.Sprintf("ws://127.0.0.1:%d", 8100+20*slice.Region()+slice.Zone()))
-			}
+		for i := 0; i < int(currentZones); i++ {
+			suburls[i] = fmt.Sprintf("ws://127.0.0.1:%d", 8100+20*nodeLocation.Region()+i)
 		}
 		cfg.SubUrls = suburls
 	}
@@ -1232,7 +1236,7 @@ func EnablePprof() {
 }
 
 // SetQuaiConfig applies quai-related command line flags to the config.
-func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []common.Location, nodeLocation common.Location, logger *log.Logger) {
+func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []common.Location, nodeLocation common.Location, currentExpansionNumber uint8, logger *log.Logger) {
 	cfg.NodeLocation = nodeLocation
 	cfg.SlicesRunning = slicesRunning
 
@@ -1257,7 +1261,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	setDomUrl(cfg, nodeLocation, logger)
 
 	// set the subordinate chain websocket urls
-	setSubUrls(cfg, nodeLocation)
+	setSubUrls(cfg, nodeLocation, currentExpansionNumber)
 
 	// set the gas limit ceil
 	setGasLimitCeil(cfg)
@@ -1399,9 +1403,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		cfg.Genesis.Nonce = viper.GetUint64(GenesisNonceFlag.Name)
 	}
 
-	logger.WithField("node", cfg.Genesis.Config.Location).Info("Setting genesis Location")
 	cfg.Genesis.Config.Location = nodeLocation
-	logger.WithField("genesis", cfg.Genesis.Config.Location).Info("Location after setting")
 }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {

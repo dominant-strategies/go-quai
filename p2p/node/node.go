@@ -195,7 +195,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		pubsub:         ps,
 		peerManager:    peerMgr,
 		requestManager: requestManager.NewManager(),
-		cache:          initializeCaches(common.GenerateLocations(common.NumRegionsInPrime, common.NumZonesInRegion)),
+		cache:          initializeCaches(common.GenerateLocations(common.MaxRegions, common.MaxZones)),
 	}
 
 	// Set the peer manager's backend to the host

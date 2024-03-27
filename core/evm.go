@@ -41,6 +41,12 @@ type ChainContext interface {
 
 	// NodeCtx returns the context of the running node
 	NodeCtx() int
+
+	// GetPrimeTerminus returns the header for the prime terminus hash in the header
+	GetPrimeTerminus(*types.Header) *types.Header
+
+	// IsSliceSetToReceiveEtx checks if the slice is eligible to receive etx
+	IsSliceSetToReceiveEtx(*types.Header, common.Location) bool
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.

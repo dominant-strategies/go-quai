@@ -265,9 +265,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	}
 }
 
-// ToBlock creates the genesis block and writes state of a genesis specification
-// to the given database (or discards it if nil).
-func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
+// ToHeader creates the genesis header from a genesis specification
+func (g *Genesis) ToHeader() *types.Header {
 	head := types.EmptyHeader()
 	head.SetNonce(types.EncodeNonce(g.Nonce))
 	head.SetTime(g.Timestamp)
@@ -285,7 +284,13 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.SetNumber(big.NewInt(0), i)
 		head.SetParentHash(common.Hash{}, i)
 	}
+	return head
+}
 
+// ToBlock creates the genesis block and writes state of a genesis specification
+// to the given database (or discards it if nil).
+func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
+	head := g.ToHeader()
 	return types.NewBlock(head, nil, nil, nil, nil, nil, trie.NewStackTrie(nil), g.Config.Location.Context())
 }
 
@@ -301,6 +306,7 @@ func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location) (*type
 	if config == nil {
 		config = params.AllProgpowProtocolChanges
 	}
+	rawdb.WriteGenesisHashes(db, common.Hashes{block.Hash()})
 	rawdb.WriteTermini(db, block.Hash(), types.EmptyTermini())
 	rawdb.WriteBlock(db, block, nodeCtx)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(nodeCtx), nil)
@@ -423,7 +429,7 @@ func DefaultLocalGenesisBlock(consensusEngine string) *Genesis {
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 			GasLimit:   5000000,
-			Difficulty: big.NewInt(300000),
+			Difficulty: big.NewInt(100000),
 		}
 	}
 	return &Genesis{

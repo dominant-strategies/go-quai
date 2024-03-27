@@ -145,6 +145,7 @@ type blockChain interface {
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	IsGenesisHash(hash common.Hash) bool
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -1601,7 +1602,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.EVMRoot(), newHead.UTXORoot())
+
+	evmRoot := newHead.EVMRoot()
+	utxoRoot := newHead.UTXORoot()
+	if pool.chain.IsGenesisHash(newHead.Hash()) {
+		evmRoot = types.EmptyRootHash
+		utxoRoot = types.EmptyRootHash
+	}
+	statedb, err := pool.chain.StateAt(evmRoot, utxoRoot)
 	if err != nil {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return
