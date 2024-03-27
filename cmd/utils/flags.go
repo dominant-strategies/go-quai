@@ -779,19 +779,7 @@ func setHTTP(cfg *node.Config, nodeLocation common.Location) {
 		}
 	}
 
-	getHttpPort := func() int {
-		switch nodeLocation.Context() {
-		case common.PRIME_CTX:
-			return 9001
-		case common.REGION_CTX:
-			return 9002 + nodeLocation.Region()
-		case common.ZONE_CTX:
-			return 9100 + 20*nodeLocation.Region() + nodeLocation.Zone()
-		}
-		panic("node location is not valid")
-	}
-
-	cfg.HTTPPort = getHttpPort()
+	cfg.HTTPPort = GetHttpPort(nodeLocation)
 
 	if viper.IsSet(HTTPCORSDomainFlag.Name) {
 		cfg.HTTPCors = SplitAndTrim(viper.GetString(HTTPCORSDomainFlag.Name))
@@ -810,6 +798,18 @@ func setHTTP(cfg *node.Config, nodeLocation common.Location) {
 	}
 }
 
+func GetHttpPort(nodeLocation common.Location) int {
+	switch nodeLocation.Context() {
+	case common.PRIME_CTX:
+		return 9001
+	case common.REGION_CTX:
+		return 9002 + nodeLocation.Region()
+	case common.ZONE_CTX:
+		return 9100 + 20*nodeLocation.Region() + nodeLocation.Zone()
+	}
+	panic("node location is not valid")
+}
+
 // setWS creates the WebSocket RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setWS(cfg *node.Config, nodeLocation common.Location) {
@@ -820,19 +820,7 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 		}
 	}
 
-	getWsPort := func() int {
-		switch nodeLocation.Context() {
-		case common.PRIME_CTX:
-			return 8001
-		case common.REGION_CTX:
-			return 8002 + nodeLocation.Region()
-		case common.ZONE_CTX:
-			return 8100 + 20*nodeLocation.Region() + nodeLocation.Zone()
-		}
-		panic("node location is not valid")
-	}
-
-	cfg.WSPort = getWsPort()
+	cfg.WSPort = GetWSPort(nodeLocation)
 
 	if viper.IsSet(WSAllowedOriginsFlag.Name) {
 		cfg.WSOrigins = SplitAndTrim(viper.GetString(WSAllowedOriginsFlag.Name))
@@ -845,6 +833,18 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 	if viper.IsSet(WSPathPrefixFlag.Name) {
 		cfg.WSPathPrefix = viper.GetString(WSPathPrefixFlag.Name)
 	}
+}
+
+func GetWSPort(nodeLocation common.Location) int {
+	switch nodeLocation.Context() {
+	case common.PRIME_CTX:
+		return 8001
+	case common.REGION_CTX:
+		return 8002 + nodeLocation.Region()
+	case common.ZONE_CTX:
+		return 8100 + 20*nodeLocation.Region() + nodeLocation.Zone()
+	}
+	panic("node location is not valid")
 }
 
 // setDomUrl sets the dominant chain websocket url.
