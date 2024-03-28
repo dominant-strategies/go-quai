@@ -1,9 +1,12 @@
 package blake3pow
 
 import (
+	"errors"
+	"math"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 	"modernc.org/mathutil"
@@ -13,7 +16,7 @@ import (
 func (blake3pow *Blake3pow) CalcOrder(header *types.Header) (*big.Int, int, error) {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
-		return common.Big0, common.PRIME_CTX, nil
+		return big0, common.PRIME_CTX, nil
 	}
 
 	// Verify the seal and get the powHash for the given header
@@ -65,7 +68,11 @@ func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (blake3pow *Blake3pow) TotalLogS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	// Treating the genesis block differntly
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	intrinsicS, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -103,7 +110,11 @@ func (blake3pow *Blake3pow) TotalLogPhS(header *types.Header) *big.Int {
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) DeltaLogS(header *types.Header) *big.Int {
+func (blake3pow *Blake3pow) DeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	// Treating the genesis block differntly
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	intrinsicS, order, err := blake3pow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
@@ -120,4 +131,75 @@ func (blake3pow *Blake3pow) DeltaLogS(header *types.Header) *big.Int {
 		return totalDeltaS
 	}
 	return big.NewInt(0)
+}
+
+func (blake3pow *Blake3pow) UncledLogS(block *types.Block) *big.Int {
+	uncles := block.Uncles()
+	totalUncledLogS := big.NewInt(0)
+	for _, uncle := range uncles {
+		// Verify the seal and get the powHash for the given header
+		err := blake3pow.verifySeal(uncle)
+		if err != nil {
+			continue
+		}
+		// Get entropy reduction of this header
+		intrinsicS := blake3pow.IntrinsicLogS(uncle.Hash())
+		totalUncledLogS.Add(totalUncledLogS, intrinsicS)
+	}
+	return totalUncledLogS
+}
+
+func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.Header) *big.Int {
+	// Treating the genesis block differntly
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
+	_, order, err := blake3pow.CalcOrder(header)
+	if err != nil {
+		return big.NewInt(0)
+	}
+	uncledLogS := header.UncledS()
+	switch order {
+	case common.PRIME_CTX:
+		return big.NewInt(0)
+	case common.REGION_CTX:
+		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.REGION_CTX), header.ParentUncledSubDeltaS(common.ZONE_CTX))
+		totalDeltaS = new(big.Int).Add(totalDeltaS, uncledLogS)
+		return totalDeltaS
+	case common.ZONE_CTX:
+		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.ZONE_CTX), uncledLogS)
+		return totalDeltaS
+	}
+	return big.NewInt(0)
+}
+
+// CalcRank returns the rank of the block within the hierarchy of chains, this
+// determines the level of the interlink
+func (blake3pow *Blake3pow) CalcRank(chain consensus.GenesisReader, header *types.Header) (int, error) {
+	if chain.IsGenesisHash(header.Hash()) {
+		return 0, nil
+	}
+	_, order, err := blake3pow.CalcOrder(header)
+	if err != nil {
+		return 0, err
+	}
+	if order != common.PRIME_CTX {
+		return 0, errors.New("rank cannot be computed for a non-prime block")
+	}
+
+	powHash := header.Hash()
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
+	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+
+	intrinsicS := blake3pow.IntrinsicLogS(powHash)
+	for i := common.InterlinkDepth; i > 0; i-- {
+		extraBits := math.Pow(2, float64(i))
+		primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(big.NewInt(int64(extraBits))))
+		primeBlockEntropyThreshold = new(big.Int).Add(primeBlockEntropyThreshold, common.BitsToBigBits(params.PrimeEntropyTarget))
+		if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 {
+			return i, nil
+		}
+	}
+
+	return 0, nil
 }

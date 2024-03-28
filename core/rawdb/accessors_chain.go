@@ -881,7 +881,7 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64, location common
 	if body == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles, body.ExtTransactions, body.SubManifest)
+	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles, body.ExtTransactions, body.SubManifest, body.InterlinkHashes)
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
@@ -993,7 +993,7 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash, location common.Location) *
 	}
 	for _, bad := range *badBlocks {
 		if bad.Header.Hash() == hash {
-			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest)
+			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest, bad.Body.InterlinkHashes)
 		}
 	}
 	return nil
@@ -1020,7 +1020,7 @@ func ReadAllBadBlocks(db ethdb.Reader, location common.Location) []*types.Block 
 	}
 	var blocks []*types.Block
 	for _, bad := range *badBlocks {
-		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest))
+		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles, bad.Body.ExtTransactions, bad.Body.SubManifest, bad.Body.InterlinkHashes))
 	}
 	return blocks
 }
@@ -1407,6 +1407,42 @@ func DeleteManifest(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadInterlinkHashes retreives the interlinkhashes corresponding to a given block
+func ReadInterlinkHashes(db ethdb.Reader, hash common.Hash) common.Hashes {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(interlinkHashKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	protoInterlinkHashes := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoInterlinkHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal interlink hashes")
+	}
+	interlinkHashes := new(common.Hashes)
+	interlinkHashes.ProtoDecode(protoInterlinkHashes)
+	return *interlinkHashes
+}
+
+// WriteInterlinkHashes stores the interlink hashes corresponding to a given block
+func WriteInterlinkHashes(db ethdb.KeyValueWriter, hash common.Hash, interlinkHashes common.Hashes) {
+	protoInterlinkHashes := interlinkHashes.ProtoEncode()
+	data, err := proto.Marshal(protoInterlinkHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal interlink hashes")
+	}
+	if err := db.Put(interlinkHashKey(hash), data); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to store interlink hashes")
+	}
+}
+
+// DeleteInterlinkHashes removes interlinkHashes data associated with a block.
+func DeleteInterlinkHashes(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(interlinkHashKey(hash)); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to delete interlink hashes")
+	}
+}
+
 // ReadBloomProto retrieves the bloom for the given block, in bytes
 func ReadBloomProto(db ethdb.Reader, hash common.Hash) []byte {
 	// Try to look up the data in leveldb.
@@ -1560,5 +1596,40 @@ func ReadAddressUtxos(db ethdb.Reader, address common.Address) []*types.UtxoEntr
 func DeleteAddressUtxos(db ethdb.KeyValueWriter, address common.Address) {
 	if err := db.Delete(addressUtxosKey(address)); err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to delete utxos")
+	}
+}
+
+func WriteGenesisHashes(db ethdb.KeyValueWriter, hashes common.Hashes) {
+	protoHashes := hashes.ProtoEncode()
+	data, err := proto.Marshal(protoHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Marshal genesis hashes")
+	}
+
+	if err := db.Put(genesisHashesKey, data); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to store genesis hashes")
+	}
+}
+
+func ReadGenesisHashes(db ethdb.Reader) common.Hashes {
+	data, _ := db.Get(genesisHashesKey)
+	if len(data) == 0 {
+		return common.Hashes{}
+	}
+	protoHashes := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoHashes)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal genesis hashes")
+	}
+
+	hashes := common.Hashes{}
+	hashes.ProtoDecode(protoHashes)
+
+	return hashes
+}
+
+func DeleteGenesisHashes(db ethdb.KeyValueWriter) {
+	if err := db.Delete(genesisHashesKey); err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to delete genesis hashes")
 	}
 }

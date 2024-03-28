@@ -523,6 +523,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, nodeLocation 
 
 	fields["uncles"] = block.Uncles()
 	fields["subManifest"] = block.SubManifest()
+	fields["interlinkHashes"] = block.InterlinkHashes()
 
 	return fields, nil
 }
@@ -630,7 +631,7 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*type
 		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
 			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
 		}
-		return types.NewBlockWithHeader(b.Header()).WithBody(b.Transactions(), b.Uncles(), b.ExtTransactions(), subManifest), nil
+		return types.NewBlockWithHeader(b.Header()).WithBody(b.Transactions(), b.Uncles(), b.ExtTransactions(), subManifest, b.InterlinkHashes()), nil
 	}
 }
 
@@ -766,12 +767,19 @@ func (s *PublicBlockChainQuaiAPI) RequestDomToAppendOrFetch(ctx context.Context,
 	}
 	s.b.RequestDomToAppendOrFetch(requestDom.Hash, requestDom.Entropy, requestDom.Order)
 }
+
+type NewGenesisPendingHeaderArgs struct {
+	PendingHeader *types.Header `json:"header"`
+	Hash          common.Hash   `json:"genesisHash"`
+	DomTerminus   common.Hash   `json:"domTerminus"`
+}
+
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
-	var pendingHeader *types.Header
-	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
+	var genesis NewGenesisPendingHeaderArgs
+	if err := json.Unmarshal(raw, &genesis); err != nil {
 		return
 	}
-	s.b.NewGenesisPendingHeader(pendingHeader)
+	s.b.NewGenesisPendingHeader(genesis.PendingHeader, genesis.DomTerminus, genesis.Hash)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {

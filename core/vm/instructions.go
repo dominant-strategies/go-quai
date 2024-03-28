@@ -908,6 +908,11 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList, ChainID: interpreter.evm.chainConfig.ChainID}
 	etx := types.NewTx(&etxInner)
 
+	// check if the etx is eligible to be sent to the to location
+	if !interpreter.evm.Context.CheckIfEtxEligible(interpreter.evm.Context.EtxEligibleSlices, *etx.To().Location()) {
+		fmt.Println("opETX error: ETX is not eligible to be sent to", etx.To())
+		return nil, nil
+	}
 	interpreter.evm.ETXCacheLock.Lock()
 	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
 	interpreter.evm.ETXCacheLock.Unlock()
