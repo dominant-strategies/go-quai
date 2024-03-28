@@ -878,7 +878,7 @@ func (b *Block) Body() *Body {
 }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding
-// and returning it, or returning a previsouly cached value.
+// and returning it, or returning a previously cached value.
 func (b *Block) Size() common.StorageSize {
 	if size := b.size.Load(); size != nil {
 		return size.(common.StorageSize)
@@ -1037,7 +1037,7 @@ func (p PendingHeader) EncodeRLP(w io.Writer) error {
 }
 
 // Termini stores the dom terminus (i.e the previous dom block) and
-// subTermini(i.e the dom blocks that have occured in the subordinate chains)
+// subTermini(i.e the dom blocks that have occurred in the subordinate chains)
 type Termini struct {
 	domTermini []common.Hash `json:"domTermini"`
 	subTermini []common.Hash `json:"subTermini"`

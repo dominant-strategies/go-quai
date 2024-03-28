@@ -1104,7 +1104,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			}
 			d.syncStatsLock.Unlock()
 
-			// Signal the content downloaders of the availablility of new tasks
+			// Signal the content downloaders of the availability of new tasks
 			for _, ch := range []chan bool{d.bodyWakeCh} {
 				select {
 				case ch <- true:

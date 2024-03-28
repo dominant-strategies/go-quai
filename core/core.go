@@ -43,7 +43,7 @@ const (
 	c_maxFutureBlocksZone               uint64 = 200
 	c_maxFutureBlocksZoneAtFray         uint64 = 2000
 	c_appendQueueRetryPriorityThreshold        = 5  // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
-	c_appendQueueRemoveThreshold               = 10 // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
+	c_appendQueueRemoveThreshold               = 10 // Number of blocks behind the block should be from the current header to be eligible for removal from the append queue
 	c_normalListProcCounter                    = 1  // Ratio of Number of times the PriorityList is serviced over the NormalList
 	c_statsPrintPeriod                         = 60 // Time between stats prints
 	c_appendQueuePrintSize                     = 10
@@ -98,8 +98,8 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	appendQueue, _ := lru.New(c_maxAppendQueue)
 	c.appendQueue = appendQueue
 
-	proccesingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
-	c.processingCache = proccesingCache
+	processingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
+	c.processingCache = processingCache
 
 	badSyncTargetsCache, _ := lru.New(c_badSyncTargetsSize)
 	c.badSyncTargets = badSyncTargetsCache
@@ -136,9 +136,9 @@ func (c *Core) InsertChain(blocks types.Blocks) (int, error) {
 			c.processingCache.Remove(block.Hash())
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
-				// referencable by this block. When this block is referenced in the dom's
+				// referenceable by this block. When this block is referenced in the dom's
 				// subordinate block manifest, then ETXs produced by this block and the rollup
-				// of ETXs produced by subordinate chain(s) will become referencable.
+				// of ETXs produced by subordinate chain(s) will become referenceable.
 				if nodeCtx > common.PRIME_CTX {
 					pendingEtx := types.PendingEtxs{block.Header(), newPendingEtxs}
 					// Only send the pending Etxs to dom if valid, because in the case of running a slice, for the zones that the node doesn't run, it cannot have the etxs generated
@@ -187,7 +187,7 @@ func (c *Core) procAppendQueue() {
 
 	maxFutureBlocks := c_maxFutureBlocksPrime
 	// If sync point is reached increase the maxFutureBlocks
-	// we can increse scope when we are near, region future blocks is increased to sync the fray fast
+	// we can increase scope when we are near, region future blocks is increased to sync the fray fast
 	if c.CurrentHeader() != nil && c.syncTarget != nil && c.CurrentHeader().NumberU64() >= c.syncTarget.NumberU64() {
 		if nodeCtx == common.REGION_CTX {
 			maxFutureBlocks = c_maxFutureBlocksRegionAtFray
@@ -505,7 +505,7 @@ func (c *Core) Config() *params.ChainConfig {
 	return c.sl.hc.bc.chainConfig
 }
 
-// Engine retreives the blake3 consensus engine.
+// Engine retrieves the blake3 consensus engine.
 func (c *Core) Engine() consensus.Engine {
 	return c.engine
 }

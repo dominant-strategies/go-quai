@@ -334,7 +334,7 @@ func TestOverriddenTraceCall(t *testing.T) {
 		expectErr   error
 		expect      *callTrace
 	}{
-		// Succcessful call with state overriding
+		// Successful call with state overriding
 		{
 			blockNumber: rpc.PendingBlockNumber,
 			call: quaiapi.TransactionArgs{

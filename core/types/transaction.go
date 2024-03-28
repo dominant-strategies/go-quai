@@ -383,7 +383,7 @@ func (tx *Transaction) FromChain() common.Location {
 }
 
 // ConfirmationCtx indicates the chain context at which this ETX becomes
-// confirmed and referencable to the destination chain
+// confirmed and referenceable to the destination chain
 func (tx *Transaction) ConfirmationCtx() int {
 	if ctx := tx.confirmCtx.Load(); ctx != nil {
 		return ctx.(int)

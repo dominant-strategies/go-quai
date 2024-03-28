@@ -30,7 +30,7 @@ const (
 	c_maxPendingEtxBatchesRegion      = 10000
 	c_maxPendingEtxsRollup            = 256
 	c_maxBloomFilters                 = 1024
-	c_pendingHeaderChacheBufferFactor = 2
+	c_pendingHeaderCacheBufferFactor = 2
 	pendingHeaderGCTime               = 5
 	c_terminusIndex                   = 3
 	c_startingPrintLimit              = 10
@@ -209,7 +209,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 
 	var pendingHeaderWithTermini types.PendingHeader
 	if nodeCtx != common.ZONE_CTX {
-		// Upate the local pending header
+		// Update the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, true, false)
 		if err != nil {
 			return nil, false, false, err
@@ -319,7 +319,7 @@ func (sl *Slice) Append(header *types.Header, domPendingHeader *types.Header, do
 				return nil, false, false, err
 			}
 		}
-		// Upate the local pending header
+		// Update the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, subReorg, false)
 		if err != nil {
 			return nil, false, false, err
@@ -556,7 +556,7 @@ func (sl *Slice) generateSlicePendingHeader(block *types.Block, newTermini types
 	var localPendingHeader *types.Header
 	var err error
 	if subReorg {
-		// Upate the local pending header
+		// Update the local pending header
 		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(block, fill)
 		if err != nil {
 			return types.PendingHeader{}, err
@@ -867,7 +867,7 @@ func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.Pendin
 	}
 }
 
-// updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
+// updatePhCacheFromDom combines the received pending header with the pending header stored locally at a given terminus for specified context
 func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, newEntropy *big.Int, subReorg bool, location common.Location) error {
 	sl.phCacheMu.Lock()
 	defer sl.phCacheMu.Unlock()
@@ -1172,7 +1172,7 @@ func (sl *Slice) combinePendingHeader(header *types.Header, slPendingHeader *typ
 func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.Header) {
 	nodeCtx := common.NodeLocation.Context()
 	genesisHash := sl.config.GenesisHash
-	// Upate the local pending header
+	// Update the local pending header
 	localPendingHeader, err := sl.miner.worker.GeneratePendingHeader(sl.hc.GetBlockByHash(genesisHash), false)
 	if err != nil {
 		return
