@@ -18,7 +18,9 @@ package dbtest
 
 import (
 	"bytes"
+	"crypto/rand"
 	"reflect"
+	"slices"
 	"sort"
 	"testing"
 
@@ -313,45 +315,6 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 	})
 
-		// Flush more modifications into the database, ensure the snapshot
-		// isn't affected.
-		var (
-			update = map[string]string{"k1": "v1-b", "k3": "v3-b"}
-			insert = map[string]string{"k5": "v5-b"}
-			delete = map[string]string{"k2": ""}
-		)
-		for k, v := range update {
-			db.Put([]byte(k), []byte(v))
-		}
-		for k, v := range insert {
-			db.Put([]byte(k), []byte(v))
-		}
-		for k := range delete {
-			db.Delete([]byte(k))
-		}
-		for k, v := range initial {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, []byte(v)) {
-				t.Fatalf("Unexpected value want: %v, got %v", v, got)
-			}
-		}
-		for k := range insert {
-			got, err := snapshot.Get([]byte(k))
-			if err == nil || len(got) != 0 {
-				t.Fatal("Unexpected value")
-			}
-		}
-		for k := range delete {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil || len(got) == 0 {
-				t.Fatal("Unexpected deletion")
-			}
-		}
-	})
-
 	t.Run("OperatonsAfterClose", func(t *testing.T) {
 		db := New()
 		db.Put([]byte("key"), []byte("value"))
@@ -472,7 +435,6 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 			benchBatchWrite(b, keys, vals)
 		})
 	})
->>>>>>> 99394adcb (ethdb/pebble: prevent shutdown-panic (#27238))
 }
 
 func iterateKeys(it ethdb.Iterator) []string {
@@ -483,4 +445,26 @@ func iterateKeys(it ethdb.Iterator) []string {
 	sort.Strings(keys)
 	it.Release()
 	return keys
+}
+
+// randomHash generates a random blob of data and returns it as a hash.
+func randBytes(len int) []byte {
+	buf := make([]byte, len)
+	if n, err := rand.Read(buf); n != len || err != nil {
+		panic(err)
+	}
+	return buf
+}
+
+func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
+	var keys [][]byte
+	var vals [][]byte
+	for i := 0; i < size; i += 1 {
+		keys = append(keys, randBytes(ksize))
+		vals = append(vals, randBytes(vsize))
+	}
+	if order {
+		slices.SortFunc(keys, func(a, b []byte) int { return bytes.Compare(a, b) })
+	}
+	return keys, vals
 }
