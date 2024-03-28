@@ -298,6 +298,14 @@ func (s *StateDB) GetBalance(addr common.InternalAddress) *big.Int {
 	return common.Big0
 }
 
+func (s *StateDB) GetLock(addr common.InternalAddress) *big.Int {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Lock()
+	}
+	return nil
+}
+
 func (s *StateDB) GetNonce(addr common.InternalAddress) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
@@ -433,6 +441,13 @@ func (s *StateDB) SetBalance(addr common.InternalAddress, amount *big.Int) {
 	}
 }
 
+func (s *StateDB) SetLock(addr common.InternalAddress, lock *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetLock(lock)
+	}
+}
+
 func (s *StateDB) SetNonce(addr common.InternalAddress, nonce uint64) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -510,7 +525,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
+		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, obj.data.Lock)
 	}
 }
 
@@ -640,6 +655,7 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 			}
 			data = &Account{
 				Nonce:    acc.Nonce,
+				Lock:     acc.Lock,
 				Balance:  acc.Balance,
 				CodeHash: acc.CodeHash,
 				Root:     common.BytesToHash(acc.Root),

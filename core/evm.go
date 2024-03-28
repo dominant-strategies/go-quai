@@ -86,17 +86,13 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 // NewEVMTxContext creates a new transaction context for a single transaction.
 func NewEVMTxContext(msg Message) vm.TxContext {
 	return vm.TxContext{
-		Origin:        msg.From(),
-		GasPrice:      new(big.Int).Set(msg.GasPrice()),
-		ETXSender:     msg.ETXSender(),
-		TxType:        msg.Type(),
-		Hash:          msg.Hash(),
-		ETXGasLimit:   msg.ETXGasLimit(),
-		ETXGasPrice:   msg.ETXGasPrice(),
-		ETXGasTip:     msg.ETXGasTip(),
-		TXGasTip:      msg.GasTipCap(),
-		ETXData:       msg.ETXData(),
-		ETXAccessList: msg.ETXAccessList(),
+		Origin:     msg.From(),
+		GasPrice:   new(big.Int).Set(msg.GasPrice()),
+		TxType:     msg.Type(),
+		Hash:       msg.Hash(),
+		TXGasTip:   msg.GasTipCap(),
+		AccessList: msg.AccessList(),
+		ETXSender:  msg.ETXSender(),
 	}
 }
 
@@ -136,9 +132,12 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
-func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
+func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int, blockheight *big.Int) bool {
 	internalAddr, err := addr.InternalAndQuaiAddress()
 	if err != nil {
+		return false
+	}
+	if db.GetLock(internalAddr) != nil && db.GetLock(internalAddr).Cmp(blockheight) > 0 {
 		return false
 	}
 	return db.GetBalance(internalAddr).Cmp(amount) >= 0

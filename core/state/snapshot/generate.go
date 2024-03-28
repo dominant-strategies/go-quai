@@ -553,6 +553,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		// Retrieve the current account and flatten it into the internal format
 		var acc struct {
 			Nonce    uint64
+			Lock     *big.Int
 			Balance  *big.Int
 			Root     common.Hash
 			CodeHash []byte
@@ -571,7 +572,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					dataLen -= 32
 				}
 			} else {
-				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
+				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash, acc.Lock)
 				dataLen = len(data)
 				rawdb.WriteAccountSnapshot(batch, accountHash, data)
 			}

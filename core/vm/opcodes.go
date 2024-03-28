@@ -216,6 +216,7 @@ const (
 	CREATE2
 	ETX
 	ISADDRINTERNAL
+	CONVERT
 	STATICCALL   OpCode = 0xfa
 	REVERT       OpCode = 0xfd
 	SELFDESTRUCT OpCode = 0xff
@@ -383,6 +384,7 @@ var opCodeToString = map[OpCode]string{
 	CREATE2:        "CREATE2",
 	ETX:            "ETX",
 	ISADDRINTERNAL: "ISADDRINTERNAL",
+	CONVERT:        "CONVERT",
 	STATICCALL:     "STATICCALL",
 	REVERT:         "REVERT",
 	SELFDESTRUCT:   "SELFDESTRUCT",
@@ -546,6 +548,7 @@ var stringToOp = map[string]OpCode{
 	"SELFDESTRUCT":   SELFDESTRUCT,
 	"ETX":            ETX,
 	"ISADDRINTERNAL": ISADDRINTERNAL,
+	"CONVERT":        CONVERT,
 }
 
 // StringToOp finds the opcode whose name is stored in `str`.
