@@ -27,6 +27,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -145,6 +146,13 @@ type blockChain interface {
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	IsGenesisHash(hash common.Hash) bool
+	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
+	Engine() consensus.Engine
+	GetHeaderOrCandidate(common.Hash, uint64) *types.Header
+	GetHeader(common.Hash, uint64) *types.Header
+	NodeCtx() int
+	GetHeaderByHash(common.Hash) *types.Header
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -1131,7 +1139,7 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 		etxPLimit = params.ETXPLimitMin
 	}
 	pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
-	fee, _, err := ProcessQiTx(tx, false, pool.chain.CurrentBlock().Header(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock().Header(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		pool.mu.RUnlock()
 		pool.logger.WithFields(logrus.Fields{
@@ -1601,7 +1609,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.EVMRoot(), newHead.UTXORoot())
+
+	evmRoot := newHead.EVMRoot()
+	utxoRoot := newHead.UTXORoot()
+	if pool.chain.IsGenesisHash(newHead.Hash()) {
+		evmRoot = types.EmptyRootHash
+		utxoRoot = types.EmptyRootHash
+	}
+	statedb, err := pool.chain.StateAt(evmRoot, utxoRoot)
 	if err != nil {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return
