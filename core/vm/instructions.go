@@ -916,6 +916,81 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	return nil, nil
 }
 
+// opConvert creates an external transaction that converts Quai to Qi
+// the ETX is added to the current context's cache and must go through Prime
+// opConvert is intended to be called in a contract
+func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
+	stack := scope.Stack
+	// We use it as a temporary value
+	temp := stack.pop() // following opCall protocol
+	// Pop other call parameters.
+	addr, uint256Value, etxGasLimit := stack.pop(), stack.pop(), stack.pop()
+	bigValue := uint256Value.ToBig()
+	toAddr := common.Bytes20ToAddress(addr.Bytes20(), interpreter.evm.chainConfig.Location)
+	// Verify address is in shard
+	if !common.IsInChainScope(toAddr.Bytes(), interpreter.evm.chainConfig.Location) {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x is not in chain scope, but opConvert was called\n", toAddr)
+		return nil, nil // following opCall protocol
+	} else if !toAddr.IsInQiLedgerScope() {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x is not in Qi ledger scope, but opConvert was called\n", toAddr)
+		return nil, nil // following opCall protocol
+	} else if bigValue.Cmp(params.MinQuaiConversionAmount) < 0 {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x cannot convert less than %d\n", scope.Contract.self.Address(), params.MinQuaiConversionAmount.Uint64())
+		return nil, nil // following opCall protocol
+	}
+	sender := scope.Contract.self.Address()
+	internalSender, err := sender.InternalAndQuaiAddress()
+	if err != nil {
+		fmt.Printf("%x opConvert error: %s\n", scope.Contract.self.Address(), err.Error())
+		return nil, nil
+	}
+
+	fee := uint256.NewInt(0)
+	gasPrice, _ := uint256.FromBig(interpreter.evm.GasPrice)
+	fee.Mul(gasPrice, &etxGasLimit) // optional: add gasPrice (base fee) and gasTipCap
+	total := uint256.NewInt(0)
+	total.Add(&uint256Value, fee)
+	// Fail if we're trying to transfer more than the available balance
+	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
+		return nil, nil
+	}
+
+	interpreter.evm.StateDB.SubBalance(internalSender, total.ToBig())
+
+	interpreter.evm.ETXCacheLock.RLock()
+	index := len(interpreter.evm.ETXCache)
+	interpreter.evm.ETXCacheLock.RUnlock()
+	if index > math.MaxUint16 {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Println("opConvert overflow error: too many ETXs in cache")
+		return nil, nil
+	}
+
+	// create external transaction
+	etxInner := types.ExternalTx{Value: bigValue, To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64()}
+	etx := types.NewTx(&etxInner)
+
+	interpreter.evm.ETXCacheLock.Lock()
+	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
+	interpreter.evm.ETXCacheLock.Unlock()
+
+	temp.SetOne() // following opCall protocol
+	stack.push(&temp)
+
+	return nil, nil
+}
+
 // opIsAddressInternal is used to determine if an address is internal or external based on the current chain context
 func opIsAddressInternal(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	addr := scope.Stack.peek()

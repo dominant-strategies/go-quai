@@ -992,5 +992,12 @@ func newInstructionSet() JumpTable {
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
+		CONVERT: {
+			execute:     opConvert,
+			constantGas: params.ETXGas,
+			minStack:    minStack(4, 1),
+			maxStack:    maxStack(4, 1),
+			writes:      true,
+		},
 	}
 }
