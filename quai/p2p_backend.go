@@ -9,6 +9,7 @@ import (
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -25,11 +26,11 @@ type QuaiBackend struct {
 
 // Create a new instance of the QuaiBackend consensus service
 func NewQuaiBackend() (*QuaiBackend, error) {
-	zoneBackends := make([][]*quaiapi.Backend, common.HierarchyDepth)
-	for i := 0; i < common.HierarchyDepth; i++ {
-		zoneBackends[i] = make([]*quaiapi.Backend, common.HierarchyDepth)
+	zoneBackends := make([][]*quaiapi.Backend, common.MaxRegions)
+	for i := 0; i < common.MaxRegions; i++ {
+		zoneBackends[i] = make([]*quaiapi.Backend, common.MaxZones)
 	}
-	return &QuaiBackend{regionApiBackends: make([]*quaiapi.Backend, common.HierarchyDepth), zoneApiBackends: zoneBackends}, nil
+	return &QuaiBackend{regionApiBackends: make([]*quaiapi.Backend, common.MaxZones), zoneApiBackends: zoneBackends}, nil
 }
 
 // Adds the p2pBackend into the given QuaiBackend
@@ -37,7 +38,7 @@ func (qbe *QuaiBackend) SetP2PApiBackend(p2pBackend NetworkingAPI) {
 	qbe.p2pBackend = p2pBackend
 }
 
-func (qbe *QuaiBackend) SetApiBackend(apiBackend quaiapi.Backend, location common.Location) {
+func (qbe *QuaiBackend) SetApiBackend(apiBackend *quaiapi.Backend, location common.Location) {
 	switch location.Context() {
 	case common.PRIME_CTX:
 		qbe.SetPrimeApiBackend(apiBackend)
@@ -49,18 +50,18 @@ func (qbe *QuaiBackend) SetApiBackend(apiBackend quaiapi.Backend, location commo
 }
 
 // Set the PrimeBackend into the QuaiBackend
-func (qbe *QuaiBackend) SetPrimeApiBackend(primeBackend quaiapi.Backend) {
-	qbe.primeApiBackend = &primeBackend
+func (qbe *QuaiBackend) SetPrimeApiBackend(primeBackend *quaiapi.Backend) {
+	qbe.primeApiBackend = primeBackend
 }
 
 // Set the RegionBackend into the QuaiBackend
-func (qbe *QuaiBackend) SetRegionApiBackend(regionBackend quaiapi.Backend, location common.Location) {
-	qbe.regionApiBackends[location.Region()] = &regionBackend
+func (qbe *QuaiBackend) SetRegionApiBackend(regionBackend *quaiapi.Backend, location common.Location) {
+	qbe.regionApiBackends[location.Region()] = regionBackend
 }
 
 // Set the ZoneBackend into the QuaiBackend
-func (qbe *QuaiBackend) SetZoneApiBackend(zoneBackend quaiapi.Backend, location common.Location) {
-	qbe.zoneApiBackends[location.Region()][location.Zone()] = &zoneBackend
+func (qbe *QuaiBackend) SetZoneApiBackend(zoneBackend *quaiapi.Backend, location common.Location) {
+	qbe.zoneApiBackends[location.Region()][location.Zone()] = zoneBackend
 }
 
 func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
@@ -139,6 +140,65 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 		}
 		return pubsub.ValidationAccept
 	}
+}
+
+// SetCurrentExpansionNumber sets the expansion number into the slice object on all the backends
+func (qbe *QuaiBackend) SetCurrentExpansionNumber(expansionNumber uint8) {
+	primeBackend := qbe.GetBackend(common.Location{})
+	if primeBackend == nil {
+		log.Global.Error("no backend found")
+		return
+	}
+	backend := *primeBackend
+	backend.SetCurrentExpansionNumber(expansionNumber)
+
+	for i := 0; i < common.MaxRegions; i++ {
+		regionBackend := qbe.GetBackend(common.Location{byte(i)})
+		if regionBackend != nil {
+			backend := *regionBackend
+			backend.SetCurrentExpansionNumber(expansionNumber)
+		}
+	}
+
+	for i := 0; i < common.MaxRegions; i++ {
+		for j := 0; j < common.MaxZones; j++ {
+			zoneBackend := qbe.GetBackend(common.Location{byte(i), byte(j)})
+			if zoneBackend != nil {
+				backend := *zoneBackend
+				backend.SetCurrentExpansionNumber(expansionNumber)
+			}
+		}
+	}
+}
+
+// WriteGenesisBlock adds the genesis block to the database and also writes the block to the disk
+func (qbe *QuaiBackend) WriteGenesisBlock(block *types.Block, location common.Location) {
+	backend := *qbe.GetBackend(location)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return
+	}
+	backend.WriteGenesisBlock(block, location)
+}
+
+// SetSubClient sets the sub client for the given subLocation
+func (qbe *QuaiBackend) SetSubClient(client *quaiclient.Client, nodeLocation common.Location, subLocation common.Location) {
+	backend := *qbe.GetBackend(nodeLocation)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return
+	}
+	backend.SetSubClient(client, subLocation)
+}
+
+// AddGenesisPendingEtxs adds the genesis pending etxs for the given location
+func (qbe *QuaiBackend) AddGenesisPendingEtxs(block *types.Block, location common.Location) {
+	backend := *qbe.GetBackend(location)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return
+	}
+	backend.AddGenesisPendingEtxs(block)
 }
 
 func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) *types.Block {

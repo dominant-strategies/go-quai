@@ -32,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -69,6 +70,7 @@ type Backend interface {
 	UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
+	SetCurrentExpansionNumber(expansionNumber uint8)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
@@ -81,7 +83,7 @@ type Backend interface {
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int)
 	UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location)
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
-	NewGenesisPendingHeader(pendingHeader *types.Header)
+	NewGenesisPendingHeader(pendingHeader *types.Header, domTerminus common.Hash, hash common.Hash)
 	GetPendingHeader() (*types.Header, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
@@ -94,6 +96,10 @@ type Backend interface {
 	SetSyncTarget(header *types.Header)
 	ProcessingState() bool
 	GetSlicesRunning() []common.Location
+	SetSubClient(client *quaiclient.Client, location common.Location)
+	AddGenesisPendingEtxs(block *types.Block)
+	SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription
+	WriteGenesisBlock(block *types.Block, location common.Location)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

@@ -39,7 +39,7 @@ func init() {
 	Denominations[13] = big.NewInt(1000000)    // 1000 Qi
 	Denominations[14] = big.NewInt(10000000)   // 10000 Qi
 	Denominations[15] = big.NewInt(100000000)  // 100000 Qi
-	Denominations[16] = big.NewInt(1000000000) // 1000000
+	Denominations[16] = big.NewInt(1000000000) // 1000000 Qi
 }
 
 type TxIns []TxIn

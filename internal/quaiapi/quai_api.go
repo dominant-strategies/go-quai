@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -446,14 +445,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	switch args.TxType {
 	case types.QiTxType:
 		return args.CalculateQiTxGas()
-	case types.InternalToExternalTxType:
-		if args.To == nil {
-			return 0, errors.New("to address is required for internal to external transaction")
-		} else if _, err := args.To.InternalAndQuaiAddress(); err != nil {
-			return 0, err
-		}
-		return hexutil.Uint64(params.TxGas + params.ETXGas), nil
-	case types.InternalTxType:
+	case types.QuaiTxType:
 		return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 	default:
 		return 0, errors.New("unsupported tx type")
@@ -523,6 +515,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, nodeLocation 
 
 	fields["uncles"] = block.Uncles()
 	fields["subManifest"] = block.SubManifest()
+	fields["interlinkHashes"] = block.InterlinkHashes()
 
 	return fields, nil
 }
@@ -630,7 +623,7 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.Block) (*type
 		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
 			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
 		}
-		return types.NewBlockWithHeader(b.Header()).WithBody(b.Transactions(), b.Uncles(), b.ExtTransactions(), subManifest), nil
+		return types.NewBlockWithHeader(b.Header()).WithBody(b.Transactions(), b.Uncles(), b.ExtTransactions(), subManifest, b.InterlinkHashes()), nil
 	}
 }
 
@@ -766,12 +759,19 @@ func (s *PublicBlockChainQuaiAPI) RequestDomToAppendOrFetch(ctx context.Context,
 	}
 	s.b.RequestDomToAppendOrFetch(requestDom.Hash, requestDom.Entropy, requestDom.Order)
 }
+
+type NewGenesisPendingHeaderArgs struct {
+	PendingHeader *types.Header `json:"header"`
+	Hash          common.Hash   `json:"genesisHash"`
+	DomTerminus   common.Hash   `json:"domTerminus"`
+}
+
 func (s *PublicBlockChainQuaiAPI) NewGenesisPendingHeader(ctx context.Context, raw json.RawMessage) {
-	var pendingHeader *types.Header
-	if err := json.Unmarshal(raw, &pendingHeader); err != nil {
+	var genesis NewGenesisPendingHeaderArgs
+	if err := json.Unmarshal(raw, &genesis); err != nil {
 		return
 	}
-	s.b.NewGenesisPendingHeader(pendingHeader)
+	s.b.NewGenesisPendingHeader(genesis.PendingHeader, genesis.DomTerminus, genesis.Hash)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {

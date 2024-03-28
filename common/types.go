@@ -31,6 +31,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -45,11 +46,13 @@ const (
 	REGION_CTX = 1
 	ZONE_CTX   = 2
 
-	// Depth of the hierarchy of chains
-	NumRegionsInPrime = 3
-	NumZonesInRegion  = 3
-	HierarchyDepth    = 3
-	NumChains         = 1 + NumRegionsInPrime*(1+NumZonesInRegion) // Prime + R regions + RxZ zones
+	//  Depth  of the tree, i.e. prime, region, zone
+	HierarchyDepth     = 3
+	MaxRegions         = 16
+	MaxZones           = 16
+	MaxWidth           = 16
+	MaxExpansionNumber = 32
+	InterlinkDepth     = 4
 )
 
 var (
@@ -223,6 +226,13 @@ func (h *Hashes) ProtoDecode(hashes *ProtoHashes) {
 	*h = res
 }
 
+// Len returns the length of h.
+func (h Hashes) Len() int { return len(h) }
+
+func (h Hashes) EncodeIndex(i int, w *bytes.Buffer) {
+	rlp.Encode(w, h[i])
+}
+
 /////////// Address
 
 type addrPrefixRange struct {
@@ -369,20 +379,7 @@ func (loc Location) HasZone() bool {
 	return loc.Zone() >= 0
 }
 
-func (loc Location) AssertValid() {
-	if !loc.HasRegion() && loc.HasZone() {
-		log.Global.Fatal("cannot specify zone without also specifying region.")
-	}
-	if loc.Region() >= NumRegionsInPrime {
-		log.Global.Fatal("region index is not valid.")
-	}
-	if loc.Zone() >= NumZonesInRegion {
-		log.Global.Fatal("zone index is not valid.")
-	}
-}
-
 func (loc Location) Context() int {
-	loc.AssertValid()
 	if loc.Zone() >= 0 {
 		return ZONE_CTX
 	} else if loc.Region() >= 0 {
@@ -593,4 +590,46 @@ func GenerateLocations(maxRegions, zonesPerRegion int) []Location {
 	}
 
 	return locations
+}
+
+// GetHierarchySizeForExpansionNumber calculates the number of regions and zones for a given expansion number.
+func GetHierarchySizeForExpansionNumber(expansion uint8) (uint64, uint64) {
+	// Handle special cases for genesis and the first expansion directly
+	switch expansion {
+	case 0: // Genesis
+		return 1, 1
+	case 1:
+		return 1, 2
+	default:
+		regions, zones := GetHierarchySizeForExpansionNumber(expansion - 1)
+		if expansion%2 == 0 {
+			return regions + 1, zones
+		} else {
+			return regions, zones + 1
+		}
+	}
+}
+
+// NewChainsAdded returns the new chains added on the given expansion number
+func NewChainsAdded(expansionNumber uint8) []Location {
+	newChains := []Location{}
+	oldRegions, _ := GetHierarchySizeForExpansionNumber(expansionNumber - 1)
+	newRegions, newZones := GetHierarchySizeForExpansionNumber(expansionNumber)
+
+	newRegionsAdded := newRegions > oldRegions
+
+	// If new region was not added, the new chains are the extra zones added to all the current regions
+	if !newRegionsAdded {
+		for i := 0; i < int(oldRegions); i++ {
+			newChains = append(newChains, Location{byte(i), byte(newZones - 1)})
+		}
+	} else {
+		// Region chain is added
+		newChains = append(newChains, Location{byte(newRegions - 1)})
+		// If new region was added, the new chains are the extra zones added to all the new regions
+		for i := 0; i < int(newZones); i++ {
+			newChains = append(newChains, Location{byte(newRegions - 1), byte(i)})
+		}
+	}
+	return newChains
 }

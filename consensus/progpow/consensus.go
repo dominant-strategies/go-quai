@@ -272,7 +272,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		return fmt.Errorf("block location is not in the same slice as the node location")
 	}
 	// Verify that the parent entropy is calculated correctly on the header
-	parentEntropy := progpow.TotalLogS(parent)
+	parentEntropy := progpow.TotalLogS(chain, parent)
 	if parentEntropy.Cmp(header.ParentEntropy(nodeCtx)) != 0 {
 		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(nodeCtx), parentEntropy)
 	}
@@ -285,12 +285,94 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), common.Big0)
 			}
 		} else {
-			parentDeltaS := progpow.DeltaLogS(parent)
+			parentDeltaS := progpow.DeltaLogS(chain, parent)
 			if parentDeltaS.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
 				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), parentDeltaS)
 			}
 		}
 	}
+	// If not prime, verify the parentUncledSubDeltaS field as well
+	if nodeCtx > common.PRIME_CTX {
+		_, parentOrder, _ := progpow.CalcOrder(parent)
+		// If parent was dom, parent uncled sub deltaS is zero and otherwise should be the calc parent uncled sub delta s on the parent
+		if parentOrder < nodeCtx {
+			if common.Big0.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), common.Big0)
+			}
+		} else {
+			expectedParentUncledSubDeltaS := progpow.UncledSubDeltaLogS(chain, parent)
+			if expectedParentUncledSubDeltaS.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), expectedParentUncledSubDeltaS)
+			}
+		}
+	}
+	// verify efficiency score, threshold count and the expansion number, on every prime block
+	if nodeCtx == common.PRIME_CTX {
+		if parent.NumberU64(nodeCtx) == 0 {
+			if header.EfficiencyScore() != 0 {
+				return fmt.Errorf("invalid efficiency score: have %v, want %v", header.EfficiencyScore(), 0)
+			}
+			if header.ThresholdCount() != 0 {
+				return fmt.Errorf("invalid threshold count: have %v, want %v", header.ThresholdCount(), 0)
+			}
+			if header.ExpansionNumber() != 0 {
+				return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), 0)
+			}
+		} else {
+			expectedEfficiencyScore := chain.ComputeEfficiencyScore(parent)
+			if header.EfficiencyScore() != expectedEfficiencyScore {
+				return fmt.Errorf("invalid efficiency score: have %v, want %v", header.EfficiencyScore(), expectedEfficiencyScore)
+			}
+
+			var expectedThresholdCount uint16
+			if parent.ThresholdCount() == 0 {
+				// If the threshold count is zero we have not started considering for the
+				// expansion
+				if expectedEfficiencyScore > params.TREE_EXPANSION_THRESHOLD {
+					expectedThresholdCount = parent.ThresholdCount() + 1
+				} else {
+					expectedThresholdCount = 0
+				}
+			} else {
+				// If the efficiency score goes below the threshold,  and we still have
+				// not triggered the expansion, reset the threshold count or if we go
+				// past the tree expansion trigger window we have to reset the
+				// threshold count
+				if (parent.ThresholdCount() < params.TREE_EXPANSION_TRIGGER_WINDOW && expectedEfficiencyScore < params.TREE_EXPANSION_THRESHOLD) ||
+					parent.ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+					expectedThresholdCount = 0
+				} else {
+					expectedThresholdCount = parent.ThresholdCount() + 1
+				}
+			}
+			if header.ThresholdCount() != expectedThresholdCount {
+				return fmt.Errorf("invalid threshold count: have %v, want %v", header.ThresholdCount(), expectedThresholdCount)
+			}
+
+			var expectedExpansionNumber uint8
+			if parent.ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+				expectedExpansionNumber = parent.ExpansionNumber() + 1
+			} else {
+				expectedExpansionNumber = parent.ExpansionNumber()
+			}
+			if header.ExpansionNumber() != expectedExpansionNumber {
+				return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), expectedExpansionNumber)
+			}
+		}
+	}
+	// verify the etx eligible slices in zone and prime ctx
+	if nodeCtx == common.PRIME_CTX {
+		var expectedEtxEligibleSlices common.Hash
+		if !chain.IsGenesisHash(parent.Hash()) {
+			expectedEtxEligibleSlices = chain.UpdateEtxEligibleSlices(parent, parent.Location())
+		} else {
+			expectedEtxEligibleSlices = parent.EtxEligibleSlices()
+		}
+		if header.EtxEligibleSlices() != expectedEtxEligibleSlices {
+			return fmt.Errorf("invalid etx eligible slices: have %v, want %v", header.EtxEligibleSlices(), expectedEtxEligibleSlices)
+		}
+	}
+
 	if nodeCtx == common.ZONE_CTX {
 		// check if the header coinbase is in scope
 		_, err := header.Coinbase().InternalAddress()
@@ -323,9 +405,28 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
 		}
+		var expectedPrimeTerminus common.Hash
+		_, parentOrder, _ := progpow.CalcOrder(parent)
+		if parentOrder == common.PRIME_CTX {
+			expectedPrimeTerminus = parent.Hash()
+		} else {
+			if chain.IsGenesisHash(parent.Hash()) {
+				expectedPrimeTerminus = parent.Hash()
+			} else {
+				expectedPrimeTerminus = parent.PrimeTerminus()
+			}
+		}
+		if header.PrimeTerminus() != expectedPrimeTerminus {
+			return fmt.Errorf("invalid primeTerminus: have %v, want %v", header.PrimeTerminus(), expectedPrimeTerminus)
+		}
 	}
 	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number(nodeCtx), parent.Number(nodeCtx)); diff.Cmp(big.NewInt(1)) != 0 {
+	parentNumber := parent.Number(nodeCtx)
+	if chain.IsGenesisHash(parent.Hash()) {
+		parentNumber = big.NewInt(0)
+	}
+	// Verify that the block number is parent's +1
+	if diff := new(big.Int).Sub(header.Number(nodeCtx), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
 	return nil
@@ -347,11 +448,12 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 	///// k = Floor(BinaryLog(parent.Difficulty()))/(DurationLimit*DifficultyAdjustmentFactor*AdjustmentPeriod)
 	///// Difficulty = Max(parent.Difficulty() + e * k, MinimumDifficulty)
 
-	if parent.Hash() == chain.Config().GenesisHash {
-		return parent.Difficulty()
+	if chain.IsGenesisHash(parent.Hash()) {
+		// Genesis Difficulty is the difficulty in the Genesis Block divided by the number of total slices active
+		return new(big.Int).Div(parent.Difficulty(), big.NewInt(int64((progpow.NodeLocation().Region()+1)*(progpow.NodeLocation().Zone()+1))))
 	}
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash(nodeCtx))
-	if parentOfParent == nil || parentOfParent.Hash() == chain.Config().GenesisHash {
+	if parentOfParent == nil || chain.IsGenesisHash(parentOfParent.Hash()) {
 		return parent.Difficulty()
 	}
 
@@ -470,7 +572,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 	nodeLocation := progpow.NodeLocation()
 	nodeCtx := progpow.NodeLocation().Context()
 
-	if nodeCtx == common.ZONE_CTX && header.ParentHash(nodeCtx) == chain.Config().GenesisHash {
+	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_"+nodeLocation.Name()+".json", progpow.logger)
 		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 

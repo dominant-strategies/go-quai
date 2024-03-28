@@ -79,6 +79,12 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			// If we have a subordinate chain, it is impossible for the subordinate manifest to be empty
 			return ErrBadSubManifest
 		}
+		if nodeCtx == common.PRIME_CTX {
+			interlinkRootHash := types.DeriveSha(block.InterlinkHashes(), trie.NewStackTrie(nil))
+			if interlinkRootHash != header.InterlinkRootHash() {
+				return ErrBadInterlink
+			}
+		}
 	} else {
 		// Header validity is known at this point, check the uncles and transactions
 		if err := v.engine.VerifyUncles(v.hc, block); err != nil {
@@ -134,6 +140,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	emittedEtxs = append(emittedEtxs, utxoEtxs...)
 	time6 := common.PrettyDuration(time.Since(start))
+
 	// Confirm the ETXs emitted by the transactions in this block exactly match the
 	// ETXs given in the block body
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
@@ -151,7 +158,12 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		if block.EtxSetHash() != types.EmptyEtxSetHash {
 			return fmt.Errorf("expected ETX Set hash %x does not match block ETXSetHash %x", types.EmptyRootHash, block.EtxSetHash())
 		}
+	}
 
+	// Check that the UncledS in the header matches the S from the block
+	expectedUncledS := v.engine.UncledLogS(block)
+	if expectedUncledS.Cmp(header.UncledS()) != 0 {
+		return fmt.Errorf("invalid uncledS (remote: %x local: %x)", header.UncledS(), expectedUncledS)
 	}
 	v.hc.logger.WithFields(log.Fields{
 		"t1": time1,
@@ -168,6 +180,16 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 // to keep the baseline gas close to the provided target, and increase it towards
 // the target if the baseline gas is lower.
 func CalcGasLimit(parent *types.Header, gasCeil uint64) uint64 {
+	// No Gas for TimeToStartTx days worth of zone blocks, this gives enough time to
+	// onboard new miners into the slice
+	if parent.NumberU64(common.ZONE_CTX) < params.TimeToStartTx {
+		return 0
+	}
+
+	// If parent gas is zero and we have passed the 5 day threshold, we can set the first block gas limit to min gas limit
+	if parent.GasLimit() == 0 {
+		return params.MinGasLimit
+	}
 
 	parentGasLimit := parent.GasLimit()
 
