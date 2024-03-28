@@ -92,8 +92,10 @@ type Backend interface {
 	GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error)
 	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
 	SetSyncTarget(header *types.Header)
+	TriggerSnapSync(header *types.Header)
 	ProcessingState() bool
 	GetSlicesRunning() []common.Location
+	TrieNodeByHash(hash common.Hash) ([]byte, error)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

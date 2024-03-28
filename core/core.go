@@ -50,7 +50,8 @@ const (
 	c_appendQueuePrintSize                     = 10
 	c_badSyncTargetsSize                       = 20 // List of bad sync target hashes
 	c_badSyncTargetCheckTime                   = 15 * time.Minute
-	c_normalListBackoffThreshold               = 5 // Max multiple on the c_normalListProcCounter
+	c_normalListBackoffThreshold               = 5   // Max multiple on the c_normalListProcCounter
+	c_snapSyncTriggerThreshold                 = 500 // Number of blocks behind the current header to trigger snap sync
 )
 
 type blockNumberAndRetryCounter struct {
@@ -73,6 +74,8 @@ type Core struct {
 	procCounter int
 
 	syncTarget *types.Header // sync target header decided based on Best Prime Block as the target to sync to
+
+	snapSyncFeed event.Feed // Snap sync feed
 
 	normalListBackoff uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
 
@@ -433,6 +436,17 @@ func (c *Core) SyncTargetEntropy() (*big.Int, *big.Int) {
 	}
 }
 
+// TriggerSnapSync triggers snap sync at the zone level
+func (c *Core) TriggerSnapSync(header *types.Header) {
+	if nodeCtx := c.NodeLocation().Context(); nodeCtx != common.ZONE_CTX {
+		for _, subClient := range c.sl.subClients {
+			subClient.TriggerSnapSync(context.Background(), header)
+		}
+	} else {
+		c.triggerSnapSyncStart(header.Number(c.sl.NodeCtx()).Uint64())
+	}
+}
+
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
 	nodeCtx := c.NodeLocation().Context()
@@ -625,8 +639,23 @@ func (c *Core) WriteBlock(block *types.Block) {
 	if nodeCtx == common.PRIME_CTX {
 		if block != nil {
 			c.SetSyncTarget(block.Header())
+			if c.shouldStartSnapSync(block) {
+				log.Global.Debugf("Starting snap sync for block %d", block.NumberU64(c.NodeCtx()))
+				c.TriggerSnapSync(block.Header())
+			}
 		}
 	}
+}
+
+// Returns true if the chain tip is 500 blocks ahead
+// of the current block
+func (c *Core) shouldStartSnapSync(block *types.Block) bool {
+	// 1. Get the block from the chain tip
+	latest := c.CurrentBlock()
+
+	// 2. If latest block is more than 500 blocks ahead of the current block
+	// then start snap sync
+	return block.NumberU64(c.NodeCtx())+c_snapSyncTriggerThreshold < latest.NumberU64(c.NodeCtx())
 }
 
 func (c *Core) Append(header *types.Header, manifest types.BlockManifest, domPendingHeader *types.Header, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
@@ -774,6 +803,11 @@ func (c *Core) GetSlicesRunning() []common.Location {
 // caching it if found.
 func (c *Core) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return c.sl.hc.GetBlock(hash, number)
+}
+
+// GetTrieNode retrieves a trie node from the database by hash.
+func (c *Core) GetTrieNodeByHash(hash common.Hash) ([]byte, error) {
+	return c.sl.hc.GetTrieNodeByHash(hash)
 }
 
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
@@ -960,6 +994,16 @@ func (c *Core) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription 
 	return c.sl.hc.bc.SubscribeBlockProcessingEvent(ch)
 }
 
+// SubscribeSnapSyncStartEvent returns a subscription to snap sync start events.
+func (c *Core) SubscribeSnapSyncStartEvent(ch chan<- SnapSyncStartEvent) event.Subscription {
+	return c.snapSyncFeed.Subscribe(ch)
+}
+
+// triggerSnapSyncStart sends a snap sync start event to all subscribers.
+func (c *Core) triggerSnapSyncStart(blockNumber uint64) {
+	c.snapSyncFeed.Send(SnapSyncStartEvent{BlockNumber: blockNumber})
+}
+
 // Export writes the active chain to the given writer.
 func (c *Core) Export(w io.Writer) error {
 	return c.sl.hc.Export(w)
@@ -1120,10 +1164,6 @@ func (c *Core) StateAtBlock(block *types.Block, reexec uint64, base *state.State
 
 func (c *Core) StateAtTransaction(block *types.Block, txIndex int, reexec uint64) (Message, vm.BlockContext, *state.StateDB, error) {
 	return c.sl.hc.bc.processor.StateAtTransaction(block, txIndex, reexec)
-}
-
-func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
-	return c.sl.hc.bc.processor.TrieNode(hash)
 }
 
 func (c *Core) GetUTXOsByAddress(addr common.Address) ([]*types.UtxoEntry, error) {

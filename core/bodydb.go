@@ -219,3 +219,8 @@ func (bc *BodyDb) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscripti
 func (bc *BodyDb) HasBlockAndState(hash common.Hash, number uint64) bool {
 	return bc.processor.HasBlockAndState(hash, number)
 }
+
+// GetTrieNode returns the encoded RLP trie node for a given hash
+func (bc *BodyDb) GetTrieNodeByHash(hash common.Hash) ([]byte, error) {
+	return bc.processor.TrieNode(hash)
+}

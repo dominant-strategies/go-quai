@@ -164,6 +164,10 @@ func (b *QuaiAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash 
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+func (b *QuaiAPIBackend) TrieNodeByHash(hash common.Hash) ([]byte, error) {
+	return b.quai.core.GetTrieNodeByHash(hash)
+}
+
 func (b *QuaiAPIBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return b.quai.core.PendingBlockAndReceipts()
 }
@@ -547,6 +551,10 @@ func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common
 
 func (b *QuaiAPIBackend) SetSyncTarget(header *types.Header) {
 	b.quai.core.SetSyncTarget(header)
+}
+
+func (b *QuaiAPIBackend) TriggerSnapSync(header *types.Header) {
+	b.quai.core.TriggerSnapSync(header)
 }
 
 func (b *QuaiAPIBackend) Logger() *log.Logger {

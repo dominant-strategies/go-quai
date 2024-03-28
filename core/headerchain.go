@@ -911,6 +911,11 @@ func (hc *HeaderChain) GetBlockOrCandidateByHash(hash common.Hash) *types.Block 
 	return hc.bc.GetBlockOrCandidate(hash, *number)
 }
 
+// GetTrieNode retrieves a trie node from the database by hash.
+func (hc *HeaderChain) GetTrieNodeByHash(hash common.Hash) ([]byte, error) {
+	return hc.bc.GetTrieNodeByHash(hash)
+}
+
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {

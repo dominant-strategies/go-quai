@@ -10,7 +10,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/p2p/requestManager"
-	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // interface required to join the quai protocol network
@@ -21,7 +20,7 @@ type QuaiP2PNode interface {
 	GetBlock(hash common.Hash, location common.Location) *types.Block
 	GetHeader(hash common.Hash, location common.Location) *types.Header
 	GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash
-	GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse
+	GetTrieNode(hash common.Hash, location common.Location) ([]byte, error)
 	GetRequestManager() requestManager.RequestManager
 	GetHostBackend() host.Host
 

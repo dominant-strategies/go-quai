@@ -46,7 +46,7 @@ func EncodeQuaiRequest(id uint32, location common.Location, data interface{}, da
 		reqMsg.Request = &QuaiRequestMessage_Transaction{}
 	case common.Hash:
 		reqMsg.Request = &QuaiRequestMessage_BlockHash{}
-	case trie.TrieNodeRequest:
+	case *trie.TrieNodeRequest:
 		reqMsg.Request = &QuaiRequestMessage_TrieNode{}
 	default:
 		return nil, errors.Errorf("unsupported request data type: %T", datatype)
@@ -94,7 +94,7 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 		blockHash.ProtoDecode(t.BlockHash)
 		reqType = blockHash
 	case *QuaiRequestMessage_TrieNode:
-		reqType = trie.TrieNodeRequest{}
+		reqType = &trie.TrieNodeRequest{}
 	default:
 		return reqMsg.Id, nil, common.Location{}, common.Hash{}, errors.Errorf("unsupported request type: %T", reqMsg.Request)
 	}
@@ -134,7 +134,10 @@ func EncodeQuaiResponse(id uint32, location common.Location, data interface{}) (
 		respMsg.Response = &QuaiResponseMessage_Transaction{Transaction: protoTransaction}
 
 	case *trie.TrieNodeResponse:
-		protoTrieNode := &trie.ProtoTrieNode{ProtoNodeData: data.NodeData}
+		protoTrieNode := &trie.ProtoTrieNode{
+			ProtoNodeData: data.NodeData,
+			ProtoNodeHash: data.NodeHash.Bytes(),
+		}
 		respMsg.Response = &QuaiResponseMessage_TrieNode{TrieNode: protoTrieNode}
 
 	case *common.Hash:
@@ -196,7 +199,12 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 		return id, hash, nil
 	case *QuaiResponseMessage_TrieNode:
 		protoTrieNode := respMsg.GetTrieNode()
-		trieNode := &trie.TrieNodeResponse{NodeData: protoTrieNode.ProtoNodeData}
+		recvdHash := common.Hash{}
+		recvdHash.SetBytes(protoTrieNode.ProtoNodeHash)
+		trieNode := &trie.TrieNodeResponse{
+			NodeData: protoTrieNode.ProtoNodeData,
+			NodeHash: recvdHash,
+		}
 		return id, trieNode, nil
 	default:
 		return id, nil, errors.Errorf("unsupported response type: %T", respMsg.Response)
