@@ -14,7 +14,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	"modernc.org/mathutil"
@@ -548,8 +547,6 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB) {
 	nodeLocation := blake3pow.config.NodeLocation
 	nodeCtx := blake3pow.config.NodeLocation.Context()
-	// Accumulate any block and uncle rewards and commit the final state root
-	accumulateRewards(chain.Config(), state, header, blake3pow.logger)
 
 	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_"+nodeLocation.Name()+".json", blake3pow.logger)
@@ -601,30 +598,4 @@ func (blake3pow *Blake3pow) NodeLocation() common.Location {
 
 func (blake3pow *Blake3pow) ComputePowLight(header *types.WorkObjectHeader) (common.Hash, common.Hash) {
 	panic("compute pow light doesnt exist for blake3")
-}
-
-// AccumulateRewards credits the coinbase of the given block with the mining
-// reward. The total reward consists of the static block reward and rewards for
-// included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.WorkObject, logger *log.Logger) {
-	// Select the correct block reward based on chain progression
-	blockReward := misc.CalculateReward(header)
-
-	coinbase, err := header.Coinbase().InternalAddress()
-	if err != nil {
-		logger.WithFields(log.Fields{
-			"Address": header.Coinbase().String(),
-			"Hash":    header.Hash().String(),
-		}).Error("Block has out of scope coinbase, skipping block reward")
-		return
-	}
-	if !header.Coinbase().IsInQuaiLedgerScope() {
-		logger.WithFields(log.Fields{
-			"Address": header.Coinbase().String(),
-			"Hash":    header.Hash().String(),
-		}).Debug("Block coinbase is in Qi ledger, skipping Quai block reward") // this log is largely unnecessary
-		return
-	}
-
-	state.AddBalance(coinbase, blockReward)
 }

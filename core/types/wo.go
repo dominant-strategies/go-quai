@@ -305,6 +305,35 @@ func (wo *WorkObject) QuaiTransactions() []*Transaction {
 	return wo.Body().QuaiTransactions()
 }
 
+func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
+	// TODO: cache the UTXO loop
+	qiTxs := make([]*Transaction, 0)
+	for i, t := range wo.Transactions() {
+		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) {
+			// ignore the Qi coinbase tx
+			continue
+		}
+		if t.Type() == QiTxType {
+			qiTxs = append(qiTxs, t)
+		}
+	}
+	return qiTxs
+}
+
+func (wo *WorkObject) QuaiTransactionsWithoutCoinbase() []*Transaction {
+	quaiTxs := make([]*Transaction, 0)
+	for i, t := range wo.Transactions() {
+		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) {
+			// ignore the Quai coinbase tx to comply with prior functionality as it is not a normal transaction
+			continue
+		}
+		if t.Type() != QiTxType {
+			quaiTxs = append(quaiTxs, t)
+		}
+	}
+	return quaiTxs
+}
+
 func (wo *WorkObject) NumberArray() []*big.Int {
 	numArray := make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
