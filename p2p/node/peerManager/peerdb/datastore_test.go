@@ -11,10 +11,8 @@ import (
 )
 
 func TestPeerDB_PutGetDeletePeer(t *testing.T) {
-	db, teardown := setupDB(t)
-	defer teardown()
-
-	ps := &PeerDB{db: db}
+	ps, teardown := setupDB(t)
+	t.Cleanup(teardown)
 
 	peerInfo := createPeers(t, 1)[0]
 
@@ -50,10 +48,8 @@ func TestPeerDB_PutGetDeletePeer(t *testing.T) {
 }
 
 func TestHas(t *testing.T) {
-	db, teardown := setupDB(t)
-	defer teardown()
-
-	ps := &PeerDB{db: db}
+	ps, teardown := setupDB(t)
+	t.Cleanup(teardown)
 
 	peerInfo := createPeers(t, 1)[0]
 
@@ -79,10 +75,8 @@ func TestHas(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	db, teardown := setupDB(t)
-	defer teardown()
-
-	ps := &PeerDB{db: db}
+	ps, teardown := setupDB(t)
+	t.Cleanup(teardown)
 
 	peers := createPeers(t, 5)
 
@@ -115,4 +109,27 @@ func TestQuery(t *testing.T) {
 		key := resultsPrefix[0].Key
 		require.Equal(t, key, "/"+peers[0].AddrInfo.ID.String())
 	})
+}
+
+func TestGetSize(t *testing.T) {
+	ps, teardown := setupDB(t)
+	t.Cleanup(teardown)
+
+	peer := createPeers(t, 1)[0]
+
+	key := datastore.NewKey(peer.AddrInfo.ID.String())
+	value, err := json.Marshal(peer)
+	require.NoError(t, err)
+
+	err = ps.Put(context.Background(), key, value)
+	require.NoError(t, err)
+
+	size, err := ps.GetSize(context.Background(), key)
+	require.NoError(t, err)
+	require.Equal(t, len(value), size)
+
+	//Test with non existent key
+	size, err = ps.GetSize(context.Background(), datastore.NewKey("non-existent-key"))
+	require.Error(t, err)
+	require.Equal(t, 0, size)
 }

@@ -5,11 +5,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func TestMain(m *testing.M) {
@@ -20,16 +21,25 @@ func TestMain(m *testing.M) {
 
 // helper functions to run peerdb tests
 
-func setupDB(t *testing.T) (*leveldb.DB, func()) {
+func setupDB(t *testing.T) (*PeerDB, func()) {
 	t.Helper()
-	dir := os.TempDir() + "peerstore_test"
+	viper.GetViper().Set(utils.DataDirFlag.Name, os.TempDir())
+	dbDir := "testdb"
+	locationName := "zone-0-0"
 
-	db, err := leveldb.OpenFile(dir, nil)
+	// creat a new peerdb
+	ps, err := NewPeerDB(dbDir, locationName)
 	require.NoError(t, err)
 
-	return db, func() {
-		db.Close()
-		os.RemoveAll(dir)
+	return ps, func() {
+		// close the db
+		err := ps.Close()
+		require.NoError(t, err)
+
+		// remove the db file
+		dbFile := viper.GetString(utils.DataDirFlag.Name) + "/" + locationName + dbDir
+		err = os.RemoveAll(dbFile)
+		require.NoError(t, err)
 	}
 }
 
