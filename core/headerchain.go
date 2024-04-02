@@ -108,7 +108,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 			return nil, ErrNoGenesis
 		}
 		if hc.genesisHeader.Hash() != hc.config.DefaultGenesisHash {
-			return nil, fmt.Errorf("genesis hash mismatch: have %x, want %x", hc.genesisHeader.Hash(), genesisHash)
+			return nil, fmt.Errorf("genesis hash mismatch: have %x, want %x", hc.genesisHeader.Hash(), chainConfig.DefaultGenesisHash)
 		}
 	}
 	hc.logger.WithField("Hash", hc.genesisHeader.Hash()).Info("Genesis")
