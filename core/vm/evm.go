@@ -608,10 +608,6 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 		return []byte{}, 0, fmt.Errorf("CreateETX error: %s", err.Error())
 	}
 
-	if err := evm.ValidateETXGasPriceAndTip(fromAddr, toAddr, evm.GasPrice, evm.TXGasTip); err != nil {
-		return []byte{}, 0, err
-	}
-
 	gas = gas - params.ETXGas
 
 	if gas < params.TxGas { // ETX must have enough gas to create a transaction
@@ -656,37 +652,6 @@ func calcEtxFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
 		multiplier = big.NewInt(0).Mul(multiplier, big.NewInt(common.MaxZones))
 	}
 	return multiplier
-}
-
-// Validate ETX gas price and tip
-func (evm *EVM) ValidateETXGasPriceAndTip(fromAddr, toAddr common.Address, etxGasPrice *big.Int, etxGasTip *big.Int) error {
-	return nil
-	if l := etxGasPrice.BitLen(); l > 256 {
-		return fmt.Errorf("max fee per gas higher than 2^256-1: address %v, etxGasPrice bit length: %d",
-			fromAddr, l)
-	}
-	if l := etxGasTip.BitLen(); l > 256 {
-		return fmt.Errorf("max priority fee per gas higher than 2^256-1: address %v, etxGasTip bit length: %d",
-			fromAddr, l)
-	}
-	if etxGasPrice.Cmp(etxGasTip) < 0 {
-		return fmt.Errorf("max priority fee per gas higher than max fee per gas: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s",
-			fromAddr, etxGasTip, etxGasPrice)
-	}
-	// This will panic if baseFee is nil, but basefee presence is verified
-	// as part of header validation.
-	feeMul := calcEtxFeeMultiplier(fromAddr, toAddr)
-	mulBaseFee := new(big.Int).Mul(evm.Context.BaseFee, feeMul)
-	if etxGasPrice.Cmp(mulBaseFee) < 0 {
-		return fmt.Errorf("etx max fee per gas less than %dx block base fee: address %v, maxFeePerGas: %s baseFee: %s",
-			feeMul, fromAddr, etxGasPrice, evm.Context.BaseFee)
-	}
-	mulTip := new(big.Int).Mul(evm.TXGasTip, feeMul)
-	if etxGasTip.Cmp(mulTip) < 0 {
-		return fmt.Errorf("etx miner tip cap less than %dx tx miner tip cap: address %v, etxGasTip: %s txGasTip: %s",
-			feeMul, fromAddr, etxGasTip, evm.TXGasTip)
-	}
-	return nil
 }
 
 // ChainConfig returns the environment's chain configuration

@@ -858,13 +858,6 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil
 	}
-	// Fail if ETX gas price or tip are not valid
-	if err := interpreter.evm.ValidateETXGasPriceAndTip(scope.Contract.Caller(), toAddr, gasFeeCap.ToBig(), gasTipCap.ToBig()); err != nil {
-		temp.Clear()
-		stack.push(&temp)
-		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
-		return nil, nil // following opCall protocol
-	}
 
 	fee := uint256.NewInt(0)
 	fee.Add(&gasTipCap, &gasFeeCap)
