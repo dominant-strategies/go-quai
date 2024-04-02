@@ -922,7 +922,7 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 		}).Error("Missing body but have receipt")
 		return nil
 	}
-	if err := receipts.DeriveFields(config, hash, number, body.QuaiTransactions()); err != nil {
+	if err := receipts.DeriveFields(config, hash, number, body.QuaiTransactionsWithoutCoinbase()); err != nil {
 		log.Global.WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,

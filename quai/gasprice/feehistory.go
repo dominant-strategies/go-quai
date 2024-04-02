@@ -106,8 +106,8 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		return
 	}
 
-	sorter := make(sortGasAndReward, len(bf.block.QuaiTransactions()))
-	for i, tx := range bf.block.QuaiTransactions() {
+	sorter := make(sortGasAndReward, len(bf.block.QuaiTransactionsWithoutCoinbase()))
+	for i, tx := range bf.block.QuaiTransactionsWithoutCoinbase() {
 		reward, _ := tx.EffectiveGasTip(bf.block.BaseFee())
 		sorter[i] = txGasAndReward{gasUsed: bf.receipts[i].GasUsed, reward: reward}
 	}

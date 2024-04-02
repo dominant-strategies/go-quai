@@ -1,6 +1,7 @@
 package core
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -9,7 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -174,12 +177,12 @@ type Config struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	config      *Config
-	chainConfig *params.ChainConfig
-	engine      consensus.Engine
-	hc          *HeaderChain
-	txPool      *TxPool
-
+	config       *Config
+	chainConfig  *params.ChainConfig
+	engine       consensus.Engine
+	hc           *HeaderChain
+	txPool       *TxPool
+	ephemeralKey *secp256k1.PrivateKey
 	// Feeds
 	pendingLogsFeed   event.Feed
 	pendingHeaderFeed event.Feed
@@ -314,6 +317,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		worker.wg.Add(1)
 		go worker.asyncStateLoop()
 	}
+
+	worker.ephemeralKey, _ = secp256k1.GeneratePrivateKey()
 
 	return worker
 }
@@ -547,6 +552,8 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		if coinbase.IsInQiLedgerScope() {
 			work.txs = append(work.txs, types.NewTx(&types.QiTx{})) // placeholder
+		} else if coinbase.IsInQuaiLedgerScope() {
+			work.txs = append(work.txs, types.NewTx(&types.QuaiTx{})) // placeholder
 		}
 		// Fill pending transactions from the txpool
 		w.adjustGasLimit(work, block)
@@ -568,7 +575,13 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			work.wo.Header().SetEtxSetHash(types.EmptyEtxSetHash)
 		}
 		if coinbase.IsInQiLedgerScope() {
-			coinbaseTx, err := createCoinbaseTxWithFees(work.wo, work.utxoFees, work.state)
+			coinbaseTx, err := createQiCoinbaseTxWithFees(work.wo, work.utxoFees, work.state, work.signer, w.ephemeralKey)
+			if err != nil {
+				return nil, err
+			}
+			work.txs[0] = coinbaseTx
+		} else if coinbase.IsInQuaiLedgerScope() {
+			coinbaseTx, err := createQuaiCoinbaseTx(work.state, work.wo, w.logger, work.signer, w.ephemeralKey.ToECDSA())
 			if err != nil {
 				return nil, err
 			}
@@ -1321,7 +1334,7 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
-	for i, tx := range block.QuaiTransactions() {
+	for i, tx := range block.QuaiTransactionsWithoutCoinbase() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
@@ -1470,15 +1483,14 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	for outPoint, utxo := range utxosCreate {
 		env.state.CreateUTXO(outPoint.TxHash, outPoint.Index, utxo)
 	}
-	gasUsed = env.wo.Header().GasUsed()
-	env.wo.Header().SetGasUsed(gasUsed + txGas)
+	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil
 }
 
-// createCoinbaseTx returns a coinbase transaction paying an appropriate subsidy
-// based on the passed block height to the provided address.  When the address
-// is nil, the coinbase transaction will instead be redeemable by anyone.
-func createCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *state.StateDB) (*types.Transaction, error) {
+// createQiCoinbaseTxWithFees returns a coinbase transaction paying an appropriate subsidy
+// based on the passed block height to the provided address. The transaction is signed
+// with an ephemeral key generated in the worker.
+func createQiCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *state.StateDB, signer types.Signer, ephemeralKey *secp256k1.PrivateKey) (*types.Transaction, error) {
 	parentHash := header.ParentHash(header.Location().Context()) // all blocks should have zone location and context
 
 	// The coinbase transaction input must be the parent hash encoded with the proper origin location
@@ -1488,6 +1500,7 @@ func createCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *st
 	in := types.TxIn{
 		// Coinbase transaction input is parent hash with max output index
 		PreviousOutPoint: *types.NewOutPoint(&parentHash, types.MaxOutputIndex),
+		PubKey:           ephemeralKey.PubKey().SerializeUncompressed(),
 	}
 
 	reward := misc.CalculateReward(header)
@@ -1515,10 +1528,42 @@ func createCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *st
 		TxIn:  []types.TxIn{in},
 		TxOut: outs,
 	}
+	txDigestHash := signer.Hash(types.NewTx(qiTx))
+	sig, err := schnorr.Sign(ephemeralKey, txDigestHash[:])
+	if err != nil {
+		return nil, err
+	}
+	qiTx.Signature = sig
+	if !sig.Verify(txDigestHash[:], ephemeralKey.PubKey()) {
+		return nil, fmt.Errorf("ephemeral key signature verification failed")
+	}
 	tx := types.NewTx(qiTx)
 	for i, out := range qiTx.TxOut {
 		// this may be unnecessary
 		state.CreateUTXO(tx.Hash(), uint16(i), types.NewUtxoEntry(&out))
 	}
+	return tx, nil
+}
+
+// createQuaiCoinbaseTx returns a coinbase transaction paying an appropriate subsidy
+// based on the passed block height to the provided address.
+func createQuaiCoinbaseTx(state *state.StateDB, header *types.WorkObject, logger *log.Logger, signer types.Signer, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+	// Select the correct block reward based on chain progression
+	blockReward := misc.CalculateReward(header)
+	coinbase := header.Coinbase()
+	internal, err := coinbase.InternalAndQuaiAddress()
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"Address": header.Coinbase().String(),
+			"Hash":    header.Hash().String(),
+		}).Error("Block has out of scope coinbase, skipping block reward")
+		return nil, fmt.Errorf("block has out of scope coinbase, skipping block reward")
+	}
+	tx := types.NewTx(&types.QuaiTx{To: &coinbase, Value: blockReward, Data: common.Hex2Bytes("Quai block reward")})
+	tx, err = types.SignTx(tx, signer, key)
+	if err != nil {
+		return nil, err
+	}
+	state.AddBalance(internal, blockReward)
 	return tx, nil
 }

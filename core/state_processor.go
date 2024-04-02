@@ -210,7 +210,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		allLogs      []*types.Log
 		gp           = new(GasPool).AddGas(block.GasLimit())
 	)
-
 	start := time.Now()
 	parent := p.hc.GetBlock(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	if parent == nil {
@@ -228,6 +227,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, p.stateCache, p.utxoCache, p.snaps, nodeLocation)
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, err
+	}
+	if len(block.Transactions()) == 0 {
+		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, statedb, 0, nil
 	}
 	time2 := common.PrettyDuration(time.Since(start))
 
@@ -267,12 +269,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	totalFees := big.NewInt(0)
 	qiEtxs := make([]*types.Transaction, 0)
 	for i, tx := range block.Transactions() {
+		if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
+			// coinbase tx currently exempt from gas and outputs are added after all txs are processed
+			continue
+		}
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
-			if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
-				// coinbase tx currently exempt from gas and outputs are added after all txs are processed
-				continue
-			}
 			fees, etxs, err := ProcessQiTx(tx, p.hc, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -344,37 +346,79 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		i++
 	}
 
-	qiTransactions := block.QiTransactions()
+	coinbaseTx := block.Transactions()[0]
 	// Coinbase check
-	if len(qiTransactions) > 0 && types.IsCoinBaseTx(qiTransactions[0], header.ParentHash(nodeCtx), nodeLocation) {
-		totalCoinbaseOut := big.NewInt(0)
-		for _, txOut := range qiTransactions[0].TxOut() {
-			totalCoinbaseOut.Add(totalCoinbaseOut, types.Denominations[txOut.Denomination])
-		}
-		reward := misc.CalculateReward(header)
-		maxCoinbaseOut := new(big.Int).Add(reward, totalFees) // TODO: Miner tip will soon no longer exist
+	if types.IsCoinBaseTx(coinbaseTx, header.ParentHash(nodeCtx), nodeLocation) {
+		if coinbaseTx.Type() == types.QiTxType {
+			// Public key aggregation for coinbase tx inputs
+			pubKeys := make([]*btcec.PublicKey, 0)
+			for _, txIn := range coinbaseTx.TxIn() {
+				pubKey, err := btcec.ParsePubKey(txIn.PubKey)
+				if err != nil {
+					return nil, nil, nil, nil, 0, err
+				}
+				pubKeys = append(pubKeys, pubKey)
+			}
 
-		if totalCoinbaseOut.Cmp(maxCoinbaseOut) > 0 {
-			return nil, nil, nil, nil, 0, fmt.Errorf("coinbase output value of %v is higher than expected value of %v", totalCoinbaseOut, maxCoinbaseOut)
-		}
-		for txOutIdx, txOut := range qiTransactions[0].TxOut() {
-			coinbase := common.BytesToAddress(txOut.Address, nodeLocation)
-			if !coinbase.IsInQiLedgerScope() { // a coinbase tx cannot emit an ETX
-				return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx emits UTXO with To address not in the Qi ledger scope")
+			// Ensure the coinbase signature is valid
+			var finalKey *btcec.PublicKey
+			if len(coinbaseTx.TxIn()) > 1 {
+				aggKey, _, _, err := musig2.AggregateKeys(
+					pubKeys, false,
+				)
+				if err != nil {
+					return nil, nil, nil, nil, 0, err
+				}
+				finalKey = aggKey.FinalKey
+			} else {
+				finalKey = pubKeys[0]
 			}
-			if _, err := coinbase.InternalAddress(); err != nil {
-				return nil, nil, nil, nil, 0, fmt.Errorf("invalid coinbase address %v: %w", coinbase, err)
+			txDigestHash := p.hc.pool.signer.Hash(coinbaseTx)
+			if !coinbaseTx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
+				return nil, nil, nil, nil, 0, errors.New("invalid signature for coinbase digest hash " + txDigestHash.String())
 			}
-			if !header.Coinbase().Equal(coinbase) {
-				return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx emits UTXO with To address not equal to block coinbase")
+			// Ensure the reward is valid
+			totalCoinbaseOut := big.NewInt(0)
+			for txOutIdx, txOut := range coinbaseTx.TxOut() {
+				coinbase := common.BytesToAddress(txOut.Address, nodeLocation)
+				if !coinbase.IsInQiLedgerScope() { // a coinbase tx cannot emit an ETX
+					return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx emits UTXO with To address not in the Qi ledger scope")
+				}
+				if _, err := coinbase.InternalAddress(); err != nil {
+					return nil, nil, nil, nil, 0, fmt.Errorf("invalid coinbase address %v: %w", coinbase, err)
+				}
+				if !header.Coinbase().Equal(coinbase) {
+					return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx emits UTXO with To address not equal to block coinbase")
+				}
+				utxo := types.NewUtxoEntry(&txOut)
+				statedb.CreateUTXO(coinbaseTx.Hash(), uint16(txOutIdx), utxo)
+				p.logger.WithFields(log.Fields{
+					"txHash":       coinbaseTx.Hash().Hex(),
+					"txOutIdx":     txOutIdx,
+					"denomination": txOut.Denomination,
+				}).Debug("Created Coinbase UTXO")
+				totalCoinbaseOut.Add(totalCoinbaseOut, types.Denominations[txOut.Denomination])
 			}
-			utxo := types.NewUtxoEntry(&txOut)
-			statedb.CreateUTXO(qiTransactions[0].Hash(), uint16(txOutIdx), utxo)
-			p.logger.WithFields(log.Fields{
-				"txHash":       qiTransactions[0].Hash().Hex(),
-				"txOutIdx":     txOutIdx,
-				"denomination": txOut.Denomination,
-			}).Debug("Created Coinbase UTXO")
+			reward := misc.CalculateReward(header)
+			maxCoinbaseOut := new(big.Int).Add(reward, totalFees) // TODO: Miner tip will soon no longer exist
+
+			if totalCoinbaseOut.Cmp(maxCoinbaseOut) > 0 {
+				return nil, nil, nil, nil, 0, fmt.Errorf("coinbase output value of %v is higher than expected value of %v", totalCoinbaseOut, maxCoinbaseOut)
+			}
+		} else if coinbaseTx.Type() == types.QuaiTxType {
+			// Apply the coinbase transaction to the current state
+			reward := misc.CalculateReward(header)
+			internal, err := coinbaseTx.To().InternalAddress()
+			if err != nil {
+				return nil, nil, nil, nil, 0, fmt.Errorf("invalid coinbase address %v: %w", coinbaseTx.To(), err)
+			}
+			if coinbaseTx.Value().Cmp(reward) > 0 {
+				return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx value %v is greater than expected reward %v", coinbaseTx.Value(), reward)
+			}
+			// Miner tips are added during EVM tx execution, so not added in the coinbase tx (and will be removed in the future)
+			statedb.AddBalance(internal, coinbaseTx.Value())
+		} else {
+			return nil, nil, nil, nil, 0, errors.New("coinbase tx type not supported")
 		}
 	}
 

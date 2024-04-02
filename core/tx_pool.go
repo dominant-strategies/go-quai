@@ -1604,9 +1604,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	} else {
 		block := pool.chain.GetBlock(newHead.Hash(), newHead.Number(pool.chainconfig.Location.Context()).Uint64())
 		pool.qiMu.Lock()
-		pool.removeQiTxsLocked(block.QiTransactions())
+		pool.removeQiTxsLocked(block.QiTransactionsWithoutCoinbase())
 		pool.qiMu.Unlock()
-		pool.logger.WithField("count", len(block.QiTransactions())).Debug("Removed qi txs from pool")
+		pool.logger.WithField("count", len(block.QiTransactionsWithoutCoinbase())).Debug("Removed qi txs from pool")
 	}
 	// Initialize the internal state to the current head
 	if newHead == nil {
