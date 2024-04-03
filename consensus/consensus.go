@@ -58,6 +58,9 @@ type ChainHeaderReader interface {
 
 	// UpdateEtxEligibleSlices updates the etx eligible slice for the given zone location
 	UpdateEtxEligibleSlices(header *types.WorkObject, location common.Location) common.Hash
+
+	// WriteAddressOutpoints writes the address outpoints to the database
+	WriteAddressOutpoints(outpointsMap map[string]map[string]*types.OutpointAndDenomination) error
 }
 
 // ChainReader defines a small collection of methods needed to access the local

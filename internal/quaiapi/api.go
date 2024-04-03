@@ -241,39 +241,57 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
 func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.AddressBytes, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
 	addr := common.Bytes20ToAddress(address, s.b.NodeLocation())
-	internal, err := addr.InternalAndQuaiAddress()
+	if addr.IsInQiLedgerScope() {
+		state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if state == nil || err != nil {
+			return nil, err
+		}
+
+		currHeader := s.b.CurrentHeader()
+		if header.Hash() != currHeader.Hash() {
+			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
+		}
+
+		utxos, err := s.b.UTXOsByAddressAtState(ctx, state, addr)
+		if utxos == nil || err != nil {
+			return nil, err
+		}
+
+		if len(utxos) == 0 {
+			return (*hexutil.Big)(big.NewInt(0)), nil
+		}
+
+		balance := big.NewInt(0)
+		for _, utxo := range utxos {
+			denomination := utxo.Denomination
+			value := types.Denominations[denomination]
+			if balance == nil {
+				balance = new(big.Int).Set(value)
+			} else {
+				balance.Add(balance, value)
+			}
+		}
+		return (*hexutil.Big)(balance), nil
+	} else {
+		state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if state == nil || err != nil {
+			return nil, err
+		}
+		internal, err := addr.InternalAndQuaiAddress()
+		if err != nil {
+			return nil, err
+		}
+		return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
+	}
+}
+
+func (s *PublicBlockChainAPI) GetOutpointsByAddressAtBlock(ctx context.Context, address common.Address) (map[string]*types.OutpointAndDenomination, error) {
+	outpoints, err := s.b.AddressOutpoints(ctx, address)
 	if err != nil {
 		return nil, err
 	}
-	return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
-}
-
-func (s *PublicBlockChainAPI) GetQiBalance(ctx context.Context, address common.Address) (*hexutil.Big, error) {
-	utxos, err := s.b.UTXOsByAddress(ctx, address)
-	if utxos == nil || err != nil {
-		return nil, err
-	}
-
-	if len(utxos) == 0 {
-		return (*hexutil.Big)(big.NewInt(0)), nil
-	}
-
-	var balance *big.Int
-	for _, utxo := range utxos {
-		denomination := utxo.Denomination
-		value := types.Denominations[denomination]
-		if balance == nil {
-			balance = new(big.Int).Set(value)
-		} else {
-			balance.Add(balance, value)
-		}
-	}
-	return (*hexutil.Big)(balance), nil
+	return outpoints, nil
 }
 
 // Result structs for GetProof

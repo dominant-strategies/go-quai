@@ -49,7 +49,7 @@ type BloomIndexer struct {
 
 // NewBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for fast logs filtering.
-func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeCtx int, logger *log.Logger) *ChainIndexer {
+func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeCtx int, logger *log.Logger, indexAddressUtxos bool) *ChainIndexer {
 	backend := &BloomIndexer{
 		db:     db,
 		size:   size,
@@ -57,7 +57,7 @@ func NewBloomIndexer(db ethdb.Database, size, confirms uint64, nodeCtx int, logg
 	}
 	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix), db.Location(), db.Logger())
 
-	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits", nodeCtx, logger)
+	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits", nodeCtx, logger, indexAddressUtxos)
 }
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index

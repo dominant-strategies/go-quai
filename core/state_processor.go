@@ -1473,8 +1473,3 @@ func prepareApplyETX(statedb *state.StateDB, value *big.Int, nodeLocation common
 	statedb.SetBalance(common.ZeroInternal(nodeLocation), value)         // Use zero address at temp placeholder and set it to value
 	return prevZeroBal
 }
-
-func (p *StateProcessor) GetUTXOsByAddress(address common.Address) ([]*types.UtxoEntry, error) {
-	utxos := rawdb.ReadAddressUtxos(p.hc.bc.db, address)
-	return utxos, nil
-}

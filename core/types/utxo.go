@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"errors"
 	"math"
 	"math/big"
@@ -102,6 +103,13 @@ type OutPoint struct {
 	Index  uint16
 }
 
+func (outPoint OutPoint) Key() string {
+	indexBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(indexBytes, outPoint.Index)
+	bytes := append(indexBytes, outPoint.TxHash.Bytes()...)
+	return common.Bytes2Hex(bytes)
+}
+
 func (outPoint OutPoint) ProtoEncode() (*ProtoOutPoint, error) {
 	protoOutPoint := &ProtoOutPoint{}
 	protoOutPoint.Hash = outPoint.TxHash.ProtoEncode()
@@ -113,6 +121,37 @@ func (outPoint OutPoint) ProtoEncode() (*ProtoOutPoint, error) {
 func (outPoint *OutPoint) ProtoDecode(protoOutPoint *ProtoOutPoint) error {
 	outPoint.TxHash.ProtoDecode(protoOutPoint.Hash)
 	outPoint.Index = uint16(*protoOutPoint.Index)
+	return nil
+}
+
+type OutpointAndDenomination struct {
+	TxHash       common.Hash
+	Index        uint16
+	Denomination uint8
+}
+
+func (outPoint OutpointAndDenomination) Key() string {
+	indexBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(indexBytes, outPoint.Index)
+	bytes := append(indexBytes, outPoint.TxHash.Bytes()...)
+	return common.Bytes2Hex(bytes)
+}
+
+func (outPoint OutpointAndDenomination) ProtoEncode() (*ProtoOutPointAndDenomination, error) {
+	protoOutPoint := &ProtoOutPointAndDenomination{}
+	protoOutPoint.Hash = outPoint.TxHash.ProtoEncode()
+	index := uint32(outPoint.Index)
+	protoOutPoint.Index = &index
+	denomination := uint32(outPoint.Denomination)
+	protoOutPoint.Denomination = &denomination
+
+	return protoOutPoint, nil
+}
+
+func (outPoint *OutpointAndDenomination) ProtoDecode(protoOutPoint *ProtoOutPointAndDenomination) error {
+	outPoint.TxHash.ProtoDecode(protoOutPoint.Hash)
+	outPoint.Index = uint16(*protoOutPoint.Index)
+	outPoint.Denomination = uint8(*protoOutPoint.Denomination)
 	return nil
 }
 
@@ -233,4 +272,9 @@ func NewUtxoEntry(txOut *TxOut) *UtxoEntry {
 		Address:      txOut.Address,
 		Lock:         txOut.Lock,
 	}
+}
+
+type AddressUtxos struct {
+	Address common.Address
+	Utxos   []*UtxoEntry
 }

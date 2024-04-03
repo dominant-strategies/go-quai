@@ -627,7 +627,11 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 				continue
 			}
 		}
-		core.AddGenesisUtxos(state, nodeLocation, blake3pow.logger)
+		addressOutpointMap := make(map[string]map[string]*types.OutpointAndDenomination)
+		core.AddGenesisUtxos(state, nodeLocation, addressOutpointMap, blake3pow.logger)
+		if chain.Config().IndexAddressUtxos {
+			chain.WriteAddressOutpoints(addressOutpointMap)
+		}
 	}
 	header.Header().SetUTXORoot(state.UTXORoot())
 	header.Header().SetEVMRoot(state.IntermediateRoot(true))

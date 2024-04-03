@@ -78,12 +78,8 @@ type Core struct {
 	logger *log.Logger
 }
 
-type IndexerConfig struct {
-	IndexAddressUtxos bool
-}
-
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.WorkObject) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, indexerConfig *IndexerConfig, genesis *Genesis, logger *log.Logger) (*Core, error) {
-	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, currentExpansionNumber, genesisBlock, domClientUrl, subClientUrls, engine, cacheConfig, indexerConfig, vmConfig, genesis, logger)
+func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.WorkObject) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Core, error) {
+	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, currentExpansionNumber, genesisBlock, domClientUrl, subClientUrls, engine, cacheConfig, vmConfig, genesis, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -942,6 +938,10 @@ func (c *Core) CheckIfEtxIsEligible(etxEligibleSlices common.Hash, location comm
 	return c.sl.hc.CheckIfEtxIsEligible(etxEligibleSlices, location)
 }
 
+func (c *Core) WriteAddressOutpoints(outpoints map[string]map[string]*types.OutpointAndDenomination) error {
+	return c.sl.hc.WriteAddressOutpoints(outpoints)
+}
+
 //--------------------//
 // BlockChain methods //
 //--------------------//
@@ -1142,8 +1142,25 @@ func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
 	return c.sl.hc.bc.processor.TrieNode(hash)
 }
 
-func (c *Core) GetUTXOsByAddress(addr common.Address) ([]*types.UtxoEntry, error) {
-	return c.sl.hc.bc.processor.GetUTXOsByAddress(addr)
+func (c *Core) GetOutpointsByAddress(address common.Address) map[string]*types.OutpointAndDenomination {
+	outpoints := rawdb.ReadAddressOutpoints(c.sl.hc.bc.db, c.sl.hc.NodeLocation())
+	outpointsForAddress := outpoints[address.Hex()]
+	return outpointsForAddress
+}
+
+func (c *Core) GetUTXOsByAddressAtState(state *state.StateDB, address common.Address) ([]*types.UtxoEntry, error) {
+	outpointsForAddress := c.GetOutpointsByAddress(address)
+	utxos := make([]*types.UtxoEntry, 0, len(outpointsForAddress))
+
+	for _, outpoint := range outpointsForAddress {
+		entry := state.GetUTXO(outpoint.TxHash, outpoint.Index)
+		if entry == nil {
+			return nil, errors.New("failed to get UTXO for address")
+		}
+		utxos = append(utxos, entry)
+	}
+
+	return utxos, nil
 }
 
 //----------------//

@@ -28,7 +28,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -1600,32 +1599,78 @@ func DeleteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-func WriteAddressUtxos(db ethdb.KeyValueWriter, address common.Address, utxos []*types.UtxoEntry) {
-	data, err := rlp.EncodeToBytes(utxos)
+func WriteAddressOutpoints(db ethdb.KeyValueWriter, outpointMap map[string]map[string]*types.OutpointAndDenomination) error {
+	outpointsProto := &types.ProtoOutPointsMap{
+		Entries: make(map[string]*types.ProtoAddressOutPoints),
+	}
+
+	for address, outpoints := range outpointMap {
+		addressOutpointsProto := &types.ProtoAddressOutPoints{
+			OutPoints: make(map[string]*types.ProtoOutPointAndDenomination, len(outpoints)),
+		}
+
+		for _, outpoint := range outpoints {
+			outpointProto, err := outpoint.ProtoEncode()
+			if err != nil {
+				return err
+			}
+
+			addressOutpointsProto.OutPoints[outpoint.Key()] = outpointProto
+		}
+
+		// Correctly assign the address's UTXOs to the Entries map within the utxosProto struct
+		outpointsProto.Entries[address] = addressOutpointsProto
+	}
+
+	// Now, marshal utxosProto to protobuf bytes
+	data, err := proto.Marshal(outpointsProto)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxos")
 	}
-	if err := db.Put(addressUtxosKey(address), data); err != nil {
+	if err := db.Put(AddressUtxosPrefix, data); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store utxos")
 	}
+
+	// And finally, store the data in the database under the appropriate key
+	return db.Put(AddressUtxosPrefix, data)
 }
 
-func ReadAddressUtxos(db ethdb.Reader, address common.Address) []*types.UtxoEntry {
+func ReadAddressOutpoints(db ethdb.Reader, location common.Location) map[string]map[string]*types.OutpointAndDenomination {
 	// Try to look up the data in leveldb.
-	data, _ := db.Get(addressUtxosKey(address))
+	data, _ := db.Get(AddressUtxosPrefix)
 	if len(data) == 0 {
+		return make(map[string]map[string]*types.OutpointAndDenomination)
+	}
+	outpointsProto := &types.ProtoOutPointsMap{}
+	if err := proto.Unmarshal(data, outpointsProto); err != nil {
 		return nil
 	}
-	utxos := []*types.UtxoEntry{}
-	if err := rlp.Decode(bytes.NewReader(data), &utxos); err != nil {
-		db.Logger().WithField("err", err).Error("Invalid utxos RLP")
-		return nil
+
+	outpointsMap := make(map[string]map[string]*types.OutpointAndDenomination)
+	for addrStr, addressOutpointsProto := range outpointsProto.Entries {
+		outpoints := map[string]*types.OutpointAndDenomination{}
+
+		for _, outpointProto := range addressOutpointsProto.OutPoints {
+			outpoint := new(types.OutpointAndDenomination)
+			err := outpoint.ProtoDecode(outpointProto)
+			if err != nil {
+				db.Logger().WithFields(log.Fields{
+					"err":      err,
+					"outpoint": outpointProto,
+				}).Error("Invalid outpointProto")
+				return nil
+			}
+			outpoints[outpoint.Key()] = outpoint
+		}
+
+		outpointsMap[addrStr] = outpoints
 	}
-	return utxos
+
+	return outpointsMap
 }
 
-func DeleteAddressUtxos(db ethdb.KeyValueWriter, address common.Address) {
-	if err := db.Delete(addressUtxosKey(address)); err != nil {
+func DeleteAddressUtxos(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Delete(AddressUtxosPrefix); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxos")
 	}
 }
