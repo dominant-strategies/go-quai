@@ -383,7 +383,3 @@ func bloomKey(hash common.Hash) []byte {
 func inboundEtxsKey(hash common.Hash) []byte {
 	return append(inboundEtxsPrefix, hash.Bytes()...)
 }
-
-func addressUtxosKey(address common.Address) []byte {
-	return append(AddressUtxosPrefix, address.Bytes()...)
-}
