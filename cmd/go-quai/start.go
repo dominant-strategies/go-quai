@@ -99,7 +99,6 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// start the p2p node
-	node.SetConsensusBackend(hc.ConsensusBackend())
 	if err := node.Start(); err != nil {
 		log.Global.WithField("error", err).Fatal("error starting node")
 	}
