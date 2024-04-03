@@ -632,7 +632,10 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 				continue
 			}
 		}
-		core.AddGenesisUtxos(state, nodeLocation, progpow.logger)
+		addressOutpointMap := make(map[string]map[string]*types.OutpointAndDenomination)
+		core.AddGenesisUtxos(state, nodeLocation, addressOutpointMap, progpow.logger)
+
+		chain.WriteAddressOutpoints(addressOutpointMap)
 	}
 	header.Header().SetUTXORoot(state.UTXORoot())
 	header.Header().SetEVMRoot(state.IntermediateRoot(true))

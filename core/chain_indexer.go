@@ -27,10 +27,13 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // ChainIndexerBackend defines the methods needed to process chain segments in
@@ -62,6 +65,8 @@ type ChainIndexerChain interface {
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	// NodeCtx returns the context of the chain
 	NodeCtx() int
+	// StateAt returns the state for a state trie root and utxo root
+	StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error)
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -79,6 +84,7 @@ type ChainIndexer struct {
 	backend   ChainIndexerBackend // Background processor generating the index data content
 	children  []*ChainIndexer     // Child indexers to cascade chain updates to
 	GetBloom  func(common.Hash) (*types.Bloom, error)
+	StateAt   func(common.Hash, common.Hash) (*state.StateDB, error)
 	active    uint32          // Flag whether the event loop was started
 	update    chan struct{}   // Notification channel that headers should be processed
 	quit      chan chan error // Quit channel to tear down running goroutines
@@ -96,22 +102,25 @@ type ChainIndexer struct {
 
 	logger *log.Logger
 	lock   sync.Mutex
+
+	indexAddressUtxos bool
 }
 
 // NewChainIndexer creates a new chain indexer to do background processing on
 // chain segments of a given size after certain number of confirmations passed.
 // The throttling parameter might be used to prevent database thrashing.
-func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string, nodeCtx int, logger *log.Logger) *ChainIndexer {
+func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend ChainIndexerBackend, section, confirm uint64, throttling time.Duration, kind string, nodeCtx int, logger *log.Logger, indexAddressUtxos bool) *ChainIndexer {
 	c := &ChainIndexer{
-		chainDb:     chainDb,
-		indexDb:     indexDb,
-		backend:     backend,
-		update:      make(chan struct{}, 1),
-		quit:        make(chan chan error),
-		sectionSize: section,
-		confirmsReq: confirm,
-		throttling:  throttling,
-		logger:      logger,
+		chainDb:           chainDb,
+		indexDb:           indexDb,
+		backend:           backend,
+		update:            make(chan struct{}, 1),
+		quit:              make(chan chan error),
+		sectionSize:       section,
+		confirmsReq:       confirm,
+		throttling:        throttling,
+		logger:            logger,
+		indexAddressUtxos: indexAddressUtxos,
 	}
 	// Initialize database dependent fields and start the updater
 	c.loadValidSections()
@@ -125,11 +134,12 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 // Start creates a goroutine to feed chain head events into the indexer for
 // cascading background processing. Children do not need to be started, they
 // are notified about new events by their parents.
-func (c *ChainIndexer) Start(chain ChainIndexerChain) {
+func (c *ChainIndexer) Start(chain ChainIndexerChain, config params.ChainConfig) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
 	c.GetBloom = chain.GetBloom
-	go c.eventLoop(chain.CurrentHeader(), events, sub, chain.NodeCtx())
+	c.StateAt = chain.StateAt
+	go c.eventLoop(chain.CurrentHeader(), events, sub, chain.NodeCtx(), config)
 }
 
 // Close tears down all goroutines belonging to the indexer and returns any error
@@ -174,7 +184,7 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan ChainHeadEvent, sub event.Subscription, nodeCtx int) {
+func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan ChainHeadEvent, sub event.Subscription, nodeCtx int, config params.ChainConfig) {
 	defer func() {
 		if r := recover(); r != nil {
 			c.logger.WithFields(log.Fields{
@@ -210,17 +220,60 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 				return
 			}
 			header := ev.Block
+
+			var validUtxoIndex bool
+			var addressOutpoints map[string]map[string]*types.OutpointAndDenomination
+			if c.indexAddressUtxos {
+				validUtxoIndex = true
+				addressOutpoints = rawdb.ReadAddressOutpoints(c.chainDb, config.Location)
+			}
+
 			if header.ParentHash(nodeCtx) != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO: This seems a bit brittle, can we detect this case explicitly?
 
 				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.NumberU64(nodeCtx)) != prevHash {
 					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header, nodeCtx); h != nil {
+
+						// If indexAddressUtxos flag is enabled, update the address utxo map
+						// TODO: Need to be able to turn on/off indexer and fix corrupted state
+						if c.indexAddressUtxos {
+							reorgHeaders := make([]*types.WorkObject, 0)
+							for prev := prevHeader; prev.Hash() != h.Hash(); prev = rawdb.ReadHeader(c.chainDb, prev.ParentHash(nodeCtx), uint64(nodeCtx)) {
+								reorgHeaders = append(reorgHeaders, h)
+							}
+
+							// Reorg out all outpoints of the reorg headers
+							err := c.reorgUtxoIndexer(reorgHeaders, addressOutpoints, nodeCtx, config)
+							if err != nil {
+								c.logger.Error("Failed to reorg utxo indexer", "err", err)
+								validUtxoIndex = false
+							}
+
+							// Add new blocks from current hash back to common ancestor
+							for curr := header; curr.Hash() != h.Hash(); curr = rawdb.ReadHeader(c.chainDb, curr.ParentHash(nodeCtx), uint64(nodeCtx)) {
+								block := rawdb.ReadWorkObject(c.chainDb, curr.Hash(), types.BlockObject)
+								c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, block)
+							}
+						}
+
 						c.newHead(h.NumberU64(nodeCtx), true)
 					}
 				}
 			}
+
+			if c.indexAddressUtxos {
+				c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, ev.Block)
+			}
+
 			c.newHead(header.NumberU64(nodeCtx), false)
+
+			if c.indexAddressUtxos && validUtxoIndex {
+				err := rawdb.WriteAddressOutpoints(c.chainDb, addressOutpoints)
+				if err != nil {
+					panic(err)
+				}
+			}
 
 			prevHeader, prevHash = header, header.Hash()
 		}
@@ -489,4 +542,109 @@ func (c *ChainIndexer) removeSectionHead(section uint64) {
 	binary.BigEndian.PutUint64(data[:], section)
 
 	c.indexDb.Delete(append([]byte("shead"), data[:]...))
+}
+
+// addOutpointsToIndexer removes the spent outpoints and adds new utxos to the indexer.
+func (c *ChainIndexer) addOutpointsToIndexer(addressOutpoints map[string]map[string]*types.OutpointAndDenomination, nodeCtx int, config params.ChainConfig, block *types.WorkObject) {
+	utxos := block.QiTransactions()
+
+	for _, tx := range utxos {
+		for _, in := range tx.TxIn() {
+
+			// Skip Coinbase TxIns since they do not have a previous outpoint
+			if types.IsCoinBaseTx(tx, block.ParentHash(nodeCtx), config.Location) {
+				continue
+			}
+
+			outpoint := in.PreviousOutPoint
+
+			address := crypto.PubkeyBytesToAddress(in.PubKey, config.Location).Hex()
+			outpointsForAddress := addressOutpoints[address]
+
+			delete(outpointsForAddress, outpoint.Key())
+		}
+
+		for i, out := range tx.TxOut() {
+
+			addrBytes := out.Address
+			outpoint := types.OutPoint{
+				TxHash: tx.Hash(),
+				Index:  uint16(i),
+			}
+
+			address := common.BytesToAddress(addrBytes, config.Location).Hex()
+
+			outpointAndDenom := &types.OutpointAndDenomination{
+				TxHash:       outpoint.TxHash,
+				Index:        outpoint.Index,
+				Denomination: out.Denomination,
+			}
+
+			if _, ok := addressOutpoints[address]; !ok {
+				addressOutpoints[address] = make(map[string]*types.OutpointAndDenomination)
+			}
+			addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
+		}
+	}
+}
+
+// reorgUtxoIndexer adds back previously removed outpoints and removes newly added outpoints.
+// This is done in reverse order from the old header to the common ancestor.
+func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutpoints map[string]map[string]*types.OutpointAndDenomination, nodeCtx int, config params.ChainConfig) error {
+	for _, header := range headers {
+		block := rawdb.ReadWorkObject(c.chainDb, header.Hash(), types.BlockObject)
+
+		for _, tx := range block.QiTransactions() {
+			for i, out := range tx.TxOut() {
+
+				address := out.Address
+
+				addr := common.BytesToAddress(address, config.Location).Hex()
+				outpointsForAddress := addressOutpoints[addr]
+
+				// reconstruct outpoint to remove it via outpoint.Key()
+				outpoint := types.OutPoint{
+					TxHash: tx.Hash(),
+					Index:  uint16(i),
+				}
+
+				delete(outpointsForAddress, outpoint.Key())
+			}
+
+			if types.IsCoinBaseTx(tx, block.ParentHash(nodeCtx), config.Location) {
+				continue
+			}
+
+			for _, in := range tx.TxIn() {
+				outpoint := in.PreviousOutPoint
+				address := crypto.PubkeyBytesToAddress(in.PubKey, config.Location).Hex()
+
+				parent := rawdb.ReadHeader(c.chainDb, block.ParentHash(nodeCtx), uint64(nodeCtx))
+
+				state, err := c.StateAt(parent.EVMRoot(), parent.UTXORoot())
+				if err != nil {
+					return err
+				}
+
+				entry := state.GetUTXO(outpoint.TxHash, outpoint.Index)
+				if entry == nil {
+					// missing entry while tryig to add back outpoint
+					continue
+				}
+
+				outpointAndDenom := &types.OutpointAndDenomination{
+					TxHash:       outpoint.TxHash,
+					Index:        outpoint.Index,
+					Denomination: entry.Denomination,
+				}
+
+				if _, ok := addressOutpoints[address]; !ok {
+					addressOutpoints[address] = make(map[string]*types.OutpointAndDenomination)
+				}
+				addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
+			}
+
+		}
+	}
+	return nil
 }

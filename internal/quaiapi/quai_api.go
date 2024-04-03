@@ -135,42 +135,54 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getBalance call can only be made on chain processing the state")
 	}
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
+
 	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
-	internal, err := addr.InternalAndQuaiAddress()
+	if addr.IsInQiLedgerScope() {
+		currHeader := s.b.CurrentHeader()
+		if header.Hash() != currHeader.Hash() {
+			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
+		}
+
+		utxos, err := s.b.UTXOsByAddressAtState(ctx, state, addr)
+		if utxos == nil || err != nil {
+			return nil, err
+		}
+
+		if len(utxos) == 0 {
+			return (*hexutil.Big)(big.NewInt(0)), nil
+		}
+
+		var balance *big.Int
+		for _, utxo := range utxos {
+			denomination := utxo.Denomination
+			value := types.Denominations[denomination]
+			if balance == nil {
+				balance = new(big.Int).Set(value)
+			} else {
+				balance.Add(balance, value)
+			}
+		}
+		return (*hexutil.Big)(balance), nil
+	} else {
+		internal, err := addr.InternalAndQuaiAddress()
+		if err != nil {
+			return nil, err
+		}
+		return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
+	}
+}
+
+func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, address common.Address) (map[string]*types.OutpointAndDenomination, error) {
+	outpints, err := s.b.AddressOutpoints(ctx, address)
 	if err != nil {
 		return nil, err
 	}
-	return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
-}
-
-func (s *PublicBlockChainQuaiAPI) GetQiBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
-	if !address.ValidChecksum() {
-		return nil, errors.New("address has invalid checksum")
-	}
-	utxos, err := s.b.UTXOsByAddress(ctx, address.Address())
-	if utxos == nil || err != nil {
-		return nil, err
-	}
-
-	if len(utxos) == 0 {
-		return (*hexutil.Big)(big.NewInt(0)), nil
-	}
-
-	var balance *big.Int
-	for _, utxo := range utxos {
-		denomination := utxo.Denomination
-		value := types.Denominations[denomination]
-		if balance == nil {
-			balance = new(big.Int).Set(value)
-		} else {
-			balance.Add(balance, value)
-		}
-	}
-	return (*hexutil.Big)(balance), nil
+	return outpints, nil
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.

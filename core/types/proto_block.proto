@@ -169,3 +169,17 @@ message ProtoTxOut {
   optional bytes address = 2;
   optional bytes lock = 3;
 }
+
+message ProtoOutPointAndDenomination {
+  optional common.ProtoHash hash = 1;
+  optional uint32 index = 2;
+  optional uint32 denomination = 3;
+}
+
+message ProtoAddressOutPoints {
+  map<string, ProtoOutPointAndDenomination> out_points = 1;
+}
+
+message ProtoOutPointsMap {
+  map<string, ProtoAddressOutPoints> entries = 1;
+}

@@ -237,26 +237,20 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		}
 	)
 
-	var (
-		indexerConfig = &core.IndexerConfig{
-			IndexAddressUtxos: config.IndexAddressUtxos,
-		}
-	)
-
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 
 	logger.WithField("url", quai.config.DomUrl).Info("Dom client")
-	quai.core, err = core.NewCore(chainDb, &config.Miner, quai.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, quai.config.SlicesRunning, currentExpansionNumber, genesisBlock, quai.config.DomUrl, quai.config.SubUrls, quai.engine, cacheConfig, vmConfig, indexerConfig, config.Genesis, logger)
+	quai.core, err = core.NewCore(chainDb, &config.Miner, quai.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, quai.config.SlicesRunning, currentExpansionNumber, genesisBlock, quai.config.DomUrl, quai.config.SubUrls, quai.engine, cacheConfig, vmConfig, config.Genesis, logger)
 	if err != nil {
 		return nil, err
 	}
 
 	// Only index bloom if processing state
 	if quai.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
-		quai.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms, chainConfig.Location.Context(), logger)
-		quai.bloomIndexer.Start(quai.Core().Slice().HeaderChain())
+		quai.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms, chainConfig.Location.Context(), logger, config.IndexAddressUtxos)
+		quai.bloomIndexer.Start(quai.Core().Slice().HeaderChain(), newChainConfig)
 	}
 
 	// Set the p2p Networking API

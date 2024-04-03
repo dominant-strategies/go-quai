@@ -511,7 +511,7 @@ func ReadGenesisQiAlloc(filename string, logger *log.Logger) map[string]GenesisU
 }
 
 // WriteGenesisUtxoSet writes the genesis utxo set to the database
-func AddGenesisUtxos(state *state.StateDB, nodeLocation common.Location, logger *log.Logger) {
+func AddGenesisUtxos(state *state.StateDB, nodeLocation common.Location, addressOutpointMap map[string]map[string]*types.OutpointAndDenomination, logger *log.Logger) {
 	qiAlloc := ReadGenesisQiAlloc("genallocs/gen_alloc_qi_"+nodeLocation.Name()+".json", logger)
 	// logger.WithField("alloc", len(qiAlloc)).Info("Allocating genesis accounts")
 	for addressString, utxo := range qiAlloc {
@@ -536,5 +536,16 @@ func AddGenesisUtxos(state *state.StateDB, nodeLocation common.Location, logger 
 		if err := state.CreateUTXO(hash, uint16(utxo.Index), newUtxo); err != nil {
 			panic(fmt.Sprintf("Failed to create genesis UTXO: %v", err))
 		}
+
+		outpointAndDenomination := &types.OutpointAndDenomination{
+			TxHash:       hash,
+			Index:        uint16(utxo.Index),
+			Denomination: uint8(utxo.Denomination),
+		}
+
+		if _, ok := addressOutpointMap[addr.Hex()]; !ok {
+			addressOutpointMap[addr.Hex()] = make(map[string]*types.OutpointAndDenomination)
+		}
+		addressOutpointMap[addr.Hex()][outpointAndDenomination.Key()] = outpointAndDenomination
 	}
 }
