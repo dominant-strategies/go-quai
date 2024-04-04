@@ -835,7 +835,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.Header, etxs
 					"tx":  tx.Hash().Hex(),
 				}).Error("Error processing QiTx")
 				// It's unlikely that this transaction will be valid in the future so remove it asynchronously
-				go w.txPool.RemoveUtxoTx(tx)
+				go w.txPool.RemoveQiTx(tx)
 			}
 			txs.PopNoSort()
 			continue
@@ -1195,7 +1195,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		return nil
 	}
 
-	pendingQiTxs := w.txPool.UTXOPoolPending()
+	pendingQiTxs := w.txPool.QiPoolPending()
 
 	if len(pending) > 0 || len(pendingQiTxs) > 0 || len(etxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.header.BaseFee(), true)

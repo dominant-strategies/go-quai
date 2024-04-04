@@ -273,7 +273,7 @@ type TxPool struct {
 	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
-	utxoMu      sync.RWMutex
+	qiMu        sync.RWMutex
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -281,7 +281,7 @@ type TxPool struct {
 
 	locals         *accountSet                                                 // Set of local transaction to exempt from eviction rules
 	journal        *txJournal                                                  // Journal of local transaction to back up to disk
-	utxoPool       map[common.Hash]*types.TxWithMinerFee                       // Utxo pool to store utxo transactions
+	qiPool         map[common.Hash]*types.TxWithMinerFee                       // Qi pool to store Qi transactions
 	pending        map[common.InternalAddress]*txList                          // All currently processable transactions
 	queue          map[common.InternalAddress]*txList                          // Queued but non-processable transactions
 	beats          map[common.InternalAddress]time.Time                        // Last heartbeat from each known account
@@ -353,7 +353,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		chain:           chain,
 		signer:          types.LatestSigner(chainconfig),
 		pending:         make(map[common.InternalAddress]*txList),
-		utxoPool:        make(map[common.Hash]*types.TxWithMinerFee),
+		qiPool:          make(map[common.Hash]*types.TxWithMinerFee),
 		queue:           make(map[common.InternalAddress]*txList),
 		beats:           make(map[common.InternalAddress]time.Time),
 		senders:         orderedmap.New[common.Hash, common.InternalAddress](),
@@ -601,12 +601,12 @@ func (pool *TxPool) ContentFrom(addr common.InternalAddress) (types.Transactions
 	return pending, queued
 }
 
-func (pool *TxPool) UTXOPoolPending() map[common.Hash]*types.TxWithMinerFee {
-	pool.utxoMu.RLock()
-	defer pool.utxoMu.RUnlock()
+func (pool *TxPool) QiPoolPending() map[common.Hash]*types.TxWithMinerFee {
+	pool.qiMu.RLock()
+	defer pool.qiMu.RUnlock()
 	// Return a copy of the pool because it is not safe to access the pool pointer directly
 	qiTxs := make(map[common.Hash]*types.TxWithMinerFee)
-	for hash, qiTx := range pool.utxoPool {
+	for hash, qiTx := range pool.qiPool {
 		qiTxs[hash] = qiTx
 	}
 	return qiTxs
@@ -1048,7 +1048,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			continue
 		}
 		if tx.Type() == types.QiTxType {
-			if err := pool.addUtxoTx(tx); err != nil {
+			if err := pool.addQiTx(tx, true); err != nil {
 				errs[i] = err
 			}
 			continue
@@ -1114,14 +1114,17 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	return errs
 }
 
-func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
-	pool.utxoMu.RLock()
-	if _, hasTx := pool.utxoPool[tx.Hash()]; hasTx {
-		pool.utxoMu.RUnlock()
+// addQiTx adds a Qi transaction to the Qi pool.
+// If the mempool lock is already held by the caller, the caller must set grabLock to false.
+// If the mempool lock is not held by the caller, the caller must set grabLock to true.
+func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
+	pool.qiMu.RLock()
+	if _, hasTx := pool.qiPool[tx.Hash()]; hasTx {
+		pool.qiMu.RUnlock()
 		return ErrAlreadyKnown
 	}
 
-	pool.utxoMu.RUnlock()
+	pool.qiMu.RUnlock()
 
 	location := pool.chainconfig.Location
 	currentBlock := pool.chain.CurrentBlock()
@@ -1134,41 +1137,45 @@ func (pool *TxPool) addUtxoTx(tx *types.Transaction) error {
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
-	pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
+	if grabLock {
+		pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
+	}
 	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock().Header(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		pool.mu.RUnlock()
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"err": err,
-		}).Error("Invalid utxo tx")
+		}).Error("Invalid qi tx")
 		return err
 	}
-	pool.mu.RUnlock()
+	if grabLock {
+		pool.mu.RUnlock()
+	}
 	txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
 	if err != nil {
 		return err
 	}
-	pool.utxoMu.Lock()
-	pool.utxoPool[tx.Hash()] = txWithMinerFee
-	pool.utxoMu.Unlock()
+	pool.qiMu.Lock()
+	pool.qiPool[tx.Hash()] = txWithMinerFee
+	pool.qiMu.Unlock()
 	pool.logger.WithFields(logrus.Fields{
 		"tx":  tx.Hash().String(),
 		"fee": fee,
-	}).Info("Added utxo tx to pool")
+	}).Info("Added qi tx to pool")
 	return nil
 }
 
-func (pool *TxPool) RemoveUtxoTx(tx *types.Transaction) {
-	pool.utxoMu.Lock()
-	delete(pool.utxoPool, tx.Hash())
-	pool.utxoMu.Unlock()
+func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
+	pool.qiMu.Lock()
+	delete(pool.qiPool, tx.Hash())
+	pool.qiMu.Unlock()
 }
 
 // Mempool lock must be held.
-func (pool *TxPool) removeUtxoTxsLocked(txs []*types.Transaction) {
+func (pool *TxPool) removeQiTxsLocked(txs []*types.Transaction) {
 	for _, tx := range txs {
-		delete(pool.utxoPool, tx.Hash())
+		delete(pool.qiPool, tx.Hash())
 	}
 }
 
@@ -1179,7 +1186,7 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error,
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
 		if tx.Type() == types.QiTxType {
-			errs[i] = pool.addUtxoTx(tx)
+			errs[i] = pool.addQiTx(tx, false)
 			continue
 		}
 		replaced, err := pool.add(tx, local)
@@ -1596,10 +1603,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		}
 	} else {
 		block := pool.chain.GetBlock(newHead.Hash(), newHead.Number(pool.chainconfig.Location.Context()).Uint64())
-		pool.utxoMu.Lock()
-		pool.removeUtxoTxsLocked(block.QiTransactions())
-		pool.utxoMu.Unlock()
-		pool.logger.WithField("count", len(block.QiTransactions())).Debug("Removed utxo txs from pool")
+		pool.qiMu.Lock()
+		pool.removeQiTxsLocked(block.QiTransactions())
+		pool.qiMu.Unlock()
+		pool.logger.WithField("count", len(block.QiTransactions())).Debug("Removed qi txs from pool")
 	}
 	// Initialize the internal state to the current head
 	if newHead == nil {
