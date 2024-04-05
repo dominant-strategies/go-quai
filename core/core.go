@@ -40,17 +40,13 @@ const (
 	c_regionRetryThreshold                     = 1200    // Number of times a block is retry to be appended before eviction from append queue in Region
 	c_zoneRetryThreshold                       = 600     // Number of times a block is retry to be appended before eviction from append queue in Zone
 	c_maxFutureBlocksPrime              uint64 = 3       // Number of blocks ahead of the current block to be put in the hashNumberList
-	c_maxFutureBlocksRegion             uint64 = 3
-	c_maxFutureBlocksRegionAtFray       uint64 = 150
-	c_maxFutureBlocksZone               uint64 = 200
-	c_maxFutureBlocksZoneAtFray         uint64 = 2000
+	c_maxFutureBlocksRegion             uint64 = 150
+	c_maxFutureBlocksZone               uint64 = 2000
 	c_appendQueueRetryPriorityThreshold        = 5  // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
 	c_appendQueueRemoveThreshold               = 10 // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
 	c_normalListProcCounter                    = 1  // Ratio of Number of times the PriorityList is serviced over the NormalList
 	c_statsPrintPeriod                         = 60 // Time between stats prints
 	c_appendQueuePrintSize                     = 10
-	c_badSyncTargetsSize                       = 20 // List of bad sync target hashes
-	c_badSyncTargetCheckTime                   = 15 * time.Minute
 	c_normalListBackoffThreshold               = 5 // Max multiple on the c_normalListProcCounter
 )
 
@@ -66,14 +62,9 @@ type Core struct {
 	appendQueue     *lru.Cache
 	processingCache *lru.Cache
 
-	badSyncTargets *lru.Cache
-	prevSyncTarget common.Hash
-
 	writeBlockLock sync.RWMutex
 
 	procCounter int
-
-	syncTarget *types.Header // sync target header decided based on Best Prime Block as the target to sync to
 
 	normalListBackoff uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
 
@@ -102,20 +93,14 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.H
 	}
 
 	// Initialize the sync target to current header parent entropy
-	c.syncTarget = c.CurrentHeader()
-
 	appendQueue, _ := lru.New(c_maxAppendQueue)
 	c.appendQueue = appendQueue
 
 	proccesingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
 	c.processingCache = proccesingCache
 
-	badSyncTargetsCache, _ := lru.New(c_badSyncTargetsSize)
-	c.badSyncTargets = badSyncTargetsCache
-
 	go c.updateAppendQueue()
 	go c.startStatsTimer()
-	go c.checkSyncTarget()
 
 	return c, nil
 }
@@ -215,20 +200,10 @@ func (c *Core) procAppendQueue() {
 	nodeCtx := c.NodeLocation().Context()
 
 	maxFutureBlocks := c_maxFutureBlocksPrime
-	// If sync point is reached increase the maxFutureBlocks
-	// we can increse scope when we are near, region future blocks is increased to sync the fray fast
-	if c.CurrentHeader() != nil && c.syncTarget != nil && c.CurrentHeader().NumberU64(nodeCtx) >= c.syncTarget.NumberU64(nodeCtx) {
-		if nodeCtx == common.REGION_CTX {
-			maxFutureBlocks = c_maxFutureBlocksRegionAtFray
-		} else if nodeCtx == common.ZONE_CTX {
-			maxFutureBlocks = c_maxFutureBlocksZoneAtFray
-		}
-	} else {
-		if nodeCtx == common.REGION_CTX {
-			maxFutureBlocks = c_maxFutureBlocksRegion
-		} else if nodeCtx == common.ZONE_CTX {
-			maxFutureBlocks = c_maxFutureBlocksZone
-		}
+	if nodeCtx == common.REGION_CTX {
+		maxFutureBlocks = c_maxFutureBlocksRegion
+	} else if nodeCtx == common.ZONE_CTX {
+		maxFutureBlocks = c_maxFutureBlocksZone
 	}
 
 	// Sort the blocks by number and retry attempts and try to insert them
@@ -393,47 +368,6 @@ func (c *Core) addToQueueIfNotAppended(block *types.Block) {
 	}
 }
 
-// SetSyncTarget sets the sync target entropy based on the prime blocks
-func (c *Core) SetSyncTarget(header *types.Header) {
-	if c.sl.subClients == nil || c.IsGenesisHash(header.Hash()) {
-		return
-	}
-
-	// Check if the header is in the badSyncTargets cache
-	_, ok := c.badSyncTargets.Get(header.Hash())
-	if ok {
-		return
-	}
-
-	nodeLocation := c.NodeLocation()
-	nodeCtx := c.NodeLocation().Context()
-	// Set Sync Target for subs
-	if nodeCtx != common.ZONE_CTX {
-		if header != nil {
-			if c.sl.subClients[header.Location().SubIndex(nodeLocation)] != nil {
-				c.sl.subClients[header.Location().SubIndex(nodeLocation)].SetSyncTarget(context.Background(), header)
-			}
-		}
-	}
-	if c.syncTarget == nil || c.syncTarget.ParentEntropy(nodeCtx).Cmp(header.ParentEntropy(nodeCtx)) < 0 {
-		c.syncTarget = header
-	}
-}
-
-// SyncTargetEntropy returns the syncTargetEntropy if its not nil, otherwise
-// returns the current header parent entropy
-func (c *Core) SyncTargetEntropy() (*big.Int, *big.Int) {
-	if c.syncTarget != nil {
-		target := new(big.Int).Div(common.Big2e256, c.syncTarget.Difficulty())
-		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
-		return c.syncTarget.ParentEntropy(c.NodeCtx()), zoneThresholdS
-	} else {
-		target := new(big.Int).Div(common.Big2e256, c.CurrentHeader().Difficulty())
-		zoneThresholdS := c.sl.engine.IntrinsicLogS(common.BytesToHash(target.Bytes()))
-		return c.CurrentHeader().ParentEntropy(c.NodeCtx()), zoneThresholdS
-	}
-}
-
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.Block) error {
 	nodeCtx := c.NodeLocation().Context()
@@ -460,26 +394,6 @@ func (c *Core) updateAppendQueue() {
 		select {
 		case <-futureTimer.C:
 			c.procAppendQueue()
-		case <-c.quit:
-			return
-		}
-	}
-}
-
-func (c *Core) checkSyncTarget() {
-	badSyncTimer := time.NewTicker(c_badSyncTargetCheckTime)
-	defer badSyncTimer.Stop()
-	for {
-		select {
-		case <-badSyncTimer.C:
-			// If the prevSyncTarget hasn't changed in the c_badSyncTargetCheckTime
-			// we add it to the badSyncTargets List
-			if c.prevSyncTarget != c.syncTarget.Hash() {
-				c.prevSyncTarget = c.syncTarget.Hash()
-			} else {
-				c.badSyncTargets.Add(c.syncTarget.Hash(), true)
-				c.syncTarget = c.CurrentHeader()
-			}
 		case <-c.quit:
 			return
 		}
@@ -621,12 +535,6 @@ func (c *Core) WriteBlock(block *types.Block) {
 
 	if c.GetHeaderOrCandidateByHash(block.Hash()) == nil {
 		c.sl.WriteBlock(block)
-	}
-
-	if nodeCtx == common.PRIME_CTX {
-		if block != nil {
-			c.SetSyncTarget(block.Header())
-		}
 	}
 }
 

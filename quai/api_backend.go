@@ -554,10 +554,6 @@ func (b *QuaiAPIBackend) GetPendingEtxsFromSub(hash common.Hash, location common
 	return b.quai.core.GetPendingEtxsFromSub(hash, location)
 }
 
-func (b *QuaiAPIBackend) SetSyncTarget(header *types.Header) {
-	b.quai.core.SetSyncTarget(header)
-}
-
 func (b *QuaiAPIBackend) Logger() *log.Logger {
 	return b.quai.logger
 }

@@ -267,11 +267,6 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number string) *types.Head
 	return header
 }
 
-func (ec *Client) SetSyncTarget(ctx context.Context, header *types.Header) {
-	fields := header.RPCMarshalHeader()
-	ec.c.CallContext(ctx, nil, "quai_setSyncTarget", fields)
-}
-
 //// Miner APIS
 
 // GetPendingHeader gets the latest pending header from the chain.
