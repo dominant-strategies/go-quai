@@ -652,6 +652,8 @@ func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types
 func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB) {
 	nodeLocation := progpow.NodeLocation()
 	nodeCtx := progpow.NodeLocation().Context()
+	// Accumulate any block and uncle rewards and commit the final state root
+	progpow.accumulateRewards(chain.Config(), state, header)
 
 	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		// Create the lockup contract account
@@ -712,4 +714,29 @@ func (progpow *Progpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 
 func (progpow *Progpow) NodeLocation() common.Location {
 	return progpow.config.NodeLocation
+}
+
+// AccumulateRewards credits the coinbase of the given block with the mining
+// reward. The total reward consists of the static block reward and rewards for
+// included uncles. The coinbase of each uncle block is also rewarded.
+func (progpow *Progpow) accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.WorkObject) {
+	// Select the correct block reward based on chain progression
+	blockReward := misc.CalculateReward(header, progpow.DiffToBigBits(header))
+
+	coinbase, err := header.Coinbase().InternalAddress()
+	if err != nil {
+		progpow.logger.WithFields(log.Fields{
+			"Address": header.Coinbase().String(),
+			"Hash":    header.Hash().String(),
+		}).Error("Block has out of scope coinbase, skipping block reward")
+		return
+	}
+	if !header.Coinbase().IsInQuaiLedgerScope() {
+		progpow.logger.WithFields(log.Fields{
+			"Address": header.Coinbase().String(),
+			"Hash":    header.Hash().String(),
+		}).Debug("Block coinbase is in Qi ledger, skipping Quai block reward") // this log is largely unnecessary
+		return
+	}
+	state.AddBalance(coinbase, blockReward)
 }

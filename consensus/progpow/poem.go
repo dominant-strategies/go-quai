@@ -30,8 +30,7 @@ func (progpow *Progpow) CalcOrder(header *types.WorkObject) (*big.Int, int, erro
 
 	// Get entropy reduction of this header
 	intrinsicS := progpow.IntrinsicLogS(powHash)
-	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdS := progpow.DiffToBigBits(header)
 
 	// PRIME
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
@@ -257,8 +256,7 @@ func (progpow *Progpow) CalcRank(chain consensus.GenesisReader, header *types.Wo
 		return 0, err
 	}
 
-	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdS := progpow.DiffToBigBits(header)
 
 	intrinsicS := progpow.IntrinsicLogS(powHash)
 	for i := common.InterlinkDepth; i > 0; i-- {
@@ -287,4 +285,9 @@ func (progpow *Progpow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader)
 		return false
 	}
 	return new(big.Int).SetBytes(powHash.Bytes()).Cmp(workShareMintarget) <= 0
+}
+
+func (progpow *Progpow) DiffToBigBits(header *types.WorkObject) *big.Int {
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
+	return progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
 }
