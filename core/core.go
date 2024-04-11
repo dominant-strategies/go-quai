@@ -881,10 +881,6 @@ func (c *Core) UpdateEtxEligibleSlices(header *types.WorkObject, location common
 	return c.sl.hc.UpdateEtxEligibleSlices(header, location)
 }
 
-func (c *Core) IsSliceSetToReceiveEtx(header *types.WorkObject, location common.Location) bool {
-	return c.sl.hc.IsSliceSetToReceiveEtx(header, location)
-}
-
 func (c *Core) GetPrimeTerminus(header *types.WorkObject) *types.WorkObject {
 	return c.sl.hc.GetPrimeTerminus(header)
 }

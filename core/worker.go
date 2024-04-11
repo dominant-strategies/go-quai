@@ -1426,7 +1426,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
 			etx := types.NewTx(&etxInner)
 			primeTerminus := w.hc.GetPrimeTerminus(env.wo)
-			if !w.hc.IsSliceSetToReceiveEtx(primeTerminus, *toAddr.Location()) {
+			if !w.hc.CheckIfEtxIsEligible(primeTerminus.EtxEligibleSlices(), *toAddr.Location()) {
 				return fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
 			}
 			etxs = append(etxs, etx)

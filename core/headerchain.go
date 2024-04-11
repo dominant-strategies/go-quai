@@ -1096,12 +1096,6 @@ func (hc *HeaderChain) UpdateEtxEligibleSlices(header *types.WorkObject, locatio
 	return newHash
 }
 
-// IsSliceSetToReceiveEtx returns true if the etx eligible slice is set to
-// receive etx for the given zone location
-func (hc *HeaderChain) IsSliceSetToReceiveEtx(header *types.WorkObject, location common.Location) bool {
-	return hc.CheckIfEtxIsEligible(header.EtxEligibleSlices(), location)
-}
-
 // CheckIfETXIsEligible checks if the given zone location is eligible to receive
 // etx based on the etxEligibleSlices hash
 func (hc *HeaderChain) CheckIfEtxIsEligible(etxEligibleSlices common.Hash, to common.Location) bool {

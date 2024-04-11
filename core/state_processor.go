@@ -587,7 +587,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 			etx := types.NewTx(&etxInner)
 			primeTerminus := currentHeader.PrimeTerminus()
 			primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
-			if !chain.CheckIfEtxIsEligible(primeTerminusHeader.PrimeTerminus(), *toAddr.Location()) {
+			if !chain.CheckIfEtxIsEligible(primeTerminusHeader.EtxEligibleSlices(), *toAddr.Location()) {
 				return nil, nil, fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
 			}
 			etxs = append(etxs, etx)
