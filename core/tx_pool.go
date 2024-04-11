@@ -70,7 +70,7 @@ var (
 	// configured for the transaction pool.
 	ErrUnderpriced = errors.New("transaction underpriced")
 
-	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accpet
+	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accept
 	// another remote transaction.
 	ErrTxPoolOverflow = errors.New("txpool is full")
 
@@ -1575,7 +1575,7 @@ func (pool *TxPool) truncatePending() {
 	}
 }
 
-// truncateQueue drops the oldes transactions in the queue if the pool is above the global queue limit.
+// truncateQueue drops the oldest transactions in the queue if the pool is above the global queue limit.
 func (pool *TxPool) truncateQueue() {
 	var start time.Time
 	if pool.reOrgCounter == c_reorgCounterThreshold {

@@ -319,7 +319,7 @@ func (fi *fastIterator) Slot() []byte {
 }
 
 // Release iterates over all the remaining live layer iterators and releases each
-// of thme individually.
+// of them individually.
 func (fi *fastIterator) Release() {
 	for _, it := range fi.iterators {
 		it.it.Release()
