@@ -477,10 +477,54 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*bi
 
 	if txType {
 		return misc.CalcBaseFee(chainCfg, header), nil
+	} else {
+		// Use the prime terminus if we have it
+		lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminus())
+		if lastPrime == nil || err != nil {
+			lastPrime = header
+		}
+		quaiBaseFee := misc.CalcBaseFee(chainCfg, header)
+		qiBaseFee := misc.QuaiToQi(lastPrime, quaiBaseFee)
+		if qiBaseFee.Cmp(big.NewInt(0)) == 0 {
+			// Minimum base fee is 1 qit or smallest unit
+			return types.Denominations[0], nil
+		} else {
+			return qiBaseFee, nil
+		}
+	}
+}
+
+// EstimateFeeForQi returns an estimate of the amount of Qi in qits needed to execute the
+// given transaction against the current pending block.
+func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args TransactionArgs) (*big.Int, error) {
+	// Estimate the gas
+	gas, err := args.CalculateQiTxGas()
+	if err != nil {
+		return nil, err
+	}
+	header := s.b.CurrentBlock()
+	if header == nil {
+		return nil, errors.New("no header available")
 	}
 
-	// TODO: implement Qi base fee calculation
-	panic("Qi base fee calculation not implemented")
+	chainCfg := s.b.ChainConfig()
+	if chainCfg == nil {
+		return nil, errors.New("no chain config available")
+	}
+	// Calculate the base fee
+	quaiBaseFee := misc.CalcBaseFee(chainCfg, header)
+	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), quaiBaseFee)
+	// Use the prime terminus if we have it
+	lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminus())
+	if lastPrime == nil || err != nil {
+		lastPrime = header
+	}
+	feeInQi := misc.QuaiToQi(lastPrime, feeInQuai)
+	if feeInQi.Cmp(big.NewInt(0)) == 0 {
+		// Minimum fee is 1 qit or smallest unit
+		return types.Denominations[0], nil
+	}
+	return feeInQi, nil
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
