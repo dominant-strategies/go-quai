@@ -270,6 +270,7 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	wo := types.EmptyWorkObject(g.Config.Location.Context())
 	wo.WorkObjectHeader().SetNonce(types.EncodeNonce(g.Nonce))
 	wo.WorkObjectHeader().SetDifficulty(g.Difficulty)
+	wo.WorkObjectHeader().SetPrimeTerminusNumber(big.NewInt(0))
 	wo.WorkObjectHeader().SetTime(g.Timestamp)
 	wo.Header().SetExtra(g.ExtraData)
 	wo.Header().SetGasLimit(g.GasLimit)
