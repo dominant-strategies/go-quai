@@ -276,6 +276,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 		ParentHash common.Hash    `json:"parentHash" gencoden:"required"`
 		Number     *hexutil.Big   `json:"number" gencoden:"required"`
 		Difficulty *hexutil.Big   `json:"difficulty" gencoden:"required"`
+		PrimeTerminusNumber *hexutil.Big `json:"primeTerminusNumber" gencoden:"required"`
 		TxHash     common.Hash    `json:"txHash" gencoden:"required"`
 		Location   hexutil.Bytes  `json:"location" gencoden:"required"`
 		MixHash    common.Hash    `json:"mixHash" gencoden:"required"`
@@ -286,6 +287,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 
 	enc.HeaderHash = wh.HeaderHash()
 	enc.Difficulty = (*hexutil.Big)(wh.Difficulty())
+	enc.PrimeTerminusNumber = (*hexutil.Big)(wh.PrimeTerminusNumber())
 	enc.Number = (*hexutil.Big)(wh.Number())
 	enc.TxHash = wh.TxHash()
 	enc.Location = hexutil.Bytes(wh.Location())
@@ -304,6 +306,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 		ParentHash common.Hash     `json:"parentHash" gencoden:"required"`
 		Number     *hexutil.Big    `json:"number" gencoden:"required"`
 		Difficulty *hexutil.Big    `json:"difficulty" gencoden:"required"`
+		PrimeTerminusNumber *hexutil.Big `json:"primeTerminusNumber" gencoden:"required"`
 		TxHash     common.Hash     `json:"txHash" gencoden:"required"`
 		Location   hexutil.Bytes   `json:"location" gencoden:"required"`
 		MixHash	   common.Hash     `json:"mixHash" gencoden:"required"`
@@ -321,6 +324,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 	wh.SetParentHash(dec.ParentHash)
 	wh.SetNumber((*big.Int)(dec.Number))
 	wh.SetDifficulty((*big.Int)(dec.Difficulty))
+	wh.SetPrimeTerminusNumber((*big.Int)(dec.PrimeTerminusNumber))
 	wh.SetTxHash(dec.TxHash)
 	if len(dec.Location) > 0 {
 		wh.location = make([]byte, len(dec.Location))

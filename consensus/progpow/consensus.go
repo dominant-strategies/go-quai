@@ -455,18 +455,25 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
 		}
 		var expectedPrimeTerminus common.Hash
+		var expectedPrimeTerminusNumber *big.Int
 		_, parentOrder, _ := progpow.CalcOrder(parent)
 		if parentOrder == common.PRIME_CTX {
 			expectedPrimeTerminus = parent.Hash()
+			expectedPrimeTerminusNumber = parent.Number(common.PRIME_CTX)
 		} else {
 			if chain.IsGenesisHash(parent.Hash()) {
 				expectedPrimeTerminus = parent.Hash()
+				expectedPrimeTerminusNumber = parent.Number(common.PRIME_CTX)
 			} else {
 				expectedPrimeTerminus = parent.PrimeTerminus()
+				expectedPrimeTerminusNumber = parent.PrimeTerminusNumber()
 			}
 		}
 		if header.PrimeTerminus() != expectedPrimeTerminus {
 			return fmt.Errorf("invalid primeTerminus: have %v, want %v", header.PrimeTerminus(), expectedPrimeTerminus)
+		}
+		if header.PrimeTerminusNumber().Cmp(expectedPrimeTerminusNumber) != 0 {
+			return fmt.Errorf("invalid primeTerminusNumber: have %v, want %v", header.PrimeTerminusNumber(), expectedPrimeTerminusNumber)
 		}
 	}
 	// Verify that the block number is parent's +1
@@ -564,9 +571,9 @@ func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash
 		}
 		return progpowLight(size, cache, hash.Bytes(), nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)
 	}
-	cache := progpow.cache(header.NumberU64())
-	size := datasetSize(header.NumberU64())
-	digest, result := powLight(size, cache.cache, header.SealHash(), header.NonceU64(), header.NumberU64())
+	cache := progpow.cache(header.PrimeTerminusNumber().Uint64())
+	size := datasetSize(header.PrimeTerminusNumber().Uint64())
+	digest, result := powLight(size, cache.cache, header.SealHash(), header.NonceU64(), header.PrimeTerminusNumber().Uint64())
 	mixHash = common.BytesToHash(digest)
 	powHash = common.BytesToHash(result)
 	header.PowDigest.Store(mixHash)

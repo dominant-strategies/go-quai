@@ -81,7 +81,8 @@ message ProtoWorkObjectHeader {
   optional common.ProtoLocation location = 7;
   optional common.ProtoHash mix_hash = 8;
   optional uint64 time = 9;
-  optional common.ProtoAddress coinbase = 10;
+  optional bytes prime_terminus_number = 10;
+  optional common.ProtoAddress coinbase = 11;
 }
 
 message ProtoWorkObjectHeaders {
