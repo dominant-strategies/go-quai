@@ -533,6 +533,8 @@ func AddGenesisUtxos(state *state.StateDB, nodeLocation common.Location, logger 
 			Denomination: uint8(utxo.Denomination),
 		}
 
-		state.CreateUTXO(hash, uint16(utxo.Index), newUtxo)
+		if err := state.CreateUTXO(hash, uint16(utxo.Index), newUtxo); err != nil {
+			panic(fmt.Sprintf("Failed to create genesis UTXO: %v", err))
+		}
 	}
 }

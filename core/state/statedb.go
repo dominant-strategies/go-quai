@@ -575,9 +575,13 @@ func (s *StateDB) DeleteUTXO(txHash common.Hash, outputIndex uint16) {
 }
 
 // CreateUTXO explicitly creates a UTXO entry.
-func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint16, utxo *types.UtxoEntry) {
+func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint16, utxo *types.UtxoEntry) error {
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("CreateUTXO").Add(float64(time.Since(start))) }(time.Now())
+	}
+	// This check is largely redundant, but it's a good sanity check. Might be removed in the future.
+	if err := common.CheckIfBytesAreInternalAndQiAddress(utxo.Address, s.nodeLocation); err != nil {
+		return err
 	}
 	data, err := rlp.EncodeToBytes(utxo)
 	if err != nil {
@@ -586,6 +590,7 @@ func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint16, utxo *types
 	if err := s.utxoTrie.TryUpdate(utxoKey(txHash, outputIndex), data); err != nil {
 		s.setError(fmt.Errorf("createUTXO (%x) error: %v", txHash, err))
 	}
+	return nil
 }
 
 func (s *StateDB) CommitUTXOs() (common.Hash, error) {

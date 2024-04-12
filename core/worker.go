@@ -742,7 +742,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			if tx.Value().Int64() > types.MaxDenomination {
 				return nil, fmt.Errorf("tx %032x emits UTXO with value greater than max denomination", tx.Hash())
 			}
-			env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes())))
+			if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes()))); err != nil {
+				return nil, err
+			}
 			gasUsed := env.wo.Header().GasUsed()
 			gasUsed += params.CallValueTransferGas
 			env.wo.Header().SetGasUsed(gasUsed)
@@ -1481,7 +1483,11 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 		env.state.DeleteUTXO(utxo.TxHash, utxo.Index)
 	}
 	for outPoint, utxo := range utxosCreate {
-		env.state.CreateUTXO(outPoint.TxHash, outPoint.Index, utxo)
+		if err := env.state.CreateUTXO(outPoint.TxHash, outPoint.Index, utxo); err != nil {
+			// This should never happen and will invalidate the block
+			log.Global.Errorf("Failed to create UTXO %032x:%d: %v", outPoint.TxHash, outPoint.Index, err)
+			return err
+		}
 	}
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil
@@ -1540,7 +1546,9 @@ func createQiCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *
 	tx := types.NewTx(qiTx)
 	for i, out := range qiTx.TxOut {
 		// this may be unnecessary
-		state.CreateUTXO(tx.Hash(), uint16(i), types.NewUtxoEntry(&out))
+		if err := state.CreateUTXO(tx.Hash(), uint16(i), types.NewUtxoEntry(&out)); err != nil {
+			return nil, err
+		}
 	}
 	return tx, nil
 }

@@ -309,7 +309,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 					return nil, nil, nil, nil, 0, fmt.Errorf("etx %032x emits UTXO with value %d greater than max denomination", tx.Hash(), tx.Value().Int64())
 				}
 				// There are no more checks to be made as the ETX is worked so add it to the set
-				statedb.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes())))
+				if err := statedb.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Int64()), tx.To().Bytes()))); err != nil {
+					return nil, nil, nil, nil, 0, fmt.Errorf("could not create UTXO for etx %032x: %w", tx.Hash(), err)
+				}
 				if err := gp.SubGas(params.CallValueTransferGas); err != nil {
 					return nil, nil, nil, nil, 0, err
 				}
@@ -391,7 +393,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 					return nil, nil, nil, nil, 0, fmt.Errorf("coinbase tx emits UTXO with To address not equal to block coinbase")
 				}
 				utxo := types.NewUtxoEntry(&txOut)
-				statedb.CreateUTXO(coinbaseTx.Hash(), uint16(txOutIdx), utxo)
+				if err := statedb.CreateUTXO(coinbaseTx.Hash(), uint16(txOutIdx), utxo); err != nil {
+					return nil, nil, nil, nil, 0, fmt.Errorf("could not create UTXO for coinbase tx %032x: %w", coinbaseTx.Hash(), err)
+				}
 				p.logger.WithFields(log.Fields{
 					"txHash":       coinbaseTx.Hash().Hex(),
 					"txOutIdx":     txOutIdx,
@@ -640,7 +644,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 			// This output creates a normal UTXO
 			utxo := types.NewUtxoEntry(&txOut)
 			if updateState {
-				statedb.CreateUTXO(tx.Hash(), uint16(txOutIdx), utxo)
+				if err := statedb.CreateUTXO(tx.Hash(), uint16(txOutIdx), utxo); err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 	}

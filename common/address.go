@@ -75,6 +75,36 @@ func (a Address) InternalAndQuaiAddress() (InternalAddress, error) {
 	return *internal, nil
 }
 
+func CheckIfBytesAreInternalAndQiAddress(b []byte, nodeLocation Location) error {
+	if len(b) != AddressLength {
+		return fmt.Errorf("address %s is not %d bytes long", hexutil.Encode(b), AddressLength)
+	}
+	if !IsInChainScope(b, nodeLocation) {
+		return ErrInvalidScope
+	}
+	if AddressBytes(b).IsInQuaiLedgerScope() {
+		return ErrQuaiAddress
+	}
+	return nil
+}
+
+func (a Address) InternalAndQiAddress() (InternalAddress, error) {
+	if a.inner == nil {
+		return InternalAddress{}, ErrNilInner
+	}
+	if a.IsInQuaiLedgerScope() {
+		return InternalAddress{}, ErrQuaiAddress
+	}
+	internal, ok := a.inner.(*InternalAddress)
+	if !ok {
+		return InternalAddress{}, ErrInvalidScope
+	}
+	if internal == nil {
+		return InternalAddress{}, ErrNilInner
+	}
+	return *internal, nil
+}
+
 func (a Address) IsInQiLedgerScope() bool {
 	// The first bit of the second byte is set if the address is in the Qi ledger
 	return a.Bytes()[1] > 127
@@ -356,6 +386,18 @@ func (a AddressBytes) hex() []byte {
 	copy(buf[:2], "0x")
 	hex.Encode(buf[2:], a[:])
 	return buf[:]
+}
+
+func (a AddressBytes) Location() *Location {
+	// Extract nibbles
+	lowerNib := a[0] & 0x0F        // Lower 4 bits
+	upperNib := (a[0] & 0xF0) >> 4 // Upper 4 bits, shifted right
+	return &Location{upperNib, lowerNib}
+}
+
+func (a AddressBytes) IsInQuaiLedgerScope() bool {
+	// The first bit of the second byte is not set if the address is in the Quai ledger
+	return a[1] <= 127
 }
 
 func MakeErrQiAddress(addr string) error {
