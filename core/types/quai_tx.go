@@ -38,6 +38,11 @@ type QuaiTx struct {
 	V *big.Int `json:"v" gencodec:"required"`
 	R *big.Int `json:"r" gencodec:"required"`
 	S *big.Int `json:"s" gencodec:"required"`
+
+	// Work fields
+	ParentHash *common.Hash
+	MixHash    *common.Hash
+	WorkNonce  *BlockNonce
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -94,6 +99,9 @@ func (tx *QuaiTx) gasPrice() *big.Int        { return tx.GasFeeCap }
 func (tx *QuaiTx) value() *big.Int           { return tx.Value }
 func (tx *QuaiTx) nonce() uint64             { return tx.Nonce }
 func (tx *QuaiTx) to() *common.Address       { return tx.To }
+func (tx *QuaiTx) parentHash() *common.Hash  { return tx.ParentHash }
+func (tx *QuaiTx) mixHash() *common.Hash     { return tx.MixHash }
+func (tx *QuaiTx) workNonce() *BlockNonce    { return tx.WorkNonce }
 func (tx *QuaiTx) etxSender() common.Address { panic("internal TX does not have etxSender") }
 func (tx *QuaiTx) originatingTxHash() common.Hash {
 	panic("internal TX does not have originatingTxHash")

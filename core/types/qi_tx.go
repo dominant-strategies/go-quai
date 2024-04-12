@@ -14,6 +14,11 @@ type QiTx struct {
 	TxOut   TxOuts
 
 	Signature *schnorr.Signature
+
+	// Work fields
+	ParentHash *common.Hash
+	MixHash    *common.Hash
+	WorkNonce  *BlockNonce
 }
 
 type WireQiTx struct {
@@ -86,17 +91,23 @@ func (tx *WireQiTx) copyFromWire() *QiTx {
 }
 
 // accessors for innerTx.
-func (tx *QiTx) txType() byte           { return QiTxType }
-func (tx *QiTx) chainID() *big.Int      { return tx.ChainID }
-func (tx *QiTx) accessList() AccessList { panic("Qi TX does not have accessList") }
-func (tx *QiTx) data() []byte           { panic("Qi TX does not have data") }
-func (tx *QiTx) gas() uint64            { panic("Qi TX does not have gas") }
-func (tx *QiTx) gasFeeCap() *big.Int    { panic("Qi TX does not have gasFeeCap") }
-func (tx *QiTx) gasTipCap() *big.Int    { panic("Qi TX does not have gasTipCap") }
-func (tx *QiTx) gasPrice() *big.Int     { panic("Qi TX does not have gasPrice") }
-func (tx *QiTx) value() *big.Int        { panic("Qi TX does not have value") }
-func (tx *QiTx) nonce() uint64          { panic("Qi TX does not have nonce") }
-func (tx *QiTx) to() *common.Address    { panic("Qi TX does not have to") }
+func (tx *QiTx) txType() byte                            { return QiTxType }
+func (tx *QiTx) chainID() *big.Int                       { return tx.ChainID }
+func (tx *QiTx) txIn() TxIns                             { return tx.TxIn }
+func (tx *QiTx) txOut() TxOuts                           { return tx.TxOut }
+func (tx *QiTx) getSchnorrSignature() *schnorr.Signature { return tx.Signature }
+func (tx *QiTx) parentHash() *common.Hash                { return tx.ParentHash }
+func (tx *QiTx) mixHash() *common.Hash                   { return tx.MixHash }
+func (tx *QiTx) workNonce() *BlockNonce                  { return tx.WorkNonce }
+func (tx *QiTx) accessList() AccessList                  { panic("Qi TX does not have accessList") }
+func (tx *QiTx) data() []byte                            { panic("Qi TX does not have data") }
+func (tx *QiTx) gas() uint64                             { panic("Qi TX does not have gas") }
+func (tx *QiTx) gasFeeCap() *big.Int                     { panic("Qi TX does not have gasFeeCap") }
+func (tx *QiTx) gasTipCap() *big.Int                     { panic("Qi TX does not have gasTipCap") }
+func (tx *QiTx) gasPrice() *big.Int                      { panic("Qi TX does not have gasPrice") }
+func (tx *QiTx) value() *big.Int                         { panic("Qi TX does not have value") }
+func (tx *QiTx) nonce() uint64                           { panic("Qi TX does not have nonce") }
+func (tx *QiTx) to() *common.Address                     { panic("Qi TX does not have to") }
 func (tx *QiTx) originatingTxHash() common.Hash {
 	panic("Qi TX does not have originatingTxHash")
 }
@@ -104,9 +115,6 @@ func (tx *QiTx) etxIndex() uint16 { panic("Qi TX does not have etxIndex") }
 func (tx *QiTx) etxSender() common.Address {
 	panic("Qi TX does not have etxSender")
 }
-func (tx *QiTx) txIn() TxIns                             { return tx.TxIn }
-func (tx *QiTx) txOut() TxOuts                           { return tx.TxOut }
-func (tx *QiTx) getSchnorrSignature() *schnorr.Signature { return tx.Signature }
 
 func (tx *QiTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	panic("Qi TX does not have ECDSA signature values")

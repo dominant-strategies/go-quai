@@ -58,6 +58,9 @@ message ProtoTransaction {
   optional ProtoTxOuts tx_outs = 17;
   optional bytes signature = 18;
   optional bytes etx_sender = 19;
+  optional common.ProtoHash parent_hash = 20;
+  optional common.ProtoHash mix_hash = 21;
+  optional uint64 work_nonce = 22;
 }
 
 message ProtoTransactions { repeated ProtoTransaction transactions = 1; }

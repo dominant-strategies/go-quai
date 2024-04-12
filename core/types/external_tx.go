@@ -172,6 +172,9 @@ func (tx *ExternalTx) etxData() []byte                { panic("external TX does 
 func (tx *ExternalTx) etxAccessList() AccessList      { panic("external TX does not have etxAccessList") }
 func (tx *ExternalTx) txIn() TxIns                    { panic("external TX does not have txIn") }
 func (tx *ExternalTx) txOut() TxOuts                  { panic("external TX does not have txOut") }
+func (tx *ExternalTx) parentHash() *common.Hash       { panic("external TX does not have parentHash") }
+func (tx *ExternalTx) mixHash() *common.Hash          { panic("external TX does not have mixHash") }
+func (tx *ExternalTx) workNonce() *BlockNonce         { panic("external TX does not have workNonce") }
 func (tx *ExternalTx) getSchnorrSignature() *schnorr.Signature {
 	panic("external TX does not have getSchnorrSignature")
 }

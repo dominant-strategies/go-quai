@@ -102,6 +102,9 @@ type TxData interface {
 	getEcdsaSignatureValues() (v, r, s *big.Int)
 	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
 	setTo(to common.Address)
+	parentHash() *common.Hash
+	mixHash() *common.Hash
+	workNonce() *BlockNonce
 
 	// Schnorr segregated sigs
 	getSchnorrSignature() *schnorr.Signature
@@ -141,6 +144,10 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
 		protoTx.ChainId = tx.ChainId().Bytes()
+		protoTx.ParentHash = tx.ParentHash().ProtoEncode()
+		protoTx.MixHash = tx.MixHash().ProtoEncode()
+		workNonce := tx.WorkNonce().Uint64()
+		protoTx.WorkNonce = &workNonce
 	case 1:
 		gas := tx.Gas()
 		protoTx.Gas = &gas
@@ -168,6 +175,10 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		}
 		protoTx.Signature = tx.GetSchnorrSignature().Serialize()
 		protoTx.ChainId = tx.ChainId().Bytes()
+		protoTx.ParentHash = tx.ParentHash().ProtoEncode()
+		protoTx.MixHash = tx.MixHash().ProtoEncode()
+		workNonce := tx.WorkNonce().Uint64()
+		protoTx.WorkNonce = &workNonce
 	}
 	return protoTx, nil
 }
@@ -206,45 +217,63 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.ChainId == nil {
 			return errors.New("missing required field 'ChainId' in ProtoTransaction")
 		}
-		var itx QuaiTx
-		itx.AccessList = AccessList{}
-		itx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
+		var quaiTx QuaiTx
+		quaiTx.AccessList = AccessList{}
+		quaiTx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
 		if protoTx.To == nil {
-			itx.To = nil
+			quaiTx.To = nil
 		} else {
 			to := common.BytesToAddress(protoTx.GetTo(), location)
-			itx.To = &to
+			quaiTx.To = &to
 		}
-		itx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
-		itx.Nonce = protoTx.GetNonce()
-		itx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
-		itx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
-		itx.Gas = protoTx.GetGas()
+		quaiTx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
+		quaiTx.Nonce = protoTx.GetNonce()
+		quaiTx.GasTipCap = new(big.Int).SetBytes(protoTx.GetGasTipCap())
+		quaiTx.GasFeeCap = new(big.Int).SetBytes(protoTx.GetGasFeeCap())
+		quaiTx.Gas = protoTx.GetGas()
 		if len(protoTx.GetValue()) == 0 {
-			itx.Value = common.Big0
+			quaiTx.Value = common.Big0
 		} else {
-			itx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+			quaiTx.Value = new(big.Int).SetBytes(protoTx.GetValue())
 		}
-		itx.Data = protoTx.GetData()
+		quaiTx.Data = protoTx.GetData()
 		if protoTx.V == nil {
 			return errors.New("missing required field 'V' in QuaiTx")
 		}
-		itx.V = new(big.Int).SetBytes(protoTx.GetV())
+		quaiTx.V = new(big.Int).SetBytes(protoTx.GetV())
 		if protoTx.R == nil {
 			return errors.New("missing required field 'R' in QuaiTx")
 		}
-		itx.R = new(big.Int).SetBytes(protoTx.GetR())
+		quaiTx.R = new(big.Int).SetBytes(protoTx.GetR())
 		if protoTx.S == nil {
 			return errors.New("missing required field 'S' in QuaiTx")
 		}
-		itx.S = new(big.Int).SetBytes(protoTx.GetS())
-		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
+		quaiTx.S = new(big.Int).SetBytes(protoTx.GetS())
+		withSignature := quaiTx.V.Sign() != 0 || quaiTx.R.Sign() != 0 || quaiTx.S.Sign() != 0
 		if withSignature {
-			if err := sanityCheckSignature(itx.V, itx.R, itx.S); err != nil {
+			if err := sanityCheckSignature(quaiTx.V, quaiTx.R, quaiTx.S); err != nil {
 				return err
 			}
 		}
-		tx.SetInner(&itx)
+		if protoTx.ParentHash == nil {
+			quaiTx.ParentHash = nil
+		} else {
+			hash := common.BytesToHash(protoTx.ParentHash.Value)
+			quaiTx.ParentHash = &hash
+		}
+		if protoTx.MixHash == nil {
+			quaiTx.MixHash = nil
+		} else {
+			hash := common.BytesToHash(protoTx.MixHash.Value)
+			quaiTx.MixHash = &hash
+		}
+		if protoTx.WorkNonce == nil {
+			quaiTx.WorkNonce = nil
+		} else {
+			nonce := BlockNonce(uint64ToByteArr(*protoTx.WorkNonce))
+			quaiTx.WorkNonce = &nonce
+		}
+		tx.SetInner(&quaiTx)
 
 	case 1:
 		if protoTx.Gas == nil {
@@ -317,7 +346,26 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		qiTx.Signature = sig
 
+		if protoTx.ParentHash == nil {
+			qiTx.ParentHash = nil
+		} else {
+			hash := common.BytesToHash(protoTx.ParentHash.Value)
+			qiTx.ParentHash = &hash
+		}
+		if protoTx.MixHash == nil {
+			qiTx.MixHash = nil
+		} else {
+			hash := common.BytesToHash(protoTx.MixHash.Value)
+			qiTx.MixHash = &hash
+		}
+		if protoTx.WorkNonce == nil {
+			qiTx.WorkNonce = nil
+		} else {
+			nonce := BlockNonce(uint64ToByteArr(*protoTx.WorkNonce))
+			qiTx.WorkNonce = &nonce
+		}
 		tx.SetInner(&qiTx)
+
 	default:
 		return errors.New("invalid transaction type")
 	}
@@ -514,6 +562,10 @@ func (tx *Transaction) TxIn() TxIns { return tx.inner.txIn() }
 func (tx *Transaction) GetSchnorrSignature() *schnorr.Signature {
 	return tx.inner.getSchnorrSignature()
 }
+
+func (tx *Transaction) ParentHash() *common.Hash { return tx.inner.parentHash() }
+func (tx *Transaction) MixHash() *common.Hash    { return tx.inner.mixHash() }
+func (tx *Transaction) WorkNonce() *BlockNonce   { return tx.inner.workNonce() }
 
 func (tx *Transaction) From(nodeLocation common.Location) *common.Address {
 	sc := tx.from.Load()
