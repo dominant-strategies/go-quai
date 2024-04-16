@@ -1214,7 +1214,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		if err != nil {
 			return nil, err
 		}
-		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil, types.BlockObject)
+		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		env, err := w.makeEnv(parent, proposedWo, w.coinbase)
 		if err != nil {
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
@@ -1253,7 +1253,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		if err != nil {
 			return nil, err
 		}
-		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil, types.BlockObject)
+		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		return &environment{wo: proposedWo}, nil
 	}
 

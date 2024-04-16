@@ -1312,7 +1312,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 		wo.Body().SetTransactions(nil)
 		wo.Body().SetExtTransactions(nil)
 		wo.Body().SetInterlinkHashes(interlinkHashes)
-		pendingBlockBody = types.NewWorkObject(wo.WorkObjectHeader(), wo.Body(), nil, types.BlockObject)
+		pendingBlockBody = types.NewWorkObject(wo.WorkObjectHeader(), wo.Body(), nil)
 	}
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(pendingBlockBody.Transactions()))
@@ -1341,7 +1341,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	pendingBlockBody.Body().SetExtTransactions(etxs)
 	pendingBlockBody.Body().SetManifest(subManifest)
 	pendingBlockBody.Body().SetInterlinkHashes(interlinkHashes)
-	block := types.NewWorkObject(wo.WorkObjectHeader(), pendingBlockBody.Body(), nil, types.BlockObject)
+	block := types.NewWorkObject(wo.WorkObjectHeader(), pendingBlockBody.Body(), nil)
 
 	if err := sl.validator.ValidateBody(block); err != nil {
 		return block, err
