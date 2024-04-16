@@ -25,7 +25,9 @@ const (
 func TopicName(genesis common.Hash, location common.Location, data interface{}) (string, error) {
 	baseTopic := strings.Join([]string{genesis.String(), location.Name()}, "/")
 	switch data.(type) {
-	case *types.WorkObject, *big.Int, common.Hash:
+	case *types.WorkObjectHeaderView, *big.Int, common.Hash:
+		return strings.Join([]string{baseTopic, C_headerType}, "/"), nil
+	case *types.WorkObjectBlockView:
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/"), nil
 	case *types.Transaction:
 		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
