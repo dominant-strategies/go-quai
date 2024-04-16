@@ -582,9 +582,19 @@ func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) 
 	return b.quai.core.SubscribeExpansionEvent(ch)
 }
 
-// ///////////////////////////
-// /////// P2P ///////////////
-// ///////////////////////////
-func (b *QuaiAPIBackend) BroadcastBlock(block *types.WorkObject, location common.Location) error {
-	return b.quai.p2p.Broadcast(location, block)
+// ////////////////////////////
+// //////// P2P ///////////////
+// ////////////////////////////
+func (b *QuaiAPIBackend) BroadcastWorkObject(wo *types.WorkObject, location common.Location) error {
+	err := b.quai.p2p.Broadcast(location, wo.ConvertToBlockView())
+	if err != nil {
+		return err
+	}
+
+	err = b.quai.p2p.Broadcast(location, wo.ConvertToHeaderView())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

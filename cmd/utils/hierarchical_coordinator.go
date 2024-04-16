@@ -134,7 +134,8 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 	quaiBackend.SetApiBackend(&apiBackend, location)
 
 	// Subscribe to the new topics after setting the api backend
-	hc.p2p.Subscribe(location, &types.WorkObject{})
+	hc.p2p.Subscribe(location, &types.WorkObjectBlockView{})
+	hc.p2p.Subscribe(location, &types.WorkObjectHeaderView{})
 	hc.p2p.Subscribe(location, common.Hash{})
 	hc.p2p.Subscribe(location, &types.Transactions{})
 

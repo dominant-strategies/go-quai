@@ -8,7 +8,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -190,29 +189,28 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 // Converts a custom go type to a proto type and marhsals it into a protobuf message
 func ConvertAndMarshal(data interface{}) ([]byte, error) {
 	switch data := data.(type) {
-	case *types.WorkObject:
-		log.Global.Tracef("marshalling block: %+v", data)
-		protoBlock, err := data.ProtoEncode(types.BlockObject)
+	case *types.WorkObjectHeaderView, *types.WorkObjectBlockView:
+		var protoBlock *types.ProtoWorkObject
+		var err error
+		switch data := data.(type) {
+		case *types.WorkObjectHeaderView:
+			protoBlock, err = data.ProtoEncode(types.HeaderObject)
+		case *types.WorkObjectBlockView:
+			protoBlock, err = data.ProtoEncode(types.BlockObject)
+		default:
+			return nil, errors.New("unsupported data type")
+		}
 		if err != nil {
 			return nil, err
 		}
 		return proto.Marshal(protoBlock)
-	case *types.Header:
-		log.Global.Tracef("marshalling header: %+v", data)
-		protoHeader, err := data.ProtoEncode()
-		if err != nil {
-			return nil, err
-		}
-		return proto.Marshal(protoHeader)
 	case *types.Transaction:
-		log.Global.Tracef("marshalling transaction: %+v", data)
 		protoTransaction, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
 		return proto.Marshal(protoTransaction)
 	case common.Hash:
-		log.Global.Tracef("marshalling hash: %+v", data)
 		protoHash := data.ProtoEncode()
 		return proto.Marshal(protoHash)
 	case *types.Transactions:
@@ -229,7 +227,7 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 // Unmarshals a protobuf message into a proto type and converts it to a custom go type
 func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *interface{}, datatype interface{}) error {
 	switch datatype.(type) {
-	case *types.WorkObject:
+	case *types.WorkObjectHeaderView, *types.WorkObjectBlockView:
 		protoWorkObject := &types.ProtoWorkObject{}
 		err := proto.Unmarshal(data, protoWorkObject)
 		if err != nil {

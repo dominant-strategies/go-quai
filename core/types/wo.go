@@ -997,3 +997,32 @@ func (wb *WorkObjectBody) RPCMarshalWorkObjectBody() map[string]interface{} {
 
 	return result
 }
+
+////////////////////////////////////////////////////////////
+///////////////////// Work Object Views ////////////////////
+////////////////////////////////////////////////////////////
+
+type WorkObjectBlockView struct {
+	*WorkObject
+}
+
+type WorkObjectHeaderView struct {
+	*WorkObject
+}
+
+////////////////////////////////////////////////////////////
+////////////// View Conversion/Getter Methods //////////////
+////////////////////////////////////////////////////////////
+
+func (wo *WorkObject) ConvertToHeaderView() *WorkObjectHeaderView {
+	newWo := NewWorkObjectWithHeader(wo, nil, common.ZONE_CTX, HeaderObject)
+	return &WorkObjectHeaderView{
+		WorkObject: newWo,
+	}
+}
+
+func (wo *WorkObject) ConvertToBlockView() *WorkObjectBlockView {
+	return &WorkObjectBlockView{
+		WorkObject: wo,
+	}
+}
