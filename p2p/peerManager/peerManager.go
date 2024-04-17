@@ -5,11 +5,13 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/streamManager"
@@ -106,7 +108,9 @@ type BasicPeerManager struct {
 
 	selfID p2p.PeerID
 
-	ctx context.Context
+	ctx    context.Context
+	cancel context.CancelFunc
+	logger *log.Logger
 }
 
 func NewManager(ctx context.Context, low int, high int, datastore datastore.Datastore) (PeerManager, error) {
@@ -151,12 +155,62 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		return nil, err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+
+	logger := log.NewLogger("nodelogs/peers.log", "debug")
+
+	go func() {
+		q := query.Query{
+			Prefix: "/peers",
+		}
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				logger.Info("Reporting peer stats")
+				for locName, location := range peerDBs {
+					locPeer := []log.Fields{}
+					for dbName, db := range location {
+						peerCount := db.GetPeerCount()
+						results, err := db.Query(ctx, q)
+						if err != nil {
+							logger.Errorf("Error querying peerDB: %s", err)
+							continue
+						}
+						for result := range results.Next() {
+							peerID, err := peer.Decode(strings.TrimPrefix(result.Key, "/"))
+							if err != nil {
+								logger.Errorf("Error decoding peer ID: %s", err)
+								continue
+							}
+							locPeer = append(locPeer, log.Fields{
+								"peerID": peerID,
+								"info":   result.Value,
+							})
+						}
+						logger.WithFields(log.Fields{
+							"location":  locName,
+							"peerCount": peerCount,
+							"bucket":    dbName,
+							"peers":     locPeer}).Info("Peer stats")
+					}
+				}
+			}
+		}
+	}()
+
 	return &BasicPeerManager{
 		ctx:                  ctx,
+		cancel:               cancel,
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
 		streamManager:        streamManager,
 		peerDBs:              peerDBs,
+		logger:               logger,
 	}, nil
 }
 
