@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -335,6 +336,14 @@ func newCache(epoch uint64) interface{} {
 
 // generate ensures that the cache content is generated before use.
 func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *log.Logger) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	c.once.Do(func() {
 		size := cacheSize(c.epoch*epochLength + 1)
 		seed := seedHash(c.epoch*epochLength + 1)
@@ -344,9 +353,9 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *lo
 		// If we don't store anything on disk, generate and return.
 		if dir == "" {
 			c.cache = make([]uint32, size/4)
-			generateCache(c.cache, c.epoch, seed)
+			generateCache(c.cache, c.epoch, seed, logger)
 			c.cDag = make([]uint32, progpowCacheWords)
-			generateCDag(c.cDag, c.cache, c.epoch)
+			generateCDag(c.cDag, c.cache, c.epoch, logger)
 			return
 		}
 		// Disk storage is needed, this will get fancy
@@ -366,21 +375,21 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *lo
 		if err == nil {
 			logger.Debug("Loaded old ethash cache from disk")
 			c.cDag = make([]uint32, progpowCacheWords)
-			generateCDag(c.cDag, c.cache, c.epoch)
+			generateCDag(c.cDag, c.cache, c.epoch, logger)
 			return
 		}
 		logger.WithField("err", err).Debug("Failed to load old ethash cache from disk")
 
 		// No previous cache available, create a new cache file to fill
-		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, lock, func(buffer []uint32) { generateCache(buffer, c.epoch, seed) })
+		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, lock, func(buffer []uint32) { generateCache(buffer, c.epoch, seed, logger) })
 		if err != nil {
 			logger.WithField("err", err).Error("Failed to generate mapped ethash cache")
 
 			c.cache = make([]uint32, size/4)
-			generateCache(c.cache, c.epoch, seed)
+			generateCache(c.cache, c.epoch, seed, logger)
 		}
 		c.cDag = make([]uint32, progpowCacheWords)
-		generateCDag(c.cDag, c.cache, c.epoch)
+		generateCDag(c.cDag, c.cache, c.epoch, logger)
 		// Iterate over all previous instances and delete old ones
 		for ep := int(c.epoch) - limit; ep >= 0; ep-- {
 			seed := seedHash(uint64(ep)*epochLength + 1)

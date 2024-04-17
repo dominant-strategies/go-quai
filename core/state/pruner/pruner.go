@@ -91,7 +91,7 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 	if headBlock == nil {
 		return nil, errors.New("failed to load head block")
 	}
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.EVMRoot(), false, false)
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.EVMRoot(), false, false, logger)
 	if err != nil {
 		return nil, err // The relevant snapshot(s) might not exist
 	}
@@ -103,7 +103,7 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 		}).Warn("Sanitizing bloomfilter size (MB)")
 		bloomSize = 256
 	}
-	stateBloom, err := newStateBloomWithSize(bloomSize)
+	stateBloom, err := newStateBloomWithSize(bloomSize, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint6
 	}, nil
 }
 
-func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, middleStateRoots map[common.Hash]struct{}, start time.Time) error {
+func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, stateBloom *stateBloom, bloomPath string, middleStateRoots map[common.Hash]struct{}, start time.Time, logger *log.Logger) error {
 	// Delete all stale trie nodes in the disk. With the help of state bloom
 	// the trie nodes(and codes) belong to the active state will be filtered
 	// out. A very small part of stale tries will also be filtered because of
@@ -148,7 +148,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				checkKey = codeKey
 			}
 			if _, exist := middleStateRoots[common.BytesToHash(checkKey)]; exist {
-				log.Global.WithField("hash", common.BytesToHash(checkKey)).Debug("Forcibly delete the middle state roots")
+				logger.WithField("hash", common.BytesToHash(checkKey)).Debug("Forcibly delete the middle state roots")
 			} else {
 				if ok, err := stateBloom.Contain(checkKey); err != nil {
 					return err
@@ -169,7 +169,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				eta = time.Duration(left/speed) * time.Millisecond
 			}
 			if time.Since(logged) > 8*time.Second {
-				log.Global.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"nodes":   count,
 					"size":    size,
 					"elapsed": common.PrettyDuration(time.Since(pstart)),
@@ -193,7 +193,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 		batch.Reset()
 	}
 	iter.Release()
-	log.Global.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"nodes":   count,
 		"size":    size,
 		"elapsed": common.PrettyDuration(time.Since(pstart)),
@@ -230,18 +230,18 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			if b == 0xf0 {
 				end = nil
 			}
-			log.Global.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"range":   fmt.Sprintf("%#x-%#x", start, end),
 				"elapsed": common.PrettyDuration(time.Since(cstart)),
 			}).Info("Compacting database")
 			if err := maindb.Compact(start, end); err != nil {
-				log.Global.WithField("err", err).Error("Database compaction failed")
+				logger.WithField("err", err).Error("Database compaction failed")
 				return err
 			}
 		}
-		log.Global.WithField("elapsed", common.PrettyDuration(time.Since(cstart))).Info("Database compaction finished")
+		logger.WithField("elapsed", common.PrettyDuration(time.Since(cstart))).Info("Database compaction finished")
 	}
-	log.Global.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"pruned":  size,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("State pruning successful")
@@ -261,7 +261,7 @@ func (p *Pruner) Prune(root common.Hash, location common.Location) error {
 		return err
 	}
 	if stateBloomRoot != (common.Hash{}) {
-		return RecoverPruning(p.datadir, p.db, p.trieCachePath, location)
+		return RecoverPruning(p.datadir, p.db, p.trieCachePath, location, p.logger)
 	}
 	// If the target state root is not specified, use the HEAD-127 as the
 	// target. The reason for picking it is:
@@ -329,7 +329,7 @@ func (p *Pruner) Prune(root common.Hash, location common.Location) error {
 	// It's necessary otherwise in the next restart we will hit the
 	// deleted state root in the "clean cache" so that the incomplete
 	// state is picked for usage.
-	deleteCleanTrieCache(p.trieCachePath)
+	deleteCleanTrieCache(p.trieCachePath, p.logger)
 
 	// All the state roots of the middle layer should be forcibly pruned,
 	// otherwise the dangling state will be left.
@@ -358,7 +358,7 @@ func (p *Pruner) Prune(root common.Hash, location common.Location) error {
 		return err
 	}
 	p.logger.WithField("name", filterName).Info("State bloom filter committed")
-	return prune(p.snaptree, root, p.db, p.stateBloom, filterName, middleRoots, start)
+	return prune(p.snaptree, root, p.db, p.stateBloom, filterName, middleRoots, start, p.logger)
 }
 
 // RecoverPruning will resume the pruning procedure during the system restart.
@@ -368,7 +368,7 @@ func (p *Pruner) Prune(root common.Hash, location common.Location) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, location common.Location) error {
+func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, location common.Location, logger *log.Logger) error {
 	stateBloomPath, stateBloomRoot, err := findBloomFilter(datadir)
 	if err != nil {
 		return err
@@ -388,21 +388,21 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, loc
 	// - The state HEAD is rewound already because of multiple incomplete `prune-state`
 	// In this case, even the state HEAD is not exactly matched with snapshot, it
 	// still feasible to recover the pruning correctly.
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.EVMRoot(), false, true)
+	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.EVMRoot(), false, true, logger)
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
-	stateBloom, err := NewStateBloomFromDisk(stateBloomPath)
+	stateBloom, err := NewStateBloomFromDisk(stateBloomPath, logger)
 	if err != nil {
 		return err
 	}
-	log.Global.WithField("path", stateBloomPath).Info("Loaded state bloom filter")
+	logger.WithField("path", stateBloomPath).Info("Loaded state bloom filter")
 
 	// Before start the pruning, delete the clean trie cache first.
 	// It's necessary otherwise in the next restart we will hit the
 	// deleted state root in the "clean cache" so that the incomplete
 	// state is picked for usage.
-	deleteCleanTrieCache(trieCachePath)
+	deleteCleanTrieCache(trieCachePath, logger)
 
 	// All the state roots of the middle layers should be forcibly pruned,
 	// otherwise the dangling state will be left.
@@ -419,10 +419,10 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, loc
 		middleRoots[layer.Root()] = struct{}{}
 	}
 	if !found {
-		log.Global.Error("Pruning target state is not existent")
+		logger.Error("Pruning target state is not existent")
 		return errors.New("non-existent target state")
 	}
-	return prune(snaptree, stateBloomRoot, db, stateBloom, stateBloomPath, middleRoots, time.Now())
+	return prune(snaptree, stateBloomRoot, db, stateBloom, stateBloomPath, middleRoots, time.Now(), logger)
 }
 
 // extractGenesis loads the genesis state and commits all the state entries
@@ -522,11 +522,11 @@ otherwise the entire database may be damaged!
 Check the command description "quai snapshot prune-state --help" for more details.
 `
 
-func deleteCleanTrieCache(path string) {
+func deleteCleanTrieCache(path string, logger *log.Logger) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		log.Global.Warn(warningLog)
+		logger.Warn(warningLog)
 		return
 	}
 	os.RemoveAll(path)
-	log.Global.WithField("path", path).Info("Deleted trie clean cache")
+	logger.WithField("path", path).Info("Deleted trie clean cache")
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"runtime/debug"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common/bitutil"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // bloomIndexes represents the bit indexes inside the bloom filter that belong
@@ -84,12 +86,14 @@ type Matcher struct {
 	deliveries chan *Retrieval      // Retriever processes waiting for task response deliveries
 
 	running uint32 // Atomic flag whether a session is live or not
+
+	logger *log.Logger
 }
 
 // NewMatcher creates a new pipeline for retrieving bloom bit streams and doing
 // address and topic filtering on them. Setting a filter component to `nil` is
 // allowed and will result in that filter rule being skipped (OR 0x11...1).
-func NewMatcher(sectionSize uint64, filters [][][]byte) *Matcher {
+func NewMatcher(sectionSize uint64, filters [][][]byte, logger *log.Logger) *Matcher {
 	// Create the matcher instance
 	m := &Matcher{
 		sectionSize: sectionSize,
@@ -98,6 +102,7 @@ func NewMatcher(sectionSize uint64, filters [][][]byte) *Matcher {
 		counters:    make(chan chan uint),
 		retrievals:  make(chan chan *Retrieval),
 		deliveries:  make(chan *Retrieval),
+		logger:      logger,
 	}
 	// Calculate the bloom bit indexes for the groups we're interested in
 	m.filters = nil
@@ -138,7 +143,7 @@ func (m *Matcher) addScheduler(idx uint) {
 	if _, ok := m.schedulers[idx]; ok {
 		return
 	}
-	m.schedulers[idx] = newScheduler(idx)
+	m.schedulers[idx] = newScheduler(idx, m.logger)
 }
 
 // Start starts the matching process and returns a stream of bloom matches in
@@ -165,6 +170,14 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 	// Read the output from the result sink and deliver to the user
 	session.pend.Add(1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				m.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		defer session.pend.Done()
 		defer close(results)
 
@@ -227,6 +240,14 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 
 	session.pend.Add(1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				m.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		defer session.pend.Done()
 		defer close(source)
 
@@ -274,6 +295,14 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 
 	session.pend.Add(2)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				m.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		// Tear down the goroutine and terminate all source channels
 		defer session.pend.Done()
 		defer close(process)
@@ -317,6 +346,14 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 	}()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				m.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		// Tear down the goroutine and terminate the final sink channel
 		defer session.pend.Done()
 		defer close(results)
@@ -380,6 +417,14 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 // of pending requests, which are assigned to retrievers wanting to fulfil them.
 func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 	defer session.pend.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			m.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 
 	var (
 		requests   = make(map[uint][]uint64) // Per-bit list of section requests, ordered by section number
@@ -595,6 +640,14 @@ func (s *MatcherSession) deliverSections(bit uint, sections []uint64, bitsets []
 // of the session, any request in-flight need to be responded to! Empty responses
 // are fine though in that case.
 func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan *Retrieval) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.matcher.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	for {
 		// Allocate a new bloom bit index to retrieve data for, stopping when done
 		bit, ok := s.allocateRetrieval()

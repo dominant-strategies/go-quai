@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -133,6 +134,14 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	// only set domClient if the chain is not Prime.
 	if nodeCtx != common.PRIME_CTX {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					sl.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Fatal("Go-Quai Panicked")
+				}
+			}()
 			sl.domClient = makeDomClient(domClientUrl, sl.logger)
 		}()
 	}
@@ -603,6 +612,14 @@ func (sl *Slice) randomRelayArray() []int {
 
 // asyncPendingHeaderLoop waits for the pendingheader updates from the worker and updates the phCache
 func (sl *Slice) asyncPendingHeaderLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			sl.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 
 	// Subscribe to the AsyncPh updates from the worker
 	sl.asyncPhCh = make(chan *types.WorkObject, c_asyncPhUpdateChanSize)
@@ -1412,6 +1429,14 @@ func (sl *Slice) WriteGenesisBlock(block *types.WorkObject, location common.Loca
 // NewGenesisPendingHeader creates a pending header on the genesis block
 func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {
 	nodeCtx := sl.NodeLocation().Context()
+	defer func() {
+		if r := recover(); r != nil {
+			sl.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 
 	if nodeCtx == common.ZONE_CTX && !sl.hc.Empty() {
 		return nil
@@ -1439,7 +1464,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 	var localPendingHeader *types.WorkObject
 	var err error
 	var termini types.Termini
-	log.Global.Infof("NewGenesisPendingHeader location: %v, genesis hash %s", sl.NodeLocation(), genesisHash)
+	sl.logger.Infof("NewGenesisPendingHeader location: %v, genesis hash %s", sl.NodeLocation(), genesisHash)
 	if sl.hc.IsGenesisHash(genesisHash) {
 		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(genesisBlock, false)
 		if err != nil {
@@ -1452,7 +1477,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 	} else {
 		localPendingHeaderWithTermini, exists := sl.readPhCache(domTerminus)
 		if !exists {
-			log.Global.Errorf("Genesis pending header not found in node location %v cache %v", sl.NodeLocation(), domTerminus)
+			sl.logger.Errorf("Genesis pending header not found in node location %v cache %v", sl.NodeLocation(), domTerminus)
 		}
 		localPendingHeader = localPendingHeaderWithTermini.WorkObject()
 		termini = localPendingHeaderWithTermini.Termini()
@@ -1519,6 +1544,14 @@ func makeDomClient(domurl string, logger *log.Logger) *quaiclient.Client {
 
 // MakeSubClients creates the quaiclient for the given suburls
 func (sl *Slice) makeSubClients(suburls []string, logger *log.Logger) {
+	defer func() {
+		if r := recover(); r != nil {
+			sl.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	for i, suburl := range suburls {
 		if suburl != "" {
 			subClient, err := quaiclient.Dial(suburl, logger)
@@ -1732,7 +1765,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 
 	// Recover the snaps
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
-		sl.hc.bc.processor.snaps, _ = snapshot.New(sl.sliceDb, sl.hc.bc.processor.stateCache.TrieDB(), sl.hc.bc.processor.cacheConfig.SnapshotLimit, currentHeader.EVMRoot(), true, true)
+		sl.hc.bc.processor.snaps, _ = snapshot.New(sl.sliceDb, sl.hc.bc.processor.stateCache.TrieDB(), sl.hc.bc.processor.cacheConfig.SnapshotLimit, currentHeader.EVMRoot(), true, true, sl.logger)
 	}
 }
 

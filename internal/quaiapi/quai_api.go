@@ -664,7 +664,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	if block.Header() != nil {
 		err := s.b.BroadcastBlock(block, s.b.NodeLocation())
 		if err != nil {
-			log.Global.WithField("err", err).Error("Error broadcasting block")
+			s.b.Logger().WithField("err", err).Error("Error broadcasting block")
 		}
 	}
 	s.b.Logger().WithFields(log.Fields{

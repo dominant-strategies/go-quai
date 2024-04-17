@@ -30,6 +30,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -324,7 +325,7 @@ func (s *Service) Stop() error {
 func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.backend.Logger().WithField("err", r).Error("Stats process crashed")
+			s.backend.Logger().WithFields(log.Fields{"err": r, "stacktrace": string(debug.Stack())}).Error("Stats process crashed")
 			go s.loopBlocks(chainHeadCh)
 		}
 	}()
@@ -332,6 +333,14 @@ func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent) {
 	quitCh := make(chan struct{})
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				s.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		for {
 			select {
 			case head := <-chainHeadCh:
@@ -353,7 +362,7 @@ func (s *Service) loopBlocks(chainHeadCh chan core.ChainHeadEvent) {
 func (s *Service) loopSender(urlMap map[string]string) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Stats process crashed with error:", r)
+			s.backend.Logger().WithFields(log.Fields{"err": r, "stacktrace": string(debug.Stack())}).Error("Stats process crashed")
 			go s.loopSender(urlMap)
 		}
 	}()
@@ -479,6 +488,14 @@ func (s *Service) initializeURLMap() map[string]string {
 }
 
 func (s *Service) handleBlock(block *types.WorkObject) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.backend.Logger().WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	// Cache Block
 	s.backend.Logger().WithFields(log.Fields{
 		"detailsQueueSize":     s.detailStatsQueue.Size(),

@@ -28,7 +28,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 
@@ -642,8 +641,7 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 		} else {
 			from, err := Sender(NewSigner(tx.ChainId(), common.Location{0, 0}), tx) // location not important when performing ecrecover
 			if err != nil {
-				log.Global.Error("err", err)
-				panic("failed to get transaction sender!")
+				return h // Caller of this function will fail with wrong tx hash and will appropriately handle the error
 			}
 			location := *from.Location()
 			origin := (uint8(location[0]) * 16) + uint8(location[1])

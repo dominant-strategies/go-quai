@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"runtime/debug"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -77,6 +78,7 @@ type Client struct {
 	idgen    func() ID // for subscriptions
 	isHTTP   bool
 	services *serviceRegistry
+	log      *log.Logger
 
 	idCounter uint32
 
@@ -111,7 +113,7 @@ type clientConn struct {
 
 func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.WithValue(context.Background(), clientContextKey{}, c)
-	handler := newHandler(ctx, conn, c.idgen, c.services)
+	handler := newHandler(ctx, conn, c.idgen, c.services, c.log)
 	return &clientConn{conn, handler}
 }
 
@@ -195,12 +197,12 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 	if err != nil {
 		return nil, err
 	}
-	c := initClient(conn, randomIDGenerator(), new(serviceRegistry))
+	c := initClient(conn, randomIDGenerator(), new(serviceRegistry), log.Global)
 	c.reconnectFunc = connect
 	return c, nil
 }
 
-func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
+func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry, log *log.Logger) *Client {
 	_, isHTTP := conn.(*httpConn)
 	c := &Client{
 		idgen:       idgen,
@@ -216,6 +218,7 @@ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *C
 		reqInit:     make(chan *requestOp),
 		reqSent:     make(chan error, 1),
 		reqTimeout:  make(chan *requestOp),
+		log:         log,
 	}
 	if !isHTTP {
 		go c.dispatch(conn)
@@ -525,7 +528,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 	}
 	newconn, err := c.reconnectFunc(ctx)
 	if err != nil {
-		log.Global.WithField("err", err).Trace("RPC client reconnect failed")
+		c.log.WithField("err", err).Trace("RPC client reconnect failed")
 		return err
 	}
 	select {
@@ -556,6 +559,14 @@ func (c *Client) dispatch(codec ServerCodec) {
 		}
 		close(c.didClose)
 	}()
+	defer func() {
+		if r := recover(); r != nil {
+			c.log.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 
 	// Spawn the initial read loop.
 	go c.read(codec)
@@ -574,13 +585,13 @@ func (c *Client) dispatch(codec ServerCodec) {
 			}
 
 		case err := <-c.readErr:
-			log.Global.WithField("err", err).Debug("RPC connection read error")
+			c.log.WithField("err", err).Debug("RPC connection read error")
 			conn.close(err, lastOp)
 			reading = false
 
 		// Reconnect:
 		case newcodec := <-c.reconnected:
-			log.Global.WithFields(log.Fields{
+			c.log.WithFields(log.Fields{
 				"reading": reading,
 				"conn":    newcodec.remoteAddr(),
 			}).Debug("RPC client reconnected")
@@ -636,6 +647,14 @@ func (c *Client) drainRead() {
 
 // read decodes RPC messages from a codec, feeding them into dispatch.
 func (c *Client) read(codec ServerCodec) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.log.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	for {
 		msgs, batch, err := codec.readBatch()
 		if _, ok := err.(*json.SyntaxError); ok {

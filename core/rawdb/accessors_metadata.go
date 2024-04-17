@@ -35,7 +35,7 @@ func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
 	protoNumber := &ProtoNumber{}
 	err := proto.Unmarshal(enc, protoNumber)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to decode database version")
+		db.Logger().WithField("err", err).Fatal("Failed to decode database version")
 	}
 	return &protoNumber.Number
 }
@@ -45,10 +45,10 @@ func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 	protoNumber := &ProtoNumber{Number: version}
 	data, err := proto.Marshal(protoNumber)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to encode database version")
+		db.Logger().WithField("err", err).Fatal("Failed to encode database version")
 	}
 	if err = db.Put(databaseVersionKey, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store the database version")
+		db.Logger().WithField("err", err).Fatal("Failed to store the database version")
 	}
 }
 
@@ -60,7 +60,7 @@ func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainCon
 	}
 	var config params.ChainConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid chain config JSON")
@@ -76,9 +76,9 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to JSON encode chain config")
+		db.Logger().WithField("err", err).Fatal("Failed to JSON encode chain config")
 	}
 	if err := db.Put(configKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store chain config")
+		db.Logger().WithField("err", err).Fatal("Failed to store chain config")
 	}
 }

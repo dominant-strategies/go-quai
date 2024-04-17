@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -56,7 +57,7 @@ func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Global.WithField("err", err).Debug("WebSocket upgrade failed")
+			s.log.WithField("err", err).Debug("WebSocket upgrade failed")
 			return
 		}
 		codec := newWebsocketCodec(conn)
@@ -279,6 +280,14 @@ func (wc *websocketCodec) pingLoop() {
 	var timer = time.NewTimer(wsPingInterval)
 	defer wc.wg.Done()
 	defer timer.Stop()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 
 	for {
 		select {

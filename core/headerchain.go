@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -406,6 +407,14 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		// Every Block that got removed from the canonical hash db is sent in the side feed to be
 		// recorded as uncles
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					hc.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Fatal("Go-Quai Panicked")
+				}
+			}()
 			var blocks []*types.WorkObject
 			for i := len(prevHashStack) - 1; i >= 0; i-- {
 				block := hc.bc.GetBlock(prevHashStack[i].Hash(), prevHashStack[i].NumberU64(hc.NodeCtx()))

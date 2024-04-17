@@ -88,7 +88,7 @@ func New(conf *Config, logger *log.Logger) (*Node, error) {
 
 	node := &Node{
 		config:        conf,
-		inprocHandler: rpc.NewServer(),
+		inprocHandler: rpc.NewServer(logger),
 		eventmux:      new(event.TypeMux),
 		stop:          make(chan struct{}),
 		databases:     make(map[*closeTrackingDB]struct{}),
@@ -464,7 +464,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
-		db = rawdb.NewMemoryDatabase()
+		db = rawdb.NewMemoryDatabase(n.logger)
 	} else {
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:      n.config.DBEngine,
@@ -496,7 +496,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
-		db = rawdb.NewMemoryDatabase()
+		db = rawdb.NewMemoryDatabase(n.logger)
 	} else {
 		db, err = rawdb.Open(rawdb.OpenOptions{
 			Type:              n.config.DBEngine,

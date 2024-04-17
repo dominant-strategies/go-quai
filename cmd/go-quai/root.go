@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -18,6 +19,14 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() error {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	err := rootCmd.Execute()
 	if err != nil {
 		return err

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -79,6 +81,14 @@ func NewPublicFilterAPI(backend Backend, timeout time.Duration) *PublicFilterAPI
 // timeoutLoop runs at the interval set by 'timeout' and deletes filters
 // that have not been recently used. It is started when the API is created.
 func (api *PublicFilterAPI) timeoutLoop(timeout time.Duration) {
+	defer func() {
+		if r := recover(); r != nil {
+			api.backend.Logger().WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	var toUninstall []*Subscription
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
@@ -124,6 +134,14 @@ func (api *PublicFilterAPI) NewPendingTransactionFilter() rpc.ID {
 	api.filtersMu.Unlock()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		for {
 			select {
 			case ph := <-pendingTxs:
@@ -155,6 +173,14 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		txHashes := make(chan []common.Hash, 128)
 		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
 
@@ -194,6 +220,14 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 	api.filtersMu.Unlock()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		for {
 			select {
 			case h := <-headers:
@@ -224,6 +258,14 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribeNewHeads(headers)
 
@@ -266,7 +308,14 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 	}
 
 	go func() {
-
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		for {
 			select {
 			case logs := <-matchedLogs:
@@ -317,6 +366,14 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	api.filtersMu.Unlock()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		for {
 			select {
 			case l := <-logs:
@@ -356,7 +413,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 			end = crit.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
+		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics, api.backend.Logger())
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
@@ -411,7 +468,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 			end = f.crit.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = NewRangeFilter(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
+		filter = NewRangeFilter(api.backend, begin, end, f.crit.Addresses, f.crit.Topics, api.backend.Logger())
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
@@ -603,6 +660,14 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		header := make(chan *types.WorkObject, c_pendingHeaderChSize)
 		headerSub := api.backend.SubscribePendingHeaderEvent(header)
 

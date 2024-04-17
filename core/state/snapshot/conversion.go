@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -51,13 +52,13 @@ type (
 )
 
 // GenerateAccountTrieRoot takes an account iterator and reproduces the root hash.
-func GenerateAccountTrieRoot(it AccountIterator) (common.Hash, error) {
-	return generateTrieRoot(nil, it, common.Hash{}, stackTrieGenerate, nil, newGenerateStats(), true)
+func GenerateAccountTrieRoot(it AccountIterator, logger *log.Logger) (common.Hash, error) {
+	return generateTrieRoot(nil, it, common.Hash{}, stackTrieGenerate, nil, newGenerateStats(logger), true)
 }
 
 // GenerateStorageTrieRoot takes a storage iterator and reproduces the root hash.
-func GenerateStorageTrieRoot(account common.Hash, it StorageIterator) (common.Hash, error) {
-	return generateTrieRoot(nil, it, account, stackTrieGenerate, nil, newGenerateStats(), true)
+func GenerateStorageTrieRoot(account common.Hash, it StorageIterator, logger *log.Logger) (common.Hash, error) {
+	return generateTrieRoot(nil, it, account, stackTrieGenerate, nil, newGenerateStats(logger), true)
 }
 
 // GenerateTrie takes the whole snapshot tree as the input, traverses all the
@@ -92,7 +93,7 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, newGenerateStats(), true)
+	}, newGenerateStats(src.Logger()), true)
 
 	if err != nil {
 		return err
@@ -116,14 +117,17 @@ type generateStats struct {
 	slotsHead  map[common.Hash]common.Hash // Slot head for accounts being crawled
 
 	lock sync.RWMutex
+
+	logger *log.Logger
 }
 
 // newGenerateStats creates a new generator stats.
-func newGenerateStats() *generateStats {
+func newGenerateStats(logger *log.Logger) *generateStats {
 	return &generateStats{
 		slotsStart: make(map[common.Hash]time.Time),
 		slotsHead:  make(map[common.Hash]common.Hash),
 		start:      time.Now(),
+		logger:     logger,
 	}
 }
 
@@ -203,7 +207,7 @@ func (stat *generateStats) report() {
 			}...)
 		}
 	}
-	log.Global.WithField("ctx", ctx).Info("Iterating state snapshot")
+	stat.logger.WithField("ctx", ctx).Info("Iterating state snapshot")
 }
 
 // reportDone prints the last log when the whole generation is finished.
@@ -217,7 +221,7 @@ func (stat *generateStats) reportDone() {
 		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
 	}
 	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
-	log.Global.WithField("ctx", ctx).Info("Iterated snapshot")
+	stat.logger.WithField("ctx", ctx).Info("Iterated snapshot")
 }
 
 // runReport periodically prints the progress information.
@@ -252,6 +256,15 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 	// Spin up a go-routine for trie hash re-generation
 	wg.Add(1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				db.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+					"account":    account,
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		defer wg.Done()
 		generatorFn(db, in, out)
 	}()
@@ -259,6 +272,14 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 	if report && stats != nil {
 		wg.Add(1)
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					db.Logger().WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			defer wg.Done()
 			runReport(stats, stoplog)
 		}()
@@ -316,6 +337,14 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 					return stop(err)
 				}
 				go func(hash common.Hash) {
+					defer func() {
+						if r := recover(); r != nil {
+							db.Logger().WithFields(log.Fields{
+								"error":      r,
+								"stacktrace": string(debug.Stack()),
+							}).Error("Go-Quai Panicked")
+						}
+					}()
 					subroot, err := leafCallback(db, hash, common.BytesToHash(account.CodeHash), stats)
 					if err != nil {
 						results <- err

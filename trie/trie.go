@@ -26,7 +26,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 var (
@@ -106,7 +105,7 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 func (t *Trie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
-		log.Global.WithField("err", err).Error("Unhandled trie error")
+		t.db.Logger().WithField("err", err).Error("Unhandled trie error")
 	}
 	return res
 }
@@ -243,7 +242,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 // stored in the trie.
 func (t *Trie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
-		log.Global.WithField("err", err).Error("Unhandled trie error")
+		t.db.Logger().WithField("err", err).Error("Unhandled trie error")
 	}
 }
 
@@ -346,7 +345,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) {
 	if err := t.TryDelete(key); err != nil {
-		log.Global.WithField("err", err).Error("Unhandled trie error")
+		t.db.Logger().WithField("err", err).Error("Unhandled trie error")
 	}
 }
 

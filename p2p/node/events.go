@@ -1,6 +1,8 @@
 package node
 
 import (
+	"runtime/debug"
+
 	"github.com/libp2p/go-libp2p/core/event"
 
 	"github.com/dominant-strategies/go-quai/log"
@@ -9,6 +11,14 @@ import (
 
 // subscribes to the event bus and handles libp2p events as they're received
 func (p *P2PNode) eventLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 
 	// Subscribe to any events of interest
 	sub, err := p.EventBus().Subscribe([]interface{}{

@@ -282,7 +282,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	}
 
 	// Create RPC server and handler.
-	srv := rpc.NewServer()
+	srv := rpc.NewServer(h.logger)
 	if err := RegisterApis(apis, config.Modules, srv, false, h.logger); err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	}
 
 	// Create RPC server and handler.
-	srv := rpc.NewServer()
+	srv := rpc.NewServer(h.logger)
 	if err := RegisterApis(apis, config.Modules, srv, false, h.logger); err != nil {
 		return err
 	}

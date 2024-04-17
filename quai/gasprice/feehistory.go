@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime/debug"
 	"sort"
 	"sync/atomic"
 
@@ -242,6 +243,14 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 	)
 	for i := 0; i < maxBlockFetchers && i < blocks; i++ {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					oracle.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			for {
 				// Retrieve the next block number to fetch with this goroutine
 				blockNumber := atomic.AddUint64(&next, 1) - 1

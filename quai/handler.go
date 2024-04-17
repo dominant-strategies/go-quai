@@ -2,6 +2,7 @@ package quai
 
 import (
 	"math/big"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -32,14 +33,16 @@ type handler struct {
 	txsSub          event.Subscription
 	wg              sync.WaitGroup
 	quitCh          chan struct{}
+	logger          *log.Logger
 }
 
-func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location) *handler {
+func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location, logger *log.Logger) *handler {
 	handler := &handler{
 		nodeLocation: nodeLocation,
 		p2pBackend:   p2pBackend,
 		core:         core,
 		quitCh:       make(chan struct{}),
+		logger:       logger,
 	}
 	return handler
 }
@@ -77,10 +80,26 @@ func (h *handler) Stop() {
 // missingBlockLoop announces new pendingEtxs to connected peers.
 func (h *handler) missingBlockLoop() {
 	defer h.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			h.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	for {
 		select {
 		case blockRequest := <-h.missingBlockCh:
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						h.logger.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Fatal("Go-Quai Panicked")
+					}
+				}()
 				resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObject{})
 				block := <-resultCh
 				if block != nil {
@@ -96,13 +115,21 @@ func (h *handler) missingBlockLoop() {
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
 	defer h.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			h.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	for {
 		select {
 		case event := <-h.txsCh:
 			for _, tx := range event.Txs {
 				err := h.p2pBackend.Broadcast(h.nodeLocation, tx)
 				if err != nil {
-					log.Global.Error("Error broadcasting transaction hash", tx.Hash(), err)
+					h.logger.Error("Error broadcasting transaction hash", tx.Hash(), err)
 				}
 			}
 		case <-h.txsSub.Err():
@@ -114,6 +141,14 @@ func (h *handler) txBroadcastLoop() {
 // checkNextPrimeBlock runs every c_checkNextPrimeBlockInterval and ask the peer for the next Block
 func (h *handler) checkNextPrimeBlock() {
 	defer h.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			h.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	checkNextPrimeBlockTimer := time.NewTicker(c_checkNextPrimeBlockInterval)
 	defer checkNextPrimeBlockTimer.Stop()
 	for {
@@ -121,6 +156,14 @@ func (h *handler) checkNextPrimeBlock() {
 		case <-checkNextPrimeBlockTimer.C:
 			currentHeight := h.core.CurrentHeader().Number(h.nodeLocation.Context())
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						h.logger.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Fatal("Go-Quai Panicked")
+					}
+				}()
 				resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(currentHeight, big.NewInt(1)), common.Hash{})
 				data := <-resultCh
 				// If we find a new hash for the requested block number we can check
@@ -134,6 +177,14 @@ func (h *handler) checkNextPrimeBlock() {
 						// appended database we ask the peer for the block with this hash
 						if block == nil {
 							go func() {
+								defer func() {
+									if r := recover(); r != nil {
+										h.logger.WithFields(log.Fields{
+											"error":      r,
+											"stacktrace": string(debug.Stack()),
+										}).Fatal("Go-Quai Panicked")
+									}
+								}()
 								resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObject{})
 								block := <-resultCh
 								if block != nil {

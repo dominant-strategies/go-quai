@@ -20,6 +20,7 @@ package core
 import (
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -66,6 +67,14 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 // the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
 // and halt your mining operation for as long as the DOS continues.
 func (miner *Miner) update() {
+	defer func() {
+		if r := recover(); r != nil {
+			miner.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	canStart := true
 	for {
 		select {

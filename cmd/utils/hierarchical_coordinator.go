@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -141,6 +142,14 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 
 	go func() {
 		defer hc.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		<-hc.quitCh
 		logger.Info("Context cancelled, shutting down node")
 		stack.Close()
@@ -161,6 +170,14 @@ func (hc *HierarchicalCoordinator) ConsensusBackend() quai.ConsensusAPI {
 
 func (hc *HierarchicalCoordinator) expansionEventLoop() {
 	defer hc.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 
 	for {
 		select {

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 var (
@@ -41,15 +42,17 @@ var (
 // functionality it also supports batch writes and iterating over the keyspace in
 // binary-alphabetical order.
 type Database struct {
-	db   map[string][]byte
-	lock sync.RWMutex
+	db     map[string][]byte
+	lock   sync.RWMutex
+	logger *log.Logger
 }
 
 // New returns a wrapped map with all the required database interface methods
 // implemented.
-func New() *Database {
+func New(logger *log.Logger) *Database {
 	return &Database{
-		db: make(map[string][]byte),
+		db:     make(map[string][]byte),
+		logger: logger,
 	}
 }
 
@@ -121,11 +124,16 @@ func (db *Database) Delete(key []byte) error {
 	return nil
 }
 
+func (db *Database) Logger() *log.Logger {
+	return db.logger
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
 	return &batch{
-		db: db,
+		db:     db,
+		logger: db.logger,
 	}
 }
 
@@ -203,6 +211,7 @@ type batch struct {
 	db     *Database
 	writes []keyvalue
 	size   int
+	logger *log.Logger
 }
 
 // Put inserts the given value into the batch for later committing.
@@ -262,6 +271,10 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 		}
 	}
 	return nil
+}
+
+func (b *batch) Logger() *log.Logger {
+	return b.db.logger
 }
 
 // iterator can walk over the (potentially partial) keyspace of a memory key

@@ -34,7 +34,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
@@ -741,7 +740,9 @@ func (h *Header) Hash() (hash common.Hash) {
 	protoSealData := h.SealEncode()
 	data, err := proto.Marshal(protoSealData)
 	if err != nil {
-		log.Global.Error("Failed to marshal seal data ", "err", err)
+		// In the case of error while marshalling return empty hash, and caller
+		// of this should handle the error
+		data = []byte{}
 	}
 	sum := blake3.Sum256(data[:])
 	hash.SetBytes(sum[:])

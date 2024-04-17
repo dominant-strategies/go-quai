@@ -59,6 +59,10 @@ func (n *proofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
+func (n *proofList) Logger() *log.Logger {
+	return log.Global
+}
+
 var (
 	stateMetrics *prometheus.GaugeVec
 )
@@ -95,6 +99,8 @@ type StateDB struct {
 	trie         Trie
 	utxoTrie     Trie
 	hasher       crypto.KeccakState
+
+	logger *log.Logger
 
 	nodeLocation common.Location
 
@@ -150,7 +156,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, utxoRoot common.Hash, db Database, utxoDb Database, snaps *snapshot.Tree, nodeLocation common.Location) (*StateDB, error) {
+func New(root common.Hash, utxoRoot common.Hash, db Database, utxoDb Database, snaps *snapshot.Tree, nodeLocation common.Location, logger *log.Logger) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -166,6 +172,7 @@ func New(root common.Hash, utxoRoot common.Hash, db Database, utxoDb Database, s
 		utxoTrie:            utxoTr,
 		originalRoot:        root,
 		snaps:               snaps,
+		logger:              logger,
 		stateObjects:        make(map[common.InternalAddress]*stateObject),
 		stateObjectsPending: make(map[common.InternalAddress]struct{}),
 		stateObjectsDirty:   make(map[common.InternalAddress]struct{}),
@@ -552,7 +559,7 @@ func (s *StateDB) GetUTXO(txHash common.Hash, outputIndex uint16) *types.UtxoEnt
 	}
 	utxo := new(types.UtxoEntry)
 	if err := rlp.DecodeBytes(enc, utxo); err != nil {
-		log.Global.WithFields(log.Fields{
+		s.logger.WithFields(log.Fields{
 			"hash": txHash,
 			"err":  err,
 		}).Error("Failed to decode UTXO entry")
@@ -674,7 +681,7 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 		}
 		data = new(Account)
 		if err := rlp.DecodeBytes(enc, data); err != nil {
-			log.Global.WithFields(log.Fields{
+			s.logger.WithFields(log.Fields{
 				"addr": addr,
 				"err":  err,
 			}).Error("Failed to decode state object")
@@ -1052,7 +1059,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
-			log.Global.WithField("err", err).Fatal("Failed to commit dirty codes")
+			s.logger.WithField("err", err).Fatal("Failed to commit dirty codes")
 		}
 	}
 	// Write the account trie changes, measuing the amount of wasted time
@@ -1084,7 +1091,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
-				log.Global.WithFields(log.Fields{
+				s.logger.WithFields(log.Fields{
 					"root":   root,
 					"parent": parent,
 					"err":    err,
@@ -1095,7 +1102,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
 			if err := s.snaps.Cap(root, 128); err != nil {
-				log.Global.WithFields(log.Fields{
+				s.logger.WithFields(log.Fields{
 					"root":   root,
 					"layers": 128,
 					"err":    err,

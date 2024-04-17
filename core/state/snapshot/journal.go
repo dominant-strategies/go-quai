@@ -88,7 +88,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// etc.), we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"diskroot": base.root,
 			"diffs":    "missing",
 		}).Warn("Loaded snapshot journal")
@@ -99,11 +99,11 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// Firstly, resolve the first element as the journal version
 	version, err := r.Uint()
 	if err != nil {
-		log.Global.WithField("err", err).Warn("Failed to resolve the journal version")
+		db.Logger().WithField("err", err).Warn("Failed to resolve the journal version")
 		return base, generator, nil
 	}
 	if version != journalVersion {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"required": journalVersion,
 			"got":      version,
 		}).Warn("Discarded the snapshot journal with wrong version")
@@ -120,7 +120,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// It can happen that Quai crashes without persisting the latest
 	// diff journal.
 	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"diskroot": base.root,
 			"diffs":    "unmatched",
 		}).Warn("Loaded snapshot journal")
@@ -131,7 +131,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if err != nil {
 		return nil, journalGenerator{}, err
 	}
-	log.Global.WithFields(log.Fields{
+	db.Logger().WithFields(log.Fields{
 		"diskroot": base.root,
 		"diffhead": snapshot.Root(),
 	}).Debug("Loaded snapshot journal")
@@ -159,7 +159,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	}
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 	if err != nil {
-		log.Global.WithField("err", err).Warn("Failed to load new-format journal")
+		diskdb.Logger().WithField("err", err).Warn("Failed to load new-format journal")
 		return nil, false, err
 	}
 	// Entire snapshot journal loaded, sanity check the head. If the loaded
@@ -181,7 +181,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		// the disk layer is always higher than chain head. It can
 		// be eventually recovered when the chain head beyonds the
 		// disk layer.
-		log.Global.WithFields(log.Fields{
+		diskdb.Logger().WithFields(log.Fields{
 			"snaproot":  head,
 			"chainroot": root,
 		}).Warn("Snapshot is not continuous with chain")
@@ -264,7 +264,7 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 
 // Journal terminates any in-progress snapshot generation, also implicitly pushing
 // the progress into the database.
-func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
+func (dl *diskLayer) Journal(buffer *bytes.Buffer, logger *log.Logger) (common.Hash, error) {
 	// If the snapshot is currently being generated, abort it
 	var stats *generatorStats
 	if dl.genAbort != nil {
@@ -285,15 +285,15 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// Ensure the generator stats is written even if none was ran this cycle
 	journalProgress(dl.diskdb, dl.genMarker, stats)
 
-	log.Global.WithField("root", dl.root).Debug("Journalled disk layer")
+	dl.diskdb.Logger().WithField("root", dl.root).Debug("Journalled disk layer")
 	return dl.root, nil
 }
 
 // Journal writes the memory layer contents into a buffer to be stored in the
 // database as the snapshot journal.
-func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
+func (dl *diffLayer) Journal(buffer *bytes.Buffer, logger *log.Logger) (common.Hash, error) {
 	// Journal the parent first
-	base, err := dl.parent.Journal(buffer)
+	base, err := dl.parent.Journal(buffer, logger)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -335,7 +335,7 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, storage); err != nil {
 		return common.Hash{}, err
 	}
-	log.Global.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"root":   dl.root,
 		"parent": dl.parent.Root(),
 	}).Debug("Journalled diff layer")

@@ -24,7 +24,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 )
@@ -214,7 +213,7 @@ func (s SignerV1) Hash(tx *Transaction) (h common.Hash) {
 	protoTxSigningData := tx.ProtoEncodeTxSigningData()
 	data, err := proto.Marshal(protoTxSigningData)
 	if err != nil {
-		log.Global.Error("failed to marshal tx signing data", "err", err)
+		return crypto.Keccak256Hash([]byte{})
 	}
 	return crypto.Keccak256Hash(data)
 }

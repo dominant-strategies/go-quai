@@ -97,16 +97,18 @@ type freezerTable struct {
 	headBytes uint32 // Number of bytes written to the head file
 
 	lock sync.RWMutex // Mutex protecting the data file descriptors
+
+	logger *log.Logger
 }
 
 // NewFreezerTable opens the given path as a freezer table.
-func NewFreezerTable(path, name string, disableSnappy bool) (*freezerTable, error) {
-	return newTable(path, name, disableSnappy)
+func NewFreezerTable(path, name string, disableSnappy bool, logger *log.Logger) (*freezerTable, error) {
+	return newTable(path, name, disableSnappy, logger)
 }
 
 // newTable opens a freezer table with default settings - 2G files
-func newTable(path string, name string, disableSnappy bool) (*freezerTable, error) {
-	return newCustomTable(path, name, 2*1000*1000*1000, disableSnappy)
+func newTable(path string, name string, disableSnappy bool, logger *log.Logger) (*freezerTable, error) {
+	return newCustomTable(path, name, 2*1000*1000*1000, disableSnappy, logger)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
@@ -150,7 +152,7 @@ func truncateFreezerFile(file *os.File, size int64) error {
 // newCustomTable opens a freezer table, creating the data and index files if they are
 // non existent. Both files are truncated to the shortest common length to ensure
 // they don't go out of sync.
-func newCustomTable(path string, name string, maxFilesize uint32, noCompression bool) (*freezerTable, error) {
+func newCustomTable(path string, name string, maxFilesize uint32, noCompression bool, logger *log.Logger) (*freezerTable, error) {
 	// Ensure the containing directory exists and open the indexEntry file
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, err
@@ -175,6 +177,7 @@ func newCustomTable(path string, name string, maxFilesize uint32, noCompression 
 		path:          path,
 		noCompression: noCompression,
 		maxFileSize:   maxFilesize,
+		logger:        logger,
 	}
 	if err := tab.repair(); err != nil {
 		tab.Close()
@@ -242,7 +245,7 @@ func (t *freezerTable) repair() error {
 	for contentExp != contentSize {
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
-			log.Global.WithFields(log.Fields{
+			t.logger.WithFields(log.Fields{
 				"indexed": common.StorageSize(contentExp),
 				"stored":  common.StorageSize(contentSize),
 			}).Warn("Truncating dangling head")
@@ -253,7 +256,7 @@ func (t *freezerTable) repair() error {
 		}
 		// Truncate the index to point within the head file
 		if contentExp > contentSize {
-			log.Global.WithFields(log.Fields{
+			t.logger.WithFields(log.Fields{
 				"indexed": common.StorageSize(contentExp),
 				"stored":  common.StorageSize(contentSize),
 			}).Warn("Truncating dangling indexes")
@@ -298,7 +301,7 @@ func (t *freezerTable) repair() error {
 	if err := t.preopen(); err != nil {
 		return err
 	}
-	log.Global.WithFields(log.Fields{
+	t.logger.WithFields(log.Fields{
 		"items": t.items,
 		"size":  common.StorageSize(t.headBytes),
 	}).Debug("Chain freezer table opened")
@@ -334,11 +337,11 @@ func (t *freezerTable) truncate(items uint64) error {
 		return nil
 	}
 	// Something's out of sync, truncate the table's offset index
-	logger := log.Global.Debug
+	t.logger.Debug("Truncating freezer table", "items", existing, "limit", items)
 	if existing > items+1 {
-		logger = log.Global.Warn // Only loud warn if we delete multiple items
+		// Only loud warn if we delete multiple items
+		t.logger.Warn("Truncating freezer table", "items", existing, "limit", items)
 	}
-	logger("Truncating freezer table", "items", existing, "limit", items)
 	if err := truncateFreezerFile(t.index, int64(items+1)*indexEntrySize); err != nil {
 		return err
 	}

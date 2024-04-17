@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
@@ -32,6 +33,9 @@ type KeyValueReader interface {
 	Get(key []byte) ([]byte, error)
 
 	Location() common.Location
+
+	// Logger returns the logger of the database.
+	Logger() *log.Logger
 }
 
 // KeyValueWriter wraps the Put method of a backing data store.
@@ -41,6 +45,9 @@ type KeyValueWriter interface {
 
 	// Delete removes the key from the key-value data store.
 	Delete(key []byte) error
+
+	// Logger returns the logger of the database.
+	Logger() *log.Logger
 }
 
 // Stater wraps the Stat method of a backing data store.

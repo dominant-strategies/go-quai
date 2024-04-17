@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
@@ -408,6 +409,14 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 // eviction events.
 func (pool *TxPool) loop() {
 	defer pool.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 
 	var (
 		// Start the stats reporting and transaction eviction tickers
@@ -1164,6 +1173,14 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 }
 
 func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	pool.qiMu.Lock()
 	delete(pool.qiPool, tx.Hash())
 	pool.qiMu.Unlock()
@@ -1328,6 +1345,14 @@ func (pool *TxPool) queueTxEvent(tx *types.Transaction) {
 // requestPromoteExecutables instead.
 func (pool *TxPool) scheduleReorgLoop() {
 	defer pool.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 
 	var (
 		curDone       chan struct{} // non-nil while runReorg is active
@@ -1410,6 +1435,14 @@ func (pool *TxPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.InternalAddress]*txSortedMap) {
 	defer close(done)
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 
 	for {
 		select {
@@ -1941,6 +1974,14 @@ func (pool *TxPool) SetSender(hash common.Hash, address common.InternalAddress) 
 
 // sendersGoroutine asynchronously adds a new sender to the cache
 func (pool *TxPool) sendersGoroutine() {
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	for {
 		select {
 		case <-pool.reorgShutdownCh:

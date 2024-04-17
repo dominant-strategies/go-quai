@@ -20,6 +20,7 @@ package filters
 
 import (
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -134,11 +135,11 @@ func NewEventSystem(backend Backend) *EventSystem {
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
 		if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
-			log.Global.Fatal("Subscribe for event system failed")
+			backend.Logger().Fatal("Subscribe for event system failed")
 		}
 	} else {
 		if m.chainSub == nil {
-			log.Global.Fatal("Subscribe for event system failed")
+			backend.Logger().Fatal("Subscribe for event system failed")
 		}
 	}
 
@@ -376,6 +377,12 @@ func (es *EventSystem) eventLoop() {
 			es.pendingLogsSub.Unsubscribe()
 		}
 		es.chainSub.Unsubscribe()
+		if r := recover(); r != nil {
+			es.backend.Logger().WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
 	}()
 
 	index := make(filterIndex)
@@ -411,6 +418,14 @@ func (es *EventSystem) eventLoop() {
 }
 
 func (es *EventSystem) handleZoneEventLoop(index filterIndex) {
+	defer func() {
+		if r := recover(); r != nil {
+			es.backend.Logger().WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	for {
 		select {
 		case ev := <-es.txsCh:

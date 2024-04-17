@@ -474,7 +474,7 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 func (db *Database) Dereference(root common.Hash) {
 	// Sanity check to ensure that the meta-root is not removed
 	if root == (common.Hash{}) {
-		log.Global.Error("Attempted to dereference the trie cache meta root")
+		db.diskdb.Logger().Error("Attempted to dereference the trie cache meta root")
 		return
 	}
 	db.lock.Lock()
@@ -487,7 +487,7 @@ func (db *Database) Dereference(root common.Hash) {
 	db.gcsize += storage - db.dirtiesSize
 	db.gctime += time.Since(start)
 
-	log.Global.WithFields(log.Fields{
+	db.diskdb.Logger().WithFields(log.Fields{
 		"nodes":     nodes - len(db.dirties),
 		"size":      storage - db.dirtiesSize,
 		"time":      time.Since(start),
@@ -573,7 +573,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	flushPreimages := db.preimagesSize > 4*1024*1024
 	if flushPreimages {
 		if db.preimages == nil {
-			log.Global.Error("Attempted to write preimages whilst disabled")
+			db.diskdb.Logger().Error("Attempted to write preimages whilst disabled")
 		} else {
 			rawdb.WritePreimages(batch, db.preimages)
 			if batch.ValueSize() > ethdb.IdealBatchSize {
@@ -594,7 +594,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		// If we exceeded the ideal batch size, commit and reset
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Global.WithField("err", err).Error("Failed to write trie to disk")
+				db.diskdb.Logger().WithField("err", err).Error("Failed to write trie to disk")
 				return err
 			}
 			batch.Reset()
@@ -610,7 +610,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	}
 	// Flush out any remainder data from the last batch
 	if err := batch.Write(); err != nil {
-		log.Global.WithField("err", err).Error("Failed to write flush list to disk")
+		db.diskdb.Logger().WithField("err", err).Error("Failed to write flush list to disk")
 		return err
 	}
 	// Write successful, clear out the flushed data
@@ -619,7 +619,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 
 	if flushPreimages {
 		if db.preimages == nil {
-			log.Global.Error("Attempted to reset preimage cache whilst disabled")
+			db.diskdb.Logger().Error("Attempted to reset preimage cache whilst disabled")
 		} else {
 			db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
 		}
@@ -641,7 +641,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	db.flushsize += storage - db.dirtiesSize
 	db.flushtime += time.Since(start)
 
-	log.Global.WithFields(log.Fields{
+	db.diskdb.Logger().WithFields(log.Fields{
 		"nodes":      nodes - len(db.dirties),
 		"size":       storage - db.dirtiesSize,
 		"time":       time.Since(start),
@@ -684,12 +684,12 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 
 	uncacher := &cleaner{db}
 	if err := db.commit(node, batch, uncacher, callback); err != nil {
-		log.Global.WithField("err", err).Error("Failed to commit trie from trie database")
+		db.Logger().WithField("err", err).Error("Failed to commit trie from trie database")
 		return err
 	}
 	// Trie mostly committed to disk, flush any batch leftovers
 	if err := batch.Write(); err != nil {
-		log.Global.WithField("err", err).Error("Failed to write trie to disk")
+		db.Logger().WithField("err", err).Error("Failed to write trie to disk")
 		return err
 	}
 	// Uncache any leftovers in the last batch
@@ -704,9 +704,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 		db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
 	}
 
-	logger := log.Global.Info
+	logger := db.Logger().Info
 	if !report {
-		logger = log.Global.Debug
+		logger = db.Logger().Debug
 	}
 	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties)+int(db.flushnodes), "size", storage-db.dirtiesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
 		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
@@ -799,6 +799,10 @@ func (c *cleaner) Delete(key []byte) error {
 	panic("not implemented")
 }
 
+func (c *cleaner) Logger() *log.Logger {
+	return c.db.Logger()
+}
+
 // Size returns the current storage size of the memory cache in front of the
 // persistent database layer.
 func (db *Database) Size() (common.StorageSize, common.StorageSize) {
@@ -819,7 +823,7 @@ func (db *Database) saveCache(dir string, threads int) error {
 	if db.cleans == nil {
 		return nil
 	}
-	log.Global.WithFields(log.Fields{
+	db.Logger().WithFields(log.Fields{
 		"path":    dir,
 		"threads": threads,
 	}).Info("Writing clean trie cache to disk")
@@ -827,10 +831,10 @@ func (db *Database) saveCache(dir string, threads int) error {
 	start := time.Now()
 	err := db.cleans.SaveToFileConcurrent(dir, threads)
 	if err != nil {
-		log.Global.WithField("err", err).Error("Failed to persist clean trie cache")
+		db.Logger().WithField("err", err).Error("Failed to persist clean trie cache")
 		return err
 	}
-	log.Global.WithFields(log.Fields{
+	db.Logger().WithFields(log.Fields{
 		"path":    dir,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("Persisted the clean trie cache")
@@ -857,4 +861,8 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 			return
 		}
 	}
+}
+
+func (db *Database) Logger() *log.Logger {
+	return db.diskdb.Logger()
 }

@@ -2,6 +2,7 @@ package node
 
 import (
 	"math/big"
+	"runtime/debug"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -20,6 +21,14 @@ import (
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
 func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data interface{}, datatype interface{}) (interface{}, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	log.Global.WithFields(log.Fields{
 		"peerId":   peerID,
 		"location": location.Name(),

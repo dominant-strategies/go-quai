@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -446,6 +447,14 @@ func (w *worker) StorePendingBlockBody() {
 
 // asyncStateLoop updates the state root for a block and returns the state udpate in a channel
 func (w *worker) asyncStateLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			w.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	defer w.wg.Done() // decrement the wait group after the close of the loop
 
 	for {
@@ -455,6 +464,14 @@ func (w *worker) asyncStateLoop() {
 			w.interruptAsyncPhGen()
 
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						w.logger.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Error("Go-Quai Panicked")
+					}
+				}()
 				select {
 				case <-w.interrupt:
 					w.interrupt = make(chan struct{})
@@ -473,6 +490,14 @@ func (w *worker) asyncStateLoop() {
 			}()
 		case side := <-w.chainSideCh:
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						w.logger.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Fatal("Go-Quai Panicked")
+					}
+				}()
 				if side.ResetUncles {
 					w.uncleMu.Lock()
 					w.localUncles = make(map[common.Hash]*types.WorkObjectHeader)
@@ -836,12 +861,12 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			break
 		}
 		if env.wo.GasUsed() > minEtxGas*params.MaximumEtxGasMultiplier { // sanity check, this should never happen
-			log.Global.WithField("Gas Used", env.wo.GasUsed()).Error("Block uses more gas than maximum ETX gas")
+			w.logger.WithField("Gas Used", env.wo.GasUsed()).Error("Block uses more gas than maximum ETX gas")
 			return true
 		}
 		hash := etxSet.Pop()
 		if hash != tx.Hash() { // sanity check, this should never happen
-			log.Global.Errorf("ETX hash from set %032x does not match transaction hash %032x", hash, tx.Hash())
+			w.logger.Errorf("ETX hash from set %032x does not match transaction hash %032x", hash, tx.Hash())
 			return true
 		}
 		env.state.Prepare(tx.Hash(), env.tcount)
@@ -1181,7 +1206,10 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			return nil, err
 		}
 		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location())
-		proposedWoBody := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
+		proposedWoBody, err := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
+		if err != nil {
+			return nil, err
+		}
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil, types.BlockObject)
 		env, err := w.makeEnv(parent, proposedWo, w.coinbase)
 		if err != nil {
@@ -1217,7 +1245,10 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		return env, nil
 	} else {
 		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location())
-		proposedWoBody := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
+		proposedWoBody, err := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
+		if err != nil {
+			return nil, err
+		}
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil, types.BlockObject)
 		return &environment{wo: proposedWo}, nil
 	}
@@ -1244,7 +1275,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 			}
 			entry := rawdb.ReadETX(w.hc.bc.db, hash)
 			if entry == nil {
-				log.Global.Errorf("ETX %s not found in the database!", hash.String())
+				w.logger.Errorf("ETX %s not found in the database!", hash.String())
 				break
 			}
 			etxs = append(etxs, entry)

@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -143,14 +144,14 @@ func SeedHash(block uint64) []byte {
 // algorithm from Strict Memory Hard Hashing Functions (2014). The output is a
 // set of 524288 64-byte values.
 // This method places the result into dest in machine byte order.
-func generateCache(dest []uint32, epoch uint64, seed []byte) {
+func generateCache(dest []uint32, epoch uint64, seed []byte, logger *log.Logger) {
 	// Print some debug logs to allow analysis on low end devices
 
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start)
 
-		logEntry := log.Global.WithFields(log.Fields{
+		logEntry := logger.WithFields(log.Fields{
 			"elapsed": common.PrettyDuration(elapsed),
 		})
 
@@ -177,12 +178,20 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	defer close(done)
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		for {
 			select {
 			case <-done:
 				return
 			case <-time.After(3 * time.Second):
-				log.Global.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"percentage": uint64(atomic.LoadUint32(&progress) * 100 / uint32(rows) / 4),
 					"elapsed":    common.PrettyDuration(time.Since(start)),
 				}).Info("Generating ethash verification cache")
@@ -222,7 +231,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 
 // generateCDag generates the cDag used for progpow. If the 'cDag' is nil, this method is a no-op. Otherwise
 // it expects the cDag to be of size progpowCacheWords
-func generateCDag(cDag, cache []uint32, epoch uint64) {
+func generateCDag(cDag, cache []uint32, epoch uint64, logger *log.Logger) {
 	if cDag == nil {
 		return
 	}
@@ -238,7 +247,7 @@ func generateCDag(cDag, cache []uint32, epoch uint64) {
 	}
 
 	elapsed := time.Since(start)
-	log.Global.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"elapsed": common.PrettyDuration(elapsed),
 		"epoch":   epoch,
 	}).Debug("Generated progpow cDag")
@@ -301,7 +310,7 @@ func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte 
 
 // generateDataset generates the entire ethash dataset for mining.
 // This method places the result into dest in machine byte order.
-func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
+func generateDataset(dest []uint32, epoch uint64, cache []uint32, logger *log.Logger) {
 	start := time.Now()
 	defer func() {
 		elapsed := time.Since(start)
@@ -358,7 +367,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 				copy(dataset[index*hashBytes:], item)
 
 				if status := atomic.AddUint32(&progress, 1); status%percent == 0 {
-					log.Global.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						"percentage": uint64(status * 100 / uint32(size/hashBytes)),
 						"elapsed":    common.PrettyDuration(time.Since(start)),
 					}).Info("Generating DAG in progress")

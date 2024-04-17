@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"math/rand"
 	"runtime"
+	"runtime/debug"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -71,12 +72,28 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
+			defer func() {
+				if r := recover(); r != nil {
+					blake3pow.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			defer pend.Done()
 			blake3pow.mine(header, id, nonce, abort, locals)
 		}(i, uint64(blake3pow.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				blake3pow.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		var result *types.WorkObject
 		select {
 		case <-stop:

@@ -2,6 +2,7 @@ package types
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -592,7 +593,7 @@ func (wo *WorkObject) WithBody(header *Header, txs []*Transaction, etxs []*Trans
 	return newWo
 }
 
-func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, uncles []*WorkObjectHeader, manifest BlockManifest, receipts []*Receipt, hasher TrieHasher, nodeCtx int) *WorkObjectBody {
+func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, uncles []*WorkObjectHeader, manifest BlockManifest, receipts []*Receipt, hasher TrieHasher, nodeCtx int) (*WorkObjectBody, error) {
 	b := &WorkObjectBody{}
 	b.SetHeader(CopyHeader(header))
 
@@ -638,16 +639,15 @@ func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, 
 		copy(b.manifest, manifest)
 	}
 	if nodeCtx < common.ZONE_CTX && subManifestHash != b.Header().ManifestHash(nodeCtx+1) {
-		log.Global.Error("attempted to build block with invalid subordinate manifest")
-		return nil
+		return nil, fmt.Errorf("attempted to build block with invalid subordinate manifest")
 	}
 
-	return b
+	return b, nil
 }
 
 func NewWorkObjectWithHeader(header *WorkObject, tx *Transaction, nodeCtx int, woType int) *WorkObject {
 	woHeader := NewWorkObjectHeader(header.Hash(), header.ParentHash(common.ZONE_CTX), header.Number(common.ZONE_CTX), header.woHeader.difficulty, header.woHeader.txHash, header.woHeader.nonce, header.woHeader.time, header.Location())
-	woBody := NewWorkObjectBody(header.Body().Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
+	woBody, _ := NewWorkObjectBody(header.Body().Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
 	return NewWorkObject(woHeader, woBody, tx, woType)
 }
 
@@ -864,7 +864,6 @@ func (wh *WorkObjectHeader) ProtoEncode() (*ProtoWorkObjectHeader, error) {
 func (wh *WorkObjectHeader) ProtoDecode(data *ProtoWorkObjectHeader) error {
 	if data.HeaderHash == nil || data.ParentHash == nil || data.Number == nil || data.Difficulty == nil || data.TxHash == nil || data.Nonce == nil || data.Location == nil {
 		err := errors.New("failed to decode work object header")
-		log.Global.WithField("err", err).Warn()
 		return err
 	}
 	wh.SetHeaderHash(common.BytesToHash(data.GetHeaderHash().Value))

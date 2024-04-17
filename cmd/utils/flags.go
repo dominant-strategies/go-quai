@@ -1231,6 +1231,14 @@ func EnablePprof() {
 	runtime.SetMutexProfileFraction(1)
 	port := "8085"
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(godebug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		log.Global.Print(http.ListenAndServe("localhost:"+port, nil))
 	}()
 }

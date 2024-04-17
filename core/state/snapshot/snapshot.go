@@ -91,7 +91,7 @@ type snapshot interface {
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
 	// flattening everything down (bad for reorgs).
-	Journal(buffer *bytes.Buffer) (common.Hash, error)
+	Journal(buffer *bytes.Buffer, logger *log.Logger) (common.Hash, error)
 
 	// Stale return whether this layer has become stale (was flattened across) or
 	// if it's still live.
@@ -119,6 +119,7 @@ type Tree struct {
 	cache  int                      // Megabytes permitted to use for read caches
 	layers map[common.Hash]snapshot // Collection of all known layers
 	lock   sync.RWMutex
+	logger *log.Logger
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -136,24 +137,25 @@ type Tree struct {
 //     This case happens when the snapshot is 'ahead' of the state trie.
 //   - otherwise, the entire snapshot is considered invalid and will be recreated on
 //     a background thread.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, rebuild bool, recovery bool) (*Tree, error) {
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, rebuild bool, recovery bool, logger *log.Logger) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,
 		triedb: triedb,
 		cache:  cache,
 		layers: make(map[common.Hash]snapshot),
+		logger: logger,
 	}
 
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, cache, root, recovery)
 	if disabled {
-		log.Global.Warn("Snapshot maintenance disabled (syncing)")
+		logger.Warn("Snapshot maintenance disabled (syncing)")
 		return snap, nil
 	}
 	if err != nil {
 		if rebuild {
-			log.Global.WithField("err", err).Warn("Failed to load snapshot, regenerating")
+			logger.WithField("err", err).Warn("Failed to load snapshot, regenerating")
 			snap.Rebuild(root)
 			return snap, nil
 		}
@@ -233,7 +235,7 @@ func (t *Tree) Disable() {
 	// Note, we don't delete the sync progress
 
 	if err := batch.Write(); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to disable snapshots")
+		t.logger.WithField("err", err).Fatal("Failed to disable snapshots")
 	}
 }
 
@@ -338,7 +340,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	if layers == 0 {
 		// If full commit was requested, flatten the diffs and merge onto disk
 		diff.lock.RLock()
-		base := diffToDisk(diff.flatten().(*diffLayer))
+		base := diffToDisk(diff.flatten().(*diffLayer), t.logger)
 		diff.lock.RUnlock()
 
 		// Replace the entire snapshot tree with the flat base
@@ -438,7 +440,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	bottom := diff.parent.(*diffLayer)
 
 	bottom.lock.RLock()
-	base := diffToDisk(bottom)
+	base := diffToDisk(bottom, t.logger)
 	bottom.lock.RUnlock()
 
 	t.layers[base.root] = base
@@ -451,7 +453,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 //
 // The disk layer persistence should be operated in an atomic way. All updates should
 // be discarded if the whole transition if not finished.
-func diffToDisk(bottom *diffLayer) *diskLayer {
+func diffToDisk(bottom *diffLayer, logger *log.Logger) *diskLayer {
 	var (
 		base  = bottom.parent.(*diskLayer)
 		batch = base.diskdb.NewBatch()
@@ -495,7 +497,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 				// crash and we'll detect and regenerate the snapshot.
 				if batch.ValueSize() > ethdb.IdealBatchSize {
 					if err := batch.Write(); err != nil {
-						log.Global.WithField("err", err).Fatal("Failed to write storage deletions")
+						logger.WithField("err", err).Fatal("Failed to write storage deletions")
 					}
 					batch.Reset()
 				}
@@ -518,7 +520,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// the snapshot.
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Global.WithField("err", err).Fatal("Failed to write storage deletions")
+				logger.WithField("err", err).Fatal("Failed to write storage deletions")
 			}
 			batch.Reset()
 		}
@@ -555,9 +557,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Flush all the updates in the single db operation. Ensure the
 	// disk layer transition is atomic.
 	if err := batch.Write(); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to write leftover snapshot")
+		logger.WithField("err", err).Fatal("Failed to write leftover snapshot")
 	}
-	log.Global.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"root":     bottom.root,
 		"complete": base.genMarker == nil,
 	}).Debug("Journalled disk layer")
@@ -613,7 +615,7 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	// Finally write out the journal of each layer in reverse order.
-	base, err := snap.(snapshot).Journal(journal)
+	base, err := snap.(snapshot).Journal(journal, t.logger)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -661,7 +663,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 	}
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
-	log.Global.Info("Rebuilding state snapshot")
+	t.logger.Info("Rebuilding state snapshot")
 	t.layers = map[common.Hash]snapshot{
 		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root),
 	}
@@ -714,7 +716,7 @@ func (t *Tree) Verify(root common.Hash) error {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, newGenerateStats(), true)
+	}, newGenerateStats(t.logger), true)
 
 	if err != nil {
 		return err

@@ -45,14 +45,14 @@ func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 // WriteCanonicalHash stores the hash assigned to a canonical block number.
 func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Put(headerHashKey(number), hash.Bytes()); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store number to hash mapping")
+		db.Logger().WithField("err", err).Fatal("Failed to store number to hash mapping")
 	}
 }
 
 // DeleteCanonicalHash removes the number to hash canonical mapping.
 func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Delete(headerHashKey(number)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete number to hash mapping")
+		db.Logger().WithField("err", err).Fatal("Failed to delete number to hash mapping")
 	}
 }
 
@@ -121,14 +121,14 @@ func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64)
 	key := headerNumberKey(hash)
 	enc := encodeBlockNumber(number)
 	if err := db.Put(key, enc); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store hash to number mapping")
+		db.Logger().WithField("err", err).Fatal("Failed to store hash to number mapping")
 	}
 }
 
 // DeleteHeaderNumber removes hash->number mapping.
 func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete hash to number mapping")
+		db.Logger().WithField("err", err).Fatal("Failed to delete hash to number mapping")
 	}
 }
 
@@ -144,7 +144,7 @@ func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 // WriteHeadHeaderHash stores the hash of the current canonical head header.
 func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store last header's hash")
+		db.Logger().WithField("err", err).Fatal("Failed to store last header's hash")
 	}
 }
 
@@ -160,7 +160,7 @@ func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
 // WriteHeadBlockHash stores the head block's hash.
 func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headWorkObjectKey, hash.Bytes()); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store last block's hash")
+		db.Logger().WithField("err", err).Fatal("Failed to store last block's hash")
 	}
 }
 
@@ -174,7 +174,7 @@ func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
 	protoPivot := new(ProtoNumber)
 	err := proto.Unmarshal(data, protoPivot)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pivot block number")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal pivot block number")
 	}
 	return &protoPivot.Number
 }
@@ -185,10 +185,10 @@ func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
 	protoPivot.Number = pivot
 	enc, err := proto.Marshal(protoPivot)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to encode pivot block number")
+		db.Logger().WithField("err", err).Fatal("Failed to encode pivot block number")
 	}
 	if err := db.Put(lastPivotKey, enc); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store pivot block number")
+		db.Logger().WithField("err", err).Fatal("Failed to store pivot block number")
 	}
 }
 
@@ -206,7 +206,7 @@ func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
 // retrieving it across restarts.
 func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) {
 	if err := db.Put(fastTrieProgressKey, new(big.Int).SetUint64(count).Bytes()); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store fast sync trie progress")
+		db.Logger().WithField("err", err).Fatal("Failed to store fast sync trie progress")
 	}
 }
 
@@ -226,7 +226,7 @@ func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
 // into database.
 func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(txIndexTailKey, encodeBlockNumber(number)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store the transaction index tail")
+		db.Logger().WithField("err", err).Fatal("Failed to store the transaction index tail")
 	}
 }
 
@@ -243,7 +243,7 @@ func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
 // WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
 func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store transaction lookup limit for fast sync")
+		db.Logger().WithField("err", err).Fatal("Failed to store transaction lookup limit for fast sync")
 	}
 }
 
@@ -301,15 +301,15 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header, nodeCtx int) {
 	// Write the encoded header
 	protoHeader, err := header.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode header")
 	}
 	data, err := proto.Marshal(protoHeader)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal header")
 	}
 	key := headerKey(number, hash)
 	if err := db.Put(key, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store header")
+		db.Logger().WithField("err", err).Fatal("Failed to store header")
 	}
 }
 
@@ -317,7 +317,7 @@ func WriteHeader(db ethdb.KeyValueWriter, header *types.Header, nodeCtx int) {
 func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	deleteHeaderWithoutNumber(db, hash, number)
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete hash to number mapping")
+		db.Logger().WithField("err", err).Fatal("Failed to delete hash to number mapping")
 	}
 }
 
@@ -325,7 +325,7 @@ func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // the hash to number mapping.
 func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(headerKey(number, hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete header")
+		db.Logger().WithField("err", err).Fatal("Failed to delete header")
 	}
 }
 
@@ -382,7 +382,7 @@ func ReadCanonicalBodyProto(db ethdb.Reader, number uint64) []byte {
 // WriteBodyProto stores an Proto encoded block body into the database.
 func WriteBodyProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, data []byte) {
 	if err := db.Put(blockBodyKey(number, hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store block body")
+		db.Logger().WithField("err", err).Fatal("Failed to store block body")
 	}
 }
 
@@ -401,7 +401,7 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 	data, err := db.Get(pbBodyKey(hash))
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Failed to read block body")
@@ -412,12 +412,12 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 	}
 	protoWorkObject := new(types.ProtoWorkObject)
 	if err := proto.Unmarshal(data, protoWorkObject); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal body")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal body")
 	}
 	body := new(types.WorkObject)
 	body.ProtoDecode(protoWorkObject, db.Location(), types.PhObject)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid pending block body Proto")
@@ -430,21 +430,21 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 func WritePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.WorkObject) {
 	protoBody, err := body.ProtoEncode(types.PhObject)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode body")
 	}
 	data, err := proto.Marshal(protoBody)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to Proto Marshal encode body")
+		db.Logger().WithField("err", err).Fatal("Failed to Proto Marshal encode body")
 	}
 	if err := db.Put(pbBodyKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to write pbBodyKey")
+		db.Logger().WithField("err", err).Fatal("Failed to write pbBodyKey")
 	}
 }
 
 // DeletePbCacheBody removes all block body data associated with a hash.
 func DeletePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(pbBodyKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete pb cache body")
+		db.Logger().WithField("err", err).Fatal("Failed to delete pb cache body")
 	}
 }
 
@@ -453,7 +453,7 @@ func ReadPbBodyKeys(db ethdb.Reader) common.Hashes {
 	key := pbBodyHashKey()
 	data, err := db.Get(key)
 	if err != nil {
-		log.Global.WithField("err", err).Error("Error in Reading pbBodyKeys")
+		db.Logger().WithField("err", err).Error("Error in Reading pbBodyKeys")
 		return nil
 	}
 	if len(data) == 0 {
@@ -462,13 +462,13 @@ func ReadPbBodyKeys(db ethdb.Reader) common.Hashes {
 	protoKeys := new(common.ProtoHashes)
 	err = proto.Unmarshal(data, protoKeys)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pbBodyKeys")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal pbBodyKeys")
 	}
 
 	keys := &common.Hashes{}
 	keys.ProtoDecode(protoKeys)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"err": err,
 		}).Error("Invalid pbBodyKeys Proto")
 		return nil
@@ -482,10 +482,10 @@ func WritePbBodyKeys(db ethdb.KeyValueWriter, hashes common.Hashes) {
 	protoHashes := hashes.ProtoEncode()
 	data, err := proto.Marshal(protoHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to Proto marshal pbBodyKeys")
+		db.Logger().WithField("err", err).Fatal("Failed to Proto marshal pbBodyKeys")
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store pending block body keys")
+		db.Logger().WithField("err", err).Fatal("Failed to store pending block body keys")
 	}
 }
 
@@ -494,7 +494,7 @@ func DeleteAllPbBodyKeys(db ethdb.KeyValueWriter) {
 	key := pbBodyHashKey()
 
 	if err := db.Delete(key); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete pending block body keys")
+		db.Logger().WithField("err", err).Fatal("Failed to delete pending block body keys")
 	}
 }
 
@@ -508,12 +508,12 @@ func ReadTermini(db ethdb.Reader, hash common.Hash) *types.Termini {
 	protoTermini := new(types.ProtoTermini)
 	err := proto.Unmarshal(data, protoTermini)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal termini")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal termini")
 	}
 	termini := new(types.Termini)
 	err = termini.ProtoDecode(protoTermini)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid termini Proto")
@@ -528,10 +528,10 @@ func WriteTermini(db ethdb.KeyValueWriter, index common.Hash, hashes types.Termi
 	protoTermini := hashes.ProtoEncode()
 	data, err := proto.Marshal(protoTermini)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to Proto marshal termini")
+		db.Logger().WithField("err", err).Fatal("Failed to Proto marshal termini")
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store last block's termini")
+		db.Logger().WithField("err", err).Fatal("Failed to store last block's termini")
 	}
 }
 
@@ -540,7 +540,7 @@ func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := terminiKey(hash)
 
 	if err := db.Delete(key); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete termini ")
+		db.Logger().WithField("err", err).Fatal("Failed to delete termini ")
 	}
 }
 
@@ -562,12 +562,12 @@ func ReadWorkObjectHeader(db ethdb.Reader, hash common.Hash, woType int) *types.
 	protoWorkObjectHeader := new(types.ProtoWorkObjectHeader)
 	err := proto.Unmarshal(data, protoWorkObjectHeader)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal work object header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal work object header")
 	}
 	workObjectHeader := new(types.WorkObjectHeader)
 	err = workObjectHeader.ProtoDecode(protoWorkObjectHeader)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid work object header Proto")
@@ -589,14 +589,14 @@ func WriteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, workObject
 	}
 	protoWorkObjectHeader, err := workObject.WorkObjectHeader().ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode work object header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode work object header")
 	}
 	data, err := proto.Marshal(protoWorkObjectHeader)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal work object header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal work object header")
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store work object header")
+		db.Logger().WithField("err", err).Fatal("Failed to store work object header")
 	}
 }
 
@@ -612,7 +612,7 @@ func DeleteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, woType in
 		key = phWorkObjectHeaderKey(hash)
 	}
 	if err := db.Delete(key); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete work object header ")
+		db.Logger().WithField("err", err).Fatal("Failed to delete work object header ")
 	}
 }
 
@@ -662,12 +662,12 @@ func ReadWorkObjectBody(db ethdb.Reader, hash common.Hash) *types.WorkObjectBody
 	protoWorkObjectBody := new(types.ProtoWorkObjectBody)
 	err := proto.Unmarshal(data, protoWorkObjectBody)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal work object body")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal work object body")
 	}
 	workObjectBody := new(types.WorkObjectBody)
 	err = workObjectBody.ProtoDecode(protoWorkObjectBody, db.Location())
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid work object body Proto")
@@ -684,14 +684,14 @@ func WriteWorkObjectBody(db ethdb.KeyValueWriter, hash common.Hash, workObject *
 
 	protoWorkObjectBody, err := workObject.Body().ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode work object body")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode work object body")
 	}
 	data, err := proto.Marshal(protoWorkObjectBody)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal work object body")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal work object body")
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store work object body")
+		db.Logger().WithField("err", err).Fatal("Failed to store work object body")
 	}
 }
 
@@ -699,7 +699,7 @@ func WriteWorkObjectBody(db ethdb.KeyValueWriter, hash common.Hash, workObject *
 func DeleteWorkObjectBody(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := workObjectBodyKey(hash)
 	if err := db.Delete(key); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete work object body ")
+		db.Logger().WithField("err", err).Fatal("Failed to delete work object body ")
 	}
 }
 
@@ -708,21 +708,21 @@ func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
 	key := pendingHeaderKey(hash)
 	data, _ := db.Get(key)
 	if len(data) == 0 {
-		log.Global.WithField("hash", hash).Debug("Pending Header is nil")
+		db.Logger().WithField("hash", hash).Debug("Pending Header is nil")
 		return nil
 	}
 
 	protoPendingHeader := new(types.ProtoPendingHeader)
 	err := proto.Unmarshal(data, protoPendingHeader)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pending header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal pending header")
 	}
 
 	pendingHeader := new(types.PendingHeader)
 
 	err = pendingHeader.ProtoDecode(protoPendingHeader, db.Location())
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid pendingHeader Proto")
@@ -737,14 +737,14 @@ func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader
 
 	protoPendingHeader, err := pendingHeader.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode pending header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode pending header")
 	}
 	data, err := proto.Marshal(protoPendingHeader)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal pending header")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal pending header")
 	}
 	if err := db.Put(key, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store header")
+		db.Logger().WithField("err", err).Fatal("Failed to store header")
 	}
 }
 
@@ -752,7 +752,7 @@ func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader
 func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
 	key := pendingHeaderKey(hash)
 	if err := db.Delete(key); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete slice pending header ")
+		db.Logger().WithField("err", err).Fatal("Failed to delete slice pending header ")
 	}
 }
 
@@ -765,7 +765,7 @@ func ReadBestPhKey(db ethdb.Reader) common.Hash {
 	}
 	protoBestPhKey := new(common.ProtoHash)
 	if err := proto.Unmarshal(data, protoBestPhKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal best ph key")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal best ph key")
 	}
 	bestPhKey := new(common.Hash)
 	bestPhKey.ProtoDecode(protoBestPhKey)
@@ -777,17 +777,17 @@ func WriteBestPhKey(db ethdb.KeyValueWriter, bestPhKey common.Hash) {
 	protoPhKey := bestPhKey.ProtoEncode()
 	data, err := proto.Marshal(protoPhKey)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to Proto marshal best ph key")
+		db.Logger().WithField("err", err).Fatal("Failed to Proto marshal best ph key")
 	}
 	if err := db.Put(phHeadKey, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store last block's hash")
+		db.Logger().WithField("err", err).Fatal("Failed to store last block's hash")
 	}
 }
 
 // DeleteBestPhKey delete the bestPhKey of the blockchain
 func DeleteBestPhKey(db ethdb.KeyValueWriter) {
 	if err := db.Delete(phHeadKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete ph head")
+		db.Logger().WithField("err", err).Fatal("Failed to delete ph head")
 	}
 }
 
@@ -800,7 +800,7 @@ func ReadHeadsHashes(db ethdb.Reader) common.Hashes {
 	protoHeadsHashes := new(common.ProtoHashes)
 	err := proto.Unmarshal(data, protoHeadsHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal heads hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal heads hashes")
 	}
 	headsHashes := new(common.Hashes)
 	headsHashes.ProtoDecode(protoHeadsHashes)
@@ -812,17 +812,17 @@ func WriteHeadsHashes(db ethdb.KeyValueWriter, hashes common.Hashes) {
 	protoHeadsHashes := hashes.ProtoEncode()
 	data, err := proto.Marshal(protoHeadsHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to Proto marshal heads hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to Proto marshal heads hashes")
 	}
 	if err := db.Put(headsHashesKey, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store last block's hash")
+		db.Logger().WithField("err", err).Fatal("Failed to store last block's hash")
 	}
 }
 
 // DeleteAllHeadsHashes writes the heads hashes of the blockchain.
 func DeleteAllHeadsHashes(db ethdb.KeyValueWriter) {
 	if err := db.Delete(headsHashesKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete block total difficulty")
+		db.Logger().WithField("err", err).Fatal("Failed to delete block total difficulty")
 	}
 }
 
@@ -881,14 +881,14 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Rec
 	protoReceipt := new(types.ProtoReceiptsForStorage)
 	err := proto.Unmarshal(data, protoReceipt)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal receipt")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal receipt")
 		return nil
 	}
 	// Convert the receipts from their storage form to their internal representation
 	storageReceipts := new(types.ReceiptsForStorage)
 	err = storageReceipts.ProtoDecode(protoReceipt, db.Location())
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid receipt array Proto")
@@ -916,14 +916,14 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 	}
 	body := ReadWorkObject(db, hash, types.BlockObject)
 	if body == nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,
 		}).Error("Missing body but have receipt")
 		return nil
 	}
 	if err := receipts.DeriveFields(config, hash, number, body.QuaiTransactionsWithoutCoinbase()); err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,
 			"err":    err,
@@ -943,22 +943,22 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 
 	protoReceipts, err := storageReceipts.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode receipt")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode receipt")
 	}
 	bytes, err := proto.Marshal(protoReceipts)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal receipt")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal receipt")
 	}
 	// Store the flattened receipt slice
 	if err := db.Put(blockReceiptsKey(number, hash), bytes); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store block receipts")
+		db.Logger().WithField("err", err).Fatal("Failed to store block receipts")
 	}
 }
 
 // DeleteReceipts removes all receipt data associated with a block hash.
 func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockReceiptsKey(number, hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete block receipts")
+		db.Logger().WithField("err", err).Fatal("Failed to delete block receipts")
 	}
 }
 
@@ -1145,7 +1145,7 @@ func ReadEtxSetProto(db ethdb.Reader, hash common.Hash, number uint64) ([]byte, 
 // WriteEtxSetProto stores the EtxSet corresponding to a given block, in Proto encoding.
 func WriteEtxSetProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, data []byte) {
 	if err := db.Put(etxSetKey(number, hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store etx set")
+		db.Logger().WithField("err", err).Fatal("Failed to store etx set")
 	}
 }
 
@@ -1153,19 +1153,19 @@ func WriteEtxSetProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, 
 func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) *types.EtxSet {
 	data, err := ReadEtxSetProto(db, hash, number)
 	if err != nil {
-		log.Global.WithError(err).Error("Failed to read etx set")
+		db.Logger().WithError(err).Error("Failed to read etx set")
 		return nil
 	}
 	protoEtxSet := new(types.ProtoEtxSet)
 	if err := proto.Unmarshal(data, protoEtxSet); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal etx set")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal etx set")
 	}
 	etxSet := types.EtxSet{
 		ETXHashes: make([]byte, 0),
 	}
 	err = etxSet.ProtoDecode(protoEtxSet)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid etx set Proto")
@@ -1180,7 +1180,7 @@ func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSe
 
 	data, err := proto.Marshal(protoEtxSet)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal etx set")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal etx set")
 	}
 	WriteEtxSetProto(db, hash, number, data)
 }
@@ -1188,7 +1188,7 @@ func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSe
 // DeleteEtxSet removes all EtxSet data associated with a block.
 func DeleteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(etxSetKey(number, hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete etx set")
+		db.Logger().WithField("err", err).Fatal("Failed to delete etx set")
 	}
 }
 
@@ -1199,11 +1199,11 @@ func ReadETX(db ethdb.Reader, hash common.Hash) *types.Transaction {
 	}
 	protoEtx := new(types.ProtoTransaction)
 	if err := proto.Unmarshal(data, protoEtx); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal etx")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal etx")
 	}
 	etx := new(types.Transaction)
 	if err := etx.ProtoDecode(protoEtx, db.Location()); err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid etx Proto")
@@ -1215,20 +1215,20 @@ func ReadETX(db ethdb.Reader, hash common.Hash) *types.Transaction {
 func WriteETX(db ethdb.KeyValueWriter, hash common.Hash, etx *types.Transaction) {
 	protoEtx, err := etx.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode etx")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode etx")
 	}
 	data, err := proto.Marshal(protoEtx)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal etx")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal etx")
 	}
 	if err := db.Put(etxKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store etx")
+		db.Logger().WithField("err", err).Fatal("Failed to store etx")
 	}
 }
 
 func DeleteETX(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(etxKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete etx")
+		db.Logger().WithField("err", err).Fatal("Failed to delete etx")
 	}
 }
 
@@ -1245,7 +1245,7 @@ func ReadPendingEtxsProto(db ethdb.Reader, hash common.Hash) []byte {
 // WritePendingEtxsProto stores the pending ETXs corresponding to a given block, in Proto encoding.
 func WritePendingEtxsProto(db ethdb.KeyValueWriter, hash common.Hash, data []byte) {
 	if err := db.Put(pendingEtxsKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store pending etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to store pending etxs")
 	}
 }
 
@@ -1257,11 +1257,11 @@ func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) *types.PendingEtxs {
 	}
 	protoPendingEtxs := new(types.ProtoPendingEtxs)
 	if err := proto.Unmarshal(data, protoPendingEtxs); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pending etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal pending etxs")
 	}
 	pendingEtxs := new(types.PendingEtxs)
 	if err := pendingEtxs.ProtoDecode(protoPendingEtxs, db.Location()); err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid pending etxs Proto")
@@ -1274,11 +1274,11 @@ func ReadPendingEtxs(db ethdb.Reader, hash common.Hash) *types.PendingEtxs {
 func WritePendingEtxs(db ethdb.KeyValueWriter, pendingEtxs types.PendingEtxs) {
 	protoPendingEtxs, err := pendingEtxs.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode pending etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode pending etxs")
 	}
 	data, err := proto.Marshal(protoPendingEtxs)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal pending etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal pending etxs")
 	}
 	WritePendingEtxsProto(db, pendingEtxs.Header.Hash(), data)
 }
@@ -1286,7 +1286,7 @@ func WritePendingEtxs(db ethdb.KeyValueWriter, pendingEtxs types.PendingEtxs) {
 // DeletePendingEtxs removes all pending ETX data associated with a block.
 func DeletePendingEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(pendingEtxsKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete pending etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to delete pending etxs")
 	}
 }
 
@@ -1300,12 +1300,12 @@ func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash) *types.PendingEtxs
 	protoPendingEtxsRollup := new(types.ProtoPendingEtxsRollup)
 	err := proto.Unmarshal(data, protoPendingEtxsRollup)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal pending etxs rollup")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal pending etxs rollup")
 	}
 	pendingEtxsRollup := new(types.PendingEtxsRollup)
 	err = pendingEtxsRollup.ProtoDecode(protoPendingEtxsRollup, db.Location())
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid pending etxs rollup Proto")
@@ -1318,21 +1318,21 @@ func ReadPendingEtxsRollup(db ethdb.Reader, hash common.Hash) *types.PendingEtxs
 func WritePendingEtxsRollup(db ethdb.KeyValueWriter, pendingEtxsRollup types.PendingEtxsRollup) {
 	protoPendingEtxsRollup, err := pendingEtxsRollup.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode pending etxs rollup")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode pending etxs rollup")
 	}
 	data, err := proto.Marshal(protoPendingEtxsRollup)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal pending etxs rollup")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal pending etxs rollup")
 	}
 	if err := db.Put(pendingEtxsRollupKey(pendingEtxsRollup.Header.Hash()), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store pending etxs rollup")
+		db.Logger().WithField("err", err).Fatal("Failed to store pending etxs rollup")
 	}
 }
 
 // DeletePendingEtxsRollup removes all pending ETX rollup data associated with a block.
 func DeletePendingEtxsRollup(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(pendingEtxsRollupKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete pending etxs rollup")
+		db.Logger().WithField("err", err).Fatal("Failed to delete pending etxs rollup")
 	}
 }
 
@@ -1346,12 +1346,12 @@ func ReadManifest(db ethdb.Reader, hash common.Hash) types.BlockManifest {
 	protoManifest := new(types.ProtoManifest)
 	err := proto.Unmarshal(data, protoManifest)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal manifest")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal manifest")
 	}
 	manifest := new(types.BlockManifest)
 	err = manifest.ProtoDecode(protoManifest)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid manifest Proto")
@@ -1364,21 +1364,21 @@ func ReadManifest(db ethdb.Reader, hash common.Hash) types.BlockManifest {
 func WriteManifest(db ethdb.KeyValueWriter, hash common.Hash, manifest types.BlockManifest) {
 	protoManifest, err := manifest.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode manifest")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode manifest")
 	}
 	data, err := proto.Marshal(protoManifest)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal manifest")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal manifest")
 	}
 	if err := db.Put(manifestKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store manifest")
+		db.Logger().WithField("err", err).Fatal("Failed to store manifest")
 	}
 }
 
 // DeleteManifest removes manifest data associated with a block.
 func DeleteManifest(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(manifestKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete manifest")
+		db.Logger().WithField("err", err).Fatal("Failed to delete manifest")
 	}
 }
 
@@ -1392,7 +1392,7 @@ func ReadInterlinkHashes(db ethdb.Reader, hash common.Hash) common.Hashes {
 	protoInterlinkHashes := new(common.ProtoHashes)
 	err := proto.Unmarshal(data, protoInterlinkHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal interlink hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal interlink hashes")
 	}
 	interlinkHashes := new(common.Hashes)
 	interlinkHashes.ProtoDecode(protoInterlinkHashes)
@@ -1404,17 +1404,17 @@ func WriteInterlinkHashes(db ethdb.KeyValueWriter, hash common.Hash, interlinkHa
 	protoInterlinkHashes := interlinkHashes.ProtoEncode()
 	data, err := proto.Marshal(protoInterlinkHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal interlink hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal interlink hashes")
 	}
 	if err := db.Put(interlinkHashKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store interlink hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to store interlink hashes")
 	}
 }
 
 // DeleteInterlinkHashes removes interlinkHashes data associated with a block.
 func DeleteInterlinkHashes(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(interlinkHashKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete interlink hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to delete interlink hashes")
 	}
 }
 
@@ -1431,7 +1431,7 @@ func ReadBloomProto(db ethdb.Reader, hash common.Hash) []byte {
 // WriteBloomProto stores the bloom corresponding to a given block, in proto bug encoding
 func WriteBloomProto(db ethdb.KeyValueWriter, hash common.Hash, data []byte) {
 	if err := db.Put(bloomKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store block bloom filter")
+		db.Logger().WithField("err", err).Fatal("Failed to store block bloom filter")
 	}
 }
 
@@ -1450,7 +1450,7 @@ func ReadBloom(db ethdb.Reader, hash common.Hash) *types.Bloom {
 func WriteBloom(db ethdb.KeyValueWriter, hash common.Hash, bloom types.Bloom) {
 	data, err := bloom.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to Proto encode pending etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to Proto encode pending etxs")
 	}
 	WriteBloomProto(db, hash, data)
 }
@@ -1458,7 +1458,7 @@ func WriteBloom(db ethdb.KeyValueWriter, hash common.Hash, bloom types.Bloom) {
 // DeleteBloom removes all bloom data associated with a block.
 func DeleteBloom(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(bloomKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete bloom")
+		db.Logger().WithField("err", err).Fatal("Failed to delete bloom")
 	}
 }
 
@@ -1472,7 +1472,7 @@ func ReadBadHashesList(db ethdb.Reader) common.Hashes {
 	protoBadHashes := new(common.ProtoHashes)
 	err := proto.Unmarshal(data, protoBadHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal badHashesList")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal badHashesList")
 	}
 	badHashes := &common.Hashes{}
 	badHashes.ProtoDecode(protoBadHashes)
@@ -1484,17 +1484,17 @@ func WriteBadHashesList(db ethdb.KeyValueWriter, badHashes common.Hashes) {
 	protoBadHashes := badHashes.ProtoEncode()
 	data, err := proto.Marshal(protoBadHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal badHashesList")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal badHashesList")
 	}
 	if err := db.Put(badHashesListPrefix, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store badHashesList")
+		db.Logger().WithField("err", err).Fatal("Failed to store badHashesList")
 	}
 }
 
 // DeleteBadHashesList removes badHashesList from the database
 func DeleteBadHashesList(db ethdb.KeyValueWriter) {
 	if err := db.Delete(badHashesListPrefix); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete badHashesList")
+		db.Logger().WithField("err", err).Fatal("Failed to delete badHashesList")
 	}
 }
 
@@ -1502,14 +1502,14 @@ func DeleteBadHashesList(db ethdb.KeyValueWriter) {
 func WriteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash, inboundEtxs types.Transactions) {
 	protoInboundEtxs, err := inboundEtxs.ProtoEncode()
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto encode inbound etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode inbound etxs")
 	}
 	data, err := proto.Marshal(protoInboundEtxs)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal inbound etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal inbound etxs")
 	}
 	if err := db.Put(inboundEtxsKey(hash), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store badHashesList")
+		db.Logger().WithField("err", err).Fatal("Failed to store badHashesList")
 	}
 }
 
@@ -1523,12 +1523,12 @@ func ReadInboundEtxs(db ethdb.Reader, hash common.Hash) types.Transactions {
 	protoInboundEtxs := new(types.ProtoTransactions)
 	err = proto.Unmarshal(data, protoInboundEtxs)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal inbound etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal inbound etxs")
 	}
 	inboundEtxs := types.Transactions{}
 	err = inboundEtxs.ProtoDecode(protoInboundEtxs, db.Location())
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
 		}).Error("Invalid inbound etxs Proto")
@@ -1540,17 +1540,17 @@ func ReadInboundEtxs(db ethdb.Reader, hash common.Hash) types.Transactions {
 // DeleteInboundEtxs deletes the inbound etxs from the database
 func DeleteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(inboundEtxsKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete inbound etxs")
+		db.Logger().WithField("err", err).Fatal("Failed to delete inbound etxs")
 	}
 }
 
 func WriteAddressUtxos(db ethdb.KeyValueWriter, address common.Address, utxos []*types.UtxoEntry) {
 	data, err := rlp.EncodeToBytes(utxos)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to rlp encode utxos")
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxos")
 	}
 	if err := db.Put(addressUtxosKey(address), data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store utxos")
+		db.Logger().WithField("err", err).Fatal("Failed to store utxos")
 	}
 }
 
@@ -1562,7 +1562,7 @@ func ReadAddressUtxos(db ethdb.Reader, address common.Address) []*types.UtxoEntr
 	}
 	utxos := []*types.UtxoEntry{}
 	if err := rlp.Decode(bytes.NewReader(data), &utxos); err != nil {
-		log.Global.WithField("err", err).Error("Invalid utxos RLP")
+		db.Logger().WithField("err", err).Error("Invalid utxos RLP")
 		return nil
 	}
 	return utxos
@@ -1570,7 +1570,7 @@ func ReadAddressUtxos(db ethdb.Reader, address common.Address) []*types.UtxoEntr
 
 func DeleteAddressUtxos(db ethdb.KeyValueWriter, address common.Address) {
 	if err := db.Delete(addressUtxosKey(address)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete utxos")
+		db.Logger().WithField("err", err).Fatal("Failed to delete utxos")
 	}
 }
 
@@ -1578,11 +1578,11 @@ func WriteGenesisHashes(db ethdb.KeyValueWriter, hashes common.Hashes) {
 	protoHashes := hashes.ProtoEncode()
 	data, err := proto.Marshal(protoHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Marshal genesis hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal genesis hashes")
 	}
 
 	if err := db.Put(genesisHashesKey, data); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store genesis hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to store genesis hashes")
 	}
 }
 
@@ -1594,7 +1594,7 @@ func ReadGenesisHashes(db ethdb.Reader) common.Hashes {
 	protoHashes := new(common.ProtoHashes)
 	err := proto.Unmarshal(data, protoHashes)
 	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal genesis hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal genesis hashes")
 	}
 
 	hashes := common.Hashes{}
@@ -1605,6 +1605,6 @@ func ReadGenesisHashes(db ethdb.Reader) common.Hashes {
 
 func DeleteGenesisHashes(db ethdb.KeyValueWriter) {
 	if err := db.Delete(genesisHashesKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete genesis hashes")
+		db.Logger().WithField("err", err).Fatal("Failed to delete genesis hashes")
 	}
 }

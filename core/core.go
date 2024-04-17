@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math/big"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -390,6 +391,14 @@ func (c *Core) removeFromAppendQueue(block *types.WorkObject) {
 
 // updateAppendQueue is a time to procAppendQueue
 func (c *Core) updateAppendQueue() {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	futureTimer := time.NewTicker(c_appendQueueRetryPeriod * time.Second)
 	defer futureTimer.Stop()
 	for {
@@ -405,6 +414,14 @@ func (c *Core) updateAppendQueue() {
 func (c *Core) startStatsTimer() {
 	futureTimer := time.NewTicker(c_statsPrintPeriod * time.Second)
 	defer futureTimer.Stop()
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	for {
 		select {
 		case <-futureTimer.C:
@@ -507,7 +524,7 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 	nodeCtx := c.NodeCtx()
 
 	if block.Location() == nil {
-		log.Global.Errorf("Block %d has nil location in %d context", block.NumberU64(c.sl.NodeCtx()), c.NodeCtx())
+		c.logger.Errorf("Block %d has nil location in %d context", block.NumberU64(c.sl.NodeCtx()), c.NodeCtx())
 		return
 	}
 

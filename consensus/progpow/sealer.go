@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"math/rand"
 	"runtime"
+	"runtime/debug"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -72,12 +73,28 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
+			defer func() {
+				if r := recover(); r != nil {
+					progpow.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			defer pend.Done()
 			progpow.mine(header, id, nonce, abort, locals)
 		}(i, uint64(progpow.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				progpow.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		var result *types.WorkObject
 		select {
 		case <-stop:
@@ -137,7 +154,7 @@ search:
 				ethashCache := progpow.cache(blockNumber)
 				if ethashCache.cDag == nil {
 					cDag := make([]uint32, progpowCacheWords)
-					generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
+					generateCDag(cDag, ethashCache.cache, blockNumber/epochLength, progpow.logger)
 					ethashCache.cDag = cDag
 				}
 				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)

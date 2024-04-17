@@ -118,7 +118,7 @@ func newFreezer(datadir string, namespace string, readonly bool, logger *log.Log
 		logger:       logger,
 	}
 	for name, disableSnappy := range FreezerNoSnappy {
-		table, err := newTable(datadir, name, disableSnappy)
+		table, err := newTable(datadir, name, disableSnappy, logger)
 		if err != nil {
 			for _, table := range freezer.tables {
 				table.Close()

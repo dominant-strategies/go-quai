@@ -21,7 +21,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 // ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.
@@ -33,14 +32,14 @@ func ReadSnapshotDisabled(db ethdb.KeyValueReader) bool {
 // WriteSnapshotDisabled stores the snapshot pause flag.
 func WriteSnapshotDisabled(db ethdb.KeyValueWriter) {
 	if err := db.Put(snapshotDisabledKey, []byte("42")); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store snapshot disabled flag")
+		db.Logger().WithField("err", err).Fatal("Failed to store snapshot disabled flag")
 	}
 }
 
 // DeleteSnapshotDisabled deletes the flag keeping the snapshot maintenance disabled.
 func DeleteSnapshotDisabled(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotDisabledKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to remove snapshot disabled flag")
+		db.Logger().WithField("err", err).Fatal("Failed to remove snapshot disabled flag")
 	}
 }
 
@@ -58,7 +57,7 @@ func ReadSnapshotRoot(db ethdb.KeyValueReader) common.Hash {
 // the persisted snapshot.
 func WriteSnapshotRoot(db ethdb.KeyValueWriter, root common.Hash) {
 	if err := db.Put(snapshotRootKey, root[:]); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store snapshot root")
+		db.Logger().WithField("err", err).Fatal("Failed to store snapshot root")
 	}
 }
 
@@ -68,7 +67,7 @@ func WriteSnapshotRoot(db ethdb.KeyValueWriter, root common.Hash) {
 // invalid.
 func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotRootKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to remove snapshot root")
+		db.Logger().WithField("err", err).Fatal("Failed to remove snapshot root")
 	}
 }
 
@@ -81,14 +80,14 @@ func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 // WriteAccountSnapshot stores the snapshot entry of an account trie leaf.
 func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byte) {
 	if err := db.Put(accountSnapshotKey(hash), entry); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store account snapshot")
+		db.Logger().WithField("err", err).Fatal("Failed to store account snapshot")
 	}
 }
 
 // DeleteAccountSnapshot removes the snapshot entry of an account trie leaf.
 func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(accountSnapshotKey(hash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete account snapshot")
+		db.Logger().WithField("err", err).Fatal("Failed to delete account snapshot")
 	}
 }
 
@@ -101,14 +100,14 @@ func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash commo
 // WriteStorageSnapshot stores the snapshot entry of an storage trie leaf.
 func WriteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash, entry []byte) {
 	if err := db.Put(storageSnapshotKey(accountHash, storageHash), entry); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store storage snapshot")
+		db.Logger().WithField("err", err).Fatal("Failed to store storage snapshot")
 	}
 }
 
 // DeleteStorageSnapshot removes the snapshot entry of an storage trie leaf.
 func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash) {
 	if err := db.Delete(storageSnapshotKey(accountHash, storageHash)); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to delete storage snapshot")
+		db.Logger().WithField("err", err).Fatal("Failed to delete storage snapshot")
 	}
 }
 
@@ -129,7 +128,7 @@ func ReadSnapshotJournal(db ethdb.KeyValueReader) []byte {
 // shutdown. The blob is expected to be max a few 10s of megabytes.
 func WriteSnapshotJournal(db ethdb.KeyValueWriter, journal []byte) {
 	if err := db.Put(snapshotJournalKey, journal); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store snapshot journal")
+		db.Logger().WithField("err", err).Fatal("Failed to store snapshot journal")
 	}
 }
 
@@ -137,7 +136,7 @@ func WriteSnapshotJournal(db ethdb.KeyValueWriter, journal []byte) {
 // the last shutdown
 func DeleteSnapshotJournal(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotJournalKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to remove snapshot journal")
+		db.Logger().WithField("err", err).Fatal("Failed to remove snapshot journal")
 	}
 }
 
@@ -152,7 +151,7 @@ func ReadSnapshotGenerator(db ethdb.KeyValueReader) []byte {
 // shutdown.
 func WriteSnapshotGenerator(db ethdb.KeyValueWriter, generator []byte) {
 	if err := db.Put(snapshotGeneratorKey, generator); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store snapshot generator")
+		db.Logger().WithField("err", err).Fatal("Failed to store snapshot generator")
 	}
 }
 
@@ -160,7 +159,7 @@ func WriteSnapshotGenerator(db ethdb.KeyValueWriter, generator []byte) {
 // the last shutdown
 func DeleteSnapshotGenerator(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotGeneratorKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to remove snapshot generator")
+		db.Logger().WithField("err", err).Fatal("Failed to remove snapshot generator")
 	}
 }
 
@@ -184,7 +183,7 @@ func WriteSnapshotRecoveryNumber(db ethdb.KeyValueWriter, number uint64) {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], number)
 	if err := db.Put(snapshotRecoveryKey, buf[:]); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store snapshot recovery number")
+		db.Logger().WithField("err", err).Fatal("Failed to store snapshot recovery number")
 	}
 }
 
@@ -192,7 +191,7 @@ func WriteSnapshotRecoveryNumber(db ethdb.KeyValueWriter, number uint64) {
 // snapshot layer.
 func DeleteSnapshotRecoveryNumber(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotRecoveryKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to remove snapshot recovery number")
+		db.Logger().WithField("err", err).Fatal("Failed to remove snapshot recovery number")
 	}
 }
 
@@ -205,7 +204,7 @@ func ReadSnapshotSyncStatus(db ethdb.KeyValueReader) []byte {
 // WriteSnapshotSyncStatus stores the serialized sync status to save at shutdown.
 func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 	if err := db.Put(snapshotSyncStatusKey, status); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to store snapshot sync status")
+		db.Logger().WithField("err", err).Fatal("Failed to store snapshot sync status")
 	}
 }
 
@@ -213,6 +212,6 @@ func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 // shutdown
 func DeleteSnapshotSyncStatus(db ethdb.KeyValueWriter) {
 	if err := db.Delete(snapshotSyncStatusKey); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to remove snapshot sync status")
+		db.Logger().WithField("err", err).Fatal("Failed to remove snapshot sync status")
 	}
 }

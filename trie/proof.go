@@ -24,7 +24,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
@@ -59,7 +58,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 			var err error
 			tn, err = t.resolveHash(n, nil)
 			if err != nil {
-				log.Global.WithField("err", err).Error("Unhandled trie error")
+				proofDb.Logger().WithField("err", err).Error("Unhandled trie error")
 				return err
 			}
 		default:
@@ -540,7 +539,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	tr := &Trie{root: root, db: NewDatabase(memorydb.New())}
+	tr := &Trie{root: root, db: NewDatabase(memorydb.New(proof.Logger()))}
 	if empty {
 		tr.root = nil
 	}

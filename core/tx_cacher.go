@@ -18,8 +18,10 @@ package core
 
 import (
 	"runtime"
+	"runtime/debug"
 
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // senderCacher is a concurrent transaction sender recoverer and cacher.
@@ -60,6 +62,14 @@ func newTxSenderCacher(threads int) *txSenderCacher {
 // cache is an infinite loop, caching transaction senders from various forms of
 // data structures.
 func (cacher *txSenderCacher) cache() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	for task := range cacher.tasks {
 		for i := 0; i < len(task.txs); i += task.inc {
 			if task.txs[i].Type() != types.QiTxType {

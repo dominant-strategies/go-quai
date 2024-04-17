@@ -45,7 +45,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// freezerdb return N items (e.g up to 1000 items per go)
 		// That would require an API change in Ancients though
 		if h, err := db.Ancient(freezerHashTable, i); err != nil {
-			log.Global.WithField("err", err).Fatal("Failed to init database from freezer")
+			db.Logger().WithField("err", err).Fatal("Failed to init database from freezer")
 		} else {
 			hash = common.BytesToHash(h)
 		}
@@ -53,13 +53,13 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		// If enough data was accumulated in memory or we're at the last block, dump to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.Global.WithField("err", err).Fatal("Failed to write data to db")
+				db.Logger().WithField("err", err).Fatal("Failed to write data to db")
 			}
 			batch.Reset()
 		}
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
-			log.Global.WithFields(log.Fields{
+			db.Logger().WithFields(log.Fields{
 				"total":   frozen,
 				"number":  i,
 				"hash":    hash,
@@ -69,12 +69,12 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		}
 	}
 	if err := batch.Write(); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to write data to db")
+		db.Logger().WithField("err", err).Fatal("Failed to write data to db")
 	}
 	batch.Reset()
 
 	WriteHeadHeaderHash(db, hash)
-	log.Global.WithFields(log.Fields{
+	db.Logger().WithFields(log.Fields{
 		"blocks":  frozen,
 		"elapsed": common.PrettyDuration(time.Since(start)),
 	}).Info("Initialized database from freezer")

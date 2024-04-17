@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,7 +71,7 @@ type callProc struct {
 	notifiers []*Notifier
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, logger *log.Logger) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:            reg,
@@ -82,6 +83,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		cancelRoot:     cancelRoot,
 		allowSubscribe: true,
 		serverSubs:     make(map[ID]*Subscription),
+		log:            logger,
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 	return h
@@ -218,6 +220,14 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 		ctx, cancel := context.WithCancel(h.rootCtx)
 		defer h.callWG.Done()
 		defer cancel()
+		defer func() {
+			if r := recover(); r != nil {
+				h.log.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		fn(&callProc{ctx: ctx})
 	}()
 }
@@ -235,7 +245,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
-		log.Global.WithFields(log.Fields{
+		h.log.WithFields(log.Fields{
 			"reqid": idForLog{msg.ID},
 			"t":     time.Since(start),
 		}).Trace("Handled RPC response")
@@ -249,7 +259,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 	var result subscriptionResult
 	if err := json.Unmarshal(msg.Params, &result); err != nil {
-		log.Global.Debug("Dropping invalid subscription message")
+		h.log.Debug("Dropping invalid subscription message")
 		return
 	}
 	if h.clientSubs[result.ID] != nil {
@@ -261,7 +271,7 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	op := h.respWait[string(msg.ID)]
 	if op == nil {
-		log.Global.WithField("reqid", idForLog{msg.ID}).Debug("Unsolicited RPC response")
+		h.log.WithField("reqid", idForLog{msg.ID}).Debug("Unsolicited RPC response")
 		return
 	}
 	delete(h.respWait, string(msg.ID))
@@ -274,6 +284,14 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	// indicates success. EthSubscribe gets unblocked in either case through
 	// the op.resp channel.
 	defer close(op.resp)
+	defer func() {
+		if r := recover(); r != nil {
+			h.log.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	if msg.Error != nil {
 		op.err = msg.Error
 		return
@@ -290,7 +308,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	switch {
 	case msg.isNotification():
 		h.handleCall(ctx, msg)
-		log.Global.WithField("t", time.Since(start)).Debug("Served " + msg.Method)
+		h.log.WithField("t", time.Since(start)).Debug("Served " + msg.Method)
 		return nil
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
@@ -301,9 +319,9 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			log.Global.Warn(ctx, "Served "+msg.Method)
+			h.log.Warn(ctx, "Served "+msg.Method)
 		} else {
-			log.Global.Debug("Served " + msg.Method)
+			h.log.Debug("Served " + msg.Method)
 		}
 		return resp
 	case msg.hasValidID():
@@ -370,7 +388,7 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 
 // runMethod runs the Go callback for an RPC method.
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
-	result, err := callb.call(ctx, msg.Method, args)
+	result, err := callb.call(ctx, msg.Method, args, h.log)
 	if err != nil {
 		return msg.errorResponse(err)
 	}

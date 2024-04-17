@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"io"
+	"runtime/debug"
 	"sync/atomic"
 
 	mapset "github.com/deckarep/golang-set"
@@ -47,11 +48,12 @@ type Server struct {
 	idgen    func() ID
 	run      int32
 	codecs   mapset.Set
+	log      *log.Logger
 }
 
 // NewServer creates a new server instance with no registered handlers.
-func NewServer() *Server {
-	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1}
+func NewServer(log *log.Logger) *Server {
+	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1, log: log}
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
@@ -73,6 +75,14 @@ func (s *Server) RegisterName(name string, receiver interface{}) error {
 //
 // Note that codec options are no longer supported.
 func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.log.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	defer codec.close()
 
 	// Don't serve if server is stopped.
@@ -84,7 +94,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	s.codecs.Add(codec)
 	defer s.codecs.Remove(codec)
 
-	c := initClient(codec, s.idgen, &s.services)
+	c := initClient(codec, s.idgen, &s.services, s.log)
 	<-codec.closed()
 	c.Close()
 }
@@ -98,7 +108,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 
-	h := newHandler(ctx, codec, s.idgen, &s.services)
+	h := newHandler(ctx, codec, s.idgen, &s.services, s.log)
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 
@@ -121,7 +131,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 // subscriptions.
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
-		log.Global.Debug("RPC server shutting down")
+		s.log.Debug("RPC server shutting down")
 		s.codecs.Each(func(c interface{}) bool {
 			c.(ServerCodec).close()
 			return true

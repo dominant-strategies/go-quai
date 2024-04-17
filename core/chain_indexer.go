@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -174,6 +175,14 @@ func (c *ChainIndexer) Close() error {
 // started for the outermost indexer to push chain head events into a processing
 // queue.
 func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan ChainHeadEvent, sub event.Subscription, nodeCtx int) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
@@ -265,6 +274,14 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 // updateLoop is the main event loop of the indexer which pushes chain segments
 // down into the processing backend.
 func (c *ChainIndexer) updateLoop(nodeCtx int) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	var (
 		updating bool
 		updated  time.Time

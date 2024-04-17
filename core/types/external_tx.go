@@ -6,7 +6,6 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/log"
 )
 
 type ExternalTx struct {
@@ -37,7 +36,6 @@ type PendingEtxsRollup struct {
 
 func (p *PendingEtxsRollup) IsValid(hasher TrieHasher) bool {
 	if p == nil || p.Header == nil || p.EtxsRollup == nil {
-		log.Global.WithField("p", p).Info("PendingEtxRollup: p/p.Header/p.EtxRollup is nil")
 		return false
 	}
 	return DeriveSha(p.EtxsRollup, hasher) == p.Header.EtxRollupHash()
@@ -92,7 +90,6 @@ type PendingEtxs struct {
 
 func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
 	if p == nil || p.Header == nil || p.Etxs == nil {
-		log.Global.WithField("p", p).Info("PendingEtx: p/p.Header/p.Etxs is nil")
 		return false
 	}
 	return DeriveSha(p.Etxs, hasher) == p.Header.EtxHash()

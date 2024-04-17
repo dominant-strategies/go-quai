@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"math/big"
+	"runtime/debug"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/sirupsen/logrus"
@@ -18,6 +19,14 @@ import (
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
 func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	defer stream.Close()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 
 	log.Global.Debugf("Received a new stream from %s", stream.Conn().RemotePeer())
 
@@ -46,6 +55,14 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 }
 
 func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	quaiMsg, err := pb.DecodeQuaiMessage(data)
 	if err != nil {
 		log.Global.Errorf("error decoding quai message: %s", err)

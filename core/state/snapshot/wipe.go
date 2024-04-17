@@ -18,6 +18,7 @@ package snapshot
 
 import (
 	"bytes"
+	"runtime/debug"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -38,8 +39,16 @@ func wipeSnapshot(db ethdb.KeyValueStore, full bool) chan struct{} {
 	// Wipe everything else asynchronously
 	wiper := make(chan struct{}, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				db.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		if err := wipeContent(db); err != nil {
-			log.Global.WithField("err", err).Error("Failed to wipe state snapshot") // Database close will trigger this
+			db.Logger().WithField("err", err).Error("Failed to wipe state snapshot") // Database close will trigger this
 			return
 		}
 		close(wiper)
@@ -62,21 +71,21 @@ func wipeContent(db ethdb.KeyValueStore) error {
 	// Compact the snapshot section of the database to get rid of unused space
 	start := time.Now()
 
-	log.Global.Info("Compacting snapshot account area ")
+	db.Logger().Info("Compacting snapshot account area ")
 	end := common.CopyBytes(rawdb.SnapshotAccountPrefix)
 	end[len(end)-1]++
 
 	if err := db.Compact(rawdb.SnapshotAccountPrefix, end); err != nil {
 		return err
 	}
-	log.Global.Info("Compacting snapshot storage area ")
+	db.Logger().Info("Compacting snapshot storage area ")
 	end = common.CopyBytes(rawdb.SnapshotStoragePrefix)
 	end[len(end)-1]++
 
 	if err := db.Compact(rawdb.SnapshotStoragePrefix, end); err != nil {
 		return err
 	}
-	log.Global.WithField("elapsed", common.PrettyDuration(time.Since(start))).Info("Compacted snapshot area in database")
+	db.Logger().WithField("elapsed", common.PrettyDuration(time.Since(start))).Info("Compacted snapshot area in database")
 
 	return nil
 }
@@ -127,7 +136,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 			it = db.NewIterator(prefix, seekPos)
 
 			if time.Since(logged) > 8*time.Second && report {
-				log.Global.WithFields(log.Fields{
+				db.Logger().WithFields(log.Fields{
 					"kind":    kind,
 					"wiped":   items,
 					"elapsed": common.PrettyDuration(time.Since(start)),
@@ -141,7 +150,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, origin []b
 		return err
 	}
 	if report {
-		log.Global.WithFields(log.Fields{
+		db.Logger().WithFields(log.Fields{
 			"kind":    kind,
 			"wiped":   items,
 			"elapsed": common.PrettyDuration(time.Since(start)),

@@ -1,6 +1,7 @@
 package node
 
 import (
+	"runtime/debug"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
@@ -18,6 +19,14 @@ func (p *P2PNode) connectionStats() (int, int, int) {
 }
 
 func (p *P2PNode) statsLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	ticker := time.NewTicker(30 * time.Second)
 	for {
 		select {

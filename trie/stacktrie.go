@@ -26,7 +26,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
@@ -198,7 +197,7 @@ func (st *StackTrie) TryUpdate(key, value []byte) error {
 
 func (st *StackTrie) Update(key, value []byte) {
 	if err := st.TryUpdate(key, value); err != nil {
-		log.Global.WithField("err", err).Error("Unhandled trie error")
+		st.db.Logger().WithField("err", err).Error("Unhandled trie error")
 	}
 }
 

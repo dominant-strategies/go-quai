@@ -3,6 +3,7 @@ package pubsubManager
 import (
 	"context"
 	"errors"
+	"runtime/debug"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -95,6 +96,15 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	g.subscriptions[topicName] = subscription
 
 	go func(location common.Location, sub *pubsub.Subscription) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+					"location":   location.Name(),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		log.Global.Debugf("waiting for first message on subscription: %s", sub.Topic())
 		for {
 			msg, err := sub.Next(g.ctx)

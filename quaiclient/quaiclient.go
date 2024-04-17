@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"runtime/debug"
 	"time"
 
 	quai "github.com/dominant-strategies/go-quai"
@@ -147,6 +148,15 @@ func (ec *Client) SubRelayPendingHeader(ctx context.Context, pendingHeader types
 }
 
 func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":       r,
+				"stacktrace":  string(debug.Stack()),
+				"to location": location.Name(),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	data := map[string]interface{}{"header": pendingHeader.WorkObject().RPCMarshalWorkObject()}
 	data["OldTerminus"] = oldTerminus
 	data["Location"] = location
@@ -156,6 +166,14 @@ func (ec *Client) UpdateDom(ctx context.Context, oldTerminus common.Hash, pendin
 }
 
 func (ec *Client) RequestDomToAppendOrFetch(ctx context.Context, hash common.Hash, entropy *big.Int, order int) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	data := map[string]interface{}{"Hash": hash}
 	data["Entropy"] = entropy
 	data["Order"] = order

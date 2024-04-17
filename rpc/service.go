@@ -181,7 +181,7 @@ func (c *callback) makeArgTypes() {
 }
 
 // call invokes the callback.
-func (c *callback) call(ctx context.Context, method string, args []reflect.Value) (res interface{}, errRes error) {
+func (c *callback) call(ctx context.Context, method string, args []reflect.Value, logger *log.Logger) (res interface{}, errRes error) {
 	// Create the argument slice.
 	fullargs := make([]reflect.Value, 0, 2+len(args))
 	if c.rcvr.IsValid() {
@@ -198,7 +198,7 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			log.Global.WithField("err", fmt.Sprintf("%v\n%s", err, buf)).Error("RPC method " + method + " crashed")
+			logger.WithField("err", fmt.Sprintf("%v\n%s", err, buf)).Error("RPC method " + method + " crashed")
 			errRes = errors.New("method handler crashed")
 		}
 	}()

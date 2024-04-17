@@ -55,30 +55,34 @@ func (f stateBloomHasher) Sum64() uint64                     { return binary.Big
 // After the entire state is generated, the bloom filter should be persisted into
 // the disk. It indicates the whole generation procedure is finished.
 type stateBloom struct {
-	bloom *bloomfilter.Filter
+	bloom  *bloomfilter.Filter
+	logger *log.Logger
 }
 
-// newStateBloomWithSize creates a brand new state bloom for state generation.
+func (sb *stateBloom) Logger() *log.Logger {
+	return sb.logger
+}
+
 // The bloom filter will be created by the passing bloom filter size. According
 // to the https://hur.st/bloomfilter/?n=600000000&p=&m=2048MB&k=4, the parameters
 // are picked so that the false-positive rate for mainnet is low enough.
-func newStateBloomWithSize(size uint64) (*stateBloom, error) {
+func newStateBloomWithSize(size uint64, logger *log.Logger) (*stateBloom, error) {
 	bloom, err := bloomfilter.New(size*1024*1024*8, 4)
 	if err != nil {
 		return nil, err
 	}
-	log.Global.WithField("size", common.StorageSize(float64(size))).Info("Initialized state bloom")
-	return &stateBloom{bloom: bloom}, nil
+	logger.WithField("size", common.StorageSize(float64(size))).Info("Initialized state bloom")
+	return &stateBloom{bloom: bloom, logger: logger}, nil
 }
 
 // NewStateBloomFromDisk loads the state bloom from the given file.
 // In this case the assumption is held the bloom filter is complete.
-func NewStateBloomFromDisk(filename string) (*stateBloom, error) {
+func NewStateBloomFromDisk(filename string, logger *log.Logger) (*stateBloom, error) {
 	bloom, _, err := bloomfilter.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	return &stateBloom{bloom: bloom}, nil
+	return &stateBloom{bloom: bloom, logger: logger}, nil
 }
 
 // Commit flushes the bloom filter content into the disk and marks the bloom

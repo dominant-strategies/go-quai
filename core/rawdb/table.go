@@ -19,6 +19,7 @@ package rawdb
 import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // table is a wrapper around a database that prefixes each key access with a pre-
@@ -27,19 +28,25 @@ type table struct {
 	db       ethdb.Database
 	prefix   string
 	location common.Location
+	logger   *log.Logger
 }
 
 // NewTable returns a database object that prefixes all keys with a given string.
-func NewTable(db ethdb.Database, prefix string, location common.Location) ethdb.Database {
+func NewTable(db ethdb.Database, prefix string, location common.Location, logger *log.Logger) ethdb.Database {
 	return &table{
 		db:       db,
 		prefix:   prefix,
 		location: location,
+		logger:   logger,
 	}
 }
 
 func (t *table) Location() common.Location {
 	return t.location
+}
+
+func (t *table) Logger() *log.Logger {
+	return t.logger
 }
 
 // Close is a noop to implement the Database interface.
@@ -202,6 +209,10 @@ func (b *tableBatch) Reset() {
 	b.batch.Reset()
 }
 
+func (b *tableBatch) Logger() *log.Logger {
+	return b.batch.Logger()
+}
+
 // tableReplayer is a wrapper around a batch replayer which truncates
 // the added prefix.
 type tableReplayer struct {
@@ -219,6 +230,10 @@ func (r *tableReplayer) Put(key []byte, value []byte) error {
 func (r *tableReplayer) Delete(key []byte) error {
 	trimmed := key[len(r.prefix):]
 	return r.w.Delete(trimmed)
+}
+
+func (r *tableReplayer) Logger() *log.Logger {
+	return r.w.Logger()
 }
 
 // Replay replays the batch contents.

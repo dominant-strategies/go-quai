@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime/debug"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -70,6 +71,7 @@ type generatorStats struct {
 	accounts uint64             // Number of accounts indexed(generated or recovered)
 	slots    uint64             // Number of storage slots indexed(generated or recovered)
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
+	logger   *log.Logger
 }
 
 // Log creates an contextual log with the given message and the context pulled
@@ -107,7 +109,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 			}...)
 		}
 	}
-	log.Global.WithField("ctx", ctx).Info(msg)
+	gs.logger.WithField("ctx", ctx).Info(msg)
 }
 
 // generateSnapshot regenerates a brand new snapshot based on an existing state
@@ -116,14 +118,14 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) *diskLayer {
 	// Create a new disk layer with an initialized state marker at zero
 	var (
-		stats     = &generatorStats{start: time.Now()}
+		stats     = &generatorStats{start: time.Now(), logger: diskdb.Logger()}
 		batch     = diskdb.NewBatch()
 		genMarker = []byte{} // Initialized but empty!
 	)
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, genMarker, stats)
 	if err := batch.Write(); err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to write initialized state marker")
+		diskdb.Logger().WithField("err", err).Fatal("Failed to write initialized state marker")
 	}
 	base := &diskLayer{
 		diskdb:     diskdb,
@@ -135,7 +137,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		genAbort:   make(chan chan *generatorStats),
 	}
 	go base.generate(stats)
-	log.Global.WithField("root", root).Debug("Started snapshot generation")
+	diskdb.Logger().WithField("root", root).Debug("Started snapshot generation")
 	return base
 }
 
@@ -168,7 +170,7 @@ func journalProgress(db ethdb.KeyValueWriter, marker []byte, stats *generatorSta
 	default:
 		logstr = fmt.Sprintf("%#x:%#x", marker[:common.HashLength], marker[common.HashLength:])
 	}
-	log.Global.WithField("progress", logstr).Debug("Journalled generator progress")
+	db.Logger().WithField("progress", logstr).Debug("Journalled generator progress")
 	rawdb.WriteSnapshotGenerator(db, blob)
 }
 
@@ -221,7 +223,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	var (
 		keys     [][]byte
 		vals     [][]byte
-		proof    = rawdb.NewMemoryDatabase()
+		proof    = rawdb.NewMemoryDatabase(stats.logger)
 		diskMore = false
 	)
 	iter := dl.diskdb.NewIterator(prefix, origin)
@@ -252,7 +254,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 				// Here append the original value to ensure that the number of key and
 				// value are the same.
 				vals = append(vals, common.CopyBytes(iter.Value()))
-				log.Global.WithField("err", err).Error("Failed to convert account state data")
+				stats.logger.WithField("err", err).Error("Failed to convert account state data")
 			} else {
 				vals = append(vals, val)
 			}
@@ -289,7 +291,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 		origin = common.Hash{}.Bytes()
 	}
 	if err := tr.Prove(origin, 0, proof); err != nil {
-		log.Global.WithFields(log.Fields{
+		stats.logger.WithFields(log.Fields{
 			"kind":   kind,
 			"origin": origin,
 			"err":    err,
@@ -304,7 +306,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 	}
 	if last != nil {
 		if err := tr.Prove(last, 0, proof); err != nil {
-			log.Global.WithFields(log.Fields{
+			stats.logger.WithFields(log.Fields{
 				"kind": kind,
 				"last": last,
 				"err":  err,
@@ -359,7 +361,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 
 	// The range prover says the range is correct, skip trie iteration
 	if result.valid() {
-		log.Global.WithField("last", hexutil.Encode(last)).Debug("Proved state range")
+		stats.logger.WithFields(log.Fields{"last": hexutil.Encode(last), "ctx": logCtx}).Debug("Proved state range")
 
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
@@ -370,7 +372,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// Only abort the iteration when both database and trie are exhausted
 		return !result.diskMore && !result.trieMore, last, nil
 	}
-	log.Global.WithFields(log.Fields{
+	stats.logger.WithFields(log.Fields{
 		"last": hexutil.Encode(last),
 		"err":  result.proofErr,
 	}).Trace("Detected outdated state range")
@@ -379,7 +381,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	// main account trie as a primary lookup when resolving hashes
 	var snapNodeCache ethdb.KeyValueStore
 	if len(result.keys) > 0 {
-		snapNodeCache = memorydb.New()
+		snapNodeCache = memorydb.New(stats.logger)
 		snapTrieDb := trie.NewDatabase(snapNodeCache)
 		snapTrie, _ := trie.New(common.Hash{}, snapTrieDb)
 		for i, key := range result.keys {
@@ -466,7 +468,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	}
 	internal += time.Since(istart)
 
-	log.Global.WithFields(log.Fields{
+	stats.logger.WithFields(log.Fields{
 		"root":      root,
 		"last":      hexutil.Encode(last),
 		"count":     count,
@@ -486,6 +488,14 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 // gathering and logging, since the method surfs the blocks as they arrive, often
 // being restarted.
 func (dl *diskLayer) generate(stats *generatorStats) {
+	defer func() {
+		if r := recover(); r != nil {
+			stats.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	var (
 		accMarker    []byte
 		accountRange = accountCheckRange
@@ -558,7 +568,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			CodeHash []byte
 		}
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
-			log.Global.WithField("err", err).Fatal("Invalid account encountered during snapshot creation")
+			stats.logger.WithField("err", err).Fatal("Invalid account encountered during snapshot creation")
 		}
 		// If the account is not yet in-progress, write it out
 		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
@@ -661,7 +671,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// generator anyway to mark the snapshot is complete.
 	journalProgress(batch, nil, stats)
 	if err := batch.Write(); err != nil {
-		log.Global.WithField("err", err).Error("Failed to flush batch")
+		stats.logger.WithField("err", err).Error("Failed to flush batch")
 
 		abort = <-dl.genAbort
 		abort <- stats
@@ -669,7 +679,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	}
 	batch.Reset()
 
-	log.Global.WithFields(log.Fields{
+	stats.logger.WithFields(log.Fields{
 		"accounts": stats.accounts,
 		"slots":    stats.slots,
 		"storage":  stats.storage,

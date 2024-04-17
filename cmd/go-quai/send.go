@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -173,6 +174,14 @@ func readWithTimeout(buf *bufio.Reader, ctx context.Context) (string, error) {
 	defer ticker.Stop()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		response, err := buf.ReadString('\n')
 		if err != nil {
 			errChan <- err

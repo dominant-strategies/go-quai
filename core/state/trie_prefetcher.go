@@ -17,6 +17,7 @@
 package state
 
 import (
+	"runtime/debug"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -233,11 +234,19 @@ func (sf *subfetcher) abort() {
 func (sf *subfetcher) loop() {
 	// No matter how the loop stops, signal anyone waiting that it's terminated
 	defer close(sf.term)
+	defer func() {
+		if r := recover(); r != nil {
+			sf.db.Logger().WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 
 	// Start by opening the trie and stop processing if it fails
 	trie, err := sf.db.OpenTrie(sf.root)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
+		sf.db.Logger().WithFields(log.Fields{
 			"root": sf.root,
 			"err":  err,
 		}).Warn("Trie prefetcher failed opening trie")

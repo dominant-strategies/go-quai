@@ -18,10 +18,12 @@ package event
 
 import (
 	"context"
+	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common/mclock"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Subscription represents a stream of events. The carrier of the events is typically a
@@ -49,6 +51,14 @@ type Subscription interface {
 func NewSubscription(producer func(<-chan struct{}) error) Subscription {
 	s := &funcSub{unsub: make(chan struct{}), err: make(chan error, 1)}
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		defer close(s.err)
 		err := producer(s.unsub)
 		s.mu.Lock()
@@ -154,6 +164,14 @@ func (s *resubscribeSub) Err() <-chan error {
 
 func (s *resubscribeSub) loop() {
 	defer close(s.err)
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	var done bool
 	for !done {
 		sub := s.subscribe()
@@ -172,6 +190,14 @@ func (s *resubscribeSub) subscribe() Subscription {
 		s.lastTry = mclock.Now()
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Global.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			rsub, err := s.fn(ctx, s.lastSubErr)
 			sub = rsub
 			subscribed <- err

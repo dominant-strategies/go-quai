@@ -165,7 +165,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	if sp.cacheConfig.SnapshotLimit > 0 {
 		// TODO: If the state is not available, enable snapshot recovery
 		head := hc.CurrentHeader()
-		sp.snaps, _ = snapshot.New(hc.headerDb, sp.stateCache.TrieDB(), sp.cacheConfig.SnapshotLimit, head.EVMRoot(), true, false)
+		sp.snaps, _ = snapshot.New(hc.headerDb, sp.stateCache.TrieDB(), sp.cacheConfig.SnapshotLimit, head.EVMRoot(), true, false, sp.logger)
 	}
 	if txLookupLimit != nil {
 		sp.txLookupLimit = *txLookupLimit
@@ -224,7 +224,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		parentUtxoRoot = types.EmptyRootHash
 	}
 	// Initialize a statedb
-	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, p.stateCache, p.utxoCache, p.snaps, nodeLocation)
+	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, p.stateCache, p.utxoCache, p.snaps, nodeLocation, p.logger)
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, err
 	}
@@ -928,7 +928,7 @@ func (p *StateProcessor) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (p *StateProcessor) StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error) {
-	return state.New(root, utxoRoot, p.stateCache, p.utxoCache, p.snaps, p.hc.NodeLocation())
+	return state.New(root, utxoRoot, p.stateCache, p.utxoCache, p.snaps, p.hc.NodeLocation(), p.logger)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1060,7 +1060,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		// we would rewind past a persisted block (specific corner case is chain
 		// tracing from the genesis).
 		if !checkLive {
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				return statedb, nil
 			}
@@ -1077,7 +1077,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			}
 			current = types.CopyWorkObject(parent)
 
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				break
 			}
@@ -1123,7 +1123,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		}
 		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash())
 		etxSet.Update(inboundEtxs, nodeLocation, func(hash common.Hash, etx *types.Transaction) {
-			rawdb.WriteETX(rawdb.NewMemoryDatabase(), hash, etx)
+			rawdb.WriteETX(rawdb.NewMemoryDatabase(p.logger), hash, etx)
 		})
 
 		currentBlock := rawdb.ReadWorkObject(p.hc.bc.db, current.Hash(), types.BlockObject)
@@ -1145,7 +1145,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
-		statedb, err = state.New(root, utxoRoot, database, utxoDatabase, nil, nodeLocation)
+		statedb, err = state.New(root, utxoRoot, database, utxoDatabase, nil, nodeLocation, p.logger)
 		if err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}

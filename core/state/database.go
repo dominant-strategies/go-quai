@@ -24,6 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -55,6 +56,9 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
+
+	// Logger returns the logger used by the database.
+	Logger() *log.Logger
 }
 
 // Trie is a Quai Merkle Patricia trie.
@@ -118,6 +122,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		db:            trie.NewDatabaseWithConfig(db, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
+		logger:        db.Logger(),
 	}
 }
 
@@ -125,6 +130,7 @@ type cachingDB struct {
 	db            *trie.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
+	logger        *log.Logger
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -197,4 +203,8 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *trie.Database {
 	return db.db
+}
+
+func (db *cachingDB) Logger() *log.Logger {
+	return db.logger
 }
