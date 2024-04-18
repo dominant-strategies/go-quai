@@ -67,6 +67,9 @@ func severStream(key interface{}, value interface{}) {
 	if err != nil {
 		log.Global.WithField("err", err).Error("Failed to close stream")
 	}
+	if streamMetrics != nil {
+		streamMetrics.WithLabelValues("NumStreams").Dec()
+	}
 }
 
 func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
@@ -99,6 +102,9 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 		sm.streamCache.Add(peerID, stream)
 		go quaiprotocol.QuaiProtocolHandler(stream.(network.Stream), sm.p2pBackend)
 		log.Global.Debug("Had to create new stream")
+		if streamMetrics != nil {
+			streamMetrics.WithLabelValues("NumStreams").Inc()
+		}
 	} else {
 		log.Global.Trace("Requested stream was found in cache")
 	}

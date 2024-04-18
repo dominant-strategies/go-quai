@@ -54,9 +54,15 @@ func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
 	switch {
 	case quaiMsg.GetRequest() != nil:
 		handleRequest(quaiMsg.GetRequest(), stream, node)
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("requests").Inc()
+		}
 
 	case quaiMsg.GetResponse() != nil:
 		handleResponse(quaiMsg.GetResponse(), node)
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("responses").Inc()
+		}
 
 	default:
 		log.Global.WithField("quaiMsg", quaiMsg).Errorf("unsupported quai message type")
@@ -118,6 +124,9 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			// TODO: handle error
 			return
 		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("blocks").Inc()
+		}
 	case *types.Header:
 		requestedHash := query.(*common.Hash)
 		err = handleHeaderRequest(id, loc, *requestedHash, stream, node)
@@ -126,6 +135,9 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			// TODO: handle error
 			return
 		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("headers").Inc()
+		}
 	case *types.Transaction:
 		requestedHash := query.(*common.Hash)
 		err = handleTransactionRequest(id, loc, *requestedHash, stream, node)
@@ -133,6 +145,9 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			log.Global.WithField("err", err).Error("error handling transaction request")
 			// TODO: handle error
 			return
+		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("transactions").Inc()
 		}
 	case *common.Hash:
 		number := query.(*big.Int)

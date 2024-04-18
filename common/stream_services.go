@@ -30,6 +30,9 @@ func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 		return nil, errors.Wrap(err, "failed to read message")
 	}
 
+	if messageMetrics != nil {
+		messageMetrics.WithLabelValues("received").Inc()
+	}
 	return data, nil
 }
 
@@ -52,6 +55,10 @@ func WriteMessageToStream(stream network.Stream, msg []byte) error {
 	_, err := stream.Write(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to write message to stream")
+	}
+
+	if messageMetrics != nil {
+		messageMetrics.WithLabelValues("sent").Inc()
 	}
 	return nil
 }
