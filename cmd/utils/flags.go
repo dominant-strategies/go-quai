@@ -812,7 +812,7 @@ func GetHttpPort(nodeLocation common.Location) int {
 	case common.REGION_CTX:
 		return 9002 + nodeLocation.Region()
 	case common.ZONE_CTX:
-		return 9100 + 20*nodeLocation.Region() + nodeLocation.Zone()
+		return 9200 + 20*nodeLocation.Region() + nodeLocation.Zone()
 	}
 	panic("node location is not valid")
 }
@@ -849,7 +849,7 @@ func GetWSPort(nodeLocation common.Location) int {
 	case common.REGION_CTX:
 		return 8002 + nodeLocation.Region()
 	case common.ZONE_CTX:
-		return 8100 + 20*nodeLocation.Region() + nodeLocation.Zone()
+		return 8200 + 20*nodeLocation.Region() + nodeLocation.Zone()
 	}
 	panic("node location is not valid")
 }

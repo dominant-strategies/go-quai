@@ -1,0 +1,8 @@
+global:
+  scrape_interval:     1s
+  evaluation_interval: 1s
+
+scrape_configs:
+  - job_name: 'go-quai'
+    static_configs:
+    - targets: [localhost:2112]
