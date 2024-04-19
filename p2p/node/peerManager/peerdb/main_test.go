@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
@@ -25,7 +26,8 @@ func setupDB(t *testing.T) (*PeerDB, func()) {
 	t.Helper()
 	viper.GetViper().Set(utils.DataDirFlag.Name, os.TempDir())
 	dbDir := "testdb"
-	locationName := "zone-0-0"
+	location := common.Location{0, 0}
+	locationName := location.Name()
 
 	// creat a new peerdb
 	ps, err := NewPeerDB(dbDir, locationName)
