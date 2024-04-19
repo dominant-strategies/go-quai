@@ -38,7 +38,7 @@ var (
 // the signer used to derive it.
 type sigCache struct {
 	signer Signer
-	from   common.Address
+	from   common.AddressBytes
 }
 
 // MakeSigner returns a Signer based on the given chain config and block number.
@@ -117,7 +117,7 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 		// call is not the same as used current, invalidate
 		// the cache.
 		if sigCache.signer.Equal(signer) {
-			return sigCache.from, nil
+			return common.Bytes20ToAddress(sigCache.from, signer.Location()), nil
 		}
 	}
 
@@ -125,7 +125,7 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	if err != nil {
 		return common.Zero, err
 	}
-	tx.from.Store(sigCache{signer: signer, from: addr})
+	tx.from.Store(sigCache{signer: signer, from: addr.Bytes20()})
 	return addr, nil
 }
 

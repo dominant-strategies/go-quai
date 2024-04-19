@@ -702,7 +702,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	var internal common.InternalAddress
 	addToCache := true
-	if sender := tx.From(); sender != nil { // Check tx cache first
+	if sender := tx.From(pool.chainconfig.Location); sender != nil { // Check tx cache first
 		var err error
 		internal, err = sender.InternalAndQuaiAddress()
 		if err != nil {
@@ -1056,7 +1056,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock
-		if sender := tx.From(); sender != nil {
+		if sender := tx.From(pool.chainconfig.Location); sender != nil {
 			var err error
 			_, err = sender.InternalAndQuaiAddress()
 			if err != nil {

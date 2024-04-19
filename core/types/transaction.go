@@ -525,11 +525,12 @@ func (tx *Transaction) GetSchnorrSignature() *schnorr.Signature {
 	return tx.inner.getSchnorrSignature()
 }
 
-func (tx *Transaction) From() *common.Address {
+func (tx *Transaction) From(nodeLocation common.Location) *common.Address {
 	sc := tx.from.Load()
 	if sc != nil {
 		sigCache := sc.(sigCache)
-		return &sigCache.from
+		addr := common.Bytes20ToAddress(sigCache.from, nodeLocation)
+		return &addr
 	} else {
 		return nil
 	}
