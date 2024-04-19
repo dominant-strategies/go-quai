@@ -98,7 +98,10 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 			log.Global.Error("no backend found")
 			return false
 		}
-		backend.SendRemoteTx(&tx)
+		// check if the backend is processing state before adding the tx
+		if backend.ProcessingState() {
+			backend.SendRemoteTx(&tx)
+		}
 		// TODO: Handle the error here and mark the peers accordingly
 	}
 
