@@ -447,20 +447,19 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	}).Info("Times during sub append")
 
 	sl.logger.WithFields(log.Fields{
-		"dom number":  block.Header().NumberArray(),
-		"zone number": block.Number(common.ZONE_CTX),
-		"hash":        block.Hash(),
-		"difficulty":  block.Difficulty(),
-		"uncles":      len(block.Uncles()),
-		"txs":         len(block.Transactions()),
-		"etxs":        len(block.ExtTransactions()),
-		"utxos":       len(block.QiTransactions()),
-		"gas":         block.GasUsed(),
-		"gasLimit":    block.GasLimit(),
-		"evmRoot":     block.EVMRoot(),
-		"order":       order,
-		"location":    block.Location(),
-		"elapsed":     common.PrettyDuration(time.Since(start)),
+		"number":     block.NumberArray(),
+		"hash":       block.Hash(),
+		"difficulty": block.Difficulty(),
+		"uncles":     len(block.Uncles()),
+		"txs":        len(block.Transactions()),
+		"etxs":       len(block.ExtTransactions()),
+		"utxos":      len(block.QiTransactions()),
+		"gas":        block.GasUsed(),
+		"gasLimit":   block.GasLimit(),
+		"evmRoot":    block.EVMRoot(),
+		"order":      order,
+		"location":   block.Location(),
+		"elapsed":    common.PrettyDuration(time.Since(start)),
 	}).Info("Appended new block")
 
 	if nodeCtx == common.ZONE_CTX {
