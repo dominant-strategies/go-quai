@@ -467,7 +467,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 
 	if chain.IsGenesisHash(parent.Hash()) {
 		// Genesis Difficulty is the difficulty in the Genesis Block divided by the number of total slices active
-		return new(big.Int).Div(parent.Difficulty(), big.NewInt(int64((progpow.NodeLocation().Region()+1)*(progpow.NodeLocation().Zone()+1))))
+		return parent.Difficulty()
 	}
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
 	if parentOfParent == nil || chain.IsGenesisHash(parentOfParent.Hash()) {

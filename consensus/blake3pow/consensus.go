@@ -468,7 +468,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 
 	if chain.IsGenesisHash(parent.Hash()) {
 		// Divide the parent difficulty by the number of slices running at the time of expansion
-		return new(big.Int).Div(parent.Difficulty(), big.NewInt(int64((blake3pow.NodeLocation().Region()+1)*(blake3pow.NodeLocation().Zone()+1))))
+		return parent.Difficulty()
 	}
 
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
