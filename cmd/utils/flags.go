@@ -877,14 +877,14 @@ func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location, currentExp
 	case common.PRIME_CTX:
 		subUrls := make([]string, common.MaxWidth)
 		for i := 0; i < int(currentRegions); i++ {
-			subUrls[i] = fmt.Sprintf("ws://127.0.0.1:%d", 8002+int(i))
+			subUrls[i] = fmt.Sprintf("ws://127.0.0.1:%d", GetWSPort(common.Location{byte(i)}))
 		}
 		cfg.SubUrls = subUrls
 	case common.REGION_CTX:
 		suburls := make([]string, common.MaxWidth)
 		// Add the zones belonging to the region into the suburls list
 		for i := 0; i < int(currentZones); i++ {
-			suburls[i] = fmt.Sprintf("ws://127.0.0.1:%d", 8100+20*nodeLocation.Region()+i)
+			suburls[i] = fmt.Sprintf("ws://127.0.0.1:%d", GetWSPort(common.Location{byte(nodeLocation.Region()), byte(i)}))
 		}
 		cfg.SubUrls = suburls
 	}
