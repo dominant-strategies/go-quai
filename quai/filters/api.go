@@ -211,7 +211,7 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 // https://eth.wiki/json-rpc/API#eth_newblockfilter
 func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 	var (
-		headers   = make(chan *types.Header)
+		headers   = make(chan *types.WorkObject)
 		headerSub = api.events.SubscribeNewHeads(headers)
 	)
 
@@ -266,14 +266,14 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 				}).Fatal("Go-Quai Panicked")
 			}
 		}()
-		headers := make(chan *types.Header)
+		headers := make(chan *types.WorkObject)
 		headersSub := api.events.SubscribeNewHeads(headers)
 
 		for {
 			select {
 			case h := <-headers:
 				// Marshal the header data
-				marshalHeader := h.RPCMarshalHeader()
+				marshalHeader := h.RPCMarshalWorkObject()
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
