@@ -487,7 +487,7 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*bi
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
 func RPCMarshalBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeLocation common.Location) (map[string]interface{}, error) {
-	fields := block.Header().RPCMarshalHeader()
+	fields := block.RPCMarshalWorkObject()
 	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
