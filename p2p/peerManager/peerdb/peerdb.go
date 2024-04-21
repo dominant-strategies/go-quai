@@ -7,7 +7,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/viper"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -15,24 +14,6 @@ import (
 var (
 	ErrPeerNotFound = leveldb.ErrNotFound
 )
-
-// contains the information of a peer
-// that is stored in the peerDB as Value
-type PeerInfo struct {
-	AddrInfo  peer.AddrInfo
-	PubKey    []byte
-	Entropy   uint64
-	Protected bool
-}
-
-// PeerDB implements the ipfs Datastore interface
-// and exposes an API for storing and retrieving peers
-// using levelDB as the underlying database
-type PeerDB struct {
-	db          *leveldb.DB
-	peerCounter int
-	mu          sync.Mutex
-}
 
 // Returns a new PeerDB instance
 func NewPeerDB(dbDirName string, locationName string) (*PeerDB, error) {

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package peerdb;
+option go_package = "github.com/dominant-strategies/go-quai/peerManager/peerdb";
+
+message ProtoPeerInfo {
+    ProtoAddrInfo addrInfo = 1;
+    bytes pubKey = 2;
+    uint64 entropy = 3;
+    bool protected = 4;
+}
+
+message ProtoAddrInfo {
+    string ID = 1;
+    repeated string Addrs = 2;
+}
