@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.starlark.net/lib/proto"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
@@ -170,9 +171,7 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 	logger := log.NewLogger("nodelogs/peers.log", "debug")
 
 	go func() {
-		q := query.Query{
-			Prefix: "/peers",
-		}
+		q := query.Query{}
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
@@ -185,7 +184,6 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 				for locName, location := range peerDBs {
 					locPeer := []log.Fields{}
 					for dbName, db := range location {
-						peerCount := db.GetPeerCount()
 						results, err := db.Query(ctx, q)
 						if err != nil {
 							logger.Errorf("Error querying peerDB: %s", err)
@@ -197,14 +195,20 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 								logger.Errorf("Error decoding peer ID: %s", err)
 								continue
 							}
+							peerInfo := &peerdb.ProtoPeerInfo{}
+							err = proto.Unmarshal(result.Value, peerInfo)
+							if err != nil {
+								logger.Errorf("Error unmarshaling peer info: %s", err)
+								continue
+							}
 							locPeer = append(locPeer, log.Fields{
 								"peerID": peerID,
-								"info":   result.Value,
+								"info":   peerInfo.String(),
 							})
 						}
 						logger.WithFields(log.Fields{
 							"location":  locName,
-							"peerCount": peerCount,
+							"peerCount": len(locPeer),
 							"bucket":    dbName,
 							"peers":     locPeer}).Info("Peer stats")
 					}
