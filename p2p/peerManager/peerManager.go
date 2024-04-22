@@ -15,12 +15,14 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/streamManager"
 
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
 
 	"github.com/dominant-strategies/go-quai/p2p/peerManager/peerdb"
+	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -67,6 +69,9 @@ type PeerManager interface {
 	// Sets the ID for the node running the peer manager
 	SetSelfID(p2p.PeerID)
 
+	// Sets the DHT provided from the Host interface
+	SetDHT(*dual.DHT)
+
 	// Manages stream lifecycles
 	streamManager.StreamManager
 
@@ -77,6 +82,7 @@ type PeerManager interface {
 
 	// Returns c_peerCount peers starting at the requested quality level of peers
 	// If there are not enough peers at the requested quality, it will return lower quality peers
+	// If there still aren't enough peers, it will query the DHT for more
 	GetPeers(common.Location, PeerQuality) []p2p.PeerID
 
 	// Increases the peer's liveliness score
@@ -104,9 +110,16 @@ type BasicPeerManager struct {
 	*basicConnGater.BasicConnectionGater
 	*basicConnMgr.BasicConnMgr
 
+	// Handles opening and closing streams
 	streamManager streamManager.StreamManager
-	peerDBs       map[string][]*peerdb.PeerDB
 
+	// Tracks peers in different quality buckets
+	peerDBs map[string][]*peerdb.PeerDB
+
+	// DHT instance
+	dht *dual.DHT
+
+	// This peer's ID to distinguish self-broadcasts
 	selfID p2p.PeerID
 
 	ctx    context.Context
@@ -229,6 +242,10 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 	}, nil
 }
 
+func (pm *BasicPeerManager) SetDHT(dht *dual.DHT) {
+	pm.dht = dht
+}
+
 func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
 	return pm.streamManager.GetStream(peerID)
 }
@@ -297,16 +314,43 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 }
 
 func (pm *BasicPeerManager) GetPeers(location common.Location, quality PeerQuality) []p2p.PeerID {
+	var peerList []p2p.PeerID
 	switch quality {
 	case Best:
-		return pm.getBestPeersWithFallback(location)
+		peerList = pm.getBestPeersWithFallback(location)
 	case Responsive:
-		return pm.getResponsivePeersWithFallback(location)
+		peerList = pm.getResponsivePeersWithFallback(location)
 	case LastResort:
-		return pm.getLastResortPeers(location)
+		peerList = pm.getLastResortPeers(location)
 	default:
 		panic("Invalid peer quality")
 	}
+
+	if len(peerList) == C_peerCount {
+		// Found sufficient number of peers
+		return peerList
+	}
+
+	// Query the DHT for more peers
+	return pm.queryDHT(location, peerList, C_peerCount-len(peerList))
+}
+
+func (pm *BasicPeerManager) queryDHT(location common.Location, peerList []p2p.PeerID, peerCount int) []p2p.PeerID {
+	// create a Cid from the slice location
+	shardCid := pubsubManager.LocationToCid(location)
+
+	// Internal list of peers from the dht
+	dhtPeers := make([]p2p.PeerID, 0, peerCount)
+	log.Global.Infof("Querying DHT for slice Cid %s", shardCid)
+	// query the DHT for peers in the slice
+	// TODO: need to find providers of a topic, not a shard
+	for peer := range pm.dht.FindProvidersAsync(pm.ctx, shardCid, peerCount) {
+		if peer.ID != pm.selfID {
+			dhtPeers = append(dhtPeers, peer.ID)
+		}
+	}
+	log.Global.Warn("Found the following peers from the DHT: ", dhtPeers)
+	return append(peerList, dhtPeers...)
 }
 
 func (pm *BasicPeerManager) getBestPeersWithFallback(location common.Location) []p2p.PeerID {
@@ -467,6 +511,7 @@ func (pm *BasicPeerManager) Stop() error {
 
 	closeFuncs := []func() error{
 		pm.BasicConnMgr.Close,
+		pm.dht.Close,
 	}
 
 	wg.Add(len(closeFuncs))

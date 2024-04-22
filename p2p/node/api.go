@@ -81,7 +81,6 @@ func (p *P2PNode) Stop() error {
 	// define a list of functions to stop the services the node is running
 	stopFuncs := []stopFunc{
 		p.Host.Close,
-		p.dht.Close,
 		p.peerManager.Stop,
 		p.pubsub.Stop,
 	}
@@ -160,27 +159,6 @@ func (p *P2PNode) requestFromPeers(location common.Location, data interface{}, d
 		}
 		requestWg.Wait()
 	}()
-}
-
-func (p *P2PNode) queryDHT(location common.Location, data interface{}, datatype interface{}, resultChan chan interface{}) {
-	const (
-		maxDHTQueryRetries    = 3  // Maximum number of retries for DHT queries
-		peersPerDHTQuery      = 10 // Number of peers to query per DHT attempt
-		dhtQueryRetryInterval = 5  // Time to wait between DHT query retries
-	)
-	// create a Cid from the slice location
-	shardCid := locationToCid(location)
-	for retries := 0; retries < maxDHTQueryRetries; retries++ {
-		log.Global.Infof("Querying DHT for slice Cid %s (retry %d)", shardCid, retries)
-		// query the DHT for peers in the slice
-		// TODO: need to find providers of a topic, not a shard
-		for peer := range p.dht.FindProvidersAsync(p.ctx, shardCid, peersPerDHTQuery) {
-			go p.requestAndWait(peer.ID, location, data, datatype, resultChan)
-		}
-		// if the data is not found, wait for a bit and try again
-		log.Global.Infof("Block %s not found in slice %s. Retrying...", data, location)
-		time.Sleep(dhtQueryRetryInterval * time.Second)
-	}
 }
 
 func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data interface{}, dataType interface{}, resultChan chan interface{}) {

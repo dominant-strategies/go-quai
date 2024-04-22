@@ -9,13 +9,11 @@ import (
 
 // Returns the number of peers in the routing table, as well as how many active
 // connections we currently have.
-func (p *P2PNode) connectionStats() (int, int, int) {
-	WANPeerNum := len(p.dht.WAN.RoutingTable().ListPeers())
-	LANPeerNum := len(p.dht.LAN.RoutingTable().ListPeers())
+func (p *P2PNode) connectionStats() (int) {
 	peers := p.Host.Network().Peers()
 	numConnected := len(peers)
 
-	return WANPeerNum, LANPeerNum, numConnected
+	return numConnected
 }
 
 func (p *P2PNode) statsLoop() {
@@ -31,14 +29,12 @@ func (p *P2PNode) statsLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			WANPeerNum, LANPeerNum, peersConnected := p.connectionStats()
+			peersConnected := p.connectionStats()
 
 			log.Global.Debugf("Number of peers connected: %d", peersConnected)
-			log.Global.Debugf("Peers in WAN Routing table: %d, Peers in LAN Routing table: %d", WANPeerNum, LANPeerNum)
 		case <-p.ctx.Done():
 			log.Global.Warnf("Context cancelled. Stopping stats loop...")
 			return
 		}
-
 	}
 }

@@ -5,10 +5,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multihash"
 	"github.com/pkg/errors"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -133,16 +131,4 @@ func (p *P2PNode) GetRequestManager() requestManager.RequestManager {
 
 func (p *P2PNode) GetHostBackend() host.Host {
 	return p.Host
-}
-
-// Creates a Cid from a location to be used as DHT key
-func locationToCid(location common.Location) cid.Cid {
-	sliceBytes := []byte(location.Name())
-
-	// create a multihash from the slice ID
-	mhash, _ := multihash.Encode(sliceBytes, multihash.SHA2_256)
-
-	// create a Cid from the multihash
-	return cid.NewCidV1(cid.Raw, mhash)
-
 }

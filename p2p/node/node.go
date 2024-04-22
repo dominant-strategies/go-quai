@@ -46,10 +46,6 @@ type P2PNode struct {
 	// List of peers to introduce us to the network
 	bootpeers []peer.AddrInfo
 
-	// TODO: Consolidate into network interface, and consensus interface
-	// DHT instance
-	dht *dual.DHT
-
 	// Gossipsub instance
 	pubsub *pubsubManager.PubsubManager
 
@@ -180,6 +176,9 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 	// Set peer manager's self ID
 	peerMgr.SetSelfID(nodeID)
 
+	// Set the DHT for the peer manager
+	peerMgr.SetDHT(dht)
+
 	// Create a gossipsub instance with helper functions
 	ps, err := pubsubManager.NewGossipSubManager(ctx, host)
 
@@ -191,7 +190,6 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		ctx:            ctx,
 		Host:           host,
 		bootpeers:      bootpeers,
-		dht:            dht,
 		pubsub:         ps,
 		peerManager:    peerMgr,
 		requestManager: requestManager.NewManager(),
