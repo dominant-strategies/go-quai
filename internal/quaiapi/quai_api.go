@@ -124,7 +124,10 @@ func (s *PublicBlockChainQuaiAPI) BlockNumber() hexutil.Uint64 {
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common.AddressBytes, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common.MixedcaseAddress, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	if !address.ValidChecksum() {
+		return nil, errors.New("address has invalid checksum")
+	}
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBalance call can only be made in zone chain")
@@ -136,7 +139,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	if state == nil || err != nil {
 		return nil, err
 	}
-	addr := common.Bytes20ToAddress(address, s.b.NodeLocation())
+	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
 	internal, err := addr.InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
@@ -144,8 +147,11 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
 }
 
-func (s *PublicBlockChainQuaiAPI) GetQiBalance(ctx context.Context, address common.Address) (*hexutil.Big, error) {
-	utxos, err := s.b.UTXOsByAddress(ctx, address)
+func (s *PublicBlockChainQuaiAPI) GetQiBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
+	if !address.ValidChecksum() {
+		return nil, errors.New("address has invalid checksum")
+	}
+	utxos, err := s.b.UTXOsByAddress(ctx, address.Address())
 	if utxos == nil || err != nil {
 		return nil, err
 	}
@@ -364,7 +370,10 @@ func (s *PublicBlockChainQuaiAPI) GetUncleCountByBlockHash(ctx context.Context, 
 }
 
 // GetCode returns the code stored at the given address in the state for the given block number.
-func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.MixedcaseAddress, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	if !address.ValidChecksum() {
+		return nil, errors.New("address has invalid checksum")
+	}
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getCode can only called in a zone chain")
@@ -376,7 +385,7 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAndQuaiAddress()
+	internal, err := address.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +396,10 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Ad
 // GetStorageAt returns the storage from the state at the given address, key and
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
-func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address common.MixedcaseAddress, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	if !address.ValidChecksum() {
+		return nil, errors.New("address has invalid checksum")
+	}
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getStorageAt can only called in a zone chain")
@@ -399,7 +411,7 @@ func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address comm
 	if state == nil || err != nil {
 		return nil, err
 	}
-	internal, err := address.InternalAndQuaiAddress()
+	internal, err := address.Address().InternalAndQuaiAddress()
 	if err != nil {
 		return nil, err
 	}
