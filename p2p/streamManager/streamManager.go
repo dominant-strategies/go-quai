@@ -15,9 +15,6 @@ import (
 )
 
 const (
-	// The number of peers to return when querying for peers
-	C_peerCount = 3
-
 	// The amount of redundancy for open streams
 	// c_peerCount * c_streamReplicationFactor = total number of open streams
 	c_streamReplicationFactor = 3
@@ -45,9 +42,9 @@ type basicStreamManager struct {
 	mu          sync.Mutex
 }
 
-func NewStreamManager() (StreamManager, error) {
+func NewStreamManager(peerCount int) (StreamManager, error) {
 	lruCache, err := lru.NewWithEvict(
-		C_peerCount*c_streamReplicationFactor,
+		peerCount*c_streamReplicationFactor,
 		severStream,
 	)
 	if err != nil {
