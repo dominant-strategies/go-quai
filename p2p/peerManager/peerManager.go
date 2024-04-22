@@ -72,6 +72,9 @@ type PeerManager interface {
 	// Sets the DHT provided from the Host interface
 	SetDHT(*dual.DHT)
 
+	// Announces to the DHT that we are providing this data
+	Provide(context.Context, common.Location, interface{}) error
+
 	// Manages stream lifecycles
 	streamManager.StreamManager
 
@@ -252,6 +255,10 @@ func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error)
 
 func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
 	return pm.streamManager.CloseStream(peerID)
+}
+
+func (pm *BasicPeerManager) Provide(ctx context.Context, location common.Location, data interface{}) error {
+	return pm.dht.Provide(ctx, pubsubManager.LocationToCid(location), true)
 }
 
 func (pm *BasicPeerManager) SetP2PBackend(p2pBackend quaiprotocol.QuaiP2PNode) {
