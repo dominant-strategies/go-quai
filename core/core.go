@@ -1120,8 +1120,8 @@ func (c *Core) State() (*state.StateDB, error) {
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (c *Core) StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error) {
-	return c.sl.hc.bc.processor.StateAt(root, utxoRoot)
+func (c *Core) StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error) {
+	return c.sl.hc.bc.processor.StateAt(root, utxoRoot, etxRoot)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.

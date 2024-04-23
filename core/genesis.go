@@ -186,7 +186,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.EVMRoot(), header.UTXORoot(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
+	if _, err := state.New(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -286,7 +286,7 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	}
 	head.Header().SetCoinbase(common.Zero)
 	head.Header().SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
-	head.Header().SetEtxSetHash(types.EmptyEtxSetHash)
+	head.Header().SetEtxSetRoot(types.EmptyRootHash)
 	if g.GasLimit == 0 {
 		head.Header().SetGasLimit(params.GenesisGasLimit)
 	}

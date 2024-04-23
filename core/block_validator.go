@@ -109,7 +109,7 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, utxoEtxs []*types.Transaction, etxSet *types.EtxSet, usedGas uint64) error {
+func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, utxoEtxs []*types.Transaction, usedGas uint64) error {
 	start := time.Now()
 	header := types.CopyHeader(block.Header())
 	time1 := common.PrettyDuration(time.Since(start))
@@ -132,6 +132,9 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 	if root := statedb.UTXORoot(); header.UTXORoot() != root {
 		return fmt.Errorf("invalid utxo root (remote: %x local: %x)", header.UTXORoot(), root)
 	}
+	if root := statedb.ETXRoot(); header.EtxSetRoot() != root {
+		return fmt.Errorf("invalid etx root (remote: %x local: %x)", header.EtxSetRoot(), root)
+	}
 	time5 := common.PrettyDuration(time.Since(start))
 	// Collect ETXs emitted from each successful transaction
 	var emittedEtxs types.Transactions
@@ -147,19 +150,6 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 	// ETXs given in the block body
 	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
-	}
-	// Confirm the ETX set used by the block matches the ETX set given in the block body
-	// This is the resulting ETX set after all ETXs in the block have been processed
-	// After validation, this ETX set should be stored in the database
-	if etxSet != nil {
-		etxSetHash := etxSet.Hash()
-		if etxSetHash != block.EtxSetHash() {
-			return fmt.Errorf("expected ETX Set hash %x does not match block ETXSetHash %x", etxSetHash, block.EtxSetHash())
-		}
-	} else {
-		if block.EtxSetHash() != types.EmptyEtxSetHash {
-			return fmt.Errorf("expected ETX Set hash %x does not match block ETXSetHash %x", types.EmptyRootHash, block.EtxSetHash())
-		}
 	}
 
 	// Check that the UncledS in the header matches the S from the block

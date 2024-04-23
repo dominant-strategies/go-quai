@@ -228,6 +228,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 			TrieCleanLimit:       config.TrieCleanCache,
 			TrieCleanJournal:     stack.ResolvePath(config.TrieCleanCacheJournal),
 			UTXOTrieCleanJournal: stack.ResolvePath(config.UTXOTrieCleanCacheJournal),
+			ETXTrieCleanJournal:  stack.ResolvePath(config.ETXTrieCleanCacheJournal),
 			TrieCleanRejournal:   config.TrieCleanCacheRejournal,
 			TrieCleanNoPrefetch:  config.NoPrefetch,
 			TrieDirtyLimit:       config.TrieDirtyCache,
