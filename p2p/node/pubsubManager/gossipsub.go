@@ -40,7 +40,12 @@ type PubsubManager struct {
 // TODO: what options do we need for quai network? See:
 // See https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub@v0.10.0#Option
 func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, error) {
-	ps, err := pubsub.NewGossipSub(ctx, h)
+	cfg := pubsub.DefaultGossipSubParams()
+	cfg.D = 30
+	cfg.Dlo = 6
+	cfg.Dhi = 45
+	cfg.Dout = 20
+	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg))
 	if err != nil {
 		return nil, err
 	}
