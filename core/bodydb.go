@@ -91,7 +91,7 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 }
 
 // Append
-func (bc *BodyDb) Append(block *types.WorkObject, newInboundEtxs types.Transactions) ([]*types.Log, error) {
+func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, error) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
@@ -102,7 +102,7 @@ func (bc *BodyDb) Append(block *types.WorkObject, newInboundEtxs types.Transacti
 	var err error
 	if nodeCtx == common.ZONE_CTX && bc.ProcessingState() {
 		// Process our block
-		logs, err = bc.processor.Apply(batch, block, newInboundEtxs)
+		logs, err = bc.processor.Apply(batch, block)
 		if err != nil {
 			return nil, err
 		}

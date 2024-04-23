@@ -45,7 +45,10 @@ type revision struct {
 
 var (
 	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	emptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	newestEtxKey = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // max hash
+	oldestEtxKey = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffe") // max hash - 1
+
 )
 
 type proofList [][]byte
@@ -94,10 +97,12 @@ func registerMetrics() {
 type StateDB struct {
 	db           Database
 	utxoDb       Database
+	etxDb        Database
 	prefetcher   *triePrefetcher
 	originalRoot common.Hash // The pre-state root, before any changes were made
 	trie         Trie
 	utxoTrie     Trie
+	etxTrie      Trie
 	hasher       crypto.KeccakState
 
 	logger *log.Logger
@@ -156,7 +161,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, utxoRoot common.Hash, db Database, utxoDb Database, snaps *snapshot.Tree, nodeLocation common.Location, logger *log.Logger) (*StateDB, error) {
+func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Database, utxoDb Database, etxDb Database, snaps *snapshot.Tree, nodeLocation common.Location, logger *log.Logger) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -165,11 +170,17 @@ func New(root common.Hash, utxoRoot common.Hash, db Database, utxoDb Database, s
 	if err != nil {
 		return nil, err
 	}
+	etxTr, err := etxDb.OpenTrie(etxRoot)
+	if err != nil {
+		return nil, err
+	}
 	sdb := &StateDB{
 		db:                  db,
 		utxoDb:              utxoDb,
+		etxDb:               etxDb,
 		trie:                tr,
 		utxoTrie:            utxoTr,
+		etxTrie:             etxTr,
 		originalRoot:        root,
 		snaps:               snaps,
 		logger:              logger,
@@ -390,6 +401,10 @@ func (s *StateDB) Database() Database {
 
 func (s *StateDB) UTXODatabase() Database {
 	return s.utxoDb
+}
+
+func (s *StateDB) ETXDatabase() Database {
+	return s.etxDb
 }
 
 // StorageTrie returns the storage trie of an account.
@@ -625,6 +640,132 @@ func (s *StateDB) GetUTXOProof(hash common.Hash, index uint16) ([][]byte, error)
 	var proof proofList
 	err := s.utxoTrie.Prove(utxoKey(hash, index), 0, &proof)
 	return proof, err
+}
+
+func (s *StateDB) PushETX(etx *types.Transaction) error {
+	if metrics_config.MetricsEnabled() {
+		defer func(start time.Time) { stateMetrics.WithLabelValues("AddETX").Add(float64(time.Since(start))) }(time.Now())
+	}
+	data, err := rlp.EncodeToBytes(etx)
+	if err != nil {
+		return err
+	}
+	newestIndex, err := s.GetNewestIndex()
+	if err != nil {
+		return err
+	}
+	if err := s.etxTrie.TryUpdate(newestIndex.Bytes(), data); err != nil {
+		return err
+	}
+	newestIndex.Add(newestIndex, big.NewInt(1))
+	if err := s.etxTrie.TryUpdate(newestEtxKey[:], newestIndex.Bytes()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *StateDB) PushETXs(etxs []*types.Transaction) error {
+	if metrics_config.MetricsEnabled() {
+		defer func(start time.Time) { stateMetrics.WithLabelValues("AddETX").Add(float64(time.Since(start))) }(time.Now())
+	}
+	newestIndex, err := s.GetNewestIndex()
+	if err != nil {
+		return err
+	}
+	for _, etx := range etxs {
+		data, err := rlp.EncodeToBytes(etx)
+		if err != nil {
+			return err
+		}
+		if err := s.etxTrie.TryUpdate(newestIndex.Bytes(), data); err != nil {
+			return err
+		}
+		newestIndex.Add(newestIndex, big.NewInt(1))
+	}
+	if err := s.etxTrie.TryUpdate(newestEtxKey[:], newestIndex.Bytes()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *StateDB) PopETX() (*types.Transaction, error) {
+	if metrics_config.MetricsEnabled() {
+		defer func(start time.Time) { stateMetrics.WithLabelValues("PopETX").Add(float64(time.Since(start))) }(time.Now())
+	}
+	oldestIndex, err := s.GetOldestIndex()
+	if err != nil {
+		return nil, err
+	}
+	enc, err := s.etxTrie.TryGet(oldestIndex.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	if len(enc) == 0 {
+		return nil, nil
+	}
+	etx := new(types.Transaction)
+	if err := rlp.DecodeBytes(enc, etx); err != nil {
+		return nil, err
+	}
+	if err := s.etxTrie.TryDelete(oldestIndex.Bytes()); err != nil {
+		return nil, err
+	}
+	oldestIndex.Add(oldestIndex, big.NewInt(1))
+	if err := s.etxTrie.TryUpdate(oldestEtxKey[:], oldestIndex.Bytes()); err != nil {
+		return nil, err
+	}
+	return etx, nil
+}
+
+func (s *StateDB) ReadETX(index *big.Int) (*types.Transaction, error) {
+	enc, err := s.etxTrie.TryGet(index.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	if len(enc) == 0 {
+		return nil, nil
+	}
+	etx := new(types.Transaction)
+	if err := rlp.DecodeBytes(enc, etx); err != nil {
+		return nil, err
+	}
+	return etx, nil
+}
+
+func (s *StateDB) GetNewestIndex() (*big.Int, error) {
+	b, err := s.etxTrie.TryGet(newestEtxKey[:])
+	if err != nil {
+		s.setError(fmt.Errorf("getNewestIndex error: %v", err))
+		return nil, err
+	}
+	return new(big.Int).SetBytes(b), nil
+}
+
+func (s *StateDB) GetOldestIndex() (*big.Int, error) {
+	b, err := s.etxTrie.TryGet(oldestEtxKey[:])
+	if err != nil {
+		s.setError(fmt.Errorf("getOldestIndex error: %v", err))
+		return nil, err
+	}
+	return new(big.Int).SetBytes(b), nil
+}
+
+func (s *StateDB) ETXRoot() common.Hash {
+	return s.etxTrie.Hash()
+}
+
+func (s *StateDB) CommitETXs() (common.Hash, error) {
+	if metrics_config.MetricsEnabled() {
+		defer func(start time.Time) { stateMetrics.WithLabelValues("CommitETXs").Add(float64(time.Since(start))) }(time.Now())
+	}
+	if s.etxTrie == nil {
+		return common.Hash{}, errors.New("ETX trie is not initialized")
+	}
+	root, err := s.etxTrie.Commit(nil)
+	if err != nil {
+		s.setError(fmt.Errorf("commitETXs error: %v", err))
+	}
+	return root, err
 }
 
 // getDeletedStateObject is similar to getStateObject, but instead of returning

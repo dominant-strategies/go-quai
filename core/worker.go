@@ -566,7 +566,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		w.adjustGasLimit(work, block)
 		work.utxoFees = big.NewInt(0)
 		start := time.Now()
-		etxSet := w.fillTransactions(interrupt, work, block, fill)
+		w.fillTransactions(interrupt, work, block, fill)
 		if fill {
 			w.fillTransactionsRollingAverage.Add(time.Since(start))
 			w.logger.WithFields(log.Fields{
@@ -574,12 +574,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 				"elapsed": common.PrettyDuration(time.Since(start)),
 				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
 			}).Info("Filled and sorted pending transactions")
-		}
-		// Set the etx set commitment in the header
-		if etxSet != nil {
-			work.wo.Header().SetEtxSetHash(etxSet.Hash())
-		} else {
-			work.wo.Header().SetEtxSetHash(types.EmptyEtxSetHash)
 		}
 		if coinbase.IsInQiLedgerScope() {
 			coinbaseTx, err := createQiCoinbaseTxWithFees(work.wo, work.utxoFees, work.state, work.signer, w.ephemeralKey)
@@ -624,7 +618,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.WorkObje
 			"fees":       totalFees(block, work.receipts),
 			"elapsed":    common.PrettyDuration(time.Since(start)),
 			"utxoRoot":   block.UTXORoot(),
-			"etxSetHash": block.EtxSetHash(),
+			"etxSetRoot": block.EtxSetRoot(),
 		}).Info("Commit new sealing work")
 	} else {
 		w.logger.WithFields(log.Fields{
@@ -638,7 +632,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.WorkObje
 			"fees":       totalFees(block, work.receipts),
 			"elapsed":    common.PrettyDuration(time.Since(start)),
 			"utxoRoot":   block.UTXORoot(),
-			"etxSetHash": block.EtxSetHash(),
+			"etxSetRoot": block.EtxSetRoot(),
 		}).Debug("Commit new sealing work")
 	}
 	work.uncleMu.RUnlock()
@@ -667,11 +661,13 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 	// the miner to speed block sealing up a bit.
 	evmRoot := parent.EVMRoot()
 	utxoRoot := parent.UTXORoot()
+	etxRoot := parent.EtxSetRoot()
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		evmRoot = types.EmptyRootHash
 		utxoRoot = types.EmptyRootHash
+		etxRoot = types.EmptyRootHash
 	}
-	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot)
+	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot, etxRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -820,7 +816,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	return nil, errors.New("error finding transaction")
 }
 
-func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
+func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
 	qiTxsToRemove := make([]*common.Hash, 0)
 	gasLimit := env.wo.GasLimit
 	if env.gasPool == nil {
@@ -828,7 +824,12 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 	}
 	var coalescedLogs []*types.Log
 	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
-	for _, tx := range etxs {
+	oldestIndex, err := env.state.GetOldestIndex()
+	if err != nil {
+		w.logger.WithField("err", err).Error("Failed to get oldest index")
+		return true
+	}
+	for {
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
@@ -847,17 +848,21 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			w.logger.WithField("Gas Used", env.wo.GasUsed()).Error("Block uses more gas than maximum ETX gas")
 			return true
 		}
-		hash := etxSet.Pop()
-		if hash != tx.Hash() { // sanity check, this should never happen
-			w.logger.Errorf("ETX hash from set %032x does not match transaction hash %032x", hash, tx.Hash())
+		etx, err := env.state.PopETX()
+		if err != nil {
+			w.logger.WithField("err", err).Error("Failed to read ETX")
 			return true
 		}
-		env.state.Prepare(tx.Hash(), env.tcount)
-		logs, err := w.commitTransaction(env, parent, tx)
+		if etx == nil {
+			break
+		}
+		env.state.Prepare(etx.Hash(), env.tcount)
+		logs, err := w.commitTransaction(env, parent, etx)
 		if err == nil {
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 		}
+		oldestIndex.Add(oldestIndex, big.NewInt(1))
 	}
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
@@ -1257,54 +1262,51 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.WorkObject, fill bool) *types.EtxSet {
+func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.WorkObject, fill bool) bool {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
-	etxs := make([]*types.Transaction, 0)
-	etxSet := rawdb.ReadEtxSet(w.hc.bc.db, block.Hash(), block.NumberU64(w.hc.NodeCtx()))
-	if etxSet != nil {
-		etxs = make([]*types.Transaction, 0, len(etxSet.ETXHashes)/common.HashLength)
-		maxEtxGas := (env.wo.GasLimit() / params.MinimumEtxGasDivisor) * params.MaximumEtxGasMultiplier
-		totalGasEstimate := uint64(0)
-		index := 0
-		for {
-			hash := etxSet.GetHashAtIndex(index)
-			if (hash == common.Hash{}) { // no more ETXs
-				break
-			}
-			entry := rawdb.ReadETX(w.hc.bc.db, hash)
-			if entry == nil {
-				w.logger.Errorf("ETX %s not found in the database!", hash.String())
-				break
-			}
-			etxs = append(etxs, entry)
-			if totalGasEstimate += entry.Gas(); totalGasEstimate > maxEtxGas { // We don't need to load any more ETXs after this limit
-				break
-			}
-			index++
+	etxs := false
+	newInboundEtxs := rawdb.ReadInboundEtxs(w.workerDb, block.Hash())
+	if len(newInboundEtxs) > 0 {
+		etxs = true
+		env.state.PushETXs(newInboundEtxs) // apply the inbound ETXs from the previous block to the ETX set state
+	} else {
+		oldestIndex, err := env.state.GetOldestIndex()
+		if err != nil {
+			w.logger.WithField("err", err).Error("Failed to get oldest index")
+			return false
+		}
+		// Check if there is at least one ETX in the set
+		etx, err := env.state.ReadETX(oldestIndex)
+		if err != nil {
+			w.logger.WithField("err", err).Error("Failed to read ETX")
+			return false
+		}
+		if etx != nil {
+			etxs = true
 		}
 	}
+
 	if !fill {
-		if len(etxs) > 0 {
-			w.commitTransactions(env, block, etxs, &types.TransactionsByPriceAndNonce{}, etxSet, interrupt)
+		if etxs {
+			return w.commitTransactions(env, block, &types.TransactionsByPriceAndNonce{}, interrupt)
 		}
-		return etxSet
+		return false
 	}
 
 	pending, err := w.txPool.TxPoolPending(false)
 	if err != nil {
-		return nil
+		w.logger.WithField("err", err).Error("Failed to get pending transactions")
+		return false
 	}
 
 	pendingQiTxs := w.txPool.QiPoolPending()
 
-	if len(pending) > 0 || len(pendingQiTxs) > 0 || len(etxs) > 0 {
+	if len(pending) > 0 || len(pendingQiTxs) > 0 || etxs {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.wo.BaseFee(), true)
-		if w.commitTransactions(env, block, etxs, txs, etxSet, interrupt) {
-			return etxSet
-		}
+		return w.commitTransactions(env, block, txs, interrupt)
 	}
-	return etxSet
+	return false
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them

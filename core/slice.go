@@ -343,8 +343,9 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		subReorg = sl.miningStrategy(bestPh, tempPendingHeader)
 
 		if order < nodeCtx {
-			// Store the inbound etxs for dom blocks that did not get picked and use
+			// Store the inbound etxs for all dom blocks and use
 			// it in the future if dom switch happens
+			// This should be pruned at the re-org tolerance depth
 			rawdb.WriteInboundEtxs(sl.sliceDb, block.Hash(), newInboundEtxs)
 		}
 
@@ -458,6 +459,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"gasLimit":     block.GasLimit(),
 		"evmRoot":      block.EVMRoot(),
 		"utxoRoot":     block.UTXORoot(),
+		"etxSetRoot":   block.EtxSetRoot(),
 		"order":        order,
 		"location":     block.Location(),
 		"elapsed":      common.PrettyDuration(time.Since(start)),
@@ -1254,7 +1256,6 @@ func (sl *Slice) init() error {
 		if err != nil {
 			return err
 		}
-		rawdb.WriteEtxSet(sl.sliceDb, genesisHash, 0, types.NewEtxSet())
 		// This is just done for the startup process
 		sl.hc.SetCurrentHeader(genesisHeader)
 
@@ -1376,10 +1377,11 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetUncleHash(header.UncleHash())
 		combinedPendingHeader.Header().SetTxHash(header.Header().TxHash())
 		combinedPendingHeader.Header().SetEtxHash(header.EtxHash())
-		combinedPendingHeader.Header().SetEtxSetHash(header.EtxSetHash())
+		combinedPendingHeader.Header().SetEtxSetRoot(header.EtxSetRoot())
 		combinedPendingHeader.Header().SetReceiptHash(header.ReceiptHash())
 		combinedPendingHeader.Header().SetEVMRoot(header.EVMRoot())
 		combinedPendingHeader.Header().SetUTXORoot(header.UTXORoot())
+		combinedPendingHeader.Header().SetEtxSetRoot(header.EtxSetRoot())
 		combinedPendingHeader.Header().SetCoinbase(header.Coinbase())
 		combinedPendingHeader.Header().SetBaseFee(header.BaseFee())
 		combinedPendingHeader.Header().SetGasLimit(header.GasLimit())
@@ -1437,7 +1439,6 @@ func (sl *Slice) WriteGenesisBlock(block *types.WorkObject, location common.Loca
 	sl.AddPendingEtxsRollup(types.PendingEtxsRollup{block, emptyPendingEtxs})
 	sl.hc.AddBloom(types.Bloom{}, block.Hash())
 	sl.hc.currentHeader.Store(block)
-	rawdb.WriteEtxSet(sl.sliceDb, block.Hash(), block.NumberU64(sl.NodeCtx()), types.NewEtxSet())
 }
 
 // NewGenesisPendingHeader creates a pending header on the genesis block

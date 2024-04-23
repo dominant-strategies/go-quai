@@ -213,8 +213,8 @@ func (wo *WorkObject) EtxRollupHash() common.Hash {
 	return wo.Header().EtxRollupHash()
 }
 
-func (wo *WorkObject) EtxSetHash() common.Hash {
-	return wo.Header().EtxSetHash()
+func (wo *WorkObject) EtxSetRoot() common.Hash {
+	return wo.Header().EtxSetRoot()
 }
 
 func (wo *WorkObject) BaseFee() *big.Int {
@@ -334,11 +334,21 @@ func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
 func (wo *WorkObject) QuaiTransactionsWithoutCoinbase() []*Transaction {
 	quaiTxs := make([]*Transaction, 0)
 	for i, t := range wo.Transactions() {
-		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) || t.Type() == QiTxType || (t.Type() == ExternalTxType && t.ETXSender().Location().Equal(*t.To().Location())) {
+		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) || t.Type() == QiTxType || (t.Type() == ExternalTxType && t.To().IsInQiLedgerScope()) {
 			// ignore the Quai coinbase tx and Quai->Qi to comply with prior functionality as it is not a normal transaction
 			continue
 		}
 		if t.Type() != QiTxType {
+			quaiTxs = append(quaiTxs, t)
+		}
+	}
+	return quaiTxs
+}
+
+func (wo *WorkObject) QuaiTransactionsWithFees() []*Transaction {
+	quaiTxs := make([]*Transaction, 0)
+	for _, t := range wo.Transactions() {
+		if t.Type() == QuaiTxType { // QuaiTxType is the only type that gives Quai fees to the miner
 			quaiTxs = append(quaiTxs, t)
 		}
 	}

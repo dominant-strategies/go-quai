@@ -81,6 +81,7 @@ type CacheConfig struct {
 	TrieCleanLimit       int    // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieCleanJournal     string // Disk journal for saving clean cache entries.
 	UTXOTrieCleanJournal string
+	ETXTrieCleanJournal  string
 	TrieCleanRejournal   time.Duration // Time interval to dump clean cache to disk periodically
 	TrieCleanNoPrefetch  bool          // Whether to disable heuristic state prefetching for followup blocks
 	TrieDirtyLimit       int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
@@ -111,6 +112,7 @@ type StateProcessor struct {
 	cacheConfig   *CacheConfig   // CacheConfig for StateProcessor
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
 	utxoCache     state.Database // UTXO database to reuse between imports (contains UTXO cache)
+	etxCache      state.Database // ETX database to reuse between imports (contains ETX cache)
 	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
 	txLookupCache *lru.Cache
 	validator     Validator // Block and state validator interface
@@ -154,6 +156,11 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 			Journal:   cacheConfig.UTXOTrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
+		etxCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
+			Cache:     cacheConfig.TrieCleanLimit,
+			Journal:   cacheConfig.ETXTrieCleanJournal,
+			Preimages: cacheConfig.Preimages,
+		}),
 		engine: engine,
 		triegc: prque.New(nil),
 		quit:   make(chan struct{}),
@@ -181,11 +188,13 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		}
 		triedb := sp.stateCache.TrieDB()
 		utxoTrieDb := sp.utxoCache.TrieDB()
+		etxTrieDb := sp.etxCache.TrieDB()
 		sp.wg.Add(1)
 		go func() {
 			defer sp.wg.Done()
 			triedb.SaveCachePeriodically(sp.cacheConfig.TrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
 			utxoTrieDb.SaveCachePeriodically(sp.cacheConfig.UTXOTrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
+			etxTrieDb.SaveCachePeriodically(sp.cacheConfig.ETXTrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
 		}()
 	}
 	return sp
@@ -198,7 +207,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) (types.Receipts, []*types.Transaction, []*types.Log, *state.StateDB, uint64, error) {
+func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*types.Transaction, []*types.Log, *state.StateDB, uint64, error) {
 	var (
 		receipts     types.Receipts
 		usedGas      = new(uint64)
@@ -219,17 +228,26 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 
 	parentEvmRoot := parent.Header().EVMRoot()
 	parentUtxoRoot := parent.Header().UTXORoot()
+	parentEtxSetRoot := parent.Header().EtxSetRoot()
 	if p.hc.IsGenesisHash(parent.Hash()) {
 		parentEvmRoot = types.EmptyRootHash
 		parentUtxoRoot = types.EmptyRootHash
+		parentEtxSetRoot = types.EmptyRootHash
 	}
 	// Initialize a statedb
-	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, p.stateCache, p.utxoCache, p.snaps, nodeLocation, p.logger)
+	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, parentEtxSetRoot, p.stateCache, p.utxoCache, p.etxCache, p.snaps, nodeLocation, p.logger)
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, err
 	}
 	if len(block.Transactions()) == 0 {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, statedb, 0, nil
+	}
+	// Apply the previous inbound ETXs to the ETX set state
+	prevInboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, header.ParentHash(nodeCtx))
+	if len(prevInboundEtxs) > 0 {
+		if err := statedb.PushETXs(prevInboundEtxs); err != nil {
+			return nil, nil, nil, nil, 0, fmt.Errorf("could not push prev inbound etxs: %w", err)
+		}
 	}
 	time2 := common.PrettyDuration(time.Since(start))
 
@@ -318,19 +336,25 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		if tx.Type() == types.ExternalTxType {
 			startTimeEtx := time.Now()
 			// ETXs MUST be included in order, so popping the first from the queue must equal the first in the block
-			etxHash := etxSet.Pop()
-			if etxHash != tx.Hash() {
+			etx, err := statedb.PopETX()
+			if err != nil {
+				return nil, nil, nil, nil, 0, fmt.Errorf("could not pop etx from statedb: %w", err)
+			}
+			if etx == nil {
+				return nil, nil, nil, nil, 0, fmt.Errorf("etx %x is nil", tx.Hash())
+			}
+			if etx.Hash() != tx.Hash() {
 				return nil, nil, nil, nil, 0, fmt.Errorf("invalid external transaction: etx %x is not in order or not found in unspent etx set", tx.Hash())
 			}
-			if tx.To().IsInQiLedgerScope() {
-				if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi Conversion
+			if etx.To().IsInQiLedgerScope() {
+				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Quai->Qi Conversion
 					lock := new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod))
 					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminus())
 					if primeTerminus == nil {
 						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
 					}
-					value := misc.QuaiToQi(primeTerminus, tx.Value()) // convert Quai to Qi
-					txGas := tx.Gas()
+					value := misc.QuaiToQi(primeTerminus, etx.Value()) // convert Quai to Qi
+					txGas := etx.Gas()
 					denominations := misc.FindMinDenominations(value)
 					outputIndex := uint16(0)
 					// Iterate over the denominations in descending order
@@ -351,7 +375,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 							*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
 							totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
 							// the ETX hash is guaranteed to be unique
-							if err := statedb.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))); err != nil {
+							if err := statedb.CreateUTXO(etx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), etx.To().Bytes(), lock))); err != nil {
 								return nil, nil, nil, nil, 0, err
 							}
 							log.Global.Infof("Converting Quai to Qi %032x with denomination %d index %d lock %d", tx.Hash(), denomination, outputIndex, lock)
@@ -360,7 +384,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 					}
 				} else {
 					// There are no more checks to be made as the ETX is worked so add it to the set
-					if err := statedb.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), big.NewInt(0)))); err != nil {
+					if err := statedb.CreateUTXO(etx.OriginatingTxHash(), etx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(etx.Value().Uint64()), etx.To().Bytes(), big.NewInt(0)))); err != nil {
 						return nil, nil, nil, nil, 0, err
 					}
 					// This Qi ETX should cost more gas
@@ -374,19 +398,19 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 				timeEtx += timeEtxDelta
 				continue
 			} else {
-				if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
+				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Qi->Quai Conversion
 					msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod)))
 					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminus())
 					if primeTerminus == nil {
 						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
 					}
 					// Convert Qi to Quai
-					msg.SetValue(misc.QiToQuai(primeTerminus, tx.Value()))
+					msg.SetValue(misc.QiToQuai(primeTerminus, etx.Value()))
 					msg.SetData([]byte{}) // data is not used in conversion
 					log.Global.Infof("Converting Qi to Quai for ETX %032x with value %d lock %d", tx.Hash(), msg.Value().Uint64(), msg.Lock().Uint64())
 				}
 				prevZeroBal := prepareApplyETX(statedb, msg.Value(), nodeLocation)
-				receipt, err = applyTransaction(msg, parent, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
+				receipt, err = applyTransaction(msg, parent, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, etx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
 				statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 				if err != nil {
 					return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -492,8 +516,20 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 			return nil, nil, nil, nil, 0, errors.New("coinbase tx type not supported")
 		}
 	}
-
-	if etxSet != nil && (etxSet.Len() > 0 && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
+	etxAvailable := false
+	oldestIndex, err := statedb.GetOldestIndex()
+	if err != nil {
+		return nil, nil, nil, nil, 0, fmt.Errorf("could not get oldest index: %w", err)
+	}
+	// Check if there is at least one ETX in the set
+	etx, err := statedb.ReadETX(oldestIndex)
+	if err != nil {
+		return nil, nil, nil, nil, 0, fmt.Errorf("could not read etx: %w", err)
+	}
+	if etx != nil {
+		etxAvailable = true
+	}
+	if (etxAvailable && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
 		return nil, nil, nil, nil, 0, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
 	}
 
@@ -818,28 +854,22 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 }
 
 // Apply State
-func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject, newInboundEtxs types.Transactions) ([]*types.Log, error) {
+func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*types.Log, error) {
 	nodeCtx := p.hc.NodeCtx()
 	start := time.Now()
 	blockHash := block.Hash()
 
 	parentHash := block.ParentHash(nodeCtx)
-	parentNumber := block.NumberU64(nodeCtx) - 1
 	if p.hc.IsGenesisHash(block.ParentHash(nodeCtx)) {
 		parent := p.hc.GetHeaderByHash(parentHash)
 		if parent == nil {
 			return nil, errors.New("failed to load parent block")
 		}
-		parentNumber = parent.NumberU64(nodeCtx)
 	}
-	etxSet := rawdb.ReadEtxSet(p.hc.bc.db, parentHash, parentNumber)
 	time1 := common.PrettyDuration(time.Since(start))
-	if etxSet == nil {
-		return nil, errors.New("failed to load etx set")
-	}
 	time2 := common.PrettyDuration(time.Since(start))
 	// Process our block
-	receipts, utxoEtxs, logs, statedb, usedGas, err := p.Process(block, etxSet)
+	receipts, utxoEtxs, logs, statedb, usedGas, err := p.Process(block)
 	if err != nil {
 		return nil, err
 	}
@@ -850,7 +880,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject, newIn
 		}).Warn("Block hash changed after Processing the block")
 	}
 	time3 := common.PrettyDuration(time.Since(start))
-	err = p.validator.ValidateState(block, statedb, receipts, utxoEtxs, etxSet, usedGas)
+	err = p.validator.ValidateState(block, statedb, receipts, utxoEtxs, usedGas)
 	if err != nil {
 		return nil, err
 	}
@@ -872,27 +902,23 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject, newIn
 	if err != nil {
 		return nil, err
 	}
-	triedb := p.stateCache.TrieDB()
+	etxRoot, err := statedb.CommitETXs()
+	if err != nil {
+		return nil, err
+	}
+
 	time7 := common.PrettyDuration(time.Since(start))
 	var time8 common.PrettyDuration
-	var time9 common.PrettyDuration
-	var time10 common.PrettyDuration
-	var time11 common.PrettyDuration
-	if err := triedb.Commit(root, false, nil); err != nil {
+	if err := p.stateCache.TrieDB().Commit(root, false, nil); err != nil {
 		return nil, err
 	}
 	if err := p.utxoCache.TrieDB().Commit(utxoRoot, false, nil); err != nil {
 		return nil, err
 	}
+	if err := p.etxCache.TrieDB().Commit(etxRoot, false, nil); err != nil {
+		return nil, err
+	}
 	time8 = common.PrettyDuration(time.Since(start))
-	// Update the set of inbound ETXs which may be mined in the next block
-	// These new inbounds are not included in the ETX hash of the current block
-	// because they are not known a-priori
-	etxSet.Update(newInboundEtxs, p.hc.NodeLocation(), func(hash common.Hash, etx *types.Transaction) {
-		rawdb.WriteETX(batch, hash, etx) // This must be done because of rawdb <-> types import cycle
-	})
-	rawdb.WriteEtxSet(batch, block.Hash(), block.NumberU64(nodeCtx), etxSet)
-	time12 := common.PrettyDuration(time.Since(start))
 
 	p.logger.WithFields(log.Fields{
 		"t1":   time1,
@@ -904,10 +930,6 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject, newIn
 		"t6":   time6,
 		"t7":   time7,
 		"t8":   time8,
-		"t9":   time9,
-		"t10":  time10,
-		"t11":  time11,
-		"t12":  time12,
 	}).Debug("times during state processor apply")
 	return logs, nil
 }
@@ -951,12 +973,12 @@ func (p *StateProcessor) GetVMConfig() *vm.Config {
 
 // State returns a new mutable state based on the current HEAD block.
 func (p *StateProcessor) State() (*state.StateDB, error) {
-	return p.StateAt(p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).EVMRoot(), p.hc.GetBlockByHash(p.hc.CurrentHeader().Hash()).UTXORoot())
+	return p.StateAt(p.hc.CurrentHeader().EVMRoot(), p.hc.CurrentHeader().UTXORoot(), p.hc.CurrentHeader().EtxSetRoot())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (p *StateProcessor) StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error) {
-	return state.New(root, utxoRoot, p.stateCache, p.utxoCache, p.snaps, p.hc.NodeLocation(), p.logger)
+func (p *StateProcessor) StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error) {
+	return state.New(root, utxoRoot, etxRoot, p.stateCache, p.utxoCache, p.etxCache, p.snaps, p.hc.NodeLocation(), p.logger)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1055,6 +1077,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		current      *types.WorkObject
 		database     state.Database
 		utxoDatabase state.Database
+		etxDatabase  state.Database
 		report       = true
 		nodeLocation = p.hc.NodeLocation()
 		nodeCtx      = p.hc.NodeCtx()
@@ -1062,7 +1085,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 	)
 	// Check the live database first if we have the state fully available, use that.
 	if checkLive {
-		statedb, err = p.StateAt(block.EVMRoot(), block.UTXORoot())
+		statedb, err = p.StateAt(block.EVMRoot(), block.UTXORoot(), block.EtxSetRoot())
 		if err == nil {
 			return statedb, nil
 		}
@@ -1071,7 +1094,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 	var newHeads []*types.WorkObject
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
-		statedb, database, utxoDatabase, report = base, base.Database(), base.UTXODatabase(), false
+		statedb, database, utxoDatabase, etxDatabase, report = base, base.Database(), base.UTXODatabase(), base.ETXDatabase(), false
 		current = p.hc.GetHeaderOrCandidate(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
@@ -1083,12 +1106,15 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		// Create an ephemeral trie.Database for isolating the live one. Otherwise
 		// the internal junks created by tracing will be persisted into the disk.
 		utxoDatabase = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
+		// Create an ephemeral trie.Database for isolating the live one. Otherwise
+		// the internal junks created by tracing will be persisted into the disk.
+		etxDatabase = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
 
 		// If we didn't check the dirty database, do check the clean one, otherwise
 		// we would rewind past a persisted block (specific corner case is chain
 		// tracing from the genesis).
 		if !checkLive {
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation, p.logger)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				return statedb, nil
 			}
@@ -1105,7 +1131,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			}
 			current = types.CopyWorkObject(parent)
 
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), database, utxoDatabase, nil, nodeLocation, p.logger)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				break
 			}
@@ -1138,27 +1164,11 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			}).Info("Regenerating historical state")
 			logged = time.Now()
 		}
-
-		parentHash := current.ParentHash(nodeCtx)
-		parentNumber := current.NumberU64(nodeCtx) - 1
-		if p.hc.IsGenesisHash(parentHash) {
-			parent := p.hc.GetHeaderByHash(parentHash)
-			parentNumber = parent.NumberU64(nodeCtx)
-		}
-		etxSet := rawdb.ReadEtxSet(p.hc.bc.db, parentHash, parentNumber)
-		if etxSet == nil {
-			return nil, errors.New("etxSet set is nil in StateProcessor")
-		}
-		inboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, current.Hash())
-		etxSet.Update(inboundEtxs, nodeLocation, func(hash common.Hash, etx *types.Transaction) {
-			rawdb.WriteETX(rawdb.NewMemoryDatabase(p.logger), hash, etx)
-		})
-
 		currentBlock := rawdb.ReadWorkObject(p.hc.bc.db, current.Hash(), types.BlockObject)
 		if currentBlock == nil {
 			return nil, errors.New("detached block found trying to regenerate state")
 		}
-		_, _, _, _, _, err := p.Process(currentBlock, etxSet)
+		_, _, _, _, _, err := p.Process(currentBlock)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}
@@ -1173,7 +1183,12 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
-		statedb, err = state.New(root, utxoRoot, database, utxoDatabase, nil, nodeLocation, p.logger)
+		etxRoot, err := statedb.CommitETXs()
+		if err != nil {
+			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
+				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
+		}
+		statedb, err = state.New(root, utxoRoot, etxRoot, database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
 		if err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}
@@ -1248,6 +1263,10 @@ func (p *StateProcessor) Stop() {
 	if p.cacheConfig.UTXOTrieCleanJournal != "" {
 		utxoTrieDB := p.utxoCache.TrieDB()
 		utxoTrieDB.SaveCache(p.cacheConfig.UTXOTrieCleanJournal)
+	}
+	if p.cacheConfig.ETXTrieCleanJournal != "" {
+		etxTrieDB := p.etxCache.TrieDB()
+		etxTrieDB.SaveCache(p.cacheConfig.ETXTrieCleanJournal)
 	}
 	close(p.quit)
 	p.logger.Info("State Processor stopped")

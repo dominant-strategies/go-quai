@@ -341,10 +341,10 @@ func (hc *HeaderChain) setStateProcessing() bool {
 }
 
 // Append
-func (hc *HeaderChain) AppendBlock(block *types.WorkObject, newInboundEtxs types.Transactions) error {
+func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 	blockappend := time.Now()
 	// Append block else revert header append
-	logs, err := hc.bc.Append(block, newInboundEtxs)
+	logs, err := hc.bc.Append(block)
 	if err != nil {
 		return err
 	}
@@ -473,10 +473,10 @@ func (hc *HeaderChain) SetCurrentState(head *types.WorkObject) error {
 		if hc.IsGenesisHash(header.Hash()) {
 			break
 		}
-		// Checking of the Etx set exists makes sure that we have processed the
-		// state of the parent block
-		etxSet := rawdb.ReadEtxSet(hc.headerDb, header.Hash(), header.NumberU64(nodeCtx))
-		if etxSet != nil {
+		// This is not perfect because it's possible some blocks have the same root hash (no uniqueness guarantee)
+		// We probably need a better way to determine if we have processed the state and ETXs for a given block
+		_, err := hc.bc.processor.StateAt(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot())
+		if err == nil {
 			break
 		}
 		current = types.CopyWorkObject(header)
@@ -484,32 +484,14 @@ func (hc *HeaderChain) SetCurrentState(head *types.WorkObject) error {
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(headersWithoutState) - 1; i >= 0; i-- {
-		err := hc.ReadInboundEtxsAndAppendBlock(headersWithoutState[i])
+		block := hc.GetBlockOrCandidate(headersWithoutState[i].Hash(), headersWithoutState[i].NumberU64(nodeCtx))
+		if block == nil {
+			return errors.New("could not find block during SetCurrentState: " + headersWithoutState[i].Hash().String())
+		}
+		err := hc.AppendBlock(block)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// ReadInboundEtxsAndAppendBlock reads the inbound etxs from database and appends the block
-func (hc *HeaderChain) ReadInboundEtxsAndAppendBlock(header *types.WorkObject) error {
-	nodeCtx := hc.NodeCtx()
-	block := hc.GetBlockOrCandidate(header.Hash(), header.NumberU64(nodeCtx))
-	if block == nil {
-		return errors.New("could not find block during reorg")
-	}
-	_, order, err := hc.engine.CalcOrder(block)
-	if err != nil {
-		return err
-	}
-	var inboundEtxs types.Transactions
-	if order < nodeCtx {
-		inboundEtxs = rawdb.ReadInboundEtxs(hc.headerDb, header.Hash())
-	}
-	err = hc.AppendBlock(block, inboundEtxs)
-	if err != nil {
-		return err
 	}
 	return nil
 }
@@ -1030,8 +1012,8 @@ func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.S
 	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
 }
 
-func (hc *HeaderChain) StateAt(root common.Hash, utxoRoot common.Hash) (*state.StateDB, error) {
-	return hc.bc.processor.StateAt(root, utxoRoot)
+func (hc *HeaderChain) StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error) {
+	return hc.bc.processor.StateAt(root, utxoRoot, etxRoot)
 }
 
 func (hc *HeaderChain) SlicesRunning() []common.Location {
