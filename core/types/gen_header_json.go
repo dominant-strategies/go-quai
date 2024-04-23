@@ -24,7 +24,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		TxHash       					common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
 		EtxHash      					common.Hash   			`json:"extTransactionsRoot"			gencodec:"required"`
-		EtxSetHash    					common.Hash    			`json:"etxSetHash"          		gencodec:"required"`
+		EtxSetRoot    					common.Hash    			`json:"etxSetRoot"          		gencodec:"required"`
 		EtxRollupHash					common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
 		PrimeTerminus         			common.Hash           	`json:"primeTerminus"            	gencodec:"required"`
@@ -67,7 +67,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.UTXORoot = h.UTXORoot()
 	enc.TxHash = h.TxHash()
 	enc.EtxHash = h.EtxHash()
-	enc.EtxSetHash = h.EtxSetHash()
+	enc.EtxSetRoot = h.EtxSetRoot()
 	enc.EtxRollupHash = h.EtxRollupHash()
 	enc.ReceiptHash = h.ReceiptHash()
 	enc.PrimeTerminus = h.PrimeTerminus()
@@ -96,7 +96,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		TxHash       					*common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					*common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
 		EtxHash      					*common.Hash   			`json:"extTransactionsRoot"			gencodec:"required"`
-		EtxSetHash    					*common.Hash    		`json:"etxSetHash"          		gencodec:"required"`
+		EtxSetRoot    					*common.Hash    		`json:"etxSetRoot"          		gencodec:"required"`
 		EtxRollupHash					*common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
 		PrimeTerminus         			*common.Hash           	`json:"primeTerminus"            	gencodec:"required"`
@@ -140,8 +140,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.EtxHash == nil {
 		return errors.New("missing required field 'extTransactionsRoot' for Header")
 	}
-	if dec.EtxSetHash == nil {
-		return errors.New("missing required field 'etxSetHash' for Header")
+	if dec.EtxSetRoot == nil {
+		return errors.New("missing required field 'etxSetRoot' for Header")
 	}
 	if dec.EtxRollupHash == nil {
 		return errors.New("missing required field 'extRollupRoot' for Header")
@@ -234,7 +234,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetTxHash(*dec.TxHash)
 	h.SetReceiptHash(*dec.ReceiptHash)
 	h.SetEtxHash(*dec.EtxHash)
-	h.SetEtxSetHash(*dec.EtxSetHash)
+	h.SetEtxSetRoot(*dec.EtxSetRoot)
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
 	h.SetPrimeTerminus(*dec.PrimeTerminus)
 	h.SetInterlinkRootHash(*dec.InterlinkRootHash)

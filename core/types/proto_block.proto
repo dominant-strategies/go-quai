@@ -29,7 +29,7 @@ message ProtoHeader {
   optional common.ProtoHash mix_hash = 21;
   optional uint64 nonce = 22;
   optional common.ProtoHash utxo_root = 23;
-  optional common.ProtoHash etx_set_hash = 24;
+  optional common.ProtoHash etx_set_root = 24;
   optional uint64 efficiency_score = 25;
   optional uint64 threshold_count = 26;
   optional uint64 expansion_number = 27;

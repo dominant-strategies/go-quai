@@ -60,29 +60,6 @@ func TestTerminiStorage(t *testing.T) {
 	}
 }
 
-func TestEtxSetStorage(t *testing.T) {
-	db := NewMemoryDatabase()
-
-	// Create a test etxSet to move around the database and make sure it's really new
-	etxSet := types.NewEtxSet()
-	hash := common.Hash{1}
-	var number uint64 = 0
-	if entry := ReadEtxSet(db, hash, number); entry != nil {
-		t.Fatalf("Non existent etxSet returned: %v", entry)
-	}
-	t.Log("EtxSet Hash stored", hash)
-	// Write and verify the etxSet in the database
-	WriteEtxSet(db, hash, 0, etxSet)
-	if entry := ReadEtxSet(db, hash, number); entry == nil {
-		t.Fatalf("Stored etxSet not found with hash %s", hash)
-	}
-	// Delete the etxSet and verify the execution
-	DeleteEtxSet(db, hash, number)
-	if entry := ReadEtxSet(db, hash, number); entry != nil {
-		t.Fatalf("Deleted etxSet returned: %v", entry)
-	}
-}
-
 // Tests inbound etx storage and retrieval operations.
 func TestInboundEtxsStorage(t *testing.T) {
 	db := NewMemoryDatabase()
