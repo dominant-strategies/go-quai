@@ -58,7 +58,7 @@ func (p *P2PNode) eventLoop() {
 			case event.EvtPeerIdentificationCompleted:
 				log.Global.Debugf("Event: 'Peer identification completed' - %v", e.Peer)
 			case event.EvtPeerIdentificationFailed:
-				log.Global.Debugf("Event 'Peer identification failed' - %v", e.Peer)
+				log.Global.Debugf("Event 'Peer identification failed' - peer: %v, reason: %v", e.Peer, e.Reason.Error())
 			case event.EvtPeerConnectednessChanged:
 				// get the peer info
 				peerInfo := p.Peerstore().PeerInfo(e.Peer)
