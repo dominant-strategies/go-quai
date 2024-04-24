@@ -3,6 +3,7 @@ package peerdb
 import (
 	"context"
 	"encoding/json"
+	"math/rand"
 	"sync"
 	"testing"
 
@@ -178,10 +179,10 @@ func TestGetSize(t *testing.T) {
 		go func(peer *PeerInfo, i int) {
 			defer wg.Done()
 			peer.Entropy = cases[i].Entropy
-			testSize(t, ps, peer, keys[i])
+			updateAndTest(t, ps, peer, keys[i])
 
 			peer.PubKey = cases[i].PubKey
-			testSize(t, ps, peer, keys[i])
+			updateAndTest(t, ps, peer, keys[i])
 		}(peer, i)
 	}
 	wg.Wait()
@@ -192,7 +193,7 @@ func TestGetSize(t *testing.T) {
 	require.Equal(t, 0, size)
 }
 
-func testSize(t *testing.T, ps *PeerDB, peer *PeerInfo, key datastore.Key) {
+func updateAndTest(t *testing.T, ps *PeerDB, peer *PeerInfo, key datastore.Key) {
 	value, err := json.Marshal(peer)
 	require.NoError(t, err)
 
@@ -201,4 +202,68 @@ func testSize(t *testing.T, ps *PeerDB, peer *PeerInfo, key datastore.Key) {
 	size, err := ps.GetSize(context.Background(), key)
 	require.NoError(t, err)
 	require.Equal(t, len(value), size)
+}
+
+func TestMultipleDatabaseUpdates(t *testing.T) {
+	ps, teardown := setupDB(t)
+	defer teardown()
+	iterations := 10000
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(t *testing.T, ps *PeerDB) {
+		defer wg.Done()
+		for i := 1; i <= iterations; i++ {
+			wg.Add(1)
+			go func(t *testing.T, ps *PeerDB) {
+				defer wg.Done()
+				peers := createPeers(t, 10)
+				for _, peer := range peers {
+					key := datastore.NewKey(peer.AddrInfo.ID.String())
+					value, err := json.Marshal(peer)
+					require.NoError(t, err)
+					err = ps.Put(context.Background(), key, value)
+					require.NoError(t, err)
+					size, err := ps.GetSize(context.Background(), key)
+					require.NoError(t, err)
+					require.Equal(t, len(value), size)
+					err = ps.Delete(context.Background(), key)
+					require.NoError(t, err)
+					size, err = ps.GetSize(context.Background(), key)
+					require.Error(t, err)
+					require.Equal(t, 0, size)
+				}
+			}(t, ps)
+		}
+	}(t, ps)
+
+	wg.Add(1)
+	go func(t *testing.T, ps *PeerDB) {
+		defer wg.Done()
+		for i := 1; i <= iterations; i++ {
+			wg.Add(1)
+			go func(t *testing.T, ps *PeerDB) {
+				peers := createPeers(t, 10)
+				defer wg.Done()
+				for _, peer := range peers {
+					// insert into database
+					key := datastore.NewKey(peer.AddrInfo.ID.String())
+					value, err := json.Marshal(peer)
+					require.NoError(t, err)
+					err = ps.Put(context.Background(), key, value)
+					require.NoError(t, err)
+					size, err := ps.GetSize(context.Background(), key)
+					require.NoError(t, err)
+					require.Equal(t, len(value), size)
+
+					// update the database
+					peer.Entropy = rand.Uint64()
+					updateAndTest(t, ps, peer, key)
+					peer.PubKey = []byte{byte(rand.Intn(256))}
+					updateAndTest(t, ps, peer, key)
+				}
+			}(t, ps)
+		}
+	}(t, ps)
+	wg.Wait()
 }
