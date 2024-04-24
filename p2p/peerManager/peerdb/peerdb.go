@@ -2,7 +2,7 @@ package peerdb
 
 import (
 	"os"
-	"strings"
+	"path/filepath"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
@@ -18,15 +18,17 @@ var (
 // Returns a new PeerDB instance
 func NewPeerDB(dbDirName string, locationName string) (*PeerDB, error) {
 	strs := []string{viper.GetString(utils.DataDirFlag.Name), locationName}
-	dataDir := strings.Join(strs, "/")
+	dataDir := filepath.Join(strs...)
+
 	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 		err := os.MkdirAll(dataDir, 0755)
 		if err != nil {
-			log.Global.Errorf("error creating data directory: %s", err)
+			log.Global.WithField("err", err).Warn("error creating data directory")
 			return nil, err
 		}
 	}
-	dbPath := dataDir + dbDirName
+
+	dbPath := filepath.Join(dataDir, dbDirName)
 
 	log.Global.Debugf("Opening PeerDB with path: %s", dbPath)
 

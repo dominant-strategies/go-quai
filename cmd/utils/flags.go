@@ -1008,14 +1008,14 @@ func setDataDir(cfg *node.Config) {
 		cfg.DataDir = viper.GetString(DataDirFlag.Name)
 	case environment == params.DevName:
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case environment == params.GardenName && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.GardenName)
-	case environment == params.OrchardName && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.OrchardName)
-	case environment == params.LighthouseName && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.LighthouseName)
-	case environment == params.LocalName && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.LocalName)
+	case environment == params.GardenName && cfg.DataDir == xdg.DataHome:
+		cfg.DataDir = filepath.Join(xdg.DataHome, params.GardenName)
+	case environment == params.OrchardName && cfg.DataDir == xdg.DataHome:
+		cfg.DataDir = filepath.Join(xdg.DataHome, params.OrchardName)
+	case environment == params.LighthouseName && cfg.DataDir == xdg.DataHome:
+		cfg.DataDir = filepath.Join(xdg.DataHome, params.LighthouseName)
+	case environment == params.LocalName && cfg.DataDir == xdg.DataHome:
+		cfg.DataDir = filepath.Join(xdg.DataHome, params.LocalName)
 	}
 	// Set specific directory for node location within the hierarchy
 	switch cfg.NodeLocation.Context() {
