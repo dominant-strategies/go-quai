@@ -65,8 +65,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	case <-time.After(requestManager.C_requestTimeout):
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
-			"error":  err,
-		}).Warn("Request failed")
+		}).Warn("Peer did not respond in time")
 		p.peerManager.MarkUnresponsivePeer(peerID, location)
 		return nil, nil
 	}

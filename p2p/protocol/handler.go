@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -120,7 +121,11 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 		}
 		err = handleBlockRequest(id, loc, *requestedHash, stream, node)
 		if err != nil {
-			log.Global.WithField("err", err).Error("error handling block request")
+			log.Global.WithFields(
+				logrus.Fields{
+					"peer": stream.Conn().RemotePeer(),
+					"err":  err,
+				}).Error("error handling block request")
 			// TODO: handle error
 			return
 		}
