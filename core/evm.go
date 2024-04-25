@@ -82,13 +82,8 @@ func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *co
 
 	// Prime terminus determines which location is eligible to except the etx
 	primeTerminus := header.PrimeTerminus()
-	var etxEligibleSlices common.Hash
-	if chain.IsGenesisHash(primeTerminus) {
-		etxEligibleSlices = common.Hash{}
-	} else {
-		primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
-		etxEligibleSlices = primeTerminusHeader.EtxEligibleSlices()
-	}
+	primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
+	etxEligibleSlices := primeTerminusHeader.EtxEligibleSlices()
 
 	return vm.BlockContext{
 		CanTransfer:        CanTransfer,

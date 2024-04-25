@@ -968,6 +968,11 @@ func (wb *WorkObjectBody) ProtoDecode(data *ProtoWorkObjectBody, location common
 	return nil
 }
 
+func (wb *WorkObjectBody) ProtoDecodeHeader(data *ProtoWorkObjectBody, location common.Location) error {
+	wb.header = &Header{}
+	return wb.header.ProtoDecode(data.GetHeader(), location)
+}
+
 func (wb *WorkObjectBody) RPCMarshalWorkObjectBody() map[string]interface{} {
 	result := map[string]interface{}{
 		"header":          wb.header.RPCMarshalHeader(),

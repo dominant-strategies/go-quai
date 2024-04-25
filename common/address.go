@@ -403,3 +403,7 @@ func (a AddressBytes) IsInQuaiLedgerScope() bool {
 func MakeErrQiAddress(addr string) error {
 	return fmt.Errorf("address %s is in Qi ledger scope and is not in Quai ledger scope", addr)
 }
+
+func (a Address) MixedcaseAddress() MixedcaseAddress {
+	return NewMixedcaseAddress(a)
+}

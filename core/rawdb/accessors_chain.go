@@ -285,7 +285,7 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 
 // ReadHeader retrieves the block header corresponding to the hash.
 func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.WorkObject {
-	return ReadWorkObject(db, hash, types.BlockObject)
+	return ReadWorkObjectHeaderOnly(db, hash, types.BlockObject)
 }
 
 // WriteHeader stores a block header into the database and also stores the hash-
@@ -629,6 +629,18 @@ func ReadWorkObject(db ethdb.Reader, hash common.Hash, woType int) *types.WorkOb
 	return types.NewWorkObject(workObjectHeader, workObjectBody, nil, woType) //TODO: mmtx transaction
 }
 
+func ReadWorkObjectHeaderOnly(db ethdb.Reader, hash common.Hash, woType int) *types.WorkObject {
+	workObjectHeader := ReadWorkObjectHeader(db, hash, woType)
+	if workObjectHeader == nil {
+		return nil
+	}
+	workObjectBodyHeaderOnly := ReadWorkObjectBodyHeaderOnly(db, hash)
+	if workObjectBodyHeaderOnly == nil {
+		return nil
+	}
+	return types.NewWorkObject(workObjectHeader, workObjectBodyHeaderOnly, nil, woType)
+}
+
 // WriteWorkObject writes the work object of the terminus hash.
 func WriteWorkObject(db ethdb.KeyValueWriter, hash common.Hash, workObject *types.WorkObject, woType int, nodeCtx int) {
 	WriteWorkObjectBody(db, hash, workObject, woType, nodeCtx)
@@ -673,6 +685,22 @@ func ReadWorkObjectBody(db ethdb.Reader, hash common.Hash) *types.WorkObjectBody
 		}).Error("Invalid work object body Proto")
 		return nil
 	}
+	return workObjectBody
+}
+
+func ReadWorkObjectBodyHeaderOnly(db ethdb.Reader, hash common.Hash) *types.WorkObjectBody {
+	key := workObjectBodyKey(hash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	protoWorkObjectBody := new(types.ProtoWorkObjectBody)
+	err := proto.Unmarshal(data, protoWorkObjectBody)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal work object body")
+	}
+	workObjectBody := new(types.WorkObjectBody)
+	workObjectBody.ProtoDecodeHeader(protoWorkObjectBody, db.Location())
 	return workObjectBody
 }
 

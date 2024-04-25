@@ -1130,7 +1130,6 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 
 	pool.qiMu.RUnlock()
 
-	location := pool.chainconfig.Location
 	currentBlock := pool.chain.CurrentBlock()
 	gp := types.GasPool(currentBlock.GasLimit())
 	etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
@@ -1144,7 +1143,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	if grabLock {
 		pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
 	}
-	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		if grabLock {
 			pool.mu.RUnlock()
@@ -1165,6 +1164,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	pool.qiMu.Lock()
 	pool.qiPool[tx.Hash()] = txWithMinerFee
 	pool.qiMu.Unlock()
+	pool.queueTxEvent(tx)
 	pool.logger.WithFields(logrus.Fields{
 		"tx":  tx.Hash().String(),
 		"fee": fee,
@@ -1362,6 +1362,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 		dirtyAccounts *accountSet
 		queuedEvents  = make(map[common.InternalAddress]*txSortedMap)
 		reorgCancelCh = make(chan struct{})
+		queuedQiTxs   = make([]*types.Transaction, 0)
 	)
 	for {
 		// Launch next background reorg if needed
@@ -1370,7 +1371,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			close(reorgCancelCh)
 			reorgCancelCh = make(chan struct{})
 			// Run the background reorg and announcements
-			go pool.runReorg(nextDone, reorgCancelCh, reset, dirtyAccounts, queuedEvents)
+			go pool.runReorg(nextDone, reorgCancelCh, reset, dirtyAccounts, queuedEvents, queuedQiTxs)
 
 			// Prepare everything for the next round of reorg
 			curDone, nextDone = nextDone, make(chan struct{})
@@ -1378,6 +1379,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 			reset, dirtyAccounts = nil, nil
 			queuedEvents = make(map[common.InternalAddress]*txSortedMap)
+			queuedQiTxs = make([]*types.Transaction, 0)
 		}
 
 		select {
@@ -1404,19 +1406,23 @@ func (pool *TxPool) scheduleReorgLoop() {
 		case tx := <-pool.queueTxEventCh:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
-			addr, err := types.Sender(pool.signer, tx)
-			if err != nil {
-				continue
+			if tx.Type() == types.QiTxType {
+				queuedQiTxs = append(queuedQiTxs, tx)
+			} else {
+				addr, err := types.Sender(pool.signer, tx)
+				if err != nil {
+					continue
+				}
+				internal, err := addr.InternalAndQuaiAddress()
+				if err != nil {
+					pool.logger.WithField("err", err).Debug("Failed to queue transaction")
+					continue
+				}
+				if _, ok := queuedEvents[internal]; !ok {
+					queuedEvents[internal] = newTxSortedMap()
+				}
+				queuedEvents[internal].Put(tx)
 			}
-			internal, err := addr.InternalAndQuaiAddress()
-			if err != nil {
-				pool.logger.WithField("err", err).Debug("Failed to queue transaction")
-				continue
-			}
-			if _, ok := queuedEvents[internal]; !ok {
-				queuedEvents[internal] = newTxSortedMap()
-			}
-			queuedEvents[internal].Put(tx)
 
 		case <-curDone:
 			curDone = nil
@@ -1433,7 +1439,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
-func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.InternalAddress]*txSortedMap) {
+func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.InternalAddress]*txSortedMap, queuedQiTxs []*types.Transaction) {
 	defer close(done)
 	defer func() {
 		if r := recover(); r != nil {
@@ -1526,6 +1532,9 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 					txs = append(txs, set.Flatten()...)
 				}
 				pool.txFeed.Send(NewTxsEvent{txs})
+			}
+			if len(queuedQiTxs) > 0 {
+				pool.txFeed.Send(NewTxsEvent{queuedQiTxs})
 			}
 			if pool.reOrgCounter == c_reorgCounterThreshold {
 				pool.logger.WithField("time", common.PrettyDuration(time.Since(start))).Debug("Time taken to runReorg in txpool")
@@ -1982,6 +1991,7 @@ func (pool *TxPool) sendersGoroutine() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	resetMetersTicker := time.NewTicker(time.Minute * 5)
 	for {
 		select {
 		case <-pool.reorgShutdownCh:
@@ -2001,6 +2011,23 @@ func (pool *TxPool) sendersGoroutine() {
 				}).Debug("Tx already seen in sender cache (reorg?)")
 			}
 			pool.SendersMutex.Unlock()
+
+		case <-resetMetersTicker.C:
+			// Reset the tx meters every 5 minutes
+			pendingDiscardMeter.Set(0)
+			pendingReplaceMeter.Set(0)
+			pendingRateLimitMeter.Set(0)
+			pendingNofundsMeter.Set(0)
+			queuedDiscardMeter.Set(0)
+			queuedReplaceMeter.Set(0)
+			queuedRateLimitMeter.Set(0)
+			queuedNofundsMeter.Set(0)
+			queuedEvictionMeter.Set(0)
+			knownTxMeter.Set(0)
+			validTxMeter.Set(0)
+			invalidTxMeter.Set(0)
+			underpricedTxMeter.Set(0)
+			overflowedTxMeter.Set(0)
 		}
 	}
 }

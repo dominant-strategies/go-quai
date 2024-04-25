@@ -471,7 +471,7 @@ var (
 	}
 
 	PprofFlag = Flag{
-		Name:  "pprof",
+		Name:  c_NodeFlagPrefix + "pprof",
 		Value: false,
 		Usage: "Enable the pprof HTTP server",
 	}
@@ -1528,7 +1528,6 @@ var configData = make(map[string]map[string]interface{})
 func addFlagsToCategory(flags []Flag) {
 	for _, flag := range flags {
 		split := strings.Split(flag.Name, ".")
-
 		if split[1] == "config-dir" {
 			continue
 		}
