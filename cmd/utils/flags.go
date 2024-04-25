@@ -159,7 +159,7 @@ var (
 	DataDirFlag = Flag{
 		Name:         c_GlobalFlagPrefix + "data-dir",
 		Abbreviation: "d",
-		Value:        xdg.DataHome + "/" + constants.APP_NAME + "/",
+		Value:        filepath.Join(xdg.DataHome, constants.APP_NAME),
 		Usage:        "data directory" + generateEnvDoc(c_GlobalFlagPrefix+"data-dir"),
 	}
 

@@ -17,7 +17,10 @@
 package node
 
 import (
+	"path/filepath"
+
 	"github.com/adrg/xdg"
+	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -30,7 +33,7 @@ const (
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
-	DataDir:          xdg.DataHome,
+	DataDir:          filepath.Join(xdg.DataHome, constants.APP_NAME),
 	HTTPPort:         DefaultHTTPPort,
 	HTTPModules:      []string{"net", "web3"},
 	HTTPVirtualHosts: []string{"localhost"},
