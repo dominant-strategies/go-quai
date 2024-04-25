@@ -225,7 +225,7 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 		}
 	}
 
-	go p.requestFromPeers(location, requestData, responseDataType, resultChan)
+	p.requestFromPeers(location, requestData, responseDataType, resultChan)
 	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
 	// Right now this creates too many streams, so don't call this until we have a better solution
 	// p.queryDHT(location, requestData, responseDataType, resultChan)

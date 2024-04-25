@@ -1186,6 +1186,14 @@ func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
 	pool.qiMu.Unlock()
 }
 
+func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
+	pool.qiMu.Lock()
+	for _, tx := range txs {
+		delete(pool.qiPool, *tx)
+	}
+	pool.qiMu.Unlock()
+}
+
 // Mempool lock must be held.
 func (pool *TxPool) removeQiTxsLocked(txs []*types.Transaction) {
 	for _, tx := range txs {

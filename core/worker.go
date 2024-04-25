@@ -839,6 +839,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 }
 
 func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, etxs []*types.Transaction, txs *types.TransactionsByPriceAndNonce, etxSet *types.EtxSet, interrupt *int32) bool {
+	qiTxsToRemove := make([]*common.Hash, 0)
 	gasLimit := env.wo.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(types.GasPool).AddGas(gasLimit())
@@ -920,12 +921,13 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				break
 			}
 			if err := w.processQiTx(tx, env, txGas); err != nil {
+				hash := tx.Hash()
 				w.logger.WithFields(log.Fields{
 					"err": err,
-					"tx":  tx.Hash().Hex(),
+					"tx":  hash.Hex(),
 				}).Error("Error processing QiTx")
 				// It's unlikely that this transaction will be valid in the future so remove it asynchronously
-				go w.txPool.RemoveQiTx(tx)
+				qiTxsToRemove = append(qiTxsToRemove, &hash)
 			}
 			txs.PopNoSort()
 			continue
@@ -1002,7 +1004,9 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			txs.Shift(from.Bytes20(), false)
 		}
 	}
-
+	if len(qiTxsToRemove) > 0 {
+		go w.txPool.RemoveQiTxs(qiTxsToRemove)
+	}
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
