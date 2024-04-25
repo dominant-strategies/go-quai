@@ -24,7 +24,6 @@ import (
 
 // Blake3pow proof-of-work protocol constants.
 var (
-	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
 
 	ContextTimeFactor = big10
@@ -83,7 +82,7 @@ func (blake3pow *Blake3pow) VerifyHeader(chain consensus.ChainHeaderReader, head
 	if chain.GetHeader(header.Hash(), number) != nil {
 		return nil
 	}
-	parent := chain.GetHeader(header.ParentHash(nodeCtx), number-1)
+	parent := chain.GetBlockByHash(header.ParentHash(nodeCtx))
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
@@ -177,7 +176,7 @@ func (blake3pow *Blake3pow) verifyHeaderWorker(chain consensus.ChainHeaderReader
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	var parent *types.WorkObject
 	if index == 0 {
-		parent = chain.GetHeader(headers[0].ParentHash(nodeCtx), headers[0].NumberU64(nodeCtx)-1)
+		parent = chain.GetBlockByHash(headers[0].ParentHash(nodeCtx))
 	} else if headers[index-1].Hash() == headers[index].ParentHash(nodeCtx) {
 		parent = headers[index-1]
 	}
@@ -195,8 +194,8 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 	if blake3pow.config.PowMode == ModeFullFake {
 		return nil
 	}
-	// Verify that there are at most 2 uncles included in this block
-	if len(block.Uncles()) > maxUncles {
+	// Verify that there are at most params.MaxWorkShareCount uncles included in this block
+	if len(block.Uncles()) > params.MaxWorkShareCount {
 		return errTooManyUncles
 	}
 	if len(block.Uncles()) == 0 {
@@ -206,7 +205,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.WorkObject)
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)
-	for i := 0; i < 7; i++ {
+	for i := 0; i < params.WorkSharesInclusionDepth; i++ {
 		ancestorHeader := chain.GetHeader(parent, number)
 		if ancestorHeader == nil {
 			break
@@ -244,8 +243,9 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		if ancestors[uncle.ParentHash()] == nil || uncle.ParentHash() == block.ParentHash(nodeCtx) {
 			return errDanglingUncle
 		}
-		// Verify the seal and get the powHash for the given header
-		err := blake3pow.verifySeal(uncle)
+
+		// make sure that the work can be computed
+		_, err := blake3pow.ComputePowHash(uncle)
 		if err != nil {
 			return err
 		}
@@ -257,6 +257,19 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 			expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader())
 			if expected.Cmp(uncle.Difficulty()) != 0 {
 				return fmt.Errorf("uncle has invalid difficulty: have %v, want %v", uncle.Difficulty(), expected)
+			}
+
+			// Verify that the work share number is parent's +1
+			parentNumber := parent.Number(nodeCtx)
+			if chain.IsGenesisHash(parent.Hash()) {
+				parentNumber = big.NewInt(0)
+			}
+			if diff := new(big.Int).Sub(uncle.Number(), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
+				return consensus.ErrInvalidNumber
+			}
+
+			if !blake3pow.CheckIfValidWorkShare(uncle) {
+				return errors.New("invalid workshare included")
 			}
 		}
 	}
@@ -626,4 +639,8 @@ func (blake3pow *Blake3pow) NodeLocation() common.Location {
 
 func (blake3pow *Blake3pow) ComputePowLight(header *types.WorkObjectHeader) (common.Hash, common.Hash) {
 	panic("compute pow light doesnt exist for blake3")
+}
+
+func (blake3pow *Blake3pow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
+	return header.Hash(), nil
 }

@@ -44,6 +44,9 @@ type ChainHeaderReader interface {
 	// GetHeaderByHash retrieves a block header from the database by its hash.
 	GetHeaderByHash(hash common.Hash) *types.WorkObject
 
+	// GetBlockByhash retrieves a block from the database by hash.
+	GetBlockByHash(hash common.Hash) *types.WorkObject
+
 	// GetTerminiByHash retrieves the termini for a given header hash
 	GetTerminiByHash(hash common.Hash) *types.Termini
 
@@ -99,6 +102,13 @@ type Engine interface {
 	// UncledLogS returns the log of the entropy reduction by uncles referenced in the block
 	UncledLogS(block *types.WorkObject) *big.Int
 
+	// WorkShareLogS returns the log of the entropy reduction by the workshare referenced in the block
+	WorkShareLogS(block *types.WorkObject) (*big.Int, error)
+
+	// CheckIfValidWorkShare checks if the workshare meets the work share
+	// requirements defined by the protocol
+	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool
+
 	// UncledUncledSubDeltaLogS returns the log of the uncled entropy reduction  since the past coincident
 	UncledSubDeltaLogS(chain GenesisReader, header *types.WorkObject) *big.Int
 
@@ -150,6 +160,9 @@ type Engine interface {
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, parent *types.WorkObjectHeader) *big.Int
+
+	// ComputePowHash returns the pow hash of the workobject header
+	ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error)
 
 	// IsDomCoincident returns true if this block satisfies the difficulty order
 	// of a dominant chain. If this node does not have a dominant chain (i.e.

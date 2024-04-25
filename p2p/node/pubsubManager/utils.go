@@ -14,10 +14,11 @@ import (
 
 const (
 	// Data types for gossipsub topics
-	C_workObjectType  = "blocks"
-	C_transactionType = "transactions"
-	C_headerType      = "headers"
-	C_hashType        = "hash"
+	C_workObjectType       = "blocks"
+	C_transactionType      = "transactions"
+	C_headerType           = "headers"
+	C_hashType             = "hash"
+	C_workObjectHeaderType = "woHeaders"
 )
 
 // gets the name of the topic for the given type of data
@@ -28,10 +29,10 @@ func TopicName(genesis common.Hash, location common.Location, data interface{}) 
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/"), nil
 	case common.Hash:
 		return strings.Join([]string{baseTopic, C_hashType}, "/"), nil
-	case *types.Transaction:
-		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
 	case *types.Transactions:
 		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
+	case *types.WorkObjectHeader:
+		return strings.Join([]string{baseTopic, C_workObjectHeaderType}, "/"), nil
 	default:
 		return "", ErrUnsupportedType
 	}

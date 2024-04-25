@@ -584,9 +584,21 @@ func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) 
 	return b.quai.core.SubscribeExpansionEvent(ch)
 }
 
+func (b *QuaiAPIBackend) SendWorkShare(workShare *types.WorkObjectHeader) error {
+	return b.quai.core.SendWorkShare(workShare)
+}
+
+func (b *QuaiAPIBackend) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool {
+	return b.quai.core.CheckIfValidWorkShare(workShare)
+}
+
 // ///////////////////////////
 // /////// P2P ///////////////
 // ///////////////////////////
 func (b *QuaiAPIBackend) BroadcastBlock(block *types.WorkObject, location common.Location) error {
 	return b.quai.p2p.Broadcast(location, block)
+}
+
+func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectHeader, location common.Location) error {
+	return b.quai.p2p.Broadcast(location, workShare)
 }

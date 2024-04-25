@@ -77,6 +77,13 @@ func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.W
 	if err != nil {
 		return big.NewInt(0)
 	}
+	if progpow.NodeLocation().Context() == common.ZONE_CTX {
+		workShareS, err := progpow.WorkShareLogS(header)
+		if err != nil {
+			return big.NewInt(0)
+		}
+		intrinsicS = new(big.Int).Add(intrinsicS, workShareS)
+	}
 	switch order {
 	case common.PRIME_CTX:
 		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaS(common.REGION_CTX))
@@ -111,9 +118,19 @@ func (progpow *Progpow) TotalLogPhS(header *types.WorkObject) *big.Int {
 }
 
 func (progpow *Progpow) DeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
 	intrinsicS, order, err := progpow.CalcOrder(header)
 	if err != nil {
 		return big.NewInt(0)
+	}
+	if progpow.NodeLocation().Context() == common.ZONE_CTX {
+		workShareS, err := progpow.WorkShareLogS(header)
+		if err != nil {
+			return big.NewInt(0)
+		}
+		intrinsicS = new(big.Int).Add(intrinsicS, workShareS)
 	}
 	switch order {
 	case common.PRIME_CTX:
@@ -143,6 +160,55 @@ func (progpow *Progpow) UncledLogS(block *types.WorkObject) *big.Int {
 		totalUncledLogS.Add(totalUncledLogS, intrinsicS)
 	}
 	return totalUncledLogS
+}
+
+func (progpow *Progpow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error) {
+	workShares := wo.Uncles()
+	totalWsEntropy := big.NewInt(0)
+	for _, ws := range workShares {
+		powHash, err := progpow.ComputePowHash(ws)
+		if err != nil {
+			return big.NewInt(0), err
+		}
+		// Two discounts need to be applied to the weight of each work share
+		// 1) Discount based on the amount of number of other possible work
+		// shares for the same entropy value
+		// 2) Discount based on the staleness of inclusion, for every block
+		// delay the weight gets reduced by the factor of 2
+
+		// Discount 1) only applies if the workshare has less weight than the
+		// work object threshold
+		var wsEntropy *big.Int
+		woDiff := new(big.Int).Set(wo.Difficulty())
+		target := new(big.Int).Div(common.Big2e256, woDiff)
+		if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) > 0 { // powHash > target
+			// The work share that has less than threshold weight needs to add
+			// an extra bit for each level
+			// This is achieved using three steps
+			// 1) Find the difference in entropy between the work share and
+			// threshold in the 2^mantBits bits field because otherwise the precision
+			// is lost due to integer division
+			// 2) Divide this difference with the 2^mantBits to get the number
+			// of bits of difference to discount the workshare entropy
+			// 3) Divide the entropy difference with 2^(extraBits+1) to get the
+			// actual work share weight here +1 is done to the extraBits because
+			// of Quo and if the difference is less than 0, its within the first
+			// level
+			cBigBits := progpow.IntrinsicLogS(powHash)
+			thresholdBigBits := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+			wsEntropy = new(big.Int).Sub(thresholdBigBits, cBigBits)
+			extraBits := new(big.Int).Quo(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(mantBits)), nil))
+			wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), new(big.Int).Add(extraBits, big.NewInt(1)), nil))
+		} else {
+			wsEntropy = new(big.Int).Set(progpow.IntrinsicLogS(powHash))
+		}
+		// Discount 2) applies to all shares regardless of the weight
+		wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(wo.NumberU64(common.ZONE_CTX)-ws.NumberU64())), nil))
+
+		// Add the entropy into the total entropy once the discount calculation is done
+		totalWsEntropy.Add(totalWsEntropy, wsEntropy)
+	}
+	return totalWsEntropy, nil
 }
 
 func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
@@ -202,4 +268,21 @@ func (progpow *Progpow) CalcRank(chain consensus.GenesisReader, header *types.Wo
 		}
 	}
 	return 0, nil
+}
+
+func (progpow *Progpow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool {
+	// Extract some data from the header
+	diff := new(big.Int).Set(workShare.Difficulty())
+	c, _ := mathutil.BinaryLog(diff, mantBits)
+	if c <= params.WorkSharesThresholdDiff {
+		return false
+	}
+	workShareThreshold := c - params.WorkSharesThresholdDiff
+	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
+	workShareMintarget := new(big.Int).Div(big2e256, workShareDiff)
+	powHash, err := progpow.ComputePowHash(workShare)
+	if err != nil {
+		return false
+	}
+	return new(big.Int).SetBytes(powHash.Bytes()).Cmp(workShareMintarget) <= 0
 }

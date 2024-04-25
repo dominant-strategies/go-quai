@@ -719,6 +719,31 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	return nil
 }
 
+func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw json.RawMessage) error {
+	nodeCtx := s.b.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return errors.New("work shares cannot be broadcasted in non-zone chain")
+	}
+	var workShare *types.WorkObjectHeader
+	if err := json.Unmarshal(raw, &workShare); err != nil {
+		return err
+	}
+	if workShare != nil {
+		// check if the workshare is valid before broadcasting as a sanity
+		if !s.b.CheckIfValidWorkShare(workShare) {
+			return errors.New("work share is invalid")
+		}
+
+		s.b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
+		err := s.b.BroadcastWorkShare(workShare, s.b.NodeLocation())
+		if err != nil {
+			log.Global.WithField("err", err).Error("Error broadcasting work share")
+			return err
+		}
+	}
+	return nil
+}
+
 type tdBlock struct {
 	Header           *types.WorkObject   `json:"header"`
 	Manifest         types.BlockManifest `json:"manifest"`

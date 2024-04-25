@@ -99,6 +99,8 @@ type Backend interface {
 	AddGenesisPendingEtxs(block *types.WorkObject)
 	SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription
 	WriteGenesisBlock(block *types.WorkObject, location common.Location)
+	SendWorkShare(workShare *types.WorkObjectHeader) error
+	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -129,6 +131,7 @@ type Backend interface {
 
 	// P2P apis
 	BroadcastBlock(block *types.WorkObject, location common.Location) error
+	BroadcastWorkShare(workShare *types.WorkObjectHeader, location common.Location) error
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

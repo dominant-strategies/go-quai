@@ -236,7 +236,6 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	if err != nil {
 		return nil, false, false, err
 	}
-
 	time3 := common.PrettyDuration(time.Since(start))
 	// Construct the block locally
 	block, err := sl.ConstructLocalBlock(header)
@@ -404,7 +403,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 			"location":   block.Location(),
 			"parentHash": block.ParentHash(nodeCtx),
 		}).Debug("Found uncle")
-		sl.hc.chainSideFeed.Send(ChainSideEvent{Blocks: []*types.WorkObject{block}, ResetUncles: false})
+		sl.hc.chainSideFeed.Send(ChainSideEvent{Blocks: []*types.WorkObject{block}})
 	}
 
 	// Chain head feed is only used by the Zone chains

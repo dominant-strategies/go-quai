@@ -12,6 +12,8 @@ import (
 
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
+	"modernc.org/mathutil"
 )
 
 const (
@@ -127,8 +129,15 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 // seed that results in correct final header difficulty.
 func (blake3pow *Blake3pow) mine(header *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
+	diff := new(big.Int).Set(header.Difficulty())
+	c, _ := mathutil.BinaryLog(diff, mantBits)
+	if c <= params.WorkSharesThresholdDiff {
+		return
+	}
+	workShareThreshold := c - params.WorkSharesThresholdDiff
+	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
 	var (
-		target = new(big.Int).Div(big2e256, header.Difficulty())
+		target = new(big.Int).Div(big2e256, workShareDiff)
 	)
 	// Start generating random nonces until we abort or find a good one
 	var (

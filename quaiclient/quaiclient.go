@@ -303,6 +303,11 @@ func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObje
 	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
 }
 
+func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObjectHeader) error {
+	data := header.RPCMarshalWorkObjectHeader()
+	return ec.c.CallContext(ctx, nil, "quai_receiveWorkShare", data)
+}
+
 // Filters
 
 // SubscribeFilterLogs subscribes to the results of a streaming filter query.

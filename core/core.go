@@ -536,6 +536,10 @@ func (c *Core) Engine() consensus.Engine {
 	return c.engine
 }
 
+func (c *Core) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool {
+	return c.engine.CheckIfValidWorkShare(workShare)
+}
+
 // Slice retrieves the slice struct.
 func (c *Core) Slice() *Slice {
 	return c.sl
@@ -1075,6 +1079,10 @@ func (c *Core) SubscribePendingHeader(ch chan<- *types.WorkObject) event.Subscri
 }
 
 func (c *Core) IsMining() bool { return c.sl.miner.Mining() }
+
+func (c *Core) SendWorkShare(workShare *types.WorkObjectHeader) error {
+	return c.sl.miner.worker.AddWorkShare(workShare)
+}
 
 //-------------------------//
 // State Processor methods //

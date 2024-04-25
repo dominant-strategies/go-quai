@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -56,6 +57,10 @@ const (
 
 	// c_chainSideChanSize is the size of the channel listening to uncle events
 	chainSideChanSize = 10
+
+	c_uncleCacheSize = 100
+
+	c_workShareFilterDist = 100 // the dist from the current block for the work share inclusion in the worker
 )
 
 // environment is the worker's current environment and holds all
@@ -209,9 +214,8 @@ type worker struct {
 
 	wg sync.WaitGroup
 
-	localUncles  map[common.Hash]*types.WorkObjectHeader // A set of side blocks generated locally as the possible uncle blocks.
-	remoteUncles map[common.Hash]*types.WorkObjectHeader // A set of side blocks as the possible uncle blocks.
-	uncleMu      sync.RWMutex
+	Uncles  *lru.Cache
+	uncleMu sync.RWMutex
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
@@ -279,8 +283,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		coinbase:                       config.Etherbase,
 		isLocalBlock:                   isLocalBlock,
 		workerDb:                       db,
-		localUncles:                    make(map[common.Hash]*types.WorkObjectHeader),
-		remoteUncles:                   make(map[common.Hash]*types.WorkObjectHeader),
 		chainHeadCh:                    make(chan ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:                    make(chan ChainSideEvent, chainSideChanSize),
 		taskCh:                         make(chan *task),
@@ -292,6 +294,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 		logger:                         logger,
 	}
+	// initialize a uncle cache
+	worker.Uncles, _ = lru.New(c_uncleCacheSize)
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit
 
@@ -498,34 +502,12 @@ func (w *worker) asyncStateLoop() {
 						}).Fatal("Go-Quai Panicked")
 					}
 				}()
-				if side.ResetUncles {
-					w.uncleMu.Lock()
-					w.localUncles = make(map[common.Hash]*types.WorkObjectHeader)
-					w.remoteUncles = make(map[common.Hash]*types.WorkObjectHeader)
-					w.uncleMu.Unlock()
-				}
 				for _, wo := range side.Blocks {
-
 					// Short circuit for duplicate side blocks
-					w.uncleMu.RLock()
-					if _, exists := w.localUncles[wo.Hash()]; exists {
-						w.uncleMu.RUnlock()
+					if exists := w.Uncles.Contains(wo.Hash()); exists {
 						continue
 					}
-					if _, exists := w.remoteUncles[wo.Hash()]; exists {
-						w.uncleMu.RUnlock()
-						continue
-					}
-					w.uncleMu.RUnlock()
-					if w.isLocalBlock != nil && w.isLocalBlock(wo) {
-						w.uncleMu.Lock()
-						w.localUncles[wo.Hash()] = wo.WorkObjectHeader()
-						w.uncleMu.Unlock()
-					} else {
-						w.uncleMu.Lock()
-						w.remoteUncles[wo.Hash()] = wo.WorkObjectHeader()
-						w.uncleMu.Unlock()
-					}
+					w.Uncles.Add(wo.Hash(), wo.WorkObjectHeader())
 				}
 			}()
 		case <-w.exitCh:
@@ -715,7 +697,7 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 		etxPLimit: etxPLimit,
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Header().Hash(), 7) {
+	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Header().Hash(), params.WorkSharesInclusionDepth) {
 		for _, uncle := range ancestor.Uncles() {
 			env.family.Add(uncle.Hash())
 		}
@@ -1221,29 +1203,42 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			return nil, err
 		}
 		// Accumulate the uncles for the sealing work.
-		commitUncles := func(wos map[common.Hash]*types.WorkObjectHeader) {
-			for hash, uncle := range wos {
+		commitUncles := func(wos *lru.Cache) {
+			var uncles []*types.WorkObjectHeader
+			keys := wos.Keys()
+			for _, hash := range keys {
+				if value, exist := wos.Peek(hash); exist {
+					uncle := value.(*types.WorkObjectHeader)
+					uncles = append(uncles, uncle)
+				}
+			}
+			// sort the uncles in the decreasing order of entropy
+			sort.Slice(uncles, func(i, j int) bool {
+				powHash1, _ := w.engine.ComputePowHash(uncles[i])
+				powHash2, _ := w.engine.ComputePowHash(uncles[j])
+				return new(big.Int).SetBytes(powHash1.Bytes()).Cmp(new(big.Int).SetBytes(powHash2.Bytes())) < 0
+			})
+			for _, uncle := range uncles {
 				env.uncleMu.RLock()
-				if len(env.uncles) == 2 {
+				if len(env.uncles) == params.MaxWorkShareCount {
 					env.uncleMu.RUnlock()
 					break
 				}
 				env.uncleMu.RUnlock()
 				if err := w.commitUncle(env, uncle); err != nil {
 					w.logger.WithFields(log.Fields{
-						"hash":   hash,
+						"hash":   uncle.Hash(),
 						"reason": err,
 					}).Trace("Possible uncle rejected")
 				} else {
-					w.logger.WithField("hash", hash).Debug("Committing new uncle to block")
+					w.logger.WithField("hash", uncle.Hash()).Debug("Committing new uncle to block")
 				}
 			}
 		}
 		if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 			w.uncleMu.RLock()
 			// Prefer to locally generated uncle
-			commitUncles(w.localUncles)
-			commitUncles(w.remoteUncles)
+			commitUncles(w.Uncles)
 			w.uncleMu.RUnlock()
 		}
 		return env, nil
@@ -1418,6 +1413,20 @@ func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+}
+
+func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
+	if !w.engine.CheckIfValidWorkShare(workShare) {
+		return errors.New("workshare is not valid")
+	}
+
+	// Don't add the workshare into the list if its farther than the worksharefilterdist
+	if workShare.NumberU64()+c_workShareFilterDist < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
+		return nil
+	}
+
+	w.Uncles.ContainsOrAdd(workShare.Hash(), workShare)
+	return nil
 }
 
 func (w *worker) CurrentInfo(header *types.WorkObject) bool {

@@ -422,7 +422,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 					blocks = append(blocks, block)
 				}
 			}
-			hc.chainSideFeed.Send(ChainSideEvent{Blocks: blocks, ResetUncles: true})
+			hc.chainSideFeed.Send(ChainSideEvent{Blocks: blocks})
 		}()
 	}
 

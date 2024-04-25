@@ -13,6 +13,8 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
+	"modernc.org/mathutil"
 )
 
 const (
@@ -128,8 +130,15 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 // seed that results in correct final block difficulty.
 func (progpow *Progpow) mine(header *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
+	diff := new(big.Int).Set(header.Difficulty())
+	c, _ := mathutil.BinaryLog(diff, mantBits)
+	if c <= params.WorkSharesThresholdDiff {
+		return
+	}
+	workShareThreshold := c - params.WorkSharesThresholdDiff
+	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
 	var (
-		target  = new(big.Int).Div(big2e256, header.Difficulty())
+		target  = new(big.Int).Div(big2e256, workShareDiff)
 		nodeCtx = progpow.config.NodeLocation.Context()
 	)
 	// Start generating random nonces until we abort or find a good one

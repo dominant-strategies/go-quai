@@ -25,7 +25,6 @@ import (
 
 // Progpow proof-of-work protocol constants.
 var (
-	maxUncles                     = 2         // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
 
 	ContextTimeFactor = big10
@@ -197,8 +196,8 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 	if progpow.config.PowMode == ModeFullFake {
 		return nil
 	}
-	// Verify that there are at most 2 uncles included in this block
-	if len(block.Uncles()) > maxUncles {
+	// Verify that there are at most params.MaxWorkShareCount uncles included in this block
+	if len(block.Uncles()) > params.MaxWorkShareCount {
 		return errTooManyUncles
 	}
 	if len(block.Uncles()) == 0 {
@@ -208,7 +207,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.WorkObject)
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)
-	for i := 0; i < 7; i++ {
+	for i := 0; i < params.WorkSharesInclusionDepth; i++ {
 		ancestorHeader := chain.GetHeader(parent, number)
 		if ancestorHeader == nil {
 			break
@@ -246,8 +245,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 		if ancestors[uncle.ParentHash()] == nil || uncle.ParentHash() == block.ParentHash(nodeCtx) {
 			return errDanglingUncle
 		}
-		// Verify the seal and get the powHash for the given header
-		_, err := progpow.verifySeal(uncle)
+		_, err := progpow.ComputePowHash(uncle)
 		if err != nil {
 			return err
 		}
@@ -260,6 +258,20 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 			if expected.Cmp(uncle.Difficulty()) != 0 {
 				return fmt.Errorf("uncle has invalid difficulty: have %v, want %v", uncle.Difficulty(), expected)
 			}
+
+			// Verify that the work share number is parent's +1
+			parentNumber := parent.Number(nodeCtx)
+			if chain.IsGenesisHash(parent.Hash()) {
+				parentNumber = big.NewInt(0)
+			}
+			if diff := new(big.Int).Sub(uncle.Number(), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
+				return consensus.ErrInvalidNumber
+			}
+
+			if !progpow.CheckIfValidWorkShare(uncle) {
+				return errors.New("invalid workshare included")
+			}
+
 		}
 	}
 	return nil
@@ -586,6 +598,20 @@ func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (common.Hash,
 	target := new(big.Int).Div(big2e256, header.Difficulty())
 	if new(big.Int).SetBytes(powHash.(common.Hash).Bytes()).Cmp(target) > 0 {
 		return powHash.(common.Hash), errInvalidPoW
+	}
+	return powHash.(common.Hash), nil
+}
+
+func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
+	// Check progpow
+	mixHash := header.PowDigest.Load()
+	powHash := header.PowHash.Load()
+	if powHash == nil || mixHash == nil {
+		mixHash, powHash = progpow.ComputePowLight(header)
+	}
+	// Verify the calculated values against the ones provided in the header
+	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
+		return common.Hash{}, errInvalidMixHash
 	}
 	return powHash.(common.Hash), nil
 }
