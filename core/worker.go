@@ -1292,7 +1292,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		return etxSet
 	}
 
-	pending, err := w.txPool.TxPoolPending(true)
+	pending, err := w.txPool.TxPoolPending(false)
 	if err != nil {
 		return nil
 	}
