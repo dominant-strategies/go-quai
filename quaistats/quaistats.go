@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -35,8 +36,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/dgrijalva/jwt-go"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/shirou/gopsutil/cpu"
@@ -858,10 +857,15 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 }
 
 type cachedBlock struct {
-	number     uint64
-	parentHash common.Hash
-	txCount    uint64
-	time       uint64
+	number        uint64
+	parentHash    common.Hash
+	txCount       uint64
+	quaiTxCount   uint64
+	qiTxCount     uint64
+	extTxCount    uint64
+	extTxInCount  uint64
+	extTxOutCount uint64
+	time          uint64
 }
 
 // nodeInfo is the collection of meta information about a node that is displayed
@@ -987,11 +991,13 @@ func (s *Service) isJwtExpired(authJwt string) (bool, error) {
 
 // Trusted Only
 type blockTransactionStats struct {
-	Timestamp             *big.Int `json:"timestamp"`
-	TotalNoTransactions1h uint64   `json:"totalNoTransactions1h"`
-	TPS1m                 uint64   `json:"tps1m"`
-	TPS1hr                uint64   `json:"tps1hr"`
-	Chain                 string   `json:"chain"`
+	Timestamp *big.Int `json:"timestamp"`
+	Tx        subTps   `json:"tx"`
+	QuaiTx    subTps   `json:"quaiTx"`
+	QiTx      subTps   `json:"qiTx"`
+	ExtTxIn   subTps   `json:"extTxIn"`
+	ExtTxOut  subTps   `json:"extTxOut"`
+	Chain     string   `json:"chain"`
 }
 
 // Trusted Only
@@ -1030,10 +1036,18 @@ type nodeStats struct {
 	HashedMAC           string     `json:"hashedMAC"`
 }
 
+type subTps struct {
+	TotalNoTransactions1h uint64 `json:"totalNoTransactions1h"`
+	TPS1m                 uint64 `json:"tps1m"`
+	TPS1hr                uint64 `json:"tps1hr"`
+}
+
 type tps struct {
-	TPS1m                     uint64
-	TPS1hr                    uint64
-	TotalNumberTransactions1h uint64
+	Tx       subTps
+	QuaiTx   subTps
+	QiTx     subTps
+	ExtTxIn  subTps
+	ExtTxOut subTps
 }
 
 type BatchObject struct {
@@ -1042,11 +1056,20 @@ type BatchObject struct {
 }
 
 func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
+	txCount := uint64(len(block.Transactions()))
+	quaiTxCount := uint64(len(block.QuaiTransactions()))
+	qiTxCount := uint64(len(block.QiTransactions()))
+	extTxInCount := txCount - quaiTxCount - qiTxCount
+
 	currentBlock := cachedBlock{
-		number:     block.NumberU64(s.backend.NodeCtx()),
-		parentHash: block.ParentHash(s.backend.NodeCtx()),
-		txCount:    uint64(len(block.Transactions())),
-		time:       block.Time(),
+		number:        block.NumberU64(s.backend.NodeCtx()),
+		parentHash:    block.ParentHash(s.backend.NodeCtx()),
+		txCount:       txCount,
+		quaiTxCount:   quaiTxCount,
+		qiTxCount:     qiTxCount,
+		extTxInCount:  extTxInCount,
+		extTxOutCount: uint64(len(block.ExtTransactions())),
+		time:          block.Time(),
 	}
 	s.blockLookupCache.Add(block.Hash(), currentBlock)
 	return currentBlock
@@ -1055,6 +1078,14 @@ func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
 func (s *Service) calculateTPS(block *types.WorkObject) *tps {
 	var totalTransactions1h uint64
 	var totalTransactions1m uint64
+	var quaiTotalTransactions1h uint64
+	var quaiTotalTransactions1m uint64
+	var qiTotalTransactions1h uint64
+	var qiTotalTransactions1m uint64
+	var extInTotalTransactions1h uint64
+	var extInTotalTransactions1m uint64
+	var extOutTotalTransactions1h uint64
+	var extOutTotalTransactions1m uint64
 	var currentBlock interface{}
 	var ok bool
 
@@ -1074,8 +1105,16 @@ func (s *Service) calculateTPS(block *types.WorkObject) *tps {
 
 		// Add the number of transactions in the block to the total
 		totalTransactions1h += currentBlock.(cachedBlock).txCount
+		quaiTotalTransactions1h += currentBlock.(cachedBlock).quaiTxCount
+		qiTotalTransactions1h += currentBlock.(cachedBlock).qiTxCount
+		extInTotalTransactions1h += currentBlock.(cachedBlock).extTxInCount
+		extOutTotalTransactions1h += currentBlock.(cachedBlock).extTxOutCount
 		if withinMinute && currentBlock.(cachedBlock).time+60 > block.Time() {
 			totalTransactions1m += currentBlock.(cachedBlock).txCount
+			quaiTotalTransactions1m += currentBlock.(cachedBlock).quaiTxCount
+			qiTotalTransactions1m += currentBlock.(cachedBlock).qiTxCount
+			extInTotalTransactions1m += currentBlock.(cachedBlock).extTxInCount
+			extOutTotalTransactions1m += currentBlock.(cachedBlock).extTxOutCount
 		} else {
 			withinMinute = false
 		}
@@ -1104,23 +1143,89 @@ func (s *Service) calculateTPS(block *types.WorkObject) *tps {
 	if currentBlock.(cachedBlock).number == 1 && withinMinute {
 		delta := block.Time() - currentBlock.(cachedBlock).time
 		return &tps{
-			TPS1m:                     totalTransactions1m / delta,
-			TPS1hr:                    totalTransactions1h / delta,
-			TotalNumberTransactions1h: totalTransactions1h,
+			Tx: subTps{
+				TPS1m:                 totalTransactions1m / delta,
+				TPS1hr:                totalTransactions1h / delta,
+				TotalNoTransactions1h: totalTransactions1h,
+			},
+			QuaiTx: subTps{
+				TPS1m:                 quaiTotalTransactions1m / delta,
+				TPS1hr:                quaiTotalTransactions1h / delta,
+				TotalNoTransactions1h: quaiTotalTransactions1h,
+			},
+			QiTx: subTps{
+				TPS1m:                 qiTotalTransactions1m / delta,
+				TPS1hr:                qiTotalTransactions1h / delta,
+				TotalNoTransactions1h: qiTotalTransactions1h,
+			},
+			ExtTxIn: subTps{
+				TPS1m:                 extInTotalTransactions1m / delta,
+				TPS1hr:                extInTotalTransactions1h / delta,
+				TotalNoTransactions1h: extInTotalTransactions1h,
+			},
+			ExtTxOut: subTps{
+				TPS1m:                 extOutTotalTransactions1m / delta,
+				TPS1hr:                extOutTotalTransactions1h / delta,
+				TotalNoTransactions1h: extOutTotalTransactions1h,
+			},
 		}
 	} else if currentBlock.(cachedBlock).number == 1 {
 		delta := block.Time() - currentBlock.(cachedBlock).time
 		return &tps{
-			TPS1m:                     totalTransactions1m / 60,
-			TPS1hr:                    totalTransactions1h / delta,
-			TotalNumberTransactions1h: totalTransactions1h,
+			Tx: subTps{
+				TPS1m:                 totalTransactions1m / 60,
+				TPS1hr:                totalTransactions1h / delta,
+				TotalNoTransactions1h: totalTransactions1h,
+			},
+			QuaiTx: subTps{
+				TPS1m:                 quaiTotalTransactions1m / 60,
+				TPS1hr:                quaiTotalTransactions1h / delta,
+				TotalNoTransactions1h: quaiTotalTransactions1h,
+			},
+			QiTx: subTps{
+				TPS1m:                 qiTotalTransactions1m / 60,
+				TPS1hr:                qiTotalTransactions1h / delta,
+				TotalNoTransactions1h: qiTotalTransactions1h,
+			},
+			ExtTxIn: subTps{
+				TPS1m:                 extInTotalTransactions1m / 60,
+				TPS1hr:                extInTotalTransactions1h / delta,
+				TotalNoTransactions1h: extInTotalTransactions1h,
+			},
+			ExtTxOut: subTps{
+				TPS1m:                 extOutTotalTransactions1m / 60,
+				TPS1hr:                extOutTotalTransactions1h / delta,
+				TotalNoTransactions1h: extOutTotalTransactions1h,
+			},
 		}
 	}
 
 	return &tps{
-		TPS1m:                     totalTransactions1m / 60,
-		TPS1hr:                    totalTransactions1h / c_windowSize,
-		TotalNumberTransactions1h: totalTransactions1h,
+		Tx: subTps{
+			TPS1m:                 totalTransactions1m / 60,
+			TPS1hr:                totalTransactions1h / c_windowSize,
+			TotalNoTransactions1h: totalTransactions1h,
+		},
+		QuaiTx: subTps{
+			TPS1m:                 quaiTotalTransactions1m / 60,
+			TPS1hr:                quaiTotalTransactions1h / c_windowSize,
+			TotalNoTransactions1h: quaiTotalTransactions1h,
+		},
+		QiTx: subTps{
+			TPS1m:                 qiTotalTransactions1m / 60,
+			TPS1hr:                qiTotalTransactions1h / c_windowSize,
+			TotalNoTransactions1h: qiTotalTransactions1h,
+		},
+		ExtTxIn: subTps{
+			TPS1m:                 extInTotalTransactions1m / 60,
+			TPS1hr:                extInTotalTransactions1h / c_windowSize,
+			TotalNoTransactions1h: extInTotalTransactions1h,
+		},
+		ExtTxOut: subTps{
+			TPS1m:                 extOutTotalTransactions1m / 60,
+			TPS1hr:                extOutTotalTransactions1h / c_windowSize,
+			TotalNoTransactions1h: extOutTotalTransactions1h,
+		},
 	}
 }
 
@@ -1169,11 +1274,13 @@ func (s *Service) assembleBlockTransactionStats(block *types.WorkObject) *blockT
 
 	// Assemble and return the block stats
 	return &blockTransactionStats{
-		Timestamp:             new(big.Int).SetUint64(block.Time()),
-		TotalNoTransactions1h: tps.TotalNumberTransactions1h,
-		TPS1m:                 tps.TPS1m,
-		TPS1hr:                tps.TPS1hr,
-		Chain:                 s.backend.NodeLocation().Name(),
+		Timestamp: new(big.Int).SetUint64(block.Time()),
+		Tx:        tps.Tx,
+		QuaiTx:    tps.QuaiTx,
+		QiTx:      tps.QiTx,
+		ExtTxIn:   tps.ExtTxIn,
+		ExtTxOut:  tps.ExtTxOut,
+		Chain:     s.backend.NodeLocation().Name(),
 	}
 }
 
