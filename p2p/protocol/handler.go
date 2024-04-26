@@ -16,6 +16,9 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
+const numWorkers = 10    // Number of workers per stream
+const msgChanSize = 5000 // 5k requests per stream
+
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
 func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	defer stream.Close()
@@ -36,12 +39,24 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 		// TODO: add logic to drop the peer
 		return
 	}
+	// Create a channel for messages
+	msgChan := make(chan []byte, msgChanSize)
+	full := 0
+	// Start worker goroutines
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			for message := range msgChan { // This should exit when msgChan is closed
+				handleMessage(message, stream, node)
+			}
+		}()
+	}
 
 	// Enter the read loop for the stream and handle messages
 	for {
 		data, err := common.ReadMessageFromStream(stream)
 		if err != nil {
 			if errors.Is(err, network.ErrReset) || errors.Is(err, io.EOF) {
+				close(msgChan)
 				return
 			}
 
@@ -50,7 +65,16 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			continue
 		}
 
-		go handleMessage(data, stream, node)
+		// Send to worker goroutines
+		select {
+		case msgChan <- data:
+		default:
+			if full%1000 == 0 {
+				log.Global.WithField("stream with peer", stream.Conn().RemotePeer()).Warnf("QuaiProtocolHandler message channel is full. Lost messages: %d", full)
+			}
+			full++
+		}
+
 	}
 }
 
