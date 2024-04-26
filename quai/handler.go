@@ -11,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
+	lru "github.com/hnlq715/golang-lru"
 )
 
 const (
@@ -20,6 +21,10 @@ const (
 	c_checkNextPrimeBlockInterval = 60 * time.Second
 	// c_txsChanSize is the size of channel listening to the new txs event
 	c_newTxsChanSize = 100
+	// c_recentBlockReqCache is the size of the cache for the recent block requests
+	c_recentBlockReqCache = 1000
+	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
+	c_recentBlockReqTimeout = 1 * time.Minute
 )
 
 // handler manages the fetch requests from the core and tx pool also takes care of the tx broadcast
@@ -34,6 +39,8 @@ type handler struct {
 	wg              sync.WaitGroup
 	quitCh          chan struct{}
 	logger          *log.Logger
+
+	recentBlockReqCache *lru.Cache // cache the latest requests on a 1 min timer
 }
 
 func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location, logger *log.Logger) *handler {
@@ -44,6 +51,7 @@ func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.L
 		quitCh:       make(chan struct{}),
 		logger:       logger,
 	}
+	handler.recentBlockReqCache, _ = lru.NewWithExpire(c_recentBlockReqCache, c_recentBlockReqTimeout)
 	return handler
 }
 
@@ -91,6 +99,16 @@ func (h *handler) missingBlockLoop() {
 	for {
 		select {
 		case blockRequest := <-h.missingBlockCh:
+
+			_, exists := h.recentBlockReqCache.Get(blockRequest.Hash)
+			if !exists {
+				// Add the block request to the cache to avoid requesting the same block multiple times
+				h.recentBlockReqCache.Add(blockRequest.Hash, true)
+			} else {
+				// Don't ask for the same block multiple times within a min window
+				continue
+			}
+
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
