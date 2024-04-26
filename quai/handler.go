@@ -155,48 +155,45 @@ func (h *handler) checkNextPrimeBlock() {
 		select {
 		case <-checkNextPrimeBlockTimer.C:
 			currentHeight := h.core.CurrentHeader().Number(h.nodeLocation.Context())
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						h.logger.WithFields(log.Fields{
-							"error":      r,
-							"stacktrace": string(debug.Stack()),
-						}).Fatal("Go-Quai Panicked")
-					}
-				}()
-				resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(currentHeight, big.NewInt(1)), common.Hash{})
-				data := <-resultCh
-				// If we find a new hash for the requested block number we can check
-				// first if we already have the block in the database otherwise ask the
-				// peers for it
-				if data != nil {
-					blockHash, ok := data.(common.Hash)
-					if ok {
-						block := h.core.GetBlockByHash(blockHash)
-						// If the blockHash for the asked number is not present in the
-						// appended database we ask the peer for the block with this hash
-						if block == nil {
-							go func() {
-								defer func() {
-									if r := recover(); r != nil {
-										h.logger.WithFields(log.Fields{
-											"error":      r,
-											"stacktrace": string(debug.Stack()),
-										}).Fatal("Go-Quai Panicked")
-									}
-								}()
-								resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObject{})
-								block := <-resultCh
-								if block != nil {
-									h.core.WriteBlock(block.(*types.WorkObject))
-								}
-							}()
-						}
-					}
-				}
-			}()
+			// Try to fetch the next 3 blocks
+			h.GetNextPrimeBlock(currentHeight)
+			h.GetNextPrimeBlock(new(big.Int).Add(currentHeight, big.NewInt(1)))
+			h.GetNextPrimeBlock(new(big.Int).Add(currentHeight, big.NewInt(2)))
 		case <-h.quitCh:
 			return
 		}
 	}
+}
+
+func (h *handler) GetNextPrimeBlock(number *big.Int) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				h.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
+		resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(number, big.NewInt(1)), common.Hash{})
+		data := <-resultCh
+		// If we find a new hash for the requested block number we can check
+		// first if we already have the block in the database otherwise ask the
+		// peers for it
+		if data != nil {
+			blockHash, ok := data.(common.Hash)
+			if ok {
+				block := h.core.GetBlockByHash(blockHash)
+				// If the blockHash for the asked number is not present in the
+				// appended database we ask the peer for the block with this hash
+				if block == nil {
+					resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObject{})
+					block := <-resultCh
+					if block != nil {
+						h.core.WriteBlock(block.(*types.WorkObject))
+					}
+				}
+			}
+		}
+	}()
 }
