@@ -772,6 +772,20 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject, location com
 		return newlyConfirmedEtxs, subRollup, nil
 	}
 
+	// Terminate the search if the slice to which the given block belongs was
+	// not activated yet, expansion number is validated on prime block, so only
+	// terminate on prime block, It is possible to make this check more
+	// optimized but this is performant enough and in some cases might have to
+	// go through few more region blocks than necessary
+	_, order, err := sl.Engine().CalcOrder(ancestor)
+	if err != nil {
+		return nil, nil, err
+	}
+	regions, zones := common.GetHierarchySizeForExpansionNumber(ancestor.ExpansionNumber())
+	if order == common.PRIME_CTX && (location.Region() > int(regions) || location.Zone() > int(zones)) {
+		return newlyConfirmedEtxs, subRollup, nil
+	}
+
 	// Terminate the search when we find a block produced by the same sub
 	if ancestor.Location().SubIndex(nodeLocation) == location.SubIndex(nodeLocation) {
 		return newlyConfirmedEtxs, subRollup, nil
