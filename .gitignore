@@ -7,4 +7,3 @@ traces/
 .vscode/
 .idea*
 *.env
-*.sh
