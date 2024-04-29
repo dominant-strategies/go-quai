@@ -546,6 +546,9 @@ func IsInChainScope(b []byte, nodeLocation Location) bool {
 	if BytesToHash(b) == ZeroAddress(nodeLocation).Hash() {
 		return true
 	}
+	if len(b) == 0 {
+		return false
+	}
 	return b[0] == nodeLocation.BytePrefix()
 }
 
