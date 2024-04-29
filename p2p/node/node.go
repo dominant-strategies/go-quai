@@ -55,6 +55,9 @@ type P2PNode struct {
 	// Request management interface instance
 	requestManager requestManager.RequestManager
 
+	// Stream management interface instance
+	streamManager protocol.StreamManager
+
 	// Caches for each type of data we may receive
 	cache map[string]map[string]*lru.Cache[common.Hash, interface{}]
 
@@ -198,6 +201,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 
 	// Set the peer manager's backend to the host
 	peerMgr.SetP2PBackend(p2p)
+	peerMgr.SetHost(host)
 
 	return p2p, nil
 }

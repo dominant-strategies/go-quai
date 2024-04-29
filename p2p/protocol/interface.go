@@ -13,6 +13,20 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
+type StreamManager interface {
+	// Set the host for the stream manager
+	SetP2PBackend(QuaiP2PNode)
+
+	// Set the host for the stream manager
+	SetHost(host.Host)
+
+	// GetStream returns a valid stream, either creating a new one or returning an existing one
+	GetStream(peer.ID) (network.Stream, error)
+
+	// RemoveStream goes through all the steps to properly close and remove a stream's resources
+	CloseStream(peer.ID) error
+}
+
 // interface required to join the quai protocol network
 type QuaiP2PNode interface {
 	GetBootPeers() []peer.AddrInfo
@@ -23,7 +37,6 @@ type QuaiP2PNode interface {
 	GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash
 	GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse
 	GetRequestManager() requestManager.RequestManager
-	GetHostBackend() host.Host
 
 	Connect(peer.AddrInfo) error
 	NewStream(peer.ID) (network.Stream, error)

@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/peerManager/peerdb"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	"github.com/libp2p/go-libp2p/core/connmgr"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	basicConnGater "github.com/libp2p/go-libp2p/p2p/net/conngater"
@@ -69,6 +70,7 @@ type PeerManager interface {
 
 	// Sets the ID for the node running the peer manager
 	SetSelfID(p2p.PeerID)
+	GetSelfID() p2p.PeerID
 
 	// Sets the DHT provided from the Host interface
 	SetDHT(*dual.DHT)
@@ -77,7 +79,7 @@ type PeerManager interface {
 	Provide(context.Context, common.Location, interface{}) error
 
 	// Manages stream lifecycles
-	streamManager.StreamManager
+	quaiprotocol.StreamManager
 
 	// Removes a peer from all the quality buckets
 	RemovePeer(p2p.PeerID) error
@@ -114,8 +116,8 @@ type BasicPeerManager struct {
 	*basicConnGater.BasicConnectionGater
 	*basicConnMgr.BasicConnMgr
 
-	// Handles opening and closing streams
-	streamManager streamManager.StreamManager
+	// Stream management interface instance
+	streamManager quaiprotocol.StreamManager
 
 	// Tracks peers in different quality buckets
 	peerDBs map[string][]*peerdb.PeerDB
@@ -274,6 +276,10 @@ func (pm *BasicPeerManager) SetP2PBackend(p2pBackend quaiprotocol.QuaiP2PNode) {
 	pm.streamManager.SetP2PBackend(p2pBackend)
 }
 
+func (pm *BasicPeerManager) SetHost(host host.Host) {
+	pm.streamManager.SetHost(host)
+}
+
 func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
 	err := pm.removePeerFromAllDBs(peerID)
 	if err != nil {
@@ -306,6 +312,10 @@ func (pm *BasicPeerManager) removePeerFromTopic(peerID p2p.PeerID, location stri
 
 func (pm *BasicPeerManager) SetSelfID(selfID p2p.PeerID) {
 	pm.selfID = selfID
+}
+
+func (pm *BasicPeerManager) GetSelfID() p2p.PeerID {
+	return pm.selfID
 }
 
 func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) []p2p.PeerID {

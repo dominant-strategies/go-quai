@@ -12,7 +12,7 @@ import (
 const (
 	// timeout in seconds before a read/write operation on the stream is considered failed
 	// TODO: consider making this dynamic based on the network latency
-	C_STREAM_TIMEOUT = 10 * time.Second
+	c_stream_write_deadline = 10 * time.Second
 )
 
 // Reads the message from the stream and returns a byte of data.
@@ -39,7 +39,7 @@ func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 // Writes the message to the stream.
 func WriteMessageToStream(stream network.Stream, msg []byte) error {
 	// Set the write deadline
-	if err := stream.SetWriteDeadline(time.Now().Add(C_STREAM_TIMEOUT)); err != nil {
+	if err := stream.SetWriteDeadline(time.Now().Add(c_stream_write_deadline)); err != nil {
 		return errors.Wrap(err, "failed to set write deadline")
 	}
 
