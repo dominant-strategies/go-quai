@@ -88,7 +88,6 @@ func (tx *WireQiTx) copyFromWire() *QiTx {
 // accessors for innerTx.
 func (tx *QiTx) txType() byte           { return QiTxType }
 func (tx *QiTx) chainID() *big.Int      { return tx.ChainID }
-func (tx *QiTx) protected() bool        { return true }
 func (tx *QiTx) accessList() AccessList { panic("Qi TX does not have accessList") }
 func (tx *QiTx) data() []byte           { panic("Qi TX does not have data") }
 func (tx *QiTx) gas() uint64            { panic("Qi TX does not have gas") }

@@ -468,15 +468,6 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int) error {
 	return nil
 }
 
-func isProtectedV(V *big.Int) bool {
-	if V.BitLen() <= 8 {
-		v := V.Uint64()
-		return v != 27 && v != 28 && v != 1 && v != 0
-	}
-	// anything not 27 or 28 is considered protected
-	return true
-}
-
 // Type returns the transaction type.
 func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
