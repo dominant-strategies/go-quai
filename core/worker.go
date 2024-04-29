@@ -945,7 +945,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 
 		logs, err := w.commitTransaction(env, parent, tx)
 		switch {
-		case errors.Is(err, ErrGasLimitReached):
+		case errors.Is(err, types.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			w.logger.WithField("sender", from).Trace("Gas limit exceeded for current block")
 			txs.PopNoSort()

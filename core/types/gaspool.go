@@ -22,6 +22,10 @@ import (
 	"math"
 )
 
+// ErrGasLimitReached is returned by the gas pool if the amount of gas required
+// by a transaction is higher than what's left in the block.
+var ErrGasLimitReached = errors.New("gas limit reached")
+
 // GasPool tracks the amount of gas available during execution of the transactions
 // in a block. The zero value is a pool with zero gas available.
 type GasPool uint64
@@ -39,7 +43,7 @@ func (gp *GasPool) AddGas(amount uint64) *GasPool {
 // available and returns an error otherwise.
 func (gp *GasPool) SubGas(amount uint64) error {
 	if uint64(*gp) < amount {
-		return errors.New("gas limit reached")
+		return ErrGasLimitReached
 	}
 	*(*uint64)(gp) -= amount
 	return nil

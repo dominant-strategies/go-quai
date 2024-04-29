@@ -94,10 +94,6 @@ var (
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
 
-	// ErrGasLimitReached is returned by the gas pool if the amount of gas required
-	// by a transaction is higher than what's left in the block.
-	ErrGasLimitReached = errors.New("gas limit reached")
-
 	// ErrEtxLimitReached is returned when the ETXs emitted by a transaction
 	// would violate the block's ETX limits.
 	ErrEtxLimitReached = errors.New("etx limit reached")
