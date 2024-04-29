@@ -29,4 +29,5 @@ do
     # Run the go tool pprof command for each port
     echo "Running pprof for port $port"
     curl http://localhost:$port/debug/pprof/goroutine -o "traces/$folder/$name"_"$port"_goroutine.pb.gz
+    curl http://localhost:$port/debug/pprof/heap -o "traces/$folder/$name"_"$port"_heap.pb.gz
 done
