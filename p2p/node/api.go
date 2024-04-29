@@ -140,7 +140,7 @@ func (p *P2PNode) requestFromPeers(location common.Location, data interface{}, d
 			}
 		}()
 		defer close(resultChan)
-		peers := p.peerManager.GetPeers(location, peerManager.Best)
+		peers := p.peerManager.GetPeers(location, data, peerManager.Best)
 		log.Global.WithFields(log.Fields{
 			"peers":    peers,
 			"location": location,

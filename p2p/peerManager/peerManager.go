@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
@@ -86,7 +87,7 @@ type PeerManager interface {
 	// Returns c_peerCount peers starting at the requested quality level of peers
 	// If there are not enough peers at the requested quality, it will return lower quality peers
 	// If there still aren't enough peers, it will query the DHT for more
-	GetPeers(common.Location, PeerQuality) []p2p.PeerID
+	GetPeers(location common.Location, data interface{}, quality PeerQuality) []p2p.PeerID
 
 	// Increases the peer's liveliness score
 	MarkLivelyPeer(p2p.PeerID, common.Location)
@@ -124,6 +125,9 @@ type BasicPeerManager struct {
 
 	// This peer's ID to distinguish self-broadcasts
 	selfID p2p.PeerID
+
+	// Genesis hash to append to topics
+	genesis common.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -240,6 +244,7 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
 		streamManager:        streamManager,
+		genesis:              utils.MakeGenesis().ToBlock(0).Hash(),
 		peerDBs:              peerDBs,
 		logger:               logger,
 	}, nil
@@ -258,7 +263,11 @@ func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
 }
 
 func (pm *BasicPeerManager) Provide(ctx context.Context, location common.Location, data interface{}) error {
-	return pm.dht.Provide(ctx, pubsubManager.LocationToCid(location), true)
+	topicName, err := pubsubManager.TopicName(pm.genesis, location, data)
+	if err != nil {
+		return err
+	}
+	return pm.dht.Provide(ctx, pubsubManager.TopicToCid(topicName), true)
 }
 
 func (pm *BasicPeerManager) SetP2PBackend(p2pBackend quaiprotocol.QuaiP2PNode) {
@@ -320,7 +329,7 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 	return peerSubset
 }
 
-func (pm *BasicPeerManager) GetPeers(location common.Location, quality PeerQuality) []p2p.PeerID {
+func (pm *BasicPeerManager) GetPeers(location common.Location, data interface{}, quality PeerQuality) []p2p.PeerID {
 	var peerList []p2p.PeerID
 	switch quality {
 	case Best:
@@ -339,12 +348,13 @@ func (pm *BasicPeerManager) GetPeers(location common.Location, quality PeerQuali
 	}
 
 	// Query the DHT for more peers
-	return pm.queryDHT(location, peerList, C_peerCount-len(peerList))
+	return pm.queryDHT(location, data, peerList, C_peerCount-len(peerList))
 }
 
-func (pm *BasicPeerManager) queryDHT(location common.Location, peerList []p2p.PeerID, peerCount int) []p2p.PeerID {
+func (pm *BasicPeerManager) queryDHT(location common.Location, data interface{}, peerList []p2p.PeerID, peerCount int) []p2p.PeerID {
 	// create a Cid from the slice location
-	shardCid := pubsubManager.LocationToCid(location)
+	topicName, _ := pubsubManager.TopicName(pm.genesis, location, data)
+	shardCid := pubsubManager.TopicToCid(topicName)
 
 	// Internal list of peers from the dht
 	dhtPeers := make([]p2p.PeerID, 0, peerCount)

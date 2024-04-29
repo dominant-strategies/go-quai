@@ -52,8 +52,8 @@ func (g *PubsubManager) PeersForTopic(location common.Location, data interface{}
 }
 
 // Creates a Cid from a location to be used as DHT key
-func LocationToCid(location common.Location) cid.Cid {
-	sliceBytes := []byte(location.Name())
+func TopicToCid(topicName string) cid.Cid {
+	sliceBytes := []byte(topicName)
 
 	// create a multihash from the slice ID
 	mhash, _ := multihash.Encode(sliceBytes, multihash.SHA2_256)
