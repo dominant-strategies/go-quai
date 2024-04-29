@@ -16,7 +16,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
-	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/streamManager"
 
@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/peerManager/peerdb"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	"github.com/libp2p/go-libp2p/core/connmgr"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	basicConnGater "github.com/libp2p/go-libp2p/p2p/net/conngater"
@@ -57,6 +58,7 @@ var (
 type PeerManager interface {
 	connmgr.ConnManager
 	connmgr.ConnectionGater
+	streamManager.StreamManager
 
 	BlockAddr(ip net.IP) error
 	BlockPeer(p peer.ID) error
@@ -70,20 +72,19 @@ type PeerManager interface {
 
 	// Sets the ID for the node running the peer manager
 	SetSelfID(p2p.PeerID)
+	GetSelfID() p2p.PeerID
 
 	// Sets the DHT provided from the Host interface
 	SetDHT(*dual.DHT)
 
+	// Sets the streamManager interface
+	SetStreamManager(streamManager.StreamManager)
+
 	// Announces to the DHT that we are providing this data
 	Provide(context.Context, common.Location, interface{}) error
 
-	// Manages stream lifecycles
-	streamManager.StreamManager
-
 	// Removes a peer from all the quality buckets
 	RemovePeer(p2p.PeerID) error
-	// Returns an existing stream with that peer or opens a new one
-	GetStream(p peer.ID) (network.Stream, error)
 
 	// Returns c_peerCount peers starting at the requested quality level of peers
 	// If there are not enough peers at the requested quality, it will return lower quality peers
@@ -115,7 +116,7 @@ type BasicPeerManager struct {
 	*basicConnGater.BasicConnectionGater
 	*basicConnMgr.BasicConnMgr
 
-	// Handles opening and closing streams
+	// Stream management interface instance
 	streamManager streamManager.StreamManager
 
 	// Tracks peers in different quality buckets
@@ -183,11 +184,6 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		}
 	}
 
-	streamManager, err := streamManager.NewStreamManager(C_peerCount)
-	if err != nil {
-		return nil, err
-	}
-
 	ctx, cancel := context.WithCancel(ctx)
 
 	logger := log.NewLogger("peers.log", viper.GetString(utils.PeersLogLevelFlag.Name))
@@ -244,7 +240,6 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		cancel:               cancel,
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
-		streamManager:        streamManager,
 		genesis:              utils.MakeGenesis().ToBlock(0).Hash(),
 		peerDBs:              peerDBs,
 		logger:               logger,
@@ -255,24 +250,12 @@ func (pm *BasicPeerManager) SetDHT(dht *dual.DHT) {
 	pm.dht = dht
 }
 
-func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
-	return pm.streamManager.GetStream(peerID)
-}
-
-func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
-	return pm.streamManager.CloseStream(peerID)
-}
-
 func (pm *BasicPeerManager) Provide(ctx context.Context, location common.Location, data interface{}) error {
 	topicName, err := pubsubManager.TopicName(pm.genesis, location, data)
 	if err != nil {
 		return err
 	}
 	return pm.dht.Provide(ctx, pubsubManager.TopicToCid(topicName), true)
-}
-
-func (pm *BasicPeerManager) SetP2PBackend(p2pBackend quaiprotocol.QuaiP2PNode) {
-	pm.streamManager.SetP2PBackend(p2pBackend)
 }
 
 func (pm *BasicPeerManager) RemovePeer(peerID p2p.PeerID) error {
@@ -307,6 +290,10 @@ func (pm *BasicPeerManager) removePeerFromTopic(peerID p2p.PeerID, location stri
 
 func (pm *BasicPeerManager) SetSelfID(selfID p2p.PeerID) {
 	pm.selfID = selfID
+}
+
+func (pm *BasicPeerManager) GetSelfID() p2p.PeerID {
+	return pm.selfID
 }
 
 func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) []p2p.PeerID {
@@ -583,4 +570,30 @@ func (pm *BasicPeerManager) Stop() error {
 	}
 
 	return nil
+}
+
+// Implementation of underlying StreamManager interface
+func (pm *BasicPeerManager) SetStreamManager(streamManager streamManager.StreamManager) {
+	pm.streamManager = streamManager
+}
+
+// Set the host for the stream manager
+func (pm *BasicPeerManager) SetP2PBackend(p2pnode protocol.QuaiP2PNode) {
+	pm.streamManager.SetP2PBackend(p2pnode)
+}
+
+func (pm *BasicPeerManager) GetHost() host.Host {
+	return pm.streamManager.GetHost()
+}
+
+func (pm *BasicPeerManager) SetHost(host host.Host) {
+	pm.streamManager.SetHost(host)
+}
+
+func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
+	return pm.streamManager.GetStream(peerID)
+}
+
+func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
+	return pm.streamManager.CloseStream(peerID)
 }

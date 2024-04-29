@@ -100,14 +100,14 @@ func runSend(cmd *cobra.Command, args []string) error {
 	}
 
 	// Connect to the target peer
-	if err := node.Host.Connect(ctx, *targetAddrInfo); err != nil {
+	if err := node.GetPeerManager().GetHost().Connect(ctx, *targetAddrInfo); err != nil {
 		log.Global.Errorf("error connecting to target peer: %+v, error: %s", targetAddrInfo.ID, err)
 		return err
 	}
 
 	// Function to send a message
 	sendMessage := func() error {
-		stream, err := node.Host.NewStream(ctx, targetAddrInfo.ID, protocol.ID(protocolID))
+		stream, err := node.GetPeerManager().GetHost().NewStream(ctx, targetAddrInfo.ID, protocol.ID(protocolID))
 		if err != nil {
 			log.Global.Errorf("error opening stream: %s", err)
 			return err

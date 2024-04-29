@@ -34,7 +34,7 @@ func (p *P2PNode) Start() error {
 	go p.statsLoop()
 
 	// Register the Quai protocol handler
-	p.SetStreamHandler(quaiprotocol.ProtocolVersion, func(s network.Stream) {
+	p.peerManager.GetHost().SetStreamHandler(quaiprotocol.ProtocolVersion, func(s network.Stream) {
 		quaiprotocol.QuaiProtocolHandler(s, p)
 	})
 
@@ -78,7 +78,7 @@ type stopFunc func() error
 func (p *P2PNode) Stop() error {
 	// define a list of functions to stop the services the node is running
 	stopFuncs := []stopFunc{
-		p.Host.Close,
+		p.peerManager.GetHost().Close,
 		p.peerManager.Stop,
 		p.pubsub.Stop,
 	}
@@ -256,7 +256,7 @@ func (p *P2PNode) BanPeer(peer p2p.PeerID) {
 	}).Warn("Banning peer for misbehaving")
 
 	p.peerManager.BanPeer(peer)
-	p.Host.Network().ClosePeer(peer)
+	p.peerManager.GetHost().Network().ClosePeer(peer)
 }
 
 // Returns the list of bootpeers
@@ -271,7 +271,7 @@ func (p *P2PNode) NewStream(peerID peer.ID) (network.Stream, error) {
 
 // Connects to the given peer
 func (p *P2PNode) Connect(pi peer.AddrInfo) error {
-	return p.Host.Connect(p.ctx, pi)
+	return p.peerManager.GetHost().Connect(p.ctx, pi)
 }
 
 // Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
