@@ -61,6 +61,10 @@ func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) erro
 	return p.pubsub.Subscribe(location, datatype)
 }
 
+func (p *P2PNode) Unsubscribe(location common.Location, datatype interface{}) {
+	p.pubsub.Unsubscribe(location, datatype)
+}
+
 func (p *P2PNode) Broadcast(location common.Location, data interface{}) error {
 	return p.pubsub.Broadcast(location, data)
 }
@@ -79,6 +83,7 @@ func (p *P2PNode) Stop() error {
 		p.Host.Close,
 		p.dht.Close,
 		p.peerManager.Stop,
+		p.pubsub.Stop,
 	}
 	// create a channel to collect errors
 	errs := make(chan error, len(stopFuncs))
@@ -111,6 +116,7 @@ func (p *P2PNode) Stop() error {
 			allErrors = append(allErrors, err)
 		}
 	}
+
 	close(errs)
 	if len(allErrors) > 0 {
 		return errors.Errorf("errors during shutdown: %v", allErrors)

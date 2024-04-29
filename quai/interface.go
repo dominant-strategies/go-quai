@@ -65,8 +65,9 @@ type NetworkingAPI interface {
 	// Stop the p2p node
 	Stop() error
 
-	// Specify location and data type to subscribe to
+	// Subscribe/UnSubscribe to a type of data from a given location
 	Subscribe(common.Location, interface{}) error
+	Unsubscribe(common.Location, interface{})
 
 	// Method to broadcast data to the network
 	// Specify location and the data to send

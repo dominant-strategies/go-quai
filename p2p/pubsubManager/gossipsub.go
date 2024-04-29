@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"runtime/debug"
+	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -23,8 +24,8 @@ var (
 type PubsubManager struct {
 	*pubsub.PubSub
 	ctx           context.Context
-	subscriptions map[string]*pubsub.Subscription
-	topics        map[string]*pubsub.Topic
+	subscriptions *sync.Map
+	topics        *sync.Map
 	consensus     quai.ConsensusAPI
 	genesis       common.Hash
 
@@ -43,8 +44,8 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	return &PubsubManager{
 		ps,
 		ctx,
-		make(map[string]*pubsub.Subscription),
-		make(map[string]*pubsub.Topic),
+		new(sync.Map),
+		new(sync.Map),
 		nil,
 		utils.MakeGenesis().ToBlock(0).Hash(),
 		nil,
@@ -61,15 +62,22 @@ func (g *PubsubManager) Start(receiveCb func(peer.ID, interface{}, common.Locati
 	g.onReceived = receiveCb
 }
 
+func (g *PubsubManager) Stop() error {
+	g.UnsubscribeAll()
+	return nil
+}
+
 func (g *PubsubManager) UnsubscribeAll() {
-	for k, sub := range g.subscriptions {
-		sub.Cancel()
-		delete(g.subscriptions, k)
-	}
-	for k, t := range g.topics {
-		t.Close()
-		delete(g.topics, k)
-	}
+	g.subscriptions.Range(func(key, value any) bool {
+		value.(*pubsub.Subscription).Cancel()
+		g.subscriptions.Delete(key)
+		return true
+	})
+	g.topics.Range(func(key, value any) bool {
+		value.(*pubsub.Topic).Close()
+		g.topics.Delete(key)
+		return true
+	})
 }
 
 // subscribe to broadcasts of the given type of data
@@ -85,7 +93,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	if err != nil {
 		return err
 	}
-	g.topics[topicName] = topic
+	g.topics.Store(topicName, topic)
 	g.PubSub.RegisterTopicValidator(topic.String(), g.consensus.ValidatorFunc())
 
 	// subscribe to the topic
@@ -93,7 +101,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	if err != nil {
 		return err
 	}
-	g.subscriptions[topicName] = subscription
+	g.subscriptions.Store(topicName, subscription)
 
 	go func(location common.Location, sub *pubsub.Subscription) {
 		defer func() {
@@ -135,6 +143,20 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	return nil
 }
 
+// unsubscribe from broadcasts of the given type of data
+func (g *PubsubManager) Unsubscribe(location common.Location, datatype interface{}) {
+	if topicName, err := TopicName(g.genesis, location, datatype); err != nil {
+		if value, ok := g.subscriptions.Load(topicName); ok {
+			value.(*pubsub.Subscription).Cancel()
+			g.subscriptions.Delete(topicName)
+		}
+		if value, ok := g.topics.Load(topicName); ok {
+			value.(*pubsub.Topic).Close()
+			g.topics.Delete(topicName)
+		}
+	}
+}
+
 // broadcasts data to subscribing peers
 func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}) error {
 	topicName, err := TopicName(g.genesis, location, datatype)
@@ -145,5 +167,8 @@ func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}
 	if err != nil {
 		return err
 	}
-	return g.topics[topicName].Publish(g.ctx, protoData)
+	if value, ok := g.topics.Load(topicName); ok {
+		return value.(*pubsub.Topic).Publish(g.ctx, protoData)
+	}
+	return errors.New("no topic for requested data")
 }

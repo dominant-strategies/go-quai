@@ -1,10 +1,12 @@
 package pubsubManager
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -41,5 +43,8 @@ func (g *PubsubManager) PeersForTopic(location common.Location, data interface{}
 	if err != nil {
 		return nil, err
 	}
-	return g.topics[topicName].ListPeers(), nil
+	if value, ok := g.topics.Load(topicName); ok {
+		return value.(*pubsub.Topic).ListPeers(), nil
+	}
+	return nil, errors.New("no topic for requested data")
 }
