@@ -342,13 +342,14 @@ func (pm *BasicPeerManager) GetPeers(location common.Location, data interface{},
 		panic("Invalid peer quality")
 	}
 
-	if len(peerList) == C_peerCount {
+	lenPeer := len(peerList)
+	if lenPeer >= C_peerCount {
 		// Found sufficient number of peers
 		return peerList
 	}
 
 	// Query the DHT for more peers
-	return pm.queryDHT(location, data, peerList, C_peerCount-len(peerList))
+	return pm.queryDHT(location, data, peerList, C_peerCount-lenPeer)
 }
 
 func (pm *BasicPeerManager) queryDHT(location common.Location, data interface{}, peerList []p2p.PeerID, peerCount int) []p2p.PeerID {
