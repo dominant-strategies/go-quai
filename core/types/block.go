@@ -719,6 +719,9 @@ func (h *Header) SealEncode() *ProtoHeader {
 		if h.ParentDeltaS(i) != nil {
 			protoSealData.ParentDeltaS = append(protoSealData.ParentDeltaS, h.ParentDeltaS(i).Bytes())
 		}
+		if h.ParentUncledSubDeltaS(i) != nil {
+			protoSealData.ParentUncledSubDeltaS = append(protoSealData.ParentUncledSubDeltaS, h.ParentUncledSubDeltaS(i).Bytes())
+		}
 
 	}
 	for i := 0; i < common.HierarchyDepth-1; i++ {
