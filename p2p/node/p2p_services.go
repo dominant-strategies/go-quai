@@ -60,6 +60,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	if err != nil {
 		return nil, err
 	}
+	log.Global.Infof("[%d] Sent request to peer: %s, %s, %s", id, stream.Conn().RemotePeer(), location.Name(), data)
 
 	// Get appropriate channel and wait for response
 	dataChan, err := p.requestManager.GetRequestChan(id)
