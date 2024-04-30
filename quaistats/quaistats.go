@@ -842,12 +842,12 @@ func (s *Service) report(url string, dataType string, stats interface{}, authJwt
 type cachedBlock struct {
 	number        uint64
 	parentHash    common.Hash
-	txCount       uint64
-	quaiTxCount   uint64
-	qiTxCount     uint64
-	extTxCount    uint64
-	extTxInCount  uint64
-	extTxOutCount uint64
+	txCount       float64
+	quaiTxCount   float64
+	qiTxCount     float64
+	extTxCount    float64
+	extTxInCount  float64
+	extTxOutCount float64
 	time          uint64
 }
 
@@ -1020,9 +1020,9 @@ type nodeStats struct {
 }
 
 type subTps struct {
-	TotalNoTransactions1h uint64 `json:"totalNoTransactions1h"`
-	TPS1m                 uint64 `json:"tps1m"`
-	TPS1hr                uint64 `json:"tps1hr"`
+	TotalNoTransactions1h float64 `json:"totalNoTransactions1h"`
+	TPS1m                 float64 `json:"tps1m"`
+	TPS1hr                float64 `json:"tps1hr"`
 }
 
 type tps struct {
@@ -1039,9 +1039,9 @@ type BatchObject struct {
 }
 
 func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
-	txCount := uint64(len(block.Transactions()))
-	quaiTxCount := uint64(len(block.QuaiTransactions()))
-	qiTxCount := uint64(len(block.QiTransactions()))
+	txCount := float64(len(block.Transactions()))
+	quaiTxCount := float64(len(block.QuaiTransactions()))
+	qiTxCount := float64(len(block.QiTransactions()))
 	extTxInCount := txCount - quaiTxCount - qiTxCount
 
 	currentBlock := cachedBlock{
@@ -1051,7 +1051,7 @@ func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
 		quaiTxCount:   quaiTxCount,
 		qiTxCount:     qiTxCount,
 		extTxInCount:  extTxInCount,
-		extTxOutCount: uint64(len(block.ExtTransactions())),
+		extTxOutCount: float64(len(block.ExtTransactions())),
 		time:          block.Time(),
 	}
 	s.blockLookupCache.Add(block.Hash(), currentBlock)
@@ -1059,16 +1059,16 @@ func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
 }
 
 func (s *Service) calculateTPS(block *types.WorkObject) *tps {
-	var totalTransactions1h uint64
-	var totalTransactions1m uint64
-	var quaiTotalTransactions1h uint64
-	var quaiTotalTransactions1m uint64
-	var qiTotalTransactions1h uint64
-	var qiTotalTransactions1m uint64
-	var extInTotalTransactions1h uint64
-	var extInTotalTransactions1m uint64
-	var extOutTotalTransactions1h uint64
-	var extOutTotalTransactions1m uint64
+	var totalTransactions1h float64
+	var totalTransactions1m float64
+	var quaiTotalTransactions1h float64
+	var quaiTotalTransactions1m float64
+	var qiTotalTransactions1h float64
+	var qiTotalTransactions1m float64
+	var extInTotalTransactions1h float64
+	var extInTotalTransactions1m float64
+	var extOutTotalTransactions1h float64
+	var extOutTotalTransactions1m float64
 	var currentBlock interface{}
 	var ok bool
 
@@ -1124,7 +1124,7 @@ func (s *Service) calculateTPS(block *types.WorkObject) *tps {
 
 	// Catches if we get to genesis block and are still within the window
 	if currentBlock.(cachedBlock).number == 1 && withinMinute {
-		delta := block.Time() - currentBlock.(cachedBlock).time
+		delta := float64(block.Time() - currentBlock.(cachedBlock).time)
 		return &tps{
 			Tx: subTps{
 				TPS1m:                 totalTransactions1m / delta,
@@ -1153,7 +1153,7 @@ func (s *Service) calculateTPS(block *types.WorkObject) *tps {
 			},
 		}
 	} else if currentBlock.(cachedBlock).number == 1 {
-		delta := block.Time() - currentBlock.(cachedBlock).time
+		delta := float64(block.Time() - currentBlock.(cachedBlock).time)
 		return &tps{
 			Tx: subTps{
 				TPS1m:                 totalTransactions1m / 60,
@@ -1182,31 +1182,33 @@ func (s *Service) calculateTPS(block *types.WorkObject) *tps {
 			},
 		}
 	}
+	// make window size float
+	cWindowSizeFloat := float64(c_windowSize)
 
 	return &tps{
 		Tx: subTps{
 			TPS1m:                 totalTransactions1m / 60,
-			TPS1hr:                totalTransactions1h / c_windowSize,
+			TPS1hr:                totalTransactions1h / cWindowSizeFloat,
 			TotalNoTransactions1h: totalTransactions1h,
 		},
 		QuaiTx: subTps{
 			TPS1m:                 quaiTotalTransactions1m / 60,
-			TPS1hr:                quaiTotalTransactions1h / c_windowSize,
+			TPS1hr:                quaiTotalTransactions1h / cWindowSizeFloat,
 			TotalNoTransactions1h: quaiTotalTransactions1h,
 		},
 		QiTx: subTps{
 			TPS1m:                 qiTotalTransactions1m / 60,
-			TPS1hr:                qiTotalTransactions1h / c_windowSize,
+			TPS1hr:                qiTotalTransactions1h / cWindowSizeFloat,
 			TotalNoTransactions1h: qiTotalTransactions1h,
 		},
 		ExtTxIn: subTps{
 			TPS1m:                 extInTotalTransactions1m / 60,
-			TPS1hr:                extInTotalTransactions1h / c_windowSize,
+			TPS1hr:                extInTotalTransactions1h / cWindowSizeFloat,
 			TotalNoTransactions1h: extInTotalTransactions1h,
 		},
 		ExtTxOut: subTps{
 			TPS1m:                 extOutTotalTransactions1m / 60,
-			TPS1hr:                extOutTotalTransactions1h / c_windowSize,
+			TPS1hr:                extOutTotalTransactions1h / cWindowSizeFloat,
 			TotalNoTransactions1h: extOutTotalTransactions1h,
 		},
 	}
