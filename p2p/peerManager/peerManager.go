@@ -189,7 +189,7 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	logger := log.NewLogger("nodelogs/peers.log", "debug")
+	logger := log.NewLogger("peers.log", "debug")
 
 	go func() {
 		q := query.Query{}

@@ -3,6 +3,7 @@ package log
 import (
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
@@ -72,7 +73,7 @@ func NewLogger(logFilename string, logLevel string) *logrus.Logger {
 	if logFilename == "" {
 		logFilename = defaultLogFilePath
 	}
-	shardLogger := createStandardLogger(logFilename, logLevel, false)
+	shardLogger := createStandardLogger(filepath.Join(logDir, logFilename), logLevel, false)
 	shardLogger.WithFields(Fields{
 		"path":  logFilename,
 		"level": logLevel,

@@ -111,14 +111,14 @@ func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error)
 
 	currentRegions, currentZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
 	// Start nodes in separate goroutines
-	hc.startNode("nodelogs/prime.log", quaiBackend, nil, nil)
+	hc.startNode("prime.log", quaiBackend, nil, nil)
 	for i := 0; i < int(currentRegions); i++ {
-		nodelogsFileName := "nodelogs/region-" + fmt.Sprintf("%d", i) + ".log"
+		nodelogsFileName := "region-" + fmt.Sprintf("%d", i) + ".log"
 		hc.startNode(nodelogsFileName, quaiBackend, common.Location{byte(i)}, nil)
 	}
 	for i := 0; i < int(currentRegions); i++ {
 		for j := 0; j < int(currentZones); j++ {
-			nodelogsFileName := "nodelogs/zone-" + fmt.Sprintf("%d", i) + "-" + fmt.Sprintf("%d", j) + ".log"
+			nodelogsFileName := "zone-" + fmt.Sprintf("%d", i) + "-" + fmt.Sprintf("%d", j) + ".log"
 			hc.startNode(nodelogsFileName, quaiBackend, common.Location{byte(i), byte(j)}, nil)
 		}
 	}
@@ -231,7 +231,7 @@ func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject)
 	if !newRegionShouldBeAdded && newZoneShouldBeAdded {
 		// add a new zone to all the current active regions
 		for i := 0; i < int(currentRegions); i++ {
-			logLocation := "nodelogs/zone-" + fmt.Sprintf("%d", i) + "-" + fmt.Sprintf("%d", newZones-1) + ".log"
+			logLocation := "zone-" + fmt.Sprintf("%d", i) + "-" + fmt.Sprintf("%d", newZones-1) + ".log"
 			hc.startNode(logLocation, hc.consensus, common.Location{byte(i), byte(newZones - 1)}, block)
 			// Add the new zone to the new slices list
 			// Add the subclient to the already existing regions
@@ -256,7 +256,7 @@ func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject)
 	if newRegionShouldBeAdded {
 
 		// add a new region
-		logLocation := "nodelogs/region-" + fmt.Sprintf("%d", newRegions-1) + ".log"
+		logLocation := "region-" + fmt.Sprintf("%d", newRegions-1) + ".log"
 		hc.startNode(logLocation, hc.consensus, common.Location{byte(newRegions - 1)}, block)
 
 		// Update the SubClient for the Prime
@@ -273,7 +273,7 @@ func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject)
 
 		// new region has to activate all the zones
 		for i := 0; i < int(newZones); i++ {
-			logLocation = "nodelogs/zone-" + fmt.Sprintf("%d", newRegions-1) + "-" + fmt.Sprintf("%d", i) + ".log"
+			logLocation = "zone-" + fmt.Sprintf("%d", newRegions-1) + "-" + fmt.Sprintf("%d", i) + ".log"
 			hc.startNode(logLocation, hc.consensus, common.Location{byte(newRegions - 1), byte(i)}, block)
 		}
 	}

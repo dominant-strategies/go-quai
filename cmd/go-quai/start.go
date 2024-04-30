@@ -84,7 +84,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.Global.WithField("error", err).Fatal("error creating node")
 	}
 
-	logLevel := cmd.Flag(utils.LogLevelFlag.Name).Value.String()
+	logLevel := viper.GetString(utils.LogLevelFlag.Name)
 
 	var startingExpansionNumber uint64
 	if viper.IsSet(utils.StartingExpansionNumberFlag.Name) {
