@@ -126,7 +126,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			"location":    loc,
 			"hash":        query,
 			"peer":        stream.Conn().RemotePeer(),
-		}).Debug("Received request by hash to handle")
+		}).Info("[%d] Received request by hash to handle")
 	case *big.Int:
 		log.Global.WithFields(log.Fields{
 			"requestID":   id,
@@ -134,7 +134,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			"location":    loc,
 			"number":      query,
 			"peer":        stream.Conn().RemotePeer(),
-		}).Debug("Received request by number to handle")
+		}).Info("[%d] Received request by number to handle")
 	default:
 		log.Global.Errorf("unsupported request input data field type: %T", query)
 	}
@@ -233,11 +233,13 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 		}).Error("error associating request ID with data channel")
 		return
 	}
+	log.Global.Infof("Received %s response to request %d", recvdType, recvdID)
 	dataChan <- recvdType
 }
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
 func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	log.Global.Infof("[%d] Received request for block: %s, %s, %s", id, stream.Conn().RemotePeer(), loc.Name(), hash)
 	// check if we have the block in our cache or database
 	block := node.GetWorkObject(hash, loc)
 	if block == nil {
@@ -254,15 +256,13 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 	if err != nil {
 		return err
 	}
-	log.Global.WithFields(log.Fields{
-		"blockHash": block.Hash(),
-		"peer":      stream.Conn().RemotePeer(),
-	}).Trace("Sent block to peer")
+	log.Global.Info("[%d] Sent block to peer: %s, %s", id, stream.Conn().RemotePeer(), block.Hash())
 	return nil
 }
 
 // Seeks the header in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
 func handleHeaderRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	log.Global.Infof("[%d] Received request for header: %s, %s, %s", id, stream.Conn().RemotePeer(), loc.Name(), hash)
 	header := node.GetHeader(hash, loc)
 	if header == nil {
 		log.Global.Debugf("header not found")
@@ -279,7 +279,7 @@ func handleHeaderRequest(id uint32, loc common.Location, hash common.Hash, strea
 	if err != nil {
 		return err
 	}
-	log.Global.Debugf("Sent header %s to peer %s", header.Hash(), stream.Conn().RemotePeer())
+	log.Global.Info("[%d] Sent header to peer: %s, %s", id, stream.Conn().RemotePeer(), header.Hash())
 	return nil
 }
 
@@ -289,6 +289,7 @@ func handleTransactionRequest(id uint32, loc common.Location, hash common.Hash, 
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
 func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, stream network.Stream, node QuaiP2PNode) error {
+	log.Global.Infof("[%d] Received request for block number: %s, %s, %d", id, stream.Conn().RemotePeer(), loc.Name(), number)
 	// check if we have the block in our cache or database
 	blockHash := node.GetBlockHashByNumber(number, loc)
 	if blockHash == nil {
@@ -306,11 +307,12 @@ func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, s
 	if err != nil {
 		return err
 	}
-	log.Global.Tracef("Sent block hash %s to peer %s", blockHash, stream.Conn().RemotePeer())
+	log.Global.Info("[%d] Sent block hash to peer: %s, %s", id, stream.Conn().RemotePeer(), blockHash)
 	return nil
 }
 
 func handleTrieNodeRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	log.Global.Infof("[%d] Received request for trie node: %s, %s, %d", id, stream.Conn().RemotePeer(), loc.Name(), hash)
 	trieNode := node.GetTrieNode(hash, loc)
 	if trieNode == nil {
 		log.Global.Tracef("trie node not found")
@@ -325,6 +327,6 @@ func handleTrieNodeRequest(id uint32, loc common.Location, hash common.Hash, str
 	if err != nil {
 		return err
 	}
-	log.Global.Tracef("Sent trie node to peer %s", stream.Conn().RemotePeer())
+	log.Global.Info("[%d] Sent trie node to peer: %s, %s", id, stream.Conn().RemotePeer(), hash)
 	return nil
 }
