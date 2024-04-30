@@ -23,10 +23,10 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/p2p/peerManager"
+	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
+	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
+	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
-	"github.com/dominant-strategies/go-quai/p2p/pubsubManager"
-	"github.com/dominant-strategies/go-quai/p2p/requestManager"
 	"github.com/dominant-strategies/go-quai/quai"
 )
 
