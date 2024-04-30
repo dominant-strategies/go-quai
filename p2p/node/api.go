@@ -13,7 +13,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/p2p/peerManager"
+	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/quai"
 	"github.com/dominant-strategies/go-quai/trie"
