@@ -10,7 +10,7 @@ import (
 // Returns the number of peers in the routing table, as well as how many active
 // connections we currently have.
 func (p *P2PNode) connectionStats() (int) {
-	peers := p.Host.Network().Peers()
+	peers := p.peerManager.GetHost().Network().Peers()
 	numConnected := len(peers)
 
 	return numConnected

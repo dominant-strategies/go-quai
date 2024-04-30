@@ -14,6 +14,7 @@ import (
 	lru "github.com/hnlq715/golang-lru"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -33,6 +34,21 @@ var (
 	errStreamNotFound = errors.New("stream not found")
 )
 
+type StreamManager interface {
+	// Set the host for the stream manager
+	SetP2PBackend(quaiprotocol.QuaiP2PNode)
+
+	// Get/Set the host for the stream manager
+	GetHost() host.Host
+	SetHost(host.Host)
+
+	// GetStream returns a valid stream, either creating a new one or returning an existing one
+	GetStream(peer.ID) (network.Stream, error)
+
+	// CloseStream goes through all the steps to properly close and remove a stream's resources
+	CloseStream(peer.ID) error
+}
+
 type basicStreamManager struct {
 	ctx         context.Context
 	streamCache *lru.Cache
@@ -47,7 +63,7 @@ type streamWrapper struct {
 	semaphore chan struct{}
 }
 
-func NewStreamManager(peerCount int) (*basicStreamManager, error) {
+func NewStreamManager(peerCount int, node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStreamManager, error) {
 	lruCache, err := lru.NewWithEvict(
 		peerCount*c_streamReplicationFactor,
 		severStream,
@@ -60,6 +76,8 @@ func NewStreamManager(peerCount int) (*basicStreamManager, error) {
 	return &basicStreamManager{
 		ctx:         context.Background(),
 		streamCache: lruCache,
+		p2pBackend:  node,
+		host:        host,
 	}, nil
 }
 
