@@ -453,7 +453,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	}
 	switch args.TxType {
 	case types.QiTxType:
-		return args.CalculateQiTxGas()
+		return args.CalculateQiTxGas(s.b.NodeLocation())
 	case types.QuaiTxType:
 		return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 	default:
@@ -498,7 +498,7 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*bi
 // given transaction against the current pending block.
 func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args TransactionArgs) (*big.Int, error) {
 	// Estimate the gas
-	gas, err := args.CalculateQiTxGas()
+	gas, err := args.CalculateQiTxGas(s.b.NodeLocation())
 	if err != nil {
 		return nil, err
 	}

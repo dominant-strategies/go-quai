@@ -124,11 +124,49 @@ func (tx *QiTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	panic("Qi TX does not have ECDSA signature values")
 }
 
-func CalculateQiTxGas(transaction *Transaction) uint64 {
+// CalculateQiTxGas calculates the total amount of gas a Qi tx uses (for fee calculation)
+func CalculateQiTxGas(transaction *Transaction, location common.Location) uint64 {
 	if transaction.Type() != QiTxType {
 		panic("CalculateQiTxGas called on a transaction that is not a Qi transaction")
 	}
-	// TODO: This should check for ETXs (and conversion) and calculate expected gas for those as well
+	txGas := CalculateIntrinsicQiTxGas(transaction)
+	for _, output := range transaction.TxOut() {
+		toAddr := common.AddressBytes(output.Address)
+		if !location.Equal(*toAddr.Location()) {
+			// This output creates an ETX
+			txGas += params.ETXGas + params.TxGas
+		} else if location.Equal(*toAddr.Location()) && toAddr.IsInQuaiLedgerScope() {
+			// This output creates a conversion
+			txGas += params.ETXGas + params.TxGas + params.ColdSloadCost + params.ColdSloadCost + params.SstoreSetGas + params.SstoreSetGas
+		}
+	}
+	return txGas
+}
+
+// CalculateBlockQiTxGas calculates the amount of gas a Qi tx uses in a block (for block gas limit calculation)
+func CalculateBlockQiTxGas(transaction *Transaction, location common.Location) uint64 {
+	if transaction.Type() != QiTxType {
+		panic("CalculateQiTxGas called on a transaction that is not a Qi transaction")
+	}
+	txGas := CalculateIntrinsicQiTxGas(transaction)
+	for _, output := range transaction.TxOut() {
+		toAddr := common.AddressBytes(output.Address)
+		if !location.Equal(*toAddr.Location()) {
+			// This output creates an ETX
+			txGas += params.ETXGas
+		} else if location.Equal(*toAddr.Location()) && toAddr.IsInQuaiLedgerScope() {
+			// This output creates a conversion
+			txGas += params.ETXGas
+		}
+	}
+	return txGas
+}
+
+// CalculateIntrinsicQiTxGas calculates the intrinsic gas for a Qi tx without ETXs
+func CalculateIntrinsicQiTxGas(transaction *Transaction) uint64 {
+	if transaction.Type() != QiTxType {
+		panic("CalculateIntrinsicQiTxGas called on a transaction that is not a Qi transaction")
+	}
 	return uint64(len(transaction.TxIn()))*params.SloadGas + uint64(len(transaction.TxOut()))*params.CallValueTransferGas + params.EcrecoverGas
 }
 

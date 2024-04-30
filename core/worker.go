@@ -912,7 +912,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			break
 		}
 		if tx.Type() == types.QiTxType {
-			txGas := types.CalculateQiTxGas(tx)
+			txGas := types.CalculateBlockQiTxGas(tx, w.hc.NodeLocation())
 			if env.gasPool.Gas() < txGas {
 				w.logger.WithFields(log.Fields{
 					"have": env.gasPool,
@@ -920,7 +920,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				}).Trace("Not enough gas for further transactions")
 				break
 			}
-			if err := w.processQiTx(tx, env, txGas); err != nil {
+			if err := w.processQiTx(tx, env); err != nil {
 				hash := tx.Hash()
 				w.logger.WithFields(log.Fields{
 					"err": err,
@@ -1429,7 +1429,7 @@ func (w *worker) CurrentInfo(header *types.WorkObject) bool {
 	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }
 
-func (w *worker) processQiTx(tx *types.Transaction, env *environment, txGas uint64) error {
+func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	location := w.hc.NodeLocation()
 	if tx.Type() != types.QiTxType {
 		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
@@ -1441,8 +1441,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, txGas uint
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
 	gasUsed := env.wo.GasUsed()
-	gasUsed += txGas // the amount of block gas used in this transaction is only the txGas, regardless of ETXs emitted
-	if err := env.gasPool.SubGas(txGas); err != nil {
+	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx)
+	gasUsed += intrinsicGas // the amount of block gas used in this transaction is only the txGas, regardless of ETXs emitted
+	if err := env.gasPool.SubGas(intrinsicGas); err != nil {
 		return err
 	}
 	if gasUsed > env.wo.GasLimit() {
@@ -1545,6 +1546,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, txGas uint
 
 			// We should require some kind of extra fee here
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
+			gasUsed += params.ETXGas
+			if err := env.gasPool.SubGas(params.ETXGas); err != nil {
+				return err
+			}
 			primeTerminus := w.hc.GetPrimeTerminus(env.wo)
 			if !w.hc.CheckIfEtxIsEligible(primeTerminus.EtxEligibleSlices(), *toAddr.Location()) {
 				return fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
@@ -1566,8 +1571,8 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, txGas uint
 	}
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
 	// Check tx against required base fee and gas
-	requiredGas := txGas + (uint64(len(etxs)) * params.TxGas) // Each ETX costs extra gas that is paid in the origin
-	if requiredGas < txGas {
+	requiredGas := intrinsicGas + (uint64(len(etxs)) * (params.TxGas + params.ETXGas)) // Each ETX costs extra gas that is paid in the origin
+	if requiredGas < intrinsicGas {
 		// overflow
 		return fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
@@ -1594,6 +1599,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, txGas uint
 			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
 		}
 		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
+		gasUsed += params.ETXGas
+		if err := env.gasPool.SubGas(params.ETXGas); err != nil {
+			return err
+		}
 		etxs = append(etxs, &etxInner)
 		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
 	}

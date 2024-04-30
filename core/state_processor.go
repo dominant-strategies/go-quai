@@ -608,9 +608,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 	if currentHeader == nil || statedb == nil || gp == nil || usedGas == nil || signer == nil || etxRLimit == nil || etxPLimit == nil {
 		return nil, nil, errors.New("one of the parameters is nil")
 	}
-	txGas := types.CalculateQiTxGas(tx)
-	*usedGas += txGas
-	if err := gp.SubGas(txGas); err != nil {
+	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx)
+	*usedGas += intrinsicGas
+	if err := gp.SubGas(intrinsicGas); err != nil {
 		return nil, nil, err
 	}
 	if *usedGas > currentHeader.GasLimit() {
@@ -732,6 +732,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 
 			// We should require some kind of extra fee here
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
+			*usedGas += params.ETXGas
+			if err := gp.SubGas(params.ETXGas); err != nil {
+				return nil, nil, err
+			}
 			etxs = append(etxs, &etxInner)
 		} else {
 			// This output creates a normal UTXO
@@ -774,8 +778,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
 	// Check tx against required base fee and gas
-	requiredGas := txGas + (uint64(len(etxs)) * params.TxGas) // Each ETX costs extra gas that is paid in the origin
-	if requiredGas < txGas {
+	requiredGas := intrinsicGas + (uint64(len(etxs)) * (params.TxGas + params.ETXGas)) // Each ETX costs extra gas that is paid in the origin
+	if requiredGas < intrinsicGas {
 		// Overflow
 		return nil, nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
@@ -800,6 +804,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 			return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
 		}
 		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
+		*usedGas += params.ETXGas
+		if err := gp.SubGas(params.ETXGas); err != nil {
+			return nil, nil, err
+		}
 		etxs = append(etxs, &etxInner)
 		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
 	}
