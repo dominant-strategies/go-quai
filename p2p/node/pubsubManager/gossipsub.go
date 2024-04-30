@@ -38,8 +38,10 @@ type PubsubManager struct {
 // See https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub@v0.10.0#Option
 func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, error) {
 	cfg := pubsub.DefaultGossipSubParams()
-	cfg.D = 10
-	cfg.Dout = 5
+	cfg.D = 30
+	cfg.Dlo = 6
+	cfg.Dhi = 45
+	cfg.Dout = 20
 	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg))
 	if err != nil {
 		return nil, err
