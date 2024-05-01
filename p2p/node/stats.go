@@ -9,7 +9,7 @@ import (
 
 // Returns the number of peers in the routing table, as well as how many active
 // connections we currently have.
-func (p *P2PNode) connectionStats() (int) {
+func (p *P2PNode) connectionStats() int {
 	peers := p.peerManager.GetHost().Network().Peers()
 	numConnected := len(peers)
 
@@ -30,7 +30,6 @@ func (p *P2PNode) statsLoop() {
 		select {
 		case <-ticker.C:
 			peersConnected := p.connectionStats()
-
 			log.Global.Debugf("Number of peers connected: %d", peersConnected)
 		case <-p.ctx.Done():
 			log.Global.Warnf("Context cancelled. Stopping stats loop...")
