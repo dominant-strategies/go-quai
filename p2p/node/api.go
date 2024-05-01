@@ -199,13 +199,21 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID, location)
 	}
-	// send the block to the result channel
-	resultChan <- recvd
+	select {
+	case resultChan <- recvd:
+		// Data sent successfully
+	default:
+		// Optionally log the missed send or handle it in another way
+		log.Global.WithFields(log.Fields{
+			"peerId":  peerID,
+			"message": "Channel is full, data not sent",
+		}).Warning("Missed data send")
+	}
 }
 
 // Request a data from the network for the specified slice
 func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
-	resultChan := make(chan interface{}, 1)
+	resultChan := make(chan interface{}, 10)
 	// If it is a hash, first check to see if it is contained in the caches
 	if hash, ok := requestData.(common.Hash); ok {
 		result, ok := p.cacheGet(hash, responseDataType, location)
