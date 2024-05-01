@@ -237,18 +237,27 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	startTimeSenders := time.Now()
 	senders := make(map[common.Hash]*common.InternalAddress) // temporary cache for senders of internal txs
 	numInternalTxs := 0
-	p.hc.pool.SendersMutex.RLock()
-	for _, tx := range block.Transactions() { // get all senders of internal txs from cache - easier on the SendersMutex to do it all at once here
+	p.hc.pool.SendersMu.RLock()               // Prevent the txpool from grabbing the lock during the entire block tx lookup
+	for i, tx := range block.Transactions() { // get all senders of internal txs from cache
+		if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
+			// coinbase tx is not in senders cache
+			continue
+		}
 		if tx.Type() == types.QuaiTxType {
 			numInternalTxs++
-			if sender, ok := p.hc.pool.GetSenderThreadUnsafe(tx.Hash()); ok {
+			if sender, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
 				senders[tx.Hash()] = &sender // This pointer must never be modified
 			} else {
 				// TODO: calcuate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
 			}
+		} else if tx.Type() == types.QiTxType {
+			numInternalTxs++
+			if _, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
+				senders[tx.Hash()] = &common.InternalAddress{}
+			}
 		}
 	}
-	p.hc.pool.SendersMutex.RUnlock()
+	p.hc.pool.SendersMu.RUnlock()
 	timeSenders = time.Since(startTimeSenders)
 	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
@@ -268,6 +277,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	totalEtxGas := uint64(0)
 	totalFees := big.NewInt(0)
 	qiEtxs := make([]*types.Transaction, 0)
+	var totalQiTime time.Duration
 	for i, tx := range block.Transactions() {
 		if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
 			// coinbase tx currently exempt from gas and outputs are added after all txs are processed
@@ -275,7 +285,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		}
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
-			fees, etxs, err := ProcessQiTx(tx, p.hc, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
+			qiTimeBefore := time.Now()
+			checkSig := true
+			if _, ok := senders[tx.Hash()]; ok {
+				checkSig = false
+			}
+			fees, etxs, err := ProcessQiTx(tx, p.hc, true, checkSig, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -283,6 +298,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 				qiEtxs = append(qiEtxs, types.NewTx(etx))
 			}
 			totalFees.Add(totalFees, fees)
+			totalQiTime += time.Since(qiTimeBefore)
 			continue
 		}
 
@@ -489,9 +505,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	p.logger.WithFields(log.Fields{
 		"signing time":       common.PrettyDuration(timeSign),
 		"prepare state time": common.PrettyDuration(timePrepare),
-		"etx time":           common.PrettyDuration(timeEtx),
-		"tx time":            common.PrettyDuration(timeTx),
-	}).Debug("Total Tx Processing Time")
+		"etxTime":            common.PrettyDuration(timeEtx),
+		"txTime":             common.PrettyDuration(timeTx),
+		"totalQiTime":        common.PrettyDuration(totalQiTime),
+	}).Info("Total Tx Processing Time")
 
 	p.logger.WithFields(log.Fields{
 		"time1": time1,
@@ -580,7 +597,7 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 // ProcessQiTx processes a QiTx by spending the inputs and creating the outputs.
 // Math is performed to verify the fee provided is sufficient to cover the gas cost.
 // updateState is set to update the statedb in the case of the state processor, but not in the case of the txpool.
-func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, currentHeader *types.WorkObject, statedb *state.StateDB, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.ExternalTx, error) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, checkSig bool, currentHeader *types.WorkObject, statedb *state.StateDB, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.ExternalTx, error) {
 	// Sanity checks
 	if tx == nil || tx.Type() != types.QiTxType {
 		return nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
@@ -616,14 +633,15 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
 		entryAddr := common.BytesToAddress(utxo.Address, location)
 		if !address.Equal(entryAddr) {
-			return nil, nil, errors.New("invalid address")
+			return nil, nil, fmt.Errorf("tx %032x spends UTXO %032x:%d with invalid pubkey, have %s want %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, address.String(), entryAddr.String())
 		}
-
-		pubKey, err := btcec.ParsePubKey(txIn.PubKey)
-		if err != nil {
-			return nil, nil, err
+		if checkSig {
+			pubKey, err := btcec.ParsePubKey(txIn.PubKey)
+			if err != nil {
+				return nil, nil, err
+			}
+			pubKeys = append(pubKeys, pubKey)
 		}
-		pubKeys = append(pubKeys, pubKey)
 		// Check for duplicate addresses. This also checks for duplicate inputs.
 		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
 			return nil, nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
@@ -734,22 +752,24 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 	}
 
 	// Ensure the transaction signature is valid
-	var finalKey *btcec.PublicKey
-	if len(tx.TxIn()) > 1 {
-		aggKey, _, _, err := musig2.AggregateKeys(
-			pubKeys, false,
-		)
-		if err != nil {
-			return nil, nil, err
+	if checkSig {
+		var finalKey *btcec.PublicKey
+		if len(tx.TxIn()) > 1 {
+			aggKey, _, _, err := musig2.AggregateKeys(
+				pubKeys, false,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			finalKey = aggKey.FinalKey
+		} else {
+			finalKey = pubKeys[0]
 		}
-		finalKey = aggKey.FinalKey
-	} else {
-		finalKey = pubKeys[0]
-	}
 
-	txDigestHash := signer.Hash(tx)
-	if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
-		return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
+		txDigestHash := signer.Hash(tx)
+		if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
+			return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
+		}
 	}
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)

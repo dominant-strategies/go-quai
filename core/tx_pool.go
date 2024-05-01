@@ -36,8 +36,8 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/sirupsen/logrus"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 const (
@@ -280,19 +280,19 @@ type TxPool struct {
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 	currentMaxGas uint64         // Current gas limit for transaction caps
 
-	locals         *accountSet                                                 // Set of local transaction to exempt from eviction rules
-	journal        *txJournal                                                  // Journal of local transaction to back up to disk
-	qiPool         map[common.Hash]*types.TxWithMinerFee                       // Qi pool to store Qi transactions
-	pending        map[common.InternalAddress]*txList                          // All currently processable transactions
-	queue          map[common.InternalAddress]*txList                          // Queued but non-processable transactions
-	beats          map[common.InternalAddress]time.Time                        // Last heartbeat from each known account
-	all            *txLookup                                                   // All transactions to allow lookups
-	priced         *txPricedList                                               // All transactions sorted by price
-	senders        *orderedmap.OrderedMap[common.Hash, common.InternalAddress] // Tx hash to sender lookup cache (async populated)
-	sendersCh      chan newSender                                              // Channel for async senders cache goroutine
-	SendersMutex   sync.RWMutex                                                // Mutex for senders map
-	localTxsCount  int                                                         // count of txs in last 1 min. Purely for logging purpose
-	remoteTxsCount int                                                         // count of txs in last 1 min. Purely for logging purpose
+	locals         *accountSet                           // Set of local transaction to exempt from eviction rules
+	journal        *txJournal                            // Journal of local transaction to back up to disk
+	qiPool         map[common.Hash]*types.TxWithMinerFee // Qi pool to store Qi transactions
+	pending        map[common.InternalAddress]*txList    // All currently processable transactions
+	queue          map[common.InternalAddress]*txList    // Queued but non-processable transactions
+	beats          map[common.InternalAddress]time.Time  // Last heartbeat from each known account
+	all            *txLookup                             // All transactions to allow lookups
+	priced         *txPricedList                         // All transactions sorted by price
+	senders        *lru.Cache                            // Tx hash to sender lookup cache (async populated)
+	sendersCh      chan newSender                        // Channel for async senders cache goroutine
+	SendersMu      sync.RWMutex                          // Mutex for priority access of senders cache
+	localTxsCount  int                                   // count of txs in last 1 min. Purely for logging purpose
+	remoteTxsCount int                                   // count of txs in last 1 min. Purely for logging purpose
 
 	reOrgCounter int // keeps track of the number of times the runReorg is called, it is reset every c_reorgCounterThreshold times
 
@@ -357,7 +357,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		qiPool:          make(map[common.Hash]*types.TxWithMinerFee),
 		queue:           make(map[common.InternalAddress]*txList),
 		beats:           make(map[common.InternalAddress]time.Time),
-		senders:         orderedmap.New[common.Hash, common.InternalAddress](),
 		sendersCh:       make(chan newSender, config.SendersChBuffer),
 		all:             newTxLookup(),
 		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
@@ -372,6 +371,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reOrgCounter:    0,
 		logger:          logger,
 	}
+	pool.senders, _ = lru.New(int(config.MaxSenders))
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
 		logger.WithField("address", addr).Debug("Setting new local account")
@@ -717,7 +717,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if err != nil {
 			return err
 		}
-	} else if sender, found := pool.GetSender(tx.Hash()); found {
+	} else if sender, found := pool.PeekSender(tx.Hash()); found {
 		internal = sender
 		addToCache = false
 	} else {
@@ -757,9 +757,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			"tx":          tx,
 		}).Warn("tx has insufficient gas")
 		return ErrIntrinsicGas
-	}
-	if len(pool.sendersCh) == int(pool.config.SendersChBuffer) {
-		pool.logger.Error("sendersCh is full, skipping until there is room")
 	}
 	if addToCache {
 		select {
@@ -1073,7 +1070,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 				invalidTxMeter.Add(1)
 				continue
 			}
-		} else if _, found := pool.GetSender(tx.Hash()); found {
+		} else if found := pool.ContainsSender(tx.Hash()); found {
 			// if the sender is cached in the tx or in the pool cache, we don't need to add it into the cache
 		} else {
 			from, err := types.Sender(pool.signer, tx)
@@ -1143,7 +1140,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	if grabLock {
 		pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
 	}
-	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+	fee, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		if grabLock {
 			pool.mu.RUnlock()
@@ -1165,6 +1162,11 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	pool.qiPool[tx.Hash()] = txWithMinerFee
 	pool.qiMu.Unlock()
 	pool.queueTxEvent(tx)
+	select {
+	case pool.sendersCh <- newSender{tx.Hash(), common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
+	default:
+		pool.logger.Error("sendersCh is full, skipping until there is room")
+	}
 	pool.logger.WithFields(logrus.Fields{
 		"tx":  tx.Hash().String(),
 		"fee": fee,
@@ -1969,24 +1971,36 @@ func (pool *TxPool) demoteUnexecutables() {
 	}
 }
 
-// GetSender returns the sender of a stored transaction.
-func (pool *TxPool) GetSender(hash common.Hash) (common.InternalAddress, bool) {
-	pool.SendersMutex.RLock()
-	defer pool.SendersMutex.RUnlock()
-	return pool.senders.Get(hash)
+// PeekSender returns the sender of a stored transaction without updating the LRU cache and without grabbing
+// the SendersMu lock.
+func (pool *TxPool) PeekSenderNoLock(hash common.Hash) (common.InternalAddress, bool) {
+	addr, ok := pool.senders.Peek(hash)
+	if ok {
+		return addr.(common.InternalAddress), true
+	}
+	return common.InternalAddress{}, false
 }
 
-// GetSenderThreadUnsafe returns the sender of a stored transaction.
-// It is not thread safe and should only be used when the pool senders mutex is locked.
-func (pool *TxPool) GetSenderThreadUnsafe(hash common.Hash) (common.InternalAddress, bool) {
-	return pool.senders.Get(hash)
+func (pool *TxPool) ContainsSender(hash common.Hash) bool {
+	pool.SendersMu.RLock()
+	defer pool.SendersMu.RUnlock()
+	return pool.senders.Contains(hash)
 }
 
-// SetSender caches the sender of a transaction.
-func (pool *TxPool) SetSender(hash common.Hash, address common.InternalAddress) {
-	pool.SendersMutex.Lock()
-	defer pool.SendersMutex.Unlock()
-	pool.senders.Set(hash, address)
+func (pool *TxPool) ContainsOrAddSender(hash common.Hash, sender common.InternalAddress) (bool, bool) {
+	pool.SendersMu.Lock()
+	defer pool.SendersMu.Unlock()
+	return pool.senders.ContainsOrAdd(hash, sender)
+}
+
+func (pool *TxPool) PeekSender(hash common.Hash) (common.InternalAddress, bool) {
+	pool.SendersMu.RLock()
+	defer pool.SendersMu.RUnlock()
+	addr, ok := pool.senders.Peek(hash)
+	if ok {
+		return addr.(common.InternalAddress), true
+	}
+	return common.InternalAddress{}, false
 }
 
 // sendersGoroutine asynchronously adds a new sender to the cache
@@ -2006,19 +2020,12 @@ func (pool *TxPool) sendersGoroutine() {
 			return
 		case tx := <-pool.sendersCh:
 			// Add transaction to sender cache
-			pool.SendersMutex.Lock() // We could RLock here but it's unlikely to just be a read
-			if _, ok := pool.senders.Get(tx.hash); !ok {
-				pool.senders.Set(tx.hash, tx.sender)
-				if pool.senders.Len() > int(pool.config.MaxSenders) {
-					pool.senders.Delete(pool.senders.Oldest().Key) // FIFO
-				}
-			} else {
+			if contains, _ := pool.ContainsOrAddSender(tx.hash, tx.sender); contains {
 				pool.logger.WithFields(log.Fields{
 					"tx":     tx.hash.String(),
 					"sender": tx.sender.String(),
 				}).Debug("Tx already seen in sender cache (reorg?)")
 			}
-			pool.SendersMutex.Unlock()
 
 		case <-resetMetersTicker.C:
 			// Reset the tx meters every 5 minutes
