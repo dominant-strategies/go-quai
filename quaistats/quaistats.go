@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -36,6 +35,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/shirou/gopsutil/cpu"
@@ -290,7 +291,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string, 
 		transactionStatsQueue: NewStatsQueue(),
 		detailStatsQueue:      NewStatsQueue(),
 		appendTimeStatsQueue:  NewStatsQueue(),
-		statsReadyCh:          make(chan struct{}),
+		statsReadyCh:          make(chan struct{}, 1),
 		sendfullstats:         sendfullstats,
 		blockLookupCache:      blockLookupCache,
 		instanceDir:           node.InstanceDir(),
@@ -523,10 +524,13 @@ func (s *Service) handleBlock(block *types.WorkObject) {
 			s.transactionStatsQueue.Enqueue(txStats)
 		}
 	}
-
 	// After handling a block and potentially adding to the queues, notify the sendStats goroutine
 	// that stats are ready to be sent
-	s.statsReadyCh <- struct{}{}
+	select {
+	case s.statsReadyCh <- struct{}{}:
+	default:
+		s.backend.Logger().Debug("Stats ready channel is full")
+	}
 }
 
 func (s *Service) reportNodeStats(url string, mod int, authJwt string) error {
