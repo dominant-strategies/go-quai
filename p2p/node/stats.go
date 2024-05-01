@@ -30,7 +30,6 @@ func (p *P2PNode) statsLoop() {
 		select {
 		case <-ticker.C:
 			peersConnected := p.connectionStats()
-
 			log.Global.Debugf("Number of peers connected: %d", peersConnected)
 		case <-p.ctx.Done():
 			log.Global.Warnf("Context cancelled. Stopping stats loop...")

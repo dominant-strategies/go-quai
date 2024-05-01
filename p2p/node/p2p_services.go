@@ -76,7 +76,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 			"peerId": peerID,
 		}).Warn("Peer did not respond in time")
 		p.peerManager.MarkUnresponsivePeer(peerID, location)
-		return nil, nil
+		return nil, errors.New("peer did not respond in time")
 	}
 
 	if recvdType == nil {

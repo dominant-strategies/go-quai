@@ -188,6 +188,16 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 
 		// Mark this peer as behaving well
 		p.peerManager.MarkResponsivePeer(peerID, location)
+		select {
+		case resultChan <- recvd:
+			// Data sent successfully
+		default:
+			// Optionally log the missed send or handle it in another way
+			log.Global.WithFields(log.Fields{
+				"peerId":  peerID,
+				"message": "Channel is full, data not sent",
+			}).Warning("Missed data send")
+		}
 	} else {
 		log.Global.WithFields(log.Fields{
 			"peerId":   peerID,
@@ -198,16 +208,6 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, data 
 		}).Error("Error requesting the data from peer")
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID, location)
-	}
-	select {
-	case resultChan <- recvd:
-		// Data sent successfully
-	default:
-		// Optionally log the missed send or handle it in another way
-		log.Global.WithFields(log.Fields{
-			"peerId":  peerID,
-			"message": "Channel is full, data not sent",
-		}).Warning("Missed data send")
 	}
 }
 
