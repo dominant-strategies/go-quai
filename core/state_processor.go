@@ -217,6 +217,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 
+	fmt.Println("process 220", time1)
 	parentEvmRoot := parent.Header().EVMRoot()
 	parentUtxoRoot := parent.Header().UTXORoot()
 	if p.hc.IsGenesisHash(parent.Hash()) {
@@ -233,6 +234,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	}
 	time2 := common.PrettyDuration(time.Since(start))
 
+	fmt.Println("process 238", time2)
 	var timeSenders, timeSign, timePrepare, timeEtx, timeTx time.Duration
 	startTimeSenders := time.Now()
 	senders := make(map[common.Hash]*common.InternalAddress) // temporary cache for senders of internal txs
@@ -254,6 +256,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
 	time3 := common.PrettyDuration(time.Since(start))
 
+	fmt.Println("process 261", time3)
 	// Iterate over and process the individual transactions.
 	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
@@ -396,6 +399,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		i++
 	}
 
+	fmt.Println("process 402 after Qi Txs")
 	coinbaseTx := block.Transactions()[0]
 	// Coinbase check
 	if types.IsCoinBaseTx(coinbaseTx, header.ParentHash(nodeCtx), nodeLocation) {
@@ -477,14 +481,17 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		}
 	}
 
+	fmt.Println("process 484 after coinbase")
 	if etxSet != nil && (etxSet.Len() > 0 && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
 		return nil, nil, nil, nil, 0, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
 	}
 
 	time4 := common.PrettyDuration(time.Since(start))
+	fmt.Println("process 490", time4)
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.hc, block, statedb)
 	time5 := common.PrettyDuration(time.Since(start))
+	fmt.Println("process 494", time5)
 
 	p.logger.WithFields(log.Fields{
 		"signing time":       common.PrettyDuration(timeSign),
