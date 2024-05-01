@@ -43,6 +43,7 @@ const (
 	c_NodeFlagPrefix    = "node."
 	c_TXPoolPrefix      = "txpool."
 	c_RPCFlagPrefix     = "rpc."
+	c_PeersFlagPrefix   = "peers."
 	c_MetricsFlagPrefix = "metrics."
 )
 
@@ -103,6 +104,7 @@ var NodeFlags = []Flag{
 	SendFullStatsFlag,
 	IndexAddressUtxos,
 	StartingExpansionNumberFlag,
+	NodeLogLevelFlag,
 }
 
 var TXPoolFlags = []Flag{
@@ -134,6 +136,10 @@ var RPCFlags = []Flag{
 	PreloadJSFlag,
 	RPCGlobalTxFeeCapFlag,
 	RPCGlobalGasCapFlag,
+}
+
+var PeersFlags = []Flag{
+	PeersLogLevelFlag,
 }
 
 var MetricsFlags = []Flag{
@@ -553,6 +559,12 @@ var (
 		Value: 0,
 		Usage: "Start the node at the expansion number preferred" + generateEnvDoc(c_NodeFlagPrefix+"starting-expansion-num"),
 	}
+
+	NodeLogLevelFlag = Flag{
+		Name:  c_NodeFlagPrefix + "log-level",
+		Value: "info",
+		Usage: "log level (trace, debug, info, warn, error, fatal, panic)" + generateEnvDoc(c_GlobalFlagPrefix+"log-level"),
+	}
 )
 
 var (
@@ -643,6 +655,19 @@ var (
 		Name:  c_RPCFlagPrefix + "gascap",
 		Value: quaiconfig.Defaults.RPCGasCap,
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)" + generateEnvDoc(c_RPCFlagPrefix+"gascap"),
+	}
+)
+
+var (
+	// ****************************************
+	// **                                    **
+	// **           PEERS FLAGS              **
+	// **                                    **
+	// ****************************************
+	PeersLogLevelFlag = Flag{
+		Name:  c_PeersFlagPrefix + "log-level",
+		Value: "info",
+		Usage: "log level (trace, debug, info, warn, error, fatal, panic)" + generateEnvDoc(c_GlobalFlagPrefix+"log-level"),
 	}
 )
 

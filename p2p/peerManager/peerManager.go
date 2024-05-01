@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
@@ -189,7 +190,7 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	logger := log.NewLogger("peers.log", "debug")
+	logger := log.NewLogger("peers.log", viper.GetString(utils.PeersLogLevelFlag.Name))
 
 	go func() {
 		q := query.Query{}
