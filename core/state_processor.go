@@ -243,18 +243,16 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	startTimeSenders := time.Now()
 	senders := make(map[common.Hash]*common.InternalAddress) // temporary cache for senders of internal txs
 	numInternalTxs := 0
-	p.hc.pool.SendersMutex.RLock()
 	for _, tx := range block.Transactions() { // get all senders of internal txs from cache - easier on the SendersMutex to do it all at once here
 		if tx.Type() == types.QuaiTxType {
 			numInternalTxs++
-			if sender, ok := p.hc.pool.GetSenderThreadUnsafe(tx.Hash()); ok {
+			if sender, ok := p.hc.pool.PeekSender(tx.Hash()); ok {
 				senders[tx.Hash()] = &sender // This pointer must never be modified
 			} else {
 				// TODO: calcuate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
 			}
 		}
 	}
-	p.hc.pool.SendersMutex.RUnlock()
 	timeSenders = time.Since(startTimeSenders)
 	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
@@ -277,6 +275,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	totalEtxGas := uint64(0)
 	totalFees := big.NewInt(0)
 	qiEtxs := make([]*types.Transaction, 0)
+	var totalQiTime time.Duration
 	for i, tx := range block.Transactions() {
 		if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
 			// coinbase tx currently exempt from gas and outputs are added after all txs are processed
@@ -284,6 +283,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		}
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
+			qiTimeBefore := time.Now()
 			fees, etxs, err := ProcessQiTx(tx, p.hc, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -292,6 +292,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 				qiEtxs = append(qiEtxs, types.NewTx(etx))
 			}
 			totalFees.Add(totalFees, fees)
+			totalQiTime += time.Since(qiTimeBefore)
 			continue
 		}
 
@@ -508,8 +509,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	p.logger.WithFields(log.Fields{
 		"signing time":       common.PrettyDuration(timeSign),
 		"prepare state time": common.PrettyDuration(timePrepare),
-		"etx time":           common.PrettyDuration(timeEtx),
-		"tx time":            common.PrettyDuration(timeTx),
+		"etxTime":            common.PrettyDuration(timeEtx),
+		"txTime":             common.PrettyDuration(timeTx),
+		"totalQiTime":        common.PrettyDuration(totalQiTime),
 	}).Info("Total Tx Processing Time")
 
 	p.logger.WithFields(log.Fields{
