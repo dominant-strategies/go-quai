@@ -35,8 +35,10 @@ func Execute() error {
 }
 
 func init() {
-	for _, flag := range utils.GlobalFlags {
-		utils.CreateAndBindFlag(flag, rootCmd)
+	for _, flagGroup := range utils.Flags {
+		for _, flag := range flagGroup {
+			utils.CreateAndBindFlag(flag, rootCmd)
+		}
 	}
 }
 

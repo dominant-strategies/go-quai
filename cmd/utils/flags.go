@@ -47,6 +47,15 @@ const (
 	c_MetricsFlagPrefix = "metrics."
 )
 
+var Flags = [][]Flag{
+	GlobalFlags,
+	NodeFlags,
+	TXPoolFlags,
+	RPCFlags,
+	PeersFlags,
+	MetricsFlags,
+}
+
 var GlobalFlags = []Flag{
 	ConfigDirFlag,
 	DataDirFlag,
