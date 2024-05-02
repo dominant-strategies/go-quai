@@ -2047,6 +2047,8 @@ func (pool *TxPool) poolLimiterGoroutine() {
 			}
 			pool.mu.RUnlock()
 			pool.logger.Infof("PoolSize: Pending: %d, Queued: %d, Number of accounts in queue: %d", pending, queued, len(pool.queue))
+			pendingTxGauge.Set(float64(pending))
+			queuedGauge.Set(float64(queued))
 			if queued > pool.config.GlobalQueue {
 				start := time.Now()
 				pool.logger.Infof("Queued pool size exceeded limit: %d > %d", queued, pool.config.GlobalQueue)
