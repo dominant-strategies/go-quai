@@ -63,6 +63,7 @@ type Transaction struct {
 	toChain    atomic.Value
 	fromChain  atomic.Value
 	confirmCtx atomic.Value // Context at which the ETX may be confirmed
+	local      atomic.Value // Whether the transaction is local
 }
 
 // NewTx creates a new transaction.
@@ -611,6 +612,17 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 		return tx.GasTipCapIntCmp(other)
 	}
 	return tx.EffectiveGasTipValue(baseFee).Cmp(other)
+}
+
+func (tx *Transaction) IsLocal() bool {
+	if local := tx.local.Load(); local != nil {
+		return local.(bool)
+	}
+	return false
+}
+
+func (tx *Transaction) SetLocal(local bool) {
+	tx.local.Store(local)
 }
 
 // Hash returns the transaction hash.

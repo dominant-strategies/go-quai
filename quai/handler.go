@@ -20,11 +20,12 @@ const (
 	// c_checkNextPrimeBlockInterval is the interval for checking the next Block in Prime
 	c_checkNextPrimeBlockInterval = 60 * time.Second
 	// c_txsChanSize is the size of channel listening to the new txs event
-	c_newTxsChanSize = 100
+	c_newTxsChanSize = 1000
 	// c_recentBlockReqCache is the size of the cache for the recent block requests
 	c_recentBlockReqCache = 1000
 	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
-	c_recentBlockReqTimeout = 1 * time.Minute
+	c_recentBlockReqTimeout         = 1 * time.Minute
+	c_broadcastTransactionsInterval = 5 * time.Second
 )
 
 // handler manages the fetch requests from the core and tx pool also takes care of the tx broadcast
@@ -132,6 +133,8 @@ func (h *handler) missingBlockLoop() {
 
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
+	transactions := make(types.Transactions, 0, 100)
+	broadcastTransactionsTicker := time.NewTicker(c_broadcastTransactionsInterval)
 	defer h.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
@@ -144,12 +147,13 @@ func (h *handler) txBroadcastLoop() {
 	for {
 		select {
 		case event := <-h.txsCh:
-			for _, tx := range event.Txs {
-				err := h.p2pBackend.Broadcast(h.nodeLocation, tx)
-				if err != nil {
-					h.logger.Error("Error broadcasting transaction hash", tx.Hash(), err)
-				}
+			transactions = append(transactions, event.Txs...)
+		case <-broadcastTransactionsTicker.C:
+			err := h.p2pBackend.Broadcast(h.nodeLocation, &transactions)
+			if err != nil {
+				h.logger.Error("Error broadcasting transactions", err)
 			}
+			transactions = make(types.Transactions, 0, 100)
 		case <-h.txsSub.Err():
 			return
 		}

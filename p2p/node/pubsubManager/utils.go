@@ -30,6 +30,8 @@ func TopicName(genesis common.Hash, location common.Location, data interface{}) 
 		return strings.Join([]string{baseTopic, C_hashType}, "/"), nil
 	case *types.Transaction:
 		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
+	case *types.Transactions:
+		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
 	default:
 		return "", ErrUnsupportedType
 	}
