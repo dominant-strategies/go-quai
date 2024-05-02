@@ -400,6 +400,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	pool.wg.Add(1)
 	go pool.loop()
 	go pool.sendersGoroutine()
+	go pool.poolLimiterGoroutine()
 	return pool
 }
 
@@ -679,7 +680,7 @@ func (pool *TxPool) local() map[common.InternalAddress]types.Transactions {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
@@ -728,7 +729,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Drop non-local transactions under our own minimal accepted gas price or tip
-	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
+	if tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
@@ -784,7 +785,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	isLocal := local || pool.locals.containsTx(tx)
 
 	// If the transaction fails basic validation, discard it
-	if err := pool.validateTx(tx, isLocal); err != nil {
+	if err := pool.validateTx(tx); err != nil {
 		pool.logger.WithFields(log.Fields{
 			"hash": hash,
 			"err":  err,
@@ -795,7 +796,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
-		if !isLocal && pool.priced.Underpriced(tx) {
+		if pool.priced.Underpriced(tx) {
 			pool.logger.WithFields(log.Fields{
 				"hash":      hash,
 				"gasTipCap": tx.GasTipCap(),
@@ -807,10 +808,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		// New transaction is better than our worse ones, make room for it.
 		// If it's a local transaction, forcibly discard all available transactions.
 		// Otherwise if we can't make enough room for new one, abort the operation.
-		drop, success := pool.priced.Discard(pool.all.Slots()-int(pool.config.GlobalSlots+pool.config.GlobalQueue)+numSlots(tx), isLocal)
+		drop, success := pool.priced.Discard(pool.all.Slots()-int(pool.config.GlobalSlots+pool.config.GlobalQueue)+numSlots(tx), false)
 
 		// Special case, we still can't make the room for the new remote one.
-		if !isLocal && !success {
+		if !success {
 			pool.logger.WithField("hash", hash).Trace("Discarding overflown transaction")
 			overflowedTxMeter.Add(1)
 			return false, ErrTxPoolOverflow
@@ -2015,6 +2016,85 @@ func (pool *TxPool) sendersGoroutine() {
 			overflowedTxMeter.Set(0)
 		}
 	}
+}
+
+// The PoolLimiter routinely checks if the pending or queued tx pools have exceeded their limits
+// and if so, removes excess transactions from the pool.
+func (pool *TxPool) poolLimiterGoroutine() {
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	// Check every 30 seconds
+	ticker := time.NewTicker(30 * time.Second)
+	for {
+		select {
+		case <-pool.reorgShutdownCh:
+			return
+		case <-ticker.C:
+			pool.mu.RLock()
+			queued := uint64(0)
+			for _, list := range pool.queue {
+				queued += uint64(list.Len())
+			}
+			pending := uint64(0)
+			for _, list := range pool.pending {
+				pending += uint64(list.Len())
+			}
+			pool.mu.RUnlock()
+			pool.logger.Infof("PoolSize: Pending: %d, Queued: %d, Number of accounts in queue: %d", pending, queued, len(pool.queue))
+			if queued > pool.config.GlobalQueue {
+				start := time.Now()
+				pool.logger.Infof("Queued pool size exceeded limit: %d > %d", queued, pool.config.GlobalQueue)
+				pool.mu.Lock()
+				for _, list := range pool.queue {
+					caps := list.Cap(int(list.Len() - int(pool.config.AccountSlots)))
+					for _, tx := range caps {
+						hash := tx.Hash()
+						pool.all.Remove(hash, pool.logger)
+						pool.removeTx(hash, true)
+						pool.logger.WithField("hash", hash).Trace("Removed cap-exceeding queued transaction")
+					}
+					pool.priced.Removed(len(caps))
+					queuedRateLimitMeter.Add(float64(len(caps)))
+				}
+				pool.mu.Unlock()
+				pool.mu.RLock()
+				queued = 0
+				for _, list := range pool.queue {
+					queued += uint64(list.Len())
+				}
+				pool.mu.RUnlock()
+				if queued < pool.config.GlobalQueue {
+					continue
+				}
+				pool.logger.WithField("queued", queued).Error("Failed to truncate queued pool, deleting accounts")
+				deleted := 0
+				pool.mu.Lock()
+				for _, list := range pool.queue {
+					txs := list.Flatten()
+					for _, tx := range txs {
+						pool.removeTx(tx.Hash(), true)
+						deleted++
+					}
+					if len(txs) > int(queued) {
+						break
+					}
+					queued -= uint64(len(txs))
+					if queued < pool.config.GlobalQueue {
+						break
+					}
+				}
+				pool.mu.Unlock()
+				pool.logger.Infof("Truncation took %d ms. Queued pool size after truncation: %d, removed: %d", time.Since(start).Milliseconds(), queued, deleted)
+			}
+		}
+	}
+
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
