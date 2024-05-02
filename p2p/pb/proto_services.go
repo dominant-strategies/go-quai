@@ -215,6 +215,12 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 		log.Global.Tracef("marshalling hash: %+v", data)
 		protoHash := data.ProtoEncode()
 		return proto.Marshal(protoHash)
+	case *types.Transactions:
+		protoTransactions, err := data.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		return proto.Marshal(protoTransactions)
 	default:
 		return nil, errors.New("unsupported data type")
 	}
