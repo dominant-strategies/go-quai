@@ -43,7 +43,6 @@ func headerTestData() (*Header, common.Hash) {
 		etxRollupHash:         common.HexToHash("0x9abcdef0123456789abcdef0123456789abcdef0123456789abcdef8"),
 		manifestHash:          []common.Hash{common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9")},
 		receiptHash:           common.HexToHash("0xbcdef0123456789abcdef0123456789abcdef0123456789abcdefa"),
-		difficulty:            big.NewInt(123456789),
 		parentEntropy:         []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
 		parentDeltaS:          []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
 		parentUncledSubDeltaS: []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
@@ -59,8 +58,6 @@ func headerTestData() (*Header, common.Hash) {
 		gasUsed:               987654321,
 		baseFee:               big.NewInt(123456789),
 		extra:                 []byte("SGVsbG8gd29ybGQ="),
-		mixHash:               common.HexToHash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeff"),
-		nonce:                 EncodeNonce(uint64(1)),
 	}
 
 	return header, header.Hash()

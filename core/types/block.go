@@ -98,7 +98,6 @@ type Header struct {
 	etxRollupHash         common.Hash    `json:"extRollupRoot"         gencodec:"required"`
 	manifestHash          []common.Hash  `json:"manifestHash"          gencodec:"required"`
 	receiptHash           common.Hash    `json:"receiptsRoot"          gencodec:"required"`
-	difficulty            *big.Int       `json:"difficulty"            gencodec:"required"`
 	parentEntropy         []*big.Int     `json:"parentEntropy"         gencodec:"required"`
 	parentDeltaS          []*big.Int     `json:"parentDeltaS"          gencodec:"required"`
 	parentUncledSubDeltaS []*big.Int     `json:"parentUncledSubDeltaS" gencodec:"required"`
@@ -114,8 +113,6 @@ type Header struct {
 	gasUsed               uint64         `json:"gasUsed"               gencodec:"required"`
 	baseFee               *big.Int       `json:"baseFeePerGas"         gencodec:"required"`
 	extra                 []byte         `json:"extraData"             gencodec:"required"`
-	mixHash               common.Hash    `json:"mixHash"               gencodec:"required"`
-	nonce                 BlockNonce     `json:"nonce"`
 
 	// caches
 	hash     atomic.Value
@@ -124,7 +121,6 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty            *hexutil.Big
 	Number                []*hexutil.Big
 	GasLimit              hexutil.Uint64
 	GasUsed               hexutil.Uint64
@@ -149,7 +145,6 @@ func EmptyHeader(nodeCtx int) *WorkObject {
 	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth-1)
-	h.difficulty = big.NewInt(0)
 	h.uncledS = big.NewInt(0)
 	h.evmRoot = EmptyRootHash
 	h.utxoRoot = EmptyRootHash
@@ -207,7 +202,6 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	etxSetRoot := common.ProtoHash{Value: h.EtxSetRoot().Bytes()}
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
-	mixHash := common.ProtoHash{Value: h.MixHash().Bytes()}
 	etxEligibleSlices := common.ProtoHash{Value: h.EtxEligibleSlices().Bytes()}
 	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
 	interlinkRootHash := common.ProtoHash{Value: h.InterlinkRootHash().Bytes()}
@@ -238,7 +232,6 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		ExpansionNumber:   &expansionNumber,
 		BaseFee:           h.BaseFee().Bytes(),
 		Extra:             h.Extra(),
-		MixHash:           &mixHash,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -394,7 +387,6 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"hash":                h.Hash(),
 		"parentHash":          h.ParentHashArray(),
 		"uncledS":             (*hexutil.Big)(h.UncledS()),
-		"nonce":               h.Nonce(),
 		"sha3Uncles":          h.UncleHash(),
 		"evmRoot":             h.EVMRoot(),
 		"utxoRoot":            h.UTXORoot(),
@@ -411,7 +403,6 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"manifestHash":        h.ManifestHashArray(),
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
 		"gasUsed":             hexutil.Uint(h.GasUsed()),
-		"mixHash":             h.MixHash(),
 		"efficiencyScore":     hexutil.Uint64(h.EfficiencyScore()),
 		"thresholdCount":      hexutil.Uint64(h.ThresholdCount()),
 		"expansionNumber":     hexutil.Uint64(h.ExpansionNumber()),
@@ -519,11 +510,8 @@ func (h *Header) BaseFee() *big.Int {
 	return h.baseFee
 }
 func (h *Header) Extra() []byte                  { return common.CopyBytes(h.extra) }
-func (h *Header) MixHash() common.Hash           { return h.mixHash }
 func (h *Header) PrimeTerminus() common.Hash     { return h.primeTerminus }
 func (h *Header) InterlinkRootHash() common.Hash { return h.interlinkRootHash }
-func (h *Header) Nonce() BlockNonce              { return h.nonce }
-func (h *Header) NonceU64() uint64               { return binary.BigEndian.Uint64(h.nonce[:]) }
 
 func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache

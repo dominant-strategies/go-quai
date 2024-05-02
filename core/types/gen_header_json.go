@@ -42,7 +42,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		GasUsed     					hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
 		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
-		Nonce       					BlockNonce     		 	`json:"nonce"`
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
@@ -114,7 +113,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		GasUsed     					*hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
 		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
-		Nonce       					BlockNonce     		 	`json:"nonce"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
