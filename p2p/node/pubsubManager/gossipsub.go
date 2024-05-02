@@ -17,6 +17,9 @@ import (
 	"github.com/dominant-strategies/go-quai/quai"
 )
 
+const numWorkers = 10   // Number of workers per stream
+const msgChanSize = 500 // 500 requests per subscription
+
 var (
 	ErrUnsupportedType = errors.New("data type not supported")
 )
@@ -113,29 +116,50 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 				}).Fatal("Go-Quai Panicked")
 			}
 		}()
+		// Create a channel for messages
+		msgChan := make(chan *pubsub.Message, msgChanSize)
+		full := 0
+		// Start worker goroutines
+		for i := 0; i < numWorkers; i++ {
+			go func(location common.Location) {
+				for msg := range msgChan { // This should exit when msgChan is closed
+					var data interface{}
+					// unmarshal the received data depending on the topic's type
+					err = pb.UnmarshalAndConvert(msg.Data, location, &data, datatype)
+					if err != nil {
+						log.Global.Errorf("error unmarshalling data: %s", err)
+						continue
+					}
+
+					// handle the received data
+					if g.onReceived != nil {
+						g.onReceived(msg.ReceivedFrom, data, location)
+					}
+				}
+			}(location)
+		}
 		log.Global.Debugf("waiting for first message on subscription: %s", sub.Topic())
 		for {
 			msg, err := sub.Next(g.ctx)
 			if err != nil || msg == nil {
 				// if context was cancelled, then we are shutting down
-				if g.ctx.Err() != nil || msg == nil {
+				if g.ctx.Err() != nil {
+					close(msgChan)
 					return
 				}
 				log.Global.Errorf("error getting next message from subscription: %s", err)
+				continue
 			}
 			log.Global.Tracef("received message on topic: %s", topicName)
 
-			var data interface{}
-			// unmarshal the received data depending on the topic's type
-			err = pb.UnmarshalAndConvert(msg.Data, location, &data, datatype)
-			if err != nil {
-				log.Global.Errorf("error unmarshalling data: %s", err)
-				return
-			}
-
-			// handle the received data
-			if g.onReceived != nil {
-				g.onReceived(msg.ReceivedFrom, data, location)
+			// Send to worker goroutines
+			select {
+			case msgChan <- msg:
+			default:
+				if full%1000 == 0 {
+					log.Global.WithField("topic", topicName).Warnf("message channel full. Lost messages: %d", full)
+				}
+				full++
 			}
 		}
 	}(location, subscription)

@@ -24,8 +24,11 @@ const (
 	// c_recentBlockReqCache is the size of the cache for the recent block requests
 	c_recentBlockReqCache = 1000
 	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
-	c_recentBlockReqTimeout         = 1 * time.Minute
+	c_recentBlockReqTimeout = 1 * time.Minute
+	// c_broadcastTransactionsInterval is the interval for broadcasting transactions
 	c_broadcastTransactionsInterval = 5 * time.Second
+	// c_maxTxBatchSize is the maximum number of transactions to broadcast at once
+	c_maxTxBatchSize = 100
 )
 
 // handler manages the fetch requests from the core and tx pool also takes care of the tx broadcast
@@ -133,7 +136,7 @@ func (h *handler) missingBlockLoop() {
 
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
-	transactions := make(types.Transactions, 0, 100)
+	transactions := make(types.Transactions, 0, c_maxTxBatchSize)
 	broadcastTransactionsTicker := time.NewTicker(c_broadcastTransactionsInterval)
 	defer h.wg.Done()
 	defer func() {
@@ -147,16 +150,42 @@ func (h *handler) txBroadcastLoop() {
 	for {
 		select {
 		case event := <-h.txsCh:
-			transactions = append(transactions, event.Txs...)
-		case <-broadcastTransactionsTicker.C:
-			err := h.p2pBackend.Broadcast(h.nodeLocation, &transactions)
-			if err != nil {
-				h.logger.Error("Error broadcasting transactions", err)
+			// check if the length of the transactions becomes more than the c_maxTxBatchSize
+			// In case the txsCh can send
+			numBatches := (len(transactions) + len(event.Txs)) / c_maxTxBatchSize
+			if numBatches > 0 {
+				// create a local cache and add all the txs and broadcast
+				transactions = append(transactions, event.Txs...)
+				for i := 0; i < numBatches; i++ {
+					start := i * c_maxTxBatchSize
+					end := start + c_maxTxBatchSize
+					if end > len(transactions) {
+						end = len(transactions)
+					}
+					h.broadcastTransactions(transactions[start:end])
+				}
+				transactions = make(types.Transactions, 0, c_maxTxBatchSize)
+			} else {
+				transactions = append(transactions, event.Txs...)
 			}
-			transactions = make(types.Transactions, 0, 100)
+		case <-broadcastTransactionsTicker.C:
+			// every ticker, gather all the transactions and broadcast them and
+			// reset the transactions list
+			h.broadcastTransactions(transactions)
+			transactions = make(types.Transactions, 0, c_maxTxBatchSize)
 		case <-h.txsSub.Err():
 			return
 		}
+	}
+}
+
+func (h *handler) broadcastTransactions(transactions types.Transactions) {
+	if len(transactions) == 0 {
+		return
+	}
+	err := h.p2pBackend.Broadcast(h.nodeLocation, &transactions)
+	if err != nil {
+		h.logger.Errorf("Error broadcasting transactions: %+v", err)
 	}
 }
 

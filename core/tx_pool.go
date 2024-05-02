@@ -1543,6 +1543,9 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 
 			// Notify subsystems for newly added transactions
 			for _, tx := range promoted {
+				if !tx.IsLocal() {
+					continue
+				}
 				addr, err := types.Sender(pool.signer, tx)
 				if err != nil {
 					continue
