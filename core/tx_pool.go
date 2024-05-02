@@ -182,10 +182,10 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	Journal:   "transactions.rlp",
 	Rejournal: time.Hour,
 
-	PriceLimit: 1,
-	PriceBump:  10,
+	PriceLimit: 0,
+	PriceBump:  5,
 
-	AccountSlots:    1,
+	AccountSlots:    10,
 	GlobalSlots:     9000 + 1024, // urgent + floating queue capacity with 4:1 ratio
 	MaxSenders:      100000,      // 5 MB - at least 10 blocks worth of transactions in case of reorg or high production rate
 	SendersChBuffer: 1024,        // at 500 TPS in zone, 2s buffer
@@ -465,11 +465,7 @@ func (pool *TxPool) loop() {
 		case <-evict.C:
 			pool.mu.Lock()
 			for addr := range pool.queue {
-				// Skip local transactions from the eviction mechanism
-				if pool.locals.contains(addr) {
-					continue
-				}
-				// Any non-locals old enough should be removed
+				// Any transactions old enough should be removed
 				if time.Since(pool.beats[addr]) > pool.config.Lifetime {
 					list := pool.queue[addr].Flatten()
 					for _, tx := range list {
@@ -1725,16 +1721,13 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 		queuedGauge.Sub(float64(len(readies)))
 
 		// Drop all transactions over the allowed limit
-		var caps types.Transactions
-		if !pool.locals.contains(addr) {
-			caps = list.Cap(int(pool.config.AccountQueue))
-			for _, tx := range caps {
-				hash := tx.Hash()
-				pool.all.Remove(hash, pool.logger)
-				pool.logger.WithField("hash", hash).Trace("Removed cap-exceeding queued transaction")
-			}
-			queuedRateLimitMeter.Add(float64(len(caps)))
+		caps := list.Cap(int(pool.config.AccountQueue))
+		for _, tx := range caps {
+			hash := tx.Hash()
+			pool.all.Remove(hash, pool.logger)
+			pool.logger.WithField("hash", hash).Trace("Removed cap-exceeding queued transaction")
 		}
+		queuedRateLimitMeter.Add(float64(len(caps)))
 		// Mark all the items dropped as removed
 		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
 		queuedRateLimitMeter.Sub(float64(len(forwards) + len(drops) + len(caps)))
@@ -1774,14 +1767,14 @@ func (pool *TxPool) truncatePending() {
 	spammers := prque.New(nil)
 	for addr, list := range pool.pending {
 		// Only evict transactions from high rollers
-		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.AccountSlots {
+		if uint64(list.Len()) > pool.config.AccountSlots {
 			spammers.Push(addr, int64(list.Len()))
 		}
 	}
 	// Gradually drop transactions from offenders
 	offenders := []common.InternalAddress{}
 	for pending > pool.config.GlobalSlots && !spammers.Empty() {
-		// Retrieve the next offender if not local address
+		// Retrieve the next offender
 		offender, _ := spammers.Pop()
 		offenders = append(offenders, offender.(common.InternalAddress))
 
@@ -1864,13 +1857,11 @@ func (pool *TxPool) truncateQueue() {
 	// Sort all accounts with queued transactions by heartbeat
 	addresses := make(addressesByHeartbeat, 0, len(pool.queue))
 	for addr := range pool.queue {
-		if !pool.locals.contains(addr) { // don't drop locals
-			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
-		}
+		addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
 	}
 	sort.Sort(addresses)
 
-	// Drop transactions until the total is below the limit or only locals remain
+	// Drop transactions until the total is below the limit
 	for drop := queued - pool.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
 		addr := addresses[len(addresses)-1]
 		list := pool.queue[addr.address]
