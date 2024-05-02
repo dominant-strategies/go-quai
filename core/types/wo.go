@@ -912,6 +912,7 @@ func (wh *WorkObjectHeader) SealHash() (hash common.Hash) {
 func (wh *WorkObjectHeader) SealEncode() *ProtoWorkObjectHeader {
 	hash := common.ProtoHash{Value: wh.HeaderHash().Bytes()}
 	parentHash := common.ProtoHash{Value: wh.ParentHash().Bytes()}
+	mixHash := common.ProtoHash{Value: wh.MixHash().Bytes()}
 	txHash := common.ProtoHash{Value: wh.TxHash().Bytes()}
 	number := wh.Number().Bytes()
 	difficulty := wh.Difficulty().Bytes()
@@ -921,6 +922,7 @@ func (wh *WorkObjectHeader) SealEncode() *ProtoWorkObjectHeader {
 	return &ProtoWorkObjectHeader{
 		HeaderHash: &hash,
 		ParentHash: &parentHash,
+		MixHash:    &mixHash,
 		Number:     number,
 		Difficulty: difficulty,
 		TxHash:     &txHash,
