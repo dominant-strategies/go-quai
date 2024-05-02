@@ -91,18 +91,16 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 		// the peer accordingly
 		backend.WriteBlock(&block)
 	case types.Header:
-	case types.Transaction:
-		tx := data.(types.Transaction)
+	case types.Transactions:
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
 			log.Global.Error("no backend found")
 			return false
 		}
-		// check if the backend is processing state before adding the tx
+		txs := data.(types.Transactions)
 		if backend.ProcessingState() {
-			backend.SendRemoteTx(&tx)
+			backend.SendRemoteTxs(txs)
 		}
-		// TODO: Handle the error here and mark the peers accordingly
 	}
 
 	// If it was a good broadcast, mark the peer as lively
@@ -232,4 +230,13 @@ func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common
 	} else {
 		return nil
 	}
+}
+
+func (qbe *QuaiBackend) ProcessingState(location common.Location) bool {
+	backend := *qbe.GetBackend(location)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return false
+	}
+	return backend.ProcessingState()
 }

@@ -319,6 +319,14 @@ func (b *QuaiAPIBackend) SendRemoteTx(remoteTx *types.Transaction) error {
 	return b.quai.Core().AddRemote(remoteTx)
 }
 
+func (b *QuaiAPIBackend) SendRemoteTxs(remoteTxs types.Transactions) []error {
+	nodeCtx := b.quai.core.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return []error{errors.New("SendRemoteTxs can only be called in zone chain")}
+	}
+	return b.quai.Core().AddRemotes(remoteTxs)
+}
+
 func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {

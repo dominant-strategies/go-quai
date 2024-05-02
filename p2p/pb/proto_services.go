@@ -258,18 +258,18 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		}
 		*dataPtr = *header
 		return nil
-	case *types.Transaction:
-		protoTransaction := &types.ProtoTransaction{}
-		err := proto.Unmarshal(data, protoTransaction)
+	case *types.Transactions:
+		protoTransactions := &types.ProtoTransactions{}
+		err := proto.Unmarshal(data, protoTransactions)
 		if err != nil {
 			return err
 		}
-		transaction := &types.Transaction{}
-		err = transaction.ProtoDecode(protoTransaction, sourceLocation)
+		transactions := &types.Transactions{}
+		err = transactions.ProtoDecode(protoTransactions, sourceLocation)
 		if err != nil {
 			return err
 		}
-		*dataPtr = *transaction
+		*dataPtr = *transactions
 		return nil
 	case common.Hash:
 		protoHash := &common.ProtoHash{}
