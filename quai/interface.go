@@ -55,6 +55,9 @@ type ConsensusAPI interface {
 
 	// WriteGenesisBlock adds the genesis block to the database and also writes the block to the disk
 	WriteGenesisBlock(*types.WorkObject, common.Location)
+
+	// Returns if the location is processing state
+	ProcessingState(common.Location) bool
 }
 
 // The networking backend will implement the following interface to enable consensus to communicate with other nodes.

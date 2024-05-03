@@ -78,9 +78,8 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 
 // Handle consensus data propagated to us from our peers
 func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, nodeLocation common.Location) bool {
-	switch data.(type) {
+	switch data := data.(type) {
 	case types.WorkObject:
-		block := data.(types.WorkObject)
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
 			log.Global.Error("no backend found")
@@ -89,7 +88,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 		// TODO: Verify the Block before writing it
 		// TODO: Determine if the block information was lively or stale and rate
 		// the peer accordingly
-		backend.WriteBlock(&block)
+		backend.WriteBlock(&data)
 	case types.Header:
 	case types.Transactions:
 		backend := *qbe.GetBackend(nodeLocation)
@@ -97,19 +96,17 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 			log.Global.Error("no backend found")
 			return false
 		}
-		txs := data.(types.Transactions)
 		if backend.ProcessingState() {
-			backend.SendRemoteTxs(txs)
+			backend.SendRemoteTxs(data)
 		}
 		// TODO: Handle the error here and mark the peers accordingly
 	case types.WorkObjectHeader:
-		woHeader := data.(types.WorkObjectHeader)
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
 			log.Global.Error("no backend found")
 			return false
 		}
-		backend.SendWorkShare(&woHeader)
+		backend.SendWorkShare(&data)
 	}
 
 	// If it was a good broadcast, mark the peer as lively
