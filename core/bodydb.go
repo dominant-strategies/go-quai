@@ -43,7 +43,8 @@ type BodyDb struct {
 	woCache        *lru.Cache
 	processor      *StateProcessor
 
-	slicesRunning []common.Location
+	slicesRunning   []common.Location
+	processingState bool
 
 	logger *log.Logger
 }
