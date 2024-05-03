@@ -72,9 +72,10 @@ type HeaderChain struct {
 	running       int32          // 0 if chain is running, 1 when stopped
 	procInterrupt int32          // interrupt signaler for block processing
 
-	headermu      sync.RWMutex
-	heads         []*types.WorkObject
-	slicesRunning []common.Location
+	headermu        sync.RWMutex
+	heads           []*types.WorkObject
+	slicesRunning   []common.Location
+	processingState bool
 
 	logger *log.Logger
 
@@ -123,6 +124,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	if err != nil {
 		return nil, err
 	}
+
+	// Record if the chain is processing state
+	hc.processingState = hc.setStateProcessing()
 
 	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
 	hc.pendingEtxsRollup = pendingEtxsRollup
@@ -314,7 +318,26 @@ func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 	return nil
 }
 func (hc *HeaderChain) ProcessingState() bool {
-	return hc.bc.ProcessingState()
+	return hc.processingState
+}
+
+func (hc *HeaderChain) setStateProcessing() bool {
+	nodeCtx := hc.NodeCtx()
+	for _, slice := range hc.slicesRunning {
+		switch nodeCtx {
+		case common.PRIME_CTX:
+			return true
+		case common.REGION_CTX:
+			if slice.Region() == hc.NodeLocation().Region() {
+				return true
+			}
+		case common.ZONE_CTX:
+			if slice.Equal(hc.NodeLocation()) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Append
