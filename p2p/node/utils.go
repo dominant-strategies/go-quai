@@ -12,6 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // Utility function that asynchronously writes the provided "info" string to the node.info file.
@@ -69,7 +70,7 @@ func deleteNodeInfoFile() error {
 
 // Loads bootpeers addresses from the config and returns a list of peer.AddrInfo
 func loadBootPeers() ([]peer.AddrInfo, error) {
-	if viper.GetBool(utils.SoloFlag.Name) {
+	if viper.GetBool(utils.SoloFlag.Name) || viper.GetString(utils.EnvironmentFlag.Name) == params.LocalName {
 		return nil, nil
 	}
 	var bootpeers []peer.AddrInfo

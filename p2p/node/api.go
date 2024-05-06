@@ -33,13 +33,6 @@ func (p *P2PNode) Start() error {
 	go p.eventLoop()
 	go p.statsLoop()
 
-	// Is this node expected to have bootstrap peers to dial?
-	if !viper.GetBool(utils.BootNodeFlag.Name) && !viper.GetBool(utils.SoloFlag.Name) && len(p.bootpeers) == 0 {
-		err := errors.New("no bootpeers provided. Unable to join network")
-		log.Global.Errorf("%s", err)
-		return err
-	}
-
 	// Register the Quai protocol handler
 	p.SetStreamHandler(quaiprotocol.ProtocolVersion, func(s network.Stream) {
 		quaiprotocol.QuaiProtocolHandler(s, p)
