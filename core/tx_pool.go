@@ -1137,7 +1137,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	if grabLock {
 		pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
 	}
-	fee, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+	fee, _, _, err := ProcessQiTx(tx, pool.chain, false, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
 		if grabLock {
 			pool.mu.RUnlock()
