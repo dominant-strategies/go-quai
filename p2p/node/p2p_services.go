@@ -19,7 +19,7 @@ import (
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
-func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data interface{}, datatype interface{}) (interface{}, error) {
+func (p *P2PNode) requestFromPeer(peerID peer.ID, topic string, location common.Location, reqData interface{}, datatype interface{}) (interface{}, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -31,7 +31,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	log.Global.WithFields(log.Fields{
 		"peerId":   peerID,
 		"location": location.Name(),
-		"data":     data,
+		"data":     reqData,
 		"datatype": datatype,
 	}).Trace("Requesting the data from peer")
 	stream, err := p.NewStream(peerID)
@@ -50,7 +50,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	defer p.requestManager.CloseRequest(id)
 
 	// Create the corresponding data request
-	requestBytes, err := pb.EncodeQuaiRequest(id, location, data, datatype)
+	requestBytes, err := pb.EncodeQuaiRequest(id, location, reqData, datatype)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
 		}).Warn("Peer did not respond in time")
-		p.peerManager.MarkUnresponsivePeer(peerID, location)
+		p.peerManager.MarkUnresponsivePeer(peerID, topic)
 		return nil, errors.New("peer did not respond in time")
 	}
 
@@ -86,7 +86,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	switch datatype.(type) {
 	case *types.WorkObject:
 		if block, ok := recvdType.(*types.WorkObject); ok {
-			switch data := data.(type) {
+			switch data := reqData.(type) {
 			case common.Hash:
 				if block.Hash() == data {
 					return block, nil
@@ -102,11 +102,11 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 		}
 		return nil, errors.New("block request invalid response")
 	case *types.Header:
-		if header, ok := recvdType.(*types.Header); ok && header.Hash() == data.(common.Hash) {
+		if header, ok := recvdType.(*types.Header); ok && header.Hash() == reqData.(common.Hash) {
 			return header, nil
 		}
 	case *types.Transaction:
-		if tx, ok := recvdType.(*types.Transaction); ok && tx.Hash() == data.(common.Hash) {
+		if tx, ok := recvdType.(*types.Transaction); ok && tx.Hash() == reqData.(common.Hash) {
 			return tx, nil
 		}
 	case common.Hash:
