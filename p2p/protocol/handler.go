@@ -234,7 +234,10 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 		return
 	}
 	log.Global.Infof("Received %s response to request %d", recvdType, recvdID)
-	dataChan <- recvdType
+	select {
+	case dataChan <- recvdType:
+	default:
+	}
 }
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
