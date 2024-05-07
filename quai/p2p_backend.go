@@ -77,7 +77,7 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 }
 
 // Handle consensus data propagated to us from our peers
-func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, nodeLocation common.Location) bool {
+func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data interface{}, nodeLocation common.Location) bool {
 	switch data := data.(type) {
 	case types.WorkObject:
 		backend := *qbe.GetBackend(nodeLocation)
@@ -102,7 +102,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, data interface{}, 
 	}
 
 	// If it was a good broadcast, mark the peer as lively
-	qbe.p2pBackend.MarkLivelyPeer(sourcePeer, nodeLocation)
+	qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	return true
 }
 
@@ -122,15 +122,14 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 	return func(ctx context.Context, id peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 		var data interface{}
 		data = msg.Message.GetData()
-		switch data.(type) {
+		switch data := data.(type) {
 		case types.WorkObject:
-			block := data.(types.WorkObject)
-			backend := *qbe.GetBackend(block.Location())
+			backend := *qbe.GetBackend(data.Location())
 			if backend == nil {
 				log.Global.WithFields(log.Fields{
 					"peer":     id,
-					"hash":     block.Hash(),
-					"location": block.Location(),
+					"hash":     data.Hash(),
+					"location": data.Location(),
 				}).Error("no backend found for this location")
 				return pubsub.ValidationReject
 			}

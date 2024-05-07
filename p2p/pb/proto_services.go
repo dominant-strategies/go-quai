@@ -21,19 +21,19 @@ func DecodeQuaiMessage(data []byte) (*QuaiMessage, error) {
 
 // EncodeRequestMessage creates a marshaled protobuf message for a Quai Request.
 // Returns the serialized protobuf message.
-func EncodeQuaiRequest(id uint32, location common.Location, data interface{}, datatype interface{}) ([]byte, error) {
+func EncodeQuaiRequest(id uint32, location common.Location, reqData interface{}, datatype interface{}) ([]byte, error) {
 	reqMsg := QuaiRequestMessage{
 		Id:       id,
 		Location: location.ProtoEncode(),
 	}
 
-	switch d := data.(type) {
+	switch d := reqData.(type) {
 	case common.Hash:
 		reqMsg.Data = &QuaiRequestMessage_Hash{Hash: d.ProtoEncode()}
 	case *big.Int:
 		reqMsg.Data = &QuaiRequestMessage_Number{Number: d.Bytes()}
 	default:
-		return nil, errors.Errorf("unsupported request input data field type: %T", data)
+		return nil, errors.Errorf("unsupported request input data field type: %T", reqData)
 	}
 
 	switch datatype.(type) {
