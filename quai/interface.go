@@ -23,7 +23,7 @@ type ConsensusAPI interface {
 	// Handle new data propagated from the gossip network. Should return quickly.
 	// Specify the peer which propagated the data to us, as well as the data itself.
 	// Return true if this data should be relayed to peers. False if it should be ignored.
-	OnNewBroadcast(core.PeerID, interface{}, common.Location) bool
+	OnNewBroadcast(core.PeerID, string, interface{}, common.Location) bool
 
 	// Creates the function that will be used to determine if a message should be propagated.
 	ValidatorFunc() func(ctx context.Context, id peer.ID, msg *pubsub.Message) pubsub.ValidationResult
@@ -85,9 +85,9 @@ type NetworkingAPI interface {
 
 	// Methods to report a peer to the P2PClient as behaving maliciously
 	// Should be called whenever a peer sends us data that is acceptably lively
-	MarkLivelyPeer(core.PeerID, common.Location)
+	MarkLivelyPeer(peerID core.PeerID, topic string)
 	// Should be called whenever a peer sends us data that is stale or latent
-	MarkLatentPeer(core.PeerID, common.Location)
+	MarkLatentPeer(peerID core.PeerID, topic string)
 
 	// Protects the peer's connection from being pruned
 	ProtectPeer(core.PeerID)
