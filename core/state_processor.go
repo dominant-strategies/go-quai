@@ -276,6 +276,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	totalFees := big.NewInt(0)
 	qiEtxs := make([]*types.Transaction, 0)
 	var totalQiTime time.Duration
+	var InputTime time.Duration
+	var OutputTime time.Duration
+	var SignatureTime time.Duration
+	var FeeTime time.Duration
+	var GetUtxoTime time.Duration
+	var DeleteUtxoTime time.Duration
+	var CreateUtxoTime time.Duration
 	for i, tx := range block.Transactions() {
 		if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
 			// coinbase tx currently exempt from gas and outputs are added after all txs are processed
@@ -284,7 +291,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
 			qiTimeBefore := time.Now()
-			fees, etxs, err := ProcessQiTx(tx, p.hc, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
+			fees, etxs, durations, err := ProcessQiTx(tx, p.hc, true, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -293,6 +300,14 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 			}
 			totalFees.Add(totalFees, fees)
 			totalQiTime += time.Since(qiTimeBefore)
+			InputTime += durations.InputTime
+			OutputTime += durations.OutputTime
+			SignatureTime += durations.SignatureTime
+			FeeTime += durations.FeeTime
+			GetUtxoTime += durations.GetUtxoTime
+			DeleteUtxoTime += durations.DeleteUtxoTime
+			CreateUtxoTime += durations.CreateUtxoTime
+			// Qi txs are not processed by the EVM
 			continue
 		}
 
@@ -512,6 +527,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		"etxTime":            common.PrettyDuration(timeEtx),
 		"txTime":             common.PrettyDuration(timeTx),
 		"totalQiTime":        common.PrettyDuration(totalQiTime),
+		"InputTime":          common.PrettyDuration(InputTime),
+		"OutputTime":         common.PrettyDuration(OutputTime),
+		"SignatureTime":      common.PrettyDuration(SignatureTime),
+		"FeeTime":            common.PrettyDuration(FeeTime),
+		"GetUtxoTime":        common.PrettyDuration(GetUtxoTime),
+		"DeleteUtxoTime":     common.PrettyDuration(DeleteUtxoTime),
+		"CreateUtxoTime":     common.PrettyDuration(CreateUtxoTime),
 	}).Info("Total Tx Processing Time")
 
 	p.logger.WithFields(log.Fields{
@@ -598,56 +620,72 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 	return receipt, err
 }
 
+type QiDurations struct {
+	TotalTime      time.Duration
+	InputTime      time.Duration
+	OutputTime     time.Duration
+	SignatureTime  time.Duration
+	FeeTime        time.Duration
+	GetUtxoTime    time.Duration
+	DeleteUtxoTime time.Duration
+	CreateUtxoTime time.Duration
+}
+
 // ProcessQiTx processes a QiTx by spending the inputs and creating the outputs.
 // Math is performed to verify the fee provided is sufficient to cover the gas cost.
 // updateState is set to update the statedb in the case of the state processor, but not in the case of the txpool.
-func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, currentHeader *types.WorkObject, statedb *state.StateDB, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.ExternalTx, error) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, currentHeader *types.WorkObject, statedb *state.StateDB, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int) (*big.Int, []*types.ExternalTx, *QiDurations, error) {
+	totalQiTimeStart := time.Now()
 	// Sanity checks
 	if tx == nil || tx.Type() != types.QiTxType {
-		return nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
+		return nil, nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
 	}
 	if tx.ChainId().Cmp(&chainId) != 0 {
-		return nil, nil, fmt.Errorf("tx %032x has invalid chain ID", tx.Hash())
+		return nil, nil, nil, fmt.Errorf("tx %032x has invalid chain ID", tx.Hash())
 	}
 	if currentHeader == nil || statedb == nil || gp == nil || usedGas == nil || signer == nil || etxRLimit == nil || etxPLimit == nil {
-		return nil, nil, errors.New("one of the parameters is nil")
+		return nil, nil, nil, errors.New("one of the parameters is nil")
 	}
 	txGas := types.CalculateQiTxGas(tx)
 	*usedGas += txGas
 	if err := gp.SubGas(txGas); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if *usedGas > currentHeader.GasLimit() {
-		return nil, nil, fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), *usedGas, currentHeader.GasLimit())
+		return nil, nil, nil, fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), *usedGas, currentHeader.GasLimit())
 	}
-
+	inputTimeStart := time.Now()
 	addresses := make(map[common.AddressBytes]struct{})
 
 	totalQitIn := big.NewInt(0)
 	pubKeys := make([]*btcec.PublicKey, 0)
+	var getUtxoTime time.Duration
+	var deleteUtxoTime time.Duration
 	for _, txIn := range tx.TxIn() {
+		getUtxoTimeStart := time.Now()
 		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		getUtxoTime += time.Since(getUtxoTimeStart)
 		if utxo == nil {
-			return nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+			return nil, nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		}
 		if utxo.Lock != nil && utxo.Lock.Cmp(currentHeader.Number(location.Context())) > 0 {
-			return nil, nil, fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String())
+			return nil, nil, nil, fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String())
 		}
 		// Verify the pubkey
 		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
 		entryAddr := common.BytesToAddress(utxo.Address, location)
 		if !address.Equal(entryAddr) {
-			return nil, nil, errors.New("invalid address")
+			return nil, nil, nil, errors.New("invalid address")
 		}
 
 		pubKey, err := btcec.ParsePubKey(txIn.PubKey)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		pubKeys = append(pubKeys, pubKey)
 		// Check for duplicate addresses. This also checks for duplicate inputs.
 		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
-			return nil, nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
+			return nil, nil, nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
 		}
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 
@@ -658,13 +696,17 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 				"higher than max allowed value of %v",
 				denomination,
 				types.MaxDenomination)
-			return nil, nil, errors.New(str)
+			return nil, nil, nil, errors.New(str)
 		}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
 		if updateState { // only update the state if requested (txpool check does not need to update the state)
+			deleteUtxoTimeStart := time.Now()
 			statedb.DeleteUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+			deleteUtxoTime += time.Since(deleteUtxoTimeStart)
 		}
 	}
+	inputTime := time.Since(inputTimeStart)
+	outputTimeStart := time.Now()
 	var ETXRCount int
 	var ETXPCount int
 	etxs := make([]*types.ExternalTx, 0)
@@ -672,10 +714,11 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 	totalConvertQitOut := big.NewInt(0)
 	conversion := false
 	var convertAddress common.Address
+	var createUtxoTime time.Duration
 	for txOutIdx, txOut := range tx.TxOut() {
 		// It would be impossible for a tx to have this many outputs based on block gas limit, but cap it here anyways
 		if txOutIdx > types.MaxOutputIndex {
-			return nil, nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
+			return nil, nil, nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
 		}
 
 		if txOut.Denomination > types.MaxDenomination {
@@ -683,7 +726,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 				"higher than max allowed value of %v",
 				txOut.Denomination,
 				types.MaxDenomination)
-			return nil, nil, errors.New(str)
+			return nil, nil, nil, errors.New(str)
 		}
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 
@@ -691,7 +734,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 
 		// Enforce no address reuse
 		if _, exists := addresses[toAddr.Bytes20()]; exists {
-			return nil, nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
+			return nil, nil, nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
 
@@ -699,7 +742,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 			conversion = true
 			convertAddress = toAddr
 			if txOut.Denomination < params.MinQiConversionDenomination {
-				return nil, nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination)
+				return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination)
 			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			delete(addresses, toAddr.Bytes20())
@@ -716,21 +759,21 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 				ETXPCount++
 			}
 			if ETXRCount > *etxRLimit {
-				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit)
+				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit)
 			}
 			if ETXPCount > *etxPLimit {
-				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
 			}
 			primeTerminus := currentHeader.PrimeTerminus()
 			primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
 			if primeTerminusHeader == nil {
-				return nil, nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminus)
+				return nil, nil, nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminus)
 			}
 			if !toAddr.IsInQiLedgerScope() {
-				return nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
+				return nil, nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
 			}
 			if !chain.CheckIfEtxIsEligible(primeTerminusHeader.EtxEligibleSlices(), *toAddr.Location()) {
-				return nil, nil, fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
+				return nil, nil, nil, fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
 			}
 
 			// We should require some kind of extra fee here
@@ -740,9 +783,11 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 			// This output creates a normal UTXO
 			utxo := types.NewUtxoEntry(&txOut)
 			if updateState {
+				createUtxoTimeStart := time.Now()
 				if err := statedb.CreateUTXO(tx.Hash(), uint16(txOutIdx), utxo); err != nil {
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
+				createUtxoTime += time.Since(createUtxoTimeStart)
 			}
 		}
 	}
@@ -751,9 +796,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 		str := fmt.Sprintf("total value of all transaction inputs for "+
 			"transaction %v is %v which is less than the amount "+
 			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
-		return nil, nil, errors.New(str)
+		return nil, nil, nil, errors.New(str)
 	}
-
+	outputTime := time.Since(outputTimeStart)
+	signatureTimeStart := time.Now()
 	// Ensure the transaction signature is valid
 	var finalKey *btcec.PublicKey
 	if len(tx.TxIn()) > 1 {
@@ -761,7 +807,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 			pubKeys, false,
 		)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		finalKey = aggKey.FinalKey
 	} else {
@@ -770,20 +816,22 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 
 	txDigestHash := signer.Hash(tx)
 	if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
-		return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
+		return nil, nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
 	}
+	signatureTime := time.Since(signatureTimeStart)
+	feeTimeStart := time.Now()
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
 	// Check tx against required base fee and gas
 	requiredGas := txGas + (uint64(len(etxs)) * params.TxGas) // Each ETX costs extra gas that is paid in the origin
 	if requiredGas < txGas {
 		// Overflow
-		return nil, nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
+		return nil, nil, nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
 	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), currentHeader.BaseFee())
 	minimumFee := misc.QuaiToQi(currentHeader, minimumFeeInQuai)
 	if txFeeInQit.Cmp(minimumFee) < 0 {
-		return nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFee.Uint64())
+		return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFee.Uint64())
 	}
 	// Miner gets remainder of fee after base fee, except in the convert case
 	txFeeInQit.Sub(txFeeInQit, minimumFee)
@@ -798,7 +846,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 		}
 		ETXPCount++
 		if ETXPCount > *etxPLimit {
-			return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+			return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
 		}
 		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
 		etxs = append(etxs, &etxInner)
@@ -807,7 +855,17 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, cu
 
 	*etxRLimit -= ETXRCount
 	*etxPLimit -= ETXPCount
-	return txFeeInQit, etxs, nil
+	durations := QiDurations{
+		TotalTime:      time.Since(totalQiTimeStart),
+		InputTime:      inputTime,
+		OutputTime:     outputTime,
+		SignatureTime:  signatureTime,
+		FeeTime:        time.Since(feeTimeStart),
+		GetUtxoTime:    getUtxoTime,
+		DeleteUtxoTime: deleteUtxoTime,
+		CreateUtxoTime: createUtxoTime,
+	}
+	return txFeeInQit, etxs, &durations, nil
 }
 
 // Apply State
