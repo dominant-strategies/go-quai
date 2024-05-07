@@ -233,7 +233,10 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 		}).Error("error associating request ID with data channel")
 		return
 	}
-	dataChan <- recvdType
+	select {
+	case dataChan <- recvdType:
+	default:
+	}
 }
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
