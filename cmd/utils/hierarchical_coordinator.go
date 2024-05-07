@@ -52,7 +52,7 @@ type HierarchicalCoordinator struct {
 func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg *sync.WaitGroup, startingExpansionNumber uint64, quitCh chan struct{}) *HierarchicalCoordinator {
 	db, err := OpenBackendDB()
 	if err != nil {
-		log.Global.Fatal("Error opening the backend db")
+		log.Global.Fatalf("Error opening the backend db: %s", err)
 	}
 	hc := &HierarchicalCoordinator{
 		wg:                          nodeWg,
