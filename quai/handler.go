@@ -122,10 +122,10 @@ func (h *handler) missingBlockLoop() {
 						}).Fatal("Go-Quai Panicked")
 					}
 				}()
-				resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObject{})
+				resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObjectBlockView{})
 				block := <-resultCh
 				if block != nil {
-					h.core.WriteBlock(block.(*types.WorkObject))
+					h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 				}
 			}()
 		case <-h.missingBlockSub.Err():

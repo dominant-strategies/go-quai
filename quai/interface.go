@@ -70,7 +70,7 @@ type NetworkingAPI interface {
 
 	// Subscribe/UnSubscribe to a type of data from a given location
 	Subscribe(common.Location, interface{}) error
-	Unsubscribe(common.Location, interface{})
+	Unsubscribe(common.Location, interface{}) error
 
 	// Method to broadcast data to the network
 	// Specify location and the data to send

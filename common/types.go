@@ -62,6 +62,10 @@ var (
 	Zero         = Address{&ZeroExternal} // For utility purposes only. It is out-of-scope for state purposes.
 )
 
+var (
+	ErrInvalidLocation = errors.New("invalid location")
+)
+
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
@@ -535,6 +539,104 @@ func (l Location) MarshalJSON() ([]byte, error) {
 		intSlice[i] = int(v)
 	}
 	return json.Marshal(intSlice)
+}
+
+// NewLocation verifies the inputs for region and zone and returns a valid location
+func NewLocation(region, zone int) (Location, error) {
+	loc := Location{}
+	err := loc.SetRegion(region)
+	if err != nil {
+		return nil, err
+	}
+	err = loc.SetZone(zone)
+	if err != nil {
+		return nil, err
+	}
+
+	return loc, nil
+}
+
+func (l *Location) SetRegion(region int) error {
+	if region < 0 || region >= 0xf {
+		return ErrInvalidLocation
+	}
+	if len(*l) < 1 {
+		// Extend location to include region if its too short
+		newLoc := make([]byte, 1)
+		*l = newLoc
+	}
+	(*l)[0] = byte(region)
+	return nil
+}
+
+func (l *Location) SetZone(zone int) error {
+	if zone < 0 || zone > 0xf {
+		return ErrInvalidLocation
+	}
+	if len(*l) < 2 {
+		// Extend the slice while preserving the first byte, if it exists
+		newSlice := make([]byte, 2)
+		if len(*l) > 0 {
+			newSlice[0] = (*l)[0] // Preserve existing first byte
+		}
+		*l = newSlice
+	}
+	(*l)[1] = byte(zone)
+	return nil
+}
+
+// regionMappings maps region names to their corresponding byte values.
+var regionMappings = map[string]byte{
+	"cyprus": 0,
+	"paxos":  1,
+	"hydra":  2,
+}
+
+// LocationFromName parses a location name and returns a Location.
+func LocationFromName(name string) (Location, error) {
+	if name == "" || name == "prime" {
+		return Location{}, nil
+	}
+
+	parts := strings.Fields(name)
+	if len(parts) == 1 {
+		// Check if name was provided as a string
+		regionIndex, err := parseRegion(parts[0])
+		if err != nil {
+			log.Global.WithField("error", err).Error("Error parsing region index")
+			return Location{}, err
+		}
+		return Location{byte(regionIndex)}, nil
+	} else if len(parts) == 2 {
+		// Check if name was provided as a string
+		regionIndex, err := parseRegion(parts[0])
+		if err != nil {
+			log.Global.WithField("error", err).Error("Error parsing region index")
+			return Location{}, err
+		}
+		zoneIndex, err := strconv.Atoi(parts[1])
+		if err != nil {
+			log.Global.WithField("error", err).Error("Error parsing zone index")
+			return nil, err
+		}
+		return Location{byte(regionIndex), byte(zoneIndex - 1)}, nil
+	}
+
+	return nil, fmt.Errorf("invalid location format")
+}
+
+// parseRegion attempts to parse a region from a string.
+func parseRegion(part string) (byte, error) {
+	// Check if the part is a region name
+	if regionIndex, ok := regionMappings[strings.ToLower(part)]; ok {
+		return regionIndex, nil
+	}
+	// Otherwise, treat it as a numerical region index
+	regionIndex, err := strconv.Atoi(part)
+	if err != nil {
+		return 0, err
+	}
+	return byte(regionIndex), nil
 }
 
 func IsInChainScope(b []byte, nodeLocation Location) bool {
