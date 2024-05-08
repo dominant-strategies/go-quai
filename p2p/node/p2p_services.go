@@ -13,13 +13,14 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
+	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
-func (p *P2PNode) requestFromPeer(peerID peer.ID, topic string, location common.Location, reqData interface{}, datatype interface{}) (interface{}, error) {
+func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}) (interface{}, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -29,10 +30,8 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic string, location common.
 		}
 	}()
 	log.Global.WithFields(log.Fields{
-		"peerId":   peerID,
-		"location": location.Name(),
-		"data":     reqData,
-		"datatype": datatype,
+		"peerId": peerID,
+		"topic":  topic,
 	}).Trace("Requesting the data from peer")
 	stream, err := p.NewStream(peerID)
 	if err != nil {
@@ -50,7 +49,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic string, location common.
 	defer p.requestManager.CloseRequest(id)
 
 	// Create the corresponding data request
-	requestBytes, err := pb.EncodeQuaiRequest(id, location, reqData, datatype)
+	requestBytes, err := pb.EncodeQuaiRequest(id, topic.GetLocation(), reqData, topic.GetTopicType())
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +82,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic string, location common.
 	}
 
 	// Check the received data type & hash matches the request
-	switch datatype.(type) {
+	switch topic.GetTopicType().(type) {
 	case *types.WorkObject:
 		if block, ok := recvdType.(*types.WorkObject); ok {
 			switch data := reqData.(type) {
@@ -93,7 +92,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic string, location common.
 				}
 				return nil, errors.Errorf("invalid response: expected block with hash %s, got %s", data, block.Hash())
 			case *big.Int:
-				nodeCtx := location.Context()
+				nodeCtx := topic.GetLocation().Context()
 				if block.Number(nodeCtx).Cmp(data) == 0 {
 					return block, nil
 				}

@@ -22,6 +22,7 @@ const msgChanSize = 500 // 500 requests per subscription
 
 var (
 	ErrUnsupportedType = errors.New("data type not supported")
+	ErrMalformedTopic  = errors.New("malformed/invalid topic")
 )
 
 type PubsubManager struct {
@@ -95,17 +96,17 @@ func (g *PubsubManager) UnsubscribeAll() {
 // subscribe to broadcasts of the given type of data
 func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}) error {
 	// build topic name
-	topicName, err := TopicName(g.genesis, location, datatype)
+	topicSub, err := NewTopic(g.genesis, location, datatype)
 	if err != nil {
 		return err
 	}
 
 	// join the topic
-	topic, err := g.Join(topicName)
+	topic, err := g.Join(topicSub.String())
 	if err != nil {
 		return err
 	}
-	g.topics.Store(topicName, topic)
+	g.topics.Store(topicSub.String(), topic)
 	g.PubSub.RegisterTopicValidator(topic.String(), g.consensus.ValidatorFunc())
 
 	// subscribe to the topic
@@ -113,7 +114,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	if err != nil {
 		return err
 	}
-	g.subscriptions.Store(topicName, subscription)
+	g.subscriptions.Store(topic, subscription)
 
 	go func(location common.Location, sub *pubsub.Subscription) {
 		defer func() {
@@ -147,7 +148,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 				}
 			}(location)
 		}
-		log.Global.Debugf("waiting for first message on subscription: %s", sub.Topic())
+		log.Global.WithField("topic", topic.String()).Debugf("Subscribed to topic")
 		for {
 			msg, err := sub.Next(g.ctx)
 			if err != nil || msg == nil {
@@ -159,14 +160,14 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 				log.Global.Errorf("error getting next message from subscription: %s", err)
 				continue
 			}
-			log.Global.Tracef("received message on topic: %s", topicName)
+			log.Global.Tracef("received message on topic: %s", topicSub.String())
 
 			// Send to worker goroutines
 			select {
 			case msgChan <- msg:
 			default:
 				if full%1000 == 0 {
-					log.Global.WithField("topic", topicName).Warnf("message channel full. Lost messages: %d", full)
+					log.Global.WithField("topic", topicSub.String()).Warnf("message channel full. Lost messages: %d", full)
 				}
 				full++
 			}
@@ -177,22 +178,25 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 }
 
 // unsubscribe from broadcasts of the given type of data
-func (g *PubsubManager) Unsubscribe(location common.Location, datatype interface{}) {
-	if topicName, err := TopicName(g.genesis, location, datatype); err != nil {
-		if value, ok := g.subscriptions.Load(topicName); ok {
+func (g *PubsubManager) Unsubscribe(location common.Location, datatype interface{}) error {
+	if topic, err := NewTopic(g.genesis, location, datatype); err != nil {
+		if value, ok := g.subscriptions.Load(topic); ok {
 			value.(*pubsub.Subscription).Cancel()
-			g.subscriptions.Delete(topicName)
+			g.subscriptions.Delete(topic)
 		}
-		if value, ok := g.topics.Load(topicName); ok {
+		if value, ok := g.topics.Load(topic); ok {
 			value.(*pubsub.Topic).Close()
-			g.topics.Delete(topicName)
+			g.topics.Delete(topic)
 		}
+		return nil
+	} else {
+		return err
 	}
 }
 
 // broadcasts data to subscribing peers
 func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}) error {
-	topicName, err := TopicName(g.genesis, location, datatype)
+	topicName, err := NewTopic(g.genesis, location, datatype)
 	if err != nil {
 		return err
 	}
@@ -200,7 +204,7 @@ func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}
 	if err != nil {
 		return err
 	}
-	if value, ok := g.topics.Load(topicName); ok {
+	if value, ok := g.topics.Load(topicName.String()); ok {
 		return value.(*pubsub.Topic).Publish(g.ctx, protoData)
 	}
 	return errors.New("no topic for requested data")

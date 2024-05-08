@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -234,14 +235,14 @@ func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
 // Helper to access the corresponding data cache
 func (p *P2PNode) pickCache(datatype interface{}, location common.Location) *lru.Cache[common.Hash, interface{}] {
 	switch datatype.(type) {
-	case *types.WorkObject:
+	case *types.WorkObject, *types.WorkObjectHeaderView, *types.WorkObjectBlockView:
 		return p.cache[location.Name()]["blocks"]
 	case *types.Transaction:
 		return p.cache[location.Name()]["transactions"]
 	case *types.Header:
 		return p.cache[location.Name()]["headers"]
 	default:
-		log.Global.Fatalf("unsupported type")
+		log.Global.WithField("type", reflect.TypeOf(datatype)).Fatalf("unsupported type")
 		return nil
 	}
 }

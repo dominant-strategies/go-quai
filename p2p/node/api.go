@@ -2,6 +2,7 @@ package node
 
 import (
 	"math/big"
+	"reflect"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -52,8 +53,8 @@ func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) erro
 	return p.peerManager.Provide(p.ctx, location, datatype)
 }
 
-func (p *P2PNode) Unsubscribe(location common.Location, datatype interface{}) {
-	p.pubsub.Unsubscribe(location, datatype)
+func (p *P2PNode) Unsubscribe(location common.Location, datatype interface{}) error {
+	return p.pubsub.Unsubscribe(location, datatype)
 }
 
 func (p *P2PNode) Broadcast(location common.Location, data interface{}) error {
@@ -115,7 +116,7 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-func (p *P2PNode) requestFromPeers(topic string, location common.Location, requestData interface{}, responseDataType interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, location common.Location, requestData interface{}, responseDataType interface{}, resultChan chan interface{}) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -145,14 +146,14 @@ func (p *P2PNode) requestFromPeers(topic string, location common.Location, reque
 					}
 				}()
 				defer requestWg.Done()
-				p.requestAndWait(peerID, location, requestData, topic, requestData, resultChan)
+				p.requestAndWait(peerID, topic, requestData, resultChan)
 			}(peerID)
 		}
 		requestWg.Wait()
 	}()
 }
 
-func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, reqData interface{}, topic string, dataType interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, resultChan chan interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -163,12 +164,10 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, reqDa
 	}()
 	var recvd interface{}
 	var err error
-	if recvd, err = p.requestFromPeer(peerID, topic, location, reqData, dataType); err == nil {
+	if recvd, err = p.requestFromPeer(peerID, topic, reqData); err == nil {
 		log.Global.WithFields(log.Fields{
-			"reqData":  reqData,
-			"dataType": dataType,
-			"peerId":   peerID,
-			"location": location.Name(),
+			"peerId": peerID,
+			"topic":  topic.String(),
 		}).Trace("Received data from peer")
 
 		// Mark this peer as behaving well
@@ -185,11 +184,9 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, reqDa
 		}
 	} else {
 		log.Global.WithFields(log.Fields{
-			"peerId":   peerID,
-			"location": location.Name(),
-			"reqData":  reqData,
-			"dataType": dataType,
-			"err":      err,
+			"peerId": peerID,
+			"topic":  topic.String(),
+			"err":    err,
 		}).Error("Error requesting the data from peer")
 		// Mark this peer as not responding
 		p.peerManager.MarkUnresponsivePeer(peerID, topic)
@@ -198,10 +195,11 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, location common.Location, reqDa
 
 // Request a data from the network for the specified slice
 func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
-	topic, err := pubsubManager.TopicName(p.pubsub.GetGenesis(), location, responseDataType)
+	topic, err := pubsubManager.NewTopic(p.pubsub.GetGenesis(), location, responseDataType)
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"location": location.Name(),
+			"dataType": reflect.TypeOf(responseDataType),
 			"err":      err,
 		}).Error("Error getting topic name")
 		panic(err)
@@ -231,7 +229,16 @@ func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID, topic string) {
 		"topic": topic,
 	}).Debug("Recording well-behaving peer")
 
-	p.peerManager.MarkLivelyPeer(peer, topic)
+	t, err := pubsubManager.TopicFromString(p.pubsub.GetGenesis(), topic)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"topic": topic,
+			"err":   err,
+		}).Error("Error getting topic name")
+		panic(err)
+	}
+
+	p.peerManager.MarkLivelyPeer(peer, t)
 }
 
 func (p *P2PNode) MarkLatentPeer(peer p2p.PeerID, topic string) {
@@ -240,7 +247,16 @@ func (p *P2PNode) MarkLatentPeer(peer p2p.PeerID, topic string) {
 		"topic": topic,
 	}).Debug("Recording misbehaving peer")
 
-	p.peerManager.MarkLatentPeer(peer, topic)
+	t, err := pubsubManager.TopicFromString(p.pubsub.GetGenesis(), topic)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"topic": topic,
+			"err":   err,
+		}).Error("Error getting topic name")
+		panic(err)
+	}
+
+	p.peerManager.MarkLatentPeer(peer, t)
 }
 
 func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {
@@ -305,6 +321,7 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interfa
 	switch v := data.(type) {
 	case types.WorkObject:
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
+		log.Global.WithField("context", v.Location().Context()).Print("")
 	// TODO: send it to consensus
 	case types.Transactions:
 	case types.WorkObjectHeader:
