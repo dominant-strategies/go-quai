@@ -37,7 +37,7 @@ func (p *P2PNode) Start() error {
 	})
 
 	// Start the pubsub manager
-	p.pubsub.Start(p.handleBroadcast)
+	p.pubsub.SetReceiveHandler(p.handleBroadcast)
 
 	return nil
 }
