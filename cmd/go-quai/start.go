@@ -78,8 +78,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 		utils.EnablePprof()
 	}
 
+	// create a quit channel for services to signal for a clean shutdown
+	quitCh := make(chan struct{})
+
 	// create a new p2p node
-	node, err := node.NewNode(ctx)
+	node, err := node.NewNode(ctx, quitCh)
 	if err != nil {
 		log.Global.WithField("error", err).Fatal("error creating node")
 	}
@@ -92,7 +95,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	// Start the  hierarchical co-ordinator
 	var nodeWg sync.WaitGroup
-	hc := utils.NewHierarchicalCoordinator(node, logLevel, &nodeWg, startingExpansionNumber)
+	hc := utils.NewHierarchicalCoordinator(node, logLevel, &nodeWg, startingExpansionNumber, quitCh)
 	err = hc.StartHierarchicalCoordinator()
 	if err != nil {
 		log.Global.WithField("error", err).Fatal("error starting hierarchical coordinator")

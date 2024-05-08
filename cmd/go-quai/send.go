@@ -77,7 +77,7 @@ func runSend(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	// create a new p2p node
-	node, err := node.NewNode(ctx)
+	node, err := node.NewNode(ctx, nil)
 	if err != nil {
 		log.Global.Fatalf("error creating node: %s", err)
 	}

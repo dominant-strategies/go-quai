@@ -13,10 +13,11 @@ import (
 func (p *P2PNode) eventLoop() {
 	defer func() {
 		if r := recover(); r != nil {
+			p.quitCh <- struct{}{}
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 

@@ -56,13 +56,16 @@ type P2PNode struct {
 	// Caches for each type of data we may receive
 	cache map[string]map[string]*lru.Cache[common.Hash, interface{}]
 
+	// Channel to signal when to quit and shutdown
+	quitCh chan struct{}
+
 	// runtime context
 	ctx context.Context
 }
 
 // Returns a new libp2p node.
 // The node is created with the given context and options passed as arguments.
-func NewNode(ctx context.Context) (*P2PNode, error) {
+func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	ipAddr := viper.GetString(utils.IPAddrFlag.Name)
 	port := viper.GetString(utils.P2PPortFlag.Name)
 
@@ -190,6 +193,7 @@ func NewNode(ctx context.Context) (*P2PNode, error) {
 		peerManager:    peerMgr,
 		requestManager: requestManager.NewManager(),
 		cache:          initializeCaches(common.GenerateLocations(common.MaxRegions, common.MaxZones)),
+		quitCh:         quitCh,
 	}
 
 	sm, err := streamManager.NewStreamManager(peerManager.C_peerCount, p2p, host)

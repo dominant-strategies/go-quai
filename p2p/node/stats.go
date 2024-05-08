@@ -19,6 +19,7 @@ func (p *P2PNode) connectionStats() int {
 func (p *P2PNode) statsLoop() {
 	defer func() {
 		if r := recover(); r != nil {
+			p.quitCh <- struct{}{}
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
