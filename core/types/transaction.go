@@ -145,10 +145,17 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
 		protoTx.ChainId = tx.ChainId().Bytes()
-		protoTx.ParentHash = tx.ParentHash().ProtoEncode()
-		protoTx.MixHash = tx.MixHash().ProtoEncode()
-		workNonce := tx.WorkNonce().Uint64()
-		protoTx.WorkNonce = &workNonce
+		if tx.ParentHash() != nil {
+			protoTx.ParentHash = tx.ParentHash().ProtoEncode()
+		}
+		if tx.MixHash() != nil {
+			protoTx.MixHash = tx.MixHash().ProtoEncode()
+		}
+		if tx.WorkNonce() != nil {
+			workNonce := tx.WorkNonce().Uint64()
+			protoTx.WorkNonce = &workNonce
+		}
+
 	case 1:
 		gas := tx.Gas()
 		protoTx.Gas = &gas
@@ -176,10 +183,17 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		}
 		protoTx.Signature = tx.GetSchnorrSignature().Serialize()
 		protoTx.ChainId = tx.ChainId().Bytes()
-		protoTx.ParentHash = tx.ParentHash().ProtoEncode()
-		protoTx.MixHash = tx.MixHash().ProtoEncode()
-		workNonce := tx.WorkNonce().Uint64()
-		protoTx.WorkNonce = &workNonce
+		if tx.ParentHash() != nil {
+			protoTx.ParentHash = tx.ParentHash().ProtoEncode()
+		}
+		if tx.MixHash() != nil {
+			protoTx.MixHash = tx.MixHash().ProtoEncode()
+		}
+		if tx.WorkNonce() != nil {
+			workNonce := tx.WorkNonce().Uint64()
+			protoTx.WorkNonce = &workNonce
+		}
+
 	}
 	return protoTx, nil
 }

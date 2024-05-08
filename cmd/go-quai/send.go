@@ -167,11 +167,11 @@ func runSend(cmd *cobra.Command, args []string) error {
 
 // readWithTimeout reads from the bufio.Reader with a 5 seconds timeout.
 func readWithTimeout(buf *bufio.Reader, ctx context.Context) (string, error) {
-	resultChan := make(chan string)
-	errChan := make(chan error)
+	resultChan := make(chan string, 1)
+	errChan := make(chan error, 1)
 
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
 
 	go func() {
 		defer func() {
@@ -197,8 +197,7 @@ func readWithTimeout(buf *bufio.Reader, ctx context.Context) (string, error) {
 		return response, nil
 	case err := <-errChan:
 		return "", err
-
-	case <-ticker.C:
+	case <-timer.C:
 		return "", errors.New("timeout waiting for response")
 	}
 }
