@@ -124,7 +124,15 @@ func (wo *WorkObject) GetAppendTime() time.Duration {
 // Size returns the true RLP encoded storage size of the block, either by encoding
 // and returning it, or returning a previsouly cached value.
 func (wo *WorkObject) Size() common.StorageSize {
-	return common.StorageSize(0)
+	protoWorkObject, err := wo.ProtoEncode(BlockObject)
+	if err != nil {
+		return common.StorageSize(0)
+	}
+	data, err := proto.Marshal(protoWorkObject)
+	if err != nil {
+		return common.StorageSize(0)
+	}
+	return common.StorageSize(len(data))
 }
 
 func (wo *WorkObject) HeaderHash() common.Hash {
