@@ -7,9 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 
-	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
@@ -37,12 +35,6 @@ func (p *P2PNode) Start() error {
 	p.peerManager.GetHost().SetStreamHandler(quaiprotocol.ProtocolVersion, func(s network.Stream) {
 		quaiprotocol.QuaiProtocolHandler(s, p)
 	})
-
-	// If the node is a bootnode, start the bootnode service
-	if viper.GetBool(utils.BootNodeFlag.Name) {
-		log.Global.Infof("starting node as a bootnode...")
-		return nil
-	}
 
 	// Start the pubsub manager
 	p.pubsub.Start(p.handleBroadcast)
