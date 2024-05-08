@@ -126,6 +126,7 @@ var (
 	queuedGauge    = txpoolMetrics.WithLabelValues("queued")
 	localTxGauge   = txpoolMetrics.WithLabelValues("local")
 	slotsGauge     = txpoolMetrics.WithLabelValues("slots")
+	qiTxGauge      = txpoolMetrics.WithLabelValues("qi")
 
 	reheapTimer = metrics_config.NewTimer("Reheap", "Reheap timer")
 )
@@ -166,14 +167,14 @@ type TxPoolConfig struct {
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
 
-	AccountSlots    uint64 // Number of executable transaction slots guaranteed per account
-	GlobalSlots     uint64 // Maximum number of executable transaction slots for all accounts
-	MaxSenders      uint64 // Maximum number of senders in the senders cache
-	SendersChBuffer uint64 // Senders cache channel buffer size
-	AccountQueue    uint64 // Maximum number of non-executable transaction slots permitted per account
-	GlobalQueue     uint64 // Maximum number of non-executable transaction slots for all accounts
-
-	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+	AccountSlots    uint64        // Number of executable transaction slots guaranteed per account
+	GlobalSlots     uint64        // Maximum number of executable transaction slots for all accounts
+	MaxSenders      uint64        // Maximum number of senders in the senders cache
+	SendersChBuffer uint64        // Senders cache channel buffer size
+	AccountQueue    uint64        // Maximum number of non-executable transaction slots permitted per account
+	GlobalQueue     uint64        // Maximum number of non-executable transaction slots for all accounts
+	QiPoolSize      uint64        // Maximum number of Qi transactions to store
+	Lifetime        time.Duration // Maximum amount of time non-executable transaction are queued
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -191,8 +192,8 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	SendersChBuffer: 1024,        // at 500 TPS in zone, 2s buffer
 	AccountQueue:    1,
 	GlobalQueue:     2048,
-
-	Lifetime: 3 * time.Hour,
+	QiPoolSize:      10024,
+	Lifetime:        3 * time.Hour,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -247,6 +248,13 @@ func (config *TxPoolConfig) sanitize(logger *log.Logger) TxPoolConfig {
 			"updated":  DefaultTxPoolConfig.GlobalQueue,
 		}).Warn("Sanitizing invalid txpool global queue")
 		conf.GlobalQueue = DefaultTxPoolConfig.GlobalQueue
+	}
+	if conf.QiPoolSize < 1 {
+		logger.WithFields(log.Fields{
+			"provided": conf.QiPoolSize,
+			"updated":  DefaultTxPoolConfig.QiPoolSize,
+		}).Warn("Sanitizing invalid txpool Qi pool size")
+		conf.QiPoolSize = DefaultTxPoolConfig.QiPoolSize
 	}
 	if conf.Lifetime < 1 {
 		logger.WithFields(log.Fields{
@@ -1159,6 +1167,15 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 		return err
 	}
 	pool.qiMu.Lock()
+	if uint64(len(pool.qiPool))+1 > pool.config.GlobalSlots {
+		// If the pool is full, don't accept the transaction
+		pool.qiMu.Unlock()
+		pool.logger.WithFields(logrus.Fields{
+			"tx":  tx.Hash().String(),
+			"fee": fee,
+		}).Error("Qi tx pool is full")
+		return ErrTxPoolOverflow
+	}
 	pool.qiPool[tx.Hash()] = txWithMinerFee
 	pool.qiMu.Unlock()
 	pool.queueTxEvent(tx)
@@ -1171,6 +1188,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 		"tx":  tx.Hash().String(),
 		"fee": fee,
 	}).Info("Added qi tx to pool")
+	qiTxGauge.Add(1)
 	return nil
 }
 
@@ -1186,6 +1204,7 @@ func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
 	pool.qiMu.Lock()
 	delete(pool.qiPool, tx.Hash())
 	pool.qiMu.Unlock()
+	qiTxGauge.Sub(1)
 }
 
 func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
@@ -1194,6 +1213,7 @@ func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
 		delete(pool.qiPool, *tx)
 	}
 	pool.qiMu.Unlock()
+	qiTxGauge.Sub(float64(len(txs)))
 }
 
 // Mempool lock must be held.
@@ -1201,6 +1221,7 @@ func (pool *TxPool) removeQiTxsLocked(txs []*types.Transaction) {
 	for _, tx := range txs {
 		delete(pool.qiPool, tx.Hash())
 	}
+	qiTxGauge.Sub(float64(len(txs)))
 }
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
