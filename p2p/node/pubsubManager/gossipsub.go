@@ -66,7 +66,7 @@ func (g *PubsubManager) SetQuaiBackend(consensus quai.ConsensusAPI) {
 
 }
 
-func (g *PubsubManager) Start(receiveCb func(peer.ID, interface{}, common.Location)) {
+func (g *PubsubManager) SetReceiveHandler(receiveCb func(peer.ID, interface{}, common.Location)) {
 	g.onReceived = receiveCb
 }
 
