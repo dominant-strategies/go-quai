@@ -235,29 +235,61 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 
 	var timeSenders, timeSign, timePrepare, timeEtx, timeTx time.Duration
 	startTimeSenders := time.Now()
-	senders := make(map[common.Hash]*common.InternalAddress) // temporary cache for senders of internal txs
-	numInternalTxs := 0
-	p.hc.pool.SendersMu.RLock()               // Prevent the txpool from grabbing the lock during the entire block tx lookup
-	for i, tx := range block.Transactions() { // get all senders of internal txs from cache
-		if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
-			// coinbase tx is not in senders cache
-			continue
-		}
-		if tx.Type() == types.QuaiTxType {
-			numInternalTxs++
-			if sender, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
-				senders[tx.Hash()] = &sender // This pointer must never be modified
+	transactions := block.Transactions()
+	if types.IsCoinBaseTx(transactions[0], header.ParentHash(nodeCtx), nodeLocation) {
+		// coinbase tx is not in senders cache
+		transactions = transactions[1:]
+	}
+	numGoroutines := 4
+	if len(transactions) > 1000 {
+		numGoroutines = 8
+	} else if len(transactions) < 12 {
+		numGoroutines = 1
+	}
+	groupSize := len(transactions) / numGoroutines // Split the block into n groups for parallel processing
+	var wg sync.WaitGroup
+	numInternalTxs := len(transactions)
+	// Each goroutine has a sub-map of senders (temporary cache for senders of internal txs)
+	var sendersArray []map[common.Hash]*common.InternalAddress = make([]map[common.Hash]*common.InternalAddress, numGoroutines)
+	p.hc.pool.SendersMu.RLock() // Prevent the txpool from grabbing the lock during the entire block tx lookup
+	for i := 0; i < numGoroutines; i++ {
+		sendersArray[i] = make(map[common.Hash]*common.InternalAddress) // Initialize the sub-map
+		wg.Add(1)
+		go func(i int) {
+			var subTransactions types.Transactions
+			if i == numGoroutines-1 {
+				subTransactions = transactions[i*groupSize:]
 			} else {
-				// TODO: calcuate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
+				subTransactions = transactions[i*groupSize : (i+1)*groupSize]
 			}
-		} else if tx.Type() == types.QiTxType {
-			numInternalTxs++
-			if _, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
-				senders[tx.Hash()] = &common.InternalAddress{}
+			for _, tx := range subTransactions {
+				if tx.Type() == types.QuaiTxType {
+					if sender, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
+						sendersArray[i][tx.Hash()] = &sender // This pointer must never be modified
+					} else {
+						// TODO: calcuate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
+					}
+				} else if tx.Type() == types.QiTxType {
+					if _, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
+						sendersArray[i][tx.Hash()] = &common.InternalAddress{}
+					}
+				}
 			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+	p.hc.pool.SendersMu.RUnlock()
+
+	// Merge the sub-maps into the main map
+	senders := make(map[common.Hash]*common.InternalAddress)
+	for _, subMap := range sendersArray {
+		for k, v := range subMap {
+			senders[k] = v
 		}
 	}
-	p.hc.pool.SendersMu.RUnlock()
+	sendersArray = nil
+
 	timeSenders = time.Since(startTimeSenders)
 	blockContext := NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
