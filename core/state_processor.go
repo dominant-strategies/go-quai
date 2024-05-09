@@ -516,7 +516,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		"time3": time3,
 		"time4": time4,
 		"time5": time5,
-	}).Debug("Time taken in Process")
+	}).Info("Time taken in Process")
 
 	p.logger.WithFields(log.Fields{
 		"signing time":                common.PrettyDuration(timeSign),
@@ -525,7 +525,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		"prepare state time":          common.PrettyDuration(timePrepare),
 		"etx time":                    common.PrettyDuration(timeEtx),
 		"tx time":                     common.PrettyDuration(timeTx),
-	}).Debug("Total Tx Processing Time")
+	}).Info("Total Tx Processing Time")
 
 	return receipts, qiEtxs, allLogs, statedb, *usedGas, nil
 }
