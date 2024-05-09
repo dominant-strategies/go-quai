@@ -283,6 +283,7 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 	qiMu        sync.RWMutex
+	stateMu     sync.RWMutex
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -386,7 +387,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		pool.locals.add(addr)
 	}
 	pool.priced = newTxPricedList(pool.all)
+	pool.mu.Lock()
 	pool.reset(nil, chain.CurrentBlock())
+	pool.mu.Unlock()
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
@@ -1060,7 +1063,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			continue
 		}
 		if tx.Type() == types.QiTxType {
-			if err := pool.addQiTx(tx, true); err != nil {
+			if err := pool.addQiTx(tx); err != nil {
 				errs[i] = err
 			}
 			continue
@@ -1124,13 +1127,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 // addQiTx adds a Qi transaction to the Qi pool.
 // If the mempool lock is already held by the caller, the caller must set grabLock to false.
 // If the mempool lock is not held by the caller, the caller must set grabLock to true.
-func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
+func (pool *TxPool) addQiTx(tx *types.Transaction) error {
 	pool.qiMu.RLock()
 	if _, hasTx := pool.qiPool[tx.Hash()]; hasTx {
 		pool.qiMu.RUnlock()
 		return ErrAlreadyKnown
 	}
-
 	pool.qiMu.RUnlock()
 
 	currentBlock := pool.chain.CurrentBlock()
@@ -1143,23 +1145,17 @@ func (pool *TxPool) addQiTx(tx *types.Transaction, grabLock bool) error {
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
-	if grabLock {
-		pool.mu.RLock() // need to readlock the whole pool because we are reading the current state
-	}
+	pool.stateMu.RLock()
 	fee, _, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
-		if grabLock {
-			pool.mu.RUnlock()
-		}
+		pool.stateMu.RUnlock()
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"err": err,
 		}).Error("Invalid Qi transaction")
 		return err
 	}
-	if grabLock {
-		pool.mu.RUnlock()
-	}
+	pool.stateMu.RUnlock()
 	txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
 	if err != nil {
 		return err
@@ -1229,7 +1225,6 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error,
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
 		if tx.Type() == types.QiTxType {
-			errs[i] = pool.addQiTx(tx, false)
 			continue
 		}
 		replaced, err := pool.add(tx, local)
@@ -1697,13 +1692,22 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return
 	}
+	pool.stateMu.Lock()
 	pool.currentState = statedb
+	pool.stateMu.Unlock()
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit()
 
 	// Inject any transactions discarded due to reorgs
 	pool.logger.WithField("count", len(reinject)).Debug("Reinjecting stale transactions")
 	senderCacher.recover(pool.signer, reinject)
+	pool.mu.Unlock()
+	for _, tx := range reinject {
+		if tx.Type() == types.QiTxType {
+			pool.addQiTx(tx)
+		}
+	}
+	pool.mu.Lock()
 	pool.addTxsLocked(reinject, false)
 	if pool.reOrgCounter == c_reorgCounterThreshold {
 		pool.logger.WithField("time", common.PrettyDuration(time.Since(start))).Debug("Time taken to resetTxPool")
