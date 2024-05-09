@@ -157,6 +157,8 @@ type Config struct {
 	NotifyFull bool
 
 	Log *log.Logger `toml:"-"`
+	// Number of threads to mine on if mining
+	NumThreads int
 }
 
 // Progpow is a proof-of-work consensus engine using the blake3 hash algorithm
@@ -196,10 +198,11 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 		}).Info("Disk storage enabled for ethash caches")
 	}
 	progpow := &Progpow{
-		config: config,
-		caches: newlru("cache", config.CachesInMem, newCache, logger),
-		update: make(chan struct{}),
-		logger: logger,
+		config:  config,
+		caches:  newlru("cache", config.CachesInMem, newCache, logger),
+		update:  make(chan struct{}),
+		logger:  logger,
+		threads: config.NumThreads,
 	}
 	if config.PowMode == ModeShared {
 		progpow.shared = sharedProgpow

@@ -43,6 +43,8 @@ type Config struct {
 	NotifyFull bool
 
 	Log *log.Logger `toml:"-"`
+	// Number of threads to mine on if mining
+	NumThreads int
 }
 
 // Blake3pow is a proof-of-work consensus engine using the blake3 hash algorithm
@@ -70,9 +72,10 @@ type Blake3pow struct {
 // packages.
 func New(config Config, notify []string, noverify bool, logger *log.Logger) *Blake3pow {
 	blake3pow := &Blake3pow{
-		config: config,
-		update: make(chan struct{}),
-		logger: logger,
+		config:  config,
+		update:  make(chan struct{}),
+		logger:  logger,
+		threads: config.NumThreads,
 	}
 	if config.PowMode == ModeShared {
 		blake3pow.shared = sharedBlake3pow

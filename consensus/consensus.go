@@ -175,6 +175,8 @@ type Engine interface {
 	// VerifySeal computes the PowHash and checks if work meets the difficulty
 	// requirement specified in header
 	VerifySeal(header *types.WorkObjectHeader) (common.Hash, error)
+
+	SetThreads(threads int)
 }
 
 func TargetToDifficulty(target *big.Int) *big.Int {
