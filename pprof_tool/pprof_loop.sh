@@ -35,6 +35,8 @@ while true; do
         echo "Running pprof for port $port"
         curl http://localhost:$port/debug/pprof/goroutine -o "traces/$folder/$name"_"$timestamp"_"$port"_goroutine.pb.gz
         curl http://localhost:$port/debug/pprof/heap -o "traces/$folder/$name"_"$timestamp"_"$port"_heap.pb.gz
+        curl http://localhost:$port/debug/pprof/mutex -o "traces/$folder/$name"_"$timestamp"_"$port"_mutex.pb.gz
+        curl http://localhost:$port/debug/pprof/trace?seconds=5 -o "traces/$folder/$name"_"$timestamp"_"$port"_trace.pb.gz
     done
     sleep 600 
 done
