@@ -725,9 +725,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		if err != nil {
 			return err
 		}
-	} else if sender, found := pool.PeekSender(tx.Hash()); found {
-		internal = sender
-		addToCache = false
 	} else {
 		// Make sure the transaction is signed properly.
 		from, err := types.Sender(pool.signer, tx)
@@ -1079,8 +1076,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 				invalidTxMeter.Add(1)
 				continue
 			}
-		} else if found := pool.ContainsSender(tx.Hash()); found {
-			// if the sender is cached in the tx or in the pool cache, we don't need to add it into the cache
 		} else {
 			from, err := types.Sender(pool.signer, tx)
 			if err != nil {
@@ -1164,10 +1159,6 @@ func (pool *TxPool) addQiTx(tx *types.Transaction) error {
 	if uint64(len(pool.qiPool))+1 > pool.config.GlobalSlots {
 		// If the pool is full, don't accept the transaction
 		pool.qiMu.Unlock()
-		pool.logger.WithFields(logrus.Fields{
-			"tx":  tx.Hash().String(),
-			"fee": fee,
-		}).Error("Qi tx pool is full")
 		return ErrTxPoolOverflow
 	}
 	pool.qiPool[tx.Hash()] = txWithMinerFee
@@ -2004,28 +1995,6 @@ func (pool *TxPool) PeekSenderNoLock(hash common.Hash) (common.InternalAddress, 
 	return common.InternalAddress{}, false
 }
 
-func (pool *TxPool) ContainsSender(hash common.Hash) bool {
-	pool.SendersMu.RLock()
-	defer pool.SendersMu.RUnlock()
-	return pool.senders.Contains(hash)
-}
-
-func (pool *TxPool) ContainsOrAddSender(hash common.Hash, sender common.InternalAddress) (bool, bool) {
-	pool.SendersMu.Lock()
-	defer pool.SendersMu.Unlock()
-	return pool.senders.ContainsOrAdd(hash, sender)
-}
-
-func (pool *TxPool) PeekSender(hash common.Hash) (common.InternalAddress, bool) {
-	pool.SendersMu.RLock()
-	defer pool.SendersMu.RUnlock()
-	addr, ok := pool.senders.Peek(hash)
-	if ok {
-		return addr.(common.InternalAddress), true
-	}
-	return common.InternalAddress{}, false
-}
-
 // sendersGoroutine asynchronously adds a new sender to the cache
 func (pool *TxPool) sendersGoroutine() {
 	defer func() {
@@ -2043,7 +2012,11 @@ func (pool *TxPool) sendersGoroutine() {
 			return
 		case tx := <-pool.sendersCh:
 			// Add transaction to sender cache
-			if contains, _ := pool.ContainsOrAddSender(tx.hash, tx.sender); contains {
+			if contains := pool.senders.Contains(tx.hash); !contains {
+				pool.SendersMu.Lock()
+				pool.senders.Add(tx.hash, tx.sender)
+				pool.SendersMu.Unlock()
+			} else {
 				pool.logger.WithFields(log.Fields{
 					"tx":     tx.hash.String(),
 					"sender": tx.sender.String(),
