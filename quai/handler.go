@@ -2,6 +2,7 @@ package quai
 
 import (
 	"math/big"
+	"math/rand"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -19,6 +20,9 @@ const (
 	c_missingBlockChanSize = 60
 	// c_checkNextPrimeBlockInterval is the interval for checking the next Block in Prime
 	c_checkNextPrimeBlockInterval = 60 * time.Second
+	// c_provideMessageInterval is the interval for sending providing messages
+	// on various topics to the network
+	c_provideMessageInterval = 2 * time.Minute
 	// c_txsChanSize is the size of channel listening to the new txs event
 	c_newTxsChanSize = 1000
 	// c_recentBlockReqCache is the size of the cache for the recent block requests
@@ -77,6 +81,9 @@ func (h *handler) Start() {
 		h.wg.Add(1)
 		go h.checkNextPrimeBlock()
 	}
+
+	h.wg.Add(1)
+	go h.broadcastProvideMessage()
 }
 
 func (h *handler) Stop() {
@@ -247,4 +254,36 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) {
 			}
 		}
 	}()
+}
+
+func (h *handler) broadcastProvideMessage() {
+	defer h.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			h.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
+	provideTimer := time.NewTicker(c_provideMessageInterval)
+	defer provideTimer.Stop()
+	for {
+		select {
+		case <-provideTimer.C:
+			// Adding a random sleep just for testing because otherwise all
+			// nodes will broadcast at the same time
+			// Sleep for that duration
+			time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
+
+			// Prime and Region Only provides the Work Object topic
+			// Zone provides the Work Object, Transaction topics
+			h.p2pBackend.Broadcast(h.nodeLocation, &types.ProvideTopic{Topic: 0})
+			if h.core.NodeCtx() == common.ZONE_CTX {
+				h.p2pBackend.Broadcast(h.nodeLocation, &types.ProvideTopic{Topic: 1})
+			}
+		case <-h.quitCh:
+			return
+		}
+	}
 }

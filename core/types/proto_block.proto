@@ -172,3 +172,5 @@ message ProtoTxOut {
   optional bytes address = 2;
   optional bytes lock = 3;
 }
+
+message ProtoProvideTopic { optional uint32 topic = 1; }
