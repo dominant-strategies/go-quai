@@ -438,6 +438,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"t8":   time8,
 		"t9":   time9,
 		"t10":  time10,
+		"hash": block.Hash(),
 	}).Info("Times during append")
 
 	sl.logger.WithFields(log.Fields{

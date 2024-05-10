@@ -562,6 +562,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 		"GetUtxoTime":        common.PrettyDuration(GetUtxoTime),
 		"DeleteUtxoTime":     common.PrettyDuration(DeleteUtxoTime),
 		"CreateUtxoTime":     common.PrettyDuration(CreateUtxoTime),
+		"NumTransactions":    len(transactions),
+		"Hash":               block.Hash(),
 	}).Info("Total Tx Processing Time")
 
 	p.logger.WithFields(log.Fields{
@@ -953,27 +955,35 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject, newIn
 	time5 := common.PrettyDuration(time.Since(start))
 	rawdb.WritePreimages(batch, statedb.Preimages())
 	time6 := common.PrettyDuration(time.Since(start))
+	evmCommitToCacheTimeStart := time.Now()
 	// Commit all cached state changes into underlying memory database.
 	root, err := statedb.Commit(true)
 	if err != nil {
 		return nil, err
 	}
+	evmCommitToCacheTime := time.Since(evmCommitToCacheTimeStart)
+	utxoCommitToCacheTimeStart := time.Now()
 	utxoRoot, err := statedb.CommitUTXOs()
 	if err != nil {
 		return nil, err
 	}
+	utxoCommitToCacheTime := time.Since(utxoCommitToCacheTimeStart)
 	triedb := p.stateCache.TrieDB()
 	time7 := common.PrettyDuration(time.Since(start))
 	var time8 common.PrettyDuration
 	var time9 common.PrettyDuration
 	var time10 common.PrettyDuration
 	var time11 common.PrettyDuration
+	evmCommitToDbTimeStart := time.Now()
 	if err := triedb.Commit(root, false, nil); err != nil {
 		return nil, err
 	}
+	evmCommitToDbTime := time.Since(evmCommitToDbTimeStart)
+	utxoCommitToDbTimeStart := time.Now()
 	if err := p.utxoCache.TrieDB().Commit(utxoRoot, false, nil); err != nil {
 		return nil, err
 	}
+	utxoCommitToDbTime := time.Since(utxoCommitToDbTimeStart)
 	time8 = common.PrettyDuration(time.Since(start))
 	// Update the set of inbound ETXs which may be mined in the next block
 	// These new inbounds are not included in the ETX hash of the current block
@@ -985,19 +995,24 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject, newIn
 	time12 := common.PrettyDuration(time.Since(start))
 
 	p.logger.WithFields(log.Fields{
-		"t1":   time1,
-		"t2":   time2,
-		"t3":   time3,
-		"t4":   time4,
-		"t4.5": time4_5,
-		"t5":   time5,
-		"t6":   time6,
-		"t7":   time7,
-		"t8":   time8,
-		"t9":   time9,
-		"t10":  time10,
-		"t11":  time11,
-		"t12":  time12,
+		"t1":                    time1,
+		"t2":                    time2,
+		"t3":                    time3,
+		"t4":                    time4,
+		"t4.5":                  time4_5,
+		"t5":                    time5,
+		"t6":                    time6,
+		"t7":                    time7,
+		"t8":                    time8,
+		"t9":                    time9,
+		"t10":                   time10,
+		"t11":                   time11,
+		"t12":                   time12,
+		"evmCommitToCacheTime":  common.PrettyDuration(evmCommitToCacheTime),
+		"utxoCommitToCacheTime": common.PrettyDuration(utxoCommitToCacheTime),
+		"evmCommitToDbTime":     common.PrettyDuration(evmCommitToDbTime),
+		"utxoCommitToDbTime":    common.PrettyDuration(utxoCommitToDbTime),
+		"hash":                  block.Hash(),
 	}).Debug("times during state processor apply")
 	return logs, nil
 }
