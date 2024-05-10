@@ -1185,3 +1185,11 @@ type BlockRequest struct {
 	Hash    common.Hash
 	Entropy *big.Int
 }
+
+// Topic is a unique identifier for a topic
+// 0 => WorkObject
+// 1 => Transactions
+// 2 => WorkObjectHeader
+type ProvideTopic struct {
+	Topic uint32
+}

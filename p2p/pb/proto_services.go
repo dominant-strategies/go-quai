@@ -204,13 +204,6 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 			return nil, err
 		}
 		return proto.Marshal(protoHeader)
-	case *types.Transaction:
-		log.Global.Tracef("marshalling transaction: %+v", data)
-		protoTransaction, err := data.ProtoEncode()
-		if err != nil {
-			return nil, err
-		}
-		return proto.Marshal(protoTransaction)
 	case common.Hash:
 		log.Global.Tracef("marshalling hash: %+v", data)
 		protoHash := data.ProtoEncode()
@@ -228,6 +221,9 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 			return nil, err
 		}
 		return proto.Marshal(protoWoHeader)
+	case *types.ProvideTopic:
+		protoProvideTopic := &types.ProtoProvideTopic{Topic: &data.Topic}
+		return proto.Marshal(protoProvideTopic)
 	default:
 		return nil, errors.New("unsupported data type")
 	}
@@ -300,6 +296,16 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		hash := common.Hash{}
 		hash.ProtoDecode(protoHash)
 		*dataPtr = hash
+		return nil
+	case *types.ProvideTopic:
+		protoProvideTopic := &types.ProtoProvideTopic{}
+		err := proto.Unmarshal(data, protoProvideTopic)
+		if err != nil {
+			return err
+		}
+		provideTopic := &types.ProvideTopic{}
+		provideTopic.Topic = *protoProvideTopic.Topic
+		*dataPtr = *provideTopic
 		return nil
 	default:
 		return errors.New("unsupported data type")

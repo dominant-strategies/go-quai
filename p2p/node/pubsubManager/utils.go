@@ -16,6 +16,7 @@ const (
 	// Data types for gossipsub topics
 	C_workObjectType       = "blocks"
 	C_transactionType      = "transactions"
+	C_provideType          = "provide"
 	C_headerType           = "headers"
 	C_hashType             = "hash"
 	C_workObjectHeaderType = "woHeaders"
@@ -33,6 +34,8 @@ func TopicName(genesis common.Hash, location common.Location, data interface{}) 
 		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
 	case *types.WorkObjectHeader:
 		return strings.Join([]string{baseTopic, C_workObjectHeaderType}, "/"), nil
+	case *types.ProvideTopic:
+		return strings.Join([]string{baseTopic, C_provideType}, "/"), nil
 	default:
 		return "", ErrUnsupportedType
 	}

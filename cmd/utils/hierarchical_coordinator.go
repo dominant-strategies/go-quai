@@ -138,6 +138,7 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 	hc.p2p.Subscribe(location, common.Hash{})
 	hc.p2p.Subscribe(location, &types.Transactions{})
 	hc.p2p.Subscribe(location, &types.WorkObjectHeader{})
+	hc.p2p.Subscribe(location, &types.ProvideTopic{})
 
 	StartNode(stack)
 
