@@ -25,9 +25,9 @@ import (
 const (
 	GasLimitBoundDivisor            uint64 = 1024 // The bound divisor of the gas limit, used in update calculations.
 	PercentGasUsedThreshold         uint64 = 50   // Percent Gas used threshold at which the gas limit adjusts
-	GasLimitStepOneBlockThreshold   uint64 = 150000
-	GasLimitStepTwoBlockThreshold   uint64 = 300000
-	GasLimitStepThreeBlockThreshold uint64 = 450000
+	GasLimitStepOneBlockThreshold   uint64 = 1
+	GasLimitStepTwoBlockThreshold   uint64 = 2
+	GasLimitStepThreeBlockThreshold uint64 = 3
 	MinGasLimit                     uint64 = 160000000 // Minimum the gas limit may ever be.
 	GenesisGasLimit                 uint64 = 5000000   // Gas limit of the Genesis block.
 
