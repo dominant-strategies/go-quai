@@ -1052,8 +1052,9 @@ func (pool *TxPool) AddRemote(tx *types.Transaction) error {
 func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
-		errs = make([]error, len(txs))
-		news = make([]*types.Transaction, 0, len(txs))
+		errs   = make([]error, len(txs))
+		news   = make([]*types.Transaction, 0, len(txs))
+		qiNews = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
@@ -1063,9 +1064,14 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			continue
 		}
 		if tx.Type() == types.QiTxType {
-			if err := pool.addQiTx(tx); err != nil {
-				errs[i] = err
+			pool.qiMu.RLock()
+			if _, hasTx := pool.qiPool[tx.Hash()]; hasTx {
+				pool.qiMu.RUnlock()
+				errs[i] = ErrAlreadyKnown
+				continue
 			}
+			pool.qiMu.RUnlock()
+			qiNews = append(qiNews, tx)
 			continue
 		}
 		// Exclude transactions with invalid signatures as soon as
@@ -1098,6 +1104,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
+	}
+	if len(qiNews) > 0 {
+		pool.qiMu.Lock()
+		qiErrs := pool.addQiTxsLocked(qiNews)
+		pool.qiMu.Unlock()
+		errs = append(errs, qiErrs...)
 	}
 	if len(news) == 0 {
 		return errs
@@ -1152,7 +1164,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction) error {
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"err": err,
-		}).Error("Invalid Qi transaction")
+		}).Debug("Invalid Qi transaction")
 		return err
 	}
 	pool.stateMu.RUnlock()
@@ -1161,7 +1173,7 @@ func (pool *TxPool) addQiTx(tx *types.Transaction) error {
 		return err
 	}
 	pool.qiMu.Lock()
-	if uint64(len(pool.qiPool))+1 > pool.config.GlobalSlots {
+	if uint64(len(pool.qiPool))+1 > pool.config.QiPoolSize {
 		// If the pool is full, don't accept the transaction
 		pool.qiMu.Unlock()
 		pool.logger.WithFields(logrus.Fields{
@@ -1184,6 +1196,60 @@ func (pool *TxPool) addQiTx(tx *types.Transaction) error {
 	}).Info("Added qi tx to pool")
 	qiTxGauge.Add(1)
 	return nil
+}
+
+// addQiTx adds Qi transactions to the Qi pool.
+// The qiMu lock must be held by the caller.
+func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
+	errs := make([]error, 0)
+	currentBlock := pool.chain.CurrentBlock()
+	gp := types.GasPool(currentBlock.GasLimit())
+	etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
+	if etxRLimit < params.ETXRLimitMin {
+		etxRLimit = params.ETXRLimitMin
+	}
+	etxPLimit := len(currentBlock.Transactions()) / params.ETXPrimeMaxFraction
+	if etxPLimit < params.ETXPLimitMin {
+		etxPLimit = params.ETXPLimitMin
+	}
+	for _, tx := range txs {
+
+		pool.stateMu.RLock()
+		fee, _, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+		if err != nil {
+			pool.stateMu.RUnlock()
+			pool.logger.WithFields(logrus.Fields{
+				"tx":  tx.Hash().String(),
+				"err": err,
+			}).Debug("Invalid Qi transaction")
+			errs = append(errs, err)
+			continue
+		}
+		pool.stateMu.RUnlock()
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if uint64(len(pool.qiPool))+1 > pool.config.QiPoolSize {
+			// If the pool is full, don't accept the transaction
+			errs = append(errs, ErrTxPoolOverflow)
+			continue
+		}
+		pool.qiPool[tx.Hash()] = txWithMinerFee
+		pool.queueTxEvent(tx)
+		select {
+		case pool.sendersCh <- newSender{tx.Hash(), common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
+		default:
+			pool.logger.Error("sendersCh is full, skipping until there is room")
+		}
+		pool.logger.WithFields(logrus.Fields{
+			"tx":  tx.Hash().String(),
+			"fee": fee,
+		}).Info("Added qi tx to pool")
+		qiTxGauge.Add(1)
+	}
+	return errs
 }
 
 func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
@@ -1701,13 +1767,19 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	// Inject any transactions discarded due to reorgs
 	pool.logger.WithField("count", len(reinject)).Debug("Reinjecting stale transactions")
 	senderCacher.recover(pool.signer, reinject)
-	pool.mu.Unlock()
+
+	qiTxs := make([]*types.Transaction, 0)
 	for _, tx := range reinject {
 		if tx.Type() == types.QiTxType {
-			pool.addQiTx(tx)
+			qiTxs = append(qiTxs, tx)
 		}
 	}
+	pool.mu.Unlock() // Don't lock the pool mutex while holding the qiMu lock
+	pool.qiMu.Lock()
+	pool.addQiTxsLocked(qiTxs)
+	pool.qiMu.Unlock()
 	pool.mu.Lock()
+
 	pool.addTxsLocked(reinject, false)
 	if pool.reOrgCounter == c_reorgCounterThreshold {
 		pool.logger.WithField("time", common.PrettyDuration(time.Since(start))).Debug("Time taken to resetTxPool")
