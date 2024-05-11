@@ -26,7 +26,7 @@ const (
 	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
 	c_recentBlockReqTimeout = 1 * time.Minute
 	// c_broadcastTransactionsInterval is the interval for broadcasting transactions
-	c_broadcastTransactionsInterval = 5 * time.Second
+	c_broadcastTransactionsInterval = 2 * time.Second
 	// c_maxTxBatchSize is the maximum number of transactions to broadcast at once
 	c_maxTxBatchSize = 100
 )

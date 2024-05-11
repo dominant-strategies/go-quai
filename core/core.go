@@ -49,6 +49,8 @@ const (
 	c_statsPrintPeriod                         = 60 // Time between stats prints
 	c_appendQueuePrintSize                     = 10
 	c_normalListBackoffThreshold               = 5 // Max multiple on the c_normalListProcCounter
+	c_maxRemoteTxQueue                         = 50000
+	c_remoteTxProcPeriod                       = 2 // Time between remote tx pool processing
 )
 
 type blockNumberAndRetryCounter struct {
@@ -62,6 +64,8 @@ type Core struct {
 
 	appendQueue     *lru.Cache
 	processingCache *lru.Cache
+	remoteTxQueue   *lru.Cache
+	localTxQueue    *lru.Cache
 
 	writeBlockLock sync.RWMutex
 
@@ -100,8 +104,14 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 	proccesingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
 	c.processingCache = proccesingCache
 
+	remoteTxQueue, _ := lru.New(c_maxRemoteTxQueue)
+	c.remoteTxQueue = remoteTxQueue
+
 	go c.updateAppendQueue()
 	go c.startStatsTimer()
+	if c.NodeCtx() == common.ZONE_CTX && c.ProcessingState() {
+		go c.startRemoteTxQueue()
+	}
 
 	return c, nil
 }
@@ -405,6 +415,35 @@ func (c *Core) updateAppendQueue() {
 		select {
 		case <-futureTimer.C:
 			c.procAppendQueue()
+		case <-c.quit:
+			return
+		}
+	}
+}
+
+// Insert remotes into the tx pool
+func (c *Core) startRemoteTxQueue() {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	futureTimer := time.NewTicker(c_remoteTxProcPeriod * time.Second)
+	defer futureTimer.Stop()
+	for {
+		select {
+		case <-futureTimer.C:
+			txs := make([]*types.Transaction, 0, c.remoteTxQueue.Len())
+			for _, tx := range c.remoteTxQueue.Keys() {
+				if value, exist := c.remoteTxQueue.Peek(tx); exist {
+					txs = append(txs, value.(*types.Transaction))
+					c.remoteTxQueue.Remove(tx)
+				}
+			}
+			c.sl.txPool.AddRemotes(txs)
 		case <-c.quit:
 			return
 		}
@@ -1118,12 +1157,14 @@ func (c *Core) AddLocal(tx *types.Transaction) error {
 	return c.sl.txPool.AddLocal(tx)
 }
 
-func (c *Core) AddRemote(tx *types.Transaction) error {
-	return c.sl.txPool.AddRemote(tx)
+func (c *Core) AddRemote(tx *types.Transaction) {
+	c.remoteTxQueue.Add(tx.Hash(), tx)
 }
 
-func (c *Core) AddRemotes(txs types.Transactions) []error {
-	return c.sl.txPool.AddRemotes(txs)
+func (c *Core) AddRemotes(txs types.Transactions) {
+	for _, tx := range txs {
+		c.remoteTxQueue.Add(tx.Hash(), tx)
+	}
 }
 
 func (c *Core) TxPoolPending(enforceTips bool) (map[common.AddressBytes]types.Transactions, error) {
