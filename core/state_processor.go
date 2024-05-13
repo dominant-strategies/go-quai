@@ -633,6 +633,190 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 	return receipt, err
 }
 
+func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, statedb *state.StateDB, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int) (*big.Int, error) {
+	if tx.Type() != types.QiTxType {
+		return nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
+	}
+	totalQitIn := big.NewInt(0)
+	addresses := make(map[common.AddressBytes]struct{})
+	for _, txIn := range tx.TxIn() {
+		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		if utxo == nil {
+			return nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		}
+		if utxo.Lock != nil && utxo.Lock.Cmp(currentHeader.Number(location.Context())) > 0 {
+			return nil, fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String())
+		}
+		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
+		entryAddr := common.BytesToAddress(utxo.Address, location)
+		if !address.Equal(entryAddr) {
+			return nil, fmt.Errorf("tx %032x spends UTXO %032x:%d with invalid pubkey, have %s want %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, address.String(), entryAddr.String())
+		}
+		// Check for duplicate addresses. This also checks for duplicate inputs.
+		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
+			return nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
+		}
+		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
+
+		// Perform some spend processing logic
+		denomination := utxo.Denomination
+		if denomination > types.MaxDenomination {
+			str := fmt.Sprintf("transaction output value of %v is "+
+				"higher than max allowed value of %v",
+				denomination,
+				types.MaxDenomination)
+			return nil, errors.New(str)
+		}
+		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
+	}
+	return totalQitIn, nil
+
+}
+
+func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit int) (*big.Int, error) {
+
+	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx)
+	usedGas := intrinsicGas
+
+	var ETXRCount int
+	var ETXPCount int
+	numEtxs := uint64(0)
+	totalQitOut := big.NewInt(0)
+	totalConvertQitOut := big.NewInt(0)
+	conversion := false
+	pubKeys := make([]*btcec.PublicKey, 0, len(tx.TxIn()))
+	addresses := make(map[common.AddressBytes]struct{})
+	for _, txIn := range tx.TxIn() {
+		pubKey, err := btcec.ParsePubKey(txIn.PubKey)
+		if err != nil {
+			return nil, err
+		}
+		pubKeys = append(pubKeys, pubKey)
+		addresses[crypto.PubkeyBytesToAddress(txIn.PubKey, location).Bytes20()] = struct{}{}
+	}
+	for txOutIdx, txOut := range tx.TxOut() {
+		// It would be impossible for a tx to have this many outputs based on block gas limit, but cap it here anyways
+		if txOutIdx > types.MaxOutputIndex {
+			return nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
+		}
+
+		if txOut.Denomination > types.MaxDenomination {
+			str := fmt.Sprintf("transaction output value of %v is "+
+				"higher than max allowed value of %v",
+				txOut.Denomination,
+				types.MaxDenomination)
+			return nil, errors.New(str)
+		}
+		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
+
+		toAddr := common.BytesToAddress(txOut.Address, location)
+
+		// Enforce no address reuse
+		if _, exists := addresses[toAddr.Bytes20()]; exists {
+			return nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
+		}
+		addresses[toAddr.Bytes20()] = struct{}{}
+
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai conversion
+			conversion = true
+			if txOut.Denomination < params.MinQiConversionDenomination {
+				return nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination)
+			}
+			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
+			delete(addresses, toAddr.Bytes20())
+			continue
+		}
+
+		if !toAddr.Location().Equal(location) { // This output creates an ETX
+			// Cross-region?
+			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
+				ETXRCount++
+			}
+			// Cross-prime?
+			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
+				ETXPCount++
+			}
+			if ETXRCount > etxRLimit {
+				return nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit)
+			}
+			if ETXPCount > etxPLimit {
+				return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+			}
+			primeTerminus := currentHeader.PrimeTerminus()
+			primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
+			if primeTerminusHeader == nil {
+				return nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminus)
+			}
+			if !toAddr.IsInQiLedgerScope() {
+				return nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
+			}
+			if !chain.CheckIfEtxIsEligible(primeTerminusHeader.EtxEligibleSlices(), *toAddr.Location()) {
+				return nil, fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
+			}
+
+			// We should require some kind of extra fee here
+			usedGas += params.ETXGas
+			numEtxs++
+		}
+	}
+	// Ensure the transaction does not spend more than its inputs.
+	if totalQitOut.Cmp(totalQitIn) == 1 {
+		str := fmt.Sprintf("total value of all transaction inputs for "+
+			"transaction %v is %v which is less than the amount "+
+			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
+		return nil, errors.New(str)
+	}
+
+	// the fee to pay the basefee/miner is the difference between inputs and outputs
+	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
+	// Check tx against required base fee and gas
+	requiredGas := intrinsicGas + (numEtxs * (params.TxGas + params.ETXGas)) // Each ETX costs extra gas that is paid in the origin
+	if requiredGas < intrinsicGas {
+		// Overflow
+		return nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
+	}
+	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), currentHeader.BaseFee())
+	minimumFee := misc.QuaiToQi(currentHeader, minimumFeeInQuai)
+	if txFeeInQit.Cmp(minimumFee) < 0 {
+		return nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFee.Uint64())
+	}
+	// Miner gets remainder of fee after base fee, except in the convert case
+	txFeeInQit.Sub(txFeeInQit, minimumFee)
+	if conversion {
+		ETXPCount++
+		if ETXPCount > etxPLimit {
+			return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+		}
+		usedGas += params.ETXGas
+		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+	}
+
+	if usedGas > currentHeader.GasLimit() {
+		return nil, fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), usedGas, currentHeader.GasLimit())
+	}
+
+	// Ensure the transaction signature is valid
+	var finalKey *btcec.PublicKey
+	if len(tx.TxIn()) > 1 {
+		aggKey, _, _, err := musig2.AggregateKeys(
+			pubKeys, false,
+		)
+		if err != nil {
+			return nil, err
+		}
+		finalKey = aggKey.FinalKey
+	} else {
+		finalKey = pubKeys[0]
+	}
+
+	txDigestHash := signer.Hash(tx)
+	if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
+		return nil, fmt.Errorf("invalid signature for tx %032x digest hash %032x", tx.Hash(), txDigestHash)
+	}
+
+	return txFeeInQit, nil
+}
+
 // ProcessQiTx processes a QiTx by spending the inputs and creating the outputs.
 // Math is performed to verify the fee provided is sufficient to cover the gas cost.
 // updateState is set to update the statedb in the case of the state processor, but not in the case of the txpool.
@@ -794,26 +978,6 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 		return nil, nil, errors.New(str)
 	}
 
-	// Ensure the transaction signature is valid
-	if checkSig {
-		var finalKey *btcec.PublicKey
-		if len(tx.TxIn()) > 1 {
-			aggKey, _, _, err := musig2.AggregateKeys(
-				pubKeys, false,
-			)
-			if err != nil {
-				return nil, nil, err
-			}
-			finalKey = aggKey.FinalKey
-		} else {
-			finalKey = pubKeys[0]
-		}
-
-		txDigestHash := signer.Hash(tx)
-		if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
-			return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
-		}
-	}
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
 	// Check tx against required base fee and gas
@@ -849,6 +1013,27 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 		}
 		etxs = append(etxs, &etxInner)
 		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+	}
+
+	// Ensure the transaction signature is valid
+	if checkSig {
+		var finalKey *btcec.PublicKey
+		if len(tx.TxIn()) > 1 {
+			aggKey, _, _, err := musig2.AggregateKeys(
+				pubKeys, false,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			finalKey = aggKey.FinalKey
+		} else {
+			finalKey = pubKeys[0]
+		}
+
+		txDigestHash := signer.Hash(tx)
+		if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
+			return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String())
+		}
 	}
 
 	*etxRLimit -= ETXRCount
