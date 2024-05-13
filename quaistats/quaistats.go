@@ -1018,6 +1018,8 @@ type blockDetailStats struct {
 	QuaiReward   string   `json:"quaiReward"`
 	QiReward     string   `json:"qiReward"`
 	QiType       bool     `json:"qiType"`
+	UncleCount   uint64   `json:"uncleCount"`
+	WoCount      uint64   `json:"woCount"`
 }
 
 // Everyone sends every block
@@ -1244,6 +1246,16 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 	if block == nil {
 		return nil
 	}
+	uncleCount := uint64(0)
+	woCount := uint64(0)
+	for _, uncle := range block.Uncles() {
+		_, err := s.engine.VerifySeal(uncle)
+		if err == nil {
+			uncleCount += 1
+		} else {
+			woCount += 1
+		}
+	}
 	qiType := block.Coinbase().IsInQiLedgerScope()
 	difficulty := block.Difficulty().String()
 	quaiPerQi := misc.QiToQuai(block, big.NewInt(1)).String()
@@ -1270,6 +1282,8 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		QuaiReward:   quaiReward.String(),
 		QiReward:     qiReward.String(),
 		QiType:       qiType,
+		UncleCount:   uncleCount,
+		WoCount:      woCount,
 	}
 }
 
