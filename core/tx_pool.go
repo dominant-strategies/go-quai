@@ -1134,71 +1134,11 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	return errs
 }
 
-// addQiTx adds a Qi transaction to the Qi pool.
-// If the mempool lock is already held by the caller, the caller must set grabLock to false.
-// If the mempool lock is not held by the caller, the caller must set grabLock to true.
-func (pool *TxPool) addQiTx(tx *types.Transaction) error {
-	pool.qiMu.RLock()
-	if _, hasTx := pool.qiPool[tx.Hash()]; hasTx {
-		pool.qiMu.RUnlock()
-		return ErrAlreadyKnown
-	}
-	pool.qiMu.RUnlock()
-
-	currentBlock := pool.chain.CurrentBlock()
-	gp := types.GasPool(currentBlock.GasLimit())
-	etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
-	if etxRLimit < params.ETXRLimitMin {
-		etxRLimit = params.ETXRLimitMin
-	}
-	etxPLimit := len(currentBlock.Transactions()) / params.ETXPrimeMaxFraction
-	if etxPLimit < params.ETXPLimitMin {
-		etxPLimit = params.ETXPLimitMin
-	}
-	fee, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
-	if err != nil {
-		pool.logger.WithFields(logrus.Fields{
-			"tx":  tx.Hash().String(),
-			"err": err,
-		}).Debug("Invalid Qi transaction")
-		return err
-	}
-	txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
-	if err != nil {
-		return err
-	}
-	pool.qiMu.Lock()
-	if uint64(len(pool.qiPool))+1 > pool.config.QiPoolSize {
-		// If the pool is full, don't accept the transaction
-		pool.qiMu.Unlock()
-		pool.logger.WithFields(logrus.Fields{
-			"tx":  tx.Hash().String(),
-			"fee": fee,
-		}).Error("Qi tx pool is full")
-		return ErrTxPoolOverflow
-	}
-	pool.qiPool[tx.Hash()] = txWithMinerFee
-	pool.qiMu.Unlock()
-	pool.queueTxEvent(tx)
-	select {
-	case pool.sendersCh <- newSender{tx.Hash(), common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
-	default:
-		pool.logger.Error("sendersCh is full, skipping until there is room")
-	}
-	pool.logger.WithFields(logrus.Fields{
-		"tx":  tx.Hash().String(),
-		"fee": fee,
-	}).Info("Added qi tx to pool")
-	qiTxGauge.Add(1)
-	return nil
-}
-
 // addQiTx adds Qi transactions to the Qi pool.
 // The qiMu lock must be held by the caller.
 func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 	errs := make([]error, 0)
 	currentBlock := pool.chain.CurrentBlock()
-	gp := types.GasPool(currentBlock.GasLimit())
 	etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
 		etxRLimit = params.ETXRLimitMin
@@ -1207,9 +1147,23 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
+	transactionsWithoutErrors := make(types.Transactions, 0, len(txs))
+	totalQitIns := make([]*big.Int, 0, len(txs))
 	for _, tx := range txs {
-
-		fee, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+		totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.currentState, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
+		if err != nil {
+			pool.logger.WithFields(logrus.Fields{
+				"tx":  tx.Hash().String(),
+				"err": err,
+			}).Debug("Invalid Qi transaction")
+			errs = append(errs, err)
+			continue
+		}
+		transactionsWithoutErrors = append(transactionsWithoutErrors, tx)
+		totalQitIns = append(totalQitIns, totalQitIn)
+	}
+	for i, tx := range transactionsWithoutErrors {
+		fee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIns[i], currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
 		if err != nil {
 			pool.logger.WithFields(logrus.Fields{
 				"tx":  tx.Hash().String(),
