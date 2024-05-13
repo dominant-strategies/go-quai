@@ -1215,7 +1215,7 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 	for _, tx := range txs {
 
 		pool.stateMu.RLock()
-		fee, _, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
+		fee, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 		if err != nil {
 			pool.stateMu.RUnlock()
 			pool.logger.WithFields(logrus.Fields{
@@ -1774,13 +1774,20 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 			qiTxs = append(qiTxs, tx)
 		}
 	}
-	pool.mu.Unlock() // Don't lock the pool mutex while holding the qiMu lock
-	pool.qiMu.Lock()
-	pool.addQiTxsLocked(qiTxs)
-	pool.qiMu.Unlock()
-	pool.mu.Lock()
-
-	pool.addTxsLocked(reinject, false)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		pool.addTxsLocked(reinject, false)
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		pool.qiMu.Lock()
+		pool.addQiTxsLocked(qiTxs)
+		pool.qiMu.Unlock()
+		wg.Done()
+	}()
+	wg.Wait()
 	if pool.reOrgCounter == c_reorgCounterThreshold {
 		pool.logger.WithField("time", common.PrettyDuration(time.Since(start))).Debug("Time taken to resetTxPool")
 	}
