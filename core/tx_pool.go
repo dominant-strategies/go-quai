@@ -175,6 +175,7 @@ type TxPoolConfig struct {
 	GlobalQueue     uint64        // Maximum number of non-executable transaction slots for all accounts
 	QiPoolSize      uint64        // Maximum number of Qi transactions to store
 	Lifetime        time.Duration // Maximum amount of time non-executable transaction are queued
+	ReorgFrequency  time.Duration // Frequency of reorgs outside of new head events
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -194,6 +195,7 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	GlobalQueue:     2048,
 	QiPoolSize:      10024,
 	Lifetime:        3 * time.Hour,
+	ReorgFrequency:  2 * time.Second,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -262,6 +264,13 @@ func (config *TxPoolConfig) sanitize(logger *log.Logger) TxPoolConfig {
 			"updated":  DefaultTxPoolConfig.Lifetime,
 		}).Warn("Sanitizing invalid txpool lifetime")
 		conf.Lifetime = DefaultTxPoolConfig.Lifetime
+	}
+	if conf.ReorgFrequency < 1 {
+		logger.WithFields(log.Fields{
+			"provided": conf.ReorgFrequency,
+			"updated":  DefaultTxPoolConfig.ReorgFrequency,
+		}).Warn("Sanitizing invalid txpool reorg frequency")
+		conf.ReorgFrequency = DefaultTxPoolConfig.ReorgFrequency
 	}
 	return conf
 }
@@ -1128,10 +1137,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		nilSlot++
 	}
 	// Reorg the pool internals if needed and return
-	done := pool.requestPromoteExecutables(dirtyAddrs)
-	if sync {
-		<-done
-	}
+	pool.requestPromoteExecutables(dirtyAddrs)
 	return errs
 }
 
@@ -1360,12 +1366,10 @@ func (pool *TxPool) requestReset(oldHead *types.WorkObject, newHead *types.WorkO
 
 // requestPromoteExecutables requests transaction promotion checks for the given addresses.
 // The returned channel is closed when the promotion checks have occurred.
-func (pool *TxPool) requestPromoteExecutables(set *accountSet) chan struct{} {
+func (pool *TxPool) requestPromoteExecutables(set *accountSet) {
 	select {
 	case pool.reqPromoteCh <- set:
-		return <-pool.reorgDoneCh
 	case <-pool.reorgShutdownCh:
-		return pool.reorgShutdownCh
 	}
 }
 
@@ -1392,16 +1396,16 @@ func (pool *TxPool) scheduleReorgLoop() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
-
 	var (
-		curDone       chan struct{} // non-nil while runReorg is active
-		nextDone      = make(chan struct{})
-		launchNextRun bool
-		reset         *txpoolResetRequest
-		dirtyAccounts *accountSet
-		queuedEvents  = make(map[common.InternalAddress]*txSortedMap)
-		reorgCancelCh = make(chan struct{})
-		queuedQiTxs   = make([]*types.Transaction, 0)
+		curDone        chan struct{} // non-nil while runReorg is active
+		nextDone       = make(chan struct{})
+		launchNextRun  bool
+		reset          *txpoolResetRequest
+		dirtyAccounts  *accountSet
+		queuedEvents   = make(map[common.InternalAddress]*txSortedMap)
+		reorgCancelCh  = make(chan struct{})
+		queuedQiTxs    = make([]*types.Transaction, 0)
+		runReorgTicker = time.NewTicker(pool.config.ReorgFrequency)
 	)
 	for {
 		// Launch next background reorg if needed
@@ -1439,8 +1443,10 @@ func (pool *TxPool) scheduleReorgLoop() {
 			} else {
 				dirtyAccounts.merge(req)
 			}
+
+		case <-runReorgTicker.C:
+			// Timer tick: launch the next reorg run
 			launchNextRun = true
-			pool.reorgDoneCh <- nextDone
 
 		case tx := <-pool.queueTxEventCh:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
