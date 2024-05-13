@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -1012,6 +1013,10 @@ type blockDetailStats struct {
 	Chain        string   `json:"chain"`
 	Entropy      string   `json:"entropy"`
 	Difficulty   string   `json:"difficulty"`
+	QuaiPerQi    string   `json:"quaiPerQi"`
+	QuaiReward   string   `json:"quaiReward"`
+	QiReward     string   `json:"qiReward"`
+	CoinType     bool     `json:"coinType"`
 }
 
 // Everyone sends every block
@@ -1238,7 +1243,18 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 	if block == nil {
 		return nil
 	}
+	coinType := block.Coinbase().IsInQiLedgerScope()
 	difficulty := block.Difficulty().String()
+	quaiPerQi := misc.QiToQuai(block, big.NewInt(1)).String()
+	var quaiReward *big.Int
+	var qiReward *big.Int
+	if coinType {
+		qiReward = misc.CalculateReward(block)
+		quaiReward = misc.QiToQuai(block, qiReward)
+	} else {
+		quaiReward = misc.CalculateReward(block)
+		qiReward = misc.QuaiToQi(block, quaiReward)
+	}
 
 	// Assemble and return the block stats
 	return &blockDetailStats{
@@ -1249,6 +1265,10 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		Chain:        s.backend.NodeLocation().Name(),
 		Entropy:      common.BigBitsToBits(s.backend.TotalLogS(block)).String(),
 		Difficulty:   difficulty,
+		QuaiPerQi:    quaiPerQi,
+		QuaiReward:   quaiReward.String(),
+		QiReward:     qiReward.String(),
+		CoinType:     coinType,
 	}
 }
 
