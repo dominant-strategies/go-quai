@@ -3,7 +3,6 @@ package streamManager
 import (
 	"context"
 	"encoding/binary"
-	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
@@ -53,7 +52,6 @@ type basicStreamManager struct {
 	ctx         context.Context
 	streamCache *lru.Cache
 	p2pBackend  quaiprotocol.QuaiP2PNode
-	mu          sync.Mutex
 
 	host host.Host
 }
@@ -98,9 +96,6 @@ func severStream(key interface{}, value interface{}) {
 }
 
 func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	wrappedStream, ok := sm.streamCache.Get(peerID)
 	if ok {
 		severStream(peerID, wrappedStream)
@@ -112,9 +107,6 @@ func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
 }
 
 func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	wrappedStream, ok := sm.streamCache.Get(peerID)
 	var err error
 	if !ok {
