@@ -254,7 +254,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		// difficulty adjustment can only be checked in zone
 		if nodeCtx == common.ZONE_CTX {
 			parent := chain.GetHeaderByHash(uncle.ParentHash())
-			expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader())
+			expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), block.ExpansionNumber())
 			if expected.Cmp(uncle.Difficulty()) != 0 {
 				return fmt.Errorf("uncle has invalid difficulty: have %v, want %v", uncle.Difficulty(), expected)
 			}
@@ -300,7 +300,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	// difficulty adjustment can only be checked in zone
 	if nodeCtx == common.ZONE_CTX {
-		expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader())
+		expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber())
 		if expected.Cmp(header.Difficulty()) != 0 {
 			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 		}
@@ -484,7 +484,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.WorkObjectHeader) *big.Int {
+func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.WorkObjectHeader, expansionNum uint8) *big.Int {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 
 	if nodeCtx != common.ZONE_CTX {
@@ -499,7 +499,22 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 
 	if chain.IsGenesisHash(parent.Hash()) {
 		// Divide the parent difficulty by the number of slices running at the time of expansion
-		return parent.Difficulty()
+		if expansionNum == 0 && parent.Location().Equal(common.Location{}) {
+			// Base case: expansion number is 0 and the parent is the actual genesis block
+			return parent.Difficulty()
+		}
+		genesis := chain.GetHeaderByHash(parent.Hash())
+		genesisTotalLogS := blake3pow.TotalLogS(chain, genesis)
+		if genesisTotalLogS.Cmp(genesis.ParentEntropy(common.PRIME_CTX)) < 0 { // prevent negative difficulty
+			blake3pow.logger.Errorf("Genesis block has invalid parent entropy: %v", genesis.ParentEntropy(common.PRIME_CTX))
+			return nil
+		}
+		differenceParentEntropy := new(big.Int).Sub(genesisTotalLogS, genesis.ParentEntropy(common.PRIME_CTX))
+		numRegionsInPrime, numZonesInRegion := common.GetHierarchySizeForExpansionNumber(expansionNum)
+		timeFactorMultiplied := new(big.Int).Mul(params.TimeFactor, params.TimeFactor)
+		numBlocks := new(big.Int).Mul(timeFactorMultiplied, new(big.Int).SetUint64(numRegionsInPrime*numZonesInRegion))
+		differenceParentEntropy.Div(differenceParentEntropy, numBlocks)
+		return common.EntropyBigBitsToDifficultyBits(differenceParentEntropy)
 	}
 
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
@@ -570,7 +585,7 @@ func (blake3pow *Blake3pow) verifySeal(header *types.WorkObjectHeader) error {
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the blake3pow protocol. The changes are done inline.
 func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *types.WorkObject, parent *types.WorkObject) error {
-	header.WorkObjectHeader().SetDifficulty(blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader()))
+	header.WorkObjectHeader().SetDifficulty(blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber()))
 	return nil
 }
 

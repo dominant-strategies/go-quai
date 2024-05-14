@@ -254,7 +254,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 		// difficulty adjustment can only be checked in zone
 		if nodeCtx == common.ZONE_CTX {
 			parent := chain.GetHeaderByHash(uncle.ParentHash())
-			expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader())
+			expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), block.ExpansionNumber())
 			if expected.Cmp(uncle.Difficulty()) != 0 {
 				return fmt.Errorf("uncle has invalid difficulty: have %v, want %v", uncle.Difficulty(), expected)
 			}
@@ -301,7 +301,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	// difficulty adjustment can only be checked in zone
 	if nodeCtx == common.ZONE_CTX {
-		expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader())
+		expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber())
 		if expected.Cmp(header.Difficulty()) != 0 {
 			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 		}
@@ -482,7 +482,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.WorkObjectHeader) *big.Int {
+func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent *types.WorkObjectHeader, expansionNum uint8) *big.Int {
 	nodeCtx := progpow.NodeLocation().Context()
 
 	if nodeCtx != common.ZONE_CTX {
@@ -496,8 +496,23 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 	///// Difficulty = Max(parent.Difficulty() + e * k, MinimumDifficulty)
 
 	if chain.IsGenesisHash(parent.Hash()) {
-		// Genesis Difficulty is the difficulty in the Genesis Block divided by the number of total slices active
-		return parent.Difficulty()
+		// Divide the parent difficulty by the number of slices running at the time of expansion
+		if expansionNum == 0 && parent.Location().Equal(common.Location{}) {
+			// Base case: expansion number is 0 and the parent is the actual genesis block
+			return parent.Difficulty()
+		}
+		genesis := chain.GetHeaderByHash(parent.Hash())
+		genesisTotalLogS := progpow.TotalLogS(chain, genesis)
+		if genesisTotalLogS.Cmp(genesis.ParentEntropy(common.PRIME_CTX)) < 0 { // prevent negative difficulty
+			progpow.logger.Errorf("Genesis block has invalid parent entropy: %v", genesis.ParentEntropy(common.PRIME_CTX))
+			return nil
+		}
+		differenceParentEntropy := new(big.Int).Sub(genesisTotalLogS, genesis.ParentEntropy(common.PRIME_CTX))
+		numRegionsInPrime, numZonesInRegion := common.GetHierarchySizeForExpansionNumber(expansionNum)
+		timeFactorMultiplied := new(big.Int).Mul(params.TimeFactor, params.TimeFactor)
+		numBlocks := new(big.Int).Mul(timeFactorMultiplied, new(big.Int).SetUint64(numRegionsInPrime*numZonesInRegion))
+		differenceParentEntropy.Div(differenceParentEntropy, numBlocks)
+		return common.EntropyBigBitsToDifficultyBits(differenceParentEntropy)
 	}
 	parentOfParent := chain.GetHeaderByHash(parent.ParentHash())
 	if parentOfParent == nil || chain.IsGenesisHash(parentOfParent.Hash()) {
@@ -619,7 +634,7 @@ func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.H
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the progpow protocol. The changes are done inline.
 func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types.WorkObject, parent *types.WorkObject) error {
-	header.WorkObjectHeader().SetDifficulty(progpow.CalcDifficulty(chain, parent.WorkObjectHeader()))
+	header.WorkObjectHeader().SetDifficulty(progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber()))
 	return nil
 }
 

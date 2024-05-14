@@ -33,11 +33,11 @@ var (
 	Big256   = big.NewInt(256)
 	Big257   = big.NewInt(257)
 	Big2e256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	Big2e64  = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
 )
 
 func BigBitsToBits(original *big.Int) *big.Int {
-	e2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
-	return big.NewInt(0).Div(original, e2e64)
+	return big.NewInt(0).Div(original, Big2e64)
 }
 
 func BitsToBigBits(original *big.Int) *big.Int {
@@ -48,11 +48,15 @@ func BitsToBigBits(original *big.Int) *big.Int {
 }
 
 func BigBitsArrayToBitsArray(original []*big.Int) []*big.Int {
-	e2e64 := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(64), nil)
 	bitsArray := make([]*big.Int, len(original))
 	for i, bits := range original {
-		bitsArray[i] = big.NewInt(0).Div(bits, e2e64)
+		bitsArray[i] = big.NewInt(0).Div(bits, Big2e64)
 	}
 
 	return bitsArray
+}
+
+func EntropyBigBitsToDifficultyBits(bigBits *big.Int) *big.Int {
+	twopowerBits := new(big.Int).Exp(big.NewInt(2), new(big.Int).Div(bigBits, Big2e64), nil)
+	return new(big.Int).Div(Big2e256, twopowerBits)
 }

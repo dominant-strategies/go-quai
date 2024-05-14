@@ -159,7 +159,7 @@ type Engine interface {
 
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
-	CalcDifficulty(chain ChainHeaderReader, parent *types.WorkObjectHeader) *big.Int
+	CalcDifficulty(chain ChainHeaderReader, parent *types.WorkObjectHeader, expansionNum uint8) *big.Int
 
 	// ComputePowHash returns the pow hash of the workobject header
 	ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error)
@@ -178,8 +178,7 @@ type Engine interface {
 }
 
 func TargetToDifficulty(target *big.Int) *big.Int {
-	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
-	return new(big.Int).Div(big2e256, target)
+	return new(big.Int).Div(common.Big2e256, target)
 }
 
 func DifficultyToTarget(difficulty *big.Int) *big.Int {
