@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -54,7 +55,7 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *common.Address) vm.BlockContext {
+func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *common.Address) (vm.BlockContext, error) {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -76,13 +77,18 @@ func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *co
 		if parent != nil {
 			timestamp = parent.Time()
 		} else {
-			log.Global.Fatal("Parent is not in the db, panic", "headerHash", header.Hash(), "parentHash", header.ParentHash(chain.NodeCtx()), "number", header.Number(chain.NodeCtx()).Uint64())
+			log.Global.Error("Parent is not in the db, cannot append", "headerHash", header.Hash(), "parentHash", header.ParentHash(chain.NodeCtx()), "number", header.Number(chain.NodeCtx()).Uint64())
+			return vm.BlockContext{}, fmt.Errorf("parent header not found for block %s, parent %s", header.Hash(), header.ParentHash(chain.NodeCtx()))
 		}
 	}
 
 	// Prime terminus determines which location is eligible to except the etx
 	primeTerminus := header.PrimeTerminus()
 	primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
+	if primeTerminusHeader == nil {
+		log.Global.Error("Prime terminus header not found", "headerHash", header.Hash(), "primeTerminus", primeTerminus)
+		return vm.BlockContext{}, ErrSubNotSyncedToDom
+	}
 	etxEligibleSlices := primeTerminusHeader.EtxEligibleSlices()
 
 	return vm.BlockContext{
@@ -97,7 +103,7 @@ func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *co
 		GasLimit:           header.GasLimit(),
 		CheckIfEtxEligible: chain.CheckIfEtxIsEligible,
 		EtxEligibleSlices:  etxEligibleSlices,
-	}
+	}, nil
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.

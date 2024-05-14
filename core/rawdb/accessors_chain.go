@@ -299,7 +299,12 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 
 // ReadHeader retrieves the block header corresponding to the hash.
 func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.WorkObject {
-	return ReadWorkObjectHeaderOnly(db, hash, types.BlockObject)
+	wo := ReadWorkObjectHeaderOnly(db, hash, types.BlockObject)
+	if wo == nil {
+		// Try backup function
+		return ReadWorkObject(db, hash, types.BlockObject)
+	}
+	return wo
 }
 
 // WriteHeader stores a block header into the database and also stores the hash-
@@ -689,6 +694,7 @@ func ReadWorkObjectBody(db ethdb.Reader, hash common.Hash) *types.WorkObjectBody
 	err := proto.Unmarshal(data, protoWorkObjectBody)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal work object body")
+		return nil
 	}
 	workObjectBody := new(types.WorkObjectBody)
 	err = workObjectBody.ProtoDecode(protoWorkObjectBody, db.Location())
@@ -712,9 +718,17 @@ func ReadWorkObjectBodyHeaderOnly(db ethdb.Reader, hash common.Hash) *types.Work
 	err := proto.Unmarshal(data, protoWorkObjectBody)
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal work object body")
+		return nil
 	}
 	workObjectBody := new(types.WorkObjectBody)
-	workObjectBody.ProtoDecodeHeader(protoWorkObjectBody, db.Location())
+	err = workObjectBody.ProtoDecodeHeader(protoWorkObjectBody, db.Location())
+	if workObjectBody.Header() == nil || err != nil {
+		log.Global.WithFields(log.Fields{
+			"hash": hash,
+			"err":  err,
+		}).Error("workObjectBody Header is nil")
+		return nil
+	}
 	return workObjectBody
 }
 

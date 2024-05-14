@@ -163,7 +163,10 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	for idx, tx := range block.Transactions() {
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
+		context, err := core.NewEVMBlockContext(block.Header(), b.chain, nil)
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, fmt.Errorf("failed to create block context: %v", err)
+		}
 		if idx == txIndex {
 			return msg, context, statedb, nil
 		}
