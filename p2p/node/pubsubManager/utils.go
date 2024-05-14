@@ -2,6 +2,7 @@ package pubsubManager
 
 import (
 	"errors"
+	"math/big"
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -17,7 +18,6 @@ const (
 	C_workObjectType       = "blocks"
 	C_transactionType      = "transactions"
 	C_headerType           = "headers"
-	C_hashType             = "hash"
 	C_workObjectHeaderType = "woHeaders"
 )
 
@@ -25,10 +25,10 @@ const (
 func TopicName(genesis common.Hash, location common.Location, data interface{}) (string, error) {
 	baseTopic := strings.Join([]string{genesis.String(), location.Name()}, "/")
 	switch data.(type) {
-	case *types.WorkObject:
+	case *types.WorkObject, *big.Int, common.Hash:
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/"), nil
-	case common.Hash:
-		return strings.Join([]string{baseTopic, C_hashType}, "/"), nil
+	case *types.Transaction:
+		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
 	case *types.Transactions:
 		return strings.Join([]string{baseTopic, C_transactionType}, "/"), nil
 	case *types.WorkObjectHeader:
