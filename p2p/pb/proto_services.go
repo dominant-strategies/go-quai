@@ -276,6 +276,9 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 			return err
 		}
 		workObject := &types.WorkObject{}
+		if protoWorkObject.WoHeader == nil {
+			return errors.New("woheader is nil")
+		}
 		if protoWorkObject.WoHeader.Location == nil {
 			return errors.New("location is nil")
 		}
