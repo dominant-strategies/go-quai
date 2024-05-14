@@ -259,7 +259,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, etxSet *types.EtxSet) 
 	}
 	p.hc.pool.SendersMu.RUnlock()
 	timeSenders = time.Since(startTimeSenders)
-	blockContext := NewEVMBlockContext(header, p.hc, nil)
+	blockContext, err := NewEVMBlockContext(header, p.hc, nil)
+	if err != nil {
+		return nil, nil, nil, nil, 0, err
+	}
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
 	time3 := common.PrettyDuration(time.Since(start))
 
@@ -933,7 +936,10 @@ func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, bc C
 		msg.SetData([]byte{}) // data is not used in conversion
 	}
 	// Create a new context to be used in the EVM environment
-	blockContext := NewEVMBlockContext(header, bc, author)
+	blockContext, err := NewEVMBlockContext(header, bc, author)
+	if err != nil {
+		return nil, err
+	}
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, msg.Value(), config.Location)
@@ -1222,7 +1228,10 @@ func (p *StateProcessor) StateAtTransaction(block *types.WorkObject, txIndex int
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := NewEVMTxContext(msg)
-		context := NewEVMBlockContext(block, p.hc, nil)
+		context, err := NewEVMBlockContext(block, p.hc, nil)
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, err
+		}
 		if idx == txIndex {
 			return msg, context, statedb, nil
 		}
