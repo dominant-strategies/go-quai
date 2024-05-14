@@ -286,7 +286,7 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 // ReadHeader retrieves the block header corresponding to the hash.
 func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.WorkObject {
 	wo := ReadWorkObjectHeaderOnly(db, hash, types.BlockObject)
-	if wo == nil {
+	if wo == nil || wo.Body() == nil || wo.Header() == nil {
 		// Try backup function
 		return ReadWorkObject(db, hash, types.BlockObject)
 	}
