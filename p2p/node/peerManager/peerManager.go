@@ -368,8 +368,24 @@ func (pm *BasicPeerManager) getBestPeersWithFallback(location common.Location) [
 
 	bestPeersCount := pm.peerDBs[locName][Best].GetPeerCount()
 	if bestPeersCount < C_peerCount {
+		// Fetch the initial list of best peers.
 		bestPeerList := pm.getPeersHelper(pm.peerDBs[locName][Best], bestPeersCount)
-		bestPeerList = append(bestPeerList, pm.getResponsivePeersWithFallback(location)...)
+
+		// Map to track unique peers.
+		uniquePeers := make(map[p2p.PeerID]bool)
+		for _, peer := range bestPeerList {
+			uniquePeers[peer] = true
+		}
+
+		// Append responsive peers ensuring they are unique.
+		responsivePeers := pm.getResponsivePeersWithFallback(location)
+		for _, peer := range responsivePeers {
+			if !uniquePeers[peer] {
+				bestPeerList = append(bestPeerList, peer)
+				uniquePeers[peer] = true
+			}
+		}
+
 		return bestPeerList
 	}
 	return pm.getPeersHelper(pm.peerDBs[locName][Best], C_peerCount)
@@ -380,13 +396,27 @@ func (pm *BasicPeerManager) getResponsivePeersWithFallback(location common.Locat
 
 	responsivePeersCount := pm.peerDBs[locName][Responsive].GetPeerCount()
 	if responsivePeersCount < C_peerCount {
+		// Fetch the initial list of responsive peers.
 		responsivePeerList := pm.getPeersHelper(pm.peerDBs[locName][Responsive], responsivePeersCount)
-		responsivePeerList = append(responsivePeerList, pm.getLastResortPeers(location)...)
+
+		// Map to track unique peers.
+		uniquePeers := make(map[p2p.PeerID]bool)
+		for _, peer := range responsivePeerList {
+			uniquePeers[peer] = true
+		}
+
+		// Append peers from last resort ensuring they are unique.
+		lastResortPeers := pm.getLastResortPeers(location)
+		for _, peer := range lastResortPeers {
+			if !uniquePeers[peer] {
+				responsivePeerList = append(responsivePeerList, peer)
+				uniquePeers[peer] = true
+			}
+		}
 
 		return responsivePeerList
 	}
 	return pm.getPeersHelper(pm.peerDBs[locName][Responsive], C_peerCount)
-
 }
 
 func (pm *BasicPeerManager) getLastResortPeers(location common.Location) []p2p.PeerID {
