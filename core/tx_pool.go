@@ -2102,7 +2102,11 @@ func (pool *TxPool) poolLimiterGoroutine() {
 				pool.logger.Infof("Queued pool size exceeded limit: %d > %d", queued, pool.config.GlobalQueue)
 				pool.mu.Lock()
 				for _, list := range pool.queue {
-					caps := list.Cap(int(list.Len() - int(pool.config.AccountSlots)))
+					capacity := int(list.Len() - int(pool.config.AccountQueue))
+					if capacity < 0 {
+						capacity = 0
+					}
+					caps := list.Cap(capacity)
 					for _, tx := range caps {
 						hash := tx.Hash()
 						pool.all.Remove(hash, pool.logger)
