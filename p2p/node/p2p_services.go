@@ -86,6 +86,11 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	case *types.WorkObject:
 		if block, ok := recvdType.(*types.WorkObject); ok {
 			switch data := reqData.(type) {
+			case *types.WorkObjectBlockView, *types.WorkObjectHeaderView:
+				if block.Hash() == data.(*types.WorkObject).Hash() {
+					return data, nil
+				}
+				return nil, errors.Errorf("invalid response: expected block with hash %s, got %s", data.(*types.WorkObject).Hash(), block.Hash())
 			case common.Hash:
 				if block.Hash() == data {
 					return block, nil

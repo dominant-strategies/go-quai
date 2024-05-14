@@ -116,7 +116,7 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, location common.Location, requestData interface{}, responseDataType interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, resultChan chan interface{}) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -215,7 +215,7 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 		}
 	}
 
-	p.requestFromPeers(topic, location, requestData, responseDataType, resultChan)
+	p.requestFromPeers(topic, requestData, resultChan)
 	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
 	// Right now this creates too many streams, so don't call this until we have a better solution
 	// p.queryDHT(location, requestData, responseDataType, resultChan)

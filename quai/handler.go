@@ -238,10 +238,10 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) {
 				// If the blockHash for the asked number is not present in the
 				// appended database we ask the peer for the block with this hash
 				if block == nil {
-					resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObject{})
+					resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObjectBlockView{})
 					block := <-resultCh
 					if block != nil {
-						h.core.WriteBlock(block.(*types.WorkObject))
+						h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 					}
 				}
 			}
