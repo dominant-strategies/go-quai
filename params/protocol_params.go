@@ -196,8 +196,6 @@ var (
 	TimeFactor                        = big.NewInt(7)
 	TimeToStartTx              uint64 = 0 * BlocksPerDay
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
-	PrimeEntropyTarget                = big.NewInt(441)                                             // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
-	RegionEntropyTarget               = big.NewInt(21)                                              // This is TimeFactor*common.NumZonesInRegion
 	DifficultyAdjustmentPeriod        = big.NewInt(360)                                             // This is the number of blocks over which the average has to be taken
 	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
 	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(1), big.NewInt(GWei))           // 0.000000001 Quai
@@ -205,3 +203,16 @@ var (
 	WorkSharesThresholdDiff           = 3 // Number of bits lower than the target that the default consensus engine uses
 	WorkSharesInclusionDepth          = 7 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 )
+
+// This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
+func PrimeEntropyTarget(expansionNum uint8) *big.Int {
+	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(expansionNum)
+	timeFactorMultiplied := new(big.Int).Mul(TimeFactor, TimeFactor)
+	return new(big.Int).Mul(timeFactorMultiplied, new(big.Int).SetUint64(numZones*numRegions))
+}
+
+// This is TimeFactor*common.NumZonesInRegion
+func RegionEntropyTarget(expansionNum uint8) *big.Int {
+	_, numZones := common.GetHierarchySizeForExpansionNumber(expansionNum)
+	return new(big.Int).Mul(TimeFactor, new(big.Int).SetUint64(numZones))
+}

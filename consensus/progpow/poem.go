@@ -19,6 +19,7 @@ func (progpow *Progpow) CalcOrder(header *types.WorkObject) (*big.Int, int, erro
 	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
 	}
+	expansionNum := header.ExpansionNumber()
 
 	// Verify the seal and get the powHash for the given header
 	powHash, err := progpow.verifySeal(header.WorkObjectHeader())
@@ -36,10 +37,10 @@ func (progpow *Progpow) CalcOrder(header *types.WorkObject) (*big.Int, int, erro
 	// the given header determines the prime block
 	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
 	totalDeltaSPrime = new(big.Int).Add(totalDeltaSPrime, intrinsicS)
-	primeDeltaSTarget := new(big.Int).Div(params.PrimeEntropyTarget, big2)
+	primeDeltaSTarget := new(big.Int).Div(params.PrimeEntropyTarget(expansionNum), big2)
 	primeDeltaSTarget = new(big.Int).Mul(zoneThresholdS, primeDeltaSTarget)
 
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.PrimeEntropyTarget))
+	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
 	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaSPrime.Cmp(primeDeltaSTarget) > 0 {
 		return intrinsicS, common.PRIME_CTX, nil
 	}
@@ -47,9 +48,9 @@ func (progpow *Progpow) CalcOrder(header *types.WorkObject) (*big.Int, int, erro
 	// REGION
 	// Compute the total accumulated entropy since the last region block
 	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-	regionDeltaSTarget := new(big.Int).Div(params.RegionEntropyTarget, big2)
+	regionDeltaSTarget := new(big.Int).Div(params.RegionEntropyTarget(expansionNum), big2)
 	regionDeltaSTarget = new(big.Int).Mul(zoneThresholdS, regionDeltaSTarget)
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.RegionEntropyTarget))
+	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
 	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
 		return intrinsicS, common.REGION_CTX, nil
 	}
@@ -262,7 +263,7 @@ func (progpow *Progpow) CalcRank(chain consensus.GenesisReader, header *types.Wo
 	for i := common.InterlinkDepth; i > 0; i-- {
 		extraBits := math.Pow(2, float64(i))
 		primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(big.NewInt(int64(extraBits))))
-		primeBlockEntropyThreshold = new(big.Int).Add(primeBlockEntropyThreshold, common.BitsToBigBits(params.PrimeEntropyTarget))
+		primeBlockEntropyThreshold = new(big.Int).Add(primeBlockEntropyThreshold, common.BitsToBigBits(params.PrimeEntropyTarget(header.ExpansionNumber())))
 		if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 {
 			return i, nil
 		}
