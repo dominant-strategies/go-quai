@@ -344,14 +344,13 @@ func (pm *BasicPeerManager) GetPeers(location common.Location, data interface{},
 func (pm *BasicPeerManager) queryDHT(location common.Location, data interface{}, peerList map[p2p.PeerID]struct{}, peerCount int) map[p2p.PeerID]struct{} {
 	// create a Cid from the slice location
 	topicName, _ := pubsubManager.TopicName(pm.genesis, location, data)
-	shardCid := pubsubManager.TopicToCid(topicName)
+	topicCid := pubsubManager.TopicToCid(topicName)
 
 	// Internal list of peers from the dht
 	dhtPeers := make(map[p2p.PeerID]struct{})
-	log.Global.Infof("Querying DHT for slice Cid %s", shardCid)
+	log.Global.Infof("Querying DHT for slice Cid %s", topicCid)
 	// query the DHT for peers in the slice
-	// TODO: need to find providers of a topic, not a shard
-	for peer := range pm.dht.FindProvidersAsync(pm.ctx, shardCid, peerCount) {
+	for peer := range pm.dht.FindProvidersAsync(pm.ctx, topicCid, peerCount) {
 		if peer.ID != pm.selfID {
 			dhtPeers[peer.ID] = struct{}{}
 		}
