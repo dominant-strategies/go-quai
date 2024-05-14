@@ -78,6 +78,10 @@ func (tx *Transaction) SetInner(inner TxData) {
 	tx.setDecoded(inner.copy(), 0)
 }
 
+func (tx *Transaction) SetInnerNoCopy(inner TxData) {
+	tx.setDecoded(inner, 0)
+}
+
 // TxData is the underlying data of a transaction.
 //
 // This is implemented by QuaiTx, ExternalTx, InternalToExternal, and QiTx.
@@ -288,7 +292,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 			nonce := BlockNonce(uint64ToByteArr(*protoTx.WorkNonce))
 			quaiTx.WorkNonce = &nonce
 		}
-		tx.SetInner(&quaiTx)
+		tx.SetInnerNoCopy(&quaiTx)
 
 	case 1:
 		if protoTx.Gas == nil {
@@ -326,7 +330,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		etx.ETXIndex = uint16(protoTx.GetEtxIndex())
 		etx.Sender = common.BytesToAddress(protoTx.GetEtxSender(), location)
 
-		tx.SetInner(&etx)
+		tx.SetInnerNoCopy(&etx)
 
 	case 2:
 		if protoTx.TxIns == nil {
@@ -379,7 +383,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 			nonce := BlockNonce(uint64ToByteArr(*protoTx.WorkNonce))
 			qiTx.WorkNonce = &nonce
 		}
-		tx.SetInner(&qiTx)
+		tx.SetInnerNoCopy(&qiTx)
 
 	default:
 		return errors.New("invalid transaction type")
