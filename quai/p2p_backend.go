@@ -89,6 +89,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		// TODO: Determine if the block information was lively or stale and rate
 		// the peer accordingly
 		backend.WriteBlock(&data)
+		// If it was a good broadcast, mark the peer as lively
+		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	case types.WorkObjectHeaderView:
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
@@ -99,6 +101,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		if !backend.ProcessingState() && backend.NodeCtx() == common.ZONE_CTX {
 			backend.WriteBlock(data.ConvertToBlockView().WorkObject)
 		}
+		// If it was a good broadcast, mark the peer as lively
+		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	case types.Header:
 	case types.Transactions:
 		backend := *qbe.GetBackend(nodeLocation)
@@ -117,6 +121,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 			return false
 		}
 		backend.SendWorkShare(&data)
+		// If it was a good broadcast, mark the peer as lively
+		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	default:
 		log.Global.WithFields(log.Fields{
 			"peer":     sourcePeer,
@@ -126,9 +132,6 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		qbe.p2pBackend.BanPeer(sourcePeer)
 		return false
 	}
-
-	// If it was a good broadcast, mark the peer as lively
-	qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	return true
 }
 
