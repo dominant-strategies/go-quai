@@ -2,6 +2,7 @@ package peerManager
 
 import (
 	"context"
+	"maps"
 	"net"
 	"runtime/debug"
 	"strings"
@@ -89,7 +90,7 @@ type PeerManager interface {
 	// Returns c_peerCount peers starting at the requested quality level of peers
 	// If there are not enough peers at the requested quality, it will return lower quality peers
 	// If there still aren't enough peers, it will query the DHT for more
-	GetPeers(location common.Location, data interface{}, quality PeerQuality) []p2p.PeerID
+	GetPeers(location common.Location, data interface{}, quality PeerQuality) map[p2p.PeerID]struct{}
 
 	// Increases the peer's liveliness score
 	MarkLivelyPeer(p2p.PeerID, common.Location)
@@ -296,8 +297,8 @@ func (pm *BasicPeerManager) GetSelfID() p2p.PeerID {
 	return pm.selfID
 }
 
-func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) []p2p.PeerID {
-	peerSubset := make([]p2p.PeerID, 0, numPeers)
+func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) map[p2p.PeerID]struct{} {
+	peerSubset := make(map[p2p.PeerID]struct{})
 	q := query.Query{
 		Limit: numPeers,
 	}
@@ -311,14 +312,14 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 		if err != nil {
 			return nil
 		}
-		peerSubset = append(peerSubset, peerID)
+		peerSubset[peerID] = struct{}{}
 	}
 
 	return peerSubset
 }
 
-func (pm *BasicPeerManager) GetPeers(location common.Location, data interface{}, quality PeerQuality) []p2p.PeerID {
-	var peerList []p2p.PeerID
+func (pm *BasicPeerManager) GetPeers(location common.Location, data interface{}, quality PeerQuality) map[p2p.PeerID]struct{} {
+	var peerList map[p2p.PeerID]struct{}
 	switch quality {
 	case Best:
 		peerList = pm.getBestPeersWithFallback(location)
@@ -340,26 +341,27 @@ func (pm *BasicPeerManager) GetPeers(location common.Location, data interface{},
 	return pm.queryDHT(location, data, peerList, C_peerCount-lenPeer)
 }
 
-func (pm *BasicPeerManager) queryDHT(location common.Location, data interface{}, peerList []p2p.PeerID, peerCount int) []p2p.PeerID {
+func (pm *BasicPeerManager) queryDHT(location common.Location, data interface{}, peerList map[p2p.PeerID]struct{}, peerCount int) map[p2p.PeerID]struct{} {
 	// create a Cid from the slice location
 	topicName, _ := pubsubManager.TopicName(pm.genesis, location, data)
 	shardCid := pubsubManager.TopicToCid(topicName)
 
 	// Internal list of peers from the dht
-	dhtPeers := make([]p2p.PeerID, 0, peerCount)
+	dhtPeers := make(map[p2p.PeerID]struct{})
 	log.Global.Infof("Querying DHT for slice Cid %s", shardCid)
 	// query the DHT for peers in the slice
 	// TODO: need to find providers of a topic, not a shard
 	for peer := range pm.dht.FindProvidersAsync(pm.ctx, shardCid, peerCount) {
 		if peer.ID != pm.selfID {
-			dhtPeers = append(dhtPeers, peer.ID)
+			dhtPeers[peer.ID] = struct{}{}
 		}
 	}
 	log.Global.Warn("Found the following peers from the DHT: ", dhtPeers)
-	return append(peerList, dhtPeers...)
+	maps.Copy(peerList, dhtPeers)
+	return peerList
 }
 
-func (pm *BasicPeerManager) getBestPeersWithFallback(location common.Location) []p2p.PeerID {
+func (pm *BasicPeerManager) getBestPeersWithFallback(location common.Location) map[p2p.PeerID]struct{} {
 	locName := location.Name()
 	if pm.peerDBs[locName] == nil {
 		// There have not been any peers added to this topic
@@ -369,27 +371,26 @@ func (pm *BasicPeerManager) getBestPeersWithFallback(location common.Location) [
 	bestPeersCount := pm.peerDBs[locName][Best].GetPeerCount()
 	if bestPeersCount < C_peerCount {
 		bestPeerList := pm.getPeersHelper(pm.peerDBs[locName][Best], bestPeersCount)
-		bestPeerList = append(bestPeerList, pm.getResponsivePeersWithFallback(location)...)
+		maps.Copy(bestPeerList, pm.getResponsivePeersWithFallback(location))
 		return bestPeerList
 	}
 	return pm.getPeersHelper(pm.peerDBs[locName][Best], C_peerCount)
 }
 
-func (pm *BasicPeerManager) getResponsivePeersWithFallback(location common.Location) []p2p.PeerID {
+func (pm *BasicPeerManager) getResponsivePeersWithFallback(location common.Location) map[p2p.PeerID]struct{} {
 	locName := location.Name()
 
 	responsivePeersCount := pm.peerDBs[locName][Responsive].GetPeerCount()
 	if responsivePeersCount < C_peerCount {
 		responsivePeerList := pm.getPeersHelper(pm.peerDBs[locName][Responsive], responsivePeersCount)
-		responsivePeerList = append(responsivePeerList, pm.getLastResortPeers(location)...)
-
+		maps.Copy(responsivePeerList, pm.getLastResortPeers(location))
 		return responsivePeerList
 	}
 	return pm.getPeersHelper(pm.peerDBs[locName][Responsive], C_peerCount)
 
 }
 
-func (pm *BasicPeerManager) getLastResortPeers(location common.Location) []p2p.PeerID {
+func (pm *BasicPeerManager) getLastResortPeers(location common.Location) map[p2p.PeerID]struct{} {
 	return pm.getPeersHelper(pm.peerDBs[location.Name()][LastResort], C_peerCount)
 }
 

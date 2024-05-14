@@ -132,7 +132,7 @@ func (p *P2PNode) requestFromPeers(location common.Location, data interface{}, d
 		}).Debug("Requesting data from peers")
 
 		var requestWg sync.WaitGroup
-		for _, peerID := range peers {
+		for peerID := range peers {
 			requestWg.Add(1)
 			go func(peerID peer.ID) {
 				defer func() {
