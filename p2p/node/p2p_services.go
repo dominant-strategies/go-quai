@@ -82,27 +82,42 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	}
 
 	// Check the received data type & hash matches the request
-	switch topic.GetTopicType().(type) {
-	case *types.WorkObject:
-		if block, ok := recvdType.(*types.WorkObject); ok {
-			switch data := reqData.(type) {
-			case *types.WorkObjectBlockView, *types.WorkObjectHeaderView:
-				if block.Hash() == data.(*types.WorkObject).Hash() {
-					return data, nil
+	switch respDataType.(type) {
+	// First, check that the recvdType is the same as the expected type
+	case *types.WorkObjectBlockView, *types.WorkObjectHeaderView:
+		switch reqData := reqData.(type) {
+		case common.Hash:
+			// Next, if it was a requestByHash, verify the hash matches
+			switch recvdType := recvdType.(type) {
+			// Finally, BlockView and HeaderView have different hash functions
+			case *types.WorkObjectBlockView:
+				if reqData == recvdType.Hash() {
+					return recvdType, nil
 				}
-				return nil, errors.Errorf("invalid response: expected block with hash %s, got %s", data.(*types.WorkObject).Hash(), block.Hash())
-			case common.Hash:
-				if block.Hash() == data {
-					return block, nil
+			case *types.WorkObjectHeaderView:
+				if reqData == recvdType.Hash() {
+					return recvdType, nil
 				}
-				return nil, errors.Errorf("invalid response: expected block with hash %s, got %s", data, block.Hash())
-			case *big.Int:
-				nodeCtx := topic.GetLocation().Context()
-				if block.Number(nodeCtx).Cmp(data) == 0 {
-					return block, nil
-				}
-				return nil, errors.Errorf("invalid response: expected block with number %s, got %s", data, block.Number(nodeCtx))
+			default:
+				return nil, errors.New("invalid response")
 			}
+			return nil, errors.Errorf("invalid response: got block with different hash")
+		case *big.Int:
+			// If it was a requestByNumber, just verify the number matches
+			nodeCtx := topic.GetLocation().Context()
+			switch block := recvdType.(type) {
+			case *types.WorkObjectBlockView:
+				if block.Number(nodeCtx).Cmp(reqData) == 0 {
+					return recvdType, nil
+				}
+			case *types.WorkObjectHeaderView:
+				if block.Number(nodeCtx).Cmp(reqData) == 0 {
+					return recvdType, nil
+				}
+			default:
+				return nil, errors.New("invalid response")
+			}
+			return nil, errors.Errorf("invalid response: got block with different number")
 		}
 		return nil, errors.New("block request invalid response")
 	case *types.Header:
