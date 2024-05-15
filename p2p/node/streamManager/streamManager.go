@@ -50,6 +50,9 @@ type StreamManager interface {
 
 	// WriteMessageToStream writes the given message into the given stream
 	WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte) error
+
+	// Releases a semaphore slot for the given peerID
+	ClosePendingRequest(peerID p2p.PeerID) error
 }
 
 type basicStreamManager struct {
@@ -187,5 +190,15 @@ func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream net
 	if err != nil {
 		return errors.Wrap(err, "failed to write message to stream")
 	}
+
+	return nil
+}
+
+func (sm *basicStreamManager) ClosePendingRequest(peerID p2p.PeerID) error {
+	wrappedStream, found := sm.streamCache.Get(peerID)
+	if !found {
+		return errors.New("stream not found")
+	}
+	<-wrappedStream.(*streamWrapper).semaphore
 	return nil
 }

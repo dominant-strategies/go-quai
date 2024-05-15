@@ -69,12 +69,14 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	var recvdType interface{}
 	select {
 	case recvdType = <-dataChan:
+		p.GetPeerManager().ClosePendingRequest(peerID)
 		break
 	case <-time.After(requestManager.C_requestTimeout):
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
 		}).Warn("Peer did not respond in time")
 		p.peerManager.MarkUnresponsivePeer(peerID, location)
+		p.GetPeerManager().ClosePendingRequest(peerID)
 		return nil, errors.New("peer did not respond in time")
 	}
 
