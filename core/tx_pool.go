@@ -283,7 +283,6 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 	qiMu        sync.RWMutex
-	stateMu     sync.RWMutex
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -1157,17 +1156,14 @@ func (pool *TxPool) addQiTx(tx *types.Transaction) error {
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
-	pool.stateMu.RLock()
 	fee, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 	if err != nil {
-		pool.stateMu.RUnlock()
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"err": err,
 		}).Debug("Invalid Qi transaction")
 		return err
 	}
-	pool.stateMu.RUnlock()
 	txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
 	if err != nil {
 		return err
@@ -1214,10 +1210,8 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 	}
 	for _, tx := range txs {
 
-		pool.stateMu.RLock()
 		fee, _, err := ProcessQiTx(tx, pool.chain, false, true, pool.chain.CurrentBlock(), pool.currentState, &gp, new(uint64), pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, &etxRLimit, &etxPLimit)
 		if err != nil {
-			pool.stateMu.RUnlock()
 			pool.logger.WithFields(logrus.Fields{
 				"tx":  tx.Hash().String(),
 				"err": err,
@@ -1225,7 +1219,6 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
-		pool.stateMu.RUnlock()
 		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
 		if err != nil {
 			errs = append(errs, err)
@@ -1758,9 +1751,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return
 	}
-	pool.stateMu.Lock()
 	pool.currentState = statedb
-	pool.stateMu.Unlock()
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit()
 
