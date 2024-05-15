@@ -249,6 +249,7 @@ func (p *P2PNode) pickCache(datatype interface{}, location common.Location) *lru
 
 // Add a datagram into the corresponding cache
 func (p *P2PNode) cacheAdd(hash common.Hash, data interface{}, location common.Location) {
+	return
 	cache := p.pickCache(data, location)
 	cache.Add(hash, data)
 }
