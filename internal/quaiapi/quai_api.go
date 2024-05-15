@@ -877,8 +877,10 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[str
 	} else if pendingHeader == nil {
 		return nil, errors.New("no pending header found")
 	}
+	// Only keep the Header in the body
+	pendingHeaderForMining := pendingHeader.WithBody(pendingHeader.Header(), nil, nil, nil, nil, nil)
 	// Marshal the response.
-	marshaledPh := pendingHeader.RPCMarshalWorkObject()
+	marshaledPh := pendingHeaderForMining.RPCMarshalWorkObject()
 	return marshaledPh, nil
 }
 
