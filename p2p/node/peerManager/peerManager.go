@@ -298,7 +298,7 @@ func (pm *BasicPeerManager) GetSelfID() p2p.PeerID {
 }
 
 func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) map[p2p.PeerID]struct{} {
-	peerSubset := make(map[p2p.PeerID]struct{})
+	peerSubset := make(map[p2p.PeerID]struct{}, C_peerCount)
 	q := query.Query{
 		Limit: numPeers,
 	}
@@ -364,7 +364,7 @@ func (pm *BasicPeerManager) getBestPeersWithFallback(location common.Location) m
 	locName := location.Name()
 	if pm.peerDBs[locName] == nil {
 		// There have not been any peers added to this topic
-		return nil
+		return make(map[peer.ID]struct{}, C_peerCount)
 	}
 
 	bestPeersCount := pm.peerDBs[locName][Best].GetPeerCount()
