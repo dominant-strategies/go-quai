@@ -35,7 +35,8 @@ message QuaiResponseMessage {
     uint32 id = 1;
     common.ProtoLocation location = 2;
     oneof response {
-        block.ProtoWorkObject work_object = 3;
+        block.ProtoWorkObjectHeaderView work_object = 3;
+        block.ProtoWorkObjectBlockView work_object = 3;
         block.ProtoTransaction transaction = 4;
         common.ProtoHash block_hash = 5;
         trie.ProtoTrieNode trie_node = 6;
