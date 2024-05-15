@@ -21,10 +21,12 @@ message QuaiRequestMessage {
         bytes number = 4;
     }
     oneof request {
-        block.ProtoWorkObject work_object = 5;
-        block.ProtoTransaction transaction = 6; 
-        common.ProtoHash block_hash = 7;
-        trie.ProtoTrieNode trie_node = 8;
+        block.ProtoWorkObjectBlockView work_object_block = 5;
+        block.ProtoWorkObjectShareView work_object_share = 6;
+        block.ProtoWorkObjectHeaderView work_object_header = 7;
+        block.ProtoTransaction transaction = 8;
+        common.ProtoHash block_hash = 9;
+        trie.ProtoTrieNode trie_node = 10;
     }
 }
 

@@ -104,6 +104,20 @@ message ProtoWorkObject {
 
 message ProtoWorkObjects { repeated ProtoWorkObject work_objects = 1; }
 
+message ProtoWorkObjectBlockView {
+    optional ProtoWorkObjectHeader wo_header = 1;
+    optional ProtoWorkObjectBody wo_body = 2;
+}
+
+message ProtoWorkObjectHeaderView {
+    optional ProtoWorkObjectHeader wo_header = 1;
+}
+
+message ProtoWorkObjectShareView {
+    optional ProtoWorkObjectHeader wo_header = 1;
+    optional ProtoWorkObjectBody wo_body = 2;
+}
+
 message ProtoAccessTuple {
   bytes address = 1;
   repeated common.ProtoHash storage_key = 2;

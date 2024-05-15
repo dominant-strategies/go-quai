@@ -38,8 +38,10 @@ func EncodeQuaiRequest(id uint32, location common.Location, reqData interface{},
 	}
 
 	switch respDataType.(type) {
-	case *types.WorkObject:
-		reqMsg.Request = &QuaiRequestMessage_WorkObject{}
+	case *types.WorkObjectBlockView:
+		reqMsg.Request = &QuaiRequestMessage_WorkObjectBlock{}
+	case *types.WorkObjectHeaderView:
+		reqMsg.Request = &QuaiRequestMessage_WorkObjectHeader{}
 	case *types.Transaction:
 		reqMsg.Request = &QuaiRequestMessage_Transaction{}
 	case common.Hash:
@@ -81,8 +83,10 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 	// Decode the request type
 	var reqType interface{}
 	switch t := reqMsg.Request.(type) {
-	case *QuaiRequestMessage_WorkObject:
-		reqType = &types.WorkObject{}
+	case *QuaiRequestMessage_WorkObjectBlock:
+		reqType = &types.WorkObjectBlockView{}
+	case *QuaiRequestMessage_WorkObjectHeader:
+		reqType = &types.WorkObjectHeaderView{}
 	case *QuaiRequestMessage_Transaction:
 		reqType = &types.Transaction{}
 	case *QuaiRequestMessage_BlockHash:
@@ -108,8 +112,15 @@ func EncodeQuaiResponse(id uint32, location common.Location, data interface{}) (
 	}
 
 	switch data := data.(type) {
-	case *types.WorkObject:
+	case *types.WorkObjectBlockView:
 		protoWorkObject, err := data.ProtoEncode(types.BlockObject)
+		if err != nil {
+			return nil, err
+		}
+		respMsg.Response = &QuaiResponseMessage_WorkObject{WorkObject: protoWorkObject}
+	
+	case *types.WorkObjectHeaderView:
+		protoWorkObject, err := data.ProtoEncode(types.HeaderObject)
 		if err != nil {
 			return nil, err
 		}

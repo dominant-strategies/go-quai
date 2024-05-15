@@ -125,7 +125,7 @@ func (h *handler) missingBlockLoop() {
 				resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObjectBlockView{})
 				block := <-resultCh
 				if block != nil {
-					h.core.WriteBlock(block.(*types.WorkObject))
+					h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 				}
 			}()
 		case <-h.missingBlockSub.Err():
@@ -241,7 +241,7 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) {
 					resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObjectBlockView{})
 					block := <-resultCh
 					if block != nil {
-						h.core.WriteBlock(block.(*types.WorkObject))
+						h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 					}
 				}
 			}
