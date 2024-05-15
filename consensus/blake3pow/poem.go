@@ -198,7 +198,7 @@ func (blake3pow *Blake3pow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error
 			cBigBits := blake3pow.IntrinsicLogS(powHash)
 			thresholdBigBits := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
 			wsEntropy = new(big.Int).Sub(thresholdBigBits, cBigBits)
-			extraBits := new(big.Int).Quo(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(mantBits)), nil))
+			extraBits := new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(mantBits)), nil))
 			wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), new(big.Int).Add(extraBits, big.NewInt(1)), nil))
 		} else {
 			wsEntropy = new(big.Int).Set(blake3pow.IntrinsicLogS(powHash))
