@@ -20,7 +20,7 @@ import (
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
-func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}) (interface{}, error) {
+func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}) (interface{}, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -49,7 +49,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	defer p.requestManager.CloseRequest(id)
 
 	// Create the corresponding data request
-	requestBytes, err := pb.EncodeQuaiRequest(id, topic.GetLocation(), reqData, topic.GetTopicType())
+	requestBytes, err := pb.EncodeQuaiRequest(id, topic.GetLocation(), reqData, respDataType)
 	if err != nil {
 		return nil, err
 	}

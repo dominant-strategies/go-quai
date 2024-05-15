@@ -116,7 +116,7 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -146,14 +146,14 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 					}
 				}()
 				defer requestWg.Done()
-				p.requestAndWait(peerID, topic, requestData, resultChan)
+				p.requestAndWait(peerID, topic, requestData, respDataType, resultChan)
 			}(peerID)
 		}
 		requestWg.Wait()
 	}()
 }
 
-func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -164,7 +164,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 	}()
 	var recvd interface{}
 	var err error
-	if recvd, err = p.requestFromPeer(peerID, topic, reqData); err == nil {
+	if recvd, err = p.requestFromPeer(peerID, topic, reqData, respDataType); err == nil {
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
 			"topic":  topic.String(),
@@ -215,7 +215,7 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 		}
 	}
 
-	p.requestFromPeers(topic, requestData, resultChan)
+	p.requestFromPeers(topic, requestData, responseDataType, resultChan)
 	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
 	// Right now this creates too many streams, so don't call this until we have a better solution
 	// p.queryDHT(location, requestData, responseDataType, resultChan)
