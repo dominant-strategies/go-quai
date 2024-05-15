@@ -604,3 +604,7 @@ func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error)
 func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
 	return pm.streamManager.CloseStream(peerID)
 }
+
+func (pm *BasicPeerManager) WriteMessageToStream(peerId p2p.PeerID, stream network.Stream, msg []byte) error {
+	return pm.streamManager.WriteMessageToStream(peerId, stream, msg)
+}

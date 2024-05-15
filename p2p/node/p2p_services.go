@@ -56,7 +56,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, location common.Location, data
 	}
 
 	// Send the request to the peer
-	err = common.WriteMessageToStream(stream, requestBytes)
+	err = p.GetPeerManager().WriteMessageToStream(peerID, stream, requestBytes)
 	if err != nil {
 		return nil, err
 	}

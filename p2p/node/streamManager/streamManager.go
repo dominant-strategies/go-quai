@@ -47,6 +47,9 @@ type StreamManager interface {
 
 	// CloseStream goes through all the steps to properly close and remove a stream's resources
 	CloseStream(peer.ID) error
+
+	// WriteMessageToStream writes the given message into the given stream
+	WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte) error
 }
 
 type basicStreamManager struct {
