@@ -1016,7 +1016,7 @@ type blockDetailStats struct {
 	QuaiPerQi    string   `json:"quaiPerQi"`
 	QuaiReward   string   `json:"quaiReward"`
 	QiReward     string   `json:"qiReward"`
-	CoinType     bool     `json:"coinType"`
+	QiType       bool     `json:"qiType"`
 }
 
 // Everyone sends every block
@@ -1243,12 +1243,12 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 	if block == nil {
 		return nil
 	}
-	coinType := block.Coinbase().IsInQiLedgerScope()
+	qiType := block.Coinbase().IsInQiLedgerScope()
 	difficulty := block.Difficulty().String()
 	quaiPerQi := misc.QiToQuai(block, big.NewInt(1)).String()
 	var quaiReward *big.Int
 	var qiReward *big.Int
-	if coinType {
+	if qiType {
 		qiReward = misc.CalculateReward(block)
 		quaiReward = misc.QiToQuai(block, qiReward)
 	} else {
@@ -1268,7 +1268,7 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		QuaiPerQi:    quaiPerQi,
 		QuaiReward:   quaiReward.String(),
 		QiReward:     qiReward.String(),
-		CoinType:     coinType,
+		QiType:       qiType,
 	}
 }
 
