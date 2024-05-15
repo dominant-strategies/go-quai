@@ -667,7 +667,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.AddressBytes]typ
 			}
 		}
 		if len(txs) > 0 {
-			pending[addr.Bytes20()] = txs
+			pending[common.AddressBytes(addr)] = txs
 		}
 	}
 	return pending, nil
@@ -1170,6 +1170,7 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
+		tx.SetSigChecked()
 		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
 		if err != nil {
 			errs = append(errs, err)

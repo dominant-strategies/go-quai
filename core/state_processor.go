@@ -267,11 +267,10 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 	groupSize := len(transactions) / numGoroutines // Split the block into n groups for parallel processing
 	var wg sync.WaitGroup
 	numInternalTxs := len(transactions)
-	// Each goroutine has a sub-map of senders (temporary cache for senders of internal txs)
-	var sendersArray []map[common.Hash]*common.InternalAddress = make([]map[common.Hash]*common.InternalAddress, numGoroutines)
+	// Each goroutine tracks how many senders were found
+	foundArray := make([]uint, numGoroutines)
 	p.hc.pool.SendersMu.RLock() // Prevent the txpool from grabbing the lock during the entire block tx lookup
 	for i := 0; i < numGoroutines; i++ {
-		sendersArray[i] = make(map[common.Hash]*common.InternalAddress) // Initialize the sub-map
 		wg.Add(1)
 		go func(i int) {
 			var subTransactions types.Transactions
@@ -282,14 +281,22 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			}
 			for _, tx := range subTransactions {
 				if tx.Type() == types.QuaiTxType {
-					if sender, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
-						sendersArray[i][tx.Hash()] = &sender // This pointer must never be modified
+					if tx.HasFromCached() {
+						continue
+					}
+					if sender, ok := p.hc.pool.PeekSenderNoLock(tx.Hash(nodeLocation...)); ok {
+						tx.StoreFrom(sender, p.hc.pool.signer)
+						foundArray[i]++
 					} else {
 						// TODO: calcuate the sender and add it to the pool senders cache in case of reorg (not necessary for now)
 					}
 				} else if tx.Type() == types.QiTxType {
+					if tx.SigChecked() {
+						continue
+					}
 					if _, ok := p.hc.pool.PeekSenderNoLock(tx.Hash()); ok {
-						sendersArray[i][tx.Hash()] = &common.InternalAddress{}
+						tx.SetSigChecked()
+						foundArray[i]++
 					}
 				}
 			}
@@ -299,14 +306,10 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 	wg.Wait()
 	p.hc.pool.SendersMu.RUnlock()
 
-	// Merge the sub-maps into the main map
-	senders := make(map[common.Hash]*common.InternalAddress)
-	for _, subMap := range sendersArray {
-		for k, v := range subMap {
-			senders[k] = v
-		}
+	numFound := uint(0) // for stats/debugging purposes
+	for _, found := range foundArray {
+		numFound += found
 	}
-	sendersArray = nil
 
 	timeSenders = time.Since(startTimeSenders)
 	blockContext, err := NewEVMBlockContext(header, p.hc, nil)
@@ -339,11 +342,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 		startProcess := time.Now()
 		if tx.Type() == types.QiTxType {
 			qiTimeBefore := time.Now()
-			checkSig := true
-			if _, ok := senders[tx.Hash()]; ok {
-				checkSig = false
-			}
-			fees, etxs, err := ProcessQiTx(tx, p.hc, true, checkSig, header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
+			fees, etxs, err := ProcessQiTx(tx, p.hc, true, !tx.SigChecked(), header, statedb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit)
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -355,7 +354,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			continue
 		}
 
-		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
+		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), tx.FromInternal())
 		if err != nil {
 			return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -592,7 +591,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 	p.logger.WithFields(log.Fields{
 		"signing time":                common.PrettyDuration(timeSign),
 		"senders cache time":          common.PrettyDuration(timeSenders),
-		"percent cached internal txs": fmt.Sprintf("%.2f", float64(len(senders))/float64(numInternalTxs)*100),
+		"percent cached internal txs": fmt.Sprintf("%.2f", float64(numFound)/float64(numInternalTxs)*100),
 		"prepare state time":          common.PrettyDuration(timePrepare),
 		"etx time":                    common.PrettyDuration(timeEtx),
 		"tx time":                     common.PrettyDuration(timeTx),
