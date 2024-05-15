@@ -61,6 +61,9 @@ func (tx *QuaiTx) copy() TxData {
 		V:          new(big.Int),
 		R:          new(big.Int),
 		S:          new(big.Int),
+		ParentHash: tx.ParentHash,
+		MixHash:    tx.MixHash,
+		WorkNonce:  tx.WorkNonce,
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
