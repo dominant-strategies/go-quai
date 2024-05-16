@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"net"
+	"reflect"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -343,19 +344,25 @@ func (pm *BasicPeerManager) GetPeers(location common.Location, data interface{},
 
 func (pm *BasicPeerManager) queryDHT(location common.Location, data interface{}, peerList map[p2p.PeerID]struct{}, peerCount int) map[p2p.PeerID]struct{} {
 	// create a Cid from the slice location
-	topicName, _ := pubsubManager.TopicName(pm.genesis, location, data)
+	topicName, err := pubsubManager.TopicName(pm.genesis, location, data)
+	if err != nil {
+		log.Global.WithFields(log.Fields{
+			"location": location,
+			"dataType": reflect.TypeOf(data),
+		}).Error("Unable to find topic for requested data")
+	}
 	topicCid := pubsubManager.TopicToCid(topicName)
 
 	// Internal list of peers from the dht
 	dhtPeers := make(map[p2p.PeerID]struct{})
-	log.Global.Infof("Querying DHT for slice Cid %s", topicCid)
+	log.Global.WithField("topic", topicName).Infof("Querying DHT for topic")
 	// query the DHT for peers in the slice
 	for peer := range pm.dht.FindProvidersAsync(pm.ctx, topicCid, peerCount) {
 		if peer.ID != pm.selfID {
 			dhtPeers[peer.ID] = struct{}{}
 		}
 	}
-	log.Global.Warn("Found the following peers from the DHT: ", dhtPeers)
+	log.Global.Info("Found the following peers from the DHT: ", dhtPeers)
 	maps.Copy(peerList, dhtPeers)
 	return peerList
 }
