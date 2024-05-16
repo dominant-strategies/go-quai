@@ -166,8 +166,17 @@ func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream net
 		// Indicate an unexpected case where the stream we stored and the stream we are requested to write to are not the same.
 		return errors.New("stream mismatch")
 	}
-	// Make sure the semaphore has space before proceeding to write to the stream
-	wrappedStream.(*streamWrapper).semaphore <- struct{}{}
+
+	// Attempt to acquire semaphore before proceeding
+	select {
+	case wrappedStream.(*streamWrapper).semaphore <- struct{}{}:
+		// Acquired semaphore successfully
+	default:
+		return errors.New("too many pending requests")
+	}
+	defer func() {
+		<-wrappedStream.(*streamWrapper).semaphore
+	}()
 
 	// Set the write deadline
 	if err := stream.SetWriteDeadline(time.Now().Add(c_stream_timeout)); err != nil {
