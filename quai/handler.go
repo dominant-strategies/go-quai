@@ -125,10 +125,18 @@ func (h *handler) missingBlockLoop() {
 						}).Fatal("Go-Quai Panicked")
 					}
 				}()
-				resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObjectBlockView{})
-				block := <-resultCh
-				if block != nil {
-					h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
+				if !h.core.ProcessingState() && h.nodeLocation.Context() == common.ZONE_CTX {
+					resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObjectHeaderView{})
+					block := <-resultCh
+					if block != nil {
+						h.core.WriteBlock(block.(*types.WorkObjectHeaderView).WorkObject)
+					}
+				} else {
+					resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObjectBlockView{})
+					block := <-resultCh
+					if block != nil {
+						h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
+					}
 				}
 				h.recentBlockReqCache.Remove(blockRequest.Hash)
 			}()
