@@ -164,7 +164,28 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 	switch respMsg.Response.(type) {
 	case *QuaiResponseMessage_WorkObjectHeaderView:
 		protoWorkObject := respMsg.GetWorkObjectHeaderView()
-		block := &types.WorkObjectHeaderView{}
+		if protoWorkObject == nil {
+			return id, nil, errors.New("work object header is nil")
+		}
+		block := &types.WorkObjectHeaderView{
+			WorkObject: &types.WorkObject{},
+		}
+		err := block.ProtoDecode(protoWorkObject, *sourceLocation)
+		if err != nil {
+			return id, nil, err
+		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("headers").Inc()
+		}
+		return id, block, nil
+	case *QuaiResponseMessage_WorkObjectBlockView:
+		protoWorkObject := respMsg.GetWorkObjectBlockView()
+		if protoWorkObject == nil {
+			return id, nil, errors.New("work object block is nil")
+		}
+		block := &types.WorkObjectBlockView{
+			WorkObject: &types.WorkObject{},
+		}
 		err := block.ProtoDecode(protoWorkObject, *sourceLocation)
 		if err != nil {
 			return id, nil, err
