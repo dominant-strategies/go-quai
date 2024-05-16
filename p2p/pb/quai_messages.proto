@@ -35,11 +35,11 @@ message QuaiResponseMessage {
     uint32 id = 1;
     common.ProtoLocation location = 2;
     oneof response {
-        block.ProtoWorkObjectHeaderView work_object = 3;
-        block.ProtoWorkObjectBlockView work_object = 3;
-        block.ProtoTransaction transaction = 4;
-        common.ProtoHash block_hash = 5;
-        trie.ProtoTrieNode trie_node = 6;
+        block.ProtoWorkObjectHeaderView work_object_header_view = 3;
+        block.ProtoWorkObjectBlockView work_object_block_view = 4;
+        block.ProtoTransaction transaction = 5;
+        common.ProtoHash block_hash = 6;
+        trie.ProtoTrieNode trie_node = 7;
     }
 }
 

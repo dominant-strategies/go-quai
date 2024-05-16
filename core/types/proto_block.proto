@@ -111,6 +111,7 @@ message ProtoWorkObjectBlockView {
 
 message ProtoWorkObjectHeaderView {
     optional ProtoWorkObjectHeader wo_header = 1;
+    optional ProtoWorkObjectBody wo_body = 2;
 }
 
 message ProtoWorkObjectShareView {
