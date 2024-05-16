@@ -237,6 +237,16 @@ func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common
 	}
 }
 
+func (qbe *QuaiBackend) GetHeader(hash common.Hash, location common.Location) *types.WorkObject {
+	backend := *qbe.GetBackend(location)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return nil
+	}
+	header, _ := backend.HeaderByHash(context.Background(), hash)
+	return header
+}
+
 func (qbe *QuaiBackend) ProcessingState(location common.Location) bool {
 	backend := *qbe.GetBackend(location)
 	if backend == nil {
