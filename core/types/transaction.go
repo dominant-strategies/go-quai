@@ -409,9 +409,7 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		} else {
 			protoTxSigningData.Data = tx.Data()
 		}
-		if tx.To() == nil {
-			protoTxSigningData.To = []byte{}
-		} else {
+		if tx.To() != nil {
 			protoTxSigningData.To = tx.To().Bytes()
 		}
 		protoTxSigningData.GasFeeCap = tx.GasFeeCap().Bytes()
