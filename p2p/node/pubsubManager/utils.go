@@ -31,7 +31,12 @@ type Topic struct {
 
 // gets the name of the topic for the given type of data
 func (t *Topic) buildTopicString() string {
-	baseTopic := strings.Join([]string{t.genesis.String(), t.location.Name()}, "/")
+	var parts []string
+	for _, b := range t.location {
+		parts = append(parts, strconv.Itoa(int(b)))
+	}
+	encodedLocation := strings.Join(parts, ",")
+	baseTopic := strings.Join([]string{t.genesis.String(), encodedLocation}, "/")
 	switch t.data.(type) {
 	case *types.WorkObjectHeaderView, *big.Int, common.Hash:
 		return strings.Join([]string{baseTopic, C_headerType}, "/")
@@ -39,6 +44,8 @@ func (t *Topic) buildTopicString() string {
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/")
 	case *types.Transactions:
 		return strings.Join([]string{baseTopic, C_transactionType}, "/")
+	case *types.WorkObjectHeader:
+		return strings.Join([]string{baseTopic, C_workObjectHeaderType}, "/")
 	default:
 		panic(ErrUnsupportedType)
 	}
@@ -59,7 +66,7 @@ func (t *Topic) GetTopicType() interface{} {
 // gets the name of the topic for the given type of data
 func NewTopic(genesis common.Hash, location common.Location, data interface{}) (*Topic, error) {
 	switch data.(type) {
-	case *types.WorkObjectHeaderView, *types.WorkObjectBlockView, common.Hash, *types.Transactions:
+	case *types.WorkObjectHeader, *types.WorkObjectHeaderView, *types.WorkObjectBlockView, common.Hash, *types.Transactions:
 		t := &Topic{
 			genesis:  genesis,
 			location: location,
@@ -104,7 +111,9 @@ func TopicFromString(genesis common.Hash, topic string) (*Topic, error) {
 	case C_workObjectType:
 		return NewTopic(genesis, location, &types.WorkObjectBlockView{})
 	case C_transactionType:
-		return NewTopic(genesis, location, &types.Transaction{})
+		return NewTopic(genesis, location, &types.Transactions{})
+	case C_workObjectHeaderType:
+		return NewTopic(genesis, location, &types.WorkObjectHeader{})
 	default:
 		return nil, ErrUnsupportedType
 	}

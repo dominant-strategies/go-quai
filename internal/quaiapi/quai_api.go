@@ -710,6 +710,12 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 		if err != nil {
 			s.b.Logger().WithField("err", err).Error("Error broadcasting block")
 		}
+		if nodeCtx == common.ZONE_CTX {
+			err = s.b.BroadcastHeader(block, s.b.NodeLocation())
+			if err != nil {
+				s.b.Logger().WithField("err", err).Error("Error broadcasting header")
+			}
+		}
 	}
 	s.b.Logger().WithFields(log.Fields{
 		"number":   block.Number(s.b.NodeCtx()),

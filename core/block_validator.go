@@ -93,11 +93,13 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 		if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash() {
 			return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash())
 		}
-		if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
-			return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
-		}
-		if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
-			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+		if v.hc.ProcessingState() {
+			if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
+				return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
+			}
+			if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+				return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+			}
 		}
 	}
 	return nil

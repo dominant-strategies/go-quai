@@ -89,6 +89,16 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		// TODO: Determine if the block information was lively or stale and rate
 		// the peer accordingly
 		backend.WriteBlock(&data)
+	case types.WorkObjectHeaderView:
+		backend := *qbe.GetBackend(nodeLocation)
+		if backend == nil {
+			log.Global.Error("no backend found")
+			return false
+		}
+		// Only append this in the case of the slice
+		if !backend.ProcessingState() && backend.NodeCtx() == common.ZONE_CTX {
+			backend.WriteBlock(data.ConvertToBlockView().WorkObject)
+		}
 	case types.Header:
 	case types.Transactions:
 		backend := *qbe.GetBackend(nodeLocation)
@@ -243,6 +253,16 @@ func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common
 	} else {
 		return nil
 	}
+}
+
+func (qbe *QuaiBackend) GetHeader(hash common.Hash, location common.Location) *types.WorkObject {
+	backend := *qbe.GetBackend(location)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return nil
+	}
+	header, _ := backend.HeaderByHash(context.Background(), hash)
+	return header
 }
 
 func (qbe *QuaiBackend) ProcessingState(location common.Location) bool {

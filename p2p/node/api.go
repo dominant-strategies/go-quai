@@ -310,7 +310,7 @@ func (p *P2PNode) GetBlockHashByNumber(number *big.Int, location common.Location
 }
 
 func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.WorkObject {
-	panic("TODO: implement")
+	return p.consensus.GetHeader(hash, location)
 }
 
 func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse {
@@ -322,6 +322,7 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interfa
 	case types.WorkObject:
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	// TODO: send it to consensus
+	case types.WorkObjectHeaderView:
 	case types.Transactions:
 	case types.WorkObjectHeader:
 	default:

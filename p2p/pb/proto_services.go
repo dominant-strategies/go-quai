@@ -269,7 +269,7 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 // Unmarshals a protobuf message into a proto type and converts it to a custom go type
 func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *interface{}, datatype interface{}) error {
 	switch datatype.(type) {
-	case *types.WorkObjectHeaderView, *types.WorkObjectBlockView:
+	case *types.WorkObjectBlockView:
 		protoWorkObject := &types.ProtoWorkObject{}
 		err := proto.Unmarshal(data, protoWorkObject)
 		if err != nil {
@@ -284,6 +284,23 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 			return err
 		}
 		*dataPtr = *workObject
+		return nil
+	case *types.WorkObjectHeaderView:
+		protoWorkObject := &types.ProtoWorkObjectHeaderView{}
+		err := proto.Unmarshal(data, protoWorkObject)
+		if err != nil {
+			return err
+		}
+		workObjectHeaderView := &types.WorkObjectHeaderView{}
+		if protoWorkObject.WoHeader.Location == nil {
+			return errors.New("location is nil")
+		}
+		workObjectHeaderView.WorkObject = &types.WorkObject{}
+		err = workObjectHeaderView.ProtoDecode(protoWorkObject, sourceLocation)
+		if err != nil {
+			return err
+		}
+		*dataPtr = *workObjectHeaderView
 		return nil
 	case *types.WorkObjectHeader:
 		protoWorkObjectHeader := &types.ProtoWorkObjectHeader{}

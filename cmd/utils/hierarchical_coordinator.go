@@ -133,14 +133,17 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 	stack, apiBackend := makeFullNode(hc.p2p, location, hc.slicesRunning, hc.currentExpansionNumber, genesisBlock, logger)
 	quaiBackend.SetApiBackend(&apiBackend, location)
 
-	// Only subscribe to block and transaction data if processing state
-	if quaiBackend.ProcessingState(location) {
-		hc.p2p.Subscribe(location, &types.WorkObjectBlockView{})
+	hc.p2p.Subscribe(location, &types.WorkObjectHeaderView{})
+
+	if quaiBackend.ProcessingState(location) && location.Context() == common.ZONE_CTX {
+		// Subscribe to the new topics after setting the api backend
+		hc.p2p.Subscribe(location, &types.WorkObjectHeader{})
 		hc.p2p.Subscribe(location, &types.Transactions{})
 	}
 
-	// Subscribe to the new topics after setting the api backend
-	hc.p2p.Subscribe(location, &types.WorkObjectHeaderView{})
+	if location.Context() == common.PRIME_CTX || location.Context() == common.REGION_CTX || quaiBackend.ProcessingState(location) {
+		hc.p2p.Subscribe(location, &types.WorkObjectBlockView{})
+	}
 
 	StartNode(stack)
 
