@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"runtime"
 	"slices"
 	"strings"
@@ -32,7 +33,7 @@ func OpenBackendDB() (*leveldb.DB, error) {
 			return nil, err
 		}
 	}
-	dbPath := dataDir + "quaibackend"
+	dbPath := path.Join(dataDir, "quaibackend")
 
 	db, err := leveldb.OpenFile(dbPath, nil)
 	if err != nil {
