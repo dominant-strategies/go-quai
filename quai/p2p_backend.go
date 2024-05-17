@@ -107,6 +107,14 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 			return false
 		}
 		backend.SendWorkShare(&data)
+	default:
+		log.Global.WithFields(log.Fields{
+			"peer":     sourcePeer,
+			"topic":    topic,
+			"location": nodeLocation,
+		}).Error("received unknown broadcast")
+		qbe.p2pBackend.BanPeer(sourcePeer)
+		return false
 	}
 
 	// If it was a good broadcast, mark the peer as lively
