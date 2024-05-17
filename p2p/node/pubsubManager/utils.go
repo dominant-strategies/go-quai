@@ -31,12 +31,12 @@ type Topic struct {
 
 // gets the name of the topic for the given type of data
 func (t *Topic) buildTopicString() string {
-	var parts []string
-	for _, b := range t.location {
-		parts = append(parts, strconv.Itoa(int(b)))
-	}
-	encodedLocation := strings.Join(parts, ",")
-	baseTopic := strings.Join([]string{t.genesis.String(), encodedLocation}, "/")
+	// var parts []string
+	// for _, b := range t.location {
+		// parts = append(parts, strconv.Itoa(int(b)))
+	// }
+	// encodedLocation := strings.Join(parts, ",")
+	baseTopic := strings.Join([]string{t.genesis.String(), t.location.Name()}, "/")
 	switch t.data.(type) {
 	case *types.WorkObjectHeaderView, *big.Int, common.Hash:
 		return strings.Join([]string{baseTopic, C_headerType}, "/")
