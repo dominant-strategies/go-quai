@@ -599,6 +599,10 @@ func (b *QuaiAPIBackend) BroadcastBlock(block *types.WorkObject, location common
 	return b.quai.p2p.Broadcast(location, block.ConvertToBlockView())
 }
 
+func (b *QuaiAPIBackend) BroadcastHeader(header *types.WorkObject, location common.Location) error {
+	return b.quai.p2p.Broadcast(location, header.ConvertToHeaderView())
+}
+
 func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectHeader, location common.Location) error {
 	return b.quai.p2p.Broadcast(location, workShare)
 }

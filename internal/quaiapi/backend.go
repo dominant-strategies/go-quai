@@ -131,6 +131,7 @@ type Backend interface {
 
 	// P2P apis
 	BroadcastBlock(block *types.WorkObject, location common.Location) error
+	BroadcastHeader(header *types.WorkObject, location common.Location) error
 	BroadcastWorkShare(workShare *types.WorkObjectHeader, location common.Location) error
 }
 
