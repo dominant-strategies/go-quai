@@ -111,7 +111,7 @@ func TopicFromString(genesis common.Hash, topic string) (*Topic, error) {
 	case C_workObjectType:
 		return NewTopic(genesis, location, &types.WorkObjectBlockView{})
 	case C_transactionType:
-		return NewTopic(genesis, location, &types.Transaction{})
+		return NewTopic(genesis, location, &types.Transactions{})
 	case C_workObjectHeaderType:
 		return NewTopic(genesis, location, &types.WorkObjectHeader{})
 	default:
