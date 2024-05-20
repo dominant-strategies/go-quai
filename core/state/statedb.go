@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -646,7 +647,11 @@ func (s *StateDB) PushETX(etx *types.Transaction) error {
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("AddETX").Add(float64(time.Since(start))) }(time.Now())
 	}
-	data, err := rlp.EncodeToBytes(etx)
+	protoTx, err := etx.ProtoEncode()
+	if err != nil {
+		return err
+	}
+	protoTxBytes, err := proto.Marshal(protoTx)
 	if err != nil {
 		return err
 	}
@@ -654,7 +659,7 @@ func (s *StateDB) PushETX(etx *types.Transaction) error {
 	if err != nil {
 		return err
 	}
-	if err := s.etxTrie.TryUpdate(newestIndex.Bytes(), data); err != nil {
+	if err := s.etxTrie.TryUpdate(newestIndex.Bytes(), protoTxBytes); err != nil {
 		return err
 	}
 	newestIndex.Add(newestIndex, big.NewInt(1))
@@ -673,11 +678,15 @@ func (s *StateDB) PushETXs(etxs []*types.Transaction) error {
 		return err
 	}
 	for _, etx := range etxs {
-		data, err := rlp.EncodeToBytes(etx)
+		protoTx, err := etx.ProtoEncode()
 		if err != nil {
 			return err
 		}
-		if err := s.etxTrie.TryUpdate(newestIndex.Bytes(), data); err != nil {
+		protoTxBytes, err := proto.Marshal(protoTx)
+		if err != nil {
+			return err
+		}
+		if err := s.etxTrie.TryUpdate(newestIndex.Bytes(), protoTxBytes); err != nil {
 			return err
 		}
 		newestIndex.Add(newestIndex, big.NewInt(1))
@@ -703,8 +712,12 @@ func (s *StateDB) PopETX() (*types.Transaction, error) {
 	if len(enc) == 0 {
 		return nil, nil
 	}
+	protoEtx := new(types.ProtoTransaction)
+	if err := proto.Unmarshal(enc, protoEtx); err != nil {
+		return nil, err
+	}
 	etx := new(types.Transaction)
-	if err := rlp.DecodeBytes(enc, etx); err != nil {
+	if err := etx.ProtoDecode(protoEtx, s.nodeLocation); err != nil {
 		return nil, err
 	}
 	if err := s.etxTrie.TryDelete(oldestIndex.Bytes()); err != nil {
@@ -725,8 +738,12 @@ func (s *StateDB) ReadETX(index *big.Int) (*types.Transaction, error) {
 	if len(enc) == 0 {
 		return nil, nil
 	}
+	protoEtx := new(types.ProtoTransaction)
+	if err := proto.Unmarshal(enc, protoEtx); err != nil {
+		return nil, err
+	}
 	etx := new(types.Transaction)
-	if err := rlp.DecodeBytes(enc, etx); err != nil {
+	if err := etx.ProtoDecode(protoEtx, s.nodeLocation); err != nil {
 		return nil, err
 	}
 	return etx, nil

@@ -108,6 +108,7 @@ var (
 	UtxoPrefix                  = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix            = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	AddressUtxosPrefix          = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
+	processedStatePrefix        = []byte("ps")    // processedStatePrefix + hash -> boolean
 
 	blockBodyPrefix         = []byte("b")   // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")   // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -266,6 +267,10 @@ func headerHashKey(number uint64) []byte {
 // headerNumberKey = headerNumberPrefix + hash
 func headerNumberKey(hash common.Hash) []byte {
 	return append(headerNumberPrefix, hash.Bytes()...)
+}
+
+func processedStateKey(hash common.Hash) []byte {
+	return append(processedStatePrefix, hash.Bytes()...)
 }
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash

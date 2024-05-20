@@ -561,6 +561,16 @@ func (wb *WorkObjectBody) QuaiTransactions() []*Transaction {
 	return quaiTxs
 }
 
+func (wb *WorkObjectBody) ExternalTransactions() []*Transaction {
+	etxs := make([]*Transaction, 0)
+	for _, t := range wb.Transactions() {
+		if t.Type() == ExternalTxType {
+			etxs = append(etxs, t)
+		}
+	}
+	return etxs
+}
+
 func CalcUncleHash(uncles []*WorkObjectHeader) common.Hash {
 	if len(uncles) == 0 {
 		return EmptyUncleHash

@@ -768,6 +768,9 @@ func (s *PublicBlockChainQuaiAPI) Append(ctx context.Context, raw json.RawMessag
 	}
 
 	body.Header.Header().SetCoinbase(common.BytesToAddress(body.Header.Coinbase().Bytes(), s.b.NodeLocation()))
+	for _, tx := range body.NewInboundEtxs {
+		tx.SetTo(common.BytesToAddress(tx.To().Bytes(), s.b.NodeLocation()))
+	}
 	pendingEtxs, subReorg, setHead, err := s.b.Append(body.Header, body.Manifest, body.DomPendingHeader, body.DomTerminus, body.DomOrigin, body.NewInboundEtxs)
 	if err != nil {
 		return nil, err
