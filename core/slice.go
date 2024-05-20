@@ -455,6 +455,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"etxs emitted": len(block.ExtTransactions()),
 		"qiTxs":        len(block.QiTransactions()),
 		"quaiTxs":      len(block.QuaiTransactions()),
+		"etxs inbound": len(block.Body().ExternalTransactions()),
 		"gas":          block.GasUsed(),
 		"gasLimit":     block.GasLimit(),
 		"evmRoot":      block.EVMRoot(),

@@ -931,6 +931,8 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		"t7":   time7,
 		"t8":   time8,
 	}).Debug("times during state processor apply")
+	// Indicate that we have processed the state of the block
+	rawdb.WriteProcessedState(batch, block.Hash())
 	return logs, nil
 }
 
