@@ -366,8 +366,9 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			if header.ThresholdCount() != 0 {
 				return fmt.Errorf("invalid threshold count: have %v, want %v", header.ThresholdCount(), 0)
 			}
-			if header.ExpansionNumber() != 0 {
-				return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), 0)
+			genesisHeader := chain.GetHeaderByNumber(0)
+			if header.ExpansionNumber() != genesisHeader.ExpansionNumber() {
+				return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), genesisHeader.ExpansionNumber())
 			}
 		} else {
 			expectedEfficiencyScore := chain.ComputeEfficiencyScore(parent)
@@ -501,6 +502,10 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 		// Divide the parent difficulty by the number of slices running at the time of expansion
 		if expansionNum == 0 && parent.Location().Equal(common.Location{}) {
 			// Base case: expansion number is 0 and the parent is the actual genesis block
+			return parent.Difficulty()
+		}
+		genesisBlock := chain.GetHeaderByHash(parent.Hash())
+		if genesisBlock.ExpansionNumber() > 0 && parent.Hash() == chain.Config().DefaultGenesisHash {
 			return parent.Difficulty()
 		}
 		genesis := chain.GetHeaderByHash(parent.Hash())
