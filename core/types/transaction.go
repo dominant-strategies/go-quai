@@ -106,7 +106,6 @@ type TxData interface {
 	parentHash() *common.Hash
 	mixHash() *common.Hash
 	workNonce() *BlockNonce
-
 	// Schnorr segregated sigs
 	getSchnorrSignature() *schnorr.Signature
 }
@@ -605,7 +604,7 @@ func (tx *Transaction) To() *common.Address {
 	return &cpy
 }
 
-func (tx *Transaction) SetGas(addr common.Address) {
+func (tx *Transaction) SetTo(addr common.Address) {
 	tx.inner.setTo(addr)
 }
 

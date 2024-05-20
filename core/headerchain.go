@@ -473,10 +473,10 @@ func (hc *HeaderChain) SetCurrentState(head *types.WorkObject) error {
 		if hc.IsGenesisHash(header.Hash()) {
 			break
 		}
-		// This is not perfect because it's possible some blocks have the same root hash (no uniqueness guarantee)
-		// We probably need a better way to determine if we have processed the state and ETXs for a given block
-		_, err := hc.bc.processor.StateAt(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot())
-		if err == nil {
+
+		// Check if the state has been processed for this block
+		processedState := rawdb.ReadProcessedState(hc.headerDb, header.Hash())
+		if processedState {
 			break
 		}
 		current = types.CopyWorkObject(header)

@@ -132,6 +132,20 @@ func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+func ReadProcessedState(db ethdb.KeyValueReader, hash common.Hash) bool {
+	data, _ := db.Get(processedStateKey(hash))
+	if len(data) == 0 {
+		return false
+	}
+	return data[0] == 1
+}
+
+func WriteProcessedState(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Put(processedStateKey(hash), []byte{1}); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store processed state for block " + hash.String())
+	}
+}
+
 // ReadHeadHeaderHash retrieves the hash of the current canonical head header.
 func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headHeaderKey)
