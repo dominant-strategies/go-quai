@@ -130,8 +130,11 @@ func (h *handler) missingBlockLoop() {
 				if block != nil {
 					h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 				}
+				h.recentBlockReqCache.Remove(blockRequest.Hash)
 			}()
 		case <-h.missingBlockSub.Err():
+			return
+		case <-h.quitCh:
 			return
 		}
 	}
