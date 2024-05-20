@@ -1073,7 +1073,11 @@ type WorkObjectHeaderView struct {
 ////////////////////////////////////////////////////////////
 
 func (wo *WorkObject) ConvertToHeaderView() *WorkObjectHeaderView {
-	newWo := NewWorkObjectWithHeader(wo, nil, common.ZONE_CTX, HeaderObject)
+	newWo := NewWorkObject(wo.woHeader, wo.woBody, wo.tx)
+	newWo.Body().SetExtTransactions(Transactions{})
+	newWo.Body().SetTransactions(Transactions{})
+	newWo.Body().SetManifest(BlockManifest{})
+	newWo.Body().SetInterlinkHashes(common.Hashes{})
 	return &WorkObjectHeaderView{
 		WorkObject: newWo,
 	}
