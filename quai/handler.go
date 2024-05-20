@@ -135,8 +135,11 @@ func (h *handler) missingBlockLoop() {
 						h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 					}
 				}
+				h.recentBlockReqCache.Remove(blockRequest.Hash)
 			}()
 		case <-h.missingBlockSub.Err():
+			return
+		case <-h.quitCh:
 			return
 		}
 	}
