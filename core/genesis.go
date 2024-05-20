@@ -274,6 +274,7 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	head.Header().SetExtra(g.ExtraData)
 	head.Header().SetGasLimit(g.GasLimit)
 	head.Header().SetGasUsed(0)
+	head.Header().SetExpansionNumber(uint8(startingExpansionNumber))
 	if startingExpansionNumber > 0 {
 		// Fill each byte with 0xFF to set all bits to 1
 		var etxEligibleSlices common.Hash
