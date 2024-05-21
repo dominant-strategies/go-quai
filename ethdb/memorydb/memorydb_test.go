@@ -21,12 +21,13 @@ import (
 
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/ethdb/dbtest"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 func TestMemoryDB(t *testing.T) {
 	t.Run("DatabaseSuite", func(t *testing.T) {
 		dbtest.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
-			return New()
+			return New(log.Global)
 		})
 	})
 }
