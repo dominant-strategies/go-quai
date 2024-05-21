@@ -152,7 +152,6 @@ type blockChain interface {
 	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
 	Engine() consensus.Engine
 	GetHeaderOrCandidate(common.Hash, uint64) *types.WorkObject
-	GetHeader(common.Hash, uint64) *types.WorkObject
 	NodeCtx() int
 	GetHeaderByHash(common.Hash) *types.WorkObject
 }

@@ -298,7 +298,7 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadHeader retrieves the block header corresponding to the hash.
-func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.WorkObject {
+func ReadHeader(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 	wo := ReadWorkObjectHeaderOnly(db, hash, types.BlockObject)
 	if wo == nil || wo.Body() == nil || wo.Header() == nil {
 		// Try backup function
@@ -1116,23 +1116,23 @@ func ReadBadWorkObject(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) *types.WorkObject {
 	for bn := b.NumberU64(nodeCtx); a.NumberU64(nodeCtx) > bn; {
-		a = ReadHeader(db, a.ParentHash(nodeCtx), a.NumberU64(nodeCtx)-1)
+		a = ReadHeader(db, a.ParentHash(nodeCtx))
 		if a == nil {
 			return nil
 		}
 	}
 	for an := a.NumberU64(nodeCtx); an < b.NumberU64(nodeCtx); {
-		b = ReadHeader(db, b.ParentHash(nodeCtx), b.NumberU64(nodeCtx)-1)
+		b = ReadHeader(db, b.ParentHash(nodeCtx))
 		if b == nil {
 			return nil
 		}
 	}
 	for a.Hash() != b.Hash() {
-		a = ReadHeader(db, a.ParentHash(nodeCtx), a.NumberU64(nodeCtx)-1)
+		a = ReadHeader(db, a.ParentHash(nodeCtx))
 		if a == nil {
 			return nil
 		}
-		b = ReadHeader(db, b.ParentHash(nodeCtx), b.NumberU64(nodeCtx)-1)
+		b = ReadHeader(db, b.ParentHash(nodeCtx))
 		if b == nil {
 			return nil
 		}
@@ -1150,7 +1150,7 @@ func ReadHeadHeader(db ethdb.Reader) *types.WorkObject {
 	if headHeaderNumber == nil {
 		return nil
 	}
-	return ReadHeader(db, headHeaderHash, *headHeaderNumber)
+	return ReadHeader(db, headHeaderHash)
 }
 
 // ReadHeadBlock returns the current canonical head block.

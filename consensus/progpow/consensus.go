@@ -80,8 +80,7 @@ func (progpow *Progpow) VerifyHeader(chain consensus.ChainHeaderReader, header *
 		return nil
 	}
 	// Short circuit if the header is known, or its parent not
-	number := header.NumberU64(nodeCtx)
-	if chain.GetHeader(header.Hash(), number) != nil {
+	if chain.GetHeaderByHash(header.Hash()) != nil {
 		return nil
 	}
 	parent := chain.GetBlockByHash(header.ParentHash(nodeCtx))
@@ -178,7 +177,7 @@ func (progpow *Progpow) verifyHeaderWorker(chain consensus.ChainHeaderReader, he
 	nodeCtx := progpow.NodeLocation().Context()
 	var parent *types.WorkObject
 	if index == 0 {
-		parent = chain.GetHeader(headers[0].ParentHash(nodeCtx), headers[0].NumberU64(nodeCtx)-1)
+		parent = chain.GetHeaderByHash(headers[0].ParentHash(nodeCtx))
 	} else if headers[index-1].Hash() == headers[index].ParentHash(nodeCtx) {
 		parent = headers[index-1]
 	}
@@ -208,7 +207,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)
 	for i := 0; i < params.WorkSharesInclusionDepth; i++ {
-		ancestorHeader := chain.GetHeader(parent, number)
+		ancestorHeader := chain.GetHeaderByHash(parent)
 		if ancestorHeader == nil {
 			break
 		}

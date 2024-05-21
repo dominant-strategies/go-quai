@@ -77,9 +77,7 @@ func (blake3pow *Blake3pow) VerifyHeader(chain consensus.ChainHeaderReader, head
 		return nil
 	}
 	nodeCtx := blake3pow.config.NodeLocation.Context()
-	// Short circuit if the header is known, or its parent not
-	number := header.NumberU64(nodeCtx)
-	if chain.GetHeader(header.Hash(), number) != nil {
+	if chain.GetHeaderByHash(header.Hash()) != nil {
 		return nil
 	}
 	parent := chain.GetBlockByHash(header.ParentHash(nodeCtx))
@@ -206,7 +204,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)
 	for i := 0; i < params.WorkSharesInclusionDepth; i++ {
-		ancestorHeader := chain.GetHeader(parent, number)
+		ancestorHeader := chain.GetHeaderByHash(parent)
 		if ancestorHeader == nil {
 			break
 		}

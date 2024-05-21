@@ -642,7 +642,7 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 	chain := make([]common.Hash, 0, max)
 	for i := uint64(0); i < max; i++ {
 		next := header.ParentHash(hc.NodeCtx())
-		if header = hc.GetHeader(next, header.NumberU64(hc.NodeCtx())-1); header == nil {
+		if header = hc.GetHeaderByHash(next); header == nil {
 			break
 		}
 		chain = append(chain, next)
@@ -664,7 +664,7 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	}
 	if ancestor == 1 {
 		// in this case it is cheaper to just read the header
-		if header := hc.GetHeader(hash, number); header != nil {
+		if header := hc.GetHeaderByHash(hash); header != nil {
 			return header.ParentHash(hc.NodeCtx()), number - 1
 		}
 		return common.Hash{}, 0
@@ -682,7 +682,7 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 		}
 		*maxNonCanonical--
 		ancestor--
-		header := hc.GetHeader(hash, number)
+		header := hc.GetHeaderByHash(hash)
 		if header == nil {
 			return common.Hash{}, 0
 		}
@@ -696,26 +696,6 @@ func (hc *HeaderChain) WriteBlock(block *types.WorkObject) {
 	hc.bc.WriteBlock(block, hc.NodeCtx())
 }
 
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
-func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.WorkObject {
-	termini := hc.GetTerminiByHash(hash)
-	if termini == nil {
-		return nil
-	}
-	// Short circuit if the header's already in the cache, retrieve otherwise
-	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.WorkObject)
-	}
-	header := rawdb.ReadHeader(hc.headerDb, hash, number)
-	if header == nil {
-		return nil
-	}
-	// Cache the found header for next time and return
-	hc.headerCache.Add(hash, header)
-	return header
-}
-
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.WorkObject {
@@ -723,12 +703,18 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 	if termini == nil {
 		return nil
 	}
-	number := hc.GetBlockNumber(hash)
-	if number == nil {
+
+	// Short circuit if the header's already in the cache, retrieve otherwise
+	if header, ok := hc.headerCache.Get(hash); ok {
+		return header.(*types.WorkObject)
+	}
+	header := rawdb.ReadHeader(hc.headerDb, hash)
+	if header == nil {
 		return nil
 	}
-
-	return hc.GetHeader(hash, *number)
+	// Cache the found header for next time and return
+	hc.headerCache.Add(hash, header)
+	return header
 }
 
 // GetHeaderOrCandidate retrieves a block header from the database by hash and number,
@@ -738,7 +724,7 @@ func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *ty
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header.(*types.WorkObject)
 	}
-	header := rawdb.ReadHeader(hc.headerDb, hash, number)
+	header := rawdb.ReadHeader(hc.headerDb, hash)
 	if header == nil {
 		return nil
 	}
@@ -799,7 +785,7 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.WorkObject {
 	if hash == (common.Hash{}) {
 		return nil
 	}
-	return hc.GetHeader(hash, number)
+	return hc.GetHeaderByHash(hash)
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {

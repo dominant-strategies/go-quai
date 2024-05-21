@@ -35,9 +35,6 @@ type ChainHeaderReader interface {
 	// CurrentHeader retrieves the current header from the local chain.
 	CurrentHeader() *types.WorkObject
 
-	// GetHeader retrieves a block header from the database by hash and number.
-	GetHeader(hash common.Hash, number uint64) *types.WorkObject
-
 	// GetHeaderByNumber retrieves a block header from the database by number.
 	GetHeaderByNumber(number uint64) *types.WorkObject
 

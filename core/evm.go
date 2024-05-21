@@ -33,9 +33,6 @@ type ChainContext interface {
 	// Engine retrieves the chain's consensus engine.
 	Engine() consensus.Engine
 
-	// GetHeader returns the hash corresponding to their hash.
-	GetHeader(common.Hash, uint64) *types.WorkObject
-
 	// GetHeader returns a block header from the database by hash.
 	// The header might not be on the canonical chain.
 	GetHeaderOrCandidate(common.Hash, uint64) *types.WorkObject
@@ -138,7 +135,7 @@ func GetHashFn(ref *types.WorkObject, chain ChainContext) func(n uint64) common.
 		lastKnownNumber := ref.NumberU64(chain.NodeCtx()) - uint64(len(cache))
 
 		for {
-			header := chain.GetHeader(lastKnownHash, lastKnownNumber)
+			header := chain.GetHeaderByHash(lastKnownHash)
 			if header == nil {
 				break
 			}

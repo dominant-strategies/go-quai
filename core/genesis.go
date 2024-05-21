@@ -185,7 +185,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	}
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
-	header := rawdb.ReadHeader(db, stored, 0)
+	header := rawdb.ReadHeader(db, stored)
 	if _, err := state.New(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()

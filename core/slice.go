@@ -1766,7 +1766,7 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 		// delete the trie node for a given root of the header
 		rawdb.DeleteTrieNode(sl.sliceDb, header.EVMRoot())
 		badHashes = append(badHashes, header.Hash())
-		parent := sl.hc.GetHeader(header.ParentHash(nodeCtx), header.NumberU64(nodeCtx)-1)
+		parent := sl.hc.GetHeaderByHash(header.ParentHash(nodeCtx))
 		header = parent
 		if header.Hash() == hash || sl.hc.IsGenesisHash(header.Hash()) {
 			break

@@ -839,12 +839,6 @@ func (c *Core) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
 	return c.engine.CalcOrder(header)
 }
 
-// GetHeader retrieves a block header from the database by hash and number,
-// caching it if found.
-func (c *Core) GetHeader(hash common.Hash, number uint64) *types.WorkObject {
-	return c.sl.hc.GetHeader(hash, number)
-}
-
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (c *Core) GetHeaderByHash(hash common.Hash) *types.WorkObject {
