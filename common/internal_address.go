@@ -17,7 +17,7 @@ type InternalAddress [AddressLength]byte
 func (a InternalAddress) Bytes() []byte { return a[:] }
 
 // Bytes20 gets the bytes20 representation of the underlying address.
-func (a InternalAddress) Bytes20() (addr AddressBytes) { copy(addr[:], a[:]); return addr } // this is not very performant
+func (a InternalAddress) Bytes20() (addr AddressBytes) { return AddressBytes(a) }
 
 // Hash converts an address to a hash by left-padding it with zeros.
 func (a InternalAddress) Hash() Hash { return BytesToHash(a[:]) }

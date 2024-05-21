@@ -73,12 +73,7 @@ func NewTx(inner TxData) *Transaction {
 	return tx
 }
 
-// SetInner sets the inner transaction data of a transaction.
 func (tx *Transaction) SetInner(inner TxData) {
-	tx.setDecoded(inner.copy(), 0)
-}
-
-func (tx *Transaction) SetInnerNoCopy(inner TxData) {
 	tx.setDecoded(inner, 0)
 }
 
@@ -291,7 +286,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 			nonce := BlockNonce(uint64ToByteArr(*protoTx.WorkNonce))
 			quaiTx.WorkNonce = &nonce
 		}
-		tx.SetInnerNoCopy(&quaiTx)
+		tx.SetInner(&quaiTx)
 
 	case 1:
 		if protoTx.Gas == nil {
@@ -329,7 +324,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		etx.ETXIndex = uint16(protoTx.GetEtxIndex())
 		etx.Sender = common.BytesToAddress(protoTx.GetEtxSender(), location)
 
-		tx.SetInnerNoCopy(&etx)
+		tx.SetInner(&etx)
 
 	case 2:
 		if protoTx.TxIns == nil {
@@ -382,7 +377,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 			nonce := BlockNonce(uint64ToByteArr(*protoTx.WorkNonce))
 			qiTx.WorkNonce = &nonce
 		}
-		tx.SetInnerNoCopy(&qiTx)
+		tx.SetInner(&qiTx)
 
 	default:
 		return errors.New("invalid transaction type")
@@ -597,13 +592,7 @@ func (tx *Transaction) From(nodeLocation common.Location) *common.Address {
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
-	// Copy the pointed-to address.
-	ito := tx.inner.to()
-	if ito == nil {
-		return nil
-	}
-	cpy := *ito
-	return &cpy
+	return tx.inner.to()
 }
 
 func (tx *Transaction) SetTo(addr common.Address) {
