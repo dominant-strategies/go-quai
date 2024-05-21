@@ -25,7 +25,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/prque"
@@ -109,12 +109,12 @@ type StateProcessor struct {
 	engine        consensus.Engine    // Consensus engine used for block rewards
 	logsFeed      event.Feed
 	rmLogsFeed    event.Feed
-	cacheConfig   *CacheConfig   // CacheConfig for StateProcessor
-	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	utxoCache     state.Database // UTXO database to reuse between imports (contains UTXO cache)
-	etxCache      state.Database // ETX database to reuse between imports (contains ETX cache)
-	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
-	txLookupCache *lru.Cache
+	cacheConfig   *CacheConfig                            // CacheConfig for StateProcessor
+	stateCache    state.Database                          // State database to reuse between imports (contains state cache)
+	utxoCache     state.Database                          // UTXO database to reuse between imports (contains UTXO cache)
+	etxCache      state.Database                          // ETX database to reuse between imports (contains ETX cache)
+	receiptsCache *lru.Cache[common.Hash, types.Receipts] // Cache for the most recent receipts per block
+	txLookupCache *lru.Cache[common.Hash, rawdb.LegacyTxLookupEntry]
 	validator     Validator // Block and state validator interface
 	prefetcher    Prefetcher
 	vmConfig      vm.Config
@@ -132,8 +132,8 @@ type StateProcessor struct {
 
 // NewStateProcessor initialises a new StateProcessor.
 func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig, txLookupLimit *uint64) *StateProcessor {
-	receiptsCache, _ := lru.New(receiptsCacheLimit)
-	txLookupCache, _ := lru.New(txLookupCacheLimit)
+	receiptsCache, _ := lru.New[common.Hash, types.Receipts](receiptsCacheLimit)
+	txLookupCache, _ := lru.New[common.Hash, rawdb.LegacyTxLookupEntry](txLookupCacheLimit)
 
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
@@ -1199,7 +1199,7 @@ func (p *StateProcessor) HasBlockAndState(hash common.Hash, number uint64) bool 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := p.receiptsCache.Get(hash); ok {
-		return receipts.(types.Receipts)
+		return receipts
 	}
 	number := rawdb.ReadHeaderNumber(p.hc.headerDb, hash)
 	if number == nil {
@@ -1218,14 +1218,14 @@ func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
 func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if lookup, exist := p.txLookupCache.Get(hash); exist {
-		return lookup.(*rawdb.LegacyTxLookupEntry)
+		return &lookup
 	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(p.hc.headerDb, hash)
 	if tx == nil {
 		return nil
 	}
 	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
-	p.txLookupCache.Add(hash, lookup)
+	p.txLookupCache.Add(hash, *lookup)
 	return lookup
 }
 

@@ -39,7 +39,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
@@ -134,7 +134,7 @@ type Service struct {
 	// that stats are ready to be sent
 	statsReadyCh chan struct{}
 
-	blockLookupCache *lru.Cache
+	blockLookupCache *lru.Cache[common.Hash, cachedBlock]
 
 	chainID *big.Int
 
@@ -279,7 +279,7 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string, 
 
 	c_blocksPerWindow := c_windowSize / durationLimitInt
 
-	blockLookupCache, _ := lru.New(int(c_blocksPerWindow * 2))
+	blockLookupCache, _ := lru.New[common.Hash, cachedBlock](int(c_blocksPerWindow * 2))
 
 	quaistats := &Service{
 		backend:               backend,

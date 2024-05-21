@@ -24,7 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 const (
@@ -56,17 +56,17 @@ type HeaderChain struct {
 	headerDb      ethdb.Database
 	genesisHeader *types.WorkObject
 
-	currentHeader atomic.Value // Current head of the header chain (may be above the block chain!)
-	headerCache   *lru.Cache   // Cache for the most recent block headers
-	numberCache   *lru.Cache   // Cache for the most recent block numbers
+	currentHeader atomic.Value                              // Current head of the header chain (may be above the block chain!)
+	headerCache   *lru.Cache[common.Hash, types.WorkObject] // Cache for the most recent block headers
+	numberCache   *lru.Cache[common.Hash, uint64]           // Cache for the most recent block numbers
 
 	fetchPEtxRollup getPendingEtxsRollup
 	fetchPEtx       getPendingEtxs
 
-	pendingEtxsRollup *lru.Cache
-	pendingEtxs       *lru.Cache
-	blooms            *lru.Cache
-	subRollupCache    *lru.Cache
+	pendingEtxsRollup *lru.Cache[common.Hash, types.PendingEtxsRollup]
+	pendingEtxs       *lru.Cache[common.Hash, types.PendingEtxs]
+	blooms            *lru.Cache[common.Hash, types.Bloom]
+	subRollupCache    *lru.Cache[common.Hash, types.Transactions]
 
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 	running       int32          // 0 if chain is running, 1 when stopped
@@ -85,8 +85,8 @@ type HeaderChain struct {
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
 func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, indexerConfig *IndexerConfig, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
-	headerCache, _ := lru.New(headerCacheLimit)
-	numberCache, _ := lru.New(numberCacheLimit)
+	headerCache, _ := lru.New[common.Hash, types.WorkObject](headerCacheLimit)
+	numberCache, _ := lru.New[common.Hash, uint64](numberCacheLimit)
 	nodeCtx := chainConfig.Location.Context()
 
 	hc := &HeaderChain{
@@ -128,19 +128,19 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	// Record if the chain is processing state
 	hc.processingState = hc.setStateProcessing()
 
-	pendingEtxsRollup, _ := lru.New(c_maxPendingEtxsRollup)
+	pendingEtxsRollup, _ := lru.New[common.Hash, types.PendingEtxsRollup](c_maxPendingEtxsRollup)
 	hc.pendingEtxsRollup = pendingEtxsRollup
 
 	if nodeCtx == common.PRIME_CTX {
-		hc.pendingEtxs, _ = lru.New(c_maxPendingEtxBatchesPrime)
+		hc.pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesPrime)
 	} else {
-		hc.pendingEtxs, _ = lru.New(c_maxPendingEtxBatchesRegion)
+		hc.pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesRegion)
 	}
 
-	blooms, _ := lru.New(c_maxBloomFilters)
+	blooms, _ := lru.New[common.Hash, types.Bloom](c_maxBloomFilters)
 	hc.blooms = blooms
 
-	subRollupCache, _ := lru.New(c_subRollupCacheSize)
+	subRollupCache, _ := lru.New[common.Hash, types.Transactions](c_subRollupCacheSize)
 	hc.subRollupCache = subRollupCache
 
 	// Initialize the heads slice
@@ -197,8 +197,8 @@ func (hc *HeaderChain) CollectSubRollup(b *types.WorkObject) (types.Transactions
 func (hc *HeaderChain) GetPendingEtxs(hash common.Hash) (*types.PendingEtxs, error) {
 	var pendingEtxs types.PendingEtxs
 	// Look for pending ETXs first in pending ETX cache, then in database
-	if res, ok := hc.pendingEtxs.Get(hash); ok && res != nil {
-		pendingEtxs = res.(types.PendingEtxs)
+	if res, ok := hc.pendingEtxs.Get(hash); ok {
+		pendingEtxs = res
 	} else if res := rawdb.ReadPendingEtxs(hc.headerDb, hash); res != nil {
 		pendingEtxs = *res
 	} else {
@@ -211,8 +211,8 @@ func (hc *HeaderChain) GetPendingEtxs(hash common.Hash) (*types.PendingEtxs, err
 func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash, location common.Location) (*types.PendingEtxsRollup, error) {
 	var rollups types.PendingEtxsRollup
 	// Look for pending ETXs first in pending ETX cache, then in database
-	if res, ok := hc.pendingEtxsRollup.Get(hash); ok && res != nil {
-		rollups = res.(types.PendingEtxsRollup)
+	if res, ok := hc.pendingEtxsRollup.Get(hash); ok {
+		rollups = res
 	} else if res := rawdb.ReadPendingEtxsRollup(hc.headerDb, hash); res != nil {
 		rollups = *res
 	} else {
@@ -226,8 +226,8 @@ func (hc *HeaderChain) GetPendingEtxsRollup(hash common.Hash, location common.Lo
 func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 	var bloom types.Bloom
 	// Look for bloom first in bloom cache, then in database
-	if res, ok := hc.blooms.Get(hash); ok && res != nil {
-		bloom = res.(types.Bloom)
+	if res, ok := hc.blooms.Get(hash); ok {
+		bloom = res
 	} else if res := rawdb.ReadBloom(hc.headerDb, hash); res != nil {
 		bloom = *res
 	} else {
@@ -615,7 +615,7 @@ func (hc *HeaderChain) Empty() bool {
 // from the cache or database
 func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
-		number := cached.(uint64)
+		number := cached
 		return &number
 	}
 	number := rawdb.ReadHeaderNumber(hc.headerDb, hash)
@@ -706,14 +706,14 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.WorkObject)
+		return &header
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash)
 	if header == nil {
 		return nil
 	}
 	// Cache the found header for next time and return
-	hc.headerCache.Add(hash, header)
+	hc.headerCache.Add(hash, *header)
 	return header
 }
 
@@ -722,14 +722,14 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.WorkObject)
+		return &header
 	}
 	header := rawdb.ReadHeader(hc.headerDb, hash)
 	if header == nil {
 		return nil
 	}
 	// Cache the found header for next time and return
-	hc.headerCache.Add(hash, header)
+	hc.headerCache.Add(hash, *header)
 	return header
 }
 
@@ -877,8 +877,8 @@ func (hc *HeaderChain) ExportN(w io.Writer, first uint64, last uint64) error {
 func (hc *HeaderChain) GetBlockFromCacheOrDb(hash common.Hash, number uint64) *types.WorkObject {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if cached, ok := hc.bc.blockCache.Get(hash); ok {
-		block := cached.(*types.WorkObject)
-		return block
+		block := cached
+		return &block
 	}
 	return hc.GetBlock(hash, number)
 }
@@ -920,8 +920,8 @@ func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.WorkObject {
 func (hc *HeaderChain) GetBody(hash common.Hash) *types.WorkObject {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := hc.bc.bodyCache.Get(hash); ok {
-		body := cached.(*types.WorkObject)
-		return body
+		body := cached
+		return &body
 	}
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
@@ -932,7 +932,7 @@ func (hc *HeaderChain) GetBody(hash common.Hash) *types.WorkObject {
 		return nil
 	}
 	// Cache the found body for next time and return
-	hc.bc.bodyCache.Add(hash, body)
+	hc.bc.bodyCache.Add(hash, *body)
 	return body
 }
 
@@ -941,7 +941,7 @@ func (hc *HeaderChain) GetBody(hash common.Hash) *types.WorkObject {
 func (hc *HeaderChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := hc.bc.bodyProtoCache.Get(hash); ok {
-		return cached.(rlp.RawValue)
+		return cached
 	}
 	number := hc.GetBlockNumber(hash)
 	if number == nil {

@@ -17,7 +17,7 @@
 package core
 
 import (
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -33,7 +33,7 @@ const (
 // an account is unknown.
 type txNoncer struct {
 	fallback *state.StateDB
-	nonces   *lru.Cache
+	nonces   *lru.Cache[common.InternalAddress, uint64]
 	lock     sync.Mutex
 }
 
@@ -42,7 +42,7 @@ func newTxNoncer(statedb *state.StateDB) *txNoncer {
 	n := &txNoncer{
 		fallback: statedb.Copy(),
 	}
-	nonces, _ := lru.New(c_maxNonceCache)
+	nonces, _ := lru.New[common.InternalAddress, uint64](c_maxNonceCache)
 	n.nonces = nonces
 
 	return n
@@ -57,7 +57,7 @@ func (txn *txNoncer) get(addr common.InternalAddress) uint64 {
 	defer txn.lock.Unlock()
 	txn.nonces.ContainsOrAdd(addr, txn.fallback.GetNonce(addr))
 	nonce, _ := txn.nonces.Get(addr)
-	return nonce.(uint64)
+	return nonce
 }
 
 // set inserts a new virtual nonce into the virtual state database to be returned
@@ -75,7 +75,7 @@ func (txn *txNoncer) setIfLower(addr common.InternalAddress, nonce uint64) {
 	defer txn.lock.Unlock()
 	txn.nonces.ContainsOrAdd(addr, txn.fallback.GetNonce(addr))
 	currentNonce, _ := txn.nonces.Peek(addr)
-	if currentNonce.(uint64) <= nonce {
+	if currentNonce <= nonce {
 		return
 	}
 	txn.nonces.Add(addr, nonce)
