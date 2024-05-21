@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	godebug "runtime/debug"
 	"sync"
 	"syscall"
 
@@ -75,7 +78,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	if viper.IsSet(utils.PprofFlag.Name) {
-		utils.EnablePprof()
+		EnablePprof()
 	}
 
 	// create a quit channel for services to signal for a clean shutdown
@@ -125,4 +128,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	log.Global.Warn("Node is offline")
 	return nil
+}
+
+func EnablePprof() {
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+	port := "8085"
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(godebug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
+		log.Global.Print(http.ListenAndServe("localhost:"+port, nil))
+	}()
 }
