@@ -36,7 +36,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 )
 
@@ -296,19 +296,19 @@ type TxPool struct {
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 	currentMaxGas uint64         // Current gas limit for transaction caps
 
-	locals         *accountSet                           // Set of local transaction to exempt from eviction rules
-	journal        *txJournal                            // Journal of local transaction to back up to disk
-	qiPool         map[common.Hash]*types.TxWithMinerFee // Qi pool to store Qi transactions
-	pending        map[common.InternalAddress]*txList    // All currently processable transactions
-	queue          map[common.InternalAddress]*txList    // Queued but non-processable transactions
-	beats          map[common.InternalAddress]time.Time  // Last heartbeat from each known account
-	all            *txLookup                             // All transactions to allow lookups
-	priced         *txPricedList                         // All transactions sorted by price
-	senders        *lru.Cache                            // Tx hash to sender lookup cache (async populated)
-	sendersCh      chan newSender                        // Channel for async senders cache goroutine
-	SendersMu      sync.RWMutex                          // Mutex for priority access of senders cache
-	localTxsCount  int                                   // count of txs in last 1 min. Purely for logging purpose
-	remoteTxsCount int                                   // count of txs in last 1 min. Purely for logging purpose
+	locals         *accountSet                                     // Set of local transaction to exempt from eviction rules
+	journal        *txJournal                                      // Journal of local transaction to back up to disk
+	qiPool         map[common.Hash]*types.TxWithMinerFee           // Qi pool to store Qi transactions
+	pending        map[common.InternalAddress]*txList              // All currently processable transactions
+	queue          map[common.InternalAddress]*txList              // Queued but non-processable transactions
+	beats          map[common.InternalAddress]time.Time            // Last heartbeat from each known account
+	all            *txLookup                                       // All transactions to allow lookups
+	priced         *txPricedList                                   // All transactions sorted by price
+	senders        *lru.Cache[common.Hash, common.InternalAddress] // Tx hash to sender lookup cache (async populated)
+	sendersCh      chan newSender                                  // Channel for async senders cache goroutine
+	SendersMu      sync.RWMutex                                    // Mutex for priority access of senders cache
+	localTxsCount  int                                             // count of txs in last 1 min. Purely for logging purpose
+	remoteTxsCount int                                             // count of txs in last 1 min. Purely for logging purpose
 
 	reOrgCounter int // keeps track of the number of times the runReorg is called, it is reset every c_reorgCounterThreshold times
 
@@ -387,7 +387,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reOrgCounter:    0,
 		logger:          logger,
 	}
-	pool.senders, _ = lru.New(int(config.MaxSenders))
+	pool.senders, _ = lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
 		logger.WithField("address", addr).Debug("Setting new local account")
@@ -2030,7 +2030,7 @@ func (pool *TxPool) demoteUnexecutables() {
 func (pool *TxPool) PeekSenderNoLock(hash common.Hash) (common.InternalAddress, bool) {
 	addr, ok := pool.senders.Peek(hash)
 	if ok {
-		return addr.(common.InternalAddress), true
+		return addr, true
 	}
 	return common.InternalAddress{}, false
 }
@@ -2052,7 +2052,7 @@ func (pool *TxPool) PeekSender(hash common.Hash) (common.InternalAddress, bool) 
 	defer pool.SendersMu.RUnlock()
 	addr, ok := pool.senders.Peek(hash)
 	if ok {
-		return addr.(common.InternalAddress), true
+		return addr, true
 	}
 	return common.InternalAddress{}, false
 }

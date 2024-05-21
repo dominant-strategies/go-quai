@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -71,13 +71,13 @@ type Slice struct {
 	scope            event.SubscriptionScope
 	missingBlockFeed event.Feed
 
-	pEtxRetryCache *lru.Cache
+	pEtxRetryCache *lru.Cache[common.Hash, pEtxRetry]
 	asyncPhCh      chan *types.WorkObject
 	asyncPhSub     event.Subscription
 
 	bestPhKey        common.Hash
-	phCache          *lru.Cache
-	inboundEtxsCache *lru.Cache
+	phCache          *lru.Cache[common.Hash, types.PendingHeader]
+	inboundEtxsCache *lru.Cache[common.Hash, types.Transactions]
 
 	validator Validator // Block and state validator interface
 	phCacheMu sync.RWMutex
@@ -117,11 +117,11 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	}
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState(), sl.logger)
 
-	sl.phCache, _ = lru.New(c_phCacheSize)
+	sl.phCache, _ = lru.New[common.Hash, types.PendingHeader](c_phCacheSize)
 
-	sl.pEtxRetryCache, _ = lru.New(c_pEtxRetryThreshold)
+	sl.pEtxRetryCache, _ = lru.New[common.Hash, pEtxRetry](c_pEtxRetryThreshold)
 
-	sl.inboundEtxsCache, _ = lru.New(c_inboundEtxCacheSize)
+	sl.inboundEtxsCache, _ = lru.New[common.Hash, types.Transactions](c_inboundEtxCacheSize)
 
 	// only set the subClients if the chain is not Zone
 	sl.subClients = make([]*quaiclient.Client, common.MaxWidth)
@@ -260,7 +260,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	if !domOrigin && nodeCtx != common.ZONE_CTX {
 		cachedInboundEtxs, exists := sl.inboundEtxsCache.Get(block.Hash())
 		if exists && cachedInboundEtxs != nil {
-			newInboundEtxs = cachedInboundEtxs.(types.Transactions)
+			newInboundEtxs = cachedInboundEtxs
 		} else {
 			newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
 			if err != nil {
@@ -270,10 +270,8 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				val, exist := sl.pEtxRetryCache.Get(block.Hash())
 				var retry uint64
 				if exist {
-					pEtxCurrent, ok := val.(pEtxRetry)
-					if ok {
-						retry = pEtxCurrent.retries + 1
-					}
+					pEtxCurrent := val
+					retry = pEtxCurrent.retries + 1
 				}
 				pEtxNew := pEtxRetry{hash: block.Hash(), retries: retry}
 				sl.pEtxRetryCache.Add(block.Hash(), pEtxNew)
@@ -655,17 +653,15 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 // Read the phCache
 func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 	if ph, exists := sl.phCache.Get(hash); exists {
-		if ph, ok := ph.(types.PendingHeader); ok {
-			if ph.Header() != nil {
-				return *types.CopyPendingHeader(&ph), exists
-			} else {
-				return types.PendingHeader{}, false
-			}
+		if ph.Header() != nil {
+			return *types.CopyPendingHeader(&ph), exists
+		} else {
+			return types.PendingHeader{}, false
 		}
 	} else {
 		ph := rawdb.ReadPendingHeader(sl.sliceDb, hash)
 		if ph != nil {
-			sl.phCache.Add(hash, ph)
+			sl.phCache.Add(hash, *ph)
 			return *types.CopyPendingHeader(ph), true
 		} else {
 			return types.PendingHeader{}, false
@@ -738,7 +734,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject, location com
 	if nodeCtx < common.ZONE_CTX {
 		rollup, exists := sl.hc.subRollupCache.Get(block.Hash())
 		if exists && rollup != nil {
-			subRollup = rollup.(types.Transactions)
+			subRollup = rollup
 			sl.logger.WithFields(log.Fields{
 				"Hash": block.Hash(),
 				"len":  len(subRollup),
@@ -906,7 +902,7 @@ func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 
 func (sl *Slice) GetPEtxRollupAfterRetryThreshold(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
 	pEtx, exists := sl.pEtxRetryCache.Get(blockHash)
-	if !exists || pEtx.(pEtxRetry).retries < c_pEtxRetryThreshold {
+	if !exists || pEtx.retries < c_pEtxRetryThreshold {
 		return types.PendingEtxsRollup{}, ErrPendingEtxNotFound
 	}
 	return sl.GetPendingEtxsRollupFromSub(hash, location)
@@ -940,7 +936,7 @@ func (sl *Slice) GetPendingEtxsRollupFromSub(hash common.Hash, location common.L
 
 func (sl *Slice) GetPEtxAfterRetryThreshold(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxs, error) {
 	pEtx, exists := sl.pEtxRetryCache.Get(blockHash)
-	if !exists || pEtx.(pEtxRetry).retries < c_pEtxRetryThreshold {
+	if !exists || pEtx.retries < c_pEtxRetryThreshold {
 		return types.PendingEtxs{}, ErrPendingEtxNotFound
 	}
 	return sl.GetPendingEtxsFromSub(hash, location)

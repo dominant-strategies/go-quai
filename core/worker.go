@@ -27,8 +27,8 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
-	lru "github.com/hashicorp/golang-lru"
-	expireLru "github.com/hnlq715/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
+	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 const (
@@ -214,7 +214,7 @@ type worker struct {
 
 	wg sync.WaitGroup
 
-	Uncles  *lru.Cache
+	Uncles  *lru.Cache[common.Hash, types.WorkObjectHeader]
 	uncleMu sync.RWMutex
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
@@ -223,12 +223,12 @@ type worker struct {
 
 	workerDb ethdb.Database
 
-	pendingBlockBody *lru.Cache
+	pendingBlockBody *lru.Cache[common.Hash, types.WorkObject]
 
 	snapshotMu    sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock *types.WorkObject
 
-	headerPrints *expireLru.Cache
+	headerPrints *expireLru.LRU[common.Hash, interface{}]
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -295,11 +295,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		logger:                         logger,
 	}
 	// initialize a uncle cache
-	worker.Uncles, _ = lru.New(c_uncleCacheSize)
+	worker.Uncles, _ = lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit
 
-	phBodyCache, _ := lru.New(pendingBlockBodyLimit)
+	phBodyCache, _ := lru.New[common.Hash, types.WorkObject](pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
 
 	// Sanitize recommit interval if the user-specified one is too short.
@@ -312,7 +312,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		recommit = minRecommitInterval
 	}
 
-	headerPrints, _ := expireLru.NewWithExpire(1, c_headerPrintsExpiryTime)
+	headerPrints := expireLru.NewLRU[common.Hash, interface{}](1, nil, c_headerPrintsExpiryTime)
 	worker.headerPrints = headerPrints
 
 	nodeCtx := headerchain.NodeCtx()
@@ -423,9 +423,9 @@ func (w *worker) LoadPendingBlockBody() {
 	pendingBlockBodykeys := rawdb.ReadPbBodyKeys(w.workerDb)
 	for _, key := range pendingBlockBodykeys {
 		if key == types.EmptyBodyHash {
-			w.pendingBlockBody.Add(key, &types.WorkObject{})
+			w.pendingBlockBody.Add(key, types.WorkObject{})
 		} else {
-			w.pendingBlockBody.Add(key, rawdb.ReadPbCacheBody(w.workerDb, key))
+			w.pendingBlockBody.Add(key, *rawdb.ReadPbCacheBody(w.workerDb, key))
 		}
 		// Remove the entry from the database so that body is not accumulated over multiple stops
 		rawdb.DeletePbCacheBody(w.workerDb, key)
@@ -440,9 +440,9 @@ func (w *worker) StorePendingBlockBody() {
 	pendingBlockBody := w.pendingBlockBody
 	for _, key := range pendingBlockBody.Keys() {
 		if value, exist := pendingBlockBody.Peek(key); exist {
-			pendingBlockBodyKeys = append(pendingBlockBodyKeys, key.(common.Hash))
-			if key.(common.Hash) != types.EmptyBodyHash {
-				rawdb.WritePbCacheBody(w.workerDb, key.(common.Hash), value.(*types.WorkObject))
+			pendingBlockBodyKeys = append(pendingBlockBodyKeys, key)
+			if key != types.EmptyBodyHash {
+				rawdb.WritePbCacheBody(w.workerDb, key, &value)
 			}
 		}
 	}
@@ -507,7 +507,7 @@ func (w *worker) asyncStateLoop() {
 					if exists := w.Uncles.Contains(wo.Hash()); exists {
 						continue
 					}
-					w.Uncles.Add(wo.Hash(), wo.WorkObjectHeader())
+					w.Uncles.Add(wo.Hash(), *wo.WorkObjectHeader())
 				}
 			}()
 		case <-w.exitCh:
@@ -1212,13 +1212,13 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			return nil, err
 		}
 		// Accumulate the uncles for the sealing work.
-		commitUncles := func(wos *lru.Cache) {
+		commitUncles := func(wos *lru.Cache[common.Hash, types.WorkObjectHeader]) {
 			var uncles []*types.WorkObjectHeader
 			keys := wos.Keys()
 			for _, hash := range keys {
 				if value, exist := wos.Peek(hash); exist {
-					uncle := value.(*types.WorkObjectHeader)
-					uncles = append(uncles, uncle)
+					uncle := value
+					uncles = append(uncles, &uncle)
 				}
 			}
 			// sort the uncles in the decreasing order of entropy
@@ -1384,14 +1384,14 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 // AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
 // maps it to body.
 func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
-	w.pendingBlockBody.Add(wo.SealHash(), wo)
+	w.pendingBlockBody.Add(wo.SealHash(), *wo)
 }
 
 // GetPendingBlockBody gets the block body associated with the given header.
 func (w *worker) GetPendingBlockBody(woHeader *types.WorkObject) (*types.WorkObject, error) {
 	body, ok := w.pendingBlockBody.Get(woHeader.SealHash())
 	if ok {
-		return body.(*types.WorkObject), nil
+		return &body, nil
 	}
 	w.logger.WithField("key", woHeader.SealHash()).Warn("pending block body not found for header")
 	return nil, errors.New("pending block body not found")
@@ -1431,7 +1431,7 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 		return nil
 	}
 
-	w.Uncles.ContainsOrAdd(workShare.Hash(), workShare)
+	w.Uncles.ContainsOrAdd(workShare.Hash(), *workShare)
 	return nil
 }
 

@@ -12,7 +12,8 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hnlq715/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
+	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
@@ -62,10 +63,9 @@ type Core struct {
 	sl     *Slice
 	engine consensus.Engine
 
-	appendQueue     *lru.Cache
-	processingCache *lru.Cache
-	remoteTxQueue   *lru.Cache
-	localTxQueue    *lru.Cache
+	appendQueue     *lru.Cache[common.Hash, blockNumberAndRetryCounter]
+	processingCache *expireLru.LRU[common.Hash, interface{}]
+	remoteTxQueue   *lru.Cache[common.Hash, types.Transaction]
 
 	writeBlockLock sync.RWMutex
 
@@ -98,13 +98,12 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 	}
 
 	// Initialize the sync target to current header parent entropy
-	appendQueue, _ := lru.New(c_maxAppendQueue)
+	appendQueue, _ := lru.New[common.Hash, blockNumberAndRetryCounter](c_maxAppendQueue)
 	c.appendQueue = appendQueue
 
-	proccesingCache, _ := lru.NewWithExpire(c_processingCache, time.Second*60)
-	c.processingCache = proccesingCache
+	c.processingCache = expireLru.NewLRU[common.Hash, interface{}](c_processingCache, nil, time.Second*60)
 
-	remoteTxQueue, _ := lru.New(c_maxRemoteTxQueue)
+	remoteTxQueue, _ := lru.New[common.Hash, types.Transaction](c_maxRemoteTxQueue)
 	c.remoteTxQueue = remoteTxQueue
 
 	go c.updateAppendQueue()
@@ -225,9 +224,9 @@ func (c *Core) procAppendQueue() {
 	var hashNumberPriorityList []types.HashAndNumber
 	for _, hash := range c.appendQueue.Keys() {
 		if value, exist := c.appendQueue.Peek(hash); exist {
-			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
+			hashNumber := types.HashAndNumber{Hash: hash, Number: value.number}
 			if hashNumber.Number < c.CurrentHeader().NumberU64(nodeCtx)+maxFutureBlocks {
-				if value.(blockNumberAndRetryCounter).retry < c_appendQueueRetryPriorityThreshold {
+				if value.retry < c_appendQueueRetryPriorityThreshold {
 					hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
 				} else {
 					hashNumberList = append(hashNumberList, hashNumber)
@@ -281,7 +280,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 		if block != nil {
 			var numberAndRetryCounter blockNumberAndRetryCounter
 			if value, exist := c.appendQueue.Peek(block.Hash()); exist {
-				numberAndRetryCounter = value.(blockNumberAndRetryCounter)
+				numberAndRetryCounter = value
 				numberAndRetryCounter.retry += 1
 				if numberAndRetryCounter.retry > retryThreshold && numberAndRetryCounter.number+c_appendQueueRemoveThreshold < c.CurrentHeader().NumberU64(c.NodeCtx()) {
 					c.appendQueue.Remove(block.Hash())
@@ -439,7 +438,7 @@ func (c *Core) startRemoteTxQueue() {
 			txs := make([]*types.Transaction, 0, c.remoteTxQueue.Len())
 			for _, tx := range c.remoteTxQueue.Keys() {
 				if value, exist := c.remoteTxQueue.Peek(tx); exist {
-					txs = append(txs, value.(*types.Transaction))
+					txs = append(txs, &value)
 					c.remoteTxQueue.Remove(tx)
 				}
 			}
@@ -481,7 +480,7 @@ func (c *Core) printStats() {
 	// Print hashes & heights of all queue entries.
 	for _, hash := range c.appendQueue.Keys()[:math.Min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
 		if value, exist := c.appendQueue.Peek(hash); exist {
-			hashNumber := types.HashAndNumber{Hash: hash.(common.Hash), Number: value.(blockNumberAndRetryCounter).number}
+			hashNumber := types.HashAndNumber{Hash: hash, Number: value.number}
 			c.logger.WithFields(log.Fields{
 				"Number": strconv.FormatUint(hashNumber.Number, 10),
 				"Hash":   hashNumber.Hash.String(),
@@ -1160,12 +1159,12 @@ func (c *Core) AddLocal(tx *types.Transaction) error {
 }
 
 func (c *Core) AddRemote(tx *types.Transaction) {
-	c.remoteTxQueue.Add(tx.Hash(), tx)
+	c.remoteTxQueue.Add(tx.Hash(), *tx)
 }
 
 func (c *Core) AddRemotes(txs types.Transactions) {
 	for _, tx := range txs {
-		c.remoteTxQueue.Add(tx.Hash(), tx)
+		c.remoteTxQueue.Add(tx.Hash(), *tx)
 	}
 }
 

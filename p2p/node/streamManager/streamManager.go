@@ -11,7 +11,7 @@ import (
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/pkg/errors"
 
-	lru "github.com/hnlq715/golang-lru"
+	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -54,7 +54,7 @@ type StreamManager interface {
 
 type basicStreamManager struct {
 	ctx         context.Context
-	streamCache *lru.Cache
+	streamCache *expireLru.LRU[p2p.PeerID, streamWrapper]
 	p2pBackend  quaiprotocol.QuaiP2PNode
 	mu          sync.Mutex
 
@@ -67,14 +67,11 @@ type streamWrapper struct {
 }
 
 func NewStreamManager(peerCount int, node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStreamManager, error) {
-	lruCache, err := lru.NewWithEvict(
+	lruCache := expireLru.NewLRU[p2p.PeerID, streamWrapper](
 		peerCount*c_streamReplicationFactor,
 		severStream,
+		0,
 	)
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Failed to create LRU cache")
-		return nil, err
-	}
 
 	return &basicStreamManager{
 		ctx:         context.Background(),
@@ -85,11 +82,7 @@ func NewStreamManager(peerCount int, node quaiprotocol.QuaiP2PNode, host host.Ho
 }
 
 // Expects a key as peerID and value of *streamWrapper
-func severStream(key interface{}, value interface{}) {
-	wrappedStream, ok := value.(*streamWrapper)
-	if !ok {
-		return
-	}
+func severStream(key p2p.PeerID, wrappedStream streamWrapper) {
 	stream := wrappedStream.stream
 	err := stream.Close()
 	if err != nil {
@@ -127,7 +120,7 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 			// Explicitly return nil here to avoid casting a nil later
 			return nil, err
 		}
-		wrappedStream = &streamWrapper{
+		wrappedStream = streamWrapper{
 			stream:    stream,
 			semaphore: make(chan struct{}, c_maxPendingRequests),
 		}
@@ -141,7 +134,7 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 		log.Global.Trace("Requested stream was found in cache")
 	}
 
-	return wrappedStream.(*streamWrapper).stream, err
+	return wrappedStream.stream, err
 }
 
 func (sm *basicStreamManager) SetP2PBackend(host quaiprotocol.QuaiP2PNode) {
@@ -162,20 +155,20 @@ func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream net
 	if !found {
 		return errors.New("stream not found")
 	}
-	if stream != wrappedStream.(*streamWrapper).stream {
+	if stream != wrappedStream.stream {
 		// Indicate an unexpected case where the stream we stored and the stream we are requested to write to are not the same.
 		return errors.New("stream mismatch")
 	}
 
 	// Attempt to acquire semaphore before proceeding
 	select {
-	case wrappedStream.(*streamWrapper).semaphore <- struct{}{}:
+	case wrappedStream.semaphore <- struct{}{}:
 		// Acquired semaphore successfully
 	default:
 		return errors.New("too many pending requests")
 	}
 	defer func() {
-		<-wrappedStream.(*streamWrapper).semaphore
+		<-wrappedStream.semaphore
 	}()
 
 	// Set the write deadline

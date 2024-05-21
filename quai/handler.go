@@ -11,7 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
-	lru "github.com/hnlq715/golang-lru"
+	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 const (
@@ -44,7 +44,7 @@ type handler struct {
 	quitCh          chan struct{}
 	logger          *log.Logger
 
-	recentBlockReqCache *lru.Cache // cache the latest requests on a 1 min timer
+	recentBlockReqCache *expireLru.LRU[common.Hash, interface{}] // cache the latest requests on a 1 min timer
 }
 
 func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location, logger *log.Logger) *handler {
@@ -55,7 +55,7 @@ func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.L
 		quitCh:       make(chan struct{}),
 		logger:       logger,
 	}
-	handler.recentBlockReqCache, _ = lru.NewWithExpire(c_recentBlockReqCache, c_recentBlockReqTimeout)
+	handler.recentBlockReqCache = expireLru.NewLRU[common.Hash, interface{}](c_recentBlockReqCache, nil, c_recentBlockReqTimeout)
 	return handler
 }
 

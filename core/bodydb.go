@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -15,6 +15,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rlp"
 )
 
 const (
@@ -37,10 +38,10 @@ type BodyDb struct {
 
 	engine         consensus.Engine
 	chainmu        sync.RWMutex
-	blockCache     *lru.Cache
-	bodyCache      *lru.Cache
-	bodyProtoCache *lru.Cache
-	woCache        *lru.Cache
+	blockCache     *lru.Cache[common.Hash, types.WorkObject]
+	bodyCache      *lru.Cache[common.Hash, types.WorkObject]
+	bodyProtoCache *lru.Cache[common.Hash, rlp.RawValue]
+	woCache        *lru.Cache[common.Hash, types.WorkObject]
 	processor      *StateProcessor
 
 	slicesRunning   []common.Location
@@ -64,21 +65,21 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 	// slices that are not being processed by the node. This helps lower the RAM
 	// requirement on the slice nodes
 	if bc.ProcessingState() {
-		blockCache, _ := lru.New(blockCacheLimit)
-		bodyCache, _ := lru.New(bodyCacheLimit)
-		bodyRLPCache, _ := lru.New(bodyCacheLimit)
+		blockCache, _ := lru.New[common.Hash, types.WorkObject](blockCacheLimit)
+		bodyCache, _ := lru.New[common.Hash, types.WorkObject](bodyCacheLimit)
+		bodyRLPCache, _ := lru.New[common.Hash, rlp.RawValue](bodyCacheLimit)
 		bc.blockCache = blockCache
 		bc.bodyCache = bodyCache
 		bc.bodyProtoCache = bodyRLPCache
-		bc.woCache, _ = lru.New(bodyCacheLimit)
+		bc.woCache, _ = lru.New[common.Hash, types.WorkObject](bodyCacheLimit)
 	} else {
-		blockCache, _ := lru.New(10)
-		bodyCache, _ := lru.New(10)
-		bodyRLPCache, _ := lru.New(10)
+		blockCache, _ := lru.New[common.Hash, types.WorkObject](10)
+		bodyCache, _ := lru.New[common.Hash, types.WorkObject](10)
+		bodyRLPCache, _ := lru.New[common.Hash, rlp.RawValue](10)
 		bc.blockCache = blockCache
 		bc.bodyCache = bodyCache
 		bc.bodyProtoCache = bodyRLPCache
-		bc.woCache, _ = lru.New(10)
+		bc.woCache, _ = lru.New[common.Hash, types.WorkObject](10)
 	}
 
 	// only start the state processor in zone
@@ -137,7 +138,7 @@ func (bc *BodyDb) ProcessingState() bool {
 // WriteBlock write the block to the bodydb database
 func (bc *BodyDb) WriteBlock(block *types.WorkObject, nodeCtx int) {
 	// add the block to the cache as well
-	bc.blockCache.Add(block.Hash(), block)
+	bc.blockCache.Add(block.Hash(), *block)
 	rawdb.WriteWorkObject(bc.db, block.Hash(), block, types.BlockObject, nodeCtx)
 }
 
@@ -163,14 +164,14 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.WorkObject {
 	}
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
-		return block.(*types.WorkObject)
+		return &block
 	}
 	block := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
 	if block == nil {
 		return nil
 	}
 	// Cache the found block for next time and return
-	bc.blockCache.Add(block.Hash(), block)
+	bc.blockCache.Add(block.Hash(), *block)
 	return block
 }
 
@@ -183,14 +184,14 @@ func (bc *BodyDb) GetWorkObject(hash common.Hash) *types.WorkObject {
 	}
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if wo, ok := bc.woCache.Get(hash); ok {
-		return wo.(*types.WorkObject)
+		return &wo
 	}
 	wo := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
 	if wo == nil {
 		return nil
 	}
 	// Cache the found block for next time and return
-	bc.woCache.Add(wo.Hash(), wo)
+	bc.woCache.Add(wo.Hash(), *wo)
 	return wo
 }
 
