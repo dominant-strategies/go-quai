@@ -25,8 +25,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -37,6 +35,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/shirou/gopsutil/cpu"
@@ -1067,7 +1068,7 @@ func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
 	txCount := float64(len(block.Transactions()))
 	quaiTxCount := float64(len(block.QuaiTransactions()))
 	qiTxCount := float64(len(block.QiTransactions()))
-	extTxInCount := txCount - quaiTxCount - qiTxCount
+	extTxInCount := float64(len(block.Body().ExternalTransactions()))
 
 	currentBlock := cachedBlock{
 		number:        block.NumberU64(s.backend.NodeCtx()),
