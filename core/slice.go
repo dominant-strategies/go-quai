@@ -424,6 +424,8 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	// Relay the new pendingHeader
 	sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), subReorg)
 
+	inputs, outputs := block.InputsAndOutputsWithoutCoinbase()
+	net := int(outputs) - int(inputs)
 	time10 := common.PrettyDuration(time.Since(start))
 	sl.logger.WithFields(log.Fields{
 		"t0_1": time0_1,
@@ -447,23 +449,24 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	}).Info("Times during sub append")
 
 	sl.logger.WithFields(log.Fields{
-		"number":       block.NumberArray(),
-		"hash":         block.Hash(),
-		"difficulty":   block.Difficulty(),
-		"uncles":       len(block.Uncles()),
-		"totalTxs":     len(block.Transactions()),
-		"etxs emitted": len(block.ExtTransactions()),
-		"qiTxs":        len(block.QiTransactions()),
-		"quaiTxs":      len(block.QuaiTransactions()),
-		"etxs inbound": len(block.Body().ExternalTransactions()),
-		"gas":          block.GasUsed(),
-		"gasLimit":     block.GasLimit(),
-		"evmRoot":      block.EVMRoot(),
-		"utxoRoot":     block.UTXORoot(),
-		"etxSetRoot":   block.EtxSetRoot(),
-		"order":        order,
-		"location":     block.Location(),
-		"elapsed":      common.PrettyDuration(time.Since(start)),
+		"number":             block.NumberArray(),
+		"hash":               block.Hash(),
+		"difficulty":         block.Difficulty(),
+		"uncles":             len(block.Uncles()),
+		"totalTxs":           len(block.Transactions()),
+		"etxs emitted":       len(block.ExtTransactions()),
+		"qiTxs":              len(block.QiTransactions()),
+		"net outputs-inputs": net,
+		"quaiTxs":            len(block.QuaiTransactions()),
+		"etxs inbound":       len(block.Body().ExternalTransactions()),
+		"gas":                block.GasUsed(),
+		"gasLimit":           block.GasLimit(),
+		"evmRoot":            block.EVMRoot(),
+		"utxoRoot":           block.UTXORoot(),
+		"etxSetRoot":         block.EtxSetRoot(),
+		"order":              order,
+		"location":           block.Location(),
+		"elapsed":            common.PrettyDuration(time.Since(start)),
 	}).Info("Appended new block")
 
 	if nodeCtx == common.ZONE_CTX {

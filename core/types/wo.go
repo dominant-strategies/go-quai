@@ -345,6 +345,22 @@ func (wo *WorkObject) QuaiTransactionsWithoutCoinbase() []*Transaction {
 	return quaiTxs
 }
 
+func (wo *WorkObject) InputsAndOutputsWithoutCoinbase() (uint, uint) {
+	inputs := 0
+	outputs := 0
+	for i, tx := range wo.Transactions() {
+		if i == 0 && IsCoinBaseTx(tx, wo.woHeader.parentHash, wo.woHeader.location) {
+			// ignore the Qi coinbase tx
+			continue
+		}
+		if tx.Type() == QiTxType {
+			inputs += len(tx.TxIn())
+			outputs += len(tx.TxOut())
+		}
+	}
+	return uint(inputs), uint(outputs)
+}
+
 func (wo *WorkObject) QuaiTransactionsWithFees() []*Transaction {
 	quaiTxs := make([]*Transaction, 0)
 	for _, t := range wo.Transactions() {

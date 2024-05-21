@@ -124,7 +124,7 @@ func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRu
 	backend, _ := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), currentExpansionNumber, startingExpansionNumber, genesisBlock, logger)
 	sendfullstats := viper.GetBool(SendFullStatsFlag.Name)
 	// Add the Quai Stats daemon if requested.
-	if cfg.Quaistats.URL != "" {
+	if cfg.Quaistats.URL != "" && backend.ProcessingState() {
 		RegisterQuaiStatsService(stack, backend, cfg.Quaistats.URL, sendfullstats)
 	}
 	return stack, backend
