@@ -84,7 +84,7 @@ func (progpow *Progpow) VerifyHeader(chain consensus.ChainHeaderReader, header *
 	if chain.GetHeader(header.Hash(), number) != nil {
 		return nil
 	}
-	parent := chain.GetHeader(header.ParentHash(nodeCtx), number-1)
+	parent := chain.GetBlockByHash(header.ParentHash(nodeCtx))
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
