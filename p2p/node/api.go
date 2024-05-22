@@ -309,10 +309,6 @@ func (p *P2PNode) GetBlockHashByNumber(number *big.Int, location common.Location
 	return p.consensus.LookupBlockHashByNumber(number, location)
 }
 
-func (p *P2PNode) GetHeader(hash common.Hash, location common.Location) *types.WorkObject {
-	return p.consensus.GetHeader(hash, location)
-}
-
 func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse {
 	return p.consensus.GetTrieNode(hash, location)
 }

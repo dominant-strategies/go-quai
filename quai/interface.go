@@ -34,8 +34,6 @@ type ConsensusAPI interface {
 
 	LookupBlockHashByNumber(*big.Int, common.Location) *common.Hash
 
-	GetHeader(common.Hash, common.Location) *types.WorkObject
-
 	// Asks the consensus backend to lookup a trie node by hash and location,
 	// and return the data in the trie node.
 	GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse

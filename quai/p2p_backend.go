@@ -103,7 +103,6 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		}
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
-	case types.Header:
 	case types.Transactions:
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
@@ -256,16 +255,6 @@ func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common
 	} else {
 		return nil
 	}
-}
-
-func (qbe *QuaiBackend) GetHeader(hash common.Hash, location common.Location) *types.WorkObject {
-	backend := *qbe.GetBackend(location)
-	if backend == nil {
-		log.Global.Error("no backend found")
-		return nil
-	}
-	header, _ := backend.HeaderByHash(context.Background(), hash)
-	return header
 }
 
 func (qbe *QuaiBackend) ProcessingState(location common.Location) bool {

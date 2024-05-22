@@ -265,28 +265,6 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 	return nil
 }
 
-// Seeks the header in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
-func handleHeaderRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
-	header := node.GetHeader(hash, loc)
-	if header == nil {
-		log.Global.Debugf("header not found")
-		// TODO: handle header not found
-		return nil
-	}
-	log.Global.Debugf("header found %s", header.Hash())
-	// create a Quai Message Response with the header
-	data, err := pb.EncodeQuaiResponse(id, loc, header)
-	if err != nil {
-		return err
-	}
-	err = common.WriteMessageToStream(stream, data)
-	if err != nil {
-		return err
-	}
-	log.Global.Debugf("Sent header %s to peer %s", header.Hash(), stream.Conn().RemotePeer())
-	return nil
-}
-
 func handleTransactionRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
 	panic("TODO: implement")
 }
