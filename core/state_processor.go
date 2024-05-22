@@ -639,6 +639,7 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, statedb *stat
 	}
 	totalQitIn := big.NewInt(0)
 	addresses := make(map[common.AddressBytes]struct{})
+	inputs := make(map[uint]uint64)
 	for _, txIn := range tx.TxIn() {
 		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
@@ -668,6 +669,24 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, statedb *stat
 			return nil, errors.New(str)
 		}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
+		inputs[uint(denomination)]++
+	}
+	outputs := make(map[uint]uint64)
+	for _, txOut := range tx.TxOut() {
+		if txOut.Denomination > types.MaxDenomination {
+			str := fmt.Sprintf("transaction output value of %v is "+
+				"higher than max allowed value of %v",
+				txOut.Denomination,
+				types.MaxDenomination)
+			return nil, errors.New(str)
+		}
+		outputs[uint(txOut.Denomination)]++
+		if common.IsConversionOutput(txOut.Address, location) { // Qi->Quai conversion
+			outputs[uint(txOut.Denomination)] -= 1 // This output no longer exists because it has been aggregated
+		}
+	}
+	if err := CheckDenominations(inputs, outputs); err != nil {
+		return nil, err
 	}
 	return totalQitIn, nil
 
@@ -725,6 +744,8 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			delete(addresses, toAddr.Bytes20())
 			continue
+		} else if toAddr.IsInQuaiLedgerScope() {
+			return nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
 		}
 
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
@@ -925,8 +946,11 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 				return nil, nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination)
 			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
+			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
 			continue
+		} else if toAddr.IsInQuaiLedgerScope() {
+			return nil, nil, fmt.Errorf("tx %v emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
 		}
 
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
@@ -1017,26 +1041,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 		etxs = append(etxs, &etxInner)
 		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
 	}
-	// Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.
-	carries := make(map[uint]uint64)
-	for i := types.MaxDenomination; i >= 0; i-- {
-		if carry, exists := carries[uint(i)]; exists {
-			if carry > inputs[uint(i)] {
-				return nil, nil, fmt.Errorf("tx attempts to combine smaller denominations into larger one for denomination %d", i)
-			}
-			inputs[uint(i)] -= carry
-		}
-		if outputs[uint(i)] > inputs[uint(i)] {
-			diff := new(big.Int).SetUint64(outputs[uint(i)] - inputs[uint(i)])
-			if i == 0 {
-				return nil, nil, fmt.Errorf("tx attempts to combine smaller denominations into larger one for denomination %d", i)
-			}
-			carries[uint(i-1)] += diff.Mul(diff, (new(big.Int).Div(types.Denominations[uint8(i)], types.Denominations[uint8(i-1)]))).Uint64()
-		} else if outputs[uint(i)] < inputs[uint(i)] {
-			continue
-		}
+	if err := CheckDenominations(inputs, outputs); err != nil {
+		return nil, nil, err
 	}
-
 	// Ensure the transaction signature is valid
 	if checkSig {
 		var finalKey *btcec.PublicKey
@@ -1061,6 +1068,20 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 	*etxRLimit -= ETXRCount
 	*etxPLimit -= ETXPCount
 	return txFeeInQit, etxs, nil
+}
+
+// Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.
+func CheckDenominations(inputs, outputs map[uint]uint64) error {
+	carries := make(map[uint]uint64)
+	for i := types.MaxDenomination; i >= 0; i-- {
+		if outputs[uint(i)] <= inputs[uint(i)]+carries[uint(i)] {
+			diff := new(big.Int).SetUint64((inputs[uint(i)] + carries[uint(i)]) - (outputs[uint(i)]))
+			carries[uint(i-1)] += diff.Mul(diff, (new(big.Int).Div(types.Denominations[uint8(i)], types.Denominations[uint8(i-1)]))).Uint64()
+		} else {
+			return fmt.Errorf("tx attempts to combine smaller denominations into larger one for denomination %d", i)
+		}
+	}
+	return nil
 }
 
 // Apply State

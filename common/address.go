@@ -407,3 +407,14 @@ func MakeErrQiAddress(addr string) error {
 func (a Address) MixedcaseAddress() MixedcaseAddress {
 	return NewMixedcaseAddress(a)
 }
+
+func IsConversionOutput(a []byte, nodeLocation Location) bool {
+	if len(a) != AddressLength {
+		return false
+	}
+	// Extract nibbles
+	lowerNib := a[0] & 0x0F        // Lower 4 bits
+	upperNib := (a[0] & 0xF0) >> 4 // Upper 4 bits, shifted right
+
+	return Location{upperNib, lowerNib}.Equal(nodeLocation) && a[1] <= 127
+}
