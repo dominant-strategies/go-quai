@@ -841,7 +841,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 	}
 
 	addresses := make(map[common.AddressBytes]struct{})
-
+	inputs := make(map[uint]uint64)
 	totalQitIn := big.NewInt(0)
 	pubKeys := make([]*btcec.PublicKey, 0)
 	for _, txIn := range tx.TxIn() {
@@ -881,6 +881,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 			return nil, nil, errors.New(str)
 		}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
+		inputs[uint(denomination)]++
 		if updateState { // only update the state if requested (txpool check does not need to update the state)
 			statedb.DeleteUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		}
@@ -888,6 +889,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 	var ETXRCount int
 	var ETXPCount int
 	etxs := make([]*types.ExternalTx, 0)
+	outputs := make(map[uint]uint64)
 	totalQitOut := big.NewInt(0)
 	totalConvertQitOut := big.NewInt(0)
 	conversion := false
@@ -914,6 +916,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 			return nil, nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String())
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
+		outputs[uint(txOut.Denomination)]++
 
 		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai conversion
 			conversion = true
@@ -1013,6 +1016,25 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 		}
 		etxs = append(etxs, &etxInner)
 		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+	}
+	// Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.
+	carries := make(map[uint]uint64)
+	for i := types.MaxDenomination; i >= 0; i-- {
+		if carry, exists := carries[uint(i)]; exists {
+			if carry > inputs[uint(i)] {
+				return nil, nil, fmt.Errorf("tx attempts to combine smaller denominations into larger one for denomination %d", i)
+			}
+			inputs[uint(i)] -= carry
+		}
+		if outputs[uint(i)] > inputs[uint(i)] {
+			diff := new(big.Int).SetUint64(outputs[uint(i)] - inputs[uint(i)])
+			if i == 0 {
+				return nil, nil, fmt.Errorf("tx attempts to combine smaller denominations into larger one for denomination %d", i)
+			}
+			carries[uint(i-1)] += diff.Mul(diff, (new(big.Int).Div(types.Denominations[uint8(i)], types.Denominations[uint8(i-1)]))).Uint64()
+		} else if outputs[uint(i)] < inputs[uint(i)] {
+			continue
+		}
 	}
 
 	// Ensure the transaction signature is valid
