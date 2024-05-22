@@ -149,6 +149,7 @@ func (h *handler) missingBlockLoop() {
 func (h *handler) txBroadcastLoop() {
 	transactions := make(types.Transactions, 0, c_maxTxBatchSize)
 	broadcastTransactionsTicker := time.NewTicker(c_broadcastTransactionsInterval)
+	defer broadcastTransactionsTicker.Stop()
 	defer h.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
