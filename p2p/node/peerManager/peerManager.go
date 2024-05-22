@@ -611,7 +611,3 @@ func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
 func (pm *BasicPeerManager) WriteMessageToStream(peerId p2p.PeerID, stream network.Stream, msg []byte) error {
 	return pm.streamManager.WriteMessageToStream(peerId, stream, msg)
 }
-
-func (pm *BasicPeerManager) ClosePendingRequest(peer p2p.PeerID) error {
-	return pm.streamManager.ClosePendingRequest(peer)
-}
