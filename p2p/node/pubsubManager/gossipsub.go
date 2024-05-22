@@ -128,6 +128,8 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 		}()
 		// Create a channel for messages
 		msgChan := make(chan *pubsub.Message, msgChanSize)
+		// close the msgChan if we exit this function
+		defer close(msgChan)
 		full := 0
 		// Start worker goroutines
 		for i := 0; i < numWorkers; i++ {
@@ -154,7 +156,6 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 			if err != nil || msg == nil {
 				// if context was cancelled, then we are shutting down
 				if g.ctx.Err() != nil {
-					close(msgChan)
 					return
 				}
 				log.Global.Errorf("error getting next message from subscription: %s", err)

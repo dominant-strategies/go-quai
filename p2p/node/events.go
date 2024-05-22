@@ -42,56 +42,58 @@ func (p *P2PNode) eventLoop() {
 	for {
 		select {
 		case evt := <-sub.Out():
-			switch e := evt.(type) {
-			case event.EvtLocalProtocolsUpdated:
-				log.Global.Debugf("Event: 'Local protocols updated' - added: %+v, removed: %+v", e.Added, e.Removed)
-			case event.EvtLocalAddressesUpdated:
-				p2pAddr, err := p.p2pAddress()
-				if err != nil {
-					log.Global.Errorf("error computing p2p address: %s", err)
-				} else {
-					for _, addr := range e.Current {
-						addr := addr.Address.Encapsulate(p2pAddr)
-						log.Global.Infof("Event: 'Local address updated': %s", addr)
+			go func(evt interface{}) {
+				switch e := evt.(type) {
+				case event.EvtLocalProtocolsUpdated:
+					log.Global.Debugf("Event: 'Local protocols updated' - added: %+v, removed: %+v", e.Added, e.Removed)
+				case event.EvtLocalAddressesUpdated:
+					p2pAddr, err := p.p2pAddress()
+					if err != nil {
+						log.Global.Errorf("error computing p2p address: %s", err)
+					} else {
+						for _, addr := range e.Current {
+							addr := addr.Address.Encapsulate(p2pAddr)
+							log.Global.Infof("Event: 'Local address updated': %s", addr)
+						}
+						// log removed addresses
+						for _, addr := range e.Removed {
+							addr := addr.Address.Encapsulate(p2pAddr)
+							log.Global.Infof("Event: 'Local address removed': %s", addr)
+						}
 					}
-					// log removed addresses
-					for _, addr := range e.Removed {
-						addr := addr.Address.Encapsulate(p2pAddr)
-						log.Global.Infof("Event: 'Local address removed': %s", addr)
+				case event.EvtLocalReachabilityChanged:
+					log.Global.Debugf("Event: 'Local reachability changed': %+v", e.Reachability)
+				case event.EvtNATDeviceTypeChanged:
+					log.Global.Debugf("Event: 'NAT device type changed' - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
+				case event.EvtPeerProtocolsUpdated:
+					log.Global.Debugf("Event: 'Peer protocols updated' - added: %+v, removed: %+v, peer: %+v", e.Added, e.Removed, e.Peer)
+				case event.EvtPeerIdentificationCompleted:
+					log.Global.Debugf("Event: 'Peer identification completed' - %v", e.Peer)
+				case event.EvtPeerIdentificationFailed:
+					log.Global.Debugf("Event 'Peer identification failed' - peer: %v, reason: %v", e.Peer, e.Reason.Error())
+				case event.EvtPeerConnectednessChanged:
+					// get the peer info
+					peerInfo := p.peerManager.GetHost().Peerstore().PeerInfo(e.Peer)
+					// get the peer ID
+					peerID := peerInfo.ID
+					// get the peer protocols
+					peerProtocols, err := p.peerManager.GetHost().Peerstore().GetProtocols(peerID)
+					if err != nil {
+						log.Global.Errorf("error getting peer protocols: %s", err)
 					}
-				}
-			case event.EvtLocalReachabilityChanged:
-				log.Global.Debugf("Event: 'Local reachability changed': %+v", e.Reachability)
-			case event.EvtNATDeviceTypeChanged:
-				log.Global.Debugf("Event: 'NAT device type changed' - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
-			case event.EvtPeerProtocolsUpdated:
-				log.Global.Debugf("Event: 'Peer protocols updated' - added: %+v, removed: %+v, peer: %+v", e.Added, e.Removed, e.Peer)
-			case event.EvtPeerIdentificationCompleted:
-				log.Global.Debugf("Event: 'Peer identification completed' - %v", e.Peer)
-			case event.EvtPeerIdentificationFailed:
-				log.Global.Debugf("Event 'Peer identification failed' - peer: %v, reason: %v", e.Peer, e.Reason.Error())
-			case event.EvtPeerConnectednessChanged:
-				// get the peer info
-				peerInfo := p.peerManager.GetHost().Peerstore().PeerInfo(e.Peer)
-				// get the peer ID
-				peerID := peerInfo.ID
-				// get the peer protocols
-				peerProtocols, err := p.peerManager.GetHost().Peerstore().GetProtocols(peerID)
-				if err != nil {
-					log.Global.Errorf("error getting peer protocols: %s", err)
-				}
-				// get the peer addresses
-				peerAddresses := p.peerManager.GetHost().Peerstore().Addrs(peerID)
-				log.Global.Debugf("Event: 'Peer connectedness change' - Peer %s (peerInfo: %+v) is now %s, protocols: %v, addresses: %v", peerID.String(), peerInfo, e.Connectedness, peerProtocols, peerAddresses)
+					// get the peer addresses
+					peerAddresses := p.peerManager.GetHost().Peerstore().Addrs(peerID)
+					log.Global.Debugf("Event: 'Peer connectedness change' - Peer %s (peerInfo: %+v) is now %s, protocols: %v, addresses: %v", peerID.String(), peerInfo, e.Connectedness, peerProtocols, peerAddresses)
 
-				if e.Connectedness == network.NotConnected {
-					p.peerManager.RemovePeer(peerID)
+					if e.Connectedness == network.NotConnected {
+						p.peerManager.RemovePeer(peerID)
+					}
+				case *event.EvtNATDeviceTypeChanged:
+					log.Global.Debugf("Event `NAT device type changed` - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
+				default:
+					log.Global.Debugf("Received unknown event (type: %T): %+v", e, e)
 				}
-			case *event.EvtNATDeviceTypeChanged:
-				log.Global.Debugf("Event `NAT device type changed` - DeviceType %v, transport: %v", e.NatDeviceType.String(), e.TransportProtocol.String())
-			default:
-				log.Global.Debugf("Received unknown event (type: %T): %+v", e, e)
-			}
+			}(evt)
 		case <-p.ctx.Done():
 			log.Global.Warnf("Context cancel received. Stopping event listener")
 			return

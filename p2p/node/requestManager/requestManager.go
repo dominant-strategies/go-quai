@@ -57,7 +57,7 @@ func NewManager() RequestManager {
 	}
 }
 
-// Generates a new random uint32 as request ID
+// CreateRequest generates a new random uint32 as request ID
 func (m *requestIDManager) CreateRequest() uint32 {
 	var id uint32
 	for {
