@@ -1468,7 +1468,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	addresses := make(map[common.AddressBytes]struct{})
 	totalQitIn := big.NewInt(0)
 	utxosDelete := make([]types.OutPoint, 0)
-	inputDenominations := make(map[uint8]uint64)
+	inputs := make(map[uint]uint64)
 	for _, txIn := range tx.TxIn() {
 		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
@@ -1487,7 +1487,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				types.MaxDenomination)
 			return errors.New(str)
 		}
-		inputDenominations[denomination] += 1
 		// Check for duplicate addresses. This also checks for duplicate inputs.
 		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
 			return errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
@@ -1495,6 +1494,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
 		utxosDelete = append(utxosDelete, txIn.PreviousOutPoint)
+		inputs[uint(denomination)]++
 	}
 	var ETXRCount int
 	var ETXPCount int
@@ -1504,7 +1504,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	utxosCreate := make(map[types.OutPoint]*types.UtxoEntry)
 	conversion := false
 	var convertAddress common.Address
-	outputDenominations := make(map[uint8]uint64)
+	outputs := make(map[uint]uint64)
 	for txOutIdx, txOut := range tx.TxOut() {
 		if txOutIdx > types.MaxOutputIndex {
 			return errors.New("transaction has too many outputs")
@@ -1516,7 +1516,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				types.MaxDenomination)
 			return errors.New(str)
 		}
-		outputDenominations[txOut.Denomination] += 1
+		outputs[uint(txOut.Denomination)] += 1
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 		toAddr := common.BytesToAddress(txOut.Address, location)
 		if _, exists := addresses[toAddr.Bytes20()]; exists {
@@ -1532,9 +1532,12 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), txOut.Denomination)
 			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
-			outputDenominations[txOut.Denomination] -= 1                                        // This output no longer exists because it has been aggregated
+			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
 			continue
+		} else if toAddr.IsInQuaiLedgerScope() {
+			w.logger.Error(fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash()))
+			return fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash())
 		}
 
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
@@ -1638,6 +1641,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			log.Global.Errorf("Failed to create UTXO %032x:%d: %v", outPoint.TxHash, outPoint.Index, err)
 			return err
 		}
+	}
+	if err := CheckDenominations(inputs, outputs); err != nil {
+		return err
 	}
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil
