@@ -195,11 +195,11 @@ var packUnpackTests = []packUnpackTest{
 	{
 		def:      `[{"type": "address"}]`,
 		packed:   "0000000000000000000000000100000000000000000000000000000000000000",
-		unpacked: common.Address{1},
+		unpacked: common.BytesToAddress([]byte{1}, common.Location{0, 0}),
 	},
 	{
 		def:      `[{"type": "address[]"}]`,
-		unpacked: []common.Address{{1}, {2}},
+		unpacked: []common.Address{common.BytesToAddress([]byte{1}, common.Location{0, 0}), common.BytesToAddress([]byte{2}, common.Location{0, 0})},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000100000000000000000000000000000000000000" +
@@ -868,7 +868,7 @@ var packUnpackTests = []packUnpackTest{
 			D []string
 			E []*big.Int
 			F []common.Address
-		}{"foobar", 1, []byte{1}, []string{"foo", "bar"}, []*big.Int{big.NewInt(1), big.NewInt(-1)}, []common.Address{{1}, {2}}},
+		}{"foobar", 1, []byte{1}, []string{"foo", "bar"}, []*big.Int{big.NewInt(1), big.NewInt(-1)}, []common.Address{common.BytesToAddress([]byte{2}, common.Location{0, 0}), common.BytesToAddress([]byte{1}, common.Location{0, 0})}},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
 			"00000000000000000000000000000000000000000000000000000000000000c0" + // struct[a] offset
 			"0000000000000000000000000000000000000000000000000000000000000001" + // struct[b]

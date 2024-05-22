@@ -154,7 +154,7 @@ func TestEventMultiValueWithArrayUnpack(t *testing.T) {
 	for ; i <= 3; i++ {
 		b.Write(packNum(reflect.ValueOf(i)))
 	}
-	unpacked, err := abi.Unpack("test", b.Bytes())
+	unpacked, err := abi.Unpack("test", b.Bytes(), common.Location{0, 0})
 	require.NoError(t, err)
 	require.Equal(t, [2]uint8{1, 2}, unpacked[0])
 	require.Equal(t, uint8(3), unpacked[1])
@@ -209,7 +209,7 @@ func TestEventTupleUnpack(t *testing.T) {
 	bigintExpected := big.NewInt(1000000)
 	bigintExpected2 := big.NewInt(2218516807680)
 	bigintExpected3 := big.NewInt(1000001)
-	addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268")
+	addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268", common.Location{0, 0})
 	var testCases = []struct {
 		data     string
 		dest     interface{}
@@ -347,7 +347,7 @@ func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, ass
 	var e Event
 	assert.NoError(json.Unmarshal(jsonEvent, &e), "Should be able to unmarshal event ABI")
 	a := ABI{Events: map[string]Event{"e": e}}
-	return a.UnpackIntoInterface(dest, "e", data)
+	return a.UnpackIntoInterface(dest, "e", data, common.Location{0, 0})
 }
 
 // TestEventUnpackIndexed verifies that indexed field will be skipped by event decoder.
@@ -362,7 +362,7 @@ func TestEventUnpackIndexed(t *testing.T) {
 	var b bytes.Buffer
 	b.Write(packNum(reflect.ValueOf(uint8(8))))
 	var rst testStruct
-	require.NoError(t, abi.UnpackIntoInterface(&rst, "test", b.Bytes()))
+	require.NoError(t, abi.UnpackIntoInterface(&rst, "test", b.Bytes(), common.Location{0, 0}))
 	require.Equal(t, uint8(0), rst.Value1)
 	require.Equal(t, uint8(8), rst.Value2)
 }
@@ -384,7 +384,7 @@ func TestEventIndexedWithArrayUnpack(t *testing.T) {
 	b.Write(common.RightPadBytes([]byte(stringOut), 32))
 
 	var rst testStruct
-	require.NoError(t, abi.UnpackIntoInterface(&rst, "test", b.Bytes()))
+	require.NoError(t, abi.UnpackIntoInterface(&rst, "test", b.Bytes(), common.Location{0, 0}))
 	require.Equal(t, [2]uint8{0, 0}, rst.Value1)
 	require.Equal(t, stringOut, rst.Value2)
 }

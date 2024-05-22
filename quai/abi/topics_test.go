@@ -49,7 +49,7 @@ func TestMakeTopics(t *testing.T) {
 		},
 		{
 			"support address types in topics",
-			args{[][]interface{}{{common.Address{1, 2, 3, 4, 5}}}},
+			args{[][]interface{}{{common.BytesToAddress([]byte{1, 2, 3, 4, 5}, common.Location{0, 0})}}},
 			[][]common.Hash{{common.Hash{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5}}},
 			false,
 		},
@@ -352,7 +352,7 @@ func TestParseTopics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			createObj := tt.args.createObj()
-			if err := ParseTopics(createObj, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
+			if err := ParseTopics(createObj, tt.args.fields, tt.args.topics, common.Location{0, 0}); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopics() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			resultObj := tt.args.resultObj()
@@ -369,7 +369,7 @@ func TestParseTopicsIntoMap(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outMap := make(map[string]interface{})
-			if err := ParseTopicsIntoMap(outMap, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
+			if err := ParseTopicsIntoMap(outMap, tt.args.fields, tt.args.topics, common.Location{0, 0}); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopicsIntoMap() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			resultMap := tt.args.resultMap()
