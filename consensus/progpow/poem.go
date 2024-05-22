@@ -205,7 +205,6 @@ func (progpow *Progpow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error) {
 		}
 		// Discount 2) applies to all shares regardless of the weight
 		wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(wo.NumberU64(common.ZONE_CTX)-ws.NumberU64())), nil))
-
 		// Add the entropy into the total entropy once the discount calculation is done
 		totalWsEntropy.Add(totalWsEntropy, wsEntropy)
 	}
