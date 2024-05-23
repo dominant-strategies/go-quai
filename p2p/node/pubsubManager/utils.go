@@ -16,16 +16,20 @@ import (
 
 const (
 	// Data types for gossipsub topics
-	C_workObjectType       = "blocks"
-	C_transactionType      = "transactions"
-	C_headerType           = "headers"
-	C_workObjectHeaderType = "woHeaders"
+	C_workObjectType                    = "blocks"
+	C_transactionType                   = "transactions"
+	C_headerType                        = "headers"
+	C_workObjectHeaderType              = "woHeaders"
+	C_workObjectRequestDegree           = 3
+	C_workObjectHeaderTypeRequestDegree = 3
+	C_defaultRequestDegree              = 3
 )
 
 type Topic struct {
-	genesis  common.Hash
-	location common.Location
-	data     interface{}
+	genesis       common.Hash
+	location      common.Location
+	data          interface{}
+	requestDegree int
 	string
 }
 
@@ -63,20 +67,31 @@ func (t *Topic) GetTopicType() interface{} {
 	return t.data
 }
 
+func (t *Topic) GetRequestDegree() int {
+	return t.requestDegree
+}
+
 // gets the name of the topic for the given type of data
 func NewTopic(genesis common.Hash, location common.Location, data interface{}) (*Topic, error) {
+	var requestDegree int
 	switch data.(type) {
-	case *types.WorkObjectHeader, *types.WorkObjectHeaderView, *types.WorkObjectBlockView, common.Hash, *types.Transactions:
-		t := &Topic{
-			genesis:  genesis,
-			location: location,
-			data:     data,
-		}
-		t.string = t.buildTopicString()
-		return t, nil
+	case *types.WorkObjectHeader, common.Hash, *types.Transactions:
+		requestDegree = C_defaultRequestDegree
+	case *types.WorkObjectHeaderView:
+		requestDegree = C_workObjectHeaderTypeRequestDegree
+	case *types.WorkObjectBlockView:
+		requestDegree = C_workObjectRequestDegree
 	default:
 		return nil, ErrUnsupportedType
 	}
+	t := &Topic{
+		genesis:       genesis,
+		location:      location,
+		data:          data,
+		requestDegree: requestDegree,
+	}
+	t.string = t.buildTopicString()
+	return t, nil
 }
 
 func TopicFromString(genesis common.Hash, topic string) (*Topic, error) {

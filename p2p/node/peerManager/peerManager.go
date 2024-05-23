@@ -3,6 +3,7 @@ package peerManager
 import (
 	"context"
 	"maps"
+	"math/rand"
 	"net"
 	"runtime/debug"
 	"strings"
@@ -40,8 +41,12 @@ const (
 	// 	e.g. live_reports / latent_reports = 0.8
 	c_qualityThreshold = 0.8
 
-	// The number of peers to return when querying for peers
-	C_peerCount = 3
+	// c_minBestPeersFromDb is the number of peers we want to randomly read from the db
+	c_minBestPeersFromDb = 6
+	// c_minResponsiveBestPeersFromDb is the number of peers we want to randomly read from the db
+	c_minResponsivePeersFromDb = 3
+	// c_minLastResortPeersFromDb is the number of peers we want to randomly read from the db
+	c_minLastResortPeersFromDb = 1
 )
 
 type PeerQuality int
@@ -88,10 +93,9 @@ type PeerManager interface {
 	// Removes a peer from all the quality buckets
 	RemovePeer(p2p.PeerID) error
 
-	// Returns c_peerCount peers starting at the requested quality level of peers
-	// If there are not enough peers at the requested quality, it will return lower quality peers
-	// If there still aren't enough peers, it will query the DHT for more
-	GetPeers(topic *pubsubManager.Topic, quality PeerQuality) map[p2p.PeerID]struct{}
+	// GetPeers gets randomized set of peers from the database based on the
+	// request degree of the topic
+	GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{}
 
 	// Increases the peer's liveliness score
 	MarkLivelyPeer(peerID p2p.PeerID, topic *pubsubManager.Topic)
@@ -311,8 +315,8 @@ func (pm *BasicPeerManager) GetSelfID() p2p.PeerID {
 	return pm.selfID
 }
 
-func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) map[p2p.PeerID]struct{} {
-	peerSubset := make(map[p2p.PeerID]struct{}, C_peerCount)
+func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, topic *pubsubManager.Topic, numPeers int) map[p2p.PeerID]struct{} {
+	peerSubset := make(map[p2p.PeerID]struct{})
 	q := query.Query{
 		Limit: numPeers,
 	}
@@ -324,7 +328,8 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 	for result := range results.Next() {
 		peerID, err := peer.Decode(strings.TrimPrefix(result.Key, "/"))
 		if err != nil {
-			return nil
+			// If there is an error, move to the next peer
+			continue
 		}
 		peerSubset[peerID] = struct{}{}
 	}
@@ -332,27 +337,45 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 	return peerSubset
 }
 
-func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic, quality PeerQuality) map[p2p.PeerID]struct{} {
-	var peerList map[p2p.PeerID]struct{}
-	switch quality {
-	case Best:
-		peerList = pm.getBestPeersWithFallback(topic)
-	case Responsive:
-		peerList = pm.getResponsivePeersWithFallback(topic)
-	case LastResort:
-		peerList = pm.getLastResortPeers(topic)
-	default:
-		panic("Invalid peer quality")
+func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
+	if pm.peerDBs[topic.String()] == nil {
+		// There have not been any peers added to this topic
+		return make(map[peer.ID]struct{})
 	}
+	peerList := make(map[p2p.PeerID]struct{})
+	// Add best peers into the peerList
+	bestPeers := pm.getBestPeers(topic)
+	maps.Copy(peerList, bestPeers)
+	// Add responsive peers into the peerList
+	responsivePeers := pm.getResponsivePeers(topic)
+	maps.Copy(peerList, responsivePeers)
+	// Add last resort peers into the peerList
+	lastResortPeers := pm.getLastResortPeers(topic)
+	maps.Copy(peerList, lastResortPeers)
 
+	// Randomly select request degree number of peers from the peerList
 	lenPeer := len(peerList)
-	if lenPeer >= C_peerCount {
-		// Found sufficient number of peers
-		return peerList
+	// If we have more peers than the request degree, randomly select peers and
+	// return, otherwise ask the dht for the extra required peers
+	if lenPeer >= topic.GetRequestDegree() {
+		peers := make([]p2p.PeerID, 0)
+		for peer, _ := range peerList {
+			peers = append(peers, peer)
+		}
+		rand.Shuffle(len(peers), func(i, j int) {
+			peers[i], peers[j] = peers[j], peers[i]
+		})
+
+		randomPeers := make(map[p2p.PeerID]struct{})
+		for _, peer := range peers[:topic.GetRequestDegree()] {
+			randomPeers[peer] = struct{}{}
+		}
+
+		return randomPeers
 	}
 
 	// Query the DHT for more peers
-	return pm.queryDHT(topic, peerList, C_peerCount-lenPeer)
+	return pm.queryDHT(topic, peerList, topic.GetRequestDegree()-lenPeer)
 }
 
 func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2p.PeerID]struct{}, peerCount int) map[p2p.PeerID]struct{} {
@@ -373,35 +396,16 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2
 	return peerList
 }
 
-func (pm *BasicPeerManager) getBestPeersWithFallback(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	if pm.peerDBs[topic.String()] == nil {
-		// There have not been any peers added to this topic
-		return make(map[peer.ID]struct{}, C_peerCount)
-	}
-
-	bestPeersCount := pm.peerDBs[topic.String()][Best].GetPeerCount()
-	if bestPeersCount < C_peerCount {
-		bestPeerList := pm.getPeersHelper(pm.peerDBs[topic.String()][Best], bestPeersCount)
-		maps.Copy(bestPeerList, pm.getResponsivePeersWithFallback(topic))
-		return bestPeerList
-	}
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][Best], C_peerCount)
+func (pm *BasicPeerManager) getBestPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
+	return pm.getPeersHelper(pm.peerDBs[topic.String()][Best], topic, c_minBestPeersFromDb)
 }
 
-func (pm *BasicPeerManager) getResponsivePeersWithFallback(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	responsivePeersCount := pm.peerDBs[topic.String()][Responsive].GetPeerCount()
-	if responsivePeersCount < C_peerCount {
-		responsivePeerList := pm.getPeersHelper(pm.peerDBs[topic.String()][Responsive], responsivePeersCount)
-		maps.Copy(responsivePeerList, pm.getLastResortPeers(topic))
-
-		return responsivePeerList
-	}
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][Responsive], C_peerCount)
-
+func (pm *BasicPeerManager) getResponsivePeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
+	return pm.getPeersHelper(pm.peerDBs[topic.String()][Responsive], topic, c_minResponsivePeersFromDb)
 }
 
 func (pm *BasicPeerManager) getLastResortPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][LastResort], C_peerCount)
+	return pm.getPeersHelper(pm.peerDBs[topic.String()][LastResort], topic, c_minLastResortPeersFromDb)
 }
 
 func (pm *BasicPeerManager) MarkLivelyPeer(peer p2p.PeerID, topic *pubsubManager.Topic) {

@@ -13,7 +13,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/quai"
@@ -131,7 +130,7 @@ func (p *P2PNode) requestFromPeers(ctx context.Context, topic *pubsubManager.Top
 			}
 		}()
 		defer close(resultChan)
-		peers := p.peerManager.GetPeers(topic, peerManager.Best)
+		peers := p.peerManager.GetPeers(topic)
 		log.Global.WithFields(log.Fields{
 			"peers": peers,
 			"topic": topic,

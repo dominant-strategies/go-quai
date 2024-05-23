@@ -2,6 +2,7 @@ package peerdb
 
 import (
 	"context"
+	"math/rand"
 
 	"github.com/dominant-strategies/go-quai/log"
 	datastore "github.com/ipfs/go-datastore"
@@ -9,6 +10,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
+
+const c_maxPeerDbLookup = 30
 
 // ipfs Datastore interface implementation
 
@@ -87,28 +90,30 @@ func (p *PeerDB) Query(ctx context.Context, q query.Query) (query.Results, error
 	iter := p.db.NewIterator(iterRange, nil)
 	defer iter.Release()
 
-	entries := make([]query.Entry, 0)
+	// collect all the keys in the peerdb
+	var entries []query.Entry
 	for iter.Next() {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-
-		key := string(iter.Key())
-		value := iter.Value()
-		log.Global.Tracef("Query result: %s -> %s", key, value)
-		entries = append(entries, query.Entry{Key: key, Value: value})
-
-		if limit && len(entries) >= q.Limit {
+		entries = append(entries, query.Entry{Key: string(iter.Key()), Value: iter.Value()})
+		if len(entries) > c_maxPeerDbLookup {
 			break
 		}
 	}
-
 	if err := iter.Error(); err != nil {
 		return nil, err
 	}
+	// Shuffle the slice of keys
+	rand.Shuffle(len(entries), func(i, j int) {
+		entries[i], entries[j] = entries[j], entries[i]
+	})
 
-	result := query.ResultsWithEntries(q, entries)
+	if limit && len(entries) < q.Limit {
+		return query.ResultsWithEntries(q, entries), nil
+	}
 
+	result := query.ResultsWithEntries(q, entries[:q.Limit])
 	return result, nil
 }
 

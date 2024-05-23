@@ -23,8 +23,7 @@ const (
 	c_stream_timeout = 10 * time.Second
 
 	// The amount of redundancy for open streams
-	// c_peerCount * c_streamReplicationFactor = total number of open streams
-	c_streamReplicationFactor = 3
+	c_streamCacheSize = 9
 
 	// The maximum number of concurrent requests before a stream is considered failed
 	c_maxPendingRequests = 100
@@ -66,9 +65,9 @@ type streamWrapper struct {
 	semaphore chan struct{}
 }
 
-func NewStreamManager(peerCount int, node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStreamManager, error) {
+func NewStreamManager(node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStreamManager, error) {
 	lruCache := expireLru.NewLRU[p2p.PeerID, streamWrapper](
-		peerCount*c_streamReplicationFactor,
+		c_streamCacheSize,
 		severStream,
 		0,
 	)

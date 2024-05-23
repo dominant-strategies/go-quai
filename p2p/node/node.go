@@ -210,7 +210,7 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 		dht:            dht,
 	}
 
-	sm, err := streamManager.NewStreamManager(peerManager.C_peerCount, p2p, host)
+	sm, err := streamManager.NewStreamManager(p2p, host)
 	if err != nil {
 		return nil, err
 	}
