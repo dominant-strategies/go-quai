@@ -21,12 +21,13 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Tests that the trie database returns a missing trie node error if attempting
 // to retrieve the meta root.
 func TestDatabaseMetarootFetch(t *testing.T) {
-	db := NewDatabase(memorydb.New())
+	db := NewDatabase(memorydb.New(log.Global))
 	if _, err := db.Node(common.Hash{}); err == nil {
 		t.Fatalf("metaroot retrieval succeeded")
 	}

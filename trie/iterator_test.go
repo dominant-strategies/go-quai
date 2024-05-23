@@ -27,6 +27,7 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 func TestIterator(t *testing.T) {
@@ -295,7 +296,7 @@ func TestIteratorContinueAfterErrorDisk(t *testing.T)    { testIteratorContinueA
 func TestIteratorContinueAfterErrorMemonly(t *testing.T) { testIteratorContinueAfterError(t, true) }
 
 func testIteratorContinueAfterError(t *testing.T, memonly bool) {
-	diskdb := memorydb.New()
+	diskdb := memorydb.New(log.Global)
 	triedb := NewDatabase(diskdb)
 
 	tr, _ := New(common.Hash{}, triedb)
@@ -386,7 +387,7 @@ func TestIteratorContinueAfterSeekErrorMemonly(t *testing.T) {
 
 func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	// Commit test trie to db, then remove the node containing "bars".
-	diskdb := memorydb.New()
+	diskdb := memorydb.New(log.Global)
 	triedb := NewDatabase(diskdb)
 
 	ctr, _ := New(common.Hash{}, triedb)
@@ -486,10 +487,18 @@ func (l *loggingDb) Close() error {
 	return l.backend.Close()
 }
 
+func (l *loggingDb) Location() common.Location {
+	return l.backend.Location()
+}
+
+func (l *loggingDb) Logger() *log.Logger {
+	return l.backend.Logger()
+}
+
 // makeLargeTestTrie create a sample test trie
 func makeLargeTestTrie() (*Database, *SecureTrie, *loggingDb) {
 	// Create an empty trie
-	logDb := &loggingDb{0, memorydb.New()}
+	logDb := &loggingDb{0, memorydb.New(log.Global)}
 	triedb := NewDatabase(logDb)
 	trie, _ := NewSecure(common.Hash{}, triedb)
 

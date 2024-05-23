@@ -8,11 +8,12 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 func TestSizeBug(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New(log.Global)))
 
 	leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -27,7 +28,7 @@ func TestSizeBug(t *testing.T) {
 
 func TestEmptyBug(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New(log.Global)))
 
 	//leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	//value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -53,7 +54,7 @@ func TestEmptyBug(t *testing.T) {
 
 func TestValLength56(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New(log.Global)))
 
 	//leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	//value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -78,7 +79,7 @@ func TestValLength56(t *testing.T) {
 // which causes a lot of node-within-node. This case was found via fuzzing.
 func TestUpdateSmallNodes(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New(log.Global)))
 	kvs := []struct {
 		K string
 		V string
@@ -106,7 +107,7 @@ func TestUpdateSmallNodes(t *testing.T) {
 func TestUpdateVariableKeys(t *testing.T) {
 	t.SkipNow()
 	st := NewStackTrie(nil)
-	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	nt, _ := New(common.Hash{}, NewDatabase(memorydb.New(log.Global)))
 	kvs := []struct {
 		K string
 		V string
@@ -176,7 +177,7 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 func TestStacktrieSerialization(t *testing.T) {
 	var (
 		st       = NewStackTrie(nil)
-		nt, _    = New(common.Hash{}, NewDatabase(memorydb.New()))
+		nt, _    = New(common.Hash{}, NewDatabase(memorydb.New(log.Global)))
 		keyB     = big.NewInt(1)
 		keyDelta = big.NewInt(1)
 		vals     [][]byte
