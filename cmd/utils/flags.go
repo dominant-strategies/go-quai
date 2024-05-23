@@ -105,8 +105,6 @@ var NodeFlags = []Flag{
 	GpoPercentileFlag,
 	GpoMaxGasPriceFlag,
 	GpoIgnoreGasPriceFlag,
-	DomUrl,
-	SubUrls,
 	CoinbaseAddressFlag,
 	EnvironmentFlag,
 	QuaiStatsURLFlag,
@@ -521,18 +519,6 @@ var (
 		Usage: "Gas price below which gpo will ignore transactions" + generateEnvDoc(c_NodeFlagPrefix+"gpo-ignoreprice"),
 	}
 
-	DomUrl = Flag{
-		Name:  c_NodeFlagPrefix + "dom-url",
-		Value: quaiconfig.Defaults.DomUrl,
-		Usage: "Dominant chain websocket url" + generateEnvDoc(c_NodeFlagPrefix+"dom-url"),
-	}
-
-	SubUrls = Flag{
-		Name:  c_NodeFlagPrefix + "sub-urls",
-		Value: quaiconfig.Defaults.DomUrl,
-		Usage: "Subordinate chain websocket urls" + generateEnvDoc(c_NodeFlagPrefix+"sub-urls"),
-	}
-
 	CoinbaseAddressFlag = Flag{
 		Name:  c_NodeFlagPrefix + "coinbases",
 		Value: "",
@@ -888,42 +874,6 @@ func GetWSPort(nodeLocation common.Location) int {
 	panic("node location is not valid")
 }
 
-// setDomUrl sets the dominant chain websocket url.
-func setDomUrl(cfg *quaiconfig.Config, nodeLocation common.Location, logger *log.Logger) {
-	// only set the dom url if the node is not prime
-	switch nodeLocation.Context() {
-	case common.REGION_CTX:
-		cfg.DomUrl = "ws://127.0.0.1:8001"
-	case common.ZONE_CTX:
-		cfg.DomUrl = "ws://127.0.0.1:" + fmt.Sprintf("%d", 8002+nodeLocation.Region())
-	}
-	logger.WithFields(log.Fields{
-		"Location": nodeLocation,
-		"domUrl":   cfg.DomUrl,
-	}).Info("Node")
-}
-
-// setSubUrls sets the subordinate chain urls
-func setSubUrls(cfg *quaiconfig.Config, nodeLocation common.Location, currentExpansionNumber uint8) {
-	// only set the sub urls if its not the zone
-	currentRegions, currentZones := common.GetHierarchySizeForExpansionNumber(currentExpansionNumber)
-	switch nodeLocation.Context() {
-	case common.PRIME_CTX:
-		subUrls := make([]string, common.MaxWidth)
-		for i := 0; i < int(currentRegions); i++ {
-			subUrls[i] = fmt.Sprintf("ws://127.0.0.1:%d", GetWSPort(common.Location{byte(i)}))
-		}
-		cfg.SubUrls = subUrls
-	case common.REGION_CTX:
-		suburls := make([]string, common.MaxWidth)
-		// Add the zones belonging to the region into the suburls list
-		for i := 0; i < int(currentZones); i++ {
-			suburls[i] = fmt.Sprintf("ws://127.0.0.1:%d", GetWSPort(common.Location{byte(nodeLocation.Region()), byte(i)}))
-		}
-		cfg.SubUrls = suburls
-	}
-}
-
 // setGasLimitCeil sets the gas limit ceils based on the network that is
 // running
 func setGasLimitCeil(cfg *quaiconfig.Config) {
@@ -941,11 +891,6 @@ func setGasLimitCeil(cfg *quaiconfig.Config) {
 	default:
 		cfg.Miner.GasCeil = params.ColosseumGasCeil
 	}
-}
-
-// makeSubUrls returns the subordinate chain urls
-func makeSubUrls() []string {
-	return strings.Split(viper.GetString(SubUrls.Name), ",")
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
@@ -1298,12 +1243,6 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	setConsensusEngineConfig(cfg)
 
 	setWhitelist(cfg)
-
-	// set the dominant chain websocket url
-	setDomUrl(cfg, nodeLocation, logger)
-
-	// set the subordinate chain websocket urls
-	setSubUrls(cfg, nodeLocation, currentExpansionNumber)
 
 	// set the gas limit ceil
 	setGasLimitCeil(cfg)

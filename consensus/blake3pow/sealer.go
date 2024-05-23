@@ -139,6 +139,7 @@ func (blake3pow *Blake3pow) mine(header *types.WorkObject, id int, seed uint64, 
 	var (
 		target = new(big.Int).Div(big2e256, workShareDiff)
 	)
+
 	// Start generating random nonces until we abort or find a good one
 	var (
 		attempts  = int64(0)

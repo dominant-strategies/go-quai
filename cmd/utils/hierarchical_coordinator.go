@@ -12,7 +12,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/quai"
-	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/syndtr/goleveldb/leveldb"
 	"google.golang.org/protobuf/proto"
 )
@@ -123,6 +122,25 @@ func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error)
 		}
 	}
 
+	// Set the Dom Interface for all the regions and zones
+	for i := 0; i < int(currentRegions); i++ {
+		primeBackend := *quaiBackend.GetBackend(common.Location{})
+		regionBackend := *quaiBackend.GetBackend(common.Location{byte(i)})
+		// set the Prime with the sub interfaces
+		primeBackend.SetSubInterface(regionBackend, common.Location{byte(i)})
+		// set the Dom Interface for each region
+		regionBackend.SetDomInterface(primeBackend)
+	}
+	for i := 0; i < int(currentRegions); i++ {
+		regionBackend := *quaiBackend.GetBackend(common.Location{byte(i)})
+		for j := 0; j < int(currentZones); j++ {
+			zoneBackend := *quaiBackend.GetBackend(common.Location{byte(i), byte(j)})
+			// Set the Sub Interface for each of the regions
+			regionBackend.SetSubInterface(zoneBackend, common.Location{byte(i), byte(j)})
+			// Set the Dom Interface for each of the zones
+			zoneBackend.SetDomInterface(regionBackend)
+		}
+	}
 	return quaiBackend, nil
 }
 
@@ -241,17 +259,11 @@ func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject)
 			logLocation := "zone-" + fmt.Sprintf("%d", i) + "-" + fmt.Sprintf("%d", newZones-1) + ".log"
 			hc.startNode(logLocation, hc.consensus, common.Location{byte(i), byte(newZones - 1)}, block)
 			// Add the new zone to the new slices list
-			// Add the subclient to the already existing regions
-			suburl := fmt.Sprintf("ws://127.0.0.1:%d", 8100+20*i+(int(newZones)-1))
-			subClient, err := quaiclient.Dial(suburl, nil)
-			if err != nil {
-				log.Global.WithFields(log.Fields{
-					"index": i,
-					"err":   err,
-				}).Fatal("Error connecting to the subordinate go-quai client")
-			}
-			// Set the subclient for the region
-			hc.consensus.SetSubClient(subClient, common.Location{byte(i)}, common.Location{byte(i), byte(newZones - 1)})
+			// Set the subInterface for the region and Set the DomInterface for the new Zones
+			zoneBackend := hc.consensus.GetBackend(common.Location{byte(i), byte(newZones - 1)})
+			hc.consensus.SetSubInterface(*zoneBackend, common.Location{byte(i)}, common.Location{byte(i), byte(newZones - 1)})
+			regionBackend := hc.consensus.GetBackend(common.Location{byte(i)})
+			hc.consensus.SetDomInterface(*regionBackend, common.Location{byte(i)})
 			// Add the Pending Etxs into the database so that the existing
 			// region can accept the Dom blocks from the new zone
 			hc.consensus.AddGenesisPendingEtxs(block, common.Location{byte(i)})
@@ -266,22 +278,15 @@ func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject)
 		logLocation := "region-" + fmt.Sprintf("%d", newRegions-1) + ".log"
 		hc.startNode(logLocation, hc.consensus, common.Location{byte(newRegions - 1)}, block)
 
-		// Update the SubClient for the Prime
-		// Add the subclient to the already existing regions
-		suburl := fmt.Sprintf("ws://127.0.0.1:%d", 8002+(newRegions-1))
-		subClient, err := quaiclient.Dial(suburl, nil)
-		if err != nil {
-			log.Global.WithFields(log.Fields{
-				"index": newRegions - 1,
-				"err":   err,
-			}).Fatal("Error connecting to the subordinate go-quai client")
-		}
-		hc.consensus.SetSubClient(subClient, common.Location{}, common.Location{byte(newRegions - 1)})
+		regionBackend := hc.consensus.GetBackend(common.Location{byte(newRegions - 1)})
+		hc.consensus.SetSubInterface(*regionBackend, common.Location{}, common.Location{byte(newRegions - 1)})
 
 		// new region has to activate all the zones
 		for i := 0; i < int(newZones); i++ {
 			logLocation = "zone-" + fmt.Sprintf("%d", newRegions-1) + "-" + fmt.Sprintf("%d", i) + ".log"
 			hc.startNode(logLocation, hc.consensus, common.Location{byte(newRegions - 1), byte(i)}, block)
+			// Set the DomInterface for each of the new zones
+			hc.consensus.SetDomInterface(*regionBackend, common.Location{byte(newRegions - 1), byte(i)})
 		}
 	}
 

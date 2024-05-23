@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -23,7 +22,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -46,6 +44,22 @@ const (
 
 )
 
+// Core will implement the following interface to enable dom-sub communication
+type CoreBackend interface {
+	AddPendingEtxs(pEtxs types.PendingEtxs) error
+	AddPendingEtxsRollup(pEtxRollup types.PendingEtxsRollup) error
+	UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location)
+	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
+	SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int)
+	Append(header *types.WorkObject, manifest types.BlockManifest, domPendingHeader *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error)
+	DownloadBlocksInManifest(hash common.Hash, manifest types.BlockManifest, entropy *big.Int)
+	GenerateRecoveryPendingHeader(pendingHeader *types.WorkObject, checkpointHashes types.Termini) error
+	GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error)
+	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
+	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
+	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
+}
+
 type pEtxRetry struct {
 	hash    common.Hash
 	retries uint64
@@ -64,8 +78,8 @@ type Slice struct {
 
 	quit chan struct{} // slice quit channel
 
-	domClient  *quaiclient.Client
-	subClients []*quaiclient.Client
+	domInterface CoreBackend
+	subInterface []CoreBackend
 
 	wg               sync.WaitGroup
 	scope            event.SubscriptionScope
@@ -87,7 +101,7 @@ type Slice struct {
 	logger         *log.Logger
 }
 
-func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.WorkObject) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, domClientUrl string, subClientUrls []string, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.WorkObject) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
 	nodeCtx := chainConfig.Location.Context()
 	sl := &Slice{
 		config:         chainConfig,
@@ -123,28 +137,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 
 	sl.inboundEtxsCache, _ = lru.New[common.Hash, types.Transactions](c_inboundEtxCacheSize)
 
-	// only set the subClients if the chain is not Zone
-	sl.subClients = make([]*quaiclient.Client, common.MaxWidth)
-	if nodeCtx != common.ZONE_CTX {
-		go func() {
-			sl.makeSubClients(subClientUrls, sl.logger)
-		}()
-	}
-
-	// only set domClient if the chain is not Prime.
-	if nodeCtx != common.PRIME_CTX {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					sl.logger.WithFields(log.Fields{
-						"error":      r,
-						"stacktrace": string(debug.Stack()),
-					}).Fatal("Go-Quai Panicked")
-				}
-			}()
-			sl.domClient = makeDomClient(domClientUrl, sl.logger)
-		}()
-	}
+	sl.subInterface = make([]CoreBackend, common.MaxWidth)
 
 	if err := sl.init(); err != nil {
 		return nil, err
@@ -162,6 +155,10 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	}
 
 	return sl, nil
+}
+
+func (sl *Slice) SetDomInterface(domInterface CoreBackend) {
+	sl.domInterface = domInterface
 }
 
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
@@ -211,11 +208,6 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		return nil, false, false, ErrKnownBlock
 	}
 	time1 := common.PrettyDuration(time.Since(start))
-	// This is to prevent a crash when we try to insert blocks before domClient is on.
-	// Ideally this check should not exist here and should be fixed before we start the slice.
-	if sl.domClient == nil && nodeCtx != common.PRIME_CTX {
-		return nil, false, false, ErrDomClientNotUp
-	}
 
 	batch := sl.sliceDb.NewBatch()
 
@@ -292,8 +284,8 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	// Call my sub to append the block, and collect the rolled up ETXs from that sub
 	if nodeCtx != common.ZONE_CTX {
 		// How to get the sub pending etxs if not running the full node?.
-		if sl.subClients[location.SubIndex(sl.NodeLocation())] != nil {
-			subPendingEtxs, subReorg, setHead, err = sl.subClients[location.SubIndex(sl.NodeLocation())].Append(context.Background(), header, block.Manifest(), pendingHeaderWithTermini.WorkObject(), domTerminus, true, newInboundEtxs)
+		if sl.subInterface[location.SubIndex(sl.NodeLocation())] != nil {
+			subPendingEtxs, subReorg, setHead, err = sl.subInterface[location.SubIndex(sl.NodeLocation())].Append(header, block.Manifest(), pendingHeaderWithTermini.WorkObject(), domTerminus, true, newInboundEtxs)
 			if err != nil {
 				return nil, false, false, err
 			}
@@ -474,8 +466,8 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				"newTermini()": pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()),
 				"location":     sl.NodeLocation(),
 			}).Info("Append updateDom")
-			if sl.domClient != nil {
-				go sl.domClient.UpdateDom(context.Background(), bestPh.Termini().DomTerminus(sl.NodeLocation()), pendingHeaderWithTermini, sl.NodeLocation())
+			if sl.domInterface != nil {
+				go sl.domInterface.UpdateDom(bestPh.Termini().DomTerminus(sl.NodeLocation()), pendingHeaderWithTermini, sl.NodeLocation())
 			}
 		}
 		return block.ExtTransactions(), subReorg, setHead, nil
@@ -512,8 +504,8 @@ func (sl *Slice) relayPh(block *types.WorkObject, pendingHeaderWithTermini types
 		}
 	} else if !domOrigin && subReorg {
 		for _, i := range sl.randomRelayArray() {
-			if sl.subClients[i] != nil {
-				sl.subClients[i].SubRelayPendingHeader(context.Background(), pendingHeaderWithTermini, pendingHeaderWithTermini.WorkObject().ParentEntropy(nodeCtx), location, subReorg, nodeCtx)
+			if sl.subInterface[i] != nil {
+				sl.subInterface[i].SubRelayPendingHeader(pendingHeaderWithTermini, pendingHeaderWithTermini.WorkObject().ParentEntropy(nodeCtx), location, subReorg, nodeCtx)
 			}
 		}
 	}
@@ -556,13 +548,13 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 		newPh, exists := sl.readPhCache(newDomTerminus)
 		if exists {
 			for _, i := range sl.randomRelayArray() {
-				if sl.subClients[i] != nil {
+				if sl.subInterface[i] != nil {
 					sl.logger.WithFields(log.Fields{
 						"parentHash": newPh.WorkObject().ParentHash(nodeCtx),
 						"number":     newPh.WorkObject().NumberArray(),
 						"newTermini": newPh.Termini().SubTerminiAtIndex(i),
 					}).Info("SubRelay in UpdateDom")
-					sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.WorkObject().ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx)
+					sl.subInterface[i].SubRelayPendingHeader(newPh, pendingHeader.WorkObject().ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx)
 				}
 			}
 		} else {
@@ -576,21 +568,21 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 			"newDomTermini": newPh.Termini(),
 			"location":      location,
 		}).Info("UpdateDom needs to updateDom")
-		if sl.domClient != nil {
-			go sl.domClient.UpdateDom(context.Background(), oldDomTerminus, types.NewPendingHeader(pendingHeader.WorkObject(), newPh.Termini()), location)
+		if sl.domInterface != nil {
+			go sl.domInterface.UpdateDom(oldDomTerminus, types.NewPendingHeader(pendingHeader.WorkObject(), newPh.Termini()), location)
 		} else {
 			// Can update
 			sl.WriteBestPhKey(newDomTerminus)
 			newPh, exists := sl.readPhCache(newDomTerminus)
 			if exists {
 				for _, i := range sl.randomRelayArray() {
-					if sl.subClients[i] != nil {
+					if sl.subInterface[i] != nil {
 						sl.logger.WithFields(log.Fields{
 							"parentHash": newPh.WorkObject().ParentHash(nodeCtx),
 							"number":     newPh.WorkObject().NumberArray(),
 							"newTermini": newPh.Termini().SubTerminiAtIndex(i),
 						}).Info("SubRelay in UpdateDom")
-						sl.subClients[i].SubRelayPendingHeader(context.Background(), newPh, pendingHeader.WorkObject().ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx)
+						sl.subInterface[i].SubRelayPendingHeader(newPh, pendingHeader.WorkObject().ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx)
 					}
 				}
 			} else {
@@ -602,7 +594,7 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 }
 
 func (sl *Slice) randomRelayArray() []int {
-	length := len(sl.subClients)
+	length := len(sl.subInterface)
 	nums := []int{}
 	for i := 0; i < length; i++ {
 		nums = append(nums, i)
@@ -889,15 +881,15 @@ func (sl *Slice) GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 // produced this block
 func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
 	subIdx := slice.SubIndex(sl.NodeLocation())
-	if sl.subClients[subIdx] == nil {
+	if sl.subInterface[subIdx] == nil {
 		return nil, errors.New("missing requested subordinate node")
 	}
-	return sl.subClients[subIdx].GetManifest(context.Background(), blockHash)
+	return sl.subInterface[subIdx].GetManifest(blockHash)
 }
 
 // SendPendingEtxsToDom shares a set of pending ETXs with your dom, so he can reference them when a coincident block is found
 func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
-	return sl.domClient.SendPendingEtxsToDom(context.Background(), pEtxs)
+	return sl.domInterface.AddPendingEtxs(pEtxs)
 }
 
 func (sl *Slice) GetPEtxRollupAfterRetryThreshold(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
@@ -912,8 +904,8 @@ func (sl *Slice) GetPEtxRollupAfterRetryThreshold(blockHash common.Hash, hash co
 func (sl *Slice) GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
 	nodeCtx := sl.NodeLocation().Context()
 	if nodeCtx == common.PRIME_CTX {
-		if sl.subClients[location.SubIndex(sl.NodeLocation())] != nil {
-			pEtxRollup, err := sl.subClients[location.SubIndex(sl.NodeLocation())].GetPendingEtxsRollupFromSub(context.Background(), hash, location)
+		if sl.subInterface[location.SubIndex(sl.NodeLocation())] != nil {
+			pEtxRollup, err := sl.subInterface[location.SubIndex(sl.NodeLocation())].GetPendingEtxsRollupFromSub(hash, location)
 			if err != nil {
 				return types.PendingEtxsRollup{}, err
 			} else {
@@ -946,8 +938,8 @@ func (sl *Slice) GetPEtxAfterRetryThreshold(blockHash common.Hash, hash common.H
 func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
 	nodeCtx := sl.NodeLocation().Context()
 	if nodeCtx != common.ZONE_CTX {
-		if sl.subClients[location.SubIndex(sl.NodeLocation())] != nil {
-			pEtx, err := sl.subClients[location.SubIndex(sl.NodeLocation())].GetPendingEtxsFromSub(context.Background(), hash, location)
+		if sl.subInterface[location.SubIndex(sl.NodeLocation())] != nil {
+			pEtx, err := sl.subInterface[location.SubIndex(sl.NodeLocation())].GetPendingEtxsFromSub(hash, location)
 			if err != nil {
 				return types.PendingEtxs{}, err
 			} else {
@@ -978,9 +970,9 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEnt
 		}
 
 		for _, i := range sl.randomRelayArray() {
-			if sl.subClients[i] != nil {
+			if sl.subInterface[i] != nil {
 				if ph, exists := sl.readPhCache(pendingHeader.Termini().SubTerminiAtIndex(sl.NodeLocation().Region())); exists {
-					sl.subClients[i].SubRelayPendingHeader(context.Background(), ph, newEntropy, location, subReorg, order)
+					sl.subInterface[i].SubRelayPendingHeader(ph, newEntropy, location, subReorg, order)
 				}
 			}
 		}
@@ -1078,7 +1070,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 					"newentropy":         newEntropy,
 				}).Warn("Subrelay Rejected")
 				sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localTermini), false, nil, sl.poem(newEntropy, localPendingHeader.Header().ParentEntropy(nodeCtx)), location)
-				go sl.domClient.UpdateDom(context.Background(), localPendingHeader.Termini().DomTerminus(nodeLocation), bestPh, sl.NodeLocation())
+				go sl.domInterface.UpdateDom(localPendingHeader.Termini().DomTerminus(nodeLocation), bestPh, sl.NodeLocation())
 				return nil
 			}
 		}
@@ -1400,13 +1392,13 @@ func (sl *Slice) IsSubClientsEmpty() bool {
 	switch sl.NodeCtx() {
 	case common.PRIME_CTX:
 		for i := 0; i < int(activeRegions); i++ {
-			if sl.subClients[i] == nil {
+			if sl.subInterface[i] == nil {
 				return true
 			}
 		}
 	case common.REGION_CTX:
 		for _, slice := range sl.ActiveSlices() {
-			if sl.subClients[slice.Zone()] == nil {
+			if sl.subInterface[slice.Zone()] == nil {
 				return true
 			}
 		}
@@ -1514,9 +1506,9 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 	}
 
 	if nodeCtx != common.ZONE_CTX {
-		for i, client := range sl.subClients {
+		for i, client := range sl.subInterface {
 			if client != nil {
-				err = client.NewGenesisPendingHeader(context.Background(), domPendingHeader, termini.SubTerminiAtIndex(i), genesisHash)
+				err = client.NewGenesisPendingHeader(domPendingHeader, termini.SubTerminiAtIndex(i), genesisHash)
 				if err != nil {
 					return err
 				}
@@ -1541,49 +1533,13 @@ func (sl *Slice) SubscribeMissingBlockEvent(ch chan<- types.BlockRequest) event.
 	return sl.scope.Track(sl.missingBlockFeed.Subscribe(ch))
 }
 
-// MakeDomClient creates the quaiclient for the given domurl
-func makeDomClient(domurl string, logger *log.Logger) *quaiclient.Client {
-	if domurl == "" {
-		logger.Fatal("dom client url is empty")
-	}
-	domClient, err := quaiclient.Dial(domurl, logger)
-	if err != nil {
-		logger.WithField("err", err).Fatal("Error connecting to the dominant go-quai client")
-	}
-	return domClient
-}
-
-// MakeSubClients creates the quaiclient for the given suburls
-func (sl *Slice) makeSubClients(suburls []string, logger *log.Logger) {
-	defer func() {
-		if r := recover(); r != nil {
-			sl.logger.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
-		}
-	}()
-	for i, suburl := range suburls {
-		if suburl != "" {
-			subClient, err := quaiclient.Dial(suburl, logger)
-			if err != nil {
-				logger.WithFields(log.Fields{
-					"index": i,
-					"err":   err,
-				}).Fatal("Error connecting to the subordinate go-quai client")
-			}
-			sl.subClients[i] = subClient
-		}
-	}
-}
-
 // SetSubClient sets the subClient for the given location
-func (sl *Slice) SetSubClient(client *quaiclient.Client, location common.Location) {
+func (sl *Slice) SetSubInterface(subInterface CoreBackend, location common.Location) {
 	switch sl.NodeCtx() {
 	case common.PRIME_CTX:
-		sl.subClients[location.Region()] = client
+		sl.subInterface[location.Region()] = subInterface
 	case common.REGION_CTX:
-		sl.subClients[location.Zone()] = client
+		sl.subInterface[location.Zone()] = subInterface
 	default:
 		sl.logger.WithField("cannot set sub client in zone", location).Fatal("Invalid location")
 	}
@@ -1671,9 +1627,7 @@ func (sl *Slice) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollup) error
 		// Write to pending ETX rollup database
 		rawdb.WritePendingEtxsRollup(sl.sliceDb, pEtxsRollup)
 		if nodeCtx == common.REGION_CTX {
-			if sl.domClient != nil {
-				sl.domClient.SendPendingEtxsRollupToDom(context.Background(), pEtxsRollup)
-			}
+			sl.domInterface.AddPendingEtxsRollup(pEtxsRollup)
 		}
 	}
 	return nil
@@ -1785,15 +1739,15 @@ func (sl *Slice) GenerateRecoveryPendingHeader(pendingHeader *types.WorkObject, 
 	regions, zones := common.GetHierarchySizeForExpansionNumber(sl.hc.currentExpansionNumber)
 	if nodeCtx == common.PRIME_CTX {
 		for i := 0; i < int(regions); i++ {
-			if sl.subClients[i] != nil {
-				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), pendingHeader, checkPointHashes)
+			if sl.subInterface[i] != nil {
+				sl.subInterface[i].GenerateRecoveryPendingHeader(pendingHeader, checkPointHashes)
 			}
 		}
 	} else if nodeCtx == common.REGION_CTX {
 		newPendingHeader := sl.SetHeadBackToRecoveryState(pendingHeader, checkPointHashes.SubTerminiAtIndex(sl.NodeLocation().Region()))
 		for i := 0; i < int(zones); i++ {
-			if sl.subClients[i] != nil {
-				sl.subClients[i].GenerateRecoveryPendingHeader(context.Background(), newPendingHeader.WorkObject(), newPendingHeader.Termini())
+			if sl.subInterface[i] != nil {
+				sl.subInterface[i].GenerateRecoveryPendingHeader(newPendingHeader.WorkObject(), newPendingHeader.Termini())
 			}
 		}
 	} else {

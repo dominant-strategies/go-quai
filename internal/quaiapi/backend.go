@@ -32,7 +32,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -84,7 +83,7 @@ type Backend interface {
 	SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int)
 	UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingHeader, location common.Location)
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
-	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash)
+	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
 	GetPendingHeader() (*types.WorkObject, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
@@ -96,12 +95,13 @@ type Backend interface {
 	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
 	ProcessingState() bool
 	GetSlicesRunning() []common.Location
-	SetSubClient(client *quaiclient.Client, location common.Location)
+	SetSubInterface(subInterface core.CoreBackend, location common.Location)
 	AddGenesisPendingEtxs(block *types.WorkObject)
 	SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription
 	WriteGenesisBlock(block *types.WorkObject, location common.Location)
 	SendWorkShare(workShare *types.WorkObjectHeader) error
 	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool
+	SetDomInterface(domInterface core.CoreBackend)
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

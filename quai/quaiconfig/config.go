@@ -88,8 +88,6 @@ var Defaults = Config{
 	RPCGasCap:   50000000,
 	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
-	DomUrl:      "ws://127.0.0.1:8546",
-	SubUrls:     []string{"ws://127.0.0.1:8546", "ws://127.0.0.1:8546", "ws://127.0.0.1:8546"},
 }
 
 //go:generate gencodec -type Config -formats toml -out gen_config.go

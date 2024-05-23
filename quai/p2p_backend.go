@@ -5,11 +5,11 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
-	"github.com/dominant-strategies/go-quai/quaiclient"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -207,14 +207,24 @@ func (qbe *QuaiBackend) WriteGenesisBlock(block *types.WorkObject, location comm
 	backend.WriteGenesisBlock(block, location)
 }
 
-// SetSubClient sets the sub client for the given subLocation
-func (qbe *QuaiBackend) SetSubClient(client *quaiclient.Client, nodeLocation common.Location, subLocation common.Location) {
+// SetSubInterface sets the sub interface for the given subLocation
+func (qbe *QuaiBackend) SetSubInterface(subInterface core.CoreBackend, nodeLocation common.Location, subLocation common.Location) {
 	backend := *qbe.GetBackend(nodeLocation)
 	if backend == nil {
 		log.Global.Error("no backend found")
 		return
 	}
-	backend.SetSubClient(client, subLocation)
+	backend.SetSubInterface(subInterface, subLocation)
+}
+
+// SetDomInterface sets the dom interface for the given location
+func (qbe *QuaiBackend) SetDomInterface(domInterface core.CoreBackend, nodeLocation common.Location) {
+	backend := *qbe.GetBackend(nodeLocation)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return
+	}
+	backend.SetDomInterface(domInterface)
 }
 
 // AddGenesisPendingEtxs adds the genesis pending etxs for the given location

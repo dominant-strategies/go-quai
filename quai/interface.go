@@ -5,9 +5,9 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	chain "github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
-	"github.com/dominant-strategies/go-quai/quaiclient"
 
 	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -47,8 +47,11 @@ type ConsensusAPI interface {
 	// SetCurrentExpansionNumber sets the current expansion number for the given location
 	SetCurrentExpansionNumber(uint8)
 
-	// SetSubClient sets the sub client for the given location
-	SetSubClient(*quaiclient.Client, common.Location, common.Location)
+	// SetSubInteface sets the sub interface for the given location
+	SetSubInterface(chain.CoreBackend, common.Location, common.Location)
+
+	// SetDomInterface sets the dom interface for the given location
+	SetDomInterface(chain.CoreBackend, common.Location)
 
 	// AddGenesisPendingEtxs adds the genesis pending etxs for the given location
 	AddGenesisPendingEtxs(*types.WorkObject, common.Location)
