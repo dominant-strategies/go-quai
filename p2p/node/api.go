@@ -53,7 +53,8 @@ func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) erro
 		return err
 	}
 
-	return p.peerManager.Provide(p.ctx, location, datatype)
+	go p.peerManager.Provide(p.ctx, location, datatype)
+	return nil
 }
 
 func (p *P2PNode) Unsubscribe(location common.Location, datatype interface{}) error {
