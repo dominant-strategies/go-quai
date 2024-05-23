@@ -257,7 +257,7 @@ func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common
 	}
 	block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(number.Int64()))
 	if err != nil {
-		log.Global.Tracef("Error looking up the BlockByNumber", location)
+		log.Global.Trace("Error looking up the BlockByNumber", location)
 	}
 	if block != nil {
 		blockHash := block.Hash()
