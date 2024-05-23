@@ -64,6 +64,7 @@ type Transaction struct {
 	fromChain  atomic.Value
 	confirmCtx atomic.Value // Context at which the ETX may be confirmed
 	local      atomic.Value // Whether the transaction is local
+	sigChecked atomic.Bool  // Whether the transaction signature has been checked (for QiTx only)
 }
 
 // NewTx creates a new transaction.
@@ -587,6 +588,31 @@ func (tx *Transaction) From(nodeLocation common.Location) *common.Address {
 	} else {
 		return nil
 	}
+}
+
+func (tx *Transaction) StoreFrom(from common.InternalAddress, signer Signer) {
+	tx.from.Store(sigCache{from: common.AddressBytes(from), signer: signer})
+}
+
+func (tx *Transaction) HasFromCached() bool {
+	return tx.from.Load() != nil
+}
+
+func (tx *Transaction) FromInternal() *common.InternalAddress {
+	sc := tx.from.Load()
+	if sc != nil {
+		sigCache := sc.(sigCache)
+		return (*common.InternalAddress)(&sigCache.from) // pointer typecasting works here because they are virtually the same underlying type (array of same length)
+	}
+	return nil
+}
+
+func (tx *Transaction) SigChecked() bool {
+	return tx.sigChecked.Load()
+}
+
+func (tx *Transaction) SetSigChecked() {
+	tx.sigChecked.Store(true)
 }
 
 // To returns the recipient address of the transaction.

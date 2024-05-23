@@ -667,7 +667,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.AddressBytes]typ
 			}
 		}
 		if len(txs) > 0 {
-			pending[addr.Bytes20()] = txs
+			pending[common.AddressBytes(addr)] = txs
 		}
 	}
 	return pending, nil
@@ -725,16 +725,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrTipAboveFeeCap
 	}
 	var internal common.InternalAddress
-	addToCache := true
 	if sender := tx.From(pool.chainconfig.Location); sender != nil { // Check tx cache first
 		var err error
 		internal, err = sender.InternalAndQuaiAddress()
 		if err != nil {
 			return err
 		}
-	} else if sender, found := pool.PeekSender(tx.Hash()); found {
-		internal = sender
-		addToCache = false
 	} else {
 		// Make sure the transaction is signed properly.
 		from, err := types.Sender(pool.signer, tx)
@@ -773,12 +769,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		}).Warn("tx has insufficient gas")
 		return ErrIntrinsicGas
 	}
-	if addToCache {
-		select {
-		case pool.sendersCh <- newSender{tx.Hash(), internal}: // Non-blocking
-		default:
-			pool.logger.Error("sendersCh is full, skipping until there is room")
-		}
+	select {
+	case pool.sendersCh <- newSender{tx.Hash(), internal}: // Non-blocking
+	default:
+		pool.logger.Error("sendersCh is full, skipping until there is room")
 	}
 
 	return nil
@@ -1092,8 +1086,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 				invalidTxMeter.Add(1)
 				continue
 			}
-		} else if found := pool.ContainsSender(tx.Hash()); found {
-			// if the sender is cached in the tx or in the pool cache, we don't need to add it into the cache
 		} else {
 			from, err := types.Sender(pool.signer, tx)
 			if err != nil {
@@ -1178,6 +1170,7 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
+		tx.SetSigChecked()
 		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
 		if err != nil {
 			errs = append(errs, err)
@@ -2035,28 +2028,6 @@ func (pool *TxPool) PeekSenderNoLock(hash common.Hash) (common.InternalAddress, 
 	return common.InternalAddress{}, false
 }
 
-func (pool *TxPool) ContainsSender(hash common.Hash) bool {
-	pool.SendersMu.RLock()
-	defer pool.SendersMu.RUnlock()
-	return pool.senders.Contains(hash)
-}
-
-func (pool *TxPool) ContainsOrAddSender(hash common.Hash, sender common.InternalAddress) (bool, bool) {
-	pool.SendersMu.Lock()
-	defer pool.SendersMu.Unlock()
-	return pool.senders.ContainsOrAdd(hash, sender)
-}
-
-func (pool *TxPool) PeekSender(hash common.Hash) (common.InternalAddress, bool) {
-	pool.SendersMu.RLock()
-	defer pool.SendersMu.RUnlock()
-	addr, ok := pool.senders.Peek(hash)
-	if ok {
-		return addr.(common.InternalAddress), true
-	}
-	return common.InternalAddress{}, false
-}
-
 // sendersGoroutine asynchronously adds a new sender to the cache
 func (pool *TxPool) sendersGoroutine() {
 	defer func() {
@@ -2074,7 +2045,11 @@ func (pool *TxPool) sendersGoroutine() {
 			return
 		case tx := <-pool.sendersCh:
 			// Add transaction to sender cache
-			if contains, _ := pool.ContainsOrAddSender(tx.hash, tx.sender); contains {
+			if contains := pool.senders.Contains(tx.hash); !contains {
+				pool.SendersMu.Lock()
+				pool.senders.Add(tx.hash, tx.sender)
+				pool.SendersMu.Unlock()
+			} else {
 				pool.logger.WithFields(log.Fields{
 					"tx":     tx.hash.String(),
 					"sender": tx.sender.String(),
