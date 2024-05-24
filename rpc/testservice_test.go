@@ -23,10 +23,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 func newTestServer() *Server {
-	server := NewServer()
+	server := NewServer(log.Global)
 	server.idgen = sequentialIDGenerator()
 	if err := server.RegisterName("test", new(testService)); err != nil {
 		panic(err)

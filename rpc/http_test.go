@@ -21,6 +21,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 func confirmStatusCode(t *testing.T, got, want int) {
@@ -102,8 +104,7 @@ func TestHTTPResponseWithEmptyGet(t *testing.T) {
 // This checks that maxRequestContentLength is not applied to the response of a request.
 func TestHTTPRespBodyUnlimited(t *testing.T) {
 	const respLength = maxRequestContentLength * 3
-
-	s := NewServer()
+	s := NewServer(log.Global)
 	defer s.Stop()
 	s.RegisterName("test", largeRespService{respLength})
 	ts := httptest.NewServer(s)

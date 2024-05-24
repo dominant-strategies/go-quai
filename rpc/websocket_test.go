@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/gorilla/websocket"
 )
 
@@ -162,8 +163,9 @@ func TestClientWebsocketPing(t *testing.T) {
 
 // This checks that the websocket transport can deal with large messages.
 func TestClientWebsocketLargeMessage(t *testing.T) {
+	logger := log.Global
 	var (
-		srv     = NewServer()
+		srv     = NewServer(logger)
 		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)

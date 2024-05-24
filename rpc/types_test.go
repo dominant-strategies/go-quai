@@ -156,11 +156,11 @@ func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 
 func TestIsInQiLedgerScope(t *testing.T) {
 	address := common.HexToAddress("0x008000000000000DEADBEEFCAFE0000000000000", common.Location{0, 0})
-	if !common.IsInQiLedgerScope(address.Bytes20()) {
+	if !address.IsInQiLedgerScope() {
 		t.Errorf("Address is not in Qi Ledger scope")
 	}
 	address = common.HexToAddress("0x2A40000DEADBEEFCAFE000000000000000000000", common.Location{0, 0})
-	if common.IsInQiLedgerScope(address.Bytes20()) {
+	if address.IsInQiLedgerScope() {
 		t.Errorf("Address is in Qi Ledger scope")
 	}
 }
