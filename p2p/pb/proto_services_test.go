@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/trie"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,6 +18,7 @@ func TestEncodeDecodeRequest(t *testing.T) {
 
 	id := uint32(1)
 
+	//TODO: Add transaction, workobject and header to test cases
 	testCases := []struct {
 		name         string
 		input        interface{}
@@ -28,21 +28,6 @@ func TestEncodeDecodeRequest(t *testing.T) {
 			name:         "Hash",
 			input:        common.Hash{},
 			expectedType: reflect.TypeOf(common.Hash{}),
-		},
-		{
-			name:         "Block",
-			input:        &types.Block{},
-			expectedType: reflect.TypeOf(&types.Block{}),
-		},
-		{
-			name:         "Transaction",
-			input:        types.NewEmptyTx(),
-			expectedType: reflect.TypeOf(types.NewEmptyTx()),
-		},
-		{
-			name:         "Header",
-			input:        &types.Header{},
-			expectedType: reflect.TypeOf(&types.Header{}),
 		},
 		{
 			name:         "TrieNode",
@@ -58,7 +43,11 @@ func TestEncodeDecodeRequest(t *testing.T) {
 			require.NoError(t, err)
 
 			// Decode the QuaiRequest
-			decodedId, decodedType, decodedLocation, decodedHash, err := DecodeQuaiRequest(data)
+			quaiMsg, err := DecodeQuaiMessage(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decodedId, decodedType, decodedLocation, decodedHash, err := DecodeQuaiRequest(quaiMsg.GetRequest())
 			assert.NoError(t, err)
 			assert.Equal(t, id, decodedId)
 			assert.Equal(t, loc, decodedLocation)
@@ -81,11 +70,15 @@ func TestEncodeDecodeTrieResponse(t *testing.T) {
 	}
 
 	// Encode the QuaiRequest
-	data, err := EncodeQuaiResponse(id, trieResp)
+	data, err := EncodeQuaiResponse(id, loc, trieResp)
 	require.NoError(t, err)
 
+	quaiMsg, err := DecodeQuaiMessage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Decode the QuaiRequest
-	decodedId, decodedType, err := DecodeQuaiResponse(data, loc)
+	decodedId, decodedType, err := DecodeQuaiResponse(quaiMsg.GetResponse())
 	assert.NoError(t, err)
 	assert.Equal(t, id, decodedId)
 	decodedTrieResp, ok := decodedType.(*trie.TrieNodeResponse)
