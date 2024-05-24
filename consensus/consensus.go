@@ -70,6 +70,10 @@ type ChainReader interface {
 
 	// GetBlock retrieves a block from the database by hash and number.
 	GetWorkObject(hash common.Hash) *types.WorkObject
+
+	// GetWorkObjectWithWorkShares retrieves a block from the database by hash
+	// but only has header and workshares populated in the body
+	GetWorkObjectWithWorkShares(hash common.Hash) *types.WorkObject
 }
 
 type GenesisReader interface {
