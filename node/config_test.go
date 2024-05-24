@@ -17,15 +17,12 @@
 package node
 
 import (
-	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
-	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured
@@ -38,7 +35,7 @@ func TestDatadirCreation(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	node, err := New(&Config{DataDir: dir})
+	node, err := New(&Config{DataDir: dir}, log.Global)
 	if err != nil {
 		t.Fatalf("failed to create stack with existing datadir: %v", err)
 	}
@@ -47,7 +44,7 @@ func TestDatadirCreation(t *testing.T) {
 	}
 	// Generate a long non-existing datadir path and check that it gets created by a node
 	dir = filepath.Join(dir, "a", "b", "c", "d", "e", "f")
-	node, err = New(&Config{DataDir: dir})
+	node, err = New(&Config{DataDir: dir}, log.Global)
 	if err != nil {
 		t.Fatalf("failed to create stack with creatable datadir: %v", err)
 	}
@@ -65,98 +62,11 @@ func TestDatadirCreation(t *testing.T) {
 	defer os.Remove(file.Name())
 
 	dir = filepath.Join(file.Name(), "invalid/path")
-	node, err = New(&Config{DataDir: dir})
+	node, err = New(&Config{DataDir: dir}, log.Global)
 	if err == nil {
 		t.Fatalf("protocol stack created with an invalid datadir")
 		if err := node.Close(); err != nil {
 			t.Fatalf("failed to close node: %v", err)
 		}
-	}
-}
-
-// Tests that IPC paths are correctly resolved to valid endpoints of different
-// platforms.
-func TestIPCPathResolution(t *testing.T) {
-	var tests = []struct {
-		DataDir  string
-		IPCPath  string
-		Windows  bool
-		Endpoint string
-	}{
-		{"", "", false, ""},
-		{"data", "", false, ""},
-		{"", "quai.ipc", false, filepath.Join(os.TempDir(), "quai.ipc")},
-		{"data", "quai.ipc", false, "data/quai.ipc"},
-		{"data", "./quai.ipc", false, "./quai.ipc"},
-		{"data", "/quai.ipc", false, "/quai.ipc"},
-		{"", "", true, ``},
-		{"data", "", true, ``},
-		{"", "quai.ipc", true, `\\.\pipe\quai.ipc`},
-		{"data", "quai.ipc", true, `\\.\pipe\quai.ipc`},
-		{"data", `\\.\pipe\quai.ipc`, true, `\\.\pipe\quai.ipc`},
-	}
-	for i, test := range tests {
-		// Only run when platform/test match
-		if (runtime.GOOS == "windows") == test.Windows {
-			if endpoint := (&Config{DataDir: test.DataDir, IPCPath: test.IPCPath}).IPCEndpoint(); endpoint != test.Endpoint {
-				t.Errorf("test %d: IPC endpoint mismatch: have %s, want %s", i, endpoint, test.Endpoint)
-			}
-		}
-	}
-}
-
-// Tests that node keys can be correctly created, persisted, loaded and/or made
-// ephemeral.
-func TestNodeKeyPersistency(t *testing.T) {
-	// Create a temporary folder and make sure no key is present
-	dir, err := ioutil.TempDir("", "node-test")
-	if err != nil {
-		t.Fatalf("failed to create temporary data directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
-
-	keyfile := filepath.Join(dir, "unit-test", datadirPrivateKey)
-
-	// Configure a node with a preset key and ensure it's not persisted
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatalf("failed to generate one-shot node key: %v", err)
-	}
-	config := &Config{Name: "unit-test", DataDir: dir, P2P: p2p.Config{PrivateKey: key}}
-	config.NodeKey()
-	if _, err := os.Stat(filepath.Join(keyfile)); err == nil {
-		t.Fatalf("one-shot node key persisted to data directory")
-	}
-
-	// Configure a node with no preset key and ensure it is persisted this time
-	config = &Config{Name: "unit-test", DataDir: dir}
-	config.NodeKey()
-	if _, err := os.Stat(keyfile); err != nil {
-		t.Fatalf("node key not persisted to data directory: %v", err)
-	}
-	if _, err = crypto.LoadECDSA(keyfile); err != nil {
-		t.Fatalf("failed to load freshly persisted node key: %v", err)
-	}
-	blob1, err := ioutil.ReadFile(keyfile)
-	if err != nil {
-		t.Fatalf("failed to read freshly persisted node key: %v", err)
-	}
-
-	// Configure a new node and ensure the previously persisted key is loaded
-	config = &Config{Name: "unit-test", DataDir: dir}
-	config.NodeKey()
-	blob2, err := ioutil.ReadFile(filepath.Join(keyfile))
-	if err != nil {
-		t.Fatalf("failed to read previously persisted node key: %v", err)
-	}
-	if !bytes.Equal(blob1, blob2) {
-		t.Fatalf("persisted node key mismatch: have %x, want %x", blob2, blob1)
-	}
-
-	// Configure ephemeral node and ensure no key is dumped locally
-	config = &Config{Name: "unit-test", DataDir: ""}
-	config.NodeKey()
-	if _, err := os.Stat(filepath.Join(".", "unit-test", datadirPrivateKey)); err == nil {
-		t.Fatalf("ephemeral node key persisted to disk")
 	}
 }

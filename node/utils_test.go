@@ -20,7 +20,6 @@
 package node
 
 import (
-	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
 
@@ -47,8 +46,6 @@ type InstrumentedService struct {
 
 	startHook func()
 	stopHook  func()
-
-	protocols []p2p.Protocol
 }
 
 func (s *InstrumentedService) Start() error {
@@ -70,7 +67,6 @@ type FullService struct{}
 func NewFullService(stack *Node) (*FullService, error) {
 	fs := new(FullService)
 
-	stack.RegisterProtocols(fs.Protocols())
 	stack.RegisterAPIs(fs.APIs())
 	stack.RegisterLifecycle(fs)
 	return fs, nil
@@ -79,19 +75,6 @@ func NewFullService(stack *Node) (*FullService, error) {
 func (f *FullService) Start() error { return nil }
 
 func (f *FullService) Stop() error { return nil }
-
-func (f *FullService) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{
-		{
-			Name:    "test1",
-			Version: uint(1),
-		},
-		{
-			Name:    "test2",
-			Version: uint(2),
-		},
-	}
-}
 
 func (f *FullService) APIs() []rpc.API {
 	return []rpc.API{

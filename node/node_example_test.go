@@ -18,8 +18,8 @@ package node_test
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/node"
 )
 
@@ -36,7 +36,7 @@ func (s *SampleLifecycle) Stop() error  { fmt.Println("Service stopping..."); re
 
 func ExampleLifecycle() {
 	// Create a network node to run protocols with the default values.
-	stack, err := node.New(&node.Config{})
+	stack, err := node.New(&node.Config{}, log.Global)
 	if err != nil {
 		log.Global.Fatalf("Failed to create network node: %v", err)
 	}

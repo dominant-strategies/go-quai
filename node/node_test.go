@@ -21,16 +21,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
-	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 
 	"github.com/stretchr/testify/assert"
@@ -43,13 +41,12 @@ var (
 func testNodeConfig() *Config {
 	return &Config{
 		Name: "test node",
-		P2P:  p2p.Config{PrivateKey: testNodeKey},
 	}
 }
 
 // Tests that an empty protocol stack can be closed more than once.
 func TestNodeCloseMultipleTimes(t *testing.T) {
-	stack, err := New(testNodeConfig())
+	stack, err := New(testNodeConfig(), log.Global)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -64,7 +61,7 @@ func TestNodeCloseMultipleTimes(t *testing.T) {
 }
 
 func TestNodeStartMultipleTimes(t *testing.T) {
-	stack, err := New(testNodeConfig())
+	stack, err := New(testNodeConfig(), log.Global)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -95,7 +92,7 @@ func TestNodeUsedDataDir(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Create a new node based on the data directory
-	original, err := New(&Config{DataDir: dir})
+	original, err := New(&Config{DataDir: dir}, log.Global)
 	if err != nil {
 		t.Fatalf("failed to create original protocol stack: %v", err)
 	}
@@ -105,7 +102,7 @@ func TestNodeUsedDataDir(t *testing.T) {
 	}
 
 	// Create a second node based on the same data directory and ensure failure
-	_, err = New(&Config{DataDir: dir})
+	_, err = New(&Config{DataDir: dir}, log.Global)
 	if err != ErrDatadirUsed {
 		t.Fatalf("duplicate datadir failure mismatch: have %v, want %v", err, ErrDatadirUsed)
 	}
@@ -113,7 +110,7 @@ func TestNodeUsedDataDir(t *testing.T) {
 
 // Tests whether a Lifecycle can be registered.
 func TestLifecycleRegistry_Successful(t *testing.T) {
-	stack, err := New(testNodeConfig())
+	stack, err := New(testNodeConfig(), log.Global)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -127,35 +124,9 @@ func TestLifecycleRegistry_Successful(t *testing.T) {
 	}
 }
 
-// Tests whether a service's protocols can be registered properly on the node's p2p server.
-func TestRegisterProtocols(t *testing.T) {
-	stack, err := New(testNodeConfig())
-	if err != nil {
-		t.Fatalf("failed to create protocol stack: %v", err)
-	}
-	defer stack.Close()
-
-	fs, err := NewFullService(stack)
-	if err != nil {
-		t.Fatalf("could not create full service: %v", err)
-	}
-
-	for _, protocol := range fs.Protocols() {
-		if !containsProtocol(stack.server.Protocols, protocol) {
-			t.Fatalf("protocol %v was not successfully registered", protocol)
-		}
-	}
-
-	for _, api := range fs.APIs() {
-		if !containsAPI(stack.rpcAPIs, api) {
-			t.Fatalf("api %v was not successfully registered", api)
-		}
-	}
-}
-
 // This test checks that open databases are closed with node.
 func TestNodeCloseClosesDB(t *testing.T) {
-	stack, _ := New(testNodeConfig())
+	stack, _ := New(testNodeConfig(), log.Global)
 	defer stack.Close()
 
 	db, err := stack.OpenDatabase("mydb", 0, 0, "", false)
@@ -174,7 +145,7 @@ func TestNodeCloseClosesDB(t *testing.T) {
 
 // This test checks that OpenDatabase can be used from within a Lifecycle Start method.
 func TestNodeOpenDatabaseFromLifecycleStart(t *testing.T) {
-	stack, _ := New(testNodeConfig())
+	stack, _ := New(testNodeConfig(), log.Global)
 	defer stack.Close()
 
 	var db ethdb.Database
@@ -197,7 +168,7 @@ func TestNodeOpenDatabaseFromLifecycleStart(t *testing.T) {
 
 // This test checks that OpenDatabase can be used from within a Lifecycle Stop method.
 func TestNodeOpenDatabaseFromLifecycleStop(t *testing.T) {
-	stack, _ := New(testNodeConfig())
+	stack, _ := New(testNodeConfig(), log.Global)
 	defer stack.Close()
 
 	stack.RegisterLifecycle(&InstrumentedService{
@@ -216,7 +187,7 @@ func TestNodeOpenDatabaseFromLifecycleStop(t *testing.T) {
 
 // Tests that registered Lifecycles get started and stopped correctly.
 func TestLifecycleLifeCycle(t *testing.T) {
-	stack, _ := New(testNodeConfig())
+	stack, _ := New(testNodeConfig(), log.Global)
 	defer stack.Close()
 
 	started := make(map[string]bool)
@@ -267,7 +238,7 @@ func TestLifecycleLifeCycle(t *testing.T) {
 // Tests that if a Lifecycle fails to start, all others started before it will be
 // shut down.
 func TestLifecycleStartupError(t *testing.T) {
-	stack, err := New(testNodeConfig())
+	stack, err := New(testNodeConfig(), log.Global)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -317,7 +288,7 @@ func TestLifecycleStartupError(t *testing.T) {
 // Tests that even if a registered Lifecycle fails to shut down cleanly, it does
 // not influence the rest of the shutdown invocations.
 func TestLifecycleTerminationGuarantee(t *testing.T) {
-	stack, err := New(testNodeConfig())
+	stack, err := New(testNodeConfig(), log.Global)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -384,9 +355,6 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 		delete(started, id)
 		delete(stopped, id)
 	}
-
-	stack.server = &p2p.Server{}
-	stack.server.PrivateKey = testNodeKey
 }
 
 // Tests whether a handler can be successfully mounted on the canonical HTTP server
@@ -424,7 +392,7 @@ func TestRegisterHandler_Successful(t *testing.T) {
 // Tests that the given handler will not be successfully mounted since no HTTP server
 // is enabled for RPC
 func TestRegisterHandler_Unsuccessful(t *testing.T) {
-	node, err := New(&DefaultConfig)
+	node, err := New(&DefaultConfig, log.Global)
 	if err != nil {
 		t.Fatalf("could not create new node: %v", err)
 	}
@@ -434,55 +402,6 @@ func TestRegisterHandler_Unsuccessful(t *testing.T) {
 		w.Write([]byte("success"))
 	})
 	node.RegisterHandler("test", "/test", handler)
-}
-
-// Tests whether websocket requests can be handled on the same port as a regular http server.
-func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
-	node := startHTTP(t, 0, 0)
-	defer node.Close()
-
-	ws := strings.Replace(node.HTTPEndpoint(), "http://", "ws://", 1)
-
-	if node.WSEndpoint() != ws {
-		t.Fatalf("endpoints should be the same")
-	}
-	if !checkRPC(ws) {
-		t.Fatalf("ws request failed")
-	}
-	if !checkRPC(node.HTTPEndpoint()) {
-		t.Fatalf("http request failed")
-	}
-}
-
-func TestWebsocketHTTPOnSeparatePort_WSRequest(t *testing.T) {
-	// try and get a free port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal("can't listen:", err)
-	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
-
-	node := startHTTP(t, 0, port)
-	defer node.Close()
-
-	wsOnHTTP := strings.Replace(node.HTTPEndpoint(), "http://", "ws://", 1)
-	ws := fmt.Sprintf("ws://127.0.0.1:%d", port)
-
-	if node.WSEndpoint() == wsOnHTTP {
-		t.Fatalf("endpoints should not be the same")
-	}
-	// ensure ws endpoint matches the expected endpoint
-	if node.WSEndpoint() != ws {
-		t.Fatalf("ws endpoint is incorrect: expected %s, got %s", ws, node.WSEndpoint())
-	}
-
-	if !checkRPC(ws) {
-		t.Fatalf("ws request failed")
-	}
-	if !checkRPC(node.HTTPEndpoint()) {
-		t.Fatalf("http request failed")
-	}
 }
 
 type rpcPrefixTest struct {
@@ -542,7 +461,7 @@ func TestNodeRPCPrefix(t *testing.T) {
 				WSHost:         "127.0.0.1",
 				WSPathPrefix:   test.wsPrefix,
 			}
-			node, err := New(cfg)
+			node, err := New(cfg, log.Global)
 			if err != nil {
 				t.Fatal("can't create node:", err)
 			}
@@ -598,7 +517,7 @@ func createNode(t *testing.T, httpPort, wsPort int) *Node {
 		WSHost:   "127.0.0.1",
 		WSPort:   wsPort,
 	}
-	node, err := New(conf)
+	node, err := New(conf, log.Global)
 	if err != nil {
 		t.Fatalf("could not create a new node: %v", err)
 	}
@@ -623,15 +542,6 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 
 	}
 	return resp
-}
-
-func containsProtocol(stackProtocols []p2p.Protocol, protocol p2p.Protocol) bool {
-	for _, a := range stackProtocols {
-		if reflect.DeepEqual(a, protocol) {
-			return true
-		}
-	}
-	return false
 }
 
 func containsAPI(stackAPIs []rpc.API, api rpc.API) bool {
