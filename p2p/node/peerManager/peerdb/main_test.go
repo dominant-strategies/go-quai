@@ -71,9 +71,11 @@ func createPeers(t *testing.T, count int) []*PeerInfo {
 	for i := 0; i < count; i++ {
 		pubKey, peerID := generateKeyAndID(t)
 		peerInfo := &PeerInfo{
-			AddrInfo: peer.AddrInfo{
-				ID:    peerID,
-				Addrs: addrs,
+			AddrInfo: AddrInfo{
+				AddrInfo: peer.AddrInfo{
+					ID:    peerID,
+					Addrs: addrs,
+				},
 			},
 			PubKey:    pubKey,
 			Entropy:   entropy,
