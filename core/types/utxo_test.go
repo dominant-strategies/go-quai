@@ -42,7 +42,7 @@ func TestSingleSigner(t *testing.T) {
 	fmt.Println(coinbaseOutput)
 
 	coinbaseBlockHash := common.HexToHash("000000000000000000000000000000000000000000000000000012")
-	coinbaseIndex := uint32(0)
+	coinbaseIndex := uint16(0)
 
 	// key = hash(blockHash, index)
 	// Find hash / index for originUtxo / imagine this is block hash
@@ -119,7 +119,7 @@ func TestMultiSigners(t *testing.T) {
 
 	fmt.Println(coinbaseOutput)
 
-	coinbaseIndex := uint32(0)
+	coinbaseIndex := uint16(0)
 
 	coinbaseBlockHash1 := common.HexToHash("00000000000000000000000000000000000000000000000000000")
 	coinbaseBlockHash2 := common.HexToHash("00000000000000000000000000000000000000000000000000001")
