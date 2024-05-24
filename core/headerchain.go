@@ -816,6 +816,10 @@ func (hc *HeaderChain) GetWorkObject(hash common.Hash) *types.WorkObject {
 	return hc.bc.GetWorkObject(hash)
 }
 
+func (hc *HeaderChain) GetWorkObjectWithWorkShares(hash common.Hash) *types.WorkObject {
+	return hc.bc.GetWorkObjectWithWorkShares(hash)
+}
+
 // CheckContext checks to make sure the range of a context or order is valid
 func (hc *HeaderChain) CheckContext(context int) error {
 	if context < 0 || context > common.HierarchyDepth {

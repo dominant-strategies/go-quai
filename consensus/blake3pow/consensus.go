@@ -212,7 +212,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
 		if ancestorHeader.UncleHash() != types.EmptyUncleHash {
 			// Need to add those uncles to the banned list too
-			ancestor := chain.GetWorkObject(parent)
+			ancestor := chain.GetWorkObjectWithWorkShares(parent)
 			if ancestor == nil {
 				break
 			}

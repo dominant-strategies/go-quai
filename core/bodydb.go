@@ -195,6 +195,20 @@ func (bc *BodyDb) GetWorkObject(hash common.Hash) *types.WorkObject {
 	return wo
 }
 
+// GetWorkObjectWithWorkShares retrieves a workObject with workshares from the database by hash,
+// caching it if found.
+func (bc *BodyDb) GetWorkObjectWithWorkShares(hash common.Hash) *types.WorkObject {
+	termini := rawdb.ReadTermini(bc.db, hash)
+	if termini == nil {
+		return nil
+	}
+	wo := rawdb.ReadWorkObjectWithWorkShares(bc.db, hash)
+	if wo == nil {
+		return nil
+	}
+	return wo
+}
+
 // GetBlockOrCandidate retrieves any known block from the database by hash and number,
 // caching it if found.
 func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
