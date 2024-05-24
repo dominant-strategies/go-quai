@@ -10,6 +10,6 @@ import (
 func TestMain(m *testing.M) {
 	// Comment / un comment below to see log output while testing
 	// log.ConfigureLogger(log.WithNullLogger())
-	log.ConfigureLogger(log.WithLevel("debug"))
+	log.Global.SetLevel(log.DebugLogLevel)
 	os.Exit(m.Run())
 }

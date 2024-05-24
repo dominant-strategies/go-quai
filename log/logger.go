@@ -15,6 +15,7 @@ type Logger = logrus.Logger
 const (
 	// default log level
 	defaultLogLevel = logrus.InfoLevel
+	DebugLogLevel   = logrus.DebugLevel
 
 	// log file name
 	globalLogFileName = "global.log"

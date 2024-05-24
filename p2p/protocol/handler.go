@@ -180,7 +180,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 				// TODO: handle error
 				return
 			}
-			log.Global.Tracef("Found hash for block %s and location: %s", number.String(), loc.Name(), requestedHash)
+			log.Global.Tracef("Found hash %s for block %s and location: %s", requestedHash, number.String(), loc.Name())
 		default:
 			log.Global.Errorf("unsupported query type %v", query)
 			// TODO: handle error
