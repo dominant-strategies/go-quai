@@ -1334,7 +1334,13 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	pendingBlockBody.Body().SetManifest(subManifest)
 	pendingBlockBody.Body().SetInterlinkHashes(interlinkHashes)
 	block := types.NewWorkObject(wo.WorkObjectHeader(), pendingBlockBody.Body(), nil)
-
+	if nodeCtx != common.ZONE_CTX {
+		subManifestHash := types.DeriveSha(block.Manifest(), trie.NewStackTrie(nil))
+		if subManifestHash == types.EmptyRootHash || subManifestHash != block.ManifestHash(nodeCtx+1) {
+			// If we have a subordinate chain, it is impossible for the subordinate manifest to be empty
+			return block, ErrBadSubManifest
+		}
+	}
 	return block, nil
 }
 
