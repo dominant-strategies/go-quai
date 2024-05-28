@@ -52,7 +52,12 @@ func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) erro
 		return err
 	}
 
-	go p.peerManager.Provide(p.ctx, location, datatype)
+	go func() {
+		err := p.peerManager.Provide(p.ctx, location, datatype)
+		if err != nil {
+			log.Global.Errorf("error providing topic %s in %s: %s", reflect.TypeOf(datatype), location.Name(), err.Error())
+		}
+	}()
 	return nil
 }
 
