@@ -142,8 +142,8 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 						"location":   location.Name(),
 					}).Errorf("Go-Quai Panicked")
 				}
+				go msgWorker(location) // If this worker exits, start a new one
 			}()
-			defer msgWorker(location)  // If this worker exits, start a new one
 			for msg := range msgChan { // This should exit when msgChan is closed
 				var data interface{}
 				// unmarshal the received data depending on the topic's type

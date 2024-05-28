@@ -208,6 +208,14 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 	logger := log.NewLogger("peers.log", viper.GetString(utils.PeersLogLevelFlag.Name))
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		q := query.Query{}
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
