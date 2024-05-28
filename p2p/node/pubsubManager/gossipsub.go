@@ -131,24 +131,36 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 		// close the msgChan if we exit this function
 		defer close(msgChan)
 		full := 0
-		// Start worker goroutines
-		for i := 0; i < numWorkers; i++ {
-			go func(location common.Location) {
-				for msg := range msgChan { // This should exit when msgChan is closed
-					var data interface{}
-					// unmarshal the received data depending on the topic's type
-					err = pb.UnmarshalAndConvert(msg.Data, location, &data, datatype)
-					if err != nil {
-						log.Global.Errorf("error unmarshalling data: %s", err)
-						continue
-					}
-
-					// handle the received data
-					if g.onReceived != nil {
-						g.onReceived(msg.ReceivedFrom, *msg.Topic, data, location)
-					}
+		// maintain a number of worker threads to handle messages
+		var msgWorker func(location common.Location)
+		msgWorker = func(location common.Location) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Global.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+						"location":   location.Name(),
+					}).Errorf("Go-Quai Panicked")
 				}
-			}(location)
+			}()
+			defer msgWorker(location)  // If this worker exits, start a new one
+			for msg := range msgChan { // This should exit when msgChan is closed
+				var data interface{}
+				// unmarshal the received data depending on the topic's type
+				err = pb.UnmarshalAndConvert(msg.Data, location, &data, datatype)
+				if err != nil {
+					log.Global.Errorf("error unmarshalling data: %s", err)
+					continue
+				}
+
+				// handle the received data
+				if g.onReceived != nil {
+					g.onReceived(msg.ReceivedFrom, *msg.Topic, data, location)
+				}
+			}
+		}
+		for i := 0; i < numWorkers; i++ {
+			go msgWorker(location)
 		}
 		log.Global.WithField("topic", topic.String()).Debugf("Subscribed to topic")
 		for {
