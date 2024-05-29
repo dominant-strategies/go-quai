@@ -78,6 +78,7 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 
 // Handle consensus data propagated to us from our peers
 func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data interface{}, nodeLocation common.Location) bool {
+	defer types.ObjectPool.Put(data)
 	switch data := data.(type) {
 	case types.WorkObject:
 		backend := *qbe.GetBackend(nodeLocation)

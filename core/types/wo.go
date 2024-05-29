@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -13,6 +14,12 @@ import (
 	"google.golang.org/protobuf/proto"
 	"lukechampine.com/blake3"
 )
+
+var ObjectPool = sync.Pool{
+	New: func() interface{} {
+		return new(interface{})
+	},
+}
 
 type WorkObject struct {
 	woHeader *WorkObjectHeader
