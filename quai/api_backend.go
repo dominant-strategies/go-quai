@@ -606,6 +606,50 @@ func (b *QuaiAPIBackend) GetMaxTxInWorkShare() uint64 {
 	return b.quai.core.GetMaxTxInWorkShare()
 }
 
+func (b *QuaiAPIBackend) BadHashExistsInChain() bool {
+	return b.quai.core.BadHashExistsInChain()
+}
+
+func (b *QuaiAPIBackend) IsBlockHashABadHash(hash common.Hash) bool {
+	return b.quai.core.IsBlockHashABadHash(hash)
+}
+
+func (b *QuaiAPIBackend) ComputeEfficiencyScore(header *types.WorkObject) uint16 {
+	return b.quai.core.ComputeEfficiencyScore(header)
+}
+
+func (b *QuaiAPIBackend) Config() *params.ChainConfig {
+	return b.quai.core.Config()
+}
+
+func (b *QuaiAPIBackend) GetBlockByHash(hash common.Hash) *types.WorkObject {
+	return b.quai.core.GetBlockByHash(hash)
+}
+
+func (b *QuaiAPIBackend) GetHeaderByHash(hash common.Hash) *types.WorkObject {
+	return b.quai.core.GetHeaderByHash(hash)
+}
+
+func (b *QuaiAPIBackend) GetHeaderByNumber(number uint64) *types.WorkObject {
+	return b.quai.core.GetHeaderByNumber(number)
+}
+
+func (b *QuaiAPIBackend) GetTerminiByHash(hash common.Hash) *types.Termini {
+	return b.quai.core.GetTerminiByHash(hash)
+}
+
+func (b *QuaiAPIBackend) IsGenesisHash(hash common.Hash) bool {
+	return b.quai.core.IsGenesisHash(hash)
+}
+
+func (b *QuaiAPIBackend) UpdateEtxEligibleSlices(header *types.WorkObject, location common.Location) common.Hash {
+	return b.quai.core.UpdateEtxEligibleSlices(header, location)
+}
+
+func (b *QuaiAPIBackend) WriteAddressOutpoints(outpointsMap map[string]map[string]*types.OutpointAndDenomination) error {
+	return b.quai.core.WriteAddressOutpoints(outpointsMap)
+}
+
 // ///////////////////////////
 // /////// P2P ///////////////
 // ///////////////////////////

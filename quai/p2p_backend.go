@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
@@ -15,6 +16,10 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+)
+
+const (
+	c_maxAllowableEntropyDist = 3500 // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
 )
 
 var (
@@ -109,11 +114,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			log.Global.Error("no backend found")
 			return false
 		}
-		// TODO: Verify the Block before writing it
-		// TODO: Determine if the block information was lively or stale and rate
-		// the peer accordingly
-		backend.WriteBlock(data.WorkObject)
 
+		backend.WriteBlock(data.WorkObject)
 		blockIngressCounter.Inc()
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
@@ -138,38 +140,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			return false
 		}
 		if backend.ProcessingState() {
-			// check if the work share is valid before accepting the transactions
-			// from the peer
-			if data.WorkObject == nil {
-				backend.Logger().Error("work share received from peer has a nil work object")
-				return false
-			}
-			if data.WorkObject.WorkObjectHeader() == nil {
-				backend.Logger().Error("work share received from peer has a nil work object header")
-				return false
-			}
-			if ok := backend.CheckIfValidWorkShare(data.WorkObject.WorkObjectHeader()); !ok {
-				backend.Logger().Error("work share received from peer is not valid")
-				return false
-			}
-			// check if the txs in the workObject hash to the tx hash in the body header
-			if hash := types.DeriveSha(data.WorkObject.Transactions(), trie.NewStackTrie(nil)); hash != data.WorkObject.TxHash() {
-				backend.Logger().Error("TxHash doesnt match the hash of the transactions in the work object received from peer")
-				return false
-			}
 
-			if len(data.WorkObject.Transactions()) > int(backend.GetMaxTxInWorkShare()) {
-				backend.Logger().Error("workshare contains more transactions than allowed")
-				return false
-			}
-
-			powHash, err := backend.Engine().ComputePowHash(data.WorkObject.WorkObjectHeader())
-			if err != nil {
-				backend.Logger().Error("Error computing the powHash of the work object header received from peer")
-				return false
-			}
-
-			backend.Logger().WithFields(log.Fields{"powHash": powHash, "tx count": len(data.WorkObject.Transactions()), "message id": Id}).Info("Received a work share broadcast")
+			backend.Logger().WithFields(log.Fields{"tx count": len(data.WorkObject.Transactions()), "message id": Id}).Info("Received a work share broadcast")
 			// Unpack the workobjectheader and the transactions
 			backend.SendWorkShare(data.WorkObject.WorkObjectHeader())
 			backend.SendRemoteTxs(data.WorkObject.Transactions())
@@ -203,12 +175,54 @@ func (qbe *QuaiBackend) GetHeight(location common.Location) uint64 {
 	panic("todo")
 }
 
-func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID, msg *pubsub.Message) pubsub.ValidationResult {
-	return func(ctx context.Context, id peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID, msg *pubsub.Message, nodeLocation common.Location) pubsub.ValidationResult {
+	return func(ctx context.Context, id peer.ID, msg *pubsub.Message, nodeLocation common.Location) pubsub.ValidationResult {
 		var data interface{}
 		data = msg.Message.GetData()
 		switch data := data.(type) {
-		case types.WorkObject:
+		case types.WorkObjectBlockView:
+			backend := *qbe.GetBackend(data.WorkObject.Location())
+			if backend == nil {
+				log.Global.WithFields(log.Fields{
+					"peer":     id,
+					"hash":     data.Hash(),
+					"location": data.Location(),
+				}).Error("no backend found for this location")
+			}
+
+			if backend.BadHashExistsInChain() {
+				backend.Logger().Warn("Bad Hashes still exist on chain, cannot handle block broadcast yet")
+				return pubsub.ValidationIgnore
+			}
+
+			// If Block broadcasted by the peer exists in the bad block list drop the peer
+			if backend.IsBlockHashABadHash(data.WorkObject.WorkObjectHeader().Hash()) {
+				return pubsub.ValidationReject
+			}
+			return ApplyPoWFilter(backend, data.WorkObject)
+
+		case types.WorkObjectHeaderView:
+			backend := *qbe.GetBackend(data.WorkObject.Location())
+			if backend == nil {
+				log.Global.WithFields(log.Fields{
+					"peer":     id,
+					"hash":     data.Hash(),
+					"location": data.Location(),
+				}).Error("no backend found for this location")
+			}
+
+			if backend.BadHashExistsInChain() {
+				backend.Logger().Warn("Bad Hashes still exist on chain, cannot handle block broadcast yet")
+				return pubsub.ValidationIgnore
+			}
+
+			// If Block broadcasted by the peer exists in the bad block list drop the peer
+			if backend.IsBlockHashABadHash(data.WorkObject.WorkObjectHeader().Hash()) {
+				return pubsub.ValidationReject
+			}
+			return ApplyPoWFilter(backend, data.WorkObject)
+
+		case types.WorkObjectShareView:
 			backend := *qbe.GetBackend(data.Location())
 			if backend == nil {
 				log.Global.WithFields(log.Fields{
@@ -216,12 +230,80 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 					"hash":     data.Hash(),
 					"location": data.Location(),
 				}).Error("no backend found for this location")
+			}
+			// check if the work share is valid before accepting the transactions
+			// from the peer
+			if data.WorkObject == nil {
+				backend.Logger().Error("work share received from peer has a nil work object")
 				return pubsub.ValidationReject
 			}
-		case types.Transaction:
-			return pubsub.ValidationAccept
+			if data.WorkObject.WorkObjectHeader() == nil {
+				backend.Logger().Error("work share received from peer has a nil work object header")
+				return pubsub.ValidationReject
+			}
+			if ok := backend.CheckIfValidWorkShare(data.WorkObject.WorkObjectHeader()); !ok {
+				backend.Logger().Error("work share received from peer is not valid")
+				return pubsub.ValidationReject
+			}
+			// check if the txs in the workObject hash to the tx hash in the body header
+			if hash := types.DeriveSha(data.WorkObject.Transactions(), trie.NewStackTrie(nil)); hash != data.WorkObject.TxHash() {
+				backend.Logger().Error("TxHash doesnt match the hash of the transactions in the work object received from peer")
+				return pubsub.ValidationReject
+			}
+
+			if len(data.WorkObject.Transactions()) > int(backend.GetMaxTxInWorkShare()) {
+				backend.Logger().Error("workshare contains more transactions than allowed")
+				return pubsub.ValidationReject
+			}
+
+			_, err := backend.Engine().ComputePowHash(data.WorkObject.WorkObjectHeader())
+			if err != nil {
+				backend.Logger().Error("Error computing the powHash of the work object header received from peer")
+				return pubsub.ValidationReject
+			}
 		}
 		return pubsub.ValidationAccept
+	}
+}
+
+func ApplyPoWFilter(backend quaiapi.Backend, wo *types.WorkObject) pubsub.ValidationResult {
+
+	powhash, err := backend.Engine().VerifySeal(wo.WorkObjectHeader())
+	if err != nil {
+		return pubsub.ValidationReject
+	}
+	// Check if the Block is atleast half the current difficulty in Zone Context,
+	// this makes sure that the nodes don't listen to the forks with the PowHash
+	//	with less than 50% of current difficulty
+	if backend.NodeCtx() == common.ZONE_CTX && new(big.Int).SetBytes(powhash.Bytes()).Cmp(new(big.Int).Div(backend.Engine().IntrinsicLogS(backend.CurrentHeader().Hash()), big.NewInt(2))) < 0 {
+		return pubsub.ValidationIgnore
+	}
+
+	currentIntrinsicS := backend.Engine().IntrinsicLogS(backend.CurrentHeader().Hash())
+	currentS := backend.CurrentHeader().ParentEntropy(backend.NodeCtx())
+	MaxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(c_maxAllowableEntropyDist))
+
+	broadCastEntropy := wo.ParentEntropy(common.ZONE_CTX)
+
+	// If someone is mining not within MaxAllowableEntropyDist*currentIntrinsicS dont broadcast
+	if currentS.Cmp(new(big.Int).Add(broadCastEntropy, MaxAllowableEntropyDist)) > 0 {
+		return pubsub.ValidationIgnore
+	}
+
+	// Quickly validate the header and propagate the block if it passes
+	err = backend.Engine().VerifyHeader(backend, wo)
+
+	// Including the ErrUnknownAncestor as well because a filter has already
+	// been applied for all the blocks that come until here. Since there
+	// exists a timedCache where the blocks expire, it is okay to let this
+	// block through and broadcast the block.
+	if err == nil || err.Error() == consensus.ErrUnknownAncestor.Error() {
+		return pubsub.ValidationAccept
+	} else if err.Error() == consensus.ErrFutureBlock.Error() {
+		// Weird future block, don't fail, but neither propagate
+		return pubsub.ValidationIgnore
+	} else {
+		return pubsub.ValidationReject
 	}
 }
 

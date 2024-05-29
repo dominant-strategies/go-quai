@@ -26,7 +26,7 @@ type ConsensusAPI interface {
 	OnNewBroadcast(core.PeerID, string, string, interface{}, common.Location) bool
 
 	// Creates the function that will be used to determine if a message should be propagated.
-	ValidatorFunc() func(ctx context.Context, id peer.ID, msg *pubsub.Message) pubsub.ValidationResult
+	ValidatorFunc() func(ctx context.Context, id peer.ID, msg *pubsub.Message, location common.Location) pubsub.ValidationResult
 
 	// Asks the consensus backend to lookup a block by hash and location.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.

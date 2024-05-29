@@ -107,6 +107,10 @@ type Backend interface {
 	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 	GetMaxTxInWorkShare() uint64
 
+	BadHashExistsInChain() bool
+	IsBlockHashABadHash(hash common.Hash) bool
+	consensus.ChainHeaderReader
+
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	SendRemoteTxs(txs types.Transactions) []error
