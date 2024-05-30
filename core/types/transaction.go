@@ -858,11 +858,11 @@ func (s Transactions) FilterToLocation(l common.Location) Transactions {
 
 // FilterToSlice returns the subset of transactions with a 'to' address which
 // belongs to the given slice location, at or above the given minimum context
-func (s Transactions) FilterToSlice(slice common.Location, minCtx int) Transactions {
+func (s Transactions) FilterToSlice(slice common.Location) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
 		toChain := tx.To().Location()
-		if toChain.InSameSliceAs(slice) {
+		if toChain.Equal(slice) {
 			filteredList = append(filteredList, tx)
 		}
 	}
