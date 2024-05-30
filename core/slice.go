@@ -722,7 +722,7 @@ func (sl *Slice) generateSlicePendingHeader(block *types.WorkObject, newTermini 
 	} else {
 		// Just compute the necessary information for the pending Header
 		// i.e ParentHash field, Number and writing manifest to the disk
-		localPendingHeader = types.EmptyHeader(sl.NodeCtx())
+		localPendingHeader = types.EmptyWorkObject(sl.NodeCtx())
 		localPendingHeader.SetParentHash(block.Hash(), nodeCtx)
 		localPendingHeader.SetNumber(big.NewInt(int64(block.NumberU64(nodeCtx))+1), nodeCtx)
 		localPendingHeader.Header().SetParentEntropy(sl.engine.TotalLogS(sl.hc, block), nodeCtx)

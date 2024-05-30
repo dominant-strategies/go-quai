@@ -135,10 +135,9 @@ type headerMarshaling struct {
 	Hash                  common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
-// Construct an empty header
-func EmptyHeader(nodeCtx int) *WorkObject {
+func EmptyHeader() *Header {
 	h := &Header{}
-	wo := &WorkObject{woHeader: &WorkObjectHeader{}, woBody: &WorkObjectBody{}, tx: &Transaction{}}
+
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
@@ -172,6 +171,14 @@ func EmptyHeader(nodeCtx int) *WorkObject {
 		h.parentHash[i] = EmptyRootHash
 		h.number[i] = big.NewInt(0)
 	}
+
+	return h
+}
+
+// Construct an empty header
+func EmptyWorkObject(nodeCtx int) *WorkObject {
+	wo := &WorkObject{woHeader: &WorkObjectHeader{}, woBody: &WorkObjectBody{}, tx: &Transaction{}}
+	h := EmptyHeader()
 	wo.woHeader.SetHeaderHash(EmptyRootHash)
 	wo.woHeader.SetParentHash(EmptyRootHash)
 	wo.woHeader.SetNumber(big.NewInt(0))

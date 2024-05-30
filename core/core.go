@@ -135,7 +135,7 @@ func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
 				}).Info("Already processing block")
 				return idx, errors.New("Already in process of appending this block")
 			}
-			newPendingEtxs, _, _, err := c.sl.Append(block, types.EmptyHeader(c.NodeCtx()), common.Hash{}, false, nil)
+			newPendingEtxs, _, _, err := c.sl.Append(block, types.EmptyWorkObject(c.NodeCtx()), common.Hash{}, false, nil)
 			c.processingCache.Remove(block.Hash())
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become

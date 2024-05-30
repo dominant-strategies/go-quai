@@ -267,35 +267,35 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
-	head := types.EmptyHeader(g.Config.Location.Context())
-	head.WorkObjectHeader().SetNonce(types.EncodeNonce(g.Nonce))
-	head.WorkObjectHeader().SetDifficulty(g.Difficulty)
-	head.WorkObjectHeader().SetTime(g.Timestamp)
-	head.Header().SetExtra(g.ExtraData)
-	head.Header().SetGasLimit(g.GasLimit)
-	head.Header().SetGasUsed(0)
-	head.Header().SetExpansionNumber(uint8(startingExpansionNumber))
+	wo := types.EmptyWorkObject(g.Config.Location.Context())
+	wo.WorkObjectHeader().SetNonce(types.EncodeNonce(g.Nonce))
+	wo.WorkObjectHeader().SetDifficulty(g.Difficulty)
+	wo.WorkObjectHeader().SetTime(g.Timestamp)
+	wo.Header().SetExtra(g.ExtraData)
+	wo.Header().SetGasLimit(g.GasLimit)
+	wo.Header().SetGasUsed(0)
+	wo.Header().SetExpansionNumber(uint8(startingExpansionNumber))
 	if startingExpansionNumber > 0 {
 		// Fill each byte with 0xFF to set all bits to 1
 		var etxEligibleSlices common.Hash
 		for i := 0; i < common.HashLength; i++ {
 			etxEligibleSlices[i] = 0xFF
 		}
-		head.Header().SetEtxEligibleSlices(etxEligibleSlices)
+		wo.Header().SetEtxEligibleSlices(etxEligibleSlices)
 	} else {
-		head.Header().SetEtxEligibleSlices(common.Hash{})
+		wo.Header().SetEtxEligibleSlices(common.Hash{})
 	}
-	head.Header().SetCoinbase(common.Zero)
-	head.Header().SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
-	head.Header().SetEtxSetRoot(types.EmptyRootHash)
+	wo.Header().SetCoinbase(common.Zero)
+	wo.Header().SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
+	wo.Header().SetEtxSetRoot(types.EmptyRootHash)
 	if g.GasLimit == 0 {
-		head.Header().SetGasLimit(params.GenesisGasLimit)
+		wo.Header().SetGasLimit(params.GenesisGasLimit)
 	}
 	for i := 0; i < common.HierarchyDepth; i++ {
-		head.SetNumber(big.NewInt(0), i)
-		head.SetParentHash(common.Hash{}, i)
+		wo.SetNumber(big.NewInt(0), i)
+		wo.SetParentHash(common.Hash{}, i)
 	}
-	return head
+	return wo
 }
 
 // Commit writes the block and state of a genesis specification to the database.

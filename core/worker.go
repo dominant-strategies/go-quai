@@ -1036,7 +1036,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	}
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number(nodeCtx)
-	newWo := types.EmptyHeader(nodeCtx)
+	newWo := types.EmptyWorkObject(nodeCtx)
 	newWo.SetParentHash(wo.Hash(), nodeCtx)
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		newWo.SetNumber(big.NewInt(1), nodeCtx)
