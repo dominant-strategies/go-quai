@@ -76,7 +76,7 @@ func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
 // Note that loading full blocks requires two requests. Use HeaderByHash
 // if you don't need all transactions or uncle headers.
 func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
-	return ec.getBlock(ctx, "eth_getBlockByHash", hash, true)
+	return ec.getBlock(ctx, "quai_getBlockByHash", hash, true)
 }
 
 // BlockByNumber returns a block from the current canonical chain. If number is nil, the
@@ -96,12 +96,12 @@ func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 }
 
 type rpcBlock struct {
-	Hash            common.Hash         `json:"hash"`
-	Transactions    []rpcTransaction    `json:"transactions"`
-	UncleHashes     []common.Hash       `json:"uncles"`
-	ExtTransactions []rpcTransaction    `json:"extTransactions"`
-	SubManifest     types.BlockManifest `json:"manifest"`
-	InterlinkHashes common.Hashes       `json:"interlinkHashes"`
+	Hash            common.Hash               `json:"hash"`
+	Transactions    []rpcTransaction          `json:"transactions"`
+	UncleHashes     []*types.WorkObjectHeader `json:"uncles"`
+	ExtTransactions []rpcTransaction          `json:"extTransactions"`
+	SubManifest     types.BlockManifest       `json:"manifest"`
+	InterlinkHashes common.Hashes             `json:"interlinkHashes"`
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.WorkObject, error) {
@@ -120,30 +120,6 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
-	}
-	// Load uncles because they are not included in the block response.
-	var uncles []*types.WorkObjectHeader
-	if len(body.UncleHashes) > 0 {
-		uncles = make([]*types.WorkObjectHeader, len(body.UncleHashes))
-		reqs := make([]rpc.BatchElem, len(body.UncleHashes))
-		for i := range reqs {
-			reqs[i] = rpc.BatchElem{
-				Method: "eth_getUncleByBlockHashAndIndex",
-				Args:   []interface{}{body.Hash, hexutil.EncodeUint64(uint64(i))},
-				Result: &uncles[i],
-			}
-		}
-		if err := ec.c.BatchCallContext(ctx, reqs); err != nil {
-			return nil, err
-		}
-		for i := range reqs {
-			if reqs[i].Error != nil {
-				return nil, reqs[i].Error
-			}
-			if uncles[i] == nil {
-				return nil, fmt.Errorf("got null header for uncle %d of block %x", i, body.Hash[:])
-			}
-		}
 	}
 	// Fill the sender cache of transactions in the block.
 	txs := make([]*types.Transaction, len(body.Transactions))
@@ -168,7 +144,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	}
 	var interlinkHashes common.Hashes
 	copy(interlinkHashes, body.InterlinkHashes)
-	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(head.Header(), txs, etxs, uncles, manifest, interlinkHashes), nil
+	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(head.Header(), txs, etxs, body.UncleHashes, manifest, interlinkHashes), nil
 }
 
 // HeaderByHash returns the block header with the given hash.

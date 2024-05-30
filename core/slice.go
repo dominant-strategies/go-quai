@@ -254,7 +254,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		if exists && cachedInboundEtxs != nil {
 			newInboundEtxs = cachedInboundEtxs
 		} else {
-			newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block, block.Location())
+			newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block)
 			if err != nil {
 				sl.logger.WithField("err", err).Trace("Error collecting newly confirmed etxs")
 				// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
@@ -439,24 +439,25 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	}).Info("Times during sub append")
 
 	sl.logger.WithFields(log.Fields{
-		"number":             block.NumberArray(),
-		"hash":               block.Hash(),
-		"difficulty":         block.Difficulty(),
-		"uncles":             len(block.Uncles()),
-		"totalTxs":           len(block.Transactions()),
-		"etxs emitted":       len(block.ExtTransactions()),
-		"qiTxs":              len(block.QiTransactions()),
-		"net outputs-inputs": net,
-		"quaiTxs":            len(block.QuaiTransactions()),
-		"etxs inbound":       len(block.Body().ExternalTransactions()),
-		"gas":                block.GasUsed(),
-		"gasLimit":           block.GasLimit(),
-		"evmRoot":            block.EVMRoot(),
-		"utxoRoot":           block.UTXORoot(),
-		"etxSetRoot":         block.EtxSetRoot(),
-		"order":              order,
-		"location":           block.Location(),
-		"elapsed":            common.PrettyDuration(time.Since(start)),
+		"number":               block.NumberArray(),
+		"hash":                 block.Hash(),
+		"difficulty":           block.Difficulty(),
+		"uncles":               len(block.Uncles()),
+		"totalTxs":             len(block.Transactions()),
+		"etxs emitted":         len(block.ExtTransactions()),
+		"qiTxs":                len(block.QiTransactions()),
+		"net outputs-inputs":   net,
+		"quaiTxs":              len(block.QuaiTransactions()),
+		"etxs inbound":         len(block.Body().ExternalTransactions()),
+		"inboundEtxs from dom": len(newInboundEtxs),
+		"gas":                  block.GasUsed(),
+		"gasLimit":             block.GasLimit(),
+		"evmRoot":              block.EVMRoot(),
+		"utxoRoot":             block.UTXORoot(),
+		"etxSetRoot":           block.EtxSetRoot(),
+		"order":                order,
+		"location":             block.Location(),
+		"elapsed":              common.PrettyDuration(time.Since(start)),
 	}).Info("Appended new block")
 
 	if nodeCtx == common.ZONE_CTX {
@@ -717,9 +718,10 @@ func (sl *Slice) generateSlicePendingHeader(block *types.WorkObject, newTermini 
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
-func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject, location common.Location) (types.Transactions, types.Transactions, error) {
-	nodeLocation := sl.NodeLocation()
+func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Transactions, types.Transactions, error) {
 	nodeCtx := sl.NodeCtx()
+	nodeLocation := sl.NodeLocation()
+	blockLocation := block.Location()
 	// Collect rollup of ETXs from the subordinate node's manifest
 	subRollup := types.Transactions{}
 	var err error
@@ -730,7 +732,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject, location com
 			sl.logger.WithFields(log.Fields{
 				"Hash": block.Hash(),
 				"len":  len(subRollup),
-			}).Info("Found the rollup in cache")
+			}).Debug("Found the rollup in cache")
 		} else {
 			subRollup, err = sl.hc.CollectSubRollup(block)
 			if err != nil {
@@ -739,59 +741,66 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject, location com
 			sl.hc.subRollupCache.Add(block.Hash(), subRollup)
 		}
 	}
-
 	// Filter for ETXs destined to this slice
-	newInboundEtxs := subRollup.FilterToSlice(location, nodeCtx)
-
+	newInboundEtxs := subRollup.FilterToSlice(blockLocation)
 	// Filter this list to exclude any ETX for which we are not the crossing
-	// context node. Such ETXs cannot be used by our subordinate for one of the
-	// following reasons:
-	// * if we are prime, but common dom was a region node, than the given ETX has
-	//   already been confirmed and passed down from the region node
-	// * if we are region, but the common dom is prime, then the destination is
-	//   not in one of our sub chains
-	//
-	// Note: here "common dom" refers to the highes context chain which exists in
-	// both the origin & destination. See the definition of the `CommonDom()`
-	// method for more explanation.
+	// context node. This check prevents cross-Region ETXs from going through Prime.
 	newlyConfirmedEtxs := newInboundEtxs.FilterConfirmationCtx(nodeCtx, nodeLocation)
+	for {
+		ancHash := block.ParentHash(nodeCtx)
+		ancNum := block.NumberU64(nodeCtx) - 1
+		parent := sl.hc.GetBlock(ancHash, ancNum)
+		if parent == nil {
+			return nil, nil, fmt.Errorf("unable to find parent, hash: %s", ancHash.String())
+		}
 
-	ancHash := block.ParentHash(nodeCtx)
-	ancNum := block.NumberU64(nodeCtx) - 1
-	ancestor := sl.hc.GetBlock(ancHash, ancNum)
-	if ancestor == nil {
-		return nil, nil, fmt.Errorf("unable to find ancestor, hash: %s", ancHash.String())
-	}
+		if sl.hc.IsGenesisHash(ancHash) {
+			break
+		}
 
-	if sl.hc.IsGenesisHash(ancHash) {
-		return newlyConfirmedEtxs, subRollup, nil
-	}
+		// Terminate the search if the slice to which the given block belongs was
+		// not activated yet, expansion number is validated on prime block, so only
+		// terminate on prime block, It is possible to make this check more
+		// optimized but this is performant enough and in some cases might have to
+		// go through few more region blocks than necessary
+		var err error
+		_, order, err := sl.Engine().CalcOrder(parent)
+		if err != nil {
+			return nil, nil, err
+		}
+		regions, zones := common.GetHierarchySizeForExpansionNumber(parent.ExpansionNumber())
+		if order == common.PRIME_CTX && (blockLocation.Region() > int(regions) || blockLocation.Zone() > int(zones)) {
+			break
+		}
 
-	// Terminate the search if the slice to which the given block belongs was
-	// not activated yet, expansion number is validated on prime block, so only
-	// terminate on prime block, It is possible to make this check more
-	// optimized but this is performant enough and in some cases might have to
-	// go through few more region blocks than necessary
-	_, order, err := sl.Engine().CalcOrder(ancestor)
-	if err != nil {
-		return nil, nil, err
-	}
-	regions, zones := common.GetHierarchySizeForExpansionNumber(ancestor.ExpansionNumber())
-	if order == common.PRIME_CTX && (location.Region() > int(regions) || location.Zone() > int(zones)) {
-		return newlyConfirmedEtxs, subRollup, nil
-	}
+		// Terminate the search when we find a block produced by the same sub
+		if parent.Location().Equal(blockLocation) && order == nodeCtx {
+			break
+		}
 
-	// Terminate the search when we find a block produced by the same sub
-	if ancestor.Location().SubIndex(nodeLocation) == location.SubIndex(nodeLocation) {
-		return newlyConfirmedEtxs, subRollup, nil
-	}
+		subRollup := types.Transactions{}
 
-	// Otherwise recursively process the ancestor and collect its newly confirmed ETXs too
-	ancEtxs, _, err := sl.CollectNewlyConfirmedEtxs(ancestor, location)
-	if err != nil {
-		return nil, nil, err
+		if nodeCtx < common.ZONE_CTX {
+			rollup, exists := sl.hc.subRollupCache.Get(parent.Hash())
+			if exists && rollup != nil {
+				subRollup = rollup
+				sl.logger.WithFields(log.Fields{
+					"Hash": parent.Hash(),
+					"len":  len(subRollup),
+				}).Debug("Found the rollup in cache")
+			} else {
+				subRollup, err = sl.hc.CollectSubRollup(parent)
+				if err != nil {
+					return nil, nil, err
+				}
+				sl.hc.subRollupCache.Add(parent.Hash(), subRollup)
+			}
+		}
+		ancInboundEtxs := subRollup.FilterToSlice(blockLocation)
+		newlyConfirmedAncEtxs := ancInboundEtxs.FilterConfirmationCtx(nodeCtx, nodeLocation)
+		newlyConfirmedEtxs = append(newlyConfirmedEtxs, newlyConfirmedAncEtxs...)
+		block = parent
 	}
-	newlyConfirmedEtxs = append(ancEtxs, newlyConfirmedEtxs...)
 	return newlyConfirmedEtxs, subRollup, nil
 }
 
@@ -1292,6 +1301,15 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
 			}).Warn("Pending Block Body not found")
+			return nil, ErrBodyNotFound
+		}
+		if len(pendingBlockBody.Transactions()) == 0 {
+			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
+				"wo.Header":       wo.HeaderHash(),
+				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
+				"wo.Difficulty()": wo.Difficulty(),
+				"wo.Location()":   wo.Location(),
+			}).Warn("Pending Block Body has no transactions")
 			return nil, ErrBodyNotFound
 		}
 	} else {
