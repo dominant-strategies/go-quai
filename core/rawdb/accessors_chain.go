@@ -306,31 +306,6 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 	return wo
 }
 
-// WriteHeader stores a block header into the database and also stores the hash-
-// to-number mapping.
-func WriteHeader(db ethdb.KeyValueWriter, header *types.Header, nodeCtx int) {
-	var (
-		hash   = header.Hash()
-		number = header.NumberU64(nodeCtx)
-	)
-	// Write the hash -> number mapping
-	WriteHeaderNumber(db, hash, number)
-
-	// Write the encoded header
-	protoHeader, err := header.ProtoEncode()
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto encode header")
-	}
-	data, err := proto.Marshal(protoHeader)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal header")
-	}
-	key := headerKey(number, hash)
-	if err := db.Put(key, data); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store header")
-	}
-}
-
 // DeleteHeader removes all block header data associated with a hash.
 func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	deleteHeaderWithoutNumber(db, hash, number)
