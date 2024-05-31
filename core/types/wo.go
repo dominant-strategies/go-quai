@@ -645,6 +645,13 @@ func (wo *WorkObject) WithBody(header *Header, txs []*Transaction, etxs []*Trans
 	return newWo
 }
 
+func EmptyWorkObjectBody() *WorkObjectBody {
+	woBody := &WorkObjectBody{}
+	woBody.SetTransactions([]*Transaction{})
+	woBody.SetExtTransactions([]*Transaction{})
+	return woBody
+}
+
 func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, uncles []*WorkObjectHeader, manifest BlockManifest, receipts []*Receipt, hasher TrieHasher, nodeCtx int) (*WorkObjectBody, error) {
 	b := &WorkObjectBody{}
 	b.SetHeader(CopyHeader(header))
