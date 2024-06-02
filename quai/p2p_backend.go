@@ -80,7 +80,7 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data interface{}, nodeLocation common.Location) bool {
 	defer types.ObjectPool.Put(data)
 	switch data := data.(type) {
-	case types.WorkObject:
+	case types.WorkObjectBlockView:
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
 			log.Global.Error("no backend found")
@@ -89,7 +89,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		// TODO: Verify the Block before writing it
 		// TODO: Determine if the block information was lively or stale and rate
 		// the peer accordingly
-		backend.WriteBlock(&data)
+		backend.WriteBlock(data.WorkObject)
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	case types.WorkObjectHeaderView:
@@ -100,7 +100,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		}
 		// Only append this in the case of the slice
 		if !backend.ProcessingState() && backend.NodeCtx() == common.ZONE_CTX {
-			backend.WriteBlock(data.ConvertToBlockView().WorkObject)
+			backend.WriteBlock(data.WorkObject)
 		}
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)

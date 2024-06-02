@@ -331,10 +331,8 @@ func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.
 }
 
 func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interface{}, nodeLocation common.Location) {
-	switch v := data.(type) {
-	case types.WorkObject:
-		p.cacheAdd(v.Hash(), &v, nodeLocation)
-	// TODO: send it to consensus
+	switch data.(type) {
+	case types.WorkObjectBlockView:
 	case types.WorkObjectHeaderView:
 	case types.Transactions:
 	case types.WorkObjectHeader:

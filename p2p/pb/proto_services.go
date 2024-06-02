@@ -270,23 +270,19 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *interface{}, datatype interface{}) error {
 	switch datatype.(type) {
 	case *types.WorkObjectBlockView:
-		protoWorkObject := &types.ProtoWorkObject{}
+		protoWorkObject := &types.ProtoWorkObjectBlockView{}
 		err := proto.Unmarshal(data, protoWorkObject)
 		if err != nil {
 			return err
 		}
-		workObject := &types.WorkObject{}
-		if protoWorkObject.WoHeader == nil {
-			return errors.New("woheader is nil")
-		}
-		if protoWorkObject.WoHeader.Location == nil {
-			return errors.New("location is nil")
-		}
-		err = workObject.ProtoDecode(protoWorkObject, sourceLocation, types.BlockObject)
+
+		workObjectBlockView := types.WorkObjectBlockView{}
+		workObjectBlockView.WorkObject = &types.WorkObject{}
+		err = workObjectBlockView.ProtoDecode(protoWorkObject, sourceLocation)
 		if err != nil {
 			return err
 		}
-		*dataPtr = *workObject
+		*dataPtr = workObjectBlockView
 		return nil
 	case *types.WorkObjectHeaderView:
 		protoWorkObject := &types.ProtoWorkObjectHeaderView{}
@@ -294,16 +290,13 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		if err != nil {
 			return err
 		}
-		workObjectHeaderView := &types.WorkObjectHeaderView{}
-		if protoWorkObject.WoHeader.Location == nil {
-			return errors.New("location is nil")
-		}
+		workObjectHeaderView := types.WorkObjectHeaderView{}
 		workObjectHeaderView.WorkObject = &types.WorkObject{}
 		err = workObjectHeaderView.ProtoDecode(protoWorkObject, sourceLocation)
 		if err != nil {
 			return err
 		}
-		*dataPtr = *workObjectHeaderView
+		*dataPtr = workObjectHeaderView
 		return nil
 	case *types.WorkObjectHeader:
 		protoWorkObjectHeader := &types.ProtoWorkObjectHeader{}
@@ -311,12 +304,12 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		if err != nil {
 			return err
 		}
-		workObjectHeader := &types.WorkObjectHeader{}
+		workObjectHeader := types.WorkObjectHeader{}
 		err = workObjectHeader.ProtoDecode(protoWorkObjectHeader)
 		if err != nil {
 			return err
 		}
-		*dataPtr = *workObjectHeader
+		*dataPtr = workObjectHeader
 		return nil
 	case *types.Header:
 		protoHeader := &types.ProtoHeader{}
@@ -324,12 +317,12 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		if err != nil {
 			return err
 		}
-		header := &types.Header{}
+		header := types.Header{}
 		err = header.ProtoDecode(protoHeader, sourceLocation)
 		if err != nil {
 			return err
 		}
-		*dataPtr = *header
+		*dataPtr = header
 		return nil
 	case *types.Transactions:
 		protoTransactions := &types.ProtoTransactions{}
@@ -337,12 +330,12 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		if err != nil {
 			return err
 		}
-		transactions := &types.Transactions{}
+		transactions := types.Transactions{}
 		err = transactions.ProtoDecode(protoTransactions, sourceLocation)
 		if err != nil {
 			return err
 		}
-		*dataPtr = *transactions
+		*dataPtr = transactions
 		return nil
 	case common.Hash:
 		protoHash := &common.ProtoHash{}
