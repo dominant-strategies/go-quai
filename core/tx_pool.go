@@ -889,7 +889,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	}
 	// Mark local addresses and journal local transactions
 	if local && !pool.locals.contains(internal) {
-		pool.logger.WithField("address", from).Info("Setting new local account")
+		pool.logger.WithField("address", from).Debug("Setting new local account")
 		pool.locals.add(internal)
 		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}
