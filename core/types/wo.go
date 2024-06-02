@@ -767,60 +767,42 @@ func (wo *WorkObject) ProtoEncode(woType WorkObjectView) (*ProtoWorkObject, erro
 }
 
 func (wo *WorkObjectHeaderView) ProtoEncode() (*ProtoWorkObjectHeaderView, error) {
-	header, err := wo.woHeader.ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-	body, err := wo.woBody.ProtoEncode()
+	protoWo, err := wo.WorkObject.ProtoEncode(HeaderObject)
 	if err != nil {
 		return nil, err
 	}
 	return &ProtoWorkObjectHeaderView{
-		WoHeader: header,
-		WoBody:   body,
+		WorkObject: protoWo,
 	}, nil
 }
 
 func (wo *WorkObjectBlockView) ProtoEncode() (*ProtoWorkObjectBlockView, error) {
-	header, err := wo.woHeader.ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-	body, err := wo.woBody.ProtoEncode()
+	protoWo, err := wo.WorkObject.ProtoEncode(BlockObject)
 	if err != nil {
 		return nil, err
 	}
 	return &ProtoWorkObjectBlockView{
-		WoHeader: header,
-		WoBody:   body,
+		WorkObject: protoWo,
 	}, nil
 }
 
 func (wo *WorkObjectHeaderView) ProtoDecode(data *ProtoWorkObjectHeaderView, location common.Location) error {
-	wo.woHeader = new(WorkObjectHeader)
-	err := wo.woHeader.ProtoDecode(data.GetWoHeader())
+	decodeWo := new(WorkObject)
+	err := decodeWo.ProtoDecode(data.GetWorkObject(), location, HeaderObject)
 	if err != nil {
 		return err
 	}
-	wo.woBody = new(WorkObjectBody)
-	err = wo.woBody.ProtoDecode(data.GetWoBody(), location, BlockObject)
-	if err != nil {
-		return err
-	}
+	wo.WorkObject = decodeWo
 	return nil
 }
 
 func (wob *WorkObjectBlockView) ProtoDecode(data *ProtoWorkObjectBlockView, location common.Location) error {
-	wob.woHeader = new(WorkObjectHeader)
-	err := wob.woHeader.ProtoDecode(data.GetWoHeader())
+	decodeWo := new(WorkObject)
+	err := decodeWo.ProtoDecode(data.GetWorkObject(), location, BlockObject)
 	if err != nil {
 		return err
 	}
-	wob.woBody = new(WorkObjectBody)
-	err = wob.woBody.ProtoDecode(data.GetWoBody(), location, BlockObject)
-	if err != nil {
-		return err
-	}
+	wob.WorkObject = decodeWo
 	return nil
 }
 
