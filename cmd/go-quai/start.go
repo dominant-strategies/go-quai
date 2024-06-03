@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
-	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p/node"
@@ -62,12 +61,6 @@ func startCmdPreRun(cmd *cobra.Command, args []string) error {
 	if viper.GetString(utils.KeyFileFlag.Name) == "" {
 		configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
 		viper.Set(utils.KeyFileFlag.Name, filepath.Join(configDir, "private.key"))
-	}
-
-	// if no bootstrap peers are provided, use the default ones defined in config/bootnodes.go
-	if bootstrapPeers := viper.GetStringSlice(utils.BootPeersFlag.Name); len(bootstrapPeers) == 0 {
-		log.Global.Debugf("no bootstrap peers provided. Using default ones: %v", common.BootstrapPeers)
-		viper.Set(utils.BootPeersFlag.Name, common.BootstrapPeers)
 	}
 	return nil
 }

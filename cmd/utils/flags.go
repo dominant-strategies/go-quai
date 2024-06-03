@@ -533,7 +533,7 @@ var (
 
 	EnvironmentFlag = Flag{
 		Name:  c_NodeFlagPrefix + "environment",
-		Value: params.LocalName,
+		Value: params.ColosseumName,
 		Usage: "environment to run in (local, colosseum, garden, orchard, lighthouse, dev)" + generateEnvDoc(c_NodeFlagPrefix+"environment"),
 	}
 
@@ -1522,7 +1522,7 @@ func addFlagsToCategory(flags []Flag) {
 	}
 }
 
-// Write a function to write the default values of each flag to a file
+// Write the default values of each flag to a file
 func WriteDefaultConfigFile(configDir string, configFileName string, configType string) error {
 	if configDir == "" {
 		log.Global.Fatalf("No config file path provided")
@@ -1559,6 +1559,9 @@ func WriteDefaultConfigFile(configDir string, configFileName string, configType 
 	addFlagsToCategory(TXPoolFlags)
 	addFlagsToCategory(RPCFlags)
 	addFlagsToCategory(MetricsFlags)
+
+	// Remove bootpeers data from the configData to be written.
+	delete(configData["node"], "bootpeers")
 
 	var output []byte
 	var marshalErr error

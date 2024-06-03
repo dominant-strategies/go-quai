@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -28,6 +29,12 @@ func InitConfig() {
 			// config file was found but another error was produced. Cannot continue
 			panic(err)
 		}
+	}
+	if !viper.IsSet(BootPeersFlag.Name) {
+		network := viper.GetString(EnvironmentFlag.Name)
+		bootpeers := common.BootstrapPeers[network]
+		log.Global.Debugf("No bootpeers specified. Using defaults for %s: %s", network, bootpeers)
+		viper.Set(BootPeersFlag.Name, bootpeers)
 	}
 
 	log.Global.Infof("Loading config from environment variables with prefix: '%s_'", constants.ENV_PREFIX)
