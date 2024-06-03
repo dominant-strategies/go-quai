@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	headerCacheLimit      = 512
+	headerCacheLimit      = 25
 	numberCacheLimit      = 2048
 	c_subRollupCacheSize  = 50
 	primeHorizonThreshold = 20
