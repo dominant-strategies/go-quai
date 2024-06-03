@@ -331,15 +331,22 @@ func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.
 }
 
 func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interface{}, nodeLocation common.Location) {
-	switch data.(type) {
-	case types.WorkObjectBlockView:
-	case types.WorkObjectHeaderView:
-	case types.Transactions:
-	case types.WorkObjectHeader:
-	default:
-		log.Global.Debugf("received unsupported block broadcast")
-		// TODO: ban the peer which sent it?
+	if _, ok := acceptableTypes[reflect.TypeOf(data)]; !ok {
+		log.Global.WithFields(log.Fields{
+			"peer":  sourcePeer,
+			"topic": topic,
+			"type":  reflect.TypeOf(data),
+		}).Warn("Received unsupported broadcast")
 		return
+	}
+
+	switch v := data.(type) {
+	case types.WorkObjectHeader:
+		p.cacheAdd(v.Hash(), &v, nodeLocation)
+	case types.WorkObjectHeaderView:
+		p.cacheAdd(v.Hash(), &v, nodeLocation)
+	case types.WorkObjectBlockView:
+		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	}
 
 	// If we made it here, pass the data on to the consensus backend
