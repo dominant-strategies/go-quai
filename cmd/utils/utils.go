@@ -3,7 +3,6 @@ package utils
 import (
 	"errors"
 	"io/fs"
-	"os"
 
 	"github.com/spf13/viper"
 
@@ -34,45 +33,4 @@ func InitConfig() {
 	log.Global.Infof("Loading config from environment variables with prefix: '%s_'", constants.ENV_PREFIX)
 	viper.SetEnvPrefix(constants.ENV_PREFIX)
 	viper.AutomaticEnv()
-}
-
-// saves the config file with the current config parameters.
-//
-// If the config file does not exist, it creates it.
-//
-// If the config file exists, it creates a backup copy ending with .bak
-// and overwrites the existing config file.
-// TODO: consider using one single utility function to save/update/append files throughout the codebase
-func SaveConfig() error {
-	// check if config file exists
-	configFile := viper.ConfigFileUsed()
-	log.Global.Debugf("saving/updating config file: %s", configFile)
-	if _, err := os.Stat(configFile); err == nil {
-		// config file exists, create backup copy
-		err := os.Rename(configFile, configFile+".bak")
-		if err != nil {
-			return err
-		}
-	} else if os.IsNotExist(err) {
-		// config file does not exist, create directory if it does not exist
-		if _, err := os.Stat(configFile); os.IsNotExist(err) {
-			configDir := viper.GetString(ConfigDirFlag.Name)
-			if err := os.MkdirAll(configDir, 0755); err != nil {
-				return err
-			}
-		}
-		_, err := os.Create(configFile)
-		if err != nil {
-			return err
-		}
-	} else {
-		return err
-	}
-
-	// write config file
-	err := viper.WriteConfigAs(configFile)
-	if err != nil {
-		return err
-	}
-	return nil
 }

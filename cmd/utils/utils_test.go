@@ -11,40 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Verifies that the config file is saved or updated with the current config parameters.
-func TestSaveConfig(t *testing.T) {
-	// set configPath to a temporary mocked XDG config folder
-	mockConfigPath := "/tmp/xdg_config_home/"
-	tempFile := createMockXDGConfigFile(t, mockConfigPath)
-	defer tempFile.Close()
-	defer os.RemoveAll(mockConfigPath)
-	// write LOG_LEVEL config to mock config.yaml file
-	_, err := tempFile.WriteString(LogLevelFlag.Name + " : " + "debug\n")
-	require.NoError(t, err)
-	// Clear viper instance to simulate a fresh start
-	viper.Reset()
-
-	// Set config path to the temporary config directory
-	viper.SetConfigFile(tempFile.Name())
-
-	// Set PORT to 8080 as environment variable
-	err = os.Setenv("GO_QUAI_PORT", "8080")
-	require.NoError(t, err)
-	defer os.Unsetenv("GO_QUAI_PORT")
-	InitConfig()
-	// Save config file
-	err = SaveConfig()
-	require.NoError(t, err)
-	// Load config from mock file into viper and assert that the new config parameters were saved
-	err = viper.ReadInConfig()
-	require.NoError(t, err)
-	assert.Equal(t, "8080", viper.GetString(P2PPortFlag.Name))
-	// Assert a .bak config file was created
-	backupFile, err := os.Stat(mockConfigPath + constants.CONFIG_FILE_NAME + ".bak")
-	assert.False(t, os.IsNotExist(err))
-	assert.Equal(t, constants.CONFIG_FILE_NAME+".bak", backupFile.Name())
-}
-
 // testXDGConfigLoading tests the loading of the config file from the XDG config home
 // and verifies values are correctly set in viper.
 // This test is nested within the TestCobraFlagConfigLoading test.
