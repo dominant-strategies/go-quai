@@ -31,15 +31,15 @@ import (
 )
 
 const (
-	c_maxAppendQueue                           = 1000000 // Maximum number of future headers we can store in cache
-	c_maxFutureTime                            = 30      // Max time into the future (in seconds) we will accept a block
-	c_appendQueueRetryPeriod                   = 1       // Time (in seconds) before retrying to append from AppendQueue
-	c_appendQueueThreshold                     = 200     // Number of blocks to load from the disk to ram on every proc of append queue
-	c_processingCache                          = 10      // Number of block hashes held to prevent multi simultaneous appends on a single block hash
-	c_primeRetryThreshold                      = 1800    // Number of times a block is retry to be appended before eviction from append queue in Prime
-	c_regionRetryThreshold                     = 1200    // Number of times a block is retry to be appended before eviction from append queue in Region
-	c_zoneRetryThreshold                       = 600     // Number of times a block is retry to be appended before eviction from append queue in Zone
-	c_maxFutureBlocksPrime              uint64 = 3       // Number of blocks ahead of the current block to be put in the hashNumberList
+	c_maxAppendQueue                           = 3000 // Maximum number of future headers we can store in cache
+	c_maxFutureTime                            = 30   // Max time into the future (in seconds) we will accept a block
+	c_appendQueueRetryPeriod                   = 1    // Time (in seconds) before retrying to append from AppendQueue
+	c_appendQueueThreshold                     = 200  // Number of blocks to load from the disk to ram on every proc of append queue
+	c_processingCache                          = 10   // Number of block hashes held to prevent multi simultaneous appends on a single block hash
+	c_primeRetryThreshold                      = 1800 // Number of times a block is retry to be appended before eviction from append queue in Prime
+	c_regionRetryThreshold                     = 1200 // Number of times a block is retry to be appended before eviction from append queue in Region
+	c_zoneRetryThreshold                       = 600  // Number of times a block is retry to be appended before eviction from append queue in Zone
+	c_maxFutureBlocksPrime              uint64 = 3    // Number of blocks ahead of the current block to be put in the hashNumberList
 	c_maxFutureBlocksRegion             uint64 = 150
 	c_maxFutureBlocksZone               uint64 = 2000
 	c_appendQueueRetryPriorityThreshold        = 5  // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended

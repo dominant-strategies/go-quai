@@ -49,7 +49,7 @@ const (
 	staleThreshold = 7
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
-	pendingBlockBodyLimit = 320
+	pendingBlockBodyLimit = 16
 
 	// c_headerPrintsExpiryTime is how long a header hash is kept in the cache, so that currentInfo
 	// is not printed on a Proc frequency
@@ -58,9 +58,9 @@ const (
 	// c_chainSideChanSize is the size of the channel listening to uncle events
 	chainSideChanSize = 10
 
-	c_uncleCacheSize = 100
+	c_uncleCacheSize = 32
 
-	c_workShareFilterDist = 100 // the dist from the current block for the work share inclusion in the worker
+	c_workShareFilterDist = 10 // the dist from the current block for the work share inclusion in the worker
 )
 
 // environment is the worker's current environment and holds all

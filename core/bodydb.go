@@ -19,9 +19,8 @@ import (
 )
 
 const (
-	bodyCacheLimit     = 256
-	blockCacheLimit    = 256
-	maxHeadsQueueLimit = 1024
+	bodyCacheLimit  = 25
+	blockCacheLimit = 25
 )
 
 type BodyDb struct {

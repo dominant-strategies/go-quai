@@ -26,10 +26,10 @@ import (
 )
 
 const (
-	c_maxPendingEtxBatchesPrime       = 30000
-	c_maxPendingEtxBatchesRegion      = 10000
+	c_maxPendingEtxBatchesPrime       = 3000
+	c_maxPendingEtxBatchesRegion      = 1000
 	c_maxPendingEtxsRollup            = 256
-	c_maxBloomFilters                 = 1024
+	c_maxBloomFilters                 = 25
 	c_pendingHeaderChacheBufferFactor = 2
 	pendingHeaderGCTime               = 5
 	c_terminusIndex                   = 3
@@ -37,10 +37,10 @@ const (
 	c_regionRelayProc                 = 3
 	c_primeRelayProc                  = 10
 	c_asyncPhUpdateChanSize           = 10
-	c_phCacheSize                     = 500
-	c_pEtxRetryThreshold              = 100 // Number of pEtxNotFound return on a dom block before asking for pEtx/Rollup from sub
-	c_currentStateComputeWindow       = 20  // Number of blocks around the current header the state generation is always done
-	c_inboundEtxCacheSize             = 10  // Number of inboundEtxs to keep in cache so that, we don't recompute it every time dom is processed
+	c_phCacheSize                     = 50
+	c_pEtxRetryThreshold              = 10 // Number of pEtxNotFound return on a dom block before asking for pEtx/Rollup from sub
+	c_currentStateComputeWindow       = 20 // Number of blocks around the current header the state generation is always done
+	c_inboundEtxCacheSize             = 10 // Number of inboundEtxs to keep in cache so that, we don't recompute it every time dom is processed
 
 )
 
