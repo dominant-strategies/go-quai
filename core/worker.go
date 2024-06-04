@@ -1290,6 +1290,11 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 			etxs = true
 		}
 	}
+	w.logger.WithFields(log.Fields{
+		"etxs":        etxs,
+		"fill":        fill,
+		"newInbounds": len(newInboundEtxs),
+	}).Info("ETXs and fill")
 
 	if !fill {
 		if etxs {
