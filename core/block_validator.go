@@ -112,7 +112,7 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, utxoEtxs []*types.Transaction, usedGas uint64) error {
+func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, etxs types.Transactions, usedGas uint64) error {
 	start := time.Now()
 	header := types.CopyHeader(block.Header())
 	time1 := common.PrettyDuration(time.Since(start))
@@ -139,19 +139,11 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 		return fmt.Errorf("invalid etx root (remote: %x local: %x)", header.EtxSetRoot(), root)
 	}
 	time5 := common.PrettyDuration(time.Since(start))
-	// Collect ETXs emitted from each successful transaction
-	var emittedEtxs types.Transactions
-	for _, receipt := range receipts {
-		if receipt.Status == types.ReceiptStatusSuccessful {
-			emittedEtxs = append(emittedEtxs, receipt.Etxs...)
-		}
-	}
-	emittedEtxs = append(emittedEtxs, utxoEtxs...)
 	time6 := common.PrettyDuration(time.Since(start))
 
 	// Confirm the ETXs emitted by the transactions in this block exactly match the
 	// ETXs given in the block body
-	if etxHash := types.DeriveSha(emittedEtxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
+	if etxHash := types.DeriveSha(etxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
 

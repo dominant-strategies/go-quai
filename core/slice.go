@@ -243,6 +243,11 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		if err != nil {
 			return nil, false, false, err
 		}
+	} else if nodeCtx == common.ZONE_CTX && order < nodeCtx {
+		// Store the inbound etxs for all dom blocks and use
+		// it in the future if dom switch happens
+		// This should be pruned at the re-org tolerance depth
+		rawdb.WriteInboundEtxs(sl.sliceDb, block.Hash(), newInboundEtxs)
 	}
 
 	// If this was a coincident block, our dom will be passing us a set of newly
@@ -331,13 +336,6 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		}
 
 		subReorg = sl.miningStrategy(bestPh, tempPendingHeader)
-
-		if order < nodeCtx {
-			// Store the inbound etxs for all dom blocks and use
-			// it in the future if dom switch happens
-			// This should be pruned at the re-org tolerance depth
-			rawdb.WriteInboundEtxs(sl.sliceDb, block.Hash(), newInboundEtxs)
-		}
 
 		setHead = sl.poem(sl.engine.TotalLogS(sl.hc, block), sl.engine.TotalLogS(sl.hc, sl.hc.CurrentHeader()))
 
