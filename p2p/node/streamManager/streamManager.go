@@ -55,9 +55,9 @@ type basicStreamManager struct {
 	ctx         context.Context
 	streamCache *expireLru.LRU[p2p.PeerID, streamWrapper]
 	p2pBackend  quaiprotocol.QuaiP2PNode
-	mu          sync.Mutex
 
 	host host.Host
+	mu   sync.Mutex
 }
 
 type streamWrapper struct {
@@ -95,7 +95,6 @@ func severStream(key p2p.PeerID, wrappedStream streamWrapper) {
 func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-
 	wrappedStream, ok := sm.streamCache.Get(peerID)
 	if ok {
 		severStream(peerID, wrappedStream)
@@ -107,9 +106,6 @@ func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
 }
 
 func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	wrappedStream, ok := sm.streamCache.Get(peerID)
 	var err error
 	if !ok {
@@ -119,11 +115,18 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 			// Explicitly return nil here to avoid casting a nil later
 			return nil, err
 		}
-		wrappedStream = streamWrapper{
-			stream:    stream,
-			semaphore: make(chan struct{}, c_maxPendingRequests),
+		if existingStream, ok := sm.streamCache.Get(peerID); !ok {
+			wrappedStream = streamWrapper{
+				stream:    stream,
+				semaphore: make(chan struct{}, c_maxPendingRequests),
+			}
+			sm.streamCache.Add(peerID, wrappedStream)
+		} else {
+			// Close the stream if someone already opened a stream and reuse the
+			// existing stream
+			stream.Close()
+			return existingStream.stream, nil
 		}
-		sm.streamCache.Add(peerID, wrappedStream)
 		go quaiprotocol.QuaiProtocolHandler(stream, sm.p2pBackend)
 		log.Global.Debug("Had to create new stream")
 		if streamMetrics != nil {
