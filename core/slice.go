@@ -296,7 +296,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 			}
 			time6_1 = common.PrettyDuration(time.Since(start))
 			// Cache the subordinate's pending ETXs
-			pEtxs := types.PendingEtxs{header, subPendingEtxs}
+			pEtxs := types.PendingEtxs{header.ConvertToPEtxView(), subPendingEtxs}
 			time6_2 = common.PrettyDuration(time.Since(start))
 			// Add the pending etx given by the sub in the rollup
 			sl.AddPendingEtxs(pEtxs)
@@ -307,7 +307,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 					return nil, false, false, err
 				}
 				// We also need to store the pendingEtxRollup to the dom
-				pEtxRollup := types.PendingEtxsRollup{header, subRollup}
+				pEtxRollup := types.PendingEtxsRollup{header.ConvertToPEtxView(), subRollup}
 				sl.AddPendingEtxsRollup(pEtxRollup)
 			}
 			time6_3 = common.PrettyDuration(time.Since(start))
@@ -927,7 +927,7 @@ func (sl *Slice) GetPendingEtxsRollupFromSub(hash common.Hash, location common.L
 			if err != nil {
 				return types.PendingEtxsRollup{}, err
 			}
-			return types.PendingEtxsRollup{Header: block, EtxsRollup: subRollup}, nil
+			return types.PendingEtxsRollup{Header: block.ConvertToPEtxView(), EtxsRollup: subRollup}, nil
 		}
 	}
 	return types.PendingEtxsRollup{}, ErrPendingEtxNotFound
@@ -957,7 +957,7 @@ func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Locatio
 	}
 	block := sl.hc.GetBlockByHash(hash)
 	if block != nil {
-		return types.PendingEtxs{Header: block, Etxs: block.ExtTransactions()}, nil
+		return types.PendingEtxs{Header: block.ConvertToPEtxView(), Etxs: block.ExtTransactions()}, nil
 	}
 	return types.PendingEtxs{}, ErrPendingEtxNotFound
 }

@@ -143,7 +143,7 @@ func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
 				// subordinate block manifest, then ETXs produced by this block and the rollup
 				// of ETXs produced by subordinate chain(s) will become referencable.
 				if nodeCtx > common.PRIME_CTX {
-					pendingEtx := types.PendingEtxs{Header: block, Etxs: newPendingEtxs}
+					pendingEtx := types.PendingEtxs{Header: block.ConvertToPEtxView(), Etxs: newPendingEtxs}
 					// Only send the pending Etxs to dom if valid, because in the case of running a slice, for the zones that the node doesn't run, it cannot have the etxs generated
 					if pendingEtx.IsValid(trie.NewStackTrie(nil)) {
 						if err := c.SendPendingEtxsToDom(pendingEtx); err != nil {

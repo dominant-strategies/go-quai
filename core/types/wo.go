@@ -1131,3 +1131,7 @@ func (wo *WorkObject) ConvertToBlockView() *WorkObjectBlockView {
 		WorkObject: wo,
 	}
 }
+
+func (wo *WorkObject) ConvertToPEtxView() *WorkObject {
+	return wo.WithBody(wo.Header(), nil, nil, nil, nil, nil)
+}
