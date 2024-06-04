@@ -30,6 +30,9 @@ var (
 	tt63      = BigPow(2, 63)
 	MaxBig256 = new(big.Int).Set(tt256m1)
 	MaxBig63  = new(big.Int).Sub(tt63, big.NewInt(1))
+	ln2       = big.NewFloat(0.6931)
+	ln2e2d2   = big.NewFloat(0.24022)
+	ln2e3d6   = big.NewFloat(0.055)
 )
 
 const (
@@ -253,5 +256,39 @@ func Exp(base, exponent *big.Int) *big.Int {
 			word >>= 1
 		}
 	}
+	return result
+}
+
+func SquaredCubed(x *big.Float) (xSquared, xCubed *big.Float) {
+	xSquared = new(big.Float).Mul(x, x)      // x^2
+	xCubed = new(big.Float).Mul(xSquared, x) // x^3
+	return xSquared, xCubed
+}
+
+// TwoToTheX computes the expression 1 + 0.6931*x + 0.24022*x^2 + 0.055*x^3
+func TwoToTheX(x *big.Float) *big.Float {
+	// Compute integer, decimal, and 2^floor(x) componenets
+	intX64, _ := x.Int64()
+	intX := new(big.Float).SetInt64(intX64)
+	if intX64 < 0 || intX64 > 1023 {
+		return new(big.Float).SetInt64(0)
+	}
+	intExp := new(big.Float).SetMantExp(new(big.Float).SetInt64(1), int(intX64))
+	decX := new(big.Float).Sub(x, intX)
+	xSquared, xCubed := SquaredCubed(decX)
+
+	// Compute each term
+	term1 := new(big.Float).Mul(ln2, decX)
+	term2 := new(big.Float).Mul(ln2e2d2, xSquared)
+	term3 := new(big.Float).Mul(ln2e3d6, xCubed)
+
+	// Sum all terms: 1 + term1 + term2 + term3
+	result := new(big.Float).Add(term1, term2)
+	result = new(big.Float).Add(result, term3)
+	result = new(big.Float).Add(result, big.NewFloat(1.0))
+
+	// Multiply 2^decX * 2^floor(x)
+	result = new(big.Float).Mul(result, intExp)
+
 	return result
 }

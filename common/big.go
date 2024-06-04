@@ -40,6 +40,10 @@ func BigBitsToBits(original *big.Int) *big.Int {
 	return big.NewInt(0).Div(original, Big2e64)
 }
 
+func BigBitsToBitsFloat(original *big.Int) *big.Float {
+	return new(big.Float).Quo(new(big.Float).SetInt(original), new(big.Float).SetInt(Big2e64))
+}
+
 func BitsToBigBits(original *big.Int) *big.Int {
 	c, m := mathutil.BinaryLog(original, 64)
 	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil))
