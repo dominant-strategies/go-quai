@@ -66,7 +66,8 @@ func startCmdPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
-	log.Global.Info("Starting go-quai")
+	network := viper.GetString(utils.EnvironmentFlag.Name)
+	log.Global.Infof("Starting go-quai on the %s network", network)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
