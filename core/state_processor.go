@@ -297,7 +297,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 	maximumEtxGas := minimumEtxGas * params.MaximumEtxGasMultiplier  // 40% of the block gas limit
 	totalEtxGas := uint64(0)
 	totalFees := big.NewInt(0)
-	qiEtxs := make([]*types.Transaction, 0)
+	emittedEtxs := make([]*types.Transaction, 0)
 	var totalQiTime time.Duration
 	for i, tx := range block.Transactions() {
 		if i == 0 && types.IsCoinBaseTx(tx, header.ParentHash(nodeCtx), nodeLocation) {
@@ -316,7 +316,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 			for _, etx := range etxs {
-				qiEtxs = append(qiEtxs, types.NewTx(etx))
+				emittedEtxs = append(emittedEtxs, types.NewTx(etx))
 			}
 			totalFees.Add(totalFees, fees)
 			totalQiTime += time.Since(qiTimeBefore)
@@ -433,6 +433,11 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			timeTx += timeTxDelta
 		} else {
 			return nil, nil, nil, nil, 0, ErrTxTypeNotSupported
+		}
+		for _, etx := range receipt.Etxs {
+			if receipt.Status == types.ReceiptStatusSuccessful {
+				emittedEtxs = append(emittedEtxs, etx)
+			}
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
@@ -566,7 +571,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 		"tx time":                     common.PrettyDuration(timeTx),
 	}).Info("Total Tx Processing Time")
 
-	return receipts, qiEtxs, allLogs, statedb, *usedGas, nil
+	return receipts, emittedEtxs, allLogs, statedb, *usedGas, nil
 }
 
 func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, error) {
@@ -1106,7 +1111,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 	time1 := common.PrettyDuration(time.Since(start))
 	time2 := common.PrettyDuration(time.Since(start))
 	// Process our block
-	receipts, utxoEtxs, logs, statedb, usedGas, err := p.Process(block)
+	receipts, etxs, logs, statedb, usedGas, err := p.Process(block)
 	if err != nil {
 		return nil, err
 	}
@@ -1117,7 +1122,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		}).Warn("Block hash changed after Processing the block")
 	}
 	time3 := common.PrettyDuration(time.Since(start))
-	err = p.validator.ValidateState(block, statedb, receipts, utxoEtxs, usedGas)
+	err = p.validator.ValidateState(block, statedb, receipts, etxs, usedGas)
 	if err != nil {
 		return nil, err
 	}
