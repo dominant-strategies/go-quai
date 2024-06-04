@@ -15,11 +15,12 @@ var (
 	ErrPeerNotFound = leveldb.ErrNotFound
 )
 
-// Returns a new PeerDB instance
+// Returns a new PeerDB instance or the existing one if it already exists
 func NewPeerDB(dbDirName string, locationName string) (*PeerDB, error) {
 	strs := []string{viper.GetString(utils.DataDirFlag.Name), locationName}
 	dataDir := filepath.Join(strs...)
 
+	// Check if the directory exists and create it if it doesn't
 	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 		err := os.MkdirAll(dataDir, 0755)
 		if err != nil {
@@ -30,21 +31,41 @@ func NewPeerDB(dbDirName string, locationName string) (*PeerDB, error) {
 
 	dbPath := filepath.Join(dataDir, dbDirName)
 
-	log.Global.Debugf("Opening PeerDB with path: %s", dbPath)
+	// Check if the database file already exists
+	if _, err := os.Stat(dbPath); err == nil {
+		// Database file exists, open it
+		db, err := leveldb.OpenFile(dbPath, nil)
+		if err != nil {
+			return nil, err
+		}
 
-	db, err := leveldb.OpenFile(dbPath, nil)
-	if err != nil {
+		// Initialize the key counter
+		peerCounter := initCounter(db)
+
+		log.Global.Debugf("Found %d peers in PeerDB", peerCounter)
+
+		return &PeerDB{
+			db:          db,
+			peerCounter: peerCounter,
+			mu:          sync.Mutex{},
+		}, nil
+	} else if os.IsNotExist(err) {
+		// Database file does not exist, create a new one
+		db, err := leveldb.OpenFile(dbPath, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		// Initialize the key counter
+		peerCounter := initCounter(db)
+
+		return &PeerDB{
+			db:          db,
+			peerCounter: peerCounter,
+			mu:          sync.Mutex{},
+		}, nil
+	} else {
+		// Some other error occurred
 		return nil, err
 	}
-
-	// Initialize the key counter
-	peerCounter := initCounter(db)
-
-	log.Global.Debugf("Found %d peers in PeerDB", peerCounter)
-
-	return &PeerDB{
-		db:          db,
-		peerCounter: peerCounter,
-		mu:          sync.Mutex{},
-	}, nil
 }
