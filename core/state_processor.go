@@ -538,6 +538,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 		etxAvailable = true
 	}
 	if (etxAvailable && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
+		p.logger.Errorf("prevInboundEtxs: %d, oldestIndex: %d, etxHash: %s", len(prevInboundEtxs), oldestIndex.Int64(), etx.Hash().Hex())
 		return nil, nil, nil, nil, 0, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
 	}
 
