@@ -325,3 +325,62 @@ func TestExp(t *testing.T) {
 		}
 	}
 }
+
+func TestSquaredCubed(t *testing.T) {
+	tests := []struct {
+		x, xSquared, xCubed *big.Float
+	}{
+		{
+			x:        big.NewFloat(2),
+			xSquared: big.NewFloat(4),
+			xCubed:   big.NewFloat(8),
+		},
+		{
+			x:        big.NewFloat(3),
+			xSquared: big.NewFloat(9),
+			xCubed:   big.NewFloat(27),
+		},
+	}
+	for _, test := range tests {
+		xSquared, xCubed := SquaredCubed(test.x)
+		if xSquared.Cmp(test.xSquared) != 0 {
+			t.Errorf("Powers(%f) = %f, %f, want %f, %f", test.x, xSquared, xCubed, test.xSquared, test.xCubed)
+		}
+		if xCubed.Cmp(test.xCubed) != 0 {
+			t.Errorf("Powers(%f) = %f, %f, want %f, %f", test.x, xSquared, xCubed, test.xSquared, test.xCubed)
+		}
+	}
+}
+func TestTwoToTheX(t *testing.T) {
+	tests := []struct {
+		x      *big.Float
+		actual *big.Float
+	}{
+		{
+			x:      big.NewFloat(1.625),
+			actual: big.NewFloat(3.03125),
+		},
+		{
+			x:      big.NewFloat(0.765),
+			actual: big.NewFloat(1.69442),
+		},
+		{
+			x:      big.NewFloat(3.685),
+			actual: big.NewFloat(12.8616),
+		},
+		{
+			x:      big.NewFloat(2),
+			actual: big.NewFloat(4),
+		},
+	}
+
+	for _, test := range tests {
+		result := TwoToTheX(test.x)
+		lowerBound := new(big.Float).Mul(test.actual, big.NewFloat(0.98))
+		upperBound := new(big.Float).Mul(test.actual, big.NewFloat(1.02))
+
+		if result.Cmp(lowerBound) < 0 || result.Cmp(upperBound) > 0 {
+			t.Errorf("TwoToTheX(%s) = %g, want %g within 3%%", test.x.Text('f', -1), result, test.actual)
+		}
+	}
+}

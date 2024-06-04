@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	bigMath "github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
@@ -196,11 +197,13 @@ func (blake3pow *Blake3pow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error
 			// actual work share weight here +1 is done to the extraBits because
 			// of Quo and if the difference is less than 0, its within the first
 			// level
+
 			cBigBits := blake3pow.IntrinsicLogS(powHash)
 			thresholdBigBits := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
 			wsEntropy = new(big.Int).Sub(thresholdBigBits, cBigBits)
-			extraBits := new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(mantBits)), nil))
-			wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), new(big.Int).Add(extraBits, big.NewInt(1)), nil))
+			extraBits := new(big.Float).Quo(new(big.Float).SetInt(wsEntropy), new(big.Float).SetInt(common.Big2e64))
+			wsEntropyAdj := new(big.Float).Quo(new(big.Float).SetInt(common.Big2e64), bigMath.TwoToTheX(extraBits))
+			wsEntropy, _ = wsEntropyAdj.Int(wsEntropy)
 		} else {
 			wsEntropy = new(big.Int).Set(blake3pow.IntrinsicLogS(powHash))
 		}
@@ -208,6 +211,7 @@ func (blake3pow *Blake3pow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error
 		wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(wo.NumberU64(common.ZONE_CTX)-ws.NumberU64())), nil))
 		// Add the entropy into the total entropy once the discount calculation is done
 		totalWsEntropy.Add(totalWsEntropy, wsEntropy)
+
 	}
 	return totalWsEntropy, nil
 }
