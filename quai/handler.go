@@ -238,25 +238,12 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) {
 				}).Fatal("Go-Quai Panicked")
 			}
 		}()
-		resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(number, big.NewInt(1)), common.Hash{})
-		data := <-resultCh
-		// If we find a new hash for the requested block number we can check
-		// first if we already have the block in the database otherwise ask the
-		// peers for it
-		if data != nil {
-			blockHash, ok := data.(common.Hash)
-			if ok {
-				block := h.core.GetBlockByHash(blockHash)
-				// If the blockHash for the asked number is not present in the
-				// appended database we ask the peer for the block with this hash
-				if block == nil {
-					resultCh := h.p2pBackend.Request(h.nodeLocation, blockHash, &types.WorkObjectBlockView{})
-					block := <-resultCh
-					if block != nil {
-						h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
-					}
-				}
-			}
+		// If the blockHash for the asked number is not present in the
+		// appended database we ask the peer for the block with this hash
+		resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(number, big.NewInt(1)), &types.WorkObjectBlockView{})
+		block := <-resultCh
+		if block != nil {
+			h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 		}
 	}()
 }

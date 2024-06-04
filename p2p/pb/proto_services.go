@@ -82,7 +82,7 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 
 	// Decode the request type
 	var reqType interface{}
-	switch t := reqMsg.Request.(type) {
+	switch reqMsg.Request.(type) {
 	case *QuaiRequestMessage_WorkObjectBlock:
 		reqType = &types.WorkObjectBlockView{}
 	case *QuaiRequestMessage_WorkObjectHeader:
@@ -90,9 +90,7 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 	case *QuaiRequestMessage_Transaction:
 		reqType = &types.Transaction{}
 	case *QuaiRequestMessage_BlockHash:
-		blockHash := &common.Hash{}
-		blockHash.ProtoDecode(t.BlockHash)
-		reqType = blockHash
+		reqType = &common.Hash{}
 	case *QuaiRequestMessage_TrieNode:
 		reqType = trie.TrieNodeRequest{}
 	default:

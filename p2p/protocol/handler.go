@@ -125,7 +125,7 @@ func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
 		}
 
 	default:
-		log.Global.WithField("quaiMsg", quaiMsg).Errorf("unsupported quai message type")
+		log.Global.WithFields(log.Fields{"quaiMsg": quaiMsg, "peer": stream.Conn().RemotePeer()}).Errorf("unsupported quai message type")
 	}
 }
 
