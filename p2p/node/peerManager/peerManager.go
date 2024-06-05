@@ -323,7 +323,7 @@ func (pm *BasicPeerManager) GetSelfID() p2p.PeerID {
 	return pm.selfID
 }
 
-func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, topic *pubsubManager.Topic, numPeers int) map[p2p.PeerID]struct{} {
+func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) map[p2p.PeerID]struct{} {
 	peerSubset := make(map[p2p.PeerID]struct{})
 	q := query.Query{
 		Limit: numPeers,
@@ -405,15 +405,15 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2
 }
 
 func (pm *BasicPeerManager) getBestPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][Best], topic, c_minBestPeersFromDb)
+	return pm.getPeersHelper(pm.peerDBs[topic.String()][Best], c_minBestPeersFromDb)
 }
 
 func (pm *BasicPeerManager) getResponsivePeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][Responsive], topic, c_minResponsivePeersFromDb)
+	return pm.getPeersHelper(pm.peerDBs[topic.String()][Responsive], c_minResponsivePeersFromDb)
 }
 
 func (pm *BasicPeerManager) getLastResortPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][LastResort], topic, c_minLastResortPeersFromDb)
+	return pm.getPeersHelper(pm.peerDBs[topic.String()][LastResort], c_minLastResortPeersFromDb)
 }
 
 func (pm *BasicPeerManager) MarkLivelyPeer(peer p2p.PeerID, topic *pubsubManager.Topic) {

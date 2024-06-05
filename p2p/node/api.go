@@ -311,11 +311,6 @@ func (p *P2PNode) BanPeer(peer p2p.PeerID) {
 	p.peerManager.GetHost().Network().ClosePeer(peer)
 }
 
-// Returns the list of bootpeers
-func (p *P2PNode) GetBootPeers() []peer.AddrInfo {
-	return p.bootpeers
-}
-
 // Opens a new stream to the given peer using the given protocol ID
 func (p *P2PNode) NewStream(peerID peer.ID) (network.Stream, error) {
 	return p.peerManager.GetStream(peerID)

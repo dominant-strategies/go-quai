@@ -14,7 +14,6 @@ import (
 
 // interface required to join the quai protocol network
 type QuaiP2PNode interface {
-	GetBootPeers() []peer.AddrInfo
 	// Search for a block in the node's cache, or query the consensus backend if it's not found in cache.
 	// Returns nil if the block is not found.
 	GetWorkObject(hash common.Hash, location common.Location) *types.WorkObject

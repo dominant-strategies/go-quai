@@ -42,9 +42,6 @@ type P2PNode struct {
 	// Backend for handling consensus data
 	consensus quai.ConsensusAPI
 
-	// List of peers to introduce us to the network
-	bootpeers []peer.AddrInfo
-
 	// Gossipsub instance
 	pubsub *pubsubManager.PubsubManager
 
@@ -199,7 +196,6 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	p2p := &P2PNode{
 		ctx:            ctx,
-		bootpeers:      bootpeers,
 		pubsub:         ps,
 		peerManager:    peerMgr,
 		requestManager: requestManager.NewManager(),
