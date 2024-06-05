@@ -495,3 +495,243 @@ func TestQiAddressScope(t *testing.T) {
 	t.Log(addr.IsInQiLedgerScope())
 	t.Log(addr.IsInQuaiLedgerScope())
 }
+
+// ETX hash tests
+func etxData() (*Transaction, common.Hash) {
+	to := common.HexToAddress("0x00bcdef0123456789abcdef0123456789abcdef2", common.Location{0, 0})
+	address := common.HexToAddress("0x3456789abcdef0123456789abcdef0123456789a", common.Location{0, 0})
+	sender := common.HexToAddress("0x89abcdef0123456789abcdef0123456789abcdef0123456789abcdef7", common.Location{0, 0})
+
+	inner := &ExternalTx{
+		OriginatingTxHash: common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
+		Gas:               uint64(1),
+		ETXIndex:          uint16(1),
+		To:                &to,
+		Value:             new(big.Int).SetUint64(1),
+		Data:              []byte{0x04},
+		AccessList: AccessList{
+			AccessTuple{
+				Address:     address,
+				StorageKeys: []common.Hash{common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1")},
+			},
+		},
+		Sender: sender,
+	}
+	tx := NewTx(inner)
+	return tx, tx.Hash()
+}
+
+func FuzzEtxOriginatingTxHash(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testByte)
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		bHash := common.BytesToHash(b)
+		hashField := tx.inner.originatingTxHash()
+		if bHash != hashField {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+
+			newInner.OriginatingTxHash = bHash
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.originatingTxHash(), bHash)
+		}
+	})
+}
+
+func FuzzEtxIndex(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testUInt16)
+	f.Add(tx.inner.etxIndex())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, i uint16) {
+		if tx.inner.etxIndex() != i {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+			newInner.ETXIndex = i
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.etxIndex(), i)
+		}
+	})
+}
+
+func FuzzEtxGas(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testUInt64)
+	f.Add(tx.inner.gas())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, i uint64) {
+		if tx.inner.gas() != i {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+			newInner.Gas = i
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.gas(), i)
+		}
+	})
+}
+
+func FuzzEtxTo(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testByte)
+	f.Add(tx.inner.to().Bytes())
+
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	//Test Nil case
+	nilInner := *tx.inner.(*ExternalTx)
+	var temp [common.AddressLength]byte
+	nilInner.To = &common.Address{}
+	emptyAddress := common.Bytes20ToAddress(temp, common.Location{0, 0})
+	nilInner.To = &emptyAddress
+	// Create a new transaction with the modified inner transaction
+	nilTx := NewTx(&nilInner)
+	require.NotEqual(f, nilTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), nil)
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		if !tx.inner.to().Equal(common.BytesToAddress(b, common.Location{0, 0})) {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+			a := common.BytesToAddress(b, common.Location{0, 0})
+			newInner.To = &a
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), a)
+		}
+	})
+}
+
+func FuzzEtxValue(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testUInt64)
+	f.Add(tx.inner.value().Uint64())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, i uint64) {
+		bi := new(big.Int).SetUint64(i)
+		if bi.Cmp(tx.inner.value()) != 0 {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+			newInner.Value = bi
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.value(), bi)
+		}
+	})
+}
+
+func FuzzEtxData(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testByte)
+	f.Add(tx.inner.data())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		if !bytes.Equal(tx.inner.data(), b) {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+
+			newInner.Data = b
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), b)
+		}
+	})
+}
+
+func FuzzEtxAccessList(f *testing.F) {
+	tx, hash := etxData()
+	f.Add(testByte)
+	f.Add(tx.inner.(*ExternalTx).accessList()[0].Address.Bytes())
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		alItem := tx.inner.(*ExternalTx).accessList()[0]
+
+		//Test with new address
+		if !bytes.Equal(alItem.Address.Bytes(), b) {
+			newInner := *tx.inner.(*ExternalTx)
+			newInner.AccessList[0].Address = common.BytesToAddress(b, common.Location{0, 0})
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", alItem.Address, newInner.AccessList[0].Address)
+		}
+
+		//Test with new storage key
+		if !bytes.Equal(alItem.Address.Hash().Bytes(), b) {
+			newInner := *tx.inner.(*ExternalTx)
+			newInner.AccessList[0].StorageKeys = []common.Hash{common.BytesToHash(b)}
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.accessList().StorageKeys(), newInner.AccessList[0].StorageKeys)
+		}
+	})
+}
+
+func FuzzEtxSender(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testByte)
+	f.Add(tx.inner.etxSender().Bytes())
+
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	//Test Nil case
+	nilInner := *tx.inner.(*ExternalTx)
+	nilInner.To = nil
+	// Create a new transaction with the modified inner transaction
+	nilTx := NewTx(&nilInner)
+	require.NotEqual(f, nilTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), nil)
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		if !tx.inner.to().Equal(common.BytesToAddress(b, common.Location{0, 0})) {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+			a := common.BytesToAddress(b, common.Location{0, 0})
+			newInner.To = &a
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), a)
+		}
+	})
+}
