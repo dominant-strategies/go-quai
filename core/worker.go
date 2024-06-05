@@ -59,8 +59,6 @@ const (
 	chainSideChanSize = 10
 
 	c_uncleCacheSize = 32
-
-	c_workShareFilterDist = 10 // the dist from the current block for the work share inclusion in the worker
 )
 
 // environment is the worker's current environment and holds all
@@ -710,15 +708,6 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	env.uncleMu.Lock()
 	defer env.uncleMu.Unlock()
 	hash := uncle.Hash()
-
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(env.wo.ParentHash(common.ZONE_CTX), 7) {
-		for _, uncle := range ancestor.Uncles() {
-			env.family.Add(uncle.Hash())
-		}
-		env.family.Add(ancestor.Hash())
-		env.ancestors.Add(ancestor.Hash())
-	}
 
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
@@ -1432,7 +1421,7 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 	}
 
 	// Don't add the workshare into the list if its farther than the worksharefilterdist
-	if workShare.NumberU64()+c_workShareFilterDist < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
+	if workShare.NumberU64()+uint64(params.WorkSharesInclusionDepth) < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
 		return nil
 	}
 
