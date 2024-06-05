@@ -520,6 +520,13 @@ func (w *worker) asyncStateLoop() {
 	}
 }
 
+// generateParams wraps various of settings for generating sealing task.
+type generateParams struct {
+	timestamp uint64         // The timstamp for sealing task
+	forceTime bool           // Flag whether the given timestamp is immutable or not
+	coinbase  common.Address // The fee recipient address for including transaction
+}
+
 // GeneratePendingBlock generates pending block given a commited block.
 func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error) {
 	nodeCtx := w.hc.NodeCtx()
@@ -603,406 +610,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	w.printPendingHeaderInfo(work, newWo, start)
 
 	return newWo, nil
-}
-
-// printPendingHeaderInfo logs the pending header information
-func (w *worker) printPendingHeaderInfo(work *environment, block *types.WorkObject, start time.Time) {
-	work.uncleMu.RLock()
-	if w.CurrentInfo(block) {
-		w.logger.WithFields(log.Fields{
-			"number":     block.Number(w.hc.NodeCtx()),
-			"parent":     block.ParentHash(w.hc.NodeCtx()),
-			"sealhash":   block.SealHash(),
-			"uncles":     len(work.uncles),
-			"txs":        len(work.txs),
-			"etxs":       len(block.ExtTransactions()),
-			"gas":        block.GasUsed(),
-			"fees":       totalFees(block, work.receipts),
-			"elapsed":    common.PrettyDuration(time.Since(start)),
-			"utxoRoot":   block.UTXORoot(),
-			"etxSetRoot": block.EtxSetRoot(),
-		}).Info("Commit new sealing work")
-	} else {
-		w.logger.WithFields(log.Fields{
-			"number":     block.Number(w.hc.NodeCtx()),
-			"parent":     block.ParentHash(w.hc.NodeCtx()),
-			"sealhash":   block.SealHash(),
-			"uncles":     len(work.uncles),
-			"txs":        len(work.txs),
-			"etxs":       len(block.ExtTransactions()),
-			"gas":        block.GasUsed(),
-			"fees":       totalFees(block, work.receipts),
-			"elapsed":    common.PrettyDuration(time.Since(start)),
-			"utxoRoot":   block.UTXORoot(),
-			"etxSetRoot": block.EtxSetRoot(),
-		}).Debug("Commit new sealing work")
-	}
-	work.uncleMu.RUnlock()
-}
-
-// interruptAsyncPhGen kills any async ph generation running
-func (w *worker) interruptAsyncPhGen() {
-	if w.interrupt != nil {
-		close(w.interrupt)
-		w.interrupt = nil
-	}
-}
-
-func (w *worker) eventExitLoop() {
-	for {
-		select {
-		case <-w.exitCh:
-			return
-		}
-	}
-}
-
-// makeEnv creates a new environment for the sealing block.
-func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject, coinbase common.Address) (*environment, error) {
-	// Retrieve the parent state to execute on top and start a prefetcher for
-	// the miner to speed block sealing up a bit.
-	evmRoot := parent.EVMRoot()
-	utxoRoot := parent.UTXORoot()
-	etxRoot := parent.EtxSetRoot()
-	if w.hc.IsGenesisHash(parent.Hash()) {
-		evmRoot = types.EmptyRootHash
-		utxoRoot = types.EmptyRootHash
-		etxRoot = types.EmptyRootHash
-	}
-	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot, etxRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
-	if etxRLimit < params.ETXRLimitMin {
-		etxRLimit = params.ETXRLimitMin
-	}
-	etxPLimit := len(parent.Transactions()) / params.ETXPrimeMaxFraction
-	if etxPLimit < params.ETXPLimitMin {
-		etxPLimit = params.ETXPLimitMin
-	}
-	// Note the passed coinbase may be different with header.Coinbase.
-	env := &environment{
-		signer:    types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
-		state:     state,
-		coinbase:  coinbase,
-		ancestors: mapset.NewSet(),
-		family:    mapset.NewSet(),
-		wo:        proposedWo,
-		uncles:    make(map[common.Hash]*types.WorkObjectHeader),
-		etxRLimit: etxRLimit,
-		etxPLimit: etxPLimit,
-	}
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Header().Hash(), params.WorkSharesInclusionDepth) {
-		for _, uncle := range ancestor.Uncles() {
-			env.family.Add(uncle.Hash())
-		}
-		env.family.Add(ancestor.Hash())
-		env.ancestors.Add(ancestor.Hash())
-	}
-	// Keep track of transactions which return errors so they can be removed
-	env.tcount = 0
-	return env, nil
-}
-
-// commitUncle adds the given block to uncle block set, returns error if failed to add.
-func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) error {
-	env.uncleMu.Lock()
-	defer env.uncleMu.Unlock()
-	hash := uncle.Hash()
-
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(env.wo.ParentHash(common.ZONE_CTX), 7) {
-		for _, uncle := range ancestor.Uncles() {
-			env.family.Add(uncle.Hash())
-		}
-		env.family.Add(ancestor.Hash())
-		env.ancestors.Add(ancestor.Hash())
-	}
-
-	if _, exist := env.uncles[hash]; exist {
-		return errors.New("uncle not unique")
-	}
-	if env.wo.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash() {
-		return errors.New("uncle is sibling")
-	}
-	if !env.ancestors.Contains(uncle.ParentHash()) {
-		return errors.New("uncle's parent unknown")
-	}
-	if env.family.Contains(hash) {
-		return errors.New("uncle already included")
-	}
-	env.uncles[hash] = uncle
-	return nil
-}
-
-func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, tx *types.Transaction) ([]*types.Log, error) {
-	if tx != nil {
-		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
-			gasUsed := env.wo.GasUsed()
-			txGas := tx.Gas()
-			if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
-				lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
-				primeTerminus := w.hc.GetPrimeTerminus(env.wo)
-				if primeTerminus == nil {
-					return nil, errors.New("prime terminus not found")
-				}
-				value := misc.QuaiToQi(primeTerminus, tx.Value())
-				denominations := misc.FindMinDenominations(value)
-				outputIndex := uint16(0)
-
-				// Iterate over the denominations in descending order
-				for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
-					// If the denomination count is zero, skip it
-					if denominations[uint8(denomination)] == 0 {
-						continue
-					}
-					for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
-						if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
-							// No more gas, the rest of the denominations are lost but the tx is still valid
-							break
-						}
-						txGas -= params.CallValueTransferGas
-						if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
-							return nil, err
-						}
-						gasUsed += params.CallValueTransferGas
-						// the ETX hash is guaranteed to be unique
-						if err := env.state.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))); err != nil {
-							return nil, err
-						}
-						outputIndex++
-					}
-				}
-			} else {
-				// This Qi ETX should cost more gas
-				if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
-					return nil, err
-				}
-				if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), big.NewInt(0)))); err != nil {
-					return nil, err
-				}
-				gasUsed += params.CallValueTransferGas
-			}
-			env.wo.Header().SetGasUsed(gasUsed)
-			env.txs = append(env.txs, tx)
-			return []*types.Log{}, nil // need to make sure this does not modify receipt hash
-		}
-		snap := env.state.Snapshot()
-		// retrieve the gas used int and pass in the reference to the ApplyTransaction
-		gasUsed := env.wo.GasUsed()
-		receipt, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
-		if err != nil {
-			w.logger.WithFields(log.Fields{
-				"err":     err,
-				"tx":      tx.Hash().Hex(),
-				"block":   env.wo.Number(w.hc.NodeCtx()),
-				"gasUsed": gasUsed,
-			}).Debug("Error playing transaction in worker")
-			env.state.RevertToSnapshot(snap)
-			return nil, err
-		}
-		if receipt.Status == types.ReceiptStatusSuccessful {
-			env.etxs = append(env.etxs, receipt.Etxs...)
-		}
-		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
-		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
-		// was possible.
-		env.wo.Header().SetGasUsed(gasUsed)
-		env.txs = append(env.txs, tx)
-		env.receipts = append(env.receipts, receipt)
-		return receipt.Logs, nil
-	}
-	return nil, errors.New("error finding transaction")
-}
-
-func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
-	qiTxsToRemove := make([]*common.Hash, 0)
-	gasLimit := env.wo.GasLimit
-	if env.gasPool == nil {
-		env.gasPool = new(types.GasPool).AddGas(gasLimit())
-	}
-	var coalescedLogs []*types.Log
-	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
-	oldestIndex, err := env.state.GetOldestIndex()
-	if err != nil {
-		w.logger.WithField("err", err).Error("Failed to get oldest index")
-		return fmt.Errorf("failed to get oldest index: %w", err)
-	}
-	for {
-		if env.gasPool.Gas() < params.TxGas {
-			w.logger.WithFields(log.Fields{
-				"have": env.gasPool,
-				"want": params.TxGas,
-			}).Trace("Not enough gas for further transactions")
-			break
-		}
-		// Add ETXs until minimum gas is used
-		if env.wo.GasUsed() >= minEtxGas {
-			break
-		}
-		if env.wo.GasUsed() > minEtxGas*params.MaximumEtxGasMultiplier { // sanity check, this should never happen
-			w.logger.WithField("Gas Used", env.wo.GasUsed()).Error("Block uses more gas than maximum ETX gas")
-			return fmt.Errorf("block uses more gas than maximum ETX gas")
-		}
-		etx, err := env.state.PopETX()
-		if err != nil {
-			w.logger.WithField("err", err).Error("Failed to read ETX")
-			return fmt.Errorf("failed to read ETX: %w", err)
-		}
-		if etx == nil {
-			break
-		}
-		env.state.Prepare(etx.Hash(), env.tcount)
-		logs, err := w.commitTransaction(env, parent, etx)
-		if err == nil {
-			coalescedLogs = append(coalescedLogs, logs...)
-			env.tcount++
-		}
-		oldestIndex.Add(oldestIndex, big.NewInt(1))
-	}
-	for {
-		// In the following two cases, we will interrupt the execution of the transaction.
-		// (1) new head block event arrival, the interrupt signal is 1
-		// (2) worker start or restart, the interrupt signal is 1
-		// For these two cases, the semi-finished work will be discarded.
-		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-			return nil
-		}
-		// If we don't have enough gas for any further transactions then we're done
-		if env.gasPool.Gas() < params.TxGas {
-			w.logger.WithFields(log.Fields{
-				"have": env.gasPool,
-				"want": params.TxGas,
-			}).Trace("Not enough gas for further transactions")
-			break
-		}
-		// Retrieve the next transaction and abort if all done
-		tx := txs.Peek()
-		if tx == nil {
-			break
-		}
-		if tx.Type() == types.QiTxType {
-			txGas := types.CalculateBlockQiTxGas(tx, w.hc.NodeLocation())
-			if env.gasPool.Gas() < txGas {
-				w.logger.WithFields(log.Fields{
-					"have": env.gasPool,
-					"want": txGas,
-				}).Trace("Not enough gas for further transactions")
-				break
-			}
-			if err := w.processQiTx(tx, env); err != nil {
-				hash := tx.Hash()
-				w.logger.WithFields(log.Fields{
-					"err": err,
-					"tx":  hash.Hex(),
-				}).Error("Error processing QiTx")
-				// It's unlikely that this transaction will be valid in the future so remove it asynchronously
-				qiTxsToRemove = append(qiTxsToRemove, &hash)
-			}
-			txs.PopNoSort()
-			continue
-		}
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
-		//
-		// We use the signer regardless of the current hf.
-		from, err := types.Sender(env.signer, tx)
-		if err != nil {
-			continue
-		}
-		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
-
-		logs, err := w.commitTransaction(env, parent, tx)
-		switch {
-		case errors.Is(err, types.ErrGasLimitReached):
-			// Pop the current out-of-gas transaction without shifting in the next from the account
-			w.logger.WithField("sender", from).Trace("Gas limit exceeded for current block")
-			txs.PopNoSort()
-
-		case errors.Is(err, ErrEtxLimitReached):
-			// Pop the current transaction without shifting in the next from the account
-			w.logger.WithField("sender", from).Trace("Etx limit exceeded for current block")
-			txs.PopNoSort()
-
-		case errors.Is(err, ErrNonceTooLow):
-			// New head notification data race between the transaction pool and miner, shift
-			w.logger.WithFields(log.Fields{
-				"sender": from,
-				"nonce":  tx.Nonce(),
-			}).Trace("Skipping transaction with low nonce")
-			txs.Shift(from.Bytes20(), false)
-
-		case errors.Is(err, ErrNonceTooHigh):
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			w.logger.WithFields(log.Fields{
-				"sender": from,
-				"nonce":  tx.Nonce(),
-			}).Trace("Skipping account with high nonce")
-			txs.PopNoSort()
-
-		case errors.Is(err, nil):
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
-			env.tcount++
-			txs.PopNoSort()
-
-		case errors.Is(err, ErrTxTypeNotSupported):
-			// Pop the unsupported transaction without shifting in the next from the account
-			w.logger.WithFields(log.Fields{
-				"sender": from,
-				"type":   tx.Type(),
-			}).Error("Skipping unsupported transaction type")
-			txs.PopNoSort()
-
-		case strings.Contains(err.Error(), "emits too many cross"): // This is ErrEtxLimitReached with more info
-			// Pop the unsupported transaction without shifting in the next from the account
-			w.logger.WithFields(log.Fields{
-				"sender": from,
-				"err":    err,
-			}).Trace("Etx limit exceeded for current block")
-			txs.PopNoSort()
-
-		default:
-			// Strange error, discard the transaction and get the next in line (note, the
-			// nonce-too-high clause will prevent us from executing in vain).
-			w.logger.WithFields(log.Fields{
-				"hash":   tx.Hash(),
-				"sender": from,
-				"err":    err,
-			}).Error("Transaction failed, account skipped")
-			txs.Shift(from.Bytes20(), false)
-		}
-	}
-	if len(qiTxsToRemove) > 0 {
-		go w.txPool.RemoveQiTxs(qiTxsToRemove)
-	}
-	if !w.isRunning() && len(coalescedLogs) > 0 {
-		// We don't push the pendingLogsEvent while we are sealing. The reason is that
-		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
-		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
-
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make([]*types.Log, len(coalescedLogs))
-		for i, l := range coalescedLogs {
-			cpy[i] = new(types.Log)
-			*cpy[i] = *l
-		}
-		w.pendingLogsFeed.Send(cpy)
-	}
-	return nil
-}
-
-// generateParams wraps various of settings for generating sealing task.
-type generateParams struct {
-	timestamp uint64         // The timstamp for sealing task
-	forceTime bool           // Flag whether the given timestamp is immutable or not
-	coinbase  common.Address // The fee recipient address for including transaction
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -1249,6 +856,87 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 
 }
 
+// makeEnv creates a new environment for the sealing block.
+func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject, coinbase common.Address) (*environment, error) {
+	// Retrieve the parent state to execute on top and start a prefetcher for
+	// the miner to speed block sealing up a bit.
+	evmRoot := parent.EVMRoot()
+	utxoRoot := parent.UTXORoot()
+	etxRoot := parent.EtxSetRoot()
+	if w.hc.IsGenesisHash(parent.Hash()) {
+		evmRoot = types.EmptyRootHash
+		utxoRoot = types.EmptyRootHash
+		etxRoot = types.EmptyRootHash
+	}
+	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot, etxRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
+	if etxRLimit < params.ETXRLimitMin {
+		etxRLimit = params.ETXRLimitMin
+	}
+	etxPLimit := len(parent.Transactions()) / params.ETXPrimeMaxFraction
+	if etxPLimit < params.ETXPLimitMin {
+		etxPLimit = params.ETXPLimitMin
+	}
+	// Note the passed coinbase may be different with header.Coinbase.
+	env := &environment{
+		signer:    types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
+		state:     state,
+		coinbase:  coinbase,
+		ancestors: mapset.NewSet(),
+		family:    mapset.NewSet(),
+		wo:        proposedWo,
+		uncles:    make(map[common.Hash]*types.WorkObjectHeader),
+		etxRLimit: etxRLimit,
+		etxPLimit: etxPLimit,
+	}
+	// when 08 is processed ancestors contain 07 (quick block)
+	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Header().Hash(), params.WorkSharesInclusionDepth) {
+		for _, uncle := range ancestor.Uncles() {
+			env.family.Add(uncle.Hash())
+		}
+		env.family.Add(ancestor.Hash())
+		env.ancestors.Add(ancestor.Hash())
+	}
+	// Keep track of transactions which return errors so they can be removed
+	env.tcount = 0
+	return env, nil
+}
+
+// commitUncle adds the given block to uncle block set, returns error if failed to add.
+func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) error {
+	env.uncleMu.Lock()
+	defer env.uncleMu.Unlock()
+	hash := uncle.Hash()
+
+	// when 08 is processed ancestors contain 07 (quick block)
+	for _, ancestor := range w.hc.GetBlocksFromHash(env.wo.ParentHash(common.ZONE_CTX), 7) {
+		for _, uncle := range ancestor.Uncles() {
+			env.family.Add(uncle.Hash())
+		}
+		env.family.Add(ancestor.Hash())
+		env.ancestors.Add(ancestor.Hash())
+	}
+
+	if _, exist := env.uncles[hash]; exist {
+		return errors.New("uncle not unique")
+	}
+	if env.wo.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash() {
+		return errors.New("uncle is sibling")
+	}
+	if !env.ancestors.Contains(uncle.ParentHash()) {
+		return errors.New("uncle's parent unknown")
+	}
+	if env.family.Contains(hash) {
+		return errors.New("uncle already included")
+	}
+	env.uncles[hash] = uncle
+	return nil
+}
+
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
@@ -1304,36 +992,264 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 	return nil
 }
 
-// fillTransactions retrieves the pending transactions from the txpool and fills them
-// into the given sealing block. The transaction selection and ordering strategy can
-// be customized with the plugin in the future.
-func (w *worker) adjustGasLimit(env *environment, parent *types.WorkObject) {
-	env.wo.Header().SetGasLimit(CalcGasLimit(parent, w.config.GasCeil))
+func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
+	qiTxsToRemove := make([]*common.Hash, 0)
+	gasLimit := env.wo.GasLimit
+	if env.gasPool == nil {
+		env.gasPool = new(types.GasPool).AddGas(gasLimit())
+	}
+	var coalescedLogs []*types.Log
+	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
+	oldestIndex, err := env.state.GetOldestIndex()
+	if err != nil {
+		w.logger.WithField("err", err).Error("Failed to get oldest index")
+		return fmt.Errorf("failed to get oldest index: %w", err)
+	}
+	for {
+		if env.gasPool.Gas() < params.TxGas {
+			w.logger.WithFields(log.Fields{
+				"have": env.gasPool,
+				"want": params.TxGas,
+			}).Trace("Not enough gas for further transactions")
+			break
+		}
+		// Add ETXs until minimum gas is used
+		if env.wo.GasUsed() >= minEtxGas {
+			break
+		}
+		if env.wo.GasUsed() > minEtxGas*params.MaximumEtxGasMultiplier { // sanity check, this should never happen
+			w.logger.WithField("Gas Used", env.wo.GasUsed()).Error("Block uses more gas than maximum ETX gas")
+			return fmt.Errorf("block uses more gas than maximum ETX gas")
+		}
+		etx, err := env.state.PopETX()
+		if err != nil {
+			w.logger.WithField("err", err).Error("Failed to read ETX")
+			return fmt.Errorf("failed to read ETX: %w", err)
+		}
+		if etx == nil {
+			break
+		}
+		env.state.Prepare(etx.Hash(), env.tcount)
+		logs, err := w.commitTransaction(env, parent, etx)
+		if err == nil {
+			coalescedLogs = append(coalescedLogs, logs...)
+			env.tcount++
+		}
+		oldestIndex.Add(oldestIndex, big.NewInt(1))
+	}
+	for {
+		// In the following two cases, we will interrupt the execution of the transaction.
+		// (1) new head block event arrival, the interrupt signal is 1
+		// (2) worker start or restart, the interrupt signal is 1
+		// For these two cases, the semi-finished work will be discarded.
+		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
+			return nil
+		}
+		// If we don't have enough gas for any further transactions then we're done
+		if env.gasPool.Gas() < params.TxGas {
+			w.logger.WithFields(log.Fields{
+				"have": env.gasPool,
+				"want": params.TxGas,
+			}).Trace("Not enough gas for further transactions")
+			break
+		}
+		// Retrieve the next transaction and abort if all done
+		tx := txs.Peek()
+		if tx == nil {
+			break
+		}
+		if tx.Type() == types.QiTxType {
+			txGas := types.CalculateBlockQiTxGas(tx, w.hc.NodeLocation())
+			if env.gasPool.Gas() < txGas {
+				w.logger.WithFields(log.Fields{
+					"have": env.gasPool,
+					"want": txGas,
+				}).Trace("Not enough gas for further transactions")
+				break
+			}
+			if err := w.processQiTx(tx, env); err != nil {
+				hash := tx.Hash()
+				w.logger.WithFields(log.Fields{
+					"err": err,
+					"tx":  hash.Hex(),
+				}).Error("Error processing QiTx")
+				// It's unlikely that this transaction will be valid in the future so remove it asynchronously
+				qiTxsToRemove = append(qiTxsToRemove, &hash)
+			}
+			txs.PopNoSort()
+			continue
+		}
+		// Error may be ignored here. The error has already been checked
+		// during transaction acceptance is the transaction pool.
+		//
+		// We use the signer regardless of the current hf.
+		from, err := types.Sender(env.signer, tx)
+		if err != nil {
+			continue
+		}
+		// Start executing the transaction
+		env.state.Prepare(tx.Hash(), env.tcount)
+
+		logs, err := w.commitTransaction(env, parent, tx)
+		switch {
+		case errors.Is(err, types.ErrGasLimitReached):
+			// Pop the current out-of-gas transaction without shifting in the next from the account
+			w.logger.WithField("sender", from).Trace("Gas limit exceeded for current block")
+			txs.PopNoSort()
+
+		case errors.Is(err, ErrEtxLimitReached):
+			// Pop the current transaction without shifting in the next from the account
+			w.logger.WithField("sender", from).Trace("Etx limit exceeded for current block")
+			txs.PopNoSort()
+
+		case errors.Is(err, ErrNonceTooLow):
+			// New head notification data race between the transaction pool and miner, shift
+			w.logger.WithFields(log.Fields{
+				"sender": from,
+				"nonce":  tx.Nonce(),
+			}).Trace("Skipping transaction with low nonce")
+			txs.Shift(from.Bytes20(), false)
+
+		case errors.Is(err, ErrNonceTooHigh):
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			w.logger.WithFields(log.Fields{
+				"sender": from,
+				"nonce":  tx.Nonce(),
+			}).Trace("Skipping account with high nonce")
+			txs.PopNoSort()
+
+		case errors.Is(err, nil):
+			// Everything ok, collect the logs and shift in the next transaction from the same account
+			coalescedLogs = append(coalescedLogs, logs...)
+			env.tcount++
+			txs.PopNoSort()
+
+		case errors.Is(err, ErrTxTypeNotSupported):
+			// Pop the unsupported transaction without shifting in the next from the account
+			w.logger.WithFields(log.Fields{
+				"sender": from,
+				"type":   tx.Type(),
+			}).Error("Skipping unsupported transaction type")
+			txs.PopNoSort()
+
+		case strings.Contains(err.Error(), "emits too many cross"): // This is ErrEtxLimitReached with more info
+			// Pop the unsupported transaction without shifting in the next from the account
+			w.logger.WithFields(log.Fields{
+				"sender": from,
+				"err":    err,
+			}).Trace("Etx limit exceeded for current block")
+			txs.PopNoSort()
+
+		default:
+			// Strange error, discard the transaction and get the next in line (note, the
+			// nonce-too-high clause will prevent us from executing in vain).
+			w.logger.WithFields(log.Fields{
+				"hash":   tx.Hash(),
+				"sender": from,
+				"err":    err,
+			}).Error("Transaction failed, account skipped")
+			txs.Shift(from.Bytes20(), false)
+		}
+	}
+	if len(qiTxsToRemove) > 0 {
+		go w.txPool.RemoveQiTxs(qiTxsToRemove)
+	}
+	if !w.isRunning() && len(coalescedLogs) > 0 {
+		// We don't push the pendingLogsEvent while we are sealing. The reason is that
+		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
+		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+
+		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+		// logs by filling in the block hash when the block was mined by the local miner. This can
+		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+		cpy := make([]*types.Log, len(coalescedLogs))
+		for i, l := range coalescedLogs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+		}
+		w.pendingLogsFeed.Send(cpy)
+	}
+	return nil
 }
 
-// ComputeManifestHash given a header computes the manifest hash for the header
-// and stores it in the database
-func (w *worker) ComputeManifestHash(header *types.WorkObject) common.Hash {
-	manifest := rawdb.ReadManifest(w.workerDb, header.Hash())
-	if manifest == nil {
-		nodeCtx := w.hc.NodeCtx()
-		// Compute and set manifest hash
-		manifest = types.BlockManifest{}
-		if nodeCtx == common.PRIME_CTX {
-			// Nothing to do for prime chain
-			manifest = types.BlockManifest{}
-		} else if w.engine.IsDomCoincident(w.hc, header) {
-			manifest = types.BlockManifest{header.Hash()}
-		} else {
-			parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash(nodeCtx))
-			manifest = append(parentManifest, header.Hash())
-		}
-		// write the manifest into the disk
-		rawdb.WriteManifest(w.workerDb, header.Hash(), manifest)
-	}
-	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
+func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, tx *types.Transaction) ([]*types.Log, error) {
+	if tx != nil {
+		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
+			gasUsed := env.wo.GasUsed()
+			txGas := tx.Gas()
+			if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
+				lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
+				primeTerminus := w.hc.GetPrimeTerminus(env.wo)
+				if primeTerminus == nil {
+					return nil, errors.New("prime terminus not found")
+				}
+				value := misc.QuaiToQi(primeTerminus, tx.Value())
+				denominations := misc.FindMinDenominations(value)
+				outputIndex := uint16(0)
 
-	return manifestHash
+				// Iterate over the denominations in descending order
+				for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+					// If the denomination count is zero, skip it
+					if denominations[uint8(denomination)] == 0 {
+						continue
+					}
+					for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
+						if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+							// No more gas, the rest of the denominations are lost but the tx is still valid
+							break
+						}
+						txGas -= params.CallValueTransferGas
+						if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+							return nil, err
+						}
+						gasUsed += params.CallValueTransferGas
+						// the ETX hash is guaranteed to be unique
+						if err := env.state.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))); err != nil {
+							return nil, err
+						}
+						outputIndex++
+					}
+				}
+			} else {
+				// This Qi ETX should cost more gas
+				if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+					return nil, err
+				}
+				if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), big.NewInt(0)))); err != nil {
+					return nil, err
+				}
+				gasUsed += params.CallValueTransferGas
+			}
+			env.wo.Header().SetGasUsed(gasUsed)
+			env.txs = append(env.txs, tx)
+			return []*types.Log{}, nil // need to make sure this does not modify receipt hash
+		}
+		snap := env.state.Snapshot()
+		// retrieve the gas used int and pass in the reference to the ApplyTransaction
+		gasUsed := env.wo.GasUsed()
+		receipt, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+		if err != nil {
+			w.logger.WithFields(log.Fields{
+				"err":     err,
+				"tx":      tx.Hash().Hex(),
+				"block":   env.wo.Number(w.hc.NodeCtx()),
+				"gasUsed": gasUsed,
+			}).Debug("Error playing transaction in worker")
+			env.state.RevertToSnapshot(snap)
+			return nil, err
+		}
+		if receipt.Status == types.ReceiptStatusSuccessful {
+			env.etxs = append(env.etxs, receipt.Etxs...)
+		}
+		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
+		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
+		// was possible.
+		env.wo.Header().SetGasUsed(gasUsed)
+		env.txs = append(env.txs, tx)
+		env.receipts = append(env.receipts, receipt)
+		return receipt.Logs, nil
+	}
+	return nil, errors.New("error finding transaction")
 }
 
 func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *types.WorkObject, parent *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObjectHeader, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.WorkObject, error) {
@@ -1372,67 +1288,36 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 	return wo, nil
 }
 
-// AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
-// maps it to body.
-func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
-	w.pendingBlockBody.Add(wo.SealHash(), *wo)
+// fillTransactions retrieves the pending transactions from the txpool and fills them
+// into the given sealing block. The transaction selection and ordering strategy can
+// be customized with the plugin in the future.
+func (w *worker) adjustGasLimit(env *environment, parent *types.WorkObject) {
+	env.wo.Header().SetGasLimit(CalcGasLimit(parent, w.config.GasCeil))
 }
 
-// GetPendingBlockBody gets the block body associated with the given header.
-func (w *worker) GetPendingBlockBody(woHeader *types.WorkObject) (*types.WorkObject, error) {
-	body, ok := w.pendingBlockBody.Get(woHeader.SealHash())
-	if ok {
-		return &body, nil
+// ComputeManifestHash given a header computes the manifest hash for the header
+// and stores it in the database
+func (w *worker) ComputeManifestHash(header *types.WorkObject) common.Hash {
+	manifest := rawdb.ReadManifest(w.workerDb, header.Hash())
+	if manifest == nil {
+		nodeCtx := w.hc.NodeCtx()
+		// Compute and set manifest hash
+		manifest = types.BlockManifest{}
+		if nodeCtx == common.PRIME_CTX {
+			// Nothing to do for prime chain
+			manifest = types.BlockManifest{}
+		} else if w.engine.IsDomCoincident(w.hc, header) {
+			manifest = types.BlockManifest{header.Hash()}
+		} else {
+			parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash(nodeCtx))
+			manifest = append(parentManifest, header.Hash())
+		}
+		// write the manifest into the disk
+		rawdb.WriteManifest(w.workerDb, header.Hash(), manifest)
 	}
-	w.logger.WithField("key", woHeader.SealHash()).Warn("pending block body not found for header")
-	return nil, errors.New("pending block body not found")
-}
+	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
 
-func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.WorkObject) event.Subscription {
-	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
-}
-
-// copyReceipts makes a deep copy of the given receipts.
-func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
-	result := make([]*types.Receipt, len(receipts))
-	for i, l := range receipts {
-		cpy := *l
-		result[i] = &cpy
-	}
-	return result
-}
-
-// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
-func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
-	feesWei := new(big.Int)
-	for i, tx := range block.QuaiTransactionsWithoutCoinbase() {
-		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
-		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
-	}
-	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
-}
-
-func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
-	if !w.engine.CheckIfValidWorkShare(workShare) {
-		return errors.New("workshare is not valid")
-	}
-
-	// Don't add the workshare into the list if its farther than the worksharefilterdist
-	if workShare.NumberU64()+c_workShareFilterDist < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
-		return nil
-	}
-
-	w.Uncles.ContainsOrAdd(workShare.Hash(), *workShare)
-	return nil
-}
-
-func (w *worker) CurrentInfo(header *types.WorkObject) bool {
-	if w.headerPrints.Contains(header.Hash()) {
-		return false
-	}
-
-	w.headerPrints.Add(header.Hash(), nil)
-	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
+	return manifestHash
 }
 
 func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
@@ -1721,4 +1606,119 @@ func createQuaiCoinbaseTx(state *state.StateDB, header *types.WorkObject, logger
 	}
 	state.AddBalance(internal, blockReward)
 	return tx, nil
+}
+
+// printPendingHeaderInfo logs the pending header information
+func (w *worker) printPendingHeaderInfo(work *environment, block *types.WorkObject, start time.Time) {
+	work.uncleMu.RLock()
+	if w.CurrentInfo(block) {
+		w.logger.WithFields(log.Fields{
+			"number":     block.Number(w.hc.NodeCtx()),
+			"parent":     block.ParentHash(w.hc.NodeCtx()),
+			"sealhash":   block.SealHash(),
+			"uncles":     len(work.uncles),
+			"txs":        len(work.txs),
+			"etxs":       len(block.ExtTransactions()),
+			"gas":        block.GasUsed(),
+			"fees":       totalFees(block, work.receipts),
+			"elapsed":    common.PrettyDuration(time.Since(start)),
+			"utxoRoot":   block.UTXORoot(),
+			"etxSetRoot": block.EtxSetRoot(),
+		}).Info("Commit new sealing work")
+	} else {
+		w.logger.WithFields(log.Fields{
+			"number":     block.Number(w.hc.NodeCtx()),
+			"parent":     block.ParentHash(w.hc.NodeCtx()),
+			"sealhash":   block.SealHash(),
+			"uncles":     len(work.uncles),
+			"txs":        len(work.txs),
+			"etxs":       len(block.ExtTransactions()),
+			"gas":        block.GasUsed(),
+			"fees":       totalFees(block, work.receipts),
+			"elapsed":    common.PrettyDuration(time.Since(start)),
+			"utxoRoot":   block.UTXORoot(),
+			"etxSetRoot": block.EtxSetRoot(),
+		}).Debug("Commit new sealing work")
+	}
+	work.uncleMu.RUnlock()
+}
+
+// interruptAsyncPhGen kills any async ph generation running
+func (w *worker) interruptAsyncPhGen() {
+	if w.interrupt != nil {
+		close(w.interrupt)
+		w.interrupt = nil
+	}
+}
+
+func (w *worker) eventExitLoop() {
+	for {
+		select {
+		case <-w.exitCh:
+			return
+		}
+	}
+}
+
+// AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
+// maps it to body.
+func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
+	w.pendingBlockBody.Add(wo.SealHash(), *wo)
+}
+
+// GetPendingBlockBody gets the block body associated with the given header.
+func (w *worker) GetPendingBlockBody(woHeader *types.WorkObject) (*types.WorkObject, error) {
+	body, ok := w.pendingBlockBody.Get(woHeader.SealHash())
+	if ok {
+		return &body, nil
+	}
+	w.logger.WithField("key", woHeader.SealHash()).Warn("pending block body not found for header")
+	return nil, errors.New("pending block body not found")
+}
+
+func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.WorkObject) event.Subscription {
+	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
+}
+
+// copyReceipts makes a deep copy of the given receipts.
+func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
+	result := make([]*types.Receipt, len(receipts))
+	for i, l := range receipts {
+		cpy := *l
+		result[i] = &cpy
+	}
+	return result
+}
+
+// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
+func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
+	feesWei := new(big.Int)
+	for i, tx := range block.QuaiTransactionsWithoutCoinbase() {
+		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
+		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
+	}
+	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+}
+
+func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
+	if !w.engine.CheckIfValidWorkShare(workShare) {
+		return errors.New("workshare is not valid")
+	}
+
+	// Don't add the workshare into the list if its farther than the worksharefilterdist
+	if workShare.NumberU64()+c_workShareFilterDist < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
+		return nil
+	}
+
+	w.Uncles.ContainsOrAdd(workShare.Hash(), *workShare)
+	return nil
+}
+
+func (w *worker) CurrentInfo(header *types.WorkObject) bool {
+	if w.headerPrints.Contains(header.Hash()) {
+		return false
+	}
+
+	w.headerPrints.Add(header.Hash(), nil)
+	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }
