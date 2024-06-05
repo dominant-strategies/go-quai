@@ -88,7 +88,6 @@ type EventSystem struct {
 	lastHead  *types.Header
 
 	// Subscriptions
-	txsSub         event.Subscription // Subscription for new transaction event
 	logsSub        event.Subscription // Subscription for new log event
 	rmLogsSub      event.Subscription // Subscription for removed log event
 	pendingLogsSub event.Subscription // Subscription for pending log event
@@ -125,7 +124,6 @@ func NewEventSystem(backend Backend) *EventSystem {
 	nodeCtx := backend.NodeCtx()
 	// Subscribe events
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
-		m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
 		m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 		m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 		m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
@@ -134,7 +132,7 @@ func NewEventSystem(backend Backend) *EventSystem {
 
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
-		if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
+		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
 			backend.Logger().Fatal("Subscribe for event system failed")
 		}
 	} else {
@@ -371,7 +369,6 @@ func (es *EventSystem) eventLoop() {
 	// Ensure all subscriptions get cleaned up
 	defer func() {
 		if nodeCtx == common.ZONE_CTX && es.backend.ProcessingState() {
-			es.txsSub.Unsubscribe()
 			es.logsSub.Unsubscribe()
 			es.rmLogsSub.Unsubscribe()
 			es.pendingLogsSub.Unsubscribe()
@@ -456,8 +453,6 @@ func (es *EventSystem) handleZoneEventLoop(index filterIndex) {
 			}
 			close(f.err)
 		// System stopped
-		case <-es.txsSub.Err():
-			return
 		case <-es.logsSub.Err():
 			return
 		case <-es.rmLogsSub.Err():

@@ -399,14 +399,6 @@ func (b *QuaiAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transacti
 	return b.quai.core.ContentFrom(addr)
 }
 
-func (b *QuaiAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	nodeCtx := b.quai.core.NodeCtx()
-	if nodeCtx != common.ZONE_CTX {
-		return nil
-	}
-	return b.quai.core.SubscribeNewTxsEvent(ch)
-}
-
 func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -492,6 +484,14 @@ func (b *QuaiAPIBackend) DownloadBlocksInManifest(hash common.Hash, manifest typ
 
 func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.WorkObject) (*types.WorkObject, error) {
 	return b.quai.core.ConstructLocalMinedBlock(header)
+}
+
+func (b *QuaiAPIBackend) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
+	return b.quai.core.GetPendingBlockBody(woHeader)
+}
+
+func (b *QuaiAPIBackend) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
+	return b.quai.core.GetTxsFromBroadcastSet(hash)
 }
 
 func (b *QuaiAPIBackend) InsertBlock(ctx context.Context, block *types.WorkObject) (int, error) {
@@ -613,6 +613,6 @@ func (b *QuaiAPIBackend) BroadcastHeader(header *types.WorkObject, location comm
 	return b.quai.p2p.Broadcast(location, header.ConvertToHeaderView())
 }
 
-func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectHeader, location common.Location) error {
+func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error {
 	return b.quai.p2p.Broadcast(location, workShare)
 }

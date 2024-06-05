@@ -272,10 +272,6 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 			if diff := new(big.Int).Sub(uncle.Number(), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
 				return consensus.ErrInvalidNumber
 			}
-
-			if !blake3pow.CheckIfValidWorkShare(uncle) {
-				return errors.New("invalid workshare included")
-			}
 		}
 	}
 	return nil

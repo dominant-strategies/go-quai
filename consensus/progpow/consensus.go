@@ -273,11 +273,6 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 			if diff := new(big.Int).Sub(uncle.Number(), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
 				return consensus.ErrInvalidNumber
 			}
-
-			if !progpow.CheckIfValidWorkShare(uncle) {
-				return errors.New("invalid workshare included")
-			}
-
 		}
 	}
 	return nil

@@ -59,6 +59,10 @@ const (
 	// c_reorgCounterThreshold determines the frequency of the timing prints
 	// around important functions in txpool
 	c_reorgCounterThreshold = 200
+
+	// c_broadcastSetCacheSize is the maxminum number of latest broadcastSets that we keep in
+	// the pool
+	c_broadcastSetCacheSize = 10
 )
 
 var (
@@ -194,7 +198,7 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	GlobalQueue:     2048,
 	QiPoolSize:      10024,
 	Lifetime:        3 * time.Hour,
-	ReorgFrequency:  2 * time.Second,
+	ReorgFrequency:  1 * time.Second,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -286,7 +290,6 @@ type TxPool struct {
 	chainconfig *params.ChainConfig
 	chain       blockChain
 	gasPrice    *big.Int
-	txFeed      event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
@@ -309,6 +312,10 @@ type TxPool struct {
 	SendersMu      sync.RWMutex                                    // Mutex for priority access of senders cache
 	localTxsCount  int                                             // count of txs in last 1 min. Purely for logging purpose
 	remoteTxsCount int                                             // count of txs in last 1 min. Purely for logging purpose
+
+	broadcastSetCache *lru.Cache[common.Hash, types.Transactions]
+	broadcastSetMu    sync.RWMutex
+	broadcastSet      types.Transactions
 
 	reOrgCounter int // keeps track of the number of times the runReorg is called, it is reset every c_reorgCounterThreshold times
 
@@ -379,6 +386,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reqResetCh:      make(chan *txpoolResetRequest),
 		reqPromoteCh:    make(chan *accountSet),
 		queueTxEventCh:  make(chan *types.Transaction),
+		broadcastSet:    make(types.Transactions, 0),
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
@@ -388,6 +396,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		logger:          logger,
 	}
 	pool.senders, _ = lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
+	pool.broadcastSetCache, _ = lru.New[common.Hash, types.Transactions](c_broadcastSetCacheSize)
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
 		logger.WithField("address", addr).Debug("Setting new local account")
@@ -524,12 +533,6 @@ func (pool *TxPool) Stop() {
 	pool.logger.Info("Transaction pool stopped")
 }
 
-// SubscribeNewTxsEvent registers a subscription of NewTxsEvent and
-// starts sending event to the given channel.
-func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return pool.scope.Track(pool.txFeed.Subscribe(ch))
-}
-
 // GasPrice returns the current gas price enforced by the transaction pool.
 func (pool *TxPool) GasPrice() *big.Int {
 	pool.mu.RLock()
@@ -634,6 +637,14 @@ func (pool *TxPool) QiPoolPending() map[common.Hash]*types.TxWithMinerFee {
 		qiTxs[hash] = qiTx
 	}
 	return qiTxs
+}
+
+func (pool *TxPool) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
+	txs, ok := pool.broadcastSetCache.Get(hash)
+	if !ok {
+		return types.Transactions{}, fmt.Errorf("cannot find the txs in the broadcast set for txhash [%s]", hash)
+	}
+	return txs, nil
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
@@ -1573,16 +1584,19 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 				}
 				events[internal].Put(tx)
 			}
+			var txs []*types.Transaction
 			if len(events) > 0 {
-				var txs []*types.Transaction
 				for _, set := range events {
 					txs = append(txs, set.Flatten()...)
 				}
-				pool.txFeed.Send(NewTxsEvent{txs})
 			}
 			if len(queuedQiTxs) > 0 {
-				pool.txFeed.Send(NewTxsEvent{queuedQiTxs})
+				txs = append(txs, queuedQiTxs...)
 			}
+			pool.broadcastSetMu.Lock()
+			pool.broadcastSet = append(pool.broadcastSet, txs...)
+			pool.broadcastSetMu.Unlock()
+
 			if pool.reOrgCounter == c_reorgCounterThreshold {
 				pool.logger.WithField("time", common.PrettyDuration(time.Since(start))).Debug("Time taken to runReorg in txpool")
 				pool.reOrgCounter = 0

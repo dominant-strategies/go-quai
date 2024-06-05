@@ -340,7 +340,7 @@ func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.
 	return p.consensus.GetTrieNode(hash, location)
 }
 
-func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interface{}, nodeLocation common.Location) {
+func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, Id string, topic string, data interface{}, nodeLocation common.Location) {
 	if _, ok := acceptableTypes[reflect.TypeOf(data)]; !ok {
 		log.Global.WithFields(log.Fields{
 			"peer":  sourcePeer,
@@ -351,8 +351,6 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interfa
 	}
 
 	switch v := data.(type) {
-	case types.WorkObjectHeader:
-		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	case types.WorkObjectHeaderView:
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	case types.WorkObjectBlockView:
@@ -361,6 +359,6 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interfa
 
 	// If we made it here, pass the data on to the consensus backend
 	if p.consensus != nil {
-		p.consensus.OnNewBroadcast(sourcePeer, topic, data, nodeLocation)
+		p.consensus.OnNewBroadcast(sourcePeer, Id, topic, data, nodeLocation)
 	}
 }

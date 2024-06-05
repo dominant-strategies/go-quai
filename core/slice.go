@@ -1323,7 +1323,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	nodeCtx := sl.NodeLocation().Context()
 	var pendingBlockBody *types.WorkObject
 	if nodeCtx == common.ZONE_CTX {
-		pendingBlockBody = sl.GetPendingBlockBody(wo)
+		pendingBlockBody = sl.GetPendingBlockBody(wo.WorkObjectHeader())
 		if pendingBlockBody == nil {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
@@ -1413,8 +1413,10 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 	}
 
 	if inSlice {
-		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.WorkObjectHeader().SetDifficulty(header.Difficulty())
+		combinedPendingHeader.WorkObjectHeader().SetTxHash(header.TxHash())
+
+		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.Header().SetUncledS(header.Header().UncledS())
 		combinedPendingHeader.Header().SetUncleHash(header.UncleHash())
 		combinedPendingHeader.Header().SetTxHash(header.Header().TxHash())
@@ -1578,7 +1580,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 	return nil
 }
 
-func (sl *Slice) GetPendingBlockBody(wo *types.WorkObject) *types.WorkObject {
+func (sl *Slice) GetPendingBlockBody(wo *types.WorkObjectHeader) *types.WorkObject {
 	blockBody, _ := sl.miner.worker.GetPendingBlockBody(wo)
 	return blockBody
 }
@@ -1875,6 +1877,28 @@ func (sl *Slice) NodeCtx() int {
 
 func (sl *Slice) GetSlicesRunning() []common.Location {
 	return sl.hc.SlicesRunning()
+}
+
+func (sl *Slice) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
+	// Every time we read the broadcast set, get the next set of transactions and
+	// update the phcache
+	// Get the latest transactions to be broadcasted from the pool
+	sl.txPool.broadcastSetMu.RLock()
+	if len(sl.txPool.broadcastSet) > 0 {
+		txs := sl.txPool.broadcastSet
+		hash := types.DeriveSha(txs, trie.NewStackTrie(nil))
+		bestPh, exists := sl.readPhCache(sl.bestPhKey)
+		if exists {
+			bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
+			bestPh.WorkObject().WorkObjectHeader().SetTxHash(hash)
+			sl.writePhCache(sl.bestPhKey, bestPh)
+			sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
+		}
+		sl.txPool.broadcastSetCache.Add(hash, txs)
+		sl.txPool.broadcastSet = types.Transactions{}
+	}
+	sl.txPool.broadcastSetMu.RUnlock()
+	return sl.txPool.GetTxsFromBroadcastSet(hash)
 }
 
 ////// Expansion related logic

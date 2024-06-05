@@ -541,6 +541,10 @@ func (c *Core) TxPool() *TxPool {
 	return c.sl.txPool
 }
 
+func (c *Core) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
+	return c.sl.GetTxsFromBroadcastSet(hash)
+}
+
 func (c *Core) Stop() {
 	// Delete the append queue
 	c.appendQueue.Purge()
@@ -649,6 +653,10 @@ func (c *Core) DownloadBlocksInManifest(blockHash common.Hash, manifest types.Bl
 // ConstructLocalBlock takes a header and construct the Block locally
 func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.WorkObject, error) {
 	return c.sl.ConstructLocalMinedBlock(woHeader)
+}
+
+func (c *Core) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
+	return c.sl.GetPendingBlockBody(woHeader)
 }
 
 func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int) {
@@ -992,10 +1000,6 @@ func (c *Core) Snapshots() *snapshot.Tree {
 
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
-}
-
-func (c *Core) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return c.sl.txPool.SubscribeNewTxsEvent(ch)
 }
 
 func (c *Core) SetExtra(extra []byte) error {
