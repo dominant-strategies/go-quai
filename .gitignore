@@ -7,3 +7,5 @@ traces/
 .vscode/
 .idea*
 *.env
+*.sh
+**/testdata/
