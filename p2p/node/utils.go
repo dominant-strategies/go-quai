@@ -5,14 +5,11 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 )
 
 // Utility function that asynchronously writes the provided "info" string to the node.info file.
@@ -66,24 +63,4 @@ func deleteNodeInfoFile() error {
 		}
 	}
 	return nil
-}
-
-// Loads bootpeers addresses from the config and returns a list of peer.AddrInfo
-func loadBootPeers() ([]peer.AddrInfo, error) {
-	if viper.GetBool(utils.SoloFlag.Name) || viper.GetString(utils.EnvironmentFlag.Name) == params.LocalName {
-		return nil, nil
-	}
-	var bootpeers []peer.AddrInfo
-	for _, p := range viper.GetStringSlice(utils.BootPeersFlag.Name) {
-		addr, err := multiaddr.NewMultiaddr(p)
-		if err != nil {
-			return nil, err
-		}
-		info, err := peer.AddrInfoFromP2pAddr(addr)
-		if err != nil {
-			return nil, err
-		}
-		bootpeers = append(bootpeers, *info)
-	}
-	return bootpeers, nil
 }

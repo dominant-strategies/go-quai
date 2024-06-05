@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
@@ -23,6 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/params"
 
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
@@ -47,6 +49,9 @@ const (
 	c_minResponsivePeersFromDb = 3
 	// c_minLastResortPeersFromDb is the number of peers we want to randomly read from the db
 	c_minLastResortPeersFromDb = 1
+
+	// c_maxBootNodes is the maximum number of bootnodes to connect to when bootstrapping
+	c_maxBootNodes = 10
 )
 
 type PeerQuality int
@@ -55,6 +60,7 @@ const (
 	Best PeerQuality = iota
 	Responsive
 	LastResort
+	All
 )
 
 var (
@@ -97,6 +103,9 @@ type PeerManager interface {
 	// request degree of the topic
 	GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{}
 
+	// RefreshBootpeers returns all the current bootpeers for bootstrapping
+	RefreshBootpeers() []peer.AddrInfo
+
 	// Increases the peer's liveliness score
 	MarkLivelyPeer(peerID p2p.PeerID, topic *pubsubManager.Topic)
 	// Decreases the peer's liveliness score
@@ -128,6 +137,9 @@ type BasicPeerManager struct {
 	// Tracks peers in different quality buckets
 	peerDBs map[string][]*peerdb.PeerDB
 
+	// Initial bootpeers passed via config
+	bootpeers []peer.AddrInfo
+
 	// DHT instance
 	dht *dual.DHT
 
@@ -153,54 +165,14 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		return nil, err
 	}
 
-	// Initialize the expected peerDBs
-	peerDBs := make(map[string][]*peerdb.PeerDB)
-
-	generateLocations := func() []common.Location {
-		locations := make([]common.Location, 9)
-		for region := byte(0); region <= 2; region++ {
-			for zone := byte(0); zone <= 2; zone++ {
-				locations = append(locations, common.Location{region, zone})
-			}
-		}
-		return locations
+	bootpeers, err := loadBootPeers()
+	if err != nil {
+		return nil, err
 	}
 
-	var dataTypes = []interface{}{
-		&types.WorkObjectHeaderView{},
-		&types.WorkObjectBlockView{},
-		common.Hash{},
-		&types.Transactions{},
-		&types.WorkObjectHeader{},
-	}
-
-	for _, loc := range generateLocations() {
-		domLocations := loc.GetDoms()
-		for _, domLoc := range domLocations {
-			for _, dataType := range dataTypes {
-				topic, err := pubsubManager.NewTopic(utils.MakeGenesis().ToBlock(0).Hash(), domLoc, dataType)
-				if err != nil {
-					return nil, err
-				}
-				if peerDBs[topic.String()] != nil {
-					// This peerDB has already been initialized
-					continue
-				}
-				peerDBs[topic.String()] = make([]*peerdb.PeerDB, 3)
-				peerDBs[topic.String()][Best], err = peerdb.NewPeerDB(dbNames[Best], topic.String())
-				if err != nil {
-					return nil, err
-				}
-				peerDBs[topic.String()][Responsive], err = peerdb.NewPeerDB(dbNames[Responsive], topic.String())
-				if err != nil {
-					return nil, err
-				}
-				peerDBs[topic.String()][LastResort], err = peerdb.NewPeerDB(dbNames[LastResort], topic.String())
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
+	peerDBs, err := loadPeerDBs()
+	if err != nil {
+		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -268,9 +240,124 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		BasicConnMgr:         mgr,
 		BasicConnectionGater: gater,
 		genesis:              utils.MakeGenesis().ToBlock(0).Hash(),
+		bootpeers:            bootpeers,
 		peerDBs:              peerDBs,
 		logger:               logger,
 	}, nil
+}
+
+func loadPeerDBs() (map[string][]*peerdb.PeerDB, error) {
+	var dataTypes = []interface{}{
+		&types.WorkObjectHeaderView{},
+		&types.WorkObjectBlockView{},
+		common.Hash{},
+		&types.Transactions{},
+		&types.WorkObjectHeader{},
+	}
+
+	generateLocations := func() []common.Location {
+		locations := make([]common.Location, 9)
+		for region := byte(0); region <= 2; region++ {
+			for zone := byte(0); zone <= 2; zone++ {
+				locations = append(locations, common.Location{region, zone})
+			}
+		}
+		return locations
+	}
+
+	// Initialize the expected peerDBs
+	peerDBs := make(map[string][]*peerdb.PeerDB)
+
+	for _, loc := range generateLocations() {
+		domLocations := loc.GetDoms()
+		for _, domLoc := range domLocations {
+			for _, dataType := range dataTypes {
+				topic, err := pubsubManager.NewTopic(utils.MakeGenesis().ToBlock(0).Hash(), domLoc, dataType)
+				if err != nil {
+					return nil, err
+				}
+				if peerDBs[topic.String()] != nil {
+					// This peerDB has already been initialized
+					continue
+				}
+				peerDBs[topic.String()] = make([]*peerdb.PeerDB, 3)
+				peerDBs[topic.String()][Best], err = peerdb.NewPeerDB(dbNames[Best], topic.String())
+				if err != nil {
+					return nil, err
+				}
+				peerDBs[topic.String()][Responsive], err = peerdb.NewPeerDB(dbNames[Responsive], topic.String())
+				if err != nil {
+					return nil, err
+				}
+				peerDBs[topic.String()][LastResort], err = peerdb.NewPeerDB(dbNames[LastResort], topic.String())
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return peerDBs, nil
+}
+
+// Loads bootpeers addresses from the config and returns a list of peer.AddrInfo
+func loadBootPeers() ([]peer.AddrInfo, error) {
+	if viper.GetBool(utils.SoloFlag.Name) || viper.GetString(utils.EnvironmentFlag.Name) == params.LocalName {
+		return nil, nil
+	}
+
+	var bootpeers []peer.AddrInfo
+	for _, p := range viper.GetStringSlice(utils.BootPeersFlag.Name) {
+		addr, err := multiaddr.NewMultiaddr(p)
+		if err != nil {
+			return nil, err
+		}
+		info, err := peer.AddrInfoFromP2pAddr(addr)
+		if err != nil {
+			return nil, err
+		}
+		bootpeers = append(bootpeers, *info)
+	}
+
+	return bootpeers, nil
+}
+
+func queryAllPeers(peerDBs map[string][]*peerdb.PeerDB, quality PeerQuality, peerCount int) ([]peer.AddrInfo, error) {
+	q := query.Query{}
+
+	bootpeers := make(map[peer.ID]struct{})
+	for _, dbList := range peerDBs {
+		if quality != All {
+			dbList = []*peerdb.PeerDB{dbList[quality]}
+		}
+		for _, db := range dbList {
+			results, err := db.Query(context.Background(), q)
+			if err != nil {
+				return nil, err
+			}
+			for result := range results.Next() {
+				peerID, err := peer.Decode(strings.TrimPrefix(result.Key, "/"))
+				if err != nil {
+					// If there is an error, move to the next peer
+					continue
+				}
+				bootpeers[peerID] = struct{}{}
+				if len(bootpeers) == peerCount {
+					break
+				}
+			}
+		}
+	}
+	peerList := make([]peer.AddrInfo, 0, len(bootpeers))
+	for peerID := range bootpeers {
+		peerList = append(peerList, peer.AddrInfo{ID: peerID})
+	}
+	return peerList, nil
+}
+
+func (pm *BasicPeerManager) RefreshBootpeers() []peer.AddrInfo {
+	bootpeers, _ := queryAllPeers(pm.peerDBs, Best, c_maxBootNodes)
+	bootpeers = append(bootpeers, pm.bootpeers...)
+	return bootpeers
 }
 
 func (pm *BasicPeerManager) SetDHT(dht *dual.DHT) {

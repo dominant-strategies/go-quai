@@ -76,13 +76,6 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	ipAddr := viper.GetString(utils.IPAddrFlag.Name)
 	port := viper.GetString(utils.P2PPortFlag.Name)
 
-	// Load bootpeers
-	bootpeers, err := loadBootPeers()
-	if err != nil {
-		log.Global.Errorf("error loading bootpeers: %s", err)
-		return nil, err
-	}
-
 	// Peer manager handles both connection management and connection gating
 	peerMgr, err := peerManager.NewManager(
 		ctx,
@@ -129,7 +122,7 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 
 		// If behind NAT, automatically advertise relay address through relay peers
 		// TODO: today the bootnodes act as static relays. In the future we should dynamically select relays from publicly reachable peers.
-		libp2p.EnableAutoRelayWithStaticRelays(bootpeers),
+		libp2p.EnableAutoRelayWithStaticRelays(peerMgr.RefreshBootpeers()),
 
 		// Attempt to open a direct connection with relayed peers, using relay
 		// nodes to coordinate the holepunch.
@@ -147,8 +140,7 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 				dual.WanDHTOption(
 					kaddht.Mode(kaddht.ModeServer),
 					kaddht.BootstrapPeersFunc(func() []peer.AddrInfo {
-						log.Global.Debugf("Bootstrapping to the following peers: %v", bootpeers)
-						return bootpeers
+						return peerMgr.RefreshBootpeers()
 					}),
 					kaddht.ProtocolPrefix("/quai"),
 					kaddht.RoutingTableRefreshPeriod(1*time.Minute),
