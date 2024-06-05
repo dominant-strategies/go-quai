@@ -712,7 +712,13 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
-	if env.wo.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash() {
+	var workShare bool
+	// If the uncle is a workshare, we should allow siblings
+	_, err := w.engine.VerifySeal(uncle)
+	if err != nil {
+		workShare = true
+	}
+	if !workShare && (env.wo.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash()) {
 		return errors.New("uncle is sibling")
 	}
 	if !env.ancestors.Contains(uncle.ParentHash()) {
