@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/stretchr/testify/require"
 )
@@ -732,6 +734,281 @@ func FuzzEtxSender(f *testing.F) {
 			newTx := NewTx(&newInner)
 
 			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), a)
+		}
+	})
+}
+
+// QiTx hash tests
+func qiTxData() (*Transaction, common.Hash) {
+	parentHash := common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3")
+	mixHash := common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4")
+	txHash := common.HexToHash("0x3a203a4f1589fe3a57a68482c048fb28c571b761a42c4cde81767e20a3d0416d")
+	workNonce := EncodeNonce(1)
+
+	outpoint := NewOutPoint(&txHash, 1)
+	inner := &QiTx{
+		ChainID:    new(big.Int).SetUint64(1),
+		TxIn:       TxIns{*NewTxIn(outpoint, []byte{0x01}, [][]byte{{0x01}})},
+		TxOut:      TxOuts{*NewTxOut(1, []byte{0x2}, big.NewInt(1))},
+		ParentHash: &parentHash,
+		MixHash:    &mixHash,
+		WorkNonce:  &workNonce,
+	}
+	tx := NewTx(inner)
+	return tx, tx.Hash()
+}
+
+func FuzzQiTxHashingChainID(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testUInt64)
+	f.Add(tx.inner.chainID().Uint64())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, i uint64) {
+		bi := new(big.Int).SetUint64(i)
+		if bi.Cmp(tx.inner.chainID()) != 0 {
+			// change something in the transaction
+			newInner := *tx.inner.(*QiTx)
+			newInner.ChainID = bi
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.chainID(), bi)
+		}
+	})
+}
+
+func FuzzQiTxHashingTxInOutPointTxHash(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testByte)
+	f.Add(tx.TxIn()[0].PreviousOutPoint.TxHash.Bytes())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		//change PreviousOutPoint TxHash
+		h := common.BytesToHash(b)
+		if h != tx.TxIn()[0].PreviousOutPoint.TxHash {
+			op := NewOutPoint(&h, tx.TxIn()[0].PreviousOutPoint.Index)
+			newInner := *tx.inner.(*QiTx)
+			// Create a deep copy of the TxIn slice
+			newInner.TxIn = make(TxIns, len(tx.inner.(*QiTx).TxIn))
+			copy(newInner.TxIn, tx.inner.(*QiTx).TxIn)
+			newInner.TxIn[0].PreviousOutPoint = *op
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision TxHash\noriginal: %v, modified: %v", tx.TxIn()[0].PreviousOutPoint.TxHash, &h)
+		}
+	})
+}
+
+func FuzzQiTxHashingTxInOutPointIndex(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testUInt16)
+	f.Add(tx.TxIn()[0].PreviousOutPoint.Index)
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+	f.Fuzz(func(t *testing.T, ui uint16) {
+		//change previousOutPoint Index
+		if ui != tx.TxIn()[0].PreviousOutPoint.Index {
+			op := NewOutPoint(&tx.TxIn()[0].PreviousOutPoint.TxHash, ui)
+			newInner := *tx.inner.(*QiTx)
+			// Create a deep copy of the TxIn slice
+			newInner.TxIn = make(TxIns, len(tx.inner.(*QiTx).TxIn))
+			copy(newInner.TxIn, tx.inner.(*QiTx).TxIn)
+			newInner.TxIn[0].PreviousOutPoint = *op
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision \noriginal: %v, modified: %v", tx.TxIn()[0].PreviousOutPoint.Index, ui)
+		}
+	})
+}
+
+func FuzzQiTxHashingTxInOutPointPubKey(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testByte)
+	f.Add(tx.TxIn()[0].PubKey)
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		if !bytes.Equal(b, tx.TxIn()[0].PubKey) {
+			newInner := *tx.inner.(*QiTx)
+			// Create a deep copy of the TxIn slice
+			newInner.TxIn = make(TxIns, len(tx.inner.(*QiTx).TxIn))
+			copy(newInner.TxIn, tx.inner.(*QiTx).TxIn)
+			newInner.TxIn[0].PubKey = b
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision on PreviousOutPoing\noriginal: %v, modified: %v", tx.TxIn()[0].PubKey, b)
+		}
+	})
+}
+
+func FuzzQiTxHashingTxOutDenomination(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testUInt8)
+	f.Add(tx.TxOut()[0].Denomination)
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+	f.Fuzz(func(t *testing.T, ui uint8) {
+		//change previousOutPoint Index
+		if ui != tx.TxOut()[0].Denomination {
+			newInner := *tx.inner.(*QiTx)
+			// Create a deep copy of the TxOut slice
+			newInner.TxOut = make(TxOuts, len(tx.inner.(*QiTx).TxOut))
+			copy(newInner.TxOut, tx.inner.(*QiTx).TxOut)
+			newInner.TxOut[0].Denomination = ui
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision \noriginal: %v, modified: %v", tx.TxOut()[0].Denomination, ui)
+		}
+	})
+}
+
+func FuzzQiTxHashingTxOutAddress(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testByte)
+	f.Add(tx.inner.txOut()[0].Address)
+
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		if !bytes.Equal(b, tx.TxOut()[0].Address) {
+			newInner := *tx.inner.(*QiTx)
+			// Create a deep copy of the TxOut slice
+			newInner.TxOut = make(TxOuts, len(tx.inner.(*QiTx).TxOut))
+			copy(newInner.TxOut, tx.inner.(*QiTx).TxOut)
+			// Change Address Value and create a new TX
+			newInner.TxOut[0].Address = b
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision on PreviousOutPoing\noriginal: %v, modified: %v", tx.TxOut()[0].Address, b)
+		}
+	})
+}
+
+func FuzzQiTxHashingTxOutLock(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testUInt64)
+	f.Add(tx.inner.txOut()[0].Lock.Uint64())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, i uint64) {
+		bi := new(big.Int).SetUint64(i)
+		if bi.Cmp(tx.inner.txOut()[0].Lock) != 0 {
+			// change something in the transaction
+			newInner := *tx.inner.(*QiTx)
+			// Create a deep copy of the TxOut slice
+			newInner.TxOut = make(TxOuts, len(tx.inner.(*QiTx).TxOut))
+			copy(newInner.TxOut, tx.inner.(*QiTx).TxOut)
+			newInner.TxOut[0].Lock = bi
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.txOut()[0].Lock, bi)
+		}
+	})
+}
+
+func FuzzQiTxHashingSignature(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testByte)
+	f.Add(tx.GetSchnorrSignature().Serialize())
+
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		privKey, _ := btcec.PrivKeyFromBytes(b)
+		if !bytes.Equal(b, tx.GetSchnorrSignature().Serialize()) {
+			newInner := *tx.inner.(*QiTx)
+			// Change Signature Value and create a new TX
+			var err error
+			newInner.Signature, err = schnorr.Sign(privKey, tx.Hash().Bytes()[:])
+			if err != nil {
+				t.Fatalf("schnorr signing failed!")
+			}
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision on PreviousOutPoing\noriginal: %v, modified: %v", tx.TxOut()[0].Address, b)
+		}
+	})
+}
+
+func fuzzQitxHashingField(f *testing.F, getField func(TxData) *common.Hash, setField func(*QiTx, *common.Hash)) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testByte)
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		bHash := common.BytesToHash(b)
+		hashField := getField(tx.inner)
+		if bHash != *hashField {
+			// change something in the transaction
+			newInner := *tx.inner.(*QiTx)
+
+			setField(&newInner, &bHash)
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", getField(tx.inner), bHash)
+		}
+	})
+}
+
+func FuzzQitxParentHash(f *testing.F) {
+	fuzzQitxHashingField(f,
+		func(it TxData) *common.Hash { return it.parentHash() },
+		func(it *QiTx, h *common.Hash) { it.ParentHash = h })
+}
+
+func FuzzQitxMixHash(f *testing.F) {
+	fuzzQitxHashingField(f,
+		func(it TxData) *common.Hash { return it.mixHash() },
+		func(it *QiTx, h *common.Hash) { it.MixHash = h })
+}
+
+func FuzzQiTxHashingWorkNonce(f *testing.F) {
+	// Create a new transaction
+	tx, hash := qiTxData()
+	f.Add(testUInt64)
+	f.Add(tx.inner.workNonce().Uint64())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, i uint64) {
+		if tx.inner.workNonce().Uint64() != i {
+			// change something in the transaction
+			newInner := *tx.inner.(*QiTx)
+			newNonce := EncodeNonce(i)
+			newInner.WorkNonce = &newNonce
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.workNonce(), i)
 		}
 	})
 }
