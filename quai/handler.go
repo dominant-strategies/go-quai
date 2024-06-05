@@ -21,6 +21,8 @@ const (
 	c_checkNextPrimeBlockInterval = 60 * time.Second
 	// c_txsChanSize is the size of channel listening to the new txs event
 	c_newTxsChanSize = 1000
+	// c_newWsChanSize  is the size of channel listening to the new workobjectshare event
+	c_newWsChanSize = 10
 	// c_recentBlockReqCache is the size of the cache for the recent block requests
 	c_recentBlockReqCache = 1000
 	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
@@ -38,11 +40,11 @@ type handler struct {
 	core            *core.Core
 	missingBlockCh  chan types.BlockRequest
 	missingBlockSub event.Subscription
-	txsCh           chan core.NewTxsEvent
-	txsSub          event.Subscription
 	wg              sync.WaitGroup
 	quitCh          chan struct{}
 	logger          *log.Logger
+
+	txs types.Transactions
 
 	recentBlockReqCache *expireLru.LRU[common.Hash, interface{}] // cache the latest requests on a 1 min timer
 }
@@ -54,6 +56,7 @@ func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.L
 		core:         core,
 		quitCh:       make(chan struct{}),
 		logger:       logger,
+		txs:          make(types.Transactions, 0),
 	}
 	handler.recentBlockReqCache = expireLru.NewLRU[common.Hash, interface{}](c_recentBlockReqCache, nil, c_recentBlockReqTimeout)
 	return handler
@@ -66,13 +69,6 @@ func (h *handler) Start() {
 	go h.missingBlockLoop()
 
 	nodeCtx := h.nodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
-		h.wg.Add(1)
-		h.txsCh = make(chan core.NewTxsEvent, c_newTxsChanSize)
-		h.txsSub = h.core.SubscribeNewTxsEvent(h.txsCh)
-		go h.txBroadcastLoop()
-	}
-
 	if nodeCtx == common.PRIME_CTX {
 		h.wg.Add(1)
 		go h.checkNextPrimeBlock()
@@ -81,10 +77,6 @@ func (h *handler) Start() {
 
 func (h *handler) Stop() {
 	h.missingBlockSub.Unsubscribe() // quits missingBlockLoop
-	nodeCtx := h.nodeLocation.Context()
-	if nodeCtx == common.ZONE_CTX && h.core.ProcessingState() {
-		h.txsSub.Unsubscribe() // quits the txBroadcastLoop
-	}
 	close(h.quitCh)
 	h.wg.Wait()
 }
@@ -142,62 +134,6 @@ func (h *handler) missingBlockLoop() {
 		case <-h.quitCh:
 			return
 		}
-	}
-}
-
-// txBroadcastLoop announces new transactions to connected peers.
-func (h *handler) txBroadcastLoop() {
-	transactions := make(types.Transactions, 0, c_maxTxBatchSize)
-	broadcastTransactionsTicker := time.NewTicker(c_broadcastTransactionsInterval)
-	defer broadcastTransactionsTicker.Stop()
-	defer h.wg.Done()
-	defer func() {
-		if r := recover(); r != nil {
-			h.logger.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
-		}
-	}()
-	for {
-		select {
-		case event := <-h.txsCh:
-			// check if the length of the transactions becomes more than the c_maxTxBatchSize
-			// In case the txsCh can send
-			numBatches := (len(transactions) + len(event.Txs)) / c_maxTxBatchSize
-			if numBatches > 0 {
-				// create a local cache and add all the txs and broadcast
-				transactions = append(transactions, event.Txs...)
-				for i := 0; i < numBatches; i++ {
-					start := i * c_maxTxBatchSize
-					end := start + c_maxTxBatchSize
-					if end > len(transactions) {
-						end = len(transactions)
-					}
-					h.broadcastTransactions(transactions[start:end])
-				}
-				transactions = make(types.Transactions, 0, c_maxTxBatchSize)
-			} else {
-				transactions = append(transactions, event.Txs...)
-			}
-		case <-broadcastTransactionsTicker.C:
-			// every ticker, gather all the transactions and broadcast them and
-			// reset the transactions list
-			h.broadcastTransactions(transactions)
-			transactions = make(types.Transactions, 0, c_maxTxBatchSize)
-		case <-h.txsSub.Err():
-			return
-		}
-	}
-}
-
-func (h *handler) broadcastTransactions(transactions types.Transactions) {
-	if len(transactions) == 0 {
-		return
-	}
-	err := h.p2pBackend.Broadcast(h.nodeLocation, &transactions)
-	if err != nil {
-		h.logger.Errorf("Error broadcasting transactions: %+v", err)
 	}
 }
 

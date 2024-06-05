@@ -286,7 +286,6 @@ type TxPool struct {
 	chainconfig *params.ChainConfig
 	chain       blockChain
 	gasPrice    *big.Int
-	txFeed      event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
@@ -522,12 +521,6 @@ func (pool *TxPool) Stop() {
 		pool.journal.close()
 	}
 	pool.logger.Info("Transaction pool stopped")
-}
-
-// SubscribeNewTxsEvent registers a subscription of NewTxsEvent and
-// starts sending event to the given channel.
-func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
@@ -1578,10 +1571,6 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 				for _, set := range events {
 					txs = append(txs, set.Flatten()...)
 				}
-				pool.txFeed.Send(NewTxsEvent{txs})
-			}
-			if len(queuedQiTxs) > 0 {
-				pool.txFeed.Send(NewTxsEvent{queuedQiTxs})
 			}
 			if pool.reOrgCounter == c_reorgCounterThreshold {
 				pool.logger.WithField("time", common.PrettyDuration(time.Since(start))).Debug("Time taken to runReorg in txpool")

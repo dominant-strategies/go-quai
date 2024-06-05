@@ -690,14 +690,6 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 		etxRLimit: etxRLimit,
 		etxPLimit: etxPLimit,
 	}
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Header().Hash(), params.WorkSharesInclusionDepth) {
-		for _, uncle := range ancestor.Uncles() {
-			env.family.Add(uncle.Hash())
-		}
-		env.family.Add(ancestor.Hash())
-		env.ancestors.Add(ancestor.Hash())
-	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	return env, nil
@@ -708,6 +700,15 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	env.uncleMu.Lock()
 	defer env.uncleMu.Unlock()
 	hash := uncle.Hash()
+
+	// when 08 is processed ancestors contain 07 (quick block)
+	for _, ancestor := range w.hc.GetBlocksFromHash(env.wo.ParentHash(common.ZONE_CTX), params.WorkSharesInclusionDepth) {
+		for _, uncle := range ancestor.Uncles() {
+			env.family.Add(uncle.Hash())
+		}
+		env.family.Add(ancestor.Hash())
+		env.ancestors.Add(ancestor.Hash())
+	}
 
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
@@ -1382,7 +1383,7 @@ func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
 }
 
 // GetPendingBlockBody gets the block body associated with the given header.
-func (w *worker) GetPendingBlockBody(woHeader *types.WorkObject) (*types.WorkObject, error) {
+func (w *worker) GetPendingBlockBody(woHeader *types.WorkObjectHeader) (*types.WorkObject, error) {
 	body, ok := w.pendingBlockBody.Get(woHeader.SealHash())
 	if ok {
 		return &body, nil

@@ -104,23 +104,28 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		}
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
-	case types.Transactions:
+	case types.WorkObjectShareView:
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
 			log.Global.Error("no backend found")
 			return false
 		}
 		if backend.ProcessingState() {
-			backend.SendRemoteTxs(data)
+			// check if the work share is valid before accepting the transactions
+			// from the peer
+			if data.WorkObject == nil {
+				return false
+			}
+			if data.WorkObject.WorkObjectHeader() == nil {
+				return false
+			}
+			if ok := backend.CheckIfValidWorkShare(data.WorkObject.WorkObjectHeader()); !ok {
+				return false
+			}
+			// Unpack the workobjectheader and the transactions
+			backend.SendWorkShare(data.WorkObject.WorkObjectHeader())
+			backend.SendRemoteTxs(data.WorkObject.Transactions())
 		}
-		// TODO: Handle the error here and mark the peers accordingly
-	case types.WorkObjectHeader:
-		backend := *qbe.GetBackend(nodeLocation)
-		if backend == nil {
-			log.Global.Error("no backend found")
-			return false
-		}
-		backend.SendWorkShare(&data)
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	default:

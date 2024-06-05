@@ -750,7 +750,7 @@ func WriteWorkObjectBody(db ethdb.KeyValueWriter, hash common.Hash, workObject *
 	key := workObjectBodyKey(hash)
 	WriteHeaderNumber(db, hash, workObject.NumberU64(nodeCtx))
 
-	protoWorkObjectBody, err := workObject.Body().ProtoEncode()
+	protoWorkObjectBody, err := workObject.Body().ProtoEncode(woType)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to proto encode work object body")
 	}
@@ -1044,7 +1044,7 @@ func (b badWorkObject) ProtoEncode() *ProtoBadWorkObject {
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto encode header")
 	}
-	protoWorkObjectBody, err := b.woBody.ProtoEncode()
+	protoWorkObjectBody, err := b.woBody.ProtoEncode(types.BlockObject)
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
 	}

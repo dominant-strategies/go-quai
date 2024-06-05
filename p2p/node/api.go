@@ -341,8 +341,6 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, topic string, data interfa
 	}
 
 	switch v := data.(type) {
-	case types.WorkObjectHeader:
-		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	case types.WorkObjectHeaderView:
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	case types.WorkObjectBlockView:

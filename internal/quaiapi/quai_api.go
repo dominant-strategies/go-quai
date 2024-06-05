@@ -753,10 +753,15 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw json
 		}
 
 		s.b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
-		err := s.b.BroadcastWorkShare(workShare, s.b.NodeLocation())
+		var txs types.Transactions
+		pendingBlockBody := s.b.GetPendingBlockBody(workShare)
+		if pendingBlockBody != nil {
+			txs = pendingBlockBody.Transactions()
+		}
+		wo := types.NewWorkObject(workShare, nil, nil)
+		err := s.b.BroadcastWorkShare(wo.ConvertToWorkObjectShareView(txs), s.b.NodeLocation())
 		if err != nil {
-			log.Global.WithField("err", err).Error("Error broadcasting work share")
-			return err
+			s.b.Logger().WithField("err", err).Error("Error broadcasting work share")
 		}
 	}
 	return nil

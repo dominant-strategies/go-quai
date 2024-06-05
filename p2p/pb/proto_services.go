@@ -8,7 +8,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -220,45 +219,24 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 // Converts a custom go type to a proto type and marhsals it into a protobuf message
 func ConvertAndMarshal(data interface{}) ([]byte, error) {
 	switch data := data.(type) {
-	case *types.WorkObjectHeaderView, *types.WorkObjectBlockView:
-		switch data := data.(type) {
-		case *types.WorkObjectHeaderView:
-			protoBlock, err := data.ProtoEncode()
-			if err != nil {
-				return nil, err
-			}
-			return proto.Marshal(protoBlock)
-		case *types.WorkObjectBlockView:
-			protoBlock, err := data.ProtoEncode()
-			if err != nil {
-				return nil, err
-			}
-			return proto.Marshal(protoBlock)
-		default:
-			return nil, errors.New("unsupported data type")
-		}
-	case *types.Transaction:
-		protoTransaction, err := data.ProtoEncode()
+	case *types.WorkObjectHeaderView:
+		protoBlock, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
-		return proto.Marshal(protoTransaction)
-	case common.Hash:
-		protoHash := data.ProtoEncode()
-		return proto.Marshal(protoHash)
-	case *types.Transactions:
-		protoTransactions, err := data.ProtoEncode()
+		return proto.Marshal(protoBlock)
+	case *types.WorkObjectBlockView:
+		protoBlock, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
-		return proto.Marshal(protoTransactions)
-	case *types.WorkObjectHeader:
-		log.Global.Tracef("marshalling block header: %+v", data)
-		protoWoHeader, err := data.ProtoEncode()
+		return proto.Marshal(protoBlock)
+	case *types.WorkObjectShareView:
+		protoBlock, err := data.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
-		return proto.Marshal(protoWoHeader)
+		return proto.Marshal(protoBlock)
 	default:
 		return nil, errors.New("unsupported data type")
 	}
@@ -296,54 +274,19 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		}
 		*dataPtr = workObjectHeaderView
 		return nil
-	case *types.WorkObjectHeader:
-		protoWorkObjectHeader := &types.ProtoWorkObjectHeader{}
-		err := proto.Unmarshal(data, protoWorkObjectHeader)
+	case *types.WorkObjectShareView:
+		protoWorkObject := &types.ProtoWorkObjectShareView{}
+		err := proto.Unmarshal(data, protoWorkObject)
 		if err != nil {
 			return err
 		}
-		workObjectHeader := types.WorkObjectHeader{}
-		err = workObjectHeader.ProtoDecode(protoWorkObjectHeader)
+		workObjectShareView := types.WorkObjectShareView{}
+		workObjectShareView.WorkObject = &types.WorkObject{}
+		err = workObjectShareView.ProtoDecode(protoWorkObject, sourceLocation)
 		if err != nil {
 			return err
 		}
-		*dataPtr = workObjectHeader
-		return nil
-	case *types.Header:
-		protoHeader := &types.ProtoHeader{}
-		err := proto.Unmarshal(data, protoHeader)
-		if err != nil {
-			return err
-		}
-		header := types.Header{}
-		err = header.ProtoDecode(protoHeader, sourceLocation)
-		if err != nil {
-			return err
-		}
-		*dataPtr = header
-		return nil
-	case *types.Transactions:
-		protoTransactions := &types.ProtoTransactions{}
-		err := proto.Unmarshal(data, protoTransactions)
-		if err != nil {
-			return err
-		}
-		transactions := types.Transactions{}
-		err = transactions.ProtoDecode(protoTransactions, sourceLocation)
-		if err != nil {
-			return err
-		}
-		*dataPtr = transactions
-		return nil
-	case common.Hash:
-		protoHash := &common.ProtoHash{}
-		err := proto.Unmarshal(data, protoHash)
-		if err != nil {
-			return err
-		}
-		hash := common.Hash{}
-		hash.ProtoDecode(protoHash)
-		*dataPtr = hash
+		*dataPtr = workObjectShareView
 		return nil
 	default:
 		return errors.New("unsupported data type")

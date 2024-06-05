@@ -652,6 +652,10 @@ func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.Work
 	return c.sl.ConstructLocalMinedBlock(woHeader)
 }
 
+func (c *Core) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
+	return c.sl.GetPendingBlockBody(woHeader)
+}
+
 func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int) {
 	c.sl.SubRelayPendingHeader(slPendingHeader, newEntropy, location, subReorg, order)
 }
@@ -993,10 +997,6 @@ func (c *Core) Snapshots() *snapshot.Tree {
 
 func (c *Core) TxLookupLimit() uint64 {
 	return 0
-}
-
-func (c *Core) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
-	return c.sl.txPool.SubscribeNewTxsEvent(ch)
 }
 
 func (c *Core) SetExtra(extra []byte) error {
