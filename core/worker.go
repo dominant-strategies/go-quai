@@ -566,7 +566,9 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		w.adjustGasLimit(work, block)
 		work.utxoFees = big.NewInt(0)
 		start := time.Now()
-		w.fillTransactions(interrupt, work, block, fill)
+		if err := w.fillTransactions(interrupt, work, block, fill); err != nil {
+			return nil, fmt.Errorf("error generating pending header: %v", err)
+		}
 		if fill {
 			w.fillTransactionsRollingAverage.Add(time.Since(start))
 			w.logger.WithFields(log.Fields{
@@ -816,7 +818,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	return nil, errors.New("error finding transaction")
 }
 
-func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
+func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
 	qiTxsToRemove := make([]*common.Hash, 0)
 	gasLimit := env.wo.GasLimit
 	if env.gasPool == nil {
@@ -827,12 +829,9 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 	oldestIndex, err := env.state.GetOldestIndex()
 	if err != nil {
 		w.logger.WithField("err", err).Error("Failed to get oldest index")
-		return true
+		return fmt.Errorf("failed to get oldest index: %w", err)
 	}
 	for {
-		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
-		}
 		if env.gasPool.Gas() < params.TxGas {
 			w.logger.WithFields(log.Fields{
 				"have": env.gasPool,
@@ -846,12 +845,12 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 		}
 		if env.wo.GasUsed() > minEtxGas*params.MaximumEtxGasMultiplier { // sanity check, this should never happen
 			w.logger.WithField("Gas Used", env.wo.GasUsed()).Error("Block uses more gas than maximum ETX gas")
-			return true
+			return fmt.Errorf("block uses more gas than maximum ETX gas")
 		}
 		etx, err := env.state.PopETX()
 		if err != nil {
 			w.logger.WithField("err", err).Error("Failed to read ETX")
-			return true
+			return fmt.Errorf("failed to read ETX: %w", err)
 		}
 		if etx == nil {
 			break
@@ -865,25 +864,12 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 		oldestIndex.Add(oldestIndex, big.NewInt(1))
 	}
 	for {
-		// In the following three cases, we will interrupt the execution of the transaction.
+		// In the following two cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
 		// (2) worker start or restart, the interrupt signal is 1
-		// (3) worker recreate the sealing block with any newly arrived transactions, the interrupt signal is 2.
-		// For the first two cases, the semi-finished work will be discarded.
-		// For the third case, the semi-finished work will be submitted to the consensus engine.
+		// For these two cases, the semi-finished work will be discarded.
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
-			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(gasLimit()-env.gasPool.Gas()) / float64(gasLimit())
-				if ratio < 0.1 {
-					ratio = 0.1
-				}
-				w.resubmitAdjustCh <- &intervalAdjust{
-					ratio: ratio,
-					inc:   true,
-				}
-			}
-			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
+			return nil
 		}
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
@@ -1009,7 +995,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
-	return false
+	return nil
 }
 
 // generateParams wraps various of settings for generating sealing task.
@@ -1266,7 +1252,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.WorkObject, fill bool) bool {
+func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.WorkObject, fill bool) error {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	etxs := false
@@ -1278,13 +1264,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		oldestIndex, err := env.state.GetOldestIndex()
 		if err != nil {
 			w.logger.WithField("err", err).Error("Failed to get oldest index")
-			return false
+			return fmt.Errorf("failed to get oldest index: %w", err)
 		}
 		// Check if there is at least one ETX in the set
 		etx, err := env.state.ReadETX(oldestIndex)
 		if err != nil {
 			w.logger.WithField("err", err).Error("Failed to read ETX")
-			return false
+			return fmt.Errorf("failed to read ETX: %w", err)
 		}
 		if etx != nil {
 			etxs = true
@@ -1300,13 +1286,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		if etxs {
 			return w.commitTransactions(env, block, &types.TransactionsByPriceAndNonce{}, interrupt)
 		}
-		return false
+		return nil
 	}
 
 	pending, err := w.txPool.TxPoolPending(false)
 	if err != nil {
 		w.logger.WithField("err", err).Error("Failed to get pending transactions")
-		return false
+		return fmt.Errorf("failed to get pending transactions: %w", err)
 	}
 
 	pendingQiTxs := w.txPool.QiPoolPending()
@@ -1315,7 +1301,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.wo.BaseFee(), true)
 		return w.commitTransactions(env, block, txs, interrupt)
 	}
-	return false
+	return nil
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
