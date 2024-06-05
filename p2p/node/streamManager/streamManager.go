@@ -63,6 +63,7 @@ type basicStreamManager struct {
 type streamWrapper struct {
 	stream    network.Stream
 	semaphore chan struct{}
+	errCount  int
 }
 
 func NewStreamManager(node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStreamManager, error) {
@@ -119,6 +120,7 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 			wrappedStream = streamWrapper{
 				stream:    stream,
 				semaphore: make(chan struct{}, c_maxPendingRequests),
+				errCount:  0,
 			}
 			sm.streamCache.Add(peerID, wrappedStream)
 		} else {
@@ -167,6 +169,16 @@ func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream net
 	case wrappedStream.semaphore <- struct{}{}:
 		// Acquired semaphore successfully
 	default:
+		wrappedStream.errCount += 1
+		if wrappedStream.errCount > c_maxPendingRequests {
+			log.Global.WithFields(log.Fields{
+				"errCount": wrappedStream.errCount,
+				"peerID":   peerID,
+			}).Warn("Had to close malfunctioning stream")
+			// If c_maxPendingRequests have been dropped, the stream is likely in a bad state
+			sm.CloseStream(peerID)
+			return errors.New("too many pending requests")
+		}
 		return errors.New("too many pending requests")
 	}
 	defer func() {
