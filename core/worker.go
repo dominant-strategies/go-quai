@@ -586,6 +586,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			}
 			work.txs[0] = coinbaseTx
 		}
+
 	}
 
 	// Create a local environment copy, avoid the data race with snapshot state.
@@ -1190,12 +1191,23 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			newWo.Header().SetCoinbase(w.coinbase)
 		}
 
+		// Get the latest transactions to be broadcasted from the pool
+		w.txPool.broadcastSetMu.RLock()
+		if len(w.txPool.broadcastSet) > 0 {
+			txs := w.txPool.broadcastSet
+			hash := types.DeriveSha(txs, trie.NewStackTrie(nil))
+			newWo.WorkObjectHeader().SetTxHash(hash)
+			w.txPool.broadcastSetCache.Add(hash, txs)
+			w.txPool.broadcastSet = types.Transactions{}
+		}
+		w.txPool.broadcastSetMu.RUnlock()
+
 		// Run the consensus preparation with the default or customized consensus engine.
 		if err := w.engine.Prepare(w.hc, newWo, wo); err != nil {
 			w.logger.WithField("err", err).Error("Failed to prepare header for sealing")
 			return nil, err
 		}
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.TxHash(), newWo.Nonce(), newWo.Time(), newWo.Location())
 		proposedWoBody, err := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
 		if err != nil {
 			return nil, err
@@ -1397,7 +1409,7 @@ func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
 }
 
 // GetPendingBlockBody gets the block body associated with the given header.
-func (w *worker) GetPendingBlockBody(woHeader *types.WorkObject) (*types.WorkObject, error) {
+func (w *worker) GetPendingBlockBody(woHeader *types.WorkObjectHeader) (*types.WorkObject, error) {
 	body, ok := w.pendingBlockBody.Get(woHeader.SealHash())
 	if ok {
 		return &body, nil
@@ -1431,10 +1443,6 @@ func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 }
 
 func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
-	if !w.engine.CheckIfValidWorkShare(workShare) {
-		return errors.New("workshare is not valid")
-	}
-
 	// Don't add the workshare into the list if its farther than the worksharefilterdist
 	if workShare.NumberU64()+uint64(params.WorkSharesInclusionDepth) < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
 		return nil

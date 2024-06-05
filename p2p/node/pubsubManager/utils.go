@@ -19,7 +19,7 @@ const (
 	C_workObjectType                    = "blocks"
 	C_transactionType                   = "transactions"
 	C_headerType                        = "headers"
-	C_workObjectHeaderType              = "woHeaders"
+	C_workObjectShareType               = "workshare"
 	C_workObjectRequestDegree           = 3
 	C_workObjectHeaderTypeRequestDegree = 3
 	C_defaultRequestDegree              = 3
@@ -46,10 +46,8 @@ func (t *Topic) buildTopicString() string {
 		return strings.Join([]string{baseTopic, C_headerType}, "/")
 	case *types.WorkObjectBlockView:
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/")
-	case *types.Transactions:
-		return strings.Join([]string{baseTopic, C_transactionType}, "/")
-	case *types.WorkObjectHeader:
-		return strings.Join([]string{baseTopic, C_workObjectHeaderType}, "/")
+	case *types.WorkObjectShareView:
+		return strings.Join([]string{baseTopic, C_workObjectShareType}, "/")
 	default:
 		panic(ErrUnsupportedType)
 	}
@@ -75,7 +73,7 @@ func (t *Topic) GetRequestDegree() int {
 func NewTopic(genesis common.Hash, location common.Location, data interface{}) (*Topic, error) {
 	var requestDegree int
 	switch data.(type) {
-	case *types.WorkObjectHeader, common.Hash, *types.Transactions:
+	case *types.WorkObjectShareView, common.Hash:
 		requestDegree = C_defaultRequestDegree
 	case *types.WorkObjectHeaderView:
 		requestDegree = C_workObjectHeaderTypeRequestDegree
@@ -125,10 +123,8 @@ func TopicFromString(genesis common.Hash, topic string) (*Topic, error) {
 		return NewTopic(genesis, location, &types.WorkObjectHeaderView{})
 	case C_workObjectType:
 		return NewTopic(genesis, location, &types.WorkObjectBlockView{})
-	case C_transactionType:
-		return NewTopic(genesis, location, &types.Transactions{})
-	case C_workObjectHeaderType:
-		return NewTopic(genesis, location, &types.WorkObjectHeader{})
+	case C_workObjectShareType:
+		return NewTopic(genesis, location, &types.WorkObjectShareView{})
 	default:
 		return nil, ErrUnsupportedType
 	}

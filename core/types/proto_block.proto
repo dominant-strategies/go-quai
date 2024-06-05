@@ -112,6 +112,10 @@ message ProtoWorkObjectHeaderView {
     optional ProtoWorkObject work_object = 1;
 }
 
+message ProtoWorkObjectShareView {
+  optional ProtoWorkObject  work_object = 1;
+}
+
 message ProtoAccessTuple {
   bytes address = 1;
   repeated common.ProtoHash storage_key = 2;

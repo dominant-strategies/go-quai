@@ -85,6 +85,8 @@ type Backend interface {
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
 	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
 	GetPendingHeader() (*types.WorkObject, error)
+	GetPendingBlockBody(workShare *types.WorkObjectHeader) *types.WorkObject
+	GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
 	AddPendingEtxs(pEtxs types.PendingEtxs) error
@@ -102,6 +104,7 @@ type Backend interface {
 	SendWorkShare(workShare *types.WorkObjectHeader) error
 	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool
 	SetDomInterface(domInterface core.CoreBackend)
+	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -113,7 +116,6 @@ type Backend interface {
 	Stats() (pending int, queued int)
 	TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions)
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
 	// Filter API
 	BloomStatus() (uint64, uint64)
@@ -133,7 +135,6 @@ type Backend interface {
 	// P2P apis
 	BroadcastBlock(block *types.WorkObject, location common.Location) error
 	BroadcastHeader(header *types.WorkObject, location common.Location) error
-	BroadcastWorkShare(workShare *types.WorkObjectHeader, location common.Location) error
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

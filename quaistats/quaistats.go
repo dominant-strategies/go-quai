@@ -91,7 +91,6 @@ var (
 // backend encompasses the bare-minimum functionality needed for quaistats reporting
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.WorkObject
 	TotalLogS(header *types.WorkObject) *big.Int
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)

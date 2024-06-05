@@ -169,9 +169,8 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 	var dataTypes = []interface{}{
 		&types.WorkObjectHeaderView{},
 		&types.WorkObjectBlockView{},
+		&types.WorkObjectShareView{},
 		common.Hash{},
-		&types.Transactions{},
-		&types.WorkObjectHeader{},
 	}
 
 	for _, loc := range generateLocations() {
