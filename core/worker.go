@@ -690,14 +690,6 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 		etxRLimit: etxRLimit,
 		etxPLimit: etxPLimit,
 	}
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range w.hc.GetBlocksFromHash(parent.Header().Hash(), params.WorkSharesInclusionDepth) {
-		for _, uncle := range ancestor.Uncles() {
-			env.family.Add(uncle.Hash())
-		}
-		env.family.Add(ancestor.Hash())
-		env.ancestors.Add(ancestor.Hash())
-	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	return env, nil
@@ -708,6 +700,14 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	env.uncleMu.Lock()
 	defer env.uncleMu.Unlock()
 	hash := uncle.Hash()
+
+	for _, ancestor := range w.hc.GetBlocksFromHash(env.wo.ParentHash(common.ZONE_CTX), params.WorkSharesInclusionDepth) {
+		for _, uncle := range ancestor.Uncles() {
+			env.family.Add(uncle.Hash())
+		}
+		env.family.Add(ancestor.Hash())
+		env.ancestors.Add(ancestor.Hash())
+	}
 
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
