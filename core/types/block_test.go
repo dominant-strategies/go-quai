@@ -63,6 +63,12 @@ func headerTestData() (*Header, common.Hash) {
 	return header, header.Hash()
 }
 
+func TestHeaderHash(t *testing.T) {
+	_, hash := headerTestData()
+	correctHash := common.HexToHash("0xe2ebfa9a0164ae53adaefeabc124facd012eab05d1084a65ae15d1ed17e82ef7")
+	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+}
+
 var testInt64 = int64(987654321)
 var testUInt8 = uint8(123)
 var testUInt16 = uint16(54321)

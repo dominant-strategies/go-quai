@@ -25,6 +25,12 @@ func woTestData() (*WorkObject, common.Hash) {
 	return wo, wo.Hash()
 }
 
+func TestWoHash(t *testing.T) {
+	_, hash := woTestData()
+	correctHash := common.HexToHash("0x5b5a1015bf50e69e7b52c78fbb65c7faf4cfde56ac3735fb4109fbabd2a370a6")
+	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+}
+
 func FuzzHeaderHash(f *testing.F) {
 	fuzzHash(f,
 		func(woh *WorkObjectHeader) common.Hash { return woh.headerHash },

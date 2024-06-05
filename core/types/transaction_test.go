@@ -139,6 +139,12 @@ func quaiTxData() (*Transaction, common.Hash) {
 	return tx, tx.Hash()
 }
 
+func TestQuaiTxHash(t *testing.T) {
+	_, hash := quaiTxData()
+	correctHash := common.HexToHash("0x3a203a4f1589fe3a57a68482c048fb28c571b761a42c4cde81767e20a3d0416d")
+	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+}
+
 func fuzzQuaiTxHashingField(f *testing.F, getField func(TxData) *common.Hash, setField func(*QuaiTx, *common.Hash)) {
 	// Create a new transaction
 	tx, hash := quaiTxData()
@@ -523,6 +529,12 @@ func etxData() (*Transaction, common.Hash) {
 	return tx, tx.Hash()
 }
 
+func TestEtxHash(t *testing.T) {
+	_, hash := etxData()
+	correctHash := common.HexToHash("0x56b300ea99355ef39a7e4ccbfdfa9cf081307ec33c6b9c90212d9518763b154b")
+	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+}
+
 func FuzzEtxOriginatingTxHash(f *testing.F) {
 	// Create a new transaction
 	tx, hash := etxData()
@@ -756,6 +768,12 @@ func qiTxData() (*Transaction, common.Hash) {
 	}
 	tx := NewTx(inner)
 	return tx, tx.Hash()
+}
+
+func TestQiTxHash(t *testing.T) {
+	_, hash := qiTxData()
+	correctHash := common.HexToHash("0x20f420e372c75c4a43555f02ae79b9c5edaeab288af2b0b8086150b3a9a3e3f0")
+	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 
 func FuzzQiTxHashingChainID(f *testing.F) {
