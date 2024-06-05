@@ -31,7 +31,10 @@ type WireQiTx struct {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *QiTx) copy() TxData {
 	cpy := &QiTx{
-		ChainID: new(big.Int),
+		ChainID:    new(big.Int),
+		ParentHash: tx.ParentHash,
+		MixHash:    tx.MixHash,
+		WorkNonce:  tx.WorkNonce,
 	}
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
