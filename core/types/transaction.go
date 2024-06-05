@@ -121,7 +121,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 
 	// Other fields are set conditionally depending on tx type.
 	switch tx.Type() {
-	case 0:
+	case QuaiTxType:
 		nonce := tx.Nonce()
 		gas := tx.Gas()
 		protoTx.Nonce = &nonce
@@ -153,8 +153,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 			workNonce := tx.WorkNonce().Uint64()
 			protoTx.WorkNonce = &workNonce
 		}
-
-	case 1:
+	case ExternalTxType:
 		gas := tx.Gas()
 		protoTx.Gas = &gas
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
@@ -169,7 +168,7 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		etxIndex := uint32(tx.ETXIndex())
 		protoTx.EtxIndex = &etxIndex
 		protoTx.EtxSender = tx.ETXSender().Bytes()
-	case 2:
+	case QiTxType:
 		var err error
 		protoTx.TxIns, err = tx.TxIn().ProtoEncode()
 		if err != nil {
