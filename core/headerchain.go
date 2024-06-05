@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"runtime/debug"
 	"sync"
@@ -1079,4 +1080,11 @@ func (hc *HeaderChain) GetPrimeTerminus(header *types.WorkObject) *types.WorkObj
 
 func (hc *HeaderChain) WriteAddressOutpoints(outpoints map[string]map[string]*types.OutpointAndDenomination) error {
 	return rawdb.WriteAddressOutpoints(hc.bc.db, outpoints)
+}
+
+func (hc *HeaderChain) GetMaxTxInWorkShare() uint64 {
+	currentGasLimit := hc.CurrentHeader().GasLimit()
+	maxEoaInBlock := currentGasLimit / params.TxGas
+	// (maxEoaInBlock*2)/(2^bits)
+	return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.WorkSharesThresholdDiff)))
 }

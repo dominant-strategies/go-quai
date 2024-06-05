@@ -62,6 +62,7 @@ const (
 	HeaderObject
 	PhObject
 	WorkShareObject
+	WorkShareTxObject
 )
 
 func (wo *WorkObject) Hash() common.Hash {
@@ -743,7 +744,7 @@ func (wo *WorkObject) ProtoEncode(woType WorkObjectView) (*ProtoWorkObject, erro
 		if err != nil {
 			return nil, err
 		}
-		body, err := wo.woBody.ProtoEncode()
+		body, err := wo.woBody.ProtoEncode(woType)
 		if err != nil {
 			return nil, err
 		}
@@ -786,6 +787,16 @@ func (wo *WorkObjectBlockView) ProtoEncode() (*ProtoWorkObjectBlockView, error) 
 	}, nil
 }
 
+func (wo *WorkObjectShareView) ProtoEncode() (*ProtoWorkObjectShareView, error) {
+	protoWo, err := wo.WorkObject.ProtoEncode(WorkShareTxObject)
+	if err != nil {
+		return nil, err
+	}
+	return &ProtoWorkObjectShareView{
+		WorkObject: protoWo,
+	}, nil
+}
+
 func (wo *WorkObjectHeaderView) ProtoDecode(data *ProtoWorkObjectHeaderView, location common.Location) error {
 	decodeWo := new(WorkObject)
 	err := decodeWo.ProtoDecode(data.GetWorkObject(), location, HeaderObject)
@@ -803,6 +814,16 @@ func (wob *WorkObjectBlockView) ProtoDecode(data *ProtoWorkObjectBlockView, loca
 		return err
 	}
 	wob.WorkObject = decodeWo
+	return nil
+}
+
+func (wos *WorkObjectShareView) ProtoDecode(data *ProtoWorkObjectShareView, location common.Location) error {
+	decodeWo := new(WorkObject)
+	err := decodeWo.ProtoDecode(data.GetWorkObject(), location, WorkShareTxObject)
+	if err != nil {
+		return err
+	}
+	wos.WorkObject = decodeWo
 	return nil
 }
 
@@ -825,7 +846,7 @@ func (wo *WorkObject) ProtoDecode(data *ProtoWorkObject, location common.Locatio
 			return err
 		}
 		wo.woBody = new(WorkObjectBody)
-		err = wo.woBody.ProtoDecode(data.GetWoBody(), location, BlockObject)
+		err = wo.woBody.ProtoDecode(data.GetWoBody(), location, woType)
 		if err != nil {
 			return err
 		}
@@ -983,49 +1004,68 @@ func CopyWorkObjectBody(wb *WorkObjectBody) *WorkObjectBody {
 	return cpy
 }
 
-func (wb *WorkObjectBody) ProtoEncode() (*ProtoWorkObjectBody, error) {
-	header, err := wb.header.ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-
-	protoTransactions, err := wb.transactions.ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-
-	protoExtTransactions, err := wb.extTransactions.ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-
-	protoUncles := &ProtoWorkObjectHeaders{}
-	for _, unc := range wb.uncles {
-		protoUncle, err := unc.ProtoEncode()
+func (wb *WorkObjectBody) ProtoEncode(woType WorkObjectView) (*ProtoWorkObjectBody, error) {
+	switch woType {
+	case WorkShareTxObject:
+		header, err := wb.header.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
-		protoUncles.WoHeaders = append(protoUncles.WoHeaders, protoUncle)
+		// Only encode the txs field in the body
+		protoTransactions, err := wb.transactions.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		return &ProtoWorkObjectBody{
+			Header:       header,
+			Transactions: protoTransactions,
+		}, nil
+
+	default:
+		header, err := wb.header.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+
+		protoTransactions, err := wb.transactions.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+
+		protoExtTransactions, err := wb.extTransactions.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+
+		protoUncles := &ProtoWorkObjectHeaders{}
+		for _, unc := range wb.uncles {
+			protoUncle, err := unc.ProtoEncode()
+			if err != nil {
+				return nil, err
+			}
+			protoUncles.WoHeaders = append(protoUncles.WoHeaders, protoUncle)
+		}
+
+		protoManifest, err := wb.manifest.ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+
+		protoInterlinkHashes := wb.interlinkHashes.ProtoEncode()
+
+		return &ProtoWorkObjectBody{
+			Header:          header,
+			Transactions:    protoTransactions,
+			ExtTransactions: protoExtTransactions,
+			Uncles:          protoUncles,
+			Manifest:        protoManifest,
+			InterlinkHashes: protoInterlinkHashes,
+		}, nil
 	}
-
-	protoManifest, err := wb.manifest.ProtoEncode()
-	if err != nil {
-		return nil, err
-	}
-
-	protoInterlinkHashes := wb.interlinkHashes.ProtoEncode()
-
-	return &ProtoWorkObjectBody{
-		Header:          header,
-		Transactions:    protoTransactions,
-		ExtTransactions: protoExtTransactions,
-		Uncles:          protoUncles,
-		Manifest:        protoManifest,
-		InterlinkHashes: protoInterlinkHashes,
-	}, nil
 }
 
 func (wb *WorkObjectBody) ProtoDecode(data *ProtoWorkObjectBody, location common.Location, woType WorkObjectView) error {
+	var err error
 	switch woType {
 	case WorkShareObject:
 		wb.header = &Header{}
@@ -1042,11 +1082,25 @@ func (wb *WorkObjectBody) ProtoDecode(data *ProtoWorkObjectBody, location common
 			}
 			wb.uncles[i] = uncle
 		}
-	default:
+	case WorkShareTxObject:
 		wb.header = &Header{}
 		err := wb.header.ProtoDecode(data.GetHeader(), location)
 		if err != nil {
 			return err
+		}
+		wb.transactions = Transactions{}
+		err = wb.transactions.ProtoDecode(data.GetTransactions(), location)
+		if err != nil {
+			return err
+		}
+	default:
+		// Only decode the header if its specified
+		if data.Header != nil {
+			wb.header = &Header{}
+			err := wb.header.ProtoDecode(data.GetHeader(), location)
+			if err != nil {
+				return err
+			}
 		}
 		wb.transactions = Transactions{}
 		err = wb.transactions.ProtoDecode(data.GetTransactions(), location)
@@ -1114,6 +1168,10 @@ type WorkObjectHeaderView struct {
 	*WorkObject
 }
 
+type WorkObjectShareView struct {
+	*WorkObject
+}
+
 ////////////////////////////////////////////////////////////
 ////////////// View Conversion/Getter Methods //////////////
 ////////////////////////////////////////////////////////////
@@ -1136,4 +1194,10 @@ func (wo *WorkObject) ConvertToBlockView() *WorkObjectBlockView {
 
 func (wo *WorkObject) ConvertToPEtxView() *WorkObject {
 	return wo.WithBody(wo.Header(), nil, nil, nil, nil, nil)
+}
+
+func (wo *WorkObject) ConvertToWorkObjectShareView(txs Transactions) *WorkObjectShareView {
+	return &WorkObjectShareView{
+		WorkObject: wo.WithBody(wo.Header(), txs, nil, nil, nil, nil),
+	}
 }

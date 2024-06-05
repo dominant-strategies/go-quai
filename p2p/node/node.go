@@ -238,10 +238,9 @@ func (p *P2PNode) Close() error {
 
 // acceptableTypes is used to filter out unsupported broadcast types
 var acceptableTypes = map[reflect.Type]struct{}{
-	reflect.TypeOf(types.WorkObjectHeader{}):     {},
+	reflect.TypeOf(types.WorkObjectShareView{}):  {},
 	reflect.TypeOf(types.WorkObjectBlockView{}):  {},
 	reflect.TypeOf(types.WorkObjectHeaderView{}): {},
-	reflect.TypeOf(types.Transactions{}):         {},
 }
 
 func initializeCaches(locations []common.Location) map[string]map[reflect.Type]*lru.Cache[common.Hash, interface{}] {

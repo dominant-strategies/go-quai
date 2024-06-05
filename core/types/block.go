@@ -836,6 +836,9 @@ func (h *Header) EmptyReceipts() bool {
 // CopyHeader creates a deep copy of a block header to prevent side effects from
 // modifying a header variable.
 func CopyHeader(h *Header) *Header {
+	if h == nil {
+		return nil
+	}
 	cpy := *h
 	cpy.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	cpy.manifestHash = make([]common.Hash, common.HierarchyDepth)
