@@ -114,7 +114,6 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 // the number of blocks which were successfully consumed (either appended, or
 // cached), and an error.
 func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
-	nodeLocation := c.NodeLocation()
 	nodeCtx := c.NodeCtx()
 	for idx, block := range blocks {
 		// Only attempt to append a block, if it is not coincident with our dominant
@@ -180,8 +179,8 @@ func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
 				}
 				if err.Error() == ErrSubNotSyncedToDom.Error() ||
 					err.Error() == ErrPendingEtxNotFound.Error() {
-					if nodeCtx != common.ZONE_CTX && c.sl.subInterface[block.Location().SubIndex(nodeLocation)] != nil {
-						c.sl.subInterface[block.Location().SubIndex(nodeLocation)].DownloadBlocksInManifest(block.Hash(), block.Manifest(), block.ParentEntropy(nodeCtx))
+					if nodeCtx != common.ZONE_CTX && c.sl.subInterface[block.Location().SubIndex(c.NodeCtx())] != nil {
+						c.sl.subInterface[block.Location().SubIndex(c.NodeCtx())].DownloadBlocksInManifest(block.Hash(), block.Manifest(), block.ParentEntropy(nodeCtx))
 					}
 				}
 				return idx, ErrPendingBlock
@@ -640,8 +639,8 @@ func (c *Core) DownloadBlocksInManifest(blockHash common.Hash, manifest types.Bl
 		block := c.GetBlockOrCandidateByHash(blockHash)
 		if block != nil {
 			// If a prime block comes in
-			if c.sl.subInterface[block.Location().SubIndex(c.NodeLocation())] != nil {
-				c.sl.subInterface[block.Location().SubIndex(c.NodeLocation())].DownloadBlocksInManifest(block.Hash(), block.Manifest(), block.ParentEntropy(c.NodeCtx()))
+			if c.sl.subInterface[block.Location().SubIndex(c.NodeCtx())] != nil {
+				c.sl.subInterface[block.Location().SubIndex(c.NodeCtx())].DownloadBlocksInManifest(block.Hash(), block.Manifest(), block.ParentEntropy(c.NodeCtx()))
 			}
 		}
 	}

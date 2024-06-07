@@ -174,13 +174,6 @@ func (hc *HeaderChain) CollectSubRollup(b *types.WorkObject) (types.Transactions
 					return nil, ErrPendingEtxNotFound
 				}
 				subRollup = append(subRollup, pendingEtxs.Etxs...)
-
-			}
-		}
-		// Rolluphash is specifically for zone rollup, which can only be validated by region
-		if nodeCtx == common.REGION_CTX {
-			if subRollupHash := types.DeriveSha(subRollup, trie.NewStackTrie(nil)); subRollupHash != b.EtxRollupHash() {
-				return nil, errors.New("sub rollup does not match sub rollup hash")
 			}
 		}
 	}

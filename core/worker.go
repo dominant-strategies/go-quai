@@ -1373,7 +1373,16 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 				}
 				etxRollup = append(etxRollup, parent.ExtTransactions()...)
 			}
-			etxRollupHash := types.DeriveSha(etxRollup, trie.NewStackTrie(nil))
+			// Only include the etxs that are going cross Prime in the rollup and the
+			// conversion type
+			filteredEtxsRollup := types.Transactions{}
+			for _, etx := range etxRollup {
+				to := etx.To().Location()
+				if to.Region() != w.hc.NodeLocation().Region() || etx.IsTxAConversionTx(w.hc.NodeLocation()) {
+					filteredEtxsRollup = append(filteredEtxsRollup, etx)
+				}
+			}
+			etxRollupHash := types.DeriveSha(filteredEtxsRollup, trie.NewStackTrie(nil))
 			wo.Header().SetEtxRollupHash(etxRollupHash)
 		}
 	}
