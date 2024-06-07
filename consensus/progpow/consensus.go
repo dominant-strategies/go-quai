@@ -512,9 +512,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 			return nil
 		}
 		differenceParentEntropy := new(big.Int).Sub(genesisTotalLogS, genesis.ParentEntropy(common.PRIME_CTX))
-		numRegionsInPrime, numZonesInRegion := common.GetHierarchySizeForExpansionNumber(expansionNum)
-		timeFactorMultiplied := new(big.Int).Mul(params.TimeFactor, params.TimeFactor)
-		numBlocks := new(big.Int).Mul(timeFactorMultiplied, new(big.Int).SetUint64(numRegionsInPrime*numZonesInRegion))
+		numBlocks := params.PrimeEntropyTarget(expansionNum)
 		differenceParentEntropy.Div(differenceParentEntropy, numBlocks)
 		return common.EntropyBigBitsToDifficultyBits(differenceParentEntropy)
 	}
