@@ -636,6 +636,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 		core.AddGenesisUtxos(state, nodeLocation, addressOutpointMap, blake3pow.logger)
 		if chain.Config().IndexAddressUtxos {
 			chain.WriteAddressOutpoints(addressOutpointMap)
+			blake3pow.logger.Info("Indexed genesis utxos")
 		}
 	}
 	header.Header().SetUTXORoot(state.UTXORoot())

@@ -1613,34 +1613,35 @@ func DeleteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 func WriteAddressOutpoints(db ethdb.KeyValueWriter, outpointMap map[string]map[string]*types.OutpointAndDenomination) error {
-	outpointsProto := &types.ProtoOutPointsMap{
-		Entries: make(map[string]*types.ProtoAddressOutPoints),
+	for address, outpoints := range outpointMap {
+		if err := WriteOutpointsForAddress(db, address, outpoints); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func WriteOutpointsForAddress(db ethdb.KeyValueWriter, address string, outpoints map[string]*types.OutpointAndDenomination) error {
+
+	addressOutpointsProto := &types.ProtoAddressOutPoints{
+		OutPoints: make(map[string]*types.ProtoOutPointAndDenomination, len(outpoints)),
 	}
 
-	for address, outpoints := range outpointMap {
-		addressOutpointsProto := &types.ProtoAddressOutPoints{
-			OutPoints: make(map[string]*types.ProtoOutPointAndDenomination, len(outpoints)),
+	for _, outpoint := range outpoints {
+		outpointProto, err := outpoint.ProtoEncode()
+		if err != nil {
+			return err
 		}
 
-		for _, outpoint := range outpoints {
-			outpointProto, err := outpoint.ProtoEncode()
-			if err != nil {
-				return err
-			}
-
-			addressOutpointsProto.OutPoints[outpoint.Key()] = outpointProto
-		}
-
-		// Correctly assign the address's UTXOs to the Entries map within the utxosProto struct
-		outpointsProto.Entries[address] = addressOutpointsProto
+		addressOutpointsProto.OutPoints[outpoint.Key()] = outpointProto
 	}
 
 	// Now, marshal utxosProto to protobuf bytes
-	data, err := proto.Marshal(outpointsProto)
+	data, err := proto.Marshal(addressOutpointsProto)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxos")
 	}
-	if err := db.Put(AddressUtxosPrefix, data); err != nil {
+	if err := db.Put(addressUtxosKey(address), data); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store utxos")
 	}
 
@@ -1648,38 +1649,34 @@ func WriteAddressOutpoints(db ethdb.KeyValueWriter, outpointMap map[string]map[s
 	return db.Put(AddressUtxosPrefix, data)
 }
 
-func ReadAddressOutpoints(db ethdb.Reader, location common.Location) map[string]map[string]*types.OutpointAndDenomination {
+func ReadOutpointsForAddress(db ethdb.Reader, address string) map[string]*types.OutpointAndDenomination {
 	// Try to look up the data in leveldb.
-	data, _ := db.Get(AddressUtxosPrefix)
+	data, _ := db.Get(addressUtxosKey(address))
 	if len(data) == 0 {
-		return make(map[string]map[string]*types.OutpointAndDenomination)
+		return make(map[string]*types.OutpointAndDenomination)
 	}
-	outpointsProto := &types.ProtoOutPointsMap{}
-	if err := proto.Unmarshal(data, outpointsProto); err != nil {
+	addressOutpointsProto := &types.ProtoAddressOutPoints{
+		OutPoints: make(map[string]*types.ProtoOutPointAndDenomination),
+	}
+	if err := proto.Unmarshal(data, addressOutpointsProto); err != nil {
 		return nil
 	}
+	outpoints := map[string]*types.OutpointAndDenomination{}
 
-	outpointsMap := make(map[string]map[string]*types.OutpointAndDenomination)
-	for addrStr, addressOutpointsProto := range outpointsProto.Entries {
-		outpoints := map[string]*types.OutpointAndDenomination{}
-
-		for _, outpointProto := range addressOutpointsProto.OutPoints {
-			outpoint := new(types.OutpointAndDenomination)
-			err := outpoint.ProtoDecode(outpointProto)
-			if err != nil {
-				db.Logger().WithFields(log.Fields{
-					"err":      err,
-					"outpoint": outpointProto,
-				}).Error("Invalid outpointProto")
-				return nil
-			}
-			outpoints[outpoint.Key()] = outpoint
+	for _, outpointProto := range addressOutpointsProto.OutPoints {
+		outpoint := new(types.OutpointAndDenomination)
+		err := outpoint.ProtoDecode(outpointProto)
+		if err != nil {
+			db.Logger().WithFields(log.Fields{
+				"err":      err,
+				"outpoint": outpointProto,
+			}).Error("Invalid outpointProto")
+			return nil
 		}
-
-		outpointsMap[addrStr] = outpoints
+		outpoints[outpoint.Key()] = outpoint
 	}
 
-	return outpointsMap
+	return outpoints
 }
 
 func DeleteAddressUtxos(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
