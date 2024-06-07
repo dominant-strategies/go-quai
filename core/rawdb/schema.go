@@ -38,17 +38,8 @@ var (
 	// headersHashKey tracks the latest known headers hash in Blockchain.
 	headsHashesKey = []byte("HeadersHash")
 
-	// phCacheKey tracks the latest known pending headers in Blockchain.
-	phCacheKey = []byte("PhCache")
-
 	// phHead tracks the latest known pending headers hash in Blockchain.
 	phHeadKey = []byte("PhHead")
-
-	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
-	lastPivotKey = []byte("LastPivot")
-
-	// fastTrieProgressKey tracks the number of trie entries imported during fast sync.
-	fastTrieProgressKey = []byte("TrieSync")
 
 	// snapshotDisabledKey flags that the snapshot should not be maintained due to initial sync.
 	snapshotDisabledKey = []byte("SnapshotDisabled")
@@ -68,12 +59,6 @@ var (
 	// snapshotSyncStatusKey tracks the snapshot sync status across restarts.
 	snapshotSyncStatusKey = []byte("SnapshotSyncStatus")
 
-	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
-	txIndexTailKey = []byte("TransactionIndexTail")
-
-	// fastTxLookupLimitKey tracks the transaction lookup limit during fast sync.
-	fastTxLookupLimitKey = []byte("FastTransactionLookupLimit")
-
 	// badWorkObjectKey tracks the list of bad blocks seen by local
 	badWorkObjectKey = []byte("InvalidWorkObject")
 
@@ -90,19 +75,13 @@ var (
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	pendingHeaderPrefix         = []byte("ph")    // pendingHeaderPrefix + hash -> header
-	candidateBodyPrefix         = []byte("cb")    // candidateBodyPrefix + hash -> Body
 	pbBodyPrefix                = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
 	pbBodyHashPrefix            = []byte("pbKey") // pbBodyPrefix -> []common.Hash
-	phTerminiPrefix             = []byte("pht")   // phTerminiPrefix + hash -> []common.Hash
-	phBodyPrefix                = []byte("pc")    // phBodyPrefix + hash -> []common.Hash + Td
 	terminiPrefix               = []byte("tk")    //terminiPrefix + hash -> []common.Hash
 	blockWorkObjectHeaderPrefix = []byte("bw")    //blockWObjectHeaderPrefix + hash -> []common.Hash
 	txWorkObjectHeaderPrefix    = []byte("tw")    //txWorkObjectHeaderPrefix + hash -> []common.Hash
 	phWorkObjectHeaderPrefix    = []byte("pw")    //phWorkObjectHeaderPrefix + hash -> []common.Hash
 	workObjectBodyPrefix        = []byte("wb")    //workObjectBodyPrefix + hash -> []common.Hash
-	blockWorkObjectPrefix       = []byte("bo")    //blockWorkObjectPrefix + hash -> []common.Hash
-	txWorkObjectPrefix          = []byte("to")    //txWorkObjectPrefix + hash -> []common.Hash
-	phWorkObjectPrefix          = []byte("po")    //phWorkObjectPrefix + hash -> []common.Hash
 	badHashesListPrefix         = []byte("bh")
 	inboundEtxsPrefix           = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
 	UtxoPrefix                  = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
@@ -125,9 +104,6 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-
-	expansionStatusPrefix = []byte("exp") // ExpansionStatusPrefix + block hash -> ExpansionStatus
-	efficiencyScorePrefix = []byte("es")  // EfficiencyScorePrefix + block hash -> EfficiencyScore
 
 	preimagePrefix = []byte("secure-key-")  // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("quai-config-") // config prefix for the db
@@ -249,16 +225,6 @@ func pbBodyHashKey() []byte {
 	return pbBodyHashPrefix
 }
 
-// phBodyTerminiKey = phTerminiPrefix + hash
-func phBodyTerminiKey(hash common.Hash) []byte {
-	return append(phTerminiPrefix, hash.Bytes()...)
-}
-
-// headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
-func headerTDKey(number uint64, hash common.Hash) []byte {
-	return append(headerKey(number, hash), headerTDSuffix...)
-}
-
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
 func headerHashKey(number uint64) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
@@ -321,16 +287,6 @@ func preimageKey(hash common.Hash) []byte {
 // codeKey = CodePrefix + hash
 func codeKey(hash common.Hash) []byte {
 	return append(CodePrefix, hash.Bytes()...)
-}
-
-// expansionStatusKey = expansionStatusPrefix + hash
-func expansionStatusKey(hash common.Hash) []byte {
-	return append(expansionStatusPrefix, hash.Bytes()...)
-}
-
-// efficiencyScoreKey = efficiencyScorePrefix + hash
-func efficiencyScoreKey(hash common.Hash) []byte {
-	return append(efficiencyScorePrefix, hash.Bytes()...)
 }
 
 // IsCodeKey reports whether the given byte slice is the key of contract code,

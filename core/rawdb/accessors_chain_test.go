@@ -32,25 +32,6 @@ func TestCanonicalHashStorage(t *testing.T) {
 		t.Fatalf("Retrieved canonical hash mismatch: have %v, want %v", entry, hash)
 	}
 
-	var cases = []struct {
-		from, to uint64
-		limit    int
-		expect   []uint64
-	}{
-		{1, 2, 0, nil},
-		{1, 3, 2, []uint64{1, 2}},
-		{2, 6, 6, []uint64{2, 3, 4, 5}},
-		{1, 6, 6, []uint64{1, 2, 3, 4, 5}},
-		{6, 7, 6, nil},
-	}
-
-	for i, c := range cases {
-		numbers, _ := ReadAllCanonicalHashes(db, c.from, c.to, c.limit)
-		if !reflect.DeepEqual(numbers, c.expect) {
-			t.Fatalf("Case %d failed, want %v, got %v", i, c.expect, numbers)
-		}
-	}
-
 	// Delete all data from database.
 	for i := uint64(1); i <= 5; i++ {
 		DeleteCanonicalHash(db, uint64(i))
@@ -147,62 +128,6 @@ func TestHeadBlockStorage(t *testing.T) {
 
 	if entry := ReadHeadBlockHash(db); entry != hash {
 		t.Fatalf("Stored head block hash not found: %v", entry)
-	}
-}
-
-func TestLastPivotStorage(t *testing.T) {
-	db := NewMemoryDatabase(log.Global)
-
-	if entry := ReadLastPivotNumber(db); entry != nil {
-		t.Fatalf("Non existent last pivot number returned: %v", entry)
-	}
-
-	WriteLastPivotNumber(db, uint64(1))
-
-	if entry := ReadLastPivotNumber(db); *entry != uint64(1) {
-		t.Fatalf("Stored last pivot not found: %v", entry)
-	}
-}
-
-func TestFastTrieStorage(t *testing.T) {
-	db := NewMemoryDatabase(log.Global)
-
-	if entry := ReadFastTrieProgress(db); entry != 0 {
-		t.Fatalf("Non existent fast trie returned: %v", entry)
-	}
-
-	WriteFastTrieProgress(db, uint64(1))
-
-	if entry := ReadFastTrieProgress(db); entry != uint64(1) {
-		t.Fatalf("Stored fast trie not found: %v", entry)
-	}
-}
-
-func TestTxIndexTailStorage(t *testing.T) {
-	db := NewMemoryDatabase(log.Global)
-
-	if entry := ReadTxIndexTail(db); entry != nil {
-		t.Fatalf("Non existent tx index returned: %v", entry)
-	}
-
-	WriteTxIndexTail(db, uint64(1))
-
-	if entry := ReadTxIndexTail(db); *entry != uint64(1) {
-		t.Fatalf("Stored tx index not found: %v", entry)
-	}
-}
-
-func TestFastTxLookupStorage(t *testing.T) {
-	db := NewMemoryDatabase(log.Global)
-
-	if entry := ReadFastTxLookupLimit(db); entry != nil {
-		t.Fatalf("Non existent fast tx lookup returned: %v", entry)
-	}
-
-	WriteFastTxLookupLimit(db, uint64(1))
-
-	if entry := ReadFastTxLookupLimit(db); *entry != uint64(1) {
-		t.Fatalf("Stored fast tx lookup not found: %v", entry)
 	}
 }
 
@@ -325,29 +250,6 @@ func TestBestPhKeyStorage(t *testing.T) {
 
 	if entry := ReadBestPhKey(db); entry != emptyHash {
 		t.Fatalf("Failed to delete key: %v", entry)
-	}
-}
-
-func TestEtxSetStorage(t *testing.T) {
-	db := NewMemoryDatabase(log.Global)
-
-	// Create a test etxSet to move around the database and make sure it's really new
-	etxSet := types.NewEtxSet()
-	hash := common.Hash{1}
-	var number uint64 = 0
-	if entry := ReadEtxSet(db, hash, number); entry != nil {
-		t.Fatalf("Non existent etxSet returned: %v", entry)
-	}
-	t.Log("EtxSet Hash stored", hash)
-	// Write and verify the etxSet in the database
-	WriteEtxSet(db, hash, 0, etxSet)
-	if entry := ReadEtxSet(db, hash, number); entry == nil {
-		t.Fatalf("Stored etxSet not found with hash %s", hash)
-	}
-	// Delete the etxSet and verify the execution
-	DeleteEtxSet(db, hash, number)
-	if entry := ReadEtxSet(db, hash, number); entry != nil {
-		t.Fatalf("Deleted etxSet returned: %v", entry)
 	}
 }
 

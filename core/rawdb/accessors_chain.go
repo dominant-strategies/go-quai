@@ -72,39 +72,6 @@ func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	return hashes
 }
 
-// ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
-// certain chain range. If the accumulated entries reaches the given threshold,
-// abort the iteration and return the semi-finish result.
-func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int) ([]uint64, []common.Hash) {
-	// Short circuit if the limit is 0.
-	if limit == 0 {
-		return nil, nil
-	}
-	var (
-		numbers []uint64
-		hashes  []common.Hash
-	)
-	// Construct the key prefix of start point.
-	start, end := headerHashKey(from), headerHashKey(to)
-	it := db.NewIterator(nil, start)
-	defer it.Release()
-
-	for it.Next() {
-		if bytes.Compare(it.Key(), end) >= 0 {
-			break
-		}
-		if key := it.Key(); len(key) == len(headerPrefix)+8+1 && bytes.Equal(key[len(key)-1:], headerHashSuffix) {
-			numbers = append(numbers, binary.BigEndian.Uint64(key[len(headerPrefix):len(headerPrefix)+8]))
-			hashes = append(hashes, common.BytesToHash(it.Value()))
-			// If the accumulated entries reaches the limit threshold, return.
-			if len(numbers) >= limit {
-				break
-			}
-		}
-	}
-	return numbers, hashes
-}
-
 // ReadHeaderNumber returns the header number assigned to a hash.
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
@@ -174,89 +141,6 @@ func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
 func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headWorkObjectKey, hash.Bytes()); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store last block's hash")
-	}
-}
-
-// ReadLastPivotNumber retrieves the number of the last pivot block. If the node
-// full synced, the last pivot will always be nil.
-func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(lastPivotKey)
-	if len(data) == 0 {
-		return nil
-	}
-	protoPivot := new(ProtoNumber)
-	err := proto.Unmarshal(data, protoPivot)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal pivot block number")
-	}
-	return &protoPivot.Number
-}
-
-// WriteLastPivotNumber stores the number of the last pivot block.
-func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
-	protoPivot := new(ProtoNumber)
-	protoPivot.Number = pivot
-	enc, err := proto.Marshal(protoPivot)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to encode pivot block number")
-	}
-	if err := db.Put(lastPivotKey, enc); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store pivot block number")
-	}
-}
-
-// ReadFastTrieProgress retrieves the number of tries nodes fast synced to allow
-// reporting correct numbers across restarts.
-func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
-	data, _ := db.Get(fastTrieProgressKey)
-	if len(data) == 0 {
-		return 0
-	}
-	return new(big.Int).SetBytes(data).Uint64()
-}
-
-// WriteFastTrieProgress stores the fast sync trie process counter to support
-// retrieving it across restarts.
-func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) {
-	if err := db.Put(fastTrieProgressKey, new(big.Int).SetUint64(count).Bytes()); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store fast sync trie progress")
-	}
-}
-
-// ReadTxIndexTail retrieves the number of oldest indexed block
-// whose transaction indices has been indexed. If the corresponding entry
-// is non-existent in database it means the indexing has been finished.
-func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(txIndexTailKey)
-	if len(data) != 8 {
-		return nil
-	}
-	number := binary.BigEndian.Uint64(data)
-	return &number
-}
-
-// WriteTxIndexTail stores the number of oldest indexed block
-// into database.
-func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(txIndexTailKey, encodeBlockNumber(number)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store the transaction index tail")
-	}
-}
-
-// ReadFastTxLookupLimit retrieves the tx lookup limit used in fast sync.
-func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(fastTxLookupLimitKey)
-	if len(data) != 8 {
-		return nil
-	}
-	number := binary.BigEndian.Uint64(data)
-	return &number
-}
-
-// WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
-func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store transaction lookup limit for fast sync")
 	}
 }
 
@@ -351,32 +235,6 @@ func ReadBodyProto(db ethdb.Reader, hash common.Hash, number uint64) []byte {
 		}
 	}
 	return nil // Can't find the data anywhere.
-}
-
-// ReadCanonicalBodyProto retrieves the block body (transactions and uncles) for the canonical
-// block at number, in Proto encoding.
-func ReadCanonicalBodyProto(db ethdb.Reader, number uint64) []byte {
-	// If it's an ancient one, we don't need the canonical hash
-	data, _ := db.Ancient(freezerBodiesTable, number)
-	if len(data) == 0 {
-		// Need to get the hash
-		data, _ = db.Get(blockBodyKey(number, ReadCanonicalHash(db, number)))
-		// In the background freezer is moving data from leveldb to flatten files.
-		// So during the first check for ancient db, the data is not yet in there,
-		// but when we reach into leveldb, the data was already moved. That would
-		// result in a not found error.
-		if len(data) == 0 {
-			data, _ = db.Ancient(freezerBodiesTable, number)
-		}
-	}
-	return data
-}
-
-// WriteBodyProto stores an Proto encoded block body into the database.
-func WriteBodyProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, data []byte) {
-	if err := db.Put(blockBodyKey(number, hash), data); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store block body")
-	}
 }
 
 // HasBody verifies the existence of a block body corresponding to the hash.
@@ -869,18 +727,6 @@ func DeleteAllHeadsHashes(db ethdb.KeyValueWriter) {
 	}
 }
 
-// HasReceipts verifies the existence of all the transaction receipts belonging
-// to a block.
-func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
-		return true
-	}
-	if has, err := db.Has(blockReceiptsKey(number, hash)); !has || err != nil {
-		return false
-	}
-	return true
-}
-
 // ReadReceiptsProto retrieves all the transaction receipts belonging to a block in Proto encoding.
 func ReadReceiptsProto(db ethdb.Reader, hash common.Hash, number uint64) []byte {
 	// First try to look up the data in ancient database. Extra hash
@@ -1125,19 +971,6 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) *t
 		}
 	}
 	return a
-}
-
-// ReadHeadHeader returns the current canonical head header.
-func ReadHeadHeader(db ethdb.Reader) *types.WorkObject {
-	headHeaderHash := ReadHeadHeaderHash(db)
-	if headHeaderHash == (common.Hash{}) {
-		return nil
-	}
-	headHeaderNumber := ReadHeaderNumber(db, headHeaderHash)
-	if headHeaderNumber == nil {
-		return nil
-	}
-	return ReadHeader(db, headHeaderHash)
 }
 
 // ReadHeadBlock returns the current canonical head block.
