@@ -200,11 +200,8 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 
 	// Fire the initial new head event to start any outstanding processing
 	c.newHead(currentHeader.NumberU64(nodeCtx), false)
-
-	var (
-		prevHeader = currentHeader
-		prevHash   = currentHeader.Hash()
-	)
+	qiIndexerCh := make(chan *types.WorkObject, 10000)
+	go c.indexerLoop(currentHeader, qiIndexerCh, nodeCtx, config)
 	for {
 		select {
 		case errc := <-c.quit:
@@ -219,21 +216,40 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 				errc <- nil
 				return
 			}
-			header := ev.Block
+			select {
+			case qiIndexerCh <- ev.Block:
+			default:
+				c.logger.Warn("qiIndexerCh is full, dropping block")
+			}
+		}
+	}
+}
 
+func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh chan *types.WorkObject, nodeCtx int, config params.ChainConfig) {
+	var (
+		prevHeader = currentHeader
+		prevHash   = currentHeader.Hash()
+	)
+	for {
+		select {
+		case errc := <-c.quit:
+			// Chain indexer terminating, report no failure and abort
+			errc <- nil
+			return
+		case block := <-qiIndexerCh:
 			var validUtxoIndex bool
 			var addressOutpoints map[string]map[string]*types.OutpointAndDenomination
 			if c.indexAddressUtxos {
 				validUtxoIndex = true
-				addressOutpoints = rawdb.ReadAddressOutpoints(c.chainDb, config.Location)
+				addressOutpoints = make(map[string]map[string]*types.OutpointAndDenomination)
 			}
 
-			if header.ParentHash(nodeCtx) != prevHash {
+			if block.ParentHash(nodeCtx) != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO: This seems a bit brittle, can we detect this case explicitly?
 
 				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.NumberU64(nodeCtx)) != prevHash {
-					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header, nodeCtx); h != nil {
+					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, block, nodeCtx); h != nil {
 
 						// If indexAddressUtxos flag is enabled, update the address utxo map
 						// TODO: Need to be able to turn on/off indexer and fix corrupted state
@@ -251,7 +267,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 							}
 
 							// Add new blocks from current hash back to common ancestor
-							for curr := header; curr.Hash() != h.Hash(); curr = rawdb.ReadHeader(c.chainDb, curr.ParentHash(nodeCtx)) {
+							for curr := block; curr.Hash() != h.Hash(); curr = rawdb.ReadHeader(c.chainDb, curr.ParentHash(nodeCtx)) {
 								block := rawdb.ReadWorkObject(c.chainDb, curr.Hash(), types.BlockObject)
 								c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, block)
 							}
@@ -263,10 +279,10 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 			}
 
 			if c.indexAddressUtxos {
-				c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, ev.Block)
+				c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, block)
 			}
 
-			c.newHead(header.NumberU64(nodeCtx), false)
+			c.newHead(block.NumberU64(nodeCtx), false)
 
 			if c.indexAddressUtxos && validUtxoIndex {
 				err := rawdb.WriteAddressOutpoints(c.chainDb, addressOutpoints)
@@ -275,7 +291,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 				}
 			}
 
-			prevHeader, prevHash = header, header.Hash()
+			prevHeader, prevHash = block, block.Hash()
 		}
 	}
 }
@@ -558,7 +574,11 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpoints map[string]map[str
 			outpoint := in.PreviousOutPoint
 
 			address := crypto.PubkeyBytesToAddress(in.PubKey, config.Location).Hex()
-			outpointsForAddress := addressOutpoints[address]
+			outpointsForAddress, exists := addressOutpoints[address]
+			if !exists {
+				outpointsForAddress = rawdb.ReadOutpointsForAddress(c.chainDb, address)
+				addressOutpoints[address] = outpointsForAddress
+			}
 
 			delete(outpointsForAddress, outpoint.Key())
 		}
@@ -579,8 +599,8 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpoints map[string]map[str
 				Denomination: out.Denomination,
 			}
 
-			if _, ok := addressOutpoints[address]; !ok {
-				addressOutpoints[address] = make(map[string]*types.OutpointAndDenomination)
+			if _, exists := addressOutpoints[address]; !exists {
+				addressOutpoints[address] = rawdb.ReadOutpointsForAddress(c.chainDb, address)
 			}
 			addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
 		}
@@ -599,7 +619,11 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 				address := out.Address
 
 				addr := common.BytesToAddress(address, config.Location).Hex()
-				outpointsForAddress := addressOutpoints[addr]
+				outpointsForAddress, exists := addressOutpoints[addr]
+				if !exists {
+					outpointsForAddress = rawdb.ReadOutpointsForAddress(c.chainDb, addr)
+					addressOutpoints[addr] = outpointsForAddress
+				}
 
 				// reconstruct outpoint to remove it via outpoint.Key()
 				outpoint := types.OutPoint{
@@ -637,8 +661,8 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 					Denomination: entry.Denomination,
 				}
 
-				if _, ok := addressOutpoints[address]; !ok {
-					addressOutpoints[address] = make(map[string]*types.OutpointAndDenomination)
+				if _, exists := addressOutpoints[address]; !exists {
+					addressOutpoints[address] = rawdb.ReadOutpointsForAddress(c.chainDb, address)
 				}
 				addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
 			}

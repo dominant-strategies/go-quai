@@ -1152,6 +1152,8 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	return errs
 }
 
+var txPoolFullErrs uint64
+
 // addQiTx adds Qi transactions to the Qi pool.
 // The qiMu lock must be held by the caller.
 func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
@@ -1198,6 +1200,13 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 		if uint64(len(pool.qiPool))+1 > pool.config.QiPoolSize {
 			// If the pool is full, don't accept the transaction
 			errs = append(errs, ErrTxPoolOverflow)
+			if txPoolFullErrs%1000 == 0 {
+				pool.logger.WithFields(logrus.Fields{
+					"tx":  tx.Hash().String(),
+					"fee": fee,
+				}).Error("Qi tx pool is full")
+			}
+			txPoolFullErrs++
 			continue
 		}
 		pool.qiPool[tx.Hash()] = txWithMinerFee
@@ -1210,7 +1219,7 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"fee": fee,
-		}).Info("Added qi tx to pool")
+		}).Debug("Added qi tx to pool")
 		qiTxGauge.Add(1)
 	}
 	return errs
@@ -2128,7 +2137,7 @@ func (pool *TxPool) poolLimiterGoroutine() {
 				pending += uint64(list.Len())
 			}
 			pool.mu.RUnlock()
-			pool.logger.Infof("PoolSize: Pending: %d, Queued: %d, Number of accounts in queue: %d", pending, queued, len(pool.queue))
+			pool.logger.Infof("PoolSize: Pending: %d, Queued: %d, Number of accounts in queue: %d, Qi Pool: %d", pending, queued, len(pool.queue), len(pool.qiPool))
 			pendingTxGauge.Set(float64(pending))
 			queuedGauge.Set(float64(queued))
 			if queued > pool.config.GlobalQueue {
