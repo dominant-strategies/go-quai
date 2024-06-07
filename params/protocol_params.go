@@ -193,7 +193,6 @@ var (
 	OrchardDurationLimit              = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LighthouseDurationLimit           = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit                = big.NewInt(2)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeFactor                        = big.NewInt(7)
 	TimeToStartTx              uint64 = 0 * BlocksPerDay
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
 	DifficultyAdjustmentPeriod        = big.NewInt(360)                                             // This is the number of blocks over which the average has to be taken
@@ -207,12 +206,15 @@ var (
 // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
 func PrimeEntropyTarget(expansionNum uint8) *big.Int {
 	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(expansionNum)
-	timeFactorMultiplied := new(big.Int).Mul(TimeFactor, TimeFactor)
+	regionTimeFactor := int64(max(numRegions, 2))
+	zoneTimeFactor := int64(max(numZones, 2))
+	timeFactorMultiplied := new(big.Int).Mul(big.NewInt(regionTimeFactor), big.NewInt(zoneTimeFactor))
 	return new(big.Int).Mul(timeFactorMultiplied, new(big.Int).SetUint64(numZones*numRegions))
 }
 
 // This is TimeFactor*common.NumZonesInRegion
 func RegionEntropyTarget(expansionNum uint8) *big.Int {
 	_, numZones := common.GetHierarchySizeForExpansionNumber(expansionNum)
-	return new(big.Int).Mul(TimeFactor, new(big.Int).SetUint64(numZones))
+	timeFactor := int64(max(numZones, 2))
+	return new(big.Int).Mul(big.NewInt(timeFactor), new(big.Int).SetUint64(numZones))
 }
