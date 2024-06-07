@@ -266,7 +266,7 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal body")
 	}
 	body := new(types.WorkObject)
-	body.ProtoDecode(protoWorkObject, db.Location(), types.PhObject)
+	err = body.ProtoDecode(protoWorkObject, db.Location(), types.PhObject)
 	if err != nil {
 		db.Logger().WithFields(log.Fields{
 			"hash": hash,
