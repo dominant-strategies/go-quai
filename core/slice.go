@@ -243,11 +243,19 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		if err != nil {
 			return nil, false, false, err
 		}
-	} else if nodeCtx == common.ZONE_CTX && order < nodeCtx {
+	}
+
+	if order < nodeCtx {
 		// Store the inbound etxs for all dom blocks and use
 		// it in the future if dom switch happens
 		// This should be pruned at the re-org tolerance depth
 		rawdb.WriteInboundEtxs(sl.sliceDb, block.Hash(), newInboundEtxs)
+
+		// After writing the inbound etxs, we need to just send the inbounds for
+		// the given block location down in the region
+		if nodeCtx == common.REGION_CTX {
+			newInboundEtxs = newInboundEtxs.FilterToSub(block.Location(), nodeCtx)
+		}
 	}
 
 	// If this was a coincident block, our dom will be passing us a set of newly
@@ -289,8 +297,8 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	// Call my sub to append the block, and collect the rolled up ETXs from that sub
 	if nodeCtx != common.ZONE_CTX {
 		// How to get the sub pending etxs if not running the full node?.
-		if sl.subInterface[location.SubIndex(sl.NodeLocation())] != nil {
-			subPendingEtxs, subReorg, setHead, err = sl.subInterface[location.SubIndex(sl.NodeLocation())].Append(header, block.Manifest(), pendingHeaderWithTermini.WorkObject(), domTerminus, true, newInboundEtxs)
+		if sl.subInterface[location.SubIndex(sl.NodeCtx())] != nil {
+			subPendingEtxs, subReorg, setHead, err = sl.subInterface[location.SubIndex(sl.NodeCtx())].Append(header, block.Manifest(), pendingHeaderWithTermini.WorkObject(), domTerminus, true, newInboundEtxs)
 			if err != nil {
 				return nil, false, false, err
 			}
@@ -302,12 +310,25 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 			sl.AddPendingEtxs(pEtxs)
 			// Only region has the rollup hashes for pendingEtxs
 			if nodeCtx == common.REGION_CTX {
+				crossPrimeRollup := types.Transactions{}
 				subRollup, err := sl.hc.CollectSubRollup(block)
 				if err != nil {
 					return nil, false, false, err
 				}
+				for _, etx := range subRollup {
+					to := etx.To().Location()
+					if to.Region() != sl.NodeLocation().Region() || etx.IsTxAConversionTx(sl.NodeLocation()) {
+						crossPrimeRollup = append(crossPrimeRollup, etx)
+					}
+				}
+				// Rolluphash is specifically for zone rollup, which can only be validated by region
+				if nodeCtx == common.REGION_CTX {
+					if etxRollupHash := types.DeriveSha(crossPrimeRollup, trie.NewStackTrie(nil)); etxRollupHash != block.EtxRollupHash() {
+						return nil, false, false, errors.New("sub rollup does not match sub rollup hash")
+					}
+				}
 				// We also need to store the pendingEtxRollup to the dom
-				pEtxRollup := types.PendingEtxsRollup{header.ConvertToPEtxView(), subRollup}
+				pEtxRollup := types.PendingEtxsRollup{header.ConvertToPEtxView(), crossPrimeRollup}
 				sl.AddPendingEtxsRollup(pEtxRollup)
 			}
 			time6_3 = common.PrettyDuration(time.Since(start))
@@ -525,9 +546,9 @@ func (sl *Slice) UpdateDom(oldTerminus common.Hash, pendingHeader types.PendingH
 	nodeCtx := sl.NodeLocation().Context()
 	sl.phCacheMu.Lock()
 	defer sl.phCacheMu.Unlock()
-	newDomTermini := sl.hc.GetTerminiByHash(pendingHeader.Termini().DomTerminiAtIndex(location.SubIndex(nodeLocation)))
+	newDomTermini := sl.hc.GetTerminiByHash(pendingHeader.Termini().DomTerminiAtIndex(location.SubIndex(nodeCtx)))
 	if newDomTermini == nil {
-		sl.logger.WithField("hash", pendingHeader.Termini().DomTerminiAtIndex(location.SubIndex(nodeLocation))).Warn("New Dom Termini doesn't exists in the database")
+		sl.logger.WithField("hash", pendingHeader.Termini().DomTerminiAtIndex(location.SubIndex(nodeCtx))).Warn("New Dom Termini doesn't exists in the database")
 		return
 	}
 	newDomTerminus := newDomTermini.DomTerminus(nodeLocation)
@@ -726,7 +747,6 @@ func (sl *Slice) generateSlicePendingHeader(block *types.WorkObject, newTermini 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
 func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Transactions, types.Transactions, error) {
 	nodeCtx := sl.NodeCtx()
-	nodeLocation := sl.NodeLocation()
 	blockLocation := block.Location()
 	// Collect rollup of ETXs from the subordinate node's manifest
 	subRollup := types.Transactions{}
@@ -747,11 +767,9 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Trans
 			sl.hc.subRollupCache.Add(block.Hash(), subRollup)
 		}
 	}
-	// Filter for ETXs destined to this slice
-	newInboundEtxs := subRollup.FilterToSlice(blockLocation)
-	// Filter this list to exclude any ETX for which we are not the crossing
-	// context node. This check prevents cross-Region ETXs from going through Prime.
-	newlyConfirmedEtxs := newInboundEtxs.FilterConfirmationCtx(nodeCtx, nodeLocation)
+	// Filter for ETXs destined to this sub
+	newInboundEtxs := subRollup.FilterToSub(blockLocation, sl.NodeCtx())
+	newlyConfirmedEtxs := newInboundEtxs
 	for {
 		ancHash := block.ParentHash(nodeCtx)
 		ancNum := block.NumberU64(nodeCtx) - 1
@@ -780,12 +798,11 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Trans
 		}
 
 		// Terminate the search when we find a block produced by the same sub
-		if parent.Location().Equal(blockLocation) && order == nodeCtx {
+		if parent.Location().SubIndex(sl.NodeCtx()) == blockLocation.SubIndex(sl.NodeCtx()) && order == nodeCtx {
 			break
 		}
 
 		subRollup := types.Transactions{}
-
 		if nodeCtx < common.ZONE_CTX {
 			rollup, exists := sl.hc.subRollupCache.Get(parent.Hash())
 			if exists && rollup != nil {
@@ -802,9 +819,16 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Trans
 				sl.hc.subRollupCache.Add(parent.Hash(), subRollup)
 			}
 		}
-		ancInboundEtxs := subRollup.FilterToSlice(blockLocation)
-		newlyConfirmedAncEtxs := ancInboundEtxs.FilterConfirmationCtx(nodeCtx, nodeLocation)
-		newlyConfirmedEtxs = append(newlyConfirmedEtxs, newlyConfirmedAncEtxs...)
+		// change for the rolldown feature is that in the region when we go
+		// back, if we find a prime block, we have to take the transactions that
+		// are going towards the given zone
+		if nodeCtx == common.REGION_CTX && order < nodeCtx && !blockLocation.Equal(parent.Location()) {
+			inboundEtxs := rawdb.ReadInboundEtxs(sl.sliceDb, parent.Hash())
+			subRollup = append(subRollup, inboundEtxs...)
+		}
+
+		ancInboundEtxs := subRollup.FilterToSub(blockLocation, sl.NodeCtx())
+		newlyConfirmedEtxs = append(newlyConfirmedEtxs, ancInboundEtxs...)
 		block = parent
 	}
 	return newlyConfirmedEtxs, subRollup, nil
@@ -830,7 +854,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.WorkObject, domTerminus c
 	newTermini := types.CopyTermini(*termini)
 	// Set the subtermini
 	if nodeCtx != common.ZONE_CTX {
-		newTermini.SetSubTerminiAtIndex(header.Hash(), location.SubIndex(nodeLocation))
+		newTermini.SetSubTerminiAtIndex(header.Hash(), location.SubIndex(nodeCtx))
 	}
 
 	// Set the terminus
@@ -860,7 +884,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.WorkObject, domTerminus c
 		return common.Hash{}, newTermini, nil
 	}
 
-	return termini.SubTerminiAtIndex(location.SubIndex(nodeLocation)), newTermini, nil
+	return termini.SubTerminiAtIndex(location.SubIndex(nodeCtx)), newTermini, nil
 }
 
 // POEM compares externS to the currentHead S and returns true if externS is greater
@@ -895,7 +919,7 @@ func (sl *Slice) GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 // GetSubManifest gets the block manifest from the subordinate node which
 // produced this block
 func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error) {
-	subIdx := slice.SubIndex(sl.NodeLocation())
+	subIdx := slice.SubIndex(sl.NodeCtx())
 	if sl.subInterface[subIdx] == nil {
 		return nil, errors.New("missing requested subordinate node")
 	}
@@ -919,8 +943,8 @@ func (sl *Slice) GetPEtxRollupAfterRetryThreshold(blockHash common.Hash, hash co
 func (sl *Slice) GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
 	nodeCtx := sl.NodeLocation().Context()
 	if nodeCtx == common.PRIME_CTX {
-		if sl.subInterface[location.SubIndex(sl.NodeLocation())] != nil {
-			pEtxRollup, err := sl.subInterface[location.SubIndex(sl.NodeLocation())].GetPendingEtxsRollupFromSub(hash, location)
+		if sl.subInterface[location.SubIndex(sl.NodeCtx())] != nil {
+			pEtxRollup, err := sl.subInterface[location.SubIndex(sl.NodeCtx())].GetPendingEtxsRollupFromSub(hash, location)
 			if err != nil {
 				return types.PendingEtxsRollup{}, err
 			} else {
@@ -953,8 +977,8 @@ func (sl *Slice) GetPEtxAfterRetryThreshold(blockHash common.Hash, hash common.H
 func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error) {
 	nodeCtx := sl.NodeLocation().Context()
 	if nodeCtx != common.ZONE_CTX {
-		if sl.subInterface[location.SubIndex(sl.NodeLocation())] != nil {
-			pEtx, err := sl.subInterface[location.SubIndex(sl.NodeLocation())].GetPendingEtxsFromSub(hash, location)
+		if sl.subInterface[location.SubIndex(sl.NodeCtx())] != nil {
+			pEtx, err := sl.subInterface[location.SubIndex(sl.NodeCtx())].GetPendingEtxsFromSub(hash, location)
 			if err != nil {
 				return types.PendingEtxs{}, err
 			} else {

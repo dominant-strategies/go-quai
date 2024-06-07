@@ -406,8 +406,8 @@ func (loc Location) DomIndex(nodeLocation Location) int {
 }
 
 // SubIndex returns the index of the subordinate chain for a given location
-func (loc Location) SubIndex(nodeLocation Location) int {
-	switch nodeLocation.Context() {
+func (loc Location) SubIndex(nodeCtx int) int {
+	switch nodeCtx {
 	case PRIME_CTX:
 		return loc.Region()
 	case REGION_CTX:
