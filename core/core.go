@@ -1147,9 +1147,7 @@ func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
 }
 
 func (c *Core) GetOutpointsByAddress(address common.Address) map[string]*types.OutpointAndDenomination {
-	outpoints := rawdb.ReadAddressOutpoints(c.sl.hc.bc.db, c.sl.hc.NodeLocation())
-	outpointsForAddress := outpoints[address.Hex()]
-	return outpointsForAddress
+	return rawdb.ReadOutpointsForAddress(c.sl.sliceDb, address.Hex())
 }
 
 func (c *Core) GetUTXOsByAddressAtState(state *state.StateDB, address common.Address) ([]*types.UtxoEntry, error) {

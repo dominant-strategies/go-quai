@@ -1519,7 +1519,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			conversion = true
 			convertAddress = toAddr
 			if txOut.Denomination < params.MinQiConversionDenomination {
-				w.logger.Error(fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), txOut.Denomination))
 				return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), txOut.Denomination)
 			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
@@ -1527,7 +1526,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 			delete(addresses, toAddr.Bytes20())
 			continue
 		} else if toAddr.IsInQuaiLedgerScope() {
-			w.logger.Error(fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash()))
 			return fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash())
 		}
 
@@ -1541,15 +1539,12 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				ETXPCount++
 			}
 			if ETXRCount > env.etxRLimit {
-				w.logger.Error(fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRCount, env.etxRLimit))
 				return fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, env.etxRLimit)
 			}
 			if ETXPCount > env.etxPLimit {
-				w.logger.Error(fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, env.etxPLimit))
 				return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
 			}
 			if !toAddr.IsInQiLedgerScope() {
-				w.logger.Error(fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash()))
 				return fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
 			}
 
@@ -1564,7 +1559,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 				return fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location())
 			}
 			etxs = append(etxs, &etxInner)
-			w.logger.Debug("Added UTXO ETX to block")
 		} else {
 			// This output creates a normal UTXO
 			utxo := types.NewUtxoEntry(&txOut)
@@ -1604,7 +1598,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 		}
 		ETXPCount++ // conversion is technically a cross-prime ETX
 		if ETXPCount > env.etxPLimit {
-			w.logger.Error(fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, env.etxPLimit))
+			//w.logger.Error(fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, env.etxPLimit))
 			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
 		}
 		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination

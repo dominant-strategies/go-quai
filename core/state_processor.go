@@ -570,6 +570,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 		"prepare state time":          common.PrettyDuration(timePrepare),
 		"etx time":                    common.PrettyDuration(timeEtx),
 		"tx time":                     common.PrettyDuration(timeTx),
+		"numTxs":                      len(block.Transactions()),
 	}).Info("Total Tx Processing Time")
 
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, nil
