@@ -308,10 +308,6 @@ func etxSetKey(number uint64, hash common.Hash) []byte {
 	return append(append(etxSetHashesPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
-func etxKey(hash common.Hash) []byte {
-	return append(etxPrefix, hash.Bytes()...)
-}
-
 // pendingEtxsKey = pendingEtxsPrefix + hash
 func pendingEtxsKey(hash common.Hash) []byte {
 	return append(pendingEtxsPrefix, hash.Bytes()...)

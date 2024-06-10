@@ -17,10 +17,8 @@
 package rawdb
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
-	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -1016,96 +1014,6 @@ func ReadEtxSetProto(db ethdb.Reader, hash common.Hash, number uint64) ([]byte, 
 		}
 	}
 	return nil, errors.New("etx set not found") // Can't find the data anywhere.
-}
-
-// WriteEtxSetProto stores the EtxSet corresponding to a given block, in Proto encoding.
-func WriteEtxSetProto(db ethdb.KeyValueWriter, hash common.Hash, number uint64, data []byte) {
-	if err := db.Put(etxSetKey(number, hash), data); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store etx set")
-	}
-}
-
-// ReadEtxSet retreives the EtxSet corresponding to a given block
-func ReadEtxSet(db ethdb.Reader, hash common.Hash, number uint64) *types.EtxSet {
-	data, err := ReadEtxSetProto(db, hash, number)
-	if err != nil {
-		db.Logger().WithError(err).Error("Failed to read etx set")
-		return nil
-	}
-	protoEtxSet := new(types.ProtoEtxSet)
-	if err := proto.Unmarshal(data, protoEtxSet); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal etx set")
-	}
-	etxSet := types.EtxSet{
-		ETXHashes: make([]byte, 0),
-	}
-	err = etxSet.ProtoDecode(protoEtxSet)
-	if err != nil {
-		db.Logger().WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Error("Invalid etx set Proto")
-		return nil
-	}
-	return &etxSet
-}
-
-// WriteEtxSet stores the EtxSet corresponding to a given block
-func WriteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64, etxSet *types.EtxSet) {
-	protoEtxSet := etxSet.ProtoEncode()
-
-	data, err := proto.Marshal(protoEtxSet)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal etx set")
-	}
-	WriteEtxSetProto(db, hash, number, data)
-}
-
-// DeleteEtxSet removes all EtxSet data associated with a block.
-func DeleteEtxSet(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(etxSetKey(number, hash)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete etx set")
-	}
-}
-
-func ReadETX(db ethdb.Reader, hash common.Hash) *types.Transaction {
-	data, _ := db.Get(etxKey(hash))
-	if len(data) == 0 {
-		return nil
-	}
-	protoEtx := new(types.ProtoTransaction)
-	if err := proto.Unmarshal(data, protoEtx); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal etx")
-	}
-	etx := new(types.Transaction)
-	if err := etx.ProtoDecode(protoEtx, db.Location()); err != nil {
-		db.Logger().WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
-		}).Error("Invalid etx Proto")
-		return nil
-	}
-	return etx
-}
-
-func WriteETX(db ethdb.KeyValueWriter, hash common.Hash, etx *types.Transaction) {
-	protoEtx, err := etx.ProtoEncode()
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto encode etx")
-	}
-	data, err := proto.Marshal(protoEtx)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal etx")
-	}
-	if err := db.Put(etxKey(hash), data); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to store etx")
-	}
-}
-
-func DeleteETX(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Delete(etxKey(hash)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete etx")
-	}
 }
 
 // ReadPendingEtxsProto retrieves the set of pending ETXs for the given block, in Proto encoding
