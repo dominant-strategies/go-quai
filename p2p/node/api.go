@@ -53,9 +53,19 @@ func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) erro
 	}
 
 	go func() {
-		err := p.peerManager.Provide(p.ctx, location, datatype)
-		if err != nil {
-			log.Global.Errorf("error providing topic %s in %s: %s", reflect.TypeOf(datatype), location.Name(), err.Error())
+		ticker := time.NewTicker(time.Second)
+		timeout := time.NewTicker(60 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				if err := p.peerManager.Provide(p.ctx, location, datatype); err == nil {
+					log.Global.Infof("providing topic %s in %s", reflect.TypeOf(datatype), location.Name())
+					return
+				}
+			case <-timeout.C:
+				log.Global.Errorf("unable to provide topic %s in %s", reflect.TypeOf(datatype), location.Name())
+				return
+			}
 		}
 	}()
 	return nil
