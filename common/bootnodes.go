@@ -2,6 +2,9 @@ package common
 
 var (
 	BootstrapPeers = map[string][]string{
+		"colosseum": {
+			"/ip4/35.222.139.95/tcp/4001/p2p/12D3KooWK3nVCWjToi3igfs8oyJscVQYLd4SmQanohAuF8M6eZBn",
+		},
 		"garden": {
 			"/ip4/146.148.66.22/tcp/4001/p2p/12D3KooWRQrLVEeJtfyKoJDYWYjryBKR8qxkDooMMzyf2ZpLaZRR",
 			"/ip4/35.190.147.237/tcp/4001/p2p/12D3KooWSb49ccXFWPCsvi7rzCbqBUK2xfuRC2xbo6KnUZk3YaVg",
