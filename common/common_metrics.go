@@ -7,7 +7,7 @@ import (
 
 var (
 	messageMetrics *prometheus.CounterVec
-	peerMetrics    *prometheus.GaugeVec
+	PeerMetrics    *prometheus.GaugeVec
 )
 
 func init() {
@@ -19,6 +19,6 @@ func registerMetrics() {
 	messageMetrics.WithLabelValues("sent")
 	messageMetrics.WithLabelValues("received")
 
-	peerMetrics = metrics_config.NewGaugeVec("PeerGauges", "Track the number of peers connected to this node")
-	peerMetrics.WithLabelValues("numPeers")
+	PeerMetrics = metrics_config.NewGaugeVec("PeerGauges", "Track the number of peers connected to this node")
+	PeerMetrics.WithLabelValues("numPeers")
 }

@@ -4,6 +4,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 )
 
@@ -31,6 +32,7 @@ func (p *P2PNode) statsLoop() {
 		select {
 		case <-ticker.C:
 			peersConnected := p.connectionStats()
+			common.PeerMetrics.WithLabelValues("numPeers").Set(float64(peersConnected))
 			log.Global.Debugf("Number of peers connected: %d", peersConnected)
 		case <-p.ctx.Done():
 			log.Global.Warnf("Context cancelled. Stopping stats loop...")

@@ -2067,7 +2067,6 @@ func (pool *TxPool) sendersGoroutine() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
-	resetMetersTicker := time.NewTicker(time.Minute * 5)
 	for {
 		select {
 		case <-pool.reorgShutdownCh:
@@ -2080,23 +2079,6 @@ func (pool *TxPool) sendersGoroutine() {
 					"sender": tx.sender.String(),
 				}).Debug("Tx already seen in sender cache (reorg?)")
 			}
-
-		case <-resetMetersTicker.C:
-			// Reset the tx meters every 5 minutes
-			pendingDiscardMeter.Set(0)
-			pendingReplaceMeter.Set(0)
-			pendingRateLimitMeter.Set(0)
-			pendingNofundsMeter.Set(0)
-			queuedDiscardMeter.Set(0)
-			queuedReplaceMeter.Set(0)
-			queuedRateLimitMeter.Set(0)
-			queuedNofundsMeter.Set(0)
-			queuedEvictionMeter.Set(0)
-			knownTxMeter.Set(0)
-			validTxMeter.Set(0)
-			invalidTxMeter.Set(0)
-			underpricedTxMeter.Set(0)
-			overflowedTxMeter.Set(0)
 		}
 	}
 }
