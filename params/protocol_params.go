@@ -201,6 +201,8 @@ var (
 	MaxWorkShareCount                 = 16
 	WorkSharesThresholdDiff           = 3 // Number of bits lower than the target that the default consensus engine uses
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
+	Kqi                               = big.NewInt(4000000000000)
+	InitExchangeRate                  = big.NewInt(1)
 )
 
 // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime

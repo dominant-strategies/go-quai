@@ -275,6 +275,13 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	head.Header().SetGasLimit(g.GasLimit)
 	head.Header().SetGasUsed(0)
 	head.Header().SetExpansionNumber(uint8(startingExpansionNumber))
+	head.Header().SetExchangeRate(params.InitExchangeRate)
+	head.Header().SetQuaiToQi(big.NewInt(0))
+	head.Header().SetQiToQuai(big.NewInt(0))
+	head.Header().SetMinedQi(big.NewInt(0))
+	head.Header().SetMinedQuai(big.NewInt(0))
+	head.Header().SetDeltaQi(big.NewInt(0))
+	head.Header().SetDeltaQuai(big.NewInt(0))
 	if startingExpansionNumber > 0 {
 		// Fill each byte with 0xFF to set all bits to 1
 		var etxEligibleSlices common.Hash

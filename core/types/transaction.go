@@ -778,6 +778,11 @@ func (tx *Transaction) ConfirmationCtx(nodeLocation common.Location) int {
 	return ctx
 }
 
+// Conversion returns true if the transaction is a Quai to Qi or Qi to Quai conversion transaction
+func (tx *Transaction) Conversion() bool {
+	return tx.Type() == ExternalTxType && tx.ETXSender().Location().Equal(*tx.To().Location())
+}
+
 // Size returns the true RLP encoded storage size of the transaction, either by
 // encoding and returning it, or returning a previously cached value.
 func (tx *Transaction) Size() common.StorageSize {

@@ -574,13 +574,13 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			}).Info("Filled and sorted pending transactions")
 		}
 		if coinbase.IsInQiLedgerScope() {
-			coinbaseTx, err := createQiCoinbaseTxWithFees(work.wo, work.utxoFees, work.state, work.signer, w.ephemeralKey)
+			coinbaseTx, err := w.createQiCoinbaseTxWithFees(work.wo, work.utxoFees, work.state, work.signer, w.ephemeralKey)
 			if err != nil {
 				return nil, err
 			}
 			work.txs[0] = coinbaseTx
 		} else if coinbase.IsInQuaiLedgerScope() {
-			coinbaseTx, err := createQuaiCoinbaseTx(work.state, work.wo, w.logger, work.signer, w.ephemeralKey.ToECDSA())
+			coinbaseTx, err := w.createQuaiCoinbaseTx(work.state, work.wo, w.logger, work.signer, w.ephemeralKey.ToECDSA())
 			if err != nil {
 				return nil, err
 			}
@@ -742,7 +742,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				if primeTerminus == nil {
 					return nil, errors.New("prime terminus not found")
 				}
-				value := misc.QuaiToQi(primeTerminus, tx.Value())
+				value := misc.QuaiToQi(env.wo, tx.Value(), w.engine.DiffToBigBits(parent))
 				denominations := misc.FindMinDenominations(value)
 				outputIndex := uint16(0)
 
@@ -786,7 +786,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		snap := env.state.Snapshot()
 		// retrieve the gas used int and pass in the reference to the ApplyTransaction
 		gasUsed := env.wo.GasUsed()
-		receipt, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+		receipt, err := w.hc.bc.processor.ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
 		if err != nil {
 			w.logger.WithFields(log.Fields{
 				"err":     err,
@@ -1176,6 +1176,31 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		rawdb.WriteInterlinkHashes(w.workerDb, parent.Hash(), interlinkHashes)
 		interlinkRootHash := types.DeriveSha(interlinkHashes, trie.NewStackTrie(nil))
 		newWo.Header().SetInterlinkRootHash(interlinkRootHash)
+	}
+
+	if nodeCtx == common.PRIME_CTX {
+		if w.hc.IsGenesisHash(parent.Hash()) {
+			newWo.Header().SetQiToQuai(big.NewInt(0))
+			newWo.Header().SetQuaiToQi(big.NewInt(0))
+			newWo.Header().SetExchangeRate(parent.Header().ExchangeRate())
+		} else {
+			newQiToQuai, newQuaiToQi, newExchangeRate, err := misc.CalculateExchangeRate(parent)
+			if err != nil {
+				newWo.Header().SetQiToQuai(newQiToQuai)
+				newWo.Header().SetQuaiToQi(newQuaiToQi)
+				newWo.Header().SetExchangeRate(newExchangeRate)
+			}
+		}
+	} else {
+		if w.hc.IsGenesisHash(parent.Hash()) {
+			newWo.Header().SetQiToQuai(big.NewInt(0))
+			newWo.Header().SetQuaiToQi(big.NewInt(0))
+			newWo.Header().SetExchangeRate(parent.Header().ExchangeRate())
+		} else {
+			newWo.Header().SetQiToQuai(parent.Header().QiToQuai())
+			newWo.Header().SetQuaiToQi(parent.Header().QuaiToQi())
+			newWo.Header().SetExchangeRate(parent.Header().ExchangeRate())
+		}
 	}
 
 	// Only zone should calculate state
@@ -1595,7 +1620,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 		return fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
 	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), env.wo.BaseFee())
-	minimumFee := misc.QuaiToQi(env.wo, minimumFeeInQuai)
+	minimumFee := misc.QuaiToQi(env.wo, minimumFeeInQuai, w.engine.DiffToBigBits(env.wo))
 	if txFeeInQit.Cmp(minimumFee) < 0 {
 		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFee.Uint64())
 	}
@@ -1604,9 +1629,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 
 	if conversion {
 		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
-		remainingTxFeeInQuai := misc.QiToQuai(env.wo, txFeeInQit)
+		remainingTxFeeInQuai := misc.QiToQuai(env.wo, txFeeInQit, w.engine.DiffToBigBits(env.wo))
 		// Fee is basefee * gas, so gas remaining is fee remaining / basefee
 		remainingGas := new(big.Int).Div(remainingTxFeeInQuai, env.wo.BaseFee())
+		remainingGas.Div(remainingGas, big.NewInt(int64(len(etxs))))
 		if remainingGas.Uint64() > (env.wo.GasLimit() / params.MinimumEtxGasDivisor) {
 			// Limit ETX gas to max ETX gas limit (the rest is burned)
 			remainingGas = new(big.Int).SetUint64(env.wo.GasLimit() / params.MinimumEtxGasDivisor)
@@ -1649,10 +1675,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment) error {
 	return nil
 }
 
-// createQiCoinbaseTxWithFees returns a coinbase transaction paying an appropriate subsidy
-// based on the passed block height to the provided address. The transaction is signed
-// with an ephemeral key generated in the worker.
-func createQiCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *state.StateDB, signer types.Signer, ephemeralKey *secp256k1.PrivateKey) (*types.Transaction, error) {
+// createCoinbaseTx returns a coinbase transaction paying an appropriate subsidy
+// based on the passed block height to the provided address.
+func (w *worker) createQiCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *state.StateDB, signer types.Signer, ephemeralKey *secp256k1.PrivateKey) (*types.Transaction, error) {
 	parentHash := header.ParentHash(header.Location().Context()) // all blocks should have zone location and context
 
 	// The coinbase transaction input must be the parent hash encoded with the proper origin location
@@ -1665,7 +1690,7 @@ func createQiCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *
 		PubKey:           ephemeralKey.PubKey().SerializeUncompressed(),
 	}
 
-	reward := misc.CalculateReward(header)
+	reward := misc.CalculateReward(header, w.engine.DiffToBigBits(header))
 	reward.Add(reward, fees)
 	denominations := misc.FindMinDenominations(reward)
 	outs := make([]types.TxOut, 0, len(denominations))
@@ -1711,9 +1736,9 @@ func createQiCoinbaseTxWithFees(header *types.WorkObject, fees *big.Int, state *
 
 // createQuaiCoinbaseTx returns a coinbase transaction paying an appropriate subsidy
 // based on the passed block height to the provided address.
-func createQuaiCoinbaseTx(state *state.StateDB, header *types.WorkObject, logger *log.Logger, signer types.Signer, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+func (w *worker) createQuaiCoinbaseTx(state *state.StateDB, header *types.WorkObject, logger *log.Logger, signer types.Signer, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	// Select the correct block reward based on chain progression
-	blockReward := misc.CalculateReward(header)
+	blockReward := misc.CalculateReward(header, w.engine.DiffToBigBits(header))
 	coinbase := header.Coinbase()
 	internal, err := coinbase.InternalAndQuaiAddress()
 	if err != nil {

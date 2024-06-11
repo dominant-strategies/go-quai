@@ -29,8 +29,7 @@ func (blake3pow *Blake3pow) CalcOrder(header *types.WorkObject) (*big.Int, int, 
 
 	// Get entropy reduction of this header
 	intrinsicS := blake3pow.IntrinsicLogS(header.Hash())
-	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdS := blake3pow.DiffToBigBits(header)
 
 	// PRIME
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
@@ -255,8 +254,7 @@ func (blake3pow *Blake3pow) CalcRank(chain consensus.GenesisReader, header *type
 	}
 
 	powHash := header.Hash()
-	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdS := blake3pow.DiffToBigBits(header)
 
 	intrinsicS := blake3pow.IntrinsicLogS(powHash)
 	for i := common.InterlinkDepth; i > 0; i-- {
@@ -286,4 +284,9 @@ func (blake3pow *Blake3pow) CheckIfValidWorkShare(workShare *types.WorkObjectHea
 		return false
 	}
 	return new(big.Int).SetBytes(powHash.Bytes()).Cmp(workShareMintarget) <= 0
+}
+
+func (blake3pow *Blake3pow) DiffToBigBits(header *types.WorkObject) *big.Int {
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
+	return blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
 }

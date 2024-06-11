@@ -600,8 +600,10 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
 func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB) {
-	nodeLocation := blake3pow.config.NodeLocation
-	nodeCtx := blake3pow.config.NodeLocation.Context()
+	nodeLocation := blake3pow.NodeLocation()
+	nodeCtx := blake3pow.NodeLocation().Context()
+	// Accumulate any block and uncle rewards and commit the final state root
+	blake3pow.accumulateRewards(chain.Config(), state, header)
 
 	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		// Create the lockup contract account
@@ -671,4 +673,30 @@ func (blake3pow *Blake3pow) ComputePowLight(header *types.WorkObjectHeader) (com
 
 func (blake3pow *Blake3pow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
 	return header.Hash(), nil
+}
+
+// AccumulateRewards credits the coinbase of the given block with the mining
+// reward. The total reward consists of the static block reward and rewards for
+// included uncles. The coinbase of each uncle block is also rewarded.
+func (blake3pow *Blake3pow) accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.WorkObject) {
+	// Select the correct block reward based on chain progression
+	blockReward := misc.CalculateReward(header, blake3pow.DiffToBigBits(header))
+
+	coinbase, err := header.Coinbase().InternalAddress()
+	if err != nil {
+		blake3pow.logger.WithFields(log.Fields{
+			"Address": header.Coinbase().String(),
+			"Hash":    header.Hash().String(),
+		}).Error("Block has out of scope coinbase, skipping block reward")
+		return
+	}
+	if !header.Coinbase().IsInQuaiLedgerScope() {
+		blake3pow.logger.WithFields(log.Fields{
+			"Address": header.Coinbase().String(),
+			"Hash":    header.Hash().String(),
+		}).Debug("Block coinbase is in Qi ledger, skipping Quai block reward") // this log is largely unnecessary
+		return
+	}
+
+	state.AddBalance(coinbase, blockReward)
 }

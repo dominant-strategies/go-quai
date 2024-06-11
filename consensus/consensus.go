@@ -181,6 +181,8 @@ type Engine interface {
 	VerifySeal(header *types.WorkObjectHeader) (common.Hash, error)
 
 	SetThreads(threads int)
+	// DiffToBigBits converts a difficulty to a big integer representation
+	DiffToBigBits(header *types.WorkObject) *big.Int
 }
 
 func TargetToDifficulty(target *big.Int) *big.Int {
