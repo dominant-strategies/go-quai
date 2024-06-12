@@ -21,6 +21,8 @@ import (
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
 func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}) (interface{}, error) {
+	log.Global.Info("Entering the requestFromPeer")
+	start := time.Now()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -28,12 +30,13 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 				"stacktrace": string(debug.Stack()),
 			}).Error("Go-Quai Panicked")
 		}
+		log.Global.Info("Exiting the requestFromPeer", "Time taken inside requestFrom peer", common.PrettyDuration(time.Since(start)))
 	}()
 	log.Global.WithFields(log.Fields{
 		"peerId": peerID,
 		"topic":  topic,
 	}).Trace("Requesting the data from peer")
-	stream, err := p.NewStream(peerID)
+	stream, err := p.GetStream(peerID)
 	if err != nil {
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
@@ -54,22 +57,32 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 		return nil, err
 	}
 
+	if len(requestBytes) == 0 {
+		log.Global.Error("Empty request message", "topic", topic.String())
+	}
+	time1 := time.Now()
 	// Send the request to the peer
 	err = p.GetPeerManager().WriteMessageToStream(peerID, stream, requestBytes)
 	if err != nil {
 		return nil, err
 	}
+	log.Global.Info("Time taken to write message to stream peer", common.PrettyDuration(time.Since(time1)))
 
 	// Get appropriate channel and wait for response
 	dataChan, err := p.requestManager.GetRequestChan(id)
 	if err != nil {
 		return nil, err
 	}
+
+	requestTimer := time.NewTimer(requestManager.C_requestTimeout)
+	defer requestTimer.Stop()
+	time2 := time.Now()
 	var recvdType interface{}
 	select {
 	case recvdType = <-dataChan:
+		log.Global.Info("Time taken to get a response from peer", common.PrettyDuration(time.Since(time2)), "peer id", peerID)
 		break
-	case <-time.After(requestManager.C_requestTimeout):
+	case <-requestTimer.C:
 		log.Global.WithFields(log.Fields{
 			"requestID": id,
 			"peerId":    peerID,

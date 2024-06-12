@@ -70,6 +70,8 @@ func (m *requestIDManager) CreateRequest() uint32 {
 		id = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
 		if _, ok := m.activeRequests.load(id); !ok {
 			break
+		} else {
+			log.Global.Error("Active requests for the id", id)
 		}
 	}
 

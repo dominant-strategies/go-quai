@@ -78,8 +78,8 @@ func (mr *MockQuaiP2PNodeMockRecorder) Network() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Network", reflect.TypeOf((*MockQuaiP2PNode)(nil).Network))
 }
 
-// NewStream mocks base method.
-func (m *MockQuaiP2PNode) NewStream(peerID peer.ID, protocolID protocol.ID) (network.Stream, error) {
+// GetStream mocks base method.
+func (m *MockQuaiP2PNode) GetStream(peerID peer.ID, protocolID protocol.ID) (network.Stream, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewStream", peerID, protocolID)
 	ret0, _ := ret[0].(network.Stream)

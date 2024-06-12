@@ -127,10 +127,12 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 				backend.Logger().Error("work share received from peer is not valid")
 				return false
 			}
-			// check if the txs in the workObject hash to the tx hash in the body header
-			if hash := types.DeriveSha(data.WorkObject.Transactions(), trie.NewStackTrie(nil)); hash != data.WorkObject.TxHash() {
-				backend.Logger().Error("TxHash doesnt match the hash of the transactions in the work object received from peer")
-				return false
+			if len(data.WorkObject.Transactions()) > 0 {
+				// check if the txs in the workObject hash to the tx hash in the body header
+				if hash := types.DeriveSha(data.WorkObject.Transactions(), trie.NewStackTrie(nil)); hash != data.WorkObject.TxHash() {
+					backend.Logger().Error("TxHash doesnt match the hash of the transactions in the work object received from peer")
+					return false
+				}
 			}
 
 			if len(data.WorkObject.Transactions()) > c_maxTxInWorkShare {

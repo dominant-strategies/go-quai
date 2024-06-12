@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"math/big"
 	"reflect"
 	"runtime/debug"
@@ -134,7 +133,7 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-func (p *P2PNode) requestFromPeers(ctx context.Context, topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -164,14 +163,14 @@ func (p *P2PNode) requestFromPeers(ctx context.Context, topic *pubsubManager.Top
 						}).Error("Go-Quai Panicked")
 					}
 				}()
-				p.requestAndWait(ctx, peerID, topic, requestData, respDataType, resultChan)
+				p.requestAndWait(peerID, topic, requestData, respDataType, resultChan)
 			}(peerID)
 		}
 		requestWg.Wait()
 	}()
 }
 
-func (p *P2PNode) requestAndWait(ctx context.Context, peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -182,6 +181,8 @@ func (p *P2PNode) requestAndWait(ctx context.Context, peerID peer.ID, topic *pub
 	}()
 	var recvd interface{}
 	var err error
+	requestTimer := time.NewTimer(10 * time.Second)
+	defer requestTimer.Stop()
 	if recvd, err = p.requestFromPeer(peerID, topic, reqData, respDataType); err == nil {
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
@@ -193,13 +194,12 @@ func (p *P2PNode) requestAndWait(ctx context.Context, peerID peer.ID, topic *pub
 		select {
 		case resultChan <- recvd:
 			// Data sent successfully
-		case <-ctx.Done():
+		case <-requestTimer.C:
 			// Request timed out, return
 			log.Global.WithFields(log.Fields{
 				"peerId":  peerID,
 				"message": "Request timed out, data not sent",
 			}).Warning("Missed data request")
-
 		default:
 			// Optionally log the missed send or handle it in another way
 			log.Global.WithFields(log.Fields{
@@ -231,8 +231,6 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 	}
 
 	resultChan := make(chan interface{}, 10)
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
 	// If it is a hash, first check to see if it is contained in the caches
 	if hash, ok := requestData.(common.Hash); ok {
 		result, ok := p.cacheGet(hash, responseDataType, location)
@@ -242,7 +240,7 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 		}
 	}
 
-	p.requestFromPeers(ctx, topic, requestData, responseDataType, resultChan)
+	p.requestFromPeers(topic, requestData, responseDataType, resultChan)
 	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
 	// Right now this creates too many streams, so don't call this until we have a better solution
 	// p.queryDHT(location, requestData, responseDataType, resultChan)
@@ -317,7 +315,7 @@ func (p *P2PNode) GetBootPeers() []peer.AddrInfo {
 }
 
 // Opens a new stream to the given peer using the given protocol ID
-func (p *P2PNode) NewStream(peerID peer.ID) (network.Stream, error) {
+func (p *P2PNode) GetStream(peerID peer.ID) (network.Stream, error) {
 	return p.peerManager.GetStream(peerID)
 }
 

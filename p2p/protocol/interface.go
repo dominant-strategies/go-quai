@@ -23,5 +23,5 @@ type QuaiP2PNode interface {
 	GetRequestManager() requestManager.RequestManager
 
 	Connect(peer.AddrInfo) error
-	NewStream(peer.ID) (network.Stream, error)
+	GetStream(peer.ID) (network.Stream, error)
 }
