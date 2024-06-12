@@ -94,41 +94,52 @@ func NewTopic(genesis common.Hash, location common.Location, data interface{}) (
 	return t, nil
 }
 
-func TopicFromString(genesis common.Hash, topic string) (*Topic, error) {
+func TopicFromString(topic string) (*Topic, error) {
 	topicParts := strings.Split(topic, "/")
 	if len(topicParts) < 3 {
-		return nil, ErrMalformedTopic
+		return nil, errors.New("topic string should have 3 parts")
+	}
+	if len(topicParts[0]) != 66 {
+		return nil, errors.New("invalid genesis hash")
+	}
+	genHash := common.HexToHash(topicParts[0])
+	if genHash.String() == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		return nil, errors.New("invalid genesis hash")
 	}
 	var location common.Location
-	locationStr := strings.Split(topicParts[1], ",")
-	if len(locationStr) > 0 {
-		if len(locationStr) >= 1 && locationStr[0] != "" {
-			// Region specified
-			region, err := strconv.Atoi(locationStr[0])
-			if err != nil {
-				return nil, err
-			}
-			location.SetRegion(region)
+	if loc := topicParts[1]; loc != "" {
+		locationParts := strings.Split(loc, ",")
+		if len(locationParts) > 2 {
+			return nil, errors.New("invalid location encoding")
 		}
-		if len(locationStr) == 2 && locationStr[1] != "" {
-			// Zone specified
-			zone, err := strconv.Atoi(locationStr[1])
+		if len(locationParts) > 1 {
+			zone, err := strconv.Atoi(locationParts[1])
 			if err != nil {
 				return nil, err
 			}
-			location.SetZone(zone)
+			if err := location.SetZone(zone); err != nil {
+				return nil, err
+			}
+		}
+		if len(locationParts) > 0 {
+			region, err := strconv.Atoi(locationParts[0])
+			if err != nil {
+				return nil, err
+			}
+			if err := location.SetRegion(region); err != nil {
+				return nil, err
+			}
 		}
 	}
-
 	switch topicParts[2] {
 	case C_headerType:
-		return NewTopic(genesis, location, &types.WorkObjectHeaderView{})
+		return NewTopic(genHash, location, &types.WorkObjectHeaderView{})
 	case C_workObjectType:
-		return NewTopic(genesis, location, &types.WorkObjectBlockView{})
+		return NewTopic(genHash, location, &types.WorkObjectBlockView{})
 	case C_transactionType:
-		return NewTopic(genesis, location, &types.Transactions{})
+		return NewTopic(genHash, location, &types.Transactions{})
 	case C_workObjectHeaderType:
-		return NewTopic(genesis, location, &types.WorkObjectHeader{})
+		return NewTopic(genHash, location, &types.WorkObjectHeader{})
 	default:
 		return nil, ErrUnsupportedType
 	}

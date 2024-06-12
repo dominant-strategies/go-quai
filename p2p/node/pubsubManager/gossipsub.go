@@ -23,7 +23,6 @@ const msgChanSize = 500 // 500 requests per subscription
 
 var (
 	ErrUnsupportedType = errors.New("data type not supported")
-	ErrMalformedTopic  = errors.New("malformed/invalid topic")
 )
 
 type PubsubManager struct {

@@ -557,7 +557,7 @@ func NewLocation(region, zone int) (Location, error) {
 }
 
 func (l *Location) SetRegion(region int) error {
-	if region < 0 || region >= 0xf {
+	if region < 0 || region > 15 {
 		return ErrInvalidLocation
 	}
 	if len(*l) < 1 {
@@ -570,7 +570,7 @@ func (l *Location) SetRegion(region int) error {
 }
 
 func (l *Location) SetZone(zone int) error {
-	if zone < 0 || zone > 0xf {
+	if zone < 0 || zone > 15 {
 		return ErrInvalidLocation
 	}
 	if len(*l) < 2 {
