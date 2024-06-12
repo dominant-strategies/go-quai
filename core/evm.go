@@ -79,11 +79,11 @@ func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *co
 		}
 	}
 
-	// Prime terminus determines which location is eligible to except the etx
+	// Prime terminus determines which location is eligible to accept the etx
 	primeTerminus := header.PrimeTerminus()
 	primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
 	if primeTerminusHeader == nil {
-		log.Global.Error("Prime terminus header not found", "headerHash", header.Hash(), "primeTerminus", primeTerminus)
+		log.Global.Error("Prime terminus header not found ", " headerHash ", header.Hash(), " primeTerminus ", primeTerminus)
 		return vm.BlockContext{}, ErrSubNotSyncedToDom
 	}
 	etxEligibleSlices := primeTerminusHeader.EtxEligibleSlices()

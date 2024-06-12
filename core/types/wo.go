@@ -340,6 +340,22 @@ func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
 	return qiTxs
 }
 
+func (wo *WorkObject) TransactionsWithReceipts() []*Transaction {
+	txs := make([]*Transaction, 0)
+	for i, t := range wo.Transactions() {
+		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) {
+			// ignore the coinbase tx
+			continue
+		}
+		if t.Type() == QuaiTxType || (t.Type() == ExternalTxType && t.To().IsInQuaiLedgerScope()) {
+			txs = append(txs, t)
+		}
+	}
+	return txs
+}
+
+// QuaiTransactionsWithoutCoinbase returns all Quai EVM transactions in the block, excluding the coinbase transaction.
+// This also returns all transactions that have an associated receipt.
 func (wo *WorkObject) QuaiTransactionsWithoutCoinbase() []*Transaction {
 	quaiTxs := make([]*Transaction, 0)
 	for i, t := range wo.Transactions() {
@@ -347,7 +363,7 @@ func (wo *WorkObject) QuaiTransactionsWithoutCoinbase() []*Transaction {
 			// ignore the Quai coinbase tx and Quai->Qi to comply with prior functionality as it is not a normal transaction
 			continue
 		}
-		if t.Type() != QiTxType {
+		if t.Type() == QuaiTxType {
 			quaiTxs = append(quaiTxs, t)
 		}
 	}
@@ -368,16 +384,6 @@ func (wo *WorkObject) InputsAndOutputsWithoutCoinbase() (uint, uint) {
 		}
 	}
 	return uint(inputs), uint(outputs)
-}
-
-func (wo *WorkObject) QuaiTransactionsWithFees() []*Transaction {
-	quaiTxs := make([]*Transaction, 0)
-	for _, t := range wo.Transactions() {
-		if t.Type() == QuaiTxType { // QuaiTxType is the only type that gives Quai fees to the miner
-			quaiTxs = append(quaiTxs, t)
-		}
-	}
-	return quaiTxs
 }
 
 func (wo *WorkObject) NumberArray() []*big.Int {
@@ -579,7 +585,7 @@ func (wb *WorkObjectBody) QiTransactions() []*Transaction {
 func (wb *WorkObjectBody) QuaiTransactions() []*Transaction {
 	quaiTxs := make([]*Transaction, 0)
 	for _, t := range wb.Transactions() {
-		if t.Type() != QiTxType {
+		if t.Type() == QuaiTxType {
 			quaiTxs = append(quaiTxs, t)
 		}
 	}
