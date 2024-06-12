@@ -336,6 +336,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 		timePrepare += timePrepareDelta
 
 		var receipt *types.Receipt
+		var addReceipt bool
 		if tx.Type() == types.ExternalTxType {
 			startTimeEtx := time.Now()
 			// ETXs MUST be included in order, so popping the first from the queue must equal the first in the block
@@ -418,6 +419,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 				if err != nil {
 					return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
+				addReceipt = true
 				totalEtxGas += receipt.GasUsed
 				timeEtxDelta := time.Since(startTimeEtx)
 				timeEtx += timeEtxDelta
@@ -429,6 +431,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			if err != nil {
 				return nil, nil, nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
+			addReceipt = true
 			timeTxDelta := time.Since(startTimeTx)
 			timeTx += timeTxDelta
 		} else {
@@ -439,8 +442,10 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 				emittedEtxs = append(emittedEtxs, etx)
 			}
 		}
-		receipts = append(receipts, receipt)
-		allLogs = append(allLogs, receipt.Logs...)
+		if addReceipt {
+			receipts = append(receipts, receipt)
+			allLogs = append(allLogs, receipt.Logs...)
+		}
 		i++
 	}
 

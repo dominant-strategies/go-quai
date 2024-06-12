@@ -732,84 +732,84 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	return nil
 }
 
-func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, tx *types.Transaction) ([]*types.Log, error) {
-	if tx != nil {
-		if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
-			gasUsed := env.wo.GasUsed()
-			txGas := tx.Gas()
-			if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
-				lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
-				primeTerminus := w.hc.GetPrimeTerminus(env.wo)
-				if primeTerminus == nil {
-					return nil, errors.New("prime terminus not found")
-				}
-				value := misc.QuaiToQi(primeTerminus, tx.Value())
-				denominations := misc.FindMinDenominations(value)
-				outputIndex := uint16(0)
-
-				// Iterate over the denominations in descending order
-				for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
-					// If the denomination count is zero, skip it
-					if denominations[uint8(denomination)] == 0 {
-						continue
-					}
-					for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
-						if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
-							// No more gas, the rest of the denominations are lost but the tx is still valid
-							break
-						}
-						txGas -= params.CallValueTransferGas
-						if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
-							return nil, err
-						}
-						gasUsed += params.CallValueTransferGas
-						// the ETX hash is guaranteed to be unique
-						if err := env.state.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))); err != nil {
-							return nil, err
-						}
-						outputIndex++
-					}
-				}
-			} else {
-				// This Qi ETX should cost more gas
-				if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
-					return nil, err
-				}
-				if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), big.NewInt(0)))); err != nil {
-					return nil, err
-				}
-				gasUsed += params.CallValueTransferGas
-			}
-			env.wo.Header().SetGasUsed(gasUsed)
-			env.txs = append(env.txs, tx)
-			return []*types.Log{}, nil // need to make sure this does not modify receipt hash
-		}
-		snap := env.state.Snapshot()
-		// retrieve the gas used int and pass in the reference to the ApplyTransaction
+func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, tx *types.Transaction) ([]*types.Log, bool, error) {
+	if tx == nil {
+		return nil, false, errors.New("nil transaction")
+	}
+	if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
 		gasUsed := env.wo.GasUsed()
-		receipt, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
-		if err != nil {
-			w.logger.WithFields(log.Fields{
-				"err":     err,
-				"tx":      tx.Hash().Hex(),
-				"block":   env.wo.Number(w.hc.NodeCtx()),
-				"gasUsed": gasUsed,
-			}).Debug("Error playing transaction in worker")
-			env.state.RevertToSnapshot(snap)
-			return nil, err
+		txGas := tx.Gas()
+		if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
+			lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
+			primeTerminus := w.hc.GetPrimeTerminus(env.wo)
+			if primeTerminus == nil {
+				return nil, false, errors.New("prime terminus not found")
+			}
+			value := misc.QuaiToQi(primeTerminus, tx.Value())
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+				// If the denomination count is zero, skip it
+				if denominations[uint8(denomination)] == 0 {
+					continue
+				}
+				for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						// No more gas, the rest of the denominations are lost but the tx is still valid
+						break
+					}
+					txGas -= params.CallValueTransferGas
+					if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+						return nil, false, err
+					}
+					gasUsed += params.CallValueTransferGas
+					// the ETX hash is guaranteed to be unique
+					if err := env.state.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))); err != nil {
+						return nil, false, err
+					}
+					outputIndex++
+				}
+			}
+		} else {
+			// This Qi ETX should cost more gas
+			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+				return nil, false, err
+			}
+			if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), big.NewInt(0)))); err != nil {
+				return nil, false, err
+			}
+			gasUsed += params.CallValueTransferGas
 		}
-		if receipt.Status == types.ReceiptStatusSuccessful {
-			env.etxs = append(env.etxs, receipt.Etxs...)
-		}
-		// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
-		// This extra step is needed because previously the GasUsed was a public method and direct update of the value
-		// was possible.
 		env.wo.Header().SetGasUsed(gasUsed)
 		env.txs = append(env.txs, tx)
-		env.receipts = append(env.receipts, receipt)
-		return receipt.Logs, nil
+		return []*types.Log{}, false, nil
 	}
-	return nil, errors.New("error finding transaction")
+	snap := env.state.Snapshot()
+	// retrieve the gas used int and pass in the reference to the ApplyTransaction
+	gasUsed := env.wo.GasUsed()
+	receipt, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+	if err != nil {
+		w.logger.WithFields(log.Fields{
+			"err":     err,
+			"tx":      tx.Hash().Hex(),
+			"block":   env.wo.Number(w.hc.NodeCtx()),
+			"gasUsed": gasUsed,
+		}).Debug("Error playing transaction in worker")
+		env.state.RevertToSnapshot(snap)
+		return nil, false, err
+	}
+	if receipt.Status == types.ReceiptStatusSuccessful {
+		env.etxs = append(env.etxs, receipt.Etxs...)
+	}
+	// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
+	// This extra step is needed because previously the GasUsed was a public method and direct update of the value
+	// was possible.
+	env.wo.Header().SetGasUsed(gasUsed)
+	env.txs = append(env.txs, tx)
+	env.receipts = append(env.receipts, receipt)
+	return receipt.Logs, true, nil
 }
 
 func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) bool {
@@ -853,9 +853,11 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			break
 		}
 		env.state.Prepare(etx.Hash(), env.tcount)
-		logs, err := w.commitTransaction(env, parent, etx)
-		if err == nil {
+		logs, receipt, err := w.commitTransaction(env, parent, etx)
+		if err == nil && receipt {
 			coalescedLogs = append(coalescedLogs, logs...)
+			env.tcount++
+		} else if err == nil && !receipt {
 			env.tcount++
 		}
 		oldestIndex.Add(oldestIndex, big.NewInt(1))
@@ -926,7 +928,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, parent, tx)
+		logs, receipt, err := w.commitTransaction(env, parent, tx)
 		switch {
 		case errors.Is(err, types.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -956,7 +958,9 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
+			if receipt {
+				coalescedLogs = append(coalescedLogs, logs...)
+			}
 			env.tcount++
 			txs.PopNoSort()
 
@@ -1433,7 +1437,7 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
-	for i, tx := range block.QuaiTransactionsWithoutCoinbase() {
+	for i, tx := range block.TransactionsWithReceipts() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
