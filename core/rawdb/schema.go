@@ -89,15 +89,13 @@ var (
 	AddressUtxosPrefix          = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
 	processedStatePrefix        = []byte("ps")    // processedStatePrefix + hash -> boolean
 
-	blockBodyPrefix         = []byte("b")   // blockBodyPrefix + num (uint64 big endian) + hash -> block body
-	blockReceiptsPrefix     = []byte("r")   // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
-	etxSetHashesPrefix      = []byte("e")   // etxSetPrefix + num (uint64 big endian) + hash -> EtxSetHashes at block
-	etxPrefix               = []byte("etx") // etxKey + hash -> Etx
-	pendingEtxsPrefix       = []byte("pe")  // pendingEtxsPrefix + hash -> PendingEtxs at block
-	pendingEtxsRollupPrefix = []byte("pr")  // pendingEtxsRollupPrefix + hash -> PendingEtxsRollup at block
-	manifestPrefix          = []byte("ma")  // manifestPrefix + hash -> Manifest at block
-	interlinkPrefix         = []byte("il")  // interlinkPrefix + hash -> Interlink at block
-	bloomPrefix             = []byte("bl")  // bloomPrefix + hash -> bloom at block
+	blockBodyPrefix         = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
+	blockReceiptsPrefix     = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	pendingEtxsPrefix       = []byte("pe") // pendingEtxsPrefix + hash -> PendingEtxs at block
+	pendingEtxsRollupPrefix = []byte("pr") // pendingEtxsRollupPrefix + hash -> PendingEtxsRollup at block
+	manifestPrefix          = []byte("ma") // manifestPrefix + hash -> Manifest at block
+	interlinkPrefix         = []byte("il") // interlinkPrefix + hash -> Interlink at block
+	bloomPrefix             = []byte("bl") // bloomPrefix + hash -> bloom at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -127,9 +125,6 @@ const (
 
 	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
 	freezerDifficultyTable = "diffs"
-
-	// freezerEtxSetsTable indicates the name of the etx set table.
-	freezerEtxSetsTable = "etxSets"
 )
 
 // FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
@@ -140,7 +135,6 @@ var FreezerNoSnappy = map[string]bool{
 	freezerBodiesTable:     false,
 	freezerReceiptTable:    false,
 	freezerDifficultyTable: true,
-	freezerEtxSetsTable:    false,
 }
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -301,11 +295,6 @@ func IsCodeKey(key []byte) (bool, []byte) {
 // configKey = configPrefix + hash
 func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
-}
-
-// etxSetKey = etxSetPrefix + num (uint64 big endian) + hash
-func etxSetKey(number uint64, hash common.Hash) []byte {
-	return append(append(etxSetHashesPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
 // pendingEtxsKey = pendingEtxsPrefix + hash

@@ -1776,7 +1776,6 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 		rawdb.DeleteCanonicalHash(sl.sliceDb, header.NumberU64(nodeCtx))
 		rawdb.DeleteHeaderNumber(sl.sliceDb, header.Hash())
 		rawdb.DeleteTermini(sl.sliceDb, header.Hash())
-		rawdb.DeleteEtxSet(sl.sliceDb, header.Hash(), header.NumberU64(nodeCtx))
 		if nodeCtx != common.ZONE_CTX {
 			rawdb.DeletePendingEtxs(sl.sliceDb, header.Hash())
 			rawdb.DeletePendingEtxsRollup(sl.sliceDb, header.Hash())

@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"encoding/binary"
-	"errors"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -982,38 +981,6 @@ func ReadHeadBlock(db ethdb.Reader) *types.WorkObject {
 		return nil
 	}
 	return ReadWorkObject(db, headWorkObjectHash, types.BlockObject)
-}
-
-// ReadEtxSetProto retrieves the EtxSet corresponding to a given block, in Proto encoding.
-func ReadEtxSetProto(db ethdb.Reader, hash common.Hash, number uint64) ([]byte, error) {
-	// First try to look up the data in ancient database. Extra hash
-	// comparison is necessary since ancient database only maintains
-	// the canonical data.
-	data, _ := db.Ancient(freezerEtxSetsTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data, nil
-		}
-	}
-	var err error
-	// Then try to look up the data in leveldb.
-	data, err = db.Get(etxSetKey(number, hash))
-	if err == nil {
-		return data, nil
-	}
-	// In the background freezer is moving data from leveldb to flatten files.
-	// So during the first check for ancient db, the data is not yet in there,
-	// but when we reach into leveldb, the data was already moved. That would
-	// result in a not found error.
-	data, _ = db.Ancient(freezerEtxSetsTable, number)
-	if len(data) > 0 {
-		h, _ := db.Ancient(freezerHashTable, number)
-		if common.BytesToHash(h) == hash {
-			return data, nil
-		}
-	}
-	return nil, errors.New("etx set not found") // Can't find the data anywhere.
 }
 
 // ReadPendingEtxsProto retrieves the set of pending ETXs for the given block, in Proto encoding

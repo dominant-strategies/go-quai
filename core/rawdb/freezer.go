@@ -200,7 +200,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 // Notably, this function is lock free but kind of thread-safe. All out-of-order
 // injection will be rejected. But if two injections with same number happen at
 // the same time, we can get into the trouble.
-func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etxSet []byte) (err error) {
+func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts []byte) (err error) {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -253,14 +253,6 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, etx
 			"hash":   hash,
 			"err":    err,
 		}).Error("Failed to append ancient receipts")
-		return err
-	}
-	if err := f.tables[freezerEtxSetsTable].Append(f.frozen, etxSet); err != nil {
-		f.logger.WithFields(log.Fields{
-			"number": f.frozen,
-			"hash":   hash,
-			"err":    err,
-		}).Error("Failed to append ancient etx set")
 		return err
 	}
 	atomic.AddUint64(&f.frozen, 1) // Only modify atomically
@@ -416,20 +408,12 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int, location common.Lo
 				}).Error("Block receipts missing, can't freeze")
 				break
 			}
-			etxSet, err := ReadEtxSetProto(nfdb, hash, f.frozen)
-			if err != nil {
-				f.logger.WithFields(log.Fields{
-					"number": f.frozen,
-					"hash":   hash,
-				}).Error("Total etxset missing, can't freeze")
-				break
-			}
 			f.logger.WithFields(log.Fields{
 				"number": f.frozen,
 				"hash":   hash,
 			}).Trace("Deep froze ancient block")
 			// Inject all the components into the relevant data tables
-			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, etxSet); err != nil {
+			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts); err != nil {
 				break
 			}
 			ancients = append(ancients, hash)
