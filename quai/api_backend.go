@@ -614,5 +614,6 @@ func (b *QuaiAPIBackend) BroadcastHeader(header *types.WorkObject, location comm
 }
 
 func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error {
+	txEgressCounter.Add(float64(len(workShare.WorkObject.Transactions())))
 	return b.quai.p2p.Broadcast(location, workShare)
 }

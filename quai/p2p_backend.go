@@ -9,6 +9,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
@@ -17,6 +18,15 @@ import (
 )
 
 const c_maxTxInWorkShare = 200
+
+var (
+	//
+	// TxPool propagation metrics
+	//
+	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
+	txIngressCounter     = txPropagationMetrics.WithLabelValues("ingress")
+	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
+)
 
 // QuaiBackend implements the quai consensus protocol
 type QuaiBackend struct {
@@ -112,6 +122,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			log.Global.Error("no backend found")
 			return false
 		}
+		txIngressCounter.Add(float64(len(data.WorkObject.Transactions())))
 		if backend.ProcessingState() {
 			// check if the work share is valid before accepting the transactions
 			// from the peer
