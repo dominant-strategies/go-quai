@@ -9,11 +9,35 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+)
+
+var (
+	// TxPool propagation metrics
+	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
+	txIngressCounter     = txPropagationMetrics.WithLabelValues("ingress")
+	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
+	workObjectMetrics    = metrics_config.NewCounterVec("Work Object Counters", "Tracks block statistics")
+
+	// Block propagation metrics
+	blockIngressCounter   = workObjectMetrics.WithLabelValues("blocks/ingress")
+	blockKnownCounter     = workObjectMetrics.WithLabelValues("blocks/known")
+	blockMaliciousCounter = workObjectMetrics.WithLabelValues("blocks/malicious")
+
+	// Header propagation metrics
+	headerIngressCounter   = workObjectMetrics.WithLabelValues("headers/ingress")
+	headerKnownCounter     = workObjectMetrics.WithLabelValues("headers/known")
+	headerMaliciousCounter = workObjectMetrics.WithLabelValues("headers/malicious")
+
+	// WorkShare propagation metrics
+	workShareIngressCounter   = workObjectMetrics.WithLabelValues("workShares/ingress")
+	workShareKnownCounter     = workObjectMetrics.WithLabelValues("workShares/known")
+	workShareMaliciousCounter = workObjectMetrics.WithLabelValues("workShares/malicious")
 )
 
 // QuaiBackend implements the quai consensus protocol
@@ -90,6 +114,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		// TODO: Determine if the block information was lively or stale and rate
 		// the peer accordingly
 		backend.WriteBlock(data.WorkObject)
+
+		blockIngressCounter.Inc()
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	case types.WorkObjectHeaderView:
@@ -102,6 +128,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		if !backend.ProcessingState() && backend.NodeCtx() == common.ZONE_CTX {
 			backend.WriteBlock(data.WorkObject)
 		}
+
+		headerIngressCounter.Inc()
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	case types.Transactions:
@@ -113,6 +141,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 		if backend.ProcessingState() {
 			backend.SendRemoteTxs(data)
 		}
+
 		// TODO: Handle the error here and mark the peers accordingly
 	case types.WorkObjectHeader:
 		backend := *qbe.GetBackend(nodeLocation)
@@ -121,6 +150,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, topic string, data
 			return false
 		}
 		backend.SendWorkShare(&data)
+
+		workShareIngressCounter.Inc()
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	default:
