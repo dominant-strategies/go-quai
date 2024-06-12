@@ -202,6 +202,8 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	if err != nil {
 		return nil, err
 	}
+	sm.Start()
+
 	p2p.peerManager.SetStreamManager(sm)
 
 	return p2p, nil

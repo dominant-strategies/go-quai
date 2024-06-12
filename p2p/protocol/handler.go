@@ -6,7 +6,6 @@ import (
 	"io"
 	"math/big"
 	"runtime/debug"
-	"sync"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/sirupsen/logrus"
@@ -46,31 +45,24 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	// Create a channel for messages
 	msgChan := make(chan []byte, msgChanSize)
 	full := 0
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var once sync.Once
-	// Start worker goroutines
-	for i := 0; i < numWorkers; i++ {
-		go func() {
-			for {
-				select {
-				case message := <-msgChan:
-					handleMessage(message, stream, node)
-				case <-ctx.Done():
-					once.Do(func() { close(msgChan) })
-					return
-				}
+	go func() {
+		for {
+			select {
+			case message := <-msgChan:
+				handleMessage(message, stream, node)
+			case <-ctx.Done():
+				return
 			}
-		}()
-	}
+		}
+	}()
 
 	// Enter the read loop for the stream and handle messages
 	for {
 		data, err := common.ReadMessageFromStream(stream)
 		if err != nil {
 			if errors.Is(err, network.ErrReset) || errors.Is(err, io.EOF) {
-				once.Do(func() { close(msgChan) })
 				return
 			}
 
@@ -83,7 +75,6 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 		select {
 		case msgChan <- data:
 		case <-ctx.Done():
-			once.Do(func() { close(msgChan) })
 			return
 		default:
 			if full%1000 == 0 {
@@ -124,7 +115,7 @@ func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
 		}
 
 	default:
-		log.Global.WithFields(log.Fields{"quaiMsg": quaiMsg, "peer": stream.Conn().RemotePeer()}).Errorf("unsupported quai message type")
+		log.Global.WithFields(log.Fields{"quaiMsg": quaiMsg, "data": data, "peer": stream.Conn().RemotePeer()}).Errorf("unsupported quai message type")
 	}
 }
 
@@ -215,7 +206,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 
 func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 	recvdID, recvdType, err := pb.DecodeQuaiResponse(quaiResp)
-	if err != nil {
+	if err != nil && err.Error() != pb.EmptyResponse.Error() {
 		log.Global.WithField(
 			"err", err,
 		).Errorf("error decoding quai response: %s", err)
@@ -230,6 +221,7 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 		}).Error("error associating request ID with data channel")
 		return
 	}
+
 	select {
 	case dataChan <- recvdType:
 	default:
@@ -240,21 +232,31 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode, view types.WorkObjectView) error {
 	// check if we have the block in our cache or database
 	fullWO := node.GetWorkObject(hash, loc)
-	if fullWO == nil {
-		log.Global.Debugf("block not found")
-		return nil
-	}
-	log.Global.Debugf("block found %s", fullWO.Hash())
-
+	var data []byte
+	var err error
 	var block interface{}
+	if fullWO == nil {
+		// If we dont have the data, still respond with empty
+		block = nil
+		log.Global.Debugf("block not found")
+	} else {
+		log.Global.Debugf("block found %s", fullWO.Hash())
+		switch view {
+		case types.HeaderObject:
+			block = fullWO.ConvertToHeaderView()
+		case types.BlockObject:
+			block = fullWO.ConvertToBlockView()
+		}
+	}
+	var requestDataType interface{}
 	switch view {
-	case types.HeaderObject:
-		block = fullWO.ConvertToHeaderView()
 	case types.BlockObject:
-		block = fullWO.ConvertToBlockView()
+		requestDataType = &types.WorkObjectBlockView{}
+	case types.HeaderObject:
+		requestDataType = &types.WorkObjectHeaderView{}
 	}
 	// create a Quai Message Response with the block
-	data, err := pb.EncodeQuaiResponse(id, loc, block)
+	data, err = pb.EncodeQuaiResponse(id, loc, requestDataType, block)
 	if err != nil {
 		return err
 	}
@@ -269,17 +271,14 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, stream network.Stream, node QuaiP2PNode) error {
 	// check if we have the block in our cache or database
 	blockHash := node.GetBlockHashByNumber(number, loc)
-	if blockHash == nil {
-		log.Global.Tracef("block not found")
-		return nil
+	if blockHash != nil {
+		log.Global.Tracef("block found %s", blockHash)
 	}
-	log.Global.Tracef("block found %s", blockHash)
 	// create a Quai Message Response with the block
-	data, err := pb.EncodeQuaiResponse(id, loc, blockHash)
+	data, err := pb.EncodeQuaiResponse(id, loc, &common.Hash{}, blockHash)
 	if err != nil {
 		return err
 	}
-
 	err = common.WriteMessageToStream(stream, data)
 	if err != nil {
 		return err

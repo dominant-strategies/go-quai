@@ -33,12 +33,8 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 		"peerId": peerID,
 		"topic":  topic,
 	}).Trace("Requesting the data from peer")
-	stream, err := p.NewStream(peerID)
+	stream, err := p.GetStream(peerID)
 	if err != nil {
-		log.Global.WithFields(log.Fields{
-			"peerId": peerID,
-			"error":  err,
-		}).Error("Failed to open stream to peer")
 		return nil, err
 	}
 
@@ -65,6 +61,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	if err != nil {
 		return nil, err
 	}
+
 	var recvdType interface{}
 	select {
 	case recvdType = <-dataChan:
