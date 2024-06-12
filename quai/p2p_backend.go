@@ -22,8 +22,8 @@ var (
 	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
 	txIngressCounter     = txPropagationMetrics.WithLabelValues("ingress")
 	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
-	workObjectMetrics    = metrics_config.NewCounterVec("Work Object Counters", "Tracks block statistics")
 
+	workObjectMetrics = metrics_config.NewCounterVec("WorkObjectCounters", "Tracks block statistics")
 	// Block propagation metrics
 	blockIngressCounter   = workObjectMetrics.WithLabelValues("blocks/ingress")
 	blockKnownCounter     = workObjectMetrics.WithLabelValues("blocks/known")
