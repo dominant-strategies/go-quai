@@ -200,7 +200,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 // Notably, this function is lock free but kind of thread-safe. All out-of-order
 // injection will be rejected. But if two injections with same number happen at
 // the same time, we can get into the trouble.
-func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts []byte) (err error) {
+func (f *freezer) AppendAncient(number uint64, hash, receipts []byte) (err error) {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -229,22 +229,6 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts []by
 			"hash":   hash,
 			"err":    err,
 		}).Error("Failed to append ancient hash")
-		return err
-	}
-	if err := f.tables[freezerHeaderTable].Append(f.frozen, header); err != nil {
-		f.logger.WithFields(log.Fields{
-			"number": f.frozen,
-			"hash":   hash,
-			"err":    err,
-		}).Error("Failed to append ancient header")
-		return err
-	}
-	if err := f.tables[freezerBodiesTable].Append(f.frozen, body); err != nil {
-		f.logger.WithFields(log.Fields{
-			"number": f.frozen,
-			"hash":   hash,
-			"err":    err,
-		}).Error("Failed to append ancient body")
 		return err
 	}
 	if err := f.tables[freezerReceiptTable].Append(f.frozen, receipts); err != nil {
@@ -384,22 +368,6 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int, location common.Lo
 				f.logger.WithField("number", f.frozen).Error("Canonical hash missing, can't freeze")
 				break
 			}
-			header := ReadHeaderProto(nfdb, hash, f.frozen)
-			if len(header) == 0 {
-				f.logger.WithFields(log.Fields{
-					"number": f.frozen,
-					"hash":   hash,
-				}).Error("Block header missing, can't freeze")
-				break
-			}
-			body := ReadBodyProto(nfdb, hash, f.frozen)
-			if len(body) == 0 {
-				f.logger.WithFields(log.Fields{
-					"number": f.frozen,
-					"hash":   hash,
-				}).Error("Block body missing, can't freeze")
-				break
-			}
 			receipts := ReadReceiptsProto(nfdb, hash, f.frozen)
 			if len(receipts) == 0 {
 				f.logger.WithFields(log.Fields{
@@ -413,7 +381,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int, location common.Lo
 				"hash":   hash,
 			}).Trace("Deep froze ancient block")
 			// Inject all the components into the relevant data tables
-			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts); err != nil {
+			if err := f.AppendAncient(f.frozen, hash[:], receipts); err != nil {
 				break
 			}
 			ancients = append(ancients, hash)

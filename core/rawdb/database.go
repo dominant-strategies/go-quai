@@ -101,7 +101,7 @@ func (db *nofreezedb) AncientSize(kind string) (uint64, error) {
 }
 
 // AppendAncient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) AppendAncient(number uint64, hash, header, body, receipts []byte) error {
+func (db *nofreezedb) AppendAncient(number uint64, hash, receipts []byte) error {
 	return errNotSupported
 }
 
@@ -456,7 +456,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *log.
 	}
 	// Inspect append-only file store then.
 	ancientSizes := []*common.StorageSize{&ancientHeadersSize, &ancientBodiesSize, &ancientReceiptsSize, &ancientHashesSize, &ancientTdsSize}
-	for i, category := range []string{freezerHeaderTable, freezerBodiesTable, freezerReceiptTable, freezerHashTable, freezerDifficultyTable} {
+	for i, category := range []string{freezerReceiptTable, freezerHashTable, freezerDifficultyTable} {
 		if size, err := db.AncientSize(category); err == nil {
 			*ancientSizes[i] += common.StorageSize(size)
 			total += common.StorageSize(size)

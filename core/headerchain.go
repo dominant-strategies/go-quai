@@ -23,7 +23,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
@@ -914,26 +913,6 @@ func (hc *HeaderChain) GetBody(hash common.Hash) *types.WorkObject {
 	}
 	// Cache the found body for next time and return
 	hc.bc.bodyCache.Add(hash, *body)
-	return body
-}
-
-// GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
-// caching it if found.
-func (hc *HeaderChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
-	// Short circuit if the body's already in the cache, retrieve otherwise
-	if cached, ok := hc.bc.bodyProtoCache.Get(hash); ok {
-		return cached
-	}
-	number := hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil
-	}
-	body := rawdb.ReadBodyProto(hc.headerDb, hash, *number)
-	if len(body) == 0 {
-		return nil
-	}
-	// Cache the found body for next time and return
-	hc.bc.bodyProtoCache.Add(hash, body)
 	return body
 }
 

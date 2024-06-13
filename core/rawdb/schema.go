@@ -111,9 +111,6 @@ var (
 )
 
 const (
-	// freezerHeaderTable indicates the name of the freezer header table.
-	freezerHeaderTable = "headers"
-
 	// freezerHashTable indicates the name of the freezer canonical hash table.
 	freezerHashTable = "hashes"
 
@@ -130,7 +127,6 @@ const (
 // FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
 var FreezerNoSnappy = map[string]bool{
-	freezerHeaderTable:     false,
 	freezerHashTable:       true,
 	freezerBodiesTable:     false,
 	freezerReceiptTable:    false,

@@ -26,7 +26,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -911,12 +910,6 @@ func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscript
 // hash, caching it if found.
 func (c *Core) GetBody(hash common.Hash) *types.WorkObject {
 	return c.sl.hc.GetBody(hash)
-}
-
-// GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
-// caching it if found.
-func (c *Core) GetBodyRLP(hash common.Hash) rlp.RawValue {
-	return c.sl.hc.GetBodyRLP(hash)
 }
 
 // GetTerminiByHash retrieves the termini stored for a given header hash
