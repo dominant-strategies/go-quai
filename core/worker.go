@@ -1192,7 +1192,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 				w.logger.Error("Refusing to mine without etherbase")
 				return nil, errors.New("refusing to mine without etherbase")
 			}
-			newWo.Header().SetCoinbase(w.coinbase)
+			newWo.WorkObjectHeader().SetCoinbase(w.coinbase)
 		}
 
 		// Get the latest transactions to be broadcasted from the pool
@@ -1209,7 +1209,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			w.logger.WithField("err", err).Error("Failed to prepare header for sealing")
 			return nil, err
 		}
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.TxHash(), newWo.Nonce(), newWo.Time(), newWo.Location())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.TxHash(), newWo.Nonce(), newWo.Time(), newWo.Location(), newWo.Coinbase())
 		proposedWoBody, err := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
 		if err != nil {
 			return nil, err
@@ -1261,7 +1261,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 		return env, nil
 	} else {
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location(), newWo.Coinbase())
 		proposedWoBody, err := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
 		if err != nil {
 			return nil, err

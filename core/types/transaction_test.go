@@ -531,7 +531,7 @@ func etxData() (*Transaction, common.Hash) {
 
 func TestEtxHash(t *testing.T) {
 	_, hash := etxData()
-	correctHash := common.HexToHash("0x56b300ea99355ef39a7e4ccbfdfa9cf081307ec33c6b9c90212d9518763b154b")
+	correctHash := common.HexToHash("0x569200efce076a61575a3661dcb6f59e77e0407279c8db136ef9b2fa23d361ce")
 	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 

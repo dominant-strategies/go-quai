@@ -754,7 +754,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexu
 	}
 
 	workShare := &types.WorkObjectHeader{}
-	err = workShare.ProtoDecode(protoWorkShare)
+	err = workShare.ProtoDecode(protoWorkShare, s.b.NodeLocation())
 	if err != nil {
 		return err
 	}

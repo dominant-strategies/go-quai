@@ -1416,6 +1416,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 	if inSlice {
 		combinedPendingHeader.WorkObjectHeader().SetDifficulty(header.Difficulty())
 		combinedPendingHeader.WorkObjectHeader().SetTxHash(header.TxHash())
+		combinedPendingHeader.WorkObjectHeader().SetCoinbase(header.Coinbase())
 
 		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.Header().SetUncledS(header.Header().UncledS())
@@ -1427,7 +1428,6 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetEVMRoot(header.EVMRoot())
 		combinedPendingHeader.Header().SetUTXORoot(header.UTXORoot())
 		combinedPendingHeader.Header().SetEtxSetRoot(header.EtxSetRoot())
-		combinedPendingHeader.Header().SetCoinbase(header.Coinbase())
 		combinedPendingHeader.Header().SetBaseFee(header.BaseFee())
 		combinedPendingHeader.Header().SetGasLimit(header.GasLimit())
 		combinedPendingHeader.Header().SetGasUsed(header.GasUsed())
@@ -1549,7 +1549,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 	}
 
 	if nodeCtx != common.ZONE_CTX {
-		localPendingHeader.Header().SetCoinbase(common.Zero)
+		localPendingHeader.WorkObjectHeader().SetCoinbase(common.Zero)
 	}
 
 	localPendingHeader.WorkObjectHeader().SetLocation(common.Location{0, 0})

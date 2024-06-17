@@ -18,7 +18,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	var enc struct {
 		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
 		UncleHash    					common.Hash    			`json:"sha3Uncles"         			gencodec:"required"`
-		Coinbase     					common.Address 			`json:"miner"              			gencodec:"required"`
 		EVMRoot      					common.Hash   			`json:"evmRoot"            			gencodec:"required"`
 		UTXORoot		 				common.Hash	 			`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
@@ -61,7 +60,6 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		enc.Number[i] = (*hexutil.Big)(h.Number(i))
 	}
 	enc.UncleHash = h.UncleHash()
-	enc.Coinbase = h.Coinbase()
 	enc.EVMRoot = h.EVMRoot()
 	enc.UTXORoot = h.UTXORoot()
 	enc.TxHash = h.TxHash()
@@ -89,7 +87,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	var dec struct {
 		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
 		UncleHash    					*common.Hash    		`json:"sha3Uncles"         			gencodec:"required"`
-		Coinbase     					*common.AddressBytes 	`json:"miner"              			gencodec:"required"`
 		EVMRoot      					*common.Hash   			`json:"evmRoot"            			gencodec:"required"`
 		UTXORoot		 				*common.Hash	 		`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					*common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
@@ -122,9 +119,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.UncleHash == nil {
 		return errors.New("missing required field 'sha3Uncles' for Header")
-	}
-	if dec.Coinbase == nil {
-		return errors.New("missing required field 'miner' for Header")
 	}
 	if dec.EVMRoot == nil {
 		return errors.New("missing required field 'evmRoot' for Header")
@@ -225,8 +219,6 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 
 	h.SetUncleHash(*dec.UncleHash)
-	coinbase := common.Bytes20ToAddress(*dec.Coinbase, []byte{0,0})
-	h.SetCoinbase(coinbase)
 	h.SetEVMRoot(*dec.EVMRoot)
 	h.SetUTXORoot(*dec.UTXORoot)
 	h.SetTxHash(*dec.TxHash)
@@ -289,6 +281,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 		MixHash    common.Hash    `json:"mixHash" gencoden:"required"`
 		Time       hexutil.Uint64 `json:"time" gencoden:"required"`
 		Nonce      BlockNonce     `json:"nonce" gencoden:"required"`
+		Coinbase   common.Address `json:"coinbase" gencoden:"required"`
 	}
 
 	enc.HeaderHash = wh.HeaderHash()
@@ -299,6 +292,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 	enc.MixHash = wh.MixHash()
 	enc.Time = hexutil.Uint64(wh.Time())
 	enc.Nonce = wh.Nonce()
+	enc.Coinbase = wh.Coinbase()
 
 	raw, err := json.Marshal(&enc)
 	return raw, err
@@ -315,6 +309,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 		MixHash	   common.Hash     `json:"mixHash" gencoden:"required"`
 		Time       hexutil.Uint64  `json:"time" gencoden:"required"`
 		Nonce      BlockNonce      `json:"nonce" gencoden:"required"`
+		Coinbase   common.Address  `json:"coinbase" gencoden:"required"`
 	}
 
 	err := json.Unmarshal(input, &dec)
@@ -334,6 +329,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 	wh.SetMixHash(dec.MixHash)
 	wh.SetTime(uint64(dec.Time))
 	wh.SetNonce(dec.Nonce)
+	wh.SetCoinbase(dec.Coinbase)
 	return nil
 }
 

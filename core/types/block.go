@@ -87,32 +87,31 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 
 // Header represents a block header in the Quai blockchain.
 type Header struct {
-	parentHash            []common.Hash  `json:"parentHash"            gencodec:"required"`
-	uncleHash             common.Hash    `json:"sha3Uncles"            gencodec:"required"`
-	coinbase              common.Address `json:"miner"                 gencodec:"required"`
-	evmRoot               common.Hash    `json:"evmRoot"               gencodec:"required"`
-	utxoRoot              common.Hash    `json:"utxoRoot"              gencodec:"required"`
-	txHash                common.Hash    `json:"transactionsRoot"      gencodec:"required"`
-	etxHash               common.Hash    `json:"extTransactionsRoot"   gencodec:"required"`
-	etxSetRoot            common.Hash    `json:"etxSetRoot"            gencodec:"required"`
-	etxRollupHash         common.Hash    `json:"extRollupRoot"         gencodec:"required"`
-	manifestHash          []common.Hash  `json:"manifestHash"          gencodec:"required"`
-	receiptHash           common.Hash    `json:"receiptsRoot"          gencodec:"required"`
-	parentEntropy         []*big.Int     `json:"parentEntropy"         gencodec:"required"`
-	parentDeltaS          []*big.Int     `json:"parentDeltaS"          gencodec:"required"`
-	parentUncledSubDeltaS []*big.Int     `json:"parentUncledSubDeltaS" gencodec:"required"`
-	efficiencyScore       uint16         `json:"efficiencyScore"       gencodec:"required"`
-	thresholdCount        uint16         `json:"thresholdCount"        gencodec:"required"`
-	expansionNumber       uint8          `json:"expansionNumber"     	gencodec:"required"`
-	etxEligibleSlices     common.Hash    `json:"etxEligibleSlices"     gencodec:"required"`
-	primeTerminus         common.Hash    `json:"primeTerminus"         gencodec:"required"`
-	interlinkRootHash     common.Hash    `json:"interlinkRootHash"     gencodec:"required"`
-	uncledS               *big.Int       `json:"uncledLogS"            gencodec:"required"`
-	number                []*big.Int     `json:"number"                gencodec:"required"`
-	gasLimit              uint64         `json:"gasLimit"              gencodec:"required"`
-	gasUsed               uint64         `json:"gasUsed"               gencodec:"required"`
-	baseFee               *big.Int       `json:"baseFeePerGas"         gencodec:"required"`
-	extra                 []byte         `json:"extraData"             gencodec:"required"`
+	parentHash            []common.Hash `json:"parentHash"            gencodec:"required"`
+	uncleHash             common.Hash   `json:"sha3Uncles"            gencodec:"required"`
+	evmRoot               common.Hash   `json:"evmRoot"               gencodec:"required"`
+	utxoRoot              common.Hash   `json:"utxoRoot"              gencodec:"required"`
+	txHash                common.Hash   `json:"transactionsRoot"      gencodec:"required"`
+	etxHash               common.Hash   `json:"extTransactionsRoot"   gencodec:"required"`
+	etxSetRoot            common.Hash   `json:"etxSetRoot"            gencodec:"required"`
+	etxRollupHash         common.Hash   `json:"extRollupRoot"         gencodec:"required"`
+	manifestHash          []common.Hash `json:"manifestHash"          gencodec:"required"`
+	receiptHash           common.Hash   `json:"receiptsRoot"          gencodec:"required"`
+	parentEntropy         []*big.Int    `json:"parentEntropy"         gencodec:"required"`
+	parentDeltaS          []*big.Int    `json:"parentDeltaS"          gencodec:"required"`
+	parentUncledSubDeltaS []*big.Int    `json:"parentUncledSubDeltaS" gencodec:"required"`
+	efficiencyScore       uint16        `json:"efficiencyScore"       gencodec:"required"`
+	thresholdCount        uint16        `json:"thresholdCount"        gencodec:"required"`
+	expansionNumber       uint8         `json:"expansionNumber"     	gencodec:"required"`
+	etxEligibleSlices     common.Hash   `json:"etxEligibleSlices"     gencodec:"required"`
+	primeTerminus         common.Hash   `json:"primeTerminus"         gencodec:"required"`
+	interlinkRootHash     common.Hash   `json:"interlinkRootHash"     gencodec:"required"`
+	uncledS               *big.Int      `json:"uncledLogS"            gencodec:"required"`
+	number                []*big.Int    `json:"number"                gencodec:"required"`
+	gasLimit              uint64        `json:"gasLimit"              gencodec:"required"`
+	gasUsed               uint64        `json:"gasUsed"               gencodec:"required"`
+	baseFee               *big.Int      `json:"baseFeePerGas"         gencodec:"required"`
+	extra                 []byte        `json:"extraData"             gencodec:"required"`
 
 	// caches
 	hash     atomic.Value
@@ -220,7 +219,6 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 
 	protoHeader := &ProtoHeader{
 		UncleHash:         &uncleHash,
-		Coinbase:          h.Coinbase().Bytes(),
 		EvmRoot:           &evmRoot,
 		UtxoRoot:          &utxoRoot,
 		TxHash:            &txHash,
@@ -270,9 +268,6 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	}
 	if protoHeader.UncleHash == nil {
 		return errors.New("missing required field 'UncleHash' in Header")
-	}
-	if protoHeader.Coinbase == nil {
-		return errors.New("missing required field 'Coinbase' in Header")
 	}
 	if protoHeader.EvmRoot == nil {
 		return errors.New("missing required field 'Root' in Header")
@@ -358,7 +353,6 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	}
 
 	h.SetUncleHash(common.BytesToHash(protoHeader.GetUncleHash().GetValue()))
-	h.SetCoinbase(common.BytesToAddress(protoHeader.GetCoinbase(), location))
 	h.SetEVMRoot(common.BytesToHash(protoHeader.GetEvmRoot().GetValue()))
 	h.SetUTXORoot(common.BytesToHash(protoHeader.GetUtxoRoot().GetValue()))
 	h.SetTxHash(common.BytesToHash(protoHeader.GetTxHash().GetValue()))
@@ -397,7 +391,6 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"sha3Uncles":          h.UncleHash(),
 		"evmRoot":             h.EVMRoot(),
 		"utxoRoot":            h.UTXORoot(),
-		"miner":               h.Coinbase(),
 		"extraData":           hexutil.Bytes(h.Extra()),
 		"size":                hexutil.Uint64(h.Size()),
 		"transactionsRoot":    h.TxHash(),
@@ -449,9 +442,6 @@ func (h *Header) ParentHash(nodeCtx int) common.Hash {
 }
 func (h *Header) UncleHash() common.Hash {
 	return h.uncleHash
-}
-func (h *Header) Coinbase() common.Address {
-	return h.coinbase
 }
 func (h *Header) EVMRoot() common.Hash {
 	return h.evmRoot
@@ -529,11 +519,6 @@ func (h *Header) SetUncleHash(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.uncleHash = val
-}
-func (h *Header) SetCoinbase(val common.Address) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.coinbase = val
 }
 func (h *Header) SetEVMRoot(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -685,7 +670,6 @@ func (h *Header) SealEncode() *ProtoHeader {
 
 	protoSealData := &ProtoHeader{
 		UncleHash:         &uncleHash,
-		Coinbase:          h.Coinbase().Bytes(),
 		EvmRoot:           &evmRoot,
 		UtxoRoot:          &utxoRoot,
 		TxHash:            &txHash,
@@ -866,7 +850,6 @@ func CopyHeader(h *Header) *Header {
 	}
 	cpy.SetUncledS(h.UncledS())
 	cpy.SetUncleHash(h.UncleHash())
-	cpy.SetCoinbase(h.Coinbase())
 	cpy.SetEVMRoot(h.EVMRoot())
 	cpy.SetUTXORoot(h.UTXORoot())
 	cpy.SetTxHash(h.TxHash())

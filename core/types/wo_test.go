@@ -27,7 +27,7 @@ func woTestData() (*WorkObject, common.Hash) {
 
 func TestWoHash(t *testing.T) {
 	_, hash := woTestData()
-	correctHash := common.HexToHash("0x9ed4ddaec19bbb4a44d9e0ebfda532406667501b44170b9ccebcc33421042ce8")
+	correctHash := common.HexToHash("0xce1b26f11a4694a6be74e23b92ce133de912799bc7e067fa05f3bb19fb356d2c")
 	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 
