@@ -600,7 +600,7 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, domPendingHeader *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, bool, error) {
 	nodeCtx := c.NodeCtx()
 	// Set the coinbase into the right interface before calling append in the sub
-	header.Header().SetCoinbase(common.BytesToAddress(header.Coinbase().Bytes(), c.NodeLocation()))
+	header.WorkObjectHeader().SetCoinbase(common.BytesToAddress(header.Coinbase().Bytes(), c.NodeLocation()))
 	newPendingEtxs, subReorg, setHead, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {

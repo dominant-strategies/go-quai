@@ -706,7 +706,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw he
 	if err != nil {
 		return err
 	}
-	woHeader.Header().SetCoinbase(common.BytesToAddress(woHeader.Coinbase().Bytes(), s.b.NodeLocation()))
+	woHeader.WorkObjectHeader().SetCoinbase(common.BytesToAddress(woHeader.Coinbase().Bytes(), s.b.NodeLocation()))
 	block, err := s.b.ConstructLocalMinedBlock(woHeader)
 	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && nodeCtx < common.ZONE_CTX {
 		s.b.Logger().Info("filling sub manifest")
@@ -755,7 +755,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexu
 	}
 
 	workShare := &types.WorkObjectHeader{}
-	err = workShare.ProtoDecode(protoWorkShare)
+	err = workShare.ProtoDecode(protoWorkShare, s.b.NodeLocation())
 	if err != nil {
 		return err
 	}

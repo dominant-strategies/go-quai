@@ -957,7 +957,6 @@ func RPCMarshalETHHeader(head *types.Header) map[string]interface{} {
 		"parentHash":       head.ParentHash,
 		"sha3Uncles":       head.UncleHash,
 		"evmRoot":          head.EVMRoot,
-		"miner":            head.Coinbase,
 		"extraData":        hexutil.Bytes(head.Extra()),
 		"size":             hexutil.Uint64(head.Size()),
 		"gasLimit":         hexutil.Uint64(head.GasLimit()),

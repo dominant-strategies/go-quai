@@ -558,7 +558,7 @@ func ReadWorkObjectHeader(db ethdb.Reader, hash common.Hash, woType types.WorkOb
 		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal work object header")
 	}
 	workObjectHeader := new(types.WorkObjectHeader)
-	err = workObjectHeader.ProtoDecode(protoWorkObjectHeader)
+	err = workObjectHeader.ProtoDecode(protoWorkObjectHeader, db.Location())
 	if err != nil {
 		db.Logger().WithFields(log.Fields{
 			"hash": hash,
@@ -1030,9 +1030,9 @@ func (b badWorkObject) ProtoEncode() *ProtoBadWorkObject {
 }
 
 // ProtoDecode decodes the protobuf encoding of the bad workObject.
-func (b *badWorkObject) ProtoDecode(pb *ProtoBadWorkObject) error {
+func (b *badWorkObject) ProtoDecode(pb *ProtoBadWorkObject, location common.Location) error {
 	woHeader := new(types.WorkObjectHeader)
-	if err := woHeader.ProtoDecode(pb.WoHeader); err != nil {
+	if err := woHeader.ProtoDecode(pb.WoHeader, location); err != nil {
 		return err
 	}
 	b.woHeader = woHeader
@@ -1062,11 +1062,11 @@ func (s badWorkObjectList) ProtoEncode() *ProtoBadWorkObjects {
 	return &ProtoBadWorkObjects{BadWorkObjects: protoList}
 }
 
-func (s *badWorkObjectList) ProtoDecode(pb *ProtoBadWorkObjects) error {
+func (s *badWorkObjectList) ProtoDecode(pb *ProtoBadWorkObjects, location common.Location) error {
 	list := make(badWorkObjectList, len(pb.BadWorkObjects))
 	for i, protoBlock := range pb.BadWorkObjects {
 		block := new(badWorkObject)
-		if err := block.ProtoDecode(protoBlock); err != nil {
+		if err := block.ProtoDecode(protoBlock, location); err != nil {
 			return err
 		}
 		list[i] = block
@@ -1088,7 +1088,7 @@ func ReadBadWorkObject(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 	}
 
 	badWorkObjects := new(badWorkObjectList)
-	err = badWorkObjects.ProtoDecode(protoBadWorkObjects)
+	err = badWorkObjects.ProtoDecode(protoBadWorkObjects, db.Location())
 	if err != nil {
 		return nil
 	}
