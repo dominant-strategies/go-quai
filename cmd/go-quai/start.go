@@ -18,6 +18,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p/node"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var startCmd = &cobra.Command{
@@ -62,12 +63,14 @@ func startCmdPreRun(cmd *cobra.Command, args []string) error {
 		configDir := cmd.Flag(utils.ConfigDirFlag.Name).Value.String()
 		viper.Set(utils.KeyFileFlag.Name, filepath.Join(configDir, "private.key"))
 	}
+	// Initialize the version info
+	params.InitVersion()
 	return nil
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
 	network := viper.GetString(utils.EnvironmentFlag.Name)
-	log.Global.Infof("Starting go-quai on the %s network", network)
+	log.Global.Infof("Starting %s on the %s network", params.Version.Full(), network)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

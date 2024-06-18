@@ -38,6 +38,11 @@ type version struct {
 	short string
 }
 
+func InitVersion() {
+	Version = CachedVersion{}
+	Version.load()
+}
+
 func readVersionFile() (version, error) {
 	raw, err := ioutil.ReadFile("VERSION")
 	if err != nil {
