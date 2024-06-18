@@ -124,6 +124,10 @@ func (tx *QuaiTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }
 
+func (tx *QuaiTx) isCoinbase() bool {
+	panic("quai TX does not have isCoinbase field")
+}
+
 func (tx *QuaiTx) setTo(to common.Address) {
 	tx.To = &to
 }

@@ -255,7 +255,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		// After writing the inbound etxs, we need to just send the inbounds for
 		// the given block location down in the region
 		if nodeCtx == common.REGION_CTX {
-			newInboundEtxs = newInboundEtxs.FilterToSub(block.Location(), nodeCtx)
+			newInboundEtxs = newInboundEtxs.FilterToSub(block.Location(), nodeCtx, order)
 		}
 	}
 
@@ -268,7 +268,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		if exists && cachedInboundEtxs != nil {
 			newInboundEtxs = cachedInboundEtxs
 		} else {
-			newInboundEtxs, _, err = sl.CollectNewlyConfirmedEtxs(block)
+			newInboundEtxs, err = sl.CollectNewlyConfirmedEtxs(block, order)
 			if err != nil {
 				sl.logger.WithField("err", err).Trace("Error collecting newly confirmed etxs")
 				// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
@@ -318,7 +318,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				}
 				for _, etx := range subRollup {
 					to := etx.To().Location()
-					if to.Region() != sl.NodeLocation().Region() || etx.IsTxAConversionTx(sl.NodeLocation()) {
+					if to.Region() != sl.NodeLocation().Region() || types.IsConversionTx(etx) || types.IsCoinBaseTx(etx) {
 						crossPrimeRollup = append(crossPrimeRollup, etx)
 					}
 				}
@@ -381,6 +381,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	time9 = common.PrettyDuration(time.Since(start))
 	sl.updatePhCache(pendingHeaderWithTermini, true, nil, subReorg, sl.NodeLocation())
 
+	time10 := common.PrettyDuration(time.Since(start))
 	var updateDom bool
 	if subReorg {
 		if order == common.ZONE_CTX && pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()) != bestPh.Termini().DomTerminus(sl.NodeLocation()) {
@@ -399,11 +400,14 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		sl.WriteBestPhKey(pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()))
 		block.SetAppendTime(time.Duration(time9))
 	}
+	time11 := common.PrettyDuration(time.Since(start))
 
 	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
 		return nil, false, false, err
 	}
+
+	time12 := common.PrettyDuration(time.Since(start))
 
 	if setHead {
 		sl.hc.SetCurrentHeader(block)
@@ -416,12 +420,13 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		}).Debug("Found uncle")
 		sl.hc.chainSideFeed.Send(ChainSideEvent{Blocks: []*types.WorkObject{block}})
 	}
-
+	time13 := common.PrettyDuration(time.Since(start))
 	// Chain head feed is only used by the Zone chains
 	if subReorg && nodeCtx == common.ZONE_CTX {
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
+	time14 := common.PrettyDuration(time.Since(start))
 	// If efficiency score changed on this block compared to the parent block
 	// we trigger the expansion using the expansion feed
 	if nodeCtx == common.PRIME_CTX {
@@ -431,12 +436,11 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		}
 	}
 
+	time15 := common.PrettyDuration(time.Since(start))
 	// Relay the new pendingHeader
 	sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), subReorg)
 
-	inputs, outputs := block.InputsAndOutputsWithoutCoinbase()
-	net := int(outputs) - int(inputs)
-	time10 := common.PrettyDuration(time.Since(start))
+	time16 := common.PrettyDuration(time.Since(start))
 	sl.logger.WithFields(log.Fields{
 		"t0_1": time0_1,
 		"t0_2": time0_2,
@@ -450,6 +454,12 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"t8":   time8,
 		"t9":   time9,
 		"t10":  time10,
+		"t11":  time11,
+		"t12":  time12,
+		"t13":  time13,
+		"t14":  time14,
+		"t15":  time15,
+		"t16":  time16,
 	}).Info("Times during append")
 
 	sl.logger.WithFields(log.Fields{
@@ -464,6 +474,10 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		workShare = big.NewInt(0)
 	}
 
+	if nodeCtx == common.ZONE_CTX {
+		sl.logger.WithFields(block.TransactionsInfo()).Info("Transactions info for Block")
+	}
+
 	sl.logger.WithFields(log.Fields{
 		"number":               block.NumberArray(),
 		"hash":                 block.Hash(),
@@ -472,11 +486,6 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"totalTxs":             len(block.Transactions()),
 		"iworkShare":           common.BigBitsToBitsFloat(workShare),
 		"intrinsicS":           common.BigBitsToBits(intrinsicS),
-		"etxs emitted":         len(block.ExtTransactions()),
-		"qiTxs":                len(block.QiTransactions()),
-		"net outputs-inputs":   net,
-		"quaiTxs":              len(block.QuaiTransactions()),
-		"etxs inbound":         len(block.Body().ExternalTransactions()),
 		"inboundEtxs from dom": len(newInboundEtxs),
 		"gas":                  block.GasUsed(),
 		"gasLimit":             block.GasLimit(),
@@ -746,7 +755,7 @@ func (sl *Slice) generateSlicePendingHeader(block *types.WorkObject, newTermini 
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
-func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Transactions, types.Transactions, error) {
+func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject, blockOrder int) (types.Transactions, error) {
 	nodeCtx := sl.NodeCtx()
 	blockLocation := block.Location()
 	// Collect rollup of ETXs from the subordinate node's manifest
@@ -763,20 +772,20 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Trans
 		} else {
 			subRollup, err = sl.hc.CollectSubRollup(block)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			sl.hc.subRollupCache.Add(block.Hash(), subRollup)
 		}
 	}
 	// Filter for ETXs destined to this sub
-	newInboundEtxs := subRollup.FilterToSub(blockLocation, sl.NodeCtx())
+	newInboundEtxs := subRollup.FilterToSub(blockLocation, sl.NodeCtx(), blockOrder)
 	newlyConfirmedEtxs := newInboundEtxs
 	for {
 		ancHash := block.ParentHash(nodeCtx)
 		ancNum := block.NumberU64(nodeCtx) - 1
 		parent := sl.hc.GetBlock(ancHash, ancNum)
 		if parent == nil {
-			return nil, nil, fmt.Errorf("unable to find parent, hash: %s", ancHash.String())
+			return nil, fmt.Errorf("unable to find parent, hash: %s", ancHash.String())
 		}
 
 		if sl.hc.IsGenesisHash(ancHash) {
@@ -791,7 +800,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Trans
 		var err error
 		_, order, err := sl.Engine().CalcOrder(parent)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		regions, zones := common.GetHierarchySizeForExpansionNumber(parent.ExpansionNumber())
 		if order == common.PRIME_CTX && (blockLocation.Region() > int(regions) || blockLocation.Zone() > int(zones)) {
@@ -815,7 +824,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Trans
 			} else {
 				subRollup, err = sl.hc.CollectSubRollup(parent)
 				if err != nil {
-					return nil, nil, err
+					return nil, err
 				}
 				sl.hc.subRollupCache.Add(parent.Hash(), subRollup)
 			}
@@ -825,14 +834,16 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject) (types.Trans
 		// are going towards the given zone
 		if nodeCtx == common.REGION_CTX && order < nodeCtx && !blockLocation.Equal(parent.Location()) {
 			inboundEtxs := rawdb.ReadInboundEtxs(sl.sliceDb, parent.Hash())
-			subRollup = append(subRollup, inboundEtxs...)
+			// Filter the Conversion and Coinbase Txs that needs to go the blockLocation
+			filteredInboundEtxs := inboundEtxs.FilterToSub(blockLocation, sl.NodeCtx(), common.PRIME_CTX)
+			newlyConfirmedEtxs = append(newlyConfirmedEtxs, filteredInboundEtxs...)
 		}
 
-		ancInboundEtxs := subRollup.FilterToSub(blockLocation, sl.NodeCtx())
+		ancInboundEtxs := subRollup.FilterToSub(blockLocation, sl.NodeCtx(), blockOrder)
 		newlyConfirmedEtxs = append(newlyConfirmedEtxs, ancInboundEtxs...)
 		block = parent
 	}
-	return newlyConfirmedEtxs, subRollup, nil
+	return newlyConfirmedEtxs, nil
 }
 
 // PCRC previous coincidence reference check makes sure there are not any cyclic references in the graph and calculates new termini and the block terminus
@@ -1334,7 +1345,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 			}).Error("Pending Block Body not found")
 			return nil, ErrBodyNotFound
 		}
-		if len(pendingBlockBody.Transactions()) == 0 {
+		if len(pendingBlockBody.ExtTransactions()) == 0 {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),

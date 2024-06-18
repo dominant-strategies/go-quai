@@ -127,6 +127,10 @@ func (tx *QiTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	panic("Qi TX does not have ECDSA signature values")
 }
 
+func (tx *QiTx) isCoinbase() bool {
+	panic("qi TX does not have isCoinbase field")
+}
+
 // CalculateQiTxGas calculates the total amount of gas a Qi tx uses (for fee calculation)
 func CalculateQiTxGas(transaction *Transaction, location common.Location) uint64 {
 	if transaction.Type() != QiTxType {
