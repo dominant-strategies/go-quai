@@ -1022,3 +1022,21 @@ func FuzzQiTxHashingWorkNonce(f *testing.F) {
 		}
 	})
 }
+
+func TestCoinbaseTxEncodeDecode(t *testing.T) {
+	toAddr := common.HexToAddress("0x0013e45aa16163F2663015b6695894D918866d19", common.Location{0, 0})
+	coinbaseTx := NewTx(&ExternalTx{To: &toAddr, Value: big.NewInt(10), Data: []byte{1}, OriginatingTxHash: common.HexToHash("0xa"), Sender: common.HexToAddress("0x0", common.Location{0, 0})})
+
+	// Encode transaction
+	protoTx, err := coinbaseTx.ProtoEncode()
+	require.Equal(t, err, nil)
+
+	// Decode transaction
+	tx := Transaction{}
+	err = tx.ProtoDecode(protoTx, common.Location{0, 0})
+	require.Equal(t, err, nil)
+
+	reflect.DeepEqual(coinbaseTx, tx)
+
+	require.Equal(t, coinbaseTx.Hash(), tx.Hash())
+}

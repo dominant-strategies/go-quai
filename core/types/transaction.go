@@ -104,6 +104,7 @@ type TxData interface {
 	parentHash() *common.Hash
 	mixHash() *common.Hash
 	workNonce() *BlockNonce
+	isCoinbase() bool
 	// Schnorr segregated sigs
 	getSchnorrSignature() *schnorr.Signature
 }
@@ -167,6 +168,8 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		etxIndex := uint32(tx.ETXIndex())
 		protoTx.EtxIndex = &etxIndex
 		protoTx.EtxSender = tx.ETXSender().Bytes()
+		isCoinbase := tx.IsCoinbase()
+		protoTx.IsCoinbase = &isCoinbase
 	case QiTxType:
 		var err error
 		protoTx.TxIns, err = tx.TxIn().ProtoEncode()
@@ -308,19 +311,22 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.EtxIndex == nil {
 			return errors.New("missing required field 'EtxIndex' in ProtoTransaction")
 		}
+		if protoTx.IsCoinbase == nil {
+			return errors.New("missing required field 'IsCoinbase in ProtoTransaction")
+		}
 
 		var etx ExternalTx
+		etx.Sender = common.BytesToAddress(protoTx.GetEtxSender(), location)
 		etx.AccessList = AccessList{}
 		etx.AccessList.ProtoDecode(protoTx.GetAccessList(), location)
-		to := common.BytesToAddress(protoTx.GetTo(), location)
-		etx.To = &to
-
 		etx.Gas = protoTx.GetGas()
 		etx.Data = protoTx.GetData()
-		etx.Value = new(big.Int).SetBytes(protoTx.GetValue())
 		etx.OriginatingTxHash = common.BytesToHash(protoTx.GetOriginatingTxHash().Value)
 		etx.ETXIndex = uint16(protoTx.GetEtxIndex())
-		etx.Sender = common.BytesToAddress(protoTx.GetEtxSender(), location)
+		to := common.BytesToAddress(protoTx.GetTo(), location)
+		etx.To = &to
+		etx.Value = new(big.Int).SetBytes(protoTx.GetValue())
+		etx.IsCoinbase = protoTx.GetIsCoinbase()
 
 		tx.SetInner(&etx)
 
@@ -561,6 +567,8 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 func (tx *Transaction) Nonce() uint64                  { return tx.inner.nonce() }
 func (tx *Transaction) ETXSender() common.Address      { return tx.inner.etxSender() }
 func (tx *Transaction) OriginatingTxHash() common.Hash { return tx.inner.originatingTxHash() }
+
+func (tx *Transaction) IsCoinbase() bool { return tx.inner.isCoinbase() }
 
 func (tx *Transaction) ETXIndex() uint16 { return tx.inner.etxIndex() }
 
@@ -840,25 +848,32 @@ func (s Transactions) FilterToLocation(l common.Location) Transactions {
 
 // FilterToSlice returns the subset of transactions with a 'to' address which
 // belongs to the given sub location, at or above the given minimum context
-func (s Transactions) FilterToSub(slice common.Location, nodeCtx int) Transactions {
+func (s Transactions) FilterToSub(slice common.Location, nodeCtx int, order int) Transactions {
 	filteredList := Transactions{}
 	for _, tx := range s {
-		// check if the tx is a conversion type and filter all the conversion types
+		// check if the tx is a conversion type and filter all the conversion, coinbase types
 		// that are going into the region in the case of Prime and all the ones
 		// going to the zone in the case of region
 		// In the case of Prime, we will filter all the etxs that are going into
 		// any zone in the given location, but in the case of Region we only send
 		// the relevant etxs down
+		coinbase := IsCoinBaseTx(tx)
+		conversion := IsConversionTx(tx)
+		standardEtx := !coinbase && !conversion
 		switch nodeCtx {
 		case common.PRIME_CTX:
-			if tx.IsTxAConversionTx(slice) && tx.To().Location().Region() == slice.Region() ||
-				tx.To().Location().Region() == slice.Region() {
+			if tx.To().Location().Region() == slice.Region() {
 				filteredList = append(filteredList, tx)
 			}
 		case common.REGION_CTX:
-			if tx.IsTxAConversionTx(slice) && tx.To().Location().Equal(slice) ||
-				tx.To().Location().Equal(slice) {
-				filteredList = append(filteredList, tx)
+			if order == common.PRIME_CTX {
+				if tx.To().Location().Equal(slice) {
+					filteredList = append(filteredList, tx)
+				}
+			} else {
+				if tx.To().Location().Equal(slice) && standardEtx {
+					filteredList = append(filteredList, tx)
+				}
 			}
 		}
 	}
@@ -1234,9 +1249,13 @@ func GetInnerForTesting(tx *Transaction) TxData {
 }
 
 // It checks if an tx is a conversion type
-func (tx *Transaction) IsTxAConversionTx(nodeLocation common.Location) bool {
+func IsConversionTx(tx *Transaction) bool {
 	if tx.Type() != ExternalTxType {
 		return false
 	}
-	return tx.ETXSender().Location().Equal(*tx.To().Location())
+	if !tx.IsCoinbase() {
+		return tx.ETXSender().Location().Equal(*tx.To().Location())
+	} else {
+		return false
+	}
 }

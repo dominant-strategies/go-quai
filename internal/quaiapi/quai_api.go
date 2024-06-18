@@ -496,7 +496,7 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*bi
 			lastPrime = header
 		}
 		quaiBaseFee := misc.CalcBaseFee(chainCfg, header)
-		qiBaseFee := misc.QuaiToQi(lastPrime, quaiBaseFee)
+		qiBaseFee := misc.QuaiToQi(lastPrime.WorkObjectHeader(), quaiBaseFee)
 		if qiBaseFee.Cmp(big.NewInt(0)) == 0 {
 			// Minimum base fee is 1 qit or smallest unit
 			return types.Denominations[0], nil
@@ -531,7 +531,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	if lastPrime == nil || err != nil {
 		lastPrime = header
 	}
-	feeInQi := misc.QuaiToQi(lastPrime, feeInQuai)
+	feeInQi := misc.QuaiToQi(lastPrime.WorkObjectHeader(), feeInQuai)
 	if feeInQi.Cmp(big.NewInt(0)) == 0 {
 		// Minimum fee is 1 qit or smallest unit
 		return types.Denominations[0], nil
@@ -842,7 +842,7 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockRef in
 		return nil
 	}
 
-	return misc.QiToQuai(header, new(big.Int).SetUint64(qiAmount))
+	return misc.QiToQuai(header.WorkObjectHeader(), new(big.Int).SetUint64(qiAmount))
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
@@ -859,5 +859,5 @@ func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockRef 
 		return nil
 	}
 
-	return misc.QuaiToQi(header, new(big.Int).SetUint64(quaiAmount))
+	return misc.QuaiToQi(header.WorkObjectHeader(), new(big.Int).SetUint64(quaiAmount))
 }

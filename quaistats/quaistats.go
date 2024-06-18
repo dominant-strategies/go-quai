@@ -1067,9 +1067,10 @@ type BatchObject struct {
 
 func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
 	txCount := float64(len(block.Transactions()))
-	quaiTxCount := float64(len(block.QuaiTransactions()))
-	qiTxCount := float64(len(block.QiTransactions()))
-	extTxInCount := float64(len(block.Body().ExternalTransactions()))
+	txInfo := block.TransactionsInfo()
+	quaiTxCount := float64(txInfo["quai"].(int))
+	qiTxCount := float64(txInfo["qi"].(int))
+	extTxInCount := float64(txInfo["etxInbound"].(int))
 
 	currentBlock := cachedBlock{
 		number:        block.NumberU64(s.backend.NodeCtx()),
@@ -1257,15 +1258,15 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 	}
 	qiType := block.Coinbase().IsInQiLedgerScope()
 	difficulty := block.Difficulty().String()
-	quaiPerQi := misc.QiToQuai(block, big.NewInt(1)).String()
+	quaiPerQi := misc.QiToQuai(block.WorkObjectHeader(), big.NewInt(1)).String()
 	var quaiReward *big.Int
 	var qiReward *big.Int
 	if qiType {
-		qiReward = misc.CalculateReward(block)
-		quaiReward = misc.QiToQuai(block, qiReward)
+		qiReward = misc.CalculateReward(block.WorkObjectHeader())
+		quaiReward = misc.QiToQuai(block.WorkObjectHeader(), qiReward)
 	} else {
-		quaiReward = misc.CalculateReward(block)
-		qiReward = misc.QuaiToQi(block, quaiReward)
+		quaiReward = misc.CalculateReward(block.WorkObjectHeader())
+		qiReward = misc.QuaiToQi(block.WorkObjectHeader(), quaiReward)
 	}
 
 	// Assemble and return the block stats

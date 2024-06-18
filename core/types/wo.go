@@ -319,21 +319,19 @@ func (wo *WorkObject) InterlinkHashes() common.Hashes {
 }
 
 func (wo *WorkObject) QiTransactions() []*Transaction {
-	return wo.Body().QiTransactions()
-}
-
-func (wo *WorkObject) QuaiTransactions() []*Transaction {
-	return wo.Body().QuaiTransactions()
+	qiTxs := make([]*Transaction, 0)
+	for _, t := range wo.Transactions() {
+		if t.Type() == QiTxType {
+			qiTxs = append(qiTxs, t)
+		}
+	}
+	return qiTxs
 }
 
 func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
 	// TODO: cache the UTXO loop
 	qiTxs := make([]*Transaction, 0)
-	for i, t := range wo.Transactions() {
-		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) {
-			// ignore the Qi coinbase tx
-			continue
-		}
+	for _, t := range wo.Transactions() {
 		if t.Type() == QiTxType {
 			qiTxs = append(qiTxs, t)
 		}
@@ -343,8 +341,8 @@ func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
 
 func (wo *WorkObject) TransactionsWithReceipts() []*Transaction {
 	txs := make([]*Transaction, 0)
-	for i, t := range wo.Transactions() {
-		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) {
+	for _, t := range wo.Transactions() {
+		if IsCoinBaseTx(t) {
 			// ignore the coinbase tx
 			continue
 		}
@@ -355,36 +353,48 @@ func (wo *WorkObject) TransactionsWithReceipts() []*Transaction {
 	return txs
 }
 
-// QuaiTransactionsWithoutCoinbase returns all Quai EVM transactions in the block, excluding the coinbase transaction.
-// This also returns all transactions that have an associated receipt.
-func (wo *WorkObject) QuaiTransactionsWithoutCoinbase() []*Transaction {
-	quaiTxs := make([]*Transaction, 0)
-	for i, t := range wo.Transactions() {
-		if i == 0 && IsCoinBaseTx(t, wo.woHeader.parentHash, wo.woHeader.location) || t.Type() == QiTxType || (t.Type() == ExternalTxType && t.To().IsInQiLedgerScope()) {
-			// ignore the Quai coinbase tx and Quai->Qi to comply with prior functionality as it is not a normal transaction
-			continue
-		}
-		if t.Type() == QuaiTxType {
-			quaiTxs = append(quaiTxs, t)
-		}
-	}
-	return quaiTxs
-}
-
-func (wo *WorkObject) InputsAndOutputsWithoutCoinbase() (uint, uint) {
-	inputs := 0
-	outputs := 0
-	for i, tx := range wo.Transactions() {
-		if i == 0 && IsCoinBaseTx(tx, wo.woHeader.parentHash, wo.woHeader.location) {
-			// ignore the Qi coinbase tx
-			continue
-		}
-		if tx.Type() == QiTxType {
+func (wo *WorkObject) TransactionsInfo() map[string]interface{} {
+	txInfo := make(map[string]interface{})
+	txInfo["hash"] = wo.Hash()
+	var inputs, outputs int
+	var quai, qi, etxOutBound, etxInbound, coinbaseOutboundEtx, coinbaseInboundEtx, conversionOutboundEtx, conversionInboundEtx int
+	var txCount int
+	for _, tx := range wo.Transactions() {
+		txCount++
+		if tx.Type() == QuaiTxType {
+			quai++
+		} else if tx.Type() == QiTxType {
+			qi++
 			inputs += len(tx.TxIn())
 			outputs += len(tx.TxOut())
+		} else if tx.Type() == ExternalTxType {
+			etxInbound++
+			if IsCoinBaseTx(tx) {
+				coinbaseInboundEtx++
+			} else if IsConversionTx(tx) {
+				conversionInboundEtx++
+			}
 		}
 	}
-	return uint(inputs), uint(outputs)
+	for _, etx := range wo.ExtTransactions() {
+		etxOutBound++
+		if IsCoinBaseTx(etx) {
+			coinbaseOutboundEtx++
+		} else if IsConversionTx(etx) {
+			conversionOutboundEtx++
+		}
+	}
+	txInfo["txs"] = txCount
+	txInfo["quai"] = quai
+	txInfo["qi"] = qi
+	txInfo["net input/outputs"] = outputs - inputs
+	txInfo["etxInbound"] = etxInbound
+	txInfo["etxOutbound"] = etxOutBound
+	txInfo["coinbaseEtxOutbound"] = coinbaseOutboundEtx
+	txInfo["coinbaseEtxInbound"] = coinbaseInboundEtx
+	txInfo["conversionEtxOutbound"] = conversionOutboundEtx
+	txInfo["conversionEtxInbound"] = conversionInboundEtx
+	return txInfo
 }
 
 func (wo *WorkObject) NumberArray() []*big.Int {
@@ -578,27 +588,6 @@ func (wb *WorkObjectBody) Manifest() BlockManifest {
 
 func (wb *WorkObjectBody) InterlinkHashes() common.Hashes {
 	return wb.interlinkHashes
-}
-
-func (wb *WorkObjectBody) QiTransactions() []*Transaction {
-	// TODO: cache the UTXO loop
-	qiTxs := make([]*Transaction, 0)
-	for _, t := range wb.Transactions() {
-		if t.Type() == QiTxType {
-			qiTxs = append(qiTxs, t)
-		}
-	}
-	return qiTxs
-}
-
-func (wb *WorkObjectBody) QuaiTransactions() []*Transaction {
-	quaiTxs := make([]*Transaction, 0)
-	for _, t := range wb.Transactions() {
-		if t.Type() == QuaiTxType {
-			quaiTxs = append(quaiTxs, t)
-		}
-	}
-	return quaiTxs
 }
 
 func (wb *WorkObjectBody) ExternalTransactions() []*Transaction {

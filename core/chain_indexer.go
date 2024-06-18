@@ -546,13 +546,12 @@ func (c *ChainIndexer) removeSectionHead(section uint64) {
 
 // addOutpointsToIndexer removes the spent outpoints and adds new utxos to the indexer.
 func (c *ChainIndexer) addOutpointsToIndexer(addressOutpoints map[string]map[string]*types.OutpointAndDenomination, nodeCtx int, config params.ChainConfig, block *types.WorkObject) {
-	utxos := block.QiTransactions()
+	utxos := block.QiTransactions() // TODO: Need to add the coinbase outputs into the Indexer
 
 	for _, tx := range utxos {
 		for _, in := range tx.TxIn() {
 
-			// Skip Coinbase TxIns since they do not have a previous outpoint
-			if types.IsCoinBaseTx(tx, block.ParentHash(nodeCtx), config.Location) {
+			if types.IsCoinBaseTx(tx) {
 				continue
 			}
 
@@ -611,7 +610,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 				delete(outpointsForAddress, outpoint.Key())
 			}
 
-			if types.IsCoinBaseTx(tx, block.ParentHash(nodeCtx), config.Location) {
+			if types.IsCoinBaseTx(tx) {
 				continue
 			}
 

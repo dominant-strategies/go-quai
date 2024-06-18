@@ -93,6 +93,7 @@ type ExecutionResult struct {
 	Err          error                // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData   []byte               // Returned data from evm(function result or data supplied with revert opcode)
 	Etxs         []*types.Transaction // External transactions generated from opETX
+	QuaiFees     *big.Int             // Fees that needs to be credited to the miner from the transaction
 	ContractAddr *common.Address      // Address of the contract created by the message
 }
 
@@ -388,12 +389,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 
-	coinbase, err := st.evm.Context.Coinbase.InternalAddress()
+	_, err = st.evm.Context.Coinbase.InternalAddress()
 	if err != nil {
 		return nil, err
 	}
-	if coinbase.IsInQuaiLedgerScope() && !st.msg.IsETX() {
-		st.state.AddBalance(coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	fees := big.NewInt(0)
+	if !st.msg.IsETX() {
+		fees = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 	}
 
 	return &ExecutionResult{
@@ -401,6 +403,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		Err:          vmerr,
 		ReturnData:   ret,
 		Etxs:         etxs,
+		QuaiFees:     fees,
 		ContractAddr: contractAddr,
 	}, nil
 }
