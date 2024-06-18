@@ -128,9 +128,9 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
 // seed that results in correct final block difficulty.
-func (progpow *Progpow) mine(header *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
+func (progpow *Progpow) mine(workObject *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
-	diff := new(big.Int).Set(header.Difficulty())
+	diff := new(big.Int).Set(workObject.Difficulty())
 	c, _ := mathutil.BinaryLog(diff, mantBits)
 	if c <= params.WorkSharesThresholdDiff {
 		return
@@ -168,17 +168,17 @@ search:
 				}
 				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
 			}
-			cache := progpow.cache(header.NumberU64(nodeCtx))
-			size := datasetSize(header.NumberU64(nodeCtx))
+			cache := progpow.cache(workObject.NumberU64(nodeCtx))
+			size := datasetSize(workObject.NumberU64(nodeCtx))
 			// Compute the PoW value of this nonce
-			digest, result := powLight(size, cache.cache, header.SealHash().Bytes(), nonce, header.NumberU64(common.ZONE_CTX))
+			digest, result := powLight(size, cache.cache, workObject.SealHash().Bytes(), nonce, workObject.NumberU64(common.ZONE_CTX))
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
-				header = types.CopyWorkObject(header)
-				header.WorkObjectHeader().SetNonce(types.EncodeNonce(nonce))
+				workObject = types.CopyWorkObject(workObject)
+				workObject.WorkObjectHeader().SetNonce(types.EncodeNonce(nonce))
 				hashBytes := common.BytesToHash(digest)
-				header.SetMixHash(hashBytes)
-				found <- header
+				workObject.SetMixHash(hashBytes)
+				found <- workObject
 				break search
 			}
 			nonce++

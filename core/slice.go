@@ -1331,7 +1331,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
-			}).Warn("Pending Block Body not found")
+			}).Error("Pending Block Body not found")
 			return nil, ErrBodyNotFound
 		}
 		if len(pendingBlockBody.Transactions()) == 0 {
@@ -1340,7 +1340,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
-			}).Warn("Pending Block Body has no transactions")
+			}).Error("Pending Block Body has no transactions")
 			return nil, ErrBodyNotFound
 		}
 	} else {
