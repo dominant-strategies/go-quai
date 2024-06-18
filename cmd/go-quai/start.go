@@ -70,7 +70,7 @@ func startCmdPreRun(cmd *cobra.Command, args []string) error {
 
 func runStart(cmd *cobra.Command, args []string) error {
 	network := viper.GetString(utils.EnvironmentFlag.Name)
-	log.Global.Infof("Starting %s on the %s network", params.Version.Full(), network)
+	log.Global.Infof("Starting %s on the %s network", params.VersionWithCommit(), network)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

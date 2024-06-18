@@ -111,7 +111,7 @@ func makeConfigNode(slicesRunning []common.Location, nodeLocation common.Locatio
 func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = ""
-	cfg.Version = params.VersionWithCommit("", "")
+	cfg.Version = params.VersionWithCommit()
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
 	cfg.WSModules = append(cfg.WSModules, "eth")
 	return cfg
