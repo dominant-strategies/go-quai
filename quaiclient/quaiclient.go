@@ -30,6 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"google.golang.org/protobuf/proto"
 )
 
 var exponentialBackoffCeilingSecs int64 = 60 // 1 minute
@@ -87,7 +88,7 @@ func (ec *Client) Close() {
 }
 
 // SubscribePendingHeader subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
+func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- []byte) (quai.Subscription, error) {
 	return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader")
 }
 
@@ -115,23 +116,47 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number string) *types.Head
 
 // GetPendingHeader gets the latest pending header from the chain.
 func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, error) {
-	var pendingHeader *types.WorkObject
-	err := ec.c.CallContext(ctx, &pendingHeader, "quai_getPendingHeader")
+	var raw hexutil.Bytes
+	err := ec.c.CallContext(ctx, &raw, "quai_getPendingHeader")
 	if err != nil {
 		return nil, err
 	}
-	return pendingHeader, nil
+	protoWo := &types.ProtoWorkObject{}
+	err = proto.Unmarshal(raw, protoWo)
+	if err != nil {
+		return nil, err
+	}
+	wo := &types.WorkObject{}
+	err = wo.ProtoDecode(protoWo, protoWo.GetWoHeader().GetLocation().Value, types.PEtxObject)
+	if err != nil {
+		return nil, err
+	}
+	return wo, nil
 }
 
 // ReceiveMinedHeader sends a mined block back to the node
 func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObject) error {
-	data := header.RPCMarshalWorkObject()
-	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", data)
+	protoWo, err := header.ProtoEncode(types.PEtxObject)
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoWo)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", hexutil.Bytes(data))
 }
 
 func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObjectHeader) error {
-	data := header.RPCMarshalWorkObjectHeader()
-	return ec.c.CallContext(ctx, nil, "quai_receiveWorkShare", data)
+	protoWs, err := header.ProtoEncode()
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoWs)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "quai_receiveWorkShare", hexutil.Bytes(data))
 }
 
 // Filters

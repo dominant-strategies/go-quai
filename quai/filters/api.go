@@ -34,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -679,8 +680,15 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 					// Only keep the Header in the body
 					pendingHeaderForMining := b.WithBody(b.Header(), nil, nil, nil, nil, nil)
 					// Marshal the response.
-					marshalHeader := pendingHeaderForMining.RPCMarshalWorkObject()
-					notifier.Notify(rpcSub.ID, marshalHeader)
+					protoWo, err := pendingHeaderForMining.ProtoEncode(types.PEtxObject)
+					if err != nil {
+						return
+					}
+					data, err := proto.Marshal(protoWo)
+					if err != nil {
+						return
+					}
+					notifier.Notify(rpcSub.ID, data)
 				}()
 			case <-rpcSub.Err():
 				headerSub.Unsubscribe()

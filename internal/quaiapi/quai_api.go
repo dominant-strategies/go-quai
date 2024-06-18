@@ -18,7 +18,6 @@ package quaiapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math/big"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
+	"google.golang.org/protobuf/proto"
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -693,14 +693,19 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.WorkObject) (
 }
 
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
-func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw hexutil.Bytes) error {
 	nodeCtx := s.b.NodeCtx()
-	// Decode header and transactions.
-	var woHeader *types.WorkObject
-	if err := json.Unmarshal(raw, &woHeader); err != nil {
+	protoWorkObject := &types.ProtoWorkObject{}
+	err := proto.Unmarshal(raw, protoWorkObject)
+	if err != nil {
 		return err
 	}
-	woHeader.Header().SetCoinbase(common.BytesToAddress(woHeader.Coinbase().Bytes(), s.b.NodeLocation()))
+
+	woHeader := &types.WorkObject{}
+	err = woHeader.ProtoDecode(protoWorkObject, s.b.NodeLocation(), types.PEtxObject)
+	if err != nil {
+		return err
+	}
 	block, err := s.b.ConstructLocalMinedBlock(woHeader)
 	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && nodeCtx < common.ZONE_CTX {
 		s.b.Logger().Info("filling sub manifest")
@@ -737,15 +742,23 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw js
 	return nil
 }
 
-func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw json.RawMessage) error {
+func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexutil.Bytes) error {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return errors.New("work shares cannot be broadcasted in non-zone chain")
 	}
-	var workShare *types.WorkObjectHeader
-	if err := json.Unmarshal(raw, &workShare); err != nil {
+	protoWorkShare := &types.ProtoWorkObjectHeader{}
+	err := proto.Unmarshal(raw, protoWorkShare)
+	if err != nil {
 		return err
 	}
+
+	workShare := &types.WorkObjectHeader{}
+	err = workShare.ProtoDecode(protoWorkShare)
+	if err != nil {
+		return err
+	}
+
 	if workShare != nil {
 		// check if the workshare is valid before broadcasting as a sanity
 		if !s.b.CheckIfValidWorkShare(workShare) {
@@ -777,7 +790,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw json
 	return nil
 }
 
-func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[string]interface{}, error) {
+func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getPendingHeader can only be called in zone chain")
@@ -794,8 +807,15 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (map[str
 	// Only keep the Header in the body
 	pendingHeaderForMining := pendingHeader.WithBody(pendingHeader.Header(), nil, nil, nil, nil, nil)
 	// Marshal the response.
-	marshaledPh := pendingHeaderForMining.RPCMarshalWorkObject()
-	return marshaledPh, nil
+	protoWo, err := pendingHeaderForMining.ProtoEncode(types.PEtxObject)
+	if err != nil {
+		return nil, err
+	}
+	data, err := proto.Marshal(protoWo)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 // ListRunningChains returns the running locations where the node is serving data.
