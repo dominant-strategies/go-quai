@@ -29,6 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai"
 )
 
@@ -155,8 +156,7 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	}
 
 	idOpts := []identify.Option{
-		// TODO: Add version number + commit hash
-		identify.UserAgent("go-quai"),
+		identify.UserAgent("go-quai " + params.VersionWithCommit()),
 		identify.ProtocolVersion(string(protocol.ProtocolVersion)),
 	}
 
