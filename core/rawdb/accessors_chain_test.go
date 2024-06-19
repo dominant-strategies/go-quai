@@ -99,6 +99,20 @@ func TestHeaderStorage(t *testing.T) {
 	}
 }
 
+func TestProcessedStateStorage(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+
+	if entry := ReadProcessedState(db, common.Hash{1}); entry != false {
+		t.Fatal("False positive on ReadProcessedState")
+	}
+
+	WriteProcessedState(db, common.Hash{1})
+
+	if entry := ReadProcessedState(db, common.Hash{1}); entry != true {
+		t.Fatal("False negative on ReadProcessedState")
+	}
+}
+
 func TestHeadHeaderStorage(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 
@@ -541,8 +555,9 @@ func TestWorkObjectStorage(t *testing.T) {
 	woBody.SetTransactions([]*types.Transaction{})
 	woBody.SetExtTransactions([]*types.Transaction{})
 	woBody.SetHeader(types.EmptyHeader())
-	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
 
+	number := big.NewInt(11)
+	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
 	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
@@ -557,6 +572,17 @@ func TestWorkObjectStorage(t *testing.T) {
 	}
 	// Delete the header and verify the execution
 	DeleteWorkObject(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64(), types.BlockObject)
+	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
+		t.Fatalf("Deleted header returned: %v", entry)
+
+	}
+
+	//Write work object again to test delete without number
+	WriteWorkObject(db, header.Hash(), header, types.BlockObject, common.ZONE_CTX)
+	DeleteBlockWithoutNumber(db, header.Hash(), header.NumberU64(common.ZONE_CTX), types.BlockObject)
+	if entry := ReadHeaderNumber(db, header.Hash()); *entry != number.Uint64() {
+		t.Fatalf("Wrong header number returned: have %v, want %v", *entry, number.Uint64())
+	}
 	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 
