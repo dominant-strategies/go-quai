@@ -24,9 +24,12 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/sirupsen/logrus"
 )
 
 // Config is a basic type specifying certain configuration flags for running
@@ -41,9 +44,11 @@ type Config struct {
 	GasLimit    uint64
 	GasPrice    *big.Int
 	Value       *big.Int
+	Lock        *big.Int
 	Debug       bool
 	EVMConfig   vm.Config
 	BaseFee     *big.Int
+	Logger      *logrus.Logger
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
@@ -72,6 +77,9 @@ func setDefaults(cfg *Config) {
 	if cfg.Value == nil {
 		cfg.Value = new(big.Int)
 	}
+	if cfg.Lock == nil {
+		cfg.Lock = new(big.Int)
+	}
 	if cfg.BlockNumber == nil {
 		cfg.BlockNumber = new(big.Int)
 	}
@@ -82,6 +90,10 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.BaseFee == nil {
 		cfg.BaseFee = big.NewInt(params.InitialBaseFee)
+	}
+
+	if cfg.Logger == nil {
+		cfg.Logger = log.Global
 	}
 }
 
@@ -97,10 +109,10 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
-		address = common.BytesToAddress([]byte("contract"))
+		address = common.BytesToAddress([]byte("contract"), cfg.ChainConfig.Location)
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
@@ -109,7 +121,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		return []byte{}, nil, err
 	}
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber)
-	cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
+	cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules, cfg.ChainConfig.Location), nil)
 
 	cfg.State.CreateAccount(internal)
 	// set the receiver's (the executing contract) code for execution.
@@ -117,10 +129,11 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	// Call the code with the given configuration.
 	ret, _, err := vmenv.Call(
 		sender,
-		common.BytesToAddress([]byte("contract")),
+		common.BytesToAddress([]byte("contract"), cfg.ChainConfig.Location),
 		input,
 		cfg.GasLimit,
 		cfg.Value,
+		cfg.Lock,
 	)
 
 	return ret, cfg.State, err
@@ -134,14 +147,14 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
 	)
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber)
-	cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
+	cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules, cfg.ChainConfig.Location), nil)
 
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
@@ -170,7 +183,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	statedb := cfg.State
 
 	rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber)
-	statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
+	statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules, cfg.ChainConfig.Location), nil)
 
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
@@ -179,6 +192,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		input,
 		cfg.GasLimit,
 		cfg.Value,
+		cfg.Lock,
 	)
 	return ret, leftOverGas, err
 }
