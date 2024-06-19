@@ -173,10 +173,11 @@ func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string
 
 // Status returns the number of pending and queued transaction in the pool.
 func (s *PublicTxPoolAPI) Status() map[string]hexutil.Uint {
-	pending, queue := s.b.Stats()
+	pending, queue, qi := s.b.Stats()
 	return map[string]hexutil.Uint{
 		"pending": hexutil.Uint(pending),
 		"queued":  hexutil.Uint(queue),
+		"qi":      hexutil.Uint(qi),
 	}
 }
 
