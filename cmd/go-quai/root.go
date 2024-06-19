@@ -56,7 +56,7 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			log.Global.Fatalf("Failed to create config directory: %s, Error: %v", configDir, err)
 		}
-		log.Global.Debug("Config directory created: %s", configDir)
+		log.Global.Debugf("Config directory created: %s", configDir)
 	} else if err != nil {
 		log.Global.Fatalf("Error accessing config directory: %s, Error: %v", configDir, err)
 	}
