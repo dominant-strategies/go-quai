@@ -277,3 +277,9 @@ func (ec *Client) QuaiRateAtBlock(ctx context.Context, block interface{}) (*big.
 	}
 	return (*big.Int)(&hex), nil
 }
+
+func (ec *Client) TxPoolStatus(ctx context.Context) (map[string]hexutil.Uint, error) {
+	var result map[string]hexutil.Uint
+	err := ec.c.CallContext(ctx, &result, "txpool_status")
+	return result, err
+}

@@ -1211,7 +1211,7 @@ func (c *Core) Nonce(addr common.Address) uint64 {
 	return c.sl.txPool.Nonce(internal)
 }
 
-func (c *Core) Stats() (int, int) {
+func (c *Core) Stats() (int, int, int) {
 	return c.sl.txPool.Stats()
 }
 

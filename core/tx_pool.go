@@ -476,7 +476,7 @@ func (pool *TxPool) loop() {
 		// Handle stats reporting ticks
 		case <-report.C:
 			pool.mu.RLock()
-			pending, queued := pool.stats()
+			pending, queued, qi := pool.stats()
 			stales := pool.priced.stales
 			pool.logger.WithFields(log.Fields{
 				"Local Txs":  pool.localTxsCount,
@@ -490,6 +490,7 @@ func (pool *TxPool) loop() {
 				"pending": pending,
 				"queued":  queued,
 				"stales":  stales,
+				"qi":      qi,
 			}).Info("Transaction pool status report")
 		// Handle inactive account transaction eviction
 		case <-evict.C:
@@ -574,16 +575,18 @@ func (pool *TxPool) Nonce(addr common.InternalAddress) uint64 {
 
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
-func (pool *TxPool) Stats() (int, int) {
+func (pool *TxPool) Stats() (int, int, int) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
+	pool.qiMu.RLock()
+	defer pool.qiMu.RUnlock()
 
 	return pool.stats()
 }
 
 // stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
-func (pool *TxPool) stats() (int, int) {
+func (pool *TxPool) stats() (int, int, int) {
 	pending := 0
 	for _, list := range pool.pending {
 		pending += list.Len()
@@ -592,7 +595,7 @@ func (pool *TxPool) stats() (int, int) {
 	for _, list := range pool.queue {
 		queued += list.Len()
 	}
-	return pending, queued
+	return pending, queued, len(pool.qiPool)
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
