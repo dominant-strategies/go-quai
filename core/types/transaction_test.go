@@ -729,23 +729,15 @@ func FuzzEtxSender(f *testing.F) {
 		f.Errorf("Transaction hash is empty")
 	}
 
-	//Test Nil case
-	nilInner := *tx.inner.(*ExternalTx)
-	nilInner.To = nil
-	// Create a new transaction with the modified inner transaction
-	nilTx := NewTx(&nilInner)
-	require.NotEqual(f, nilTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), nil)
-
 	f.Fuzz(func(t *testing.T, b []byte) {
-		if !tx.inner.to().Equal(common.BytesToAddress(b, common.Location{0, 0})) {
+		if !tx.inner.etxSender().Equal(common.BytesToAddress(b, common.Location{0, 0})) {
 			// change something in the transaction
 			newInner := *tx.inner.(*ExternalTx)
-			a := common.BytesToAddress(b, common.Location{0, 0})
-			newInner.To = &a
+			newInner.Sender = common.BytesToAddress(b, common.Location{0, 0})
 			// Create a new transaction with the modified inner transaction
 			newTx := NewTx(&newInner)
 
-			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.to(), a)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.etxSender(), newInner.Sender)
 		}
 	})
 }
