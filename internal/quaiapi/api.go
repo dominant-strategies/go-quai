@@ -1045,13 +1045,24 @@ type RPCTransaction struct {
 	V                 *hexutil.Big      `json:"v,omitempty"`
 	R                 *hexutil.Big      `json:"r,omitempty"`
 	S                 *hexutil.Big      `json:"s,omitempty"`
-	TxIn              []types.TxIn      `json:"inputs,omitempty"`
-	TxOut             []types.TxOut     `json:"outputs,omitempty"`
+	TxIn              []RPCTxIn         `json:"inputs,omitempty"`
+	TxOut             []RPCTxOut        `json:"outputs,omitempty"`
 	UTXOSignature     hexutil.Bytes     `json:"utxoSignature,omitempty"`
 	OriginatingTxHash *common.Hash      `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64   `json:"etxIndex,omitempty"`
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
+}
+
+type RPCTxIn struct {
+	PreviousOutPoint types.OutPoint `json:"previousOutPoint,omitempty"`
+	PubKey           hexutil.Bytes  `json:"pubKey,omitempty"`
+}
+
+type RPCTxOut struct {
+	Denomination hexutil.Uint  `json:"denomination,omitempty"`
+	Address      hexutil.Bytes `json:"address,omitempty"`
+	Lock         *hexutil.Big  `json:"lock,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1069,9 +1080,13 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			Type:          hexutil.Uint64(tx.Type()),
 			ChainID:       (*hexutil.Big)(tx.ChainId()),
 			Hash:          tx.Hash(),
-			TxIn:          tx.TxIn(),
-			TxOut:         tx.TxOut(),
 			UTXOSignature: hexutil.Bytes(sig),
+		}
+		for _, txin := range tx.TxIn() {
+			result.TxIn = append(result.TxIn, RPCTxIn{PreviousOutPoint: txin.PreviousOutPoint, PubKey: hexutil.Bytes(txin.PubKey)})
+		}
+		for _, txout := range tx.TxOut() {
+			result.TxOut = append(result.TxOut, RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
 		}
 		return result
 	}
