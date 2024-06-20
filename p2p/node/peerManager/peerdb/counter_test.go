@@ -32,7 +32,7 @@ func TestCounter(t *testing.T) {
 			require.NoError(t, err)
 
 			// remove the db file
-			dbFile := viper.GetString(utils.DataDirFlag.Name) + "/" + locationName + dbDir
+			dbFile := viper.GetString(utils.DataDirFlag.Name) + "/" + locationName + "/" + dbDir
 			err = os.RemoveAll(dbFile)
 			require.NoError(t, err)
 		},
