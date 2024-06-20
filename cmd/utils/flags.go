@@ -77,7 +77,6 @@ var NodeFlags = []Flag{
 	DBEngineFlag,
 	NetworkIdFlag,
 	SlicesRunningFlag,
-	GenesisNonceFlag,
 	DevPeriodFlag,
 	IdentityFlag,
 	DocRootFlag,
@@ -277,12 +276,6 @@ var (
 		Name:  c_NodeFlagPrefix + "slices",
 		Value: "",
 		Usage: "All the slices that are running on this node" + generateEnvDoc(c_NodeFlagPrefix+"slices"),
-	}
-
-	GenesisNonceFlag = Flag{
-		Name:  c_NodeFlagPrefix + "nonce",
-		Value: 0,
-		Usage: "Nonce to use for the genesis block (integer)" + generateEnvDoc(c_NodeFlagPrefix+"nonce"),
 	}
 
 	DevPeriodFlag = Flag{
@@ -1405,9 +1398,6 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		if !viper.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
-	}
-	if viper.GetString(EnvironmentFlag.Name) != params.LocalName {
-		cfg.Genesis.Nonce = viper.GetUint64(GenesisNonceFlag.Name)
 	}
 
 	cfg.Genesis.Config.Location = nodeLocation
