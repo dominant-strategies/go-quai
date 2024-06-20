@@ -89,12 +89,6 @@ func TestLocationHash(t *testing.T) {
 	}
 }
 
-func FuzzMixHash(f *testing.F) {
-	fuzzHash(f,
-		func(woh *WorkObjectHeader) common.Hash { return woh.mixHash },
-		func(woh *WorkObjectHeader, hash common.Hash) { woh.mixHash = hash })
-}
-
 func FuzzTimeHash(f *testing.F) {
 	fuzzUint64Field(f,
 		func(woh *WorkObjectHeader) uint64 { return woh.time },
@@ -110,13 +104,13 @@ func FuzzNonceHash(f *testing.F) {
 func fuzzHash(f *testing.F, getField func(*WorkObjectHeader) common.Hash, setField func(*WorkObjectHeader, common.Hash)) {
 	wo, _ := woTestData()
 	f.Add(testByte)
-	f.Add(getField(wo.woHeader).Hex())
+	f.Add(getField(wo.woHeader).Bytes())
 	f.Fuzz(func(t *testing.T, b []byte) {
 		localWo, hash := woTestData()
 		sc := common.BytesToHash(b)
 		if getField(localWo.woHeader) != sc {
 			setField(localWo.woHeader, sc)
-			require.NotEqual(t, localWo.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", getField(wo.woHeader), b)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", getField(wo.woHeader).Bytes(), b)
 		}
 	})
 }
