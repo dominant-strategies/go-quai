@@ -109,11 +109,11 @@ func (p *PeerDB) Query(ctx context.Context, q query.Query) (query.Results, error
 		entries[i], entries[j] = entries[j], entries[i]
 	})
 
-	if limit && len(entries) < q.Limit {
+	if !limit || (limit && len(entries) < q.Limit) {
 		return query.ResultsWithEntries(q, entries), nil
 	}
-
 	result := query.ResultsWithEntries(q, entries[:q.Limit])
+
 	return result, nil
 }
 
