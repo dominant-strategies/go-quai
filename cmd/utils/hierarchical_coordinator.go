@@ -251,7 +251,7 @@ func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject)
 		return err
 	}
 
-	// If only new zones to be added, go through all the regions and add a new zone
+	// If only new zones are to be added, go through all the regions and add a new zone
 	if !newRegionShouldBeAdded && newZoneShouldBeAdded {
 		// add a new zone to all the current active regions
 		for i := 0; i < int(currentRegions); i++ {
