@@ -97,7 +97,7 @@ func bitsetEncodeBytes(data []byte) []byte {
 }
 
 // DecompressBytes decompresses data with a known target size. If the input data
-// matches the size of the target, it means no compression was done in the first
+// matches the size of the target, which means no compression was done in the first
 // place.
 func DecompressBytes(data []byte, target int) ([]byte, error) {
 	if len(data) > target {

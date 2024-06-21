@@ -190,7 +190,7 @@ func benchmarkBaseOR(b *testing.B, size int) {
 	}
 }
 
-var GloBool bool // Exported global will not be dead-code eliminated, at least not yet.
+var GloBool bool // Exported globally will not be dead-code eliminated, at least not yet.
 
 // Benchmarks the potentially optimized bit testing performance.
 func BenchmarkFastTest1KB(b *testing.B) { benchmarkFastTest(b, 1024) }
