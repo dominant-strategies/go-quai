@@ -26,7 +26,7 @@ import (
 // simulates a scheduler on a virtual timescale where actual processing takes zero time.
 //
 // The virtual clock doesn't advance on its own, call Run to advance it and execute timers.
-// Since there is no way to influence the Go scheduler, testing timeout behaviour involving
+// Since there is no way to influence the Go scheduler, testing timeout behavior involving
 // goroutines needs special care. A good way to test such timeouts is as follows: First
 // perform the action that is supposed to time out. Ensure that the timer you want to test
 // is created. Then run the clock until after the timeout. Finally observe the effect of
