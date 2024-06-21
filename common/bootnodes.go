@@ -16,5 +16,8 @@ var (
 			"/ip4/34.122.101.50/tcp/4001/p2p/12D3KooWMCLAgSHLnfiKBXKprRP4KDjP3aqoVeHY1KVLahCHdKp5",
 			"/ip4/34.136.175.169/tcp/4001/p2p/12D3KooWNhJWXsu2G19QV75D6UPsRmRNvGQL4JWA37SUjxubpVdj",
 		},
+		"lighthouse": {
+			"/dns4/host-go-quai/tcp/4001/p2p/12D3KooWS83uhvCfyNeAV24nEsp3DHrygDD39rZiVy6Gabv6pqxt",
+		},
 	}
 )
