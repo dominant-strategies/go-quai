@@ -52,7 +52,7 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *common.Address) (vm.BlockContext, error) {
+func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chain ChainContext, author *common.Address) (vm.BlockContext, error) {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -81,10 +81,19 @@ func NewEVMBlockContext(header *types.WorkObject, chain ChainContext, author *co
 
 	// Prime terminus determines which location is eligible to accept the etx
 	primeTerminus := header.PrimeTerminus()
-	primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
-	if primeTerminusHeader == nil {
-		log.Global.Error("Prime terminus header not found ", " headerHash ", header.Hash(), " primeTerminus ", primeTerminus)
-		return vm.BlockContext{}, ErrSubNotSyncedToDom
+	_, parentOrder, err := chain.Engine().CalcOrder(parent)
+	if err != nil {
+		return vm.BlockContext{}, fmt.Errorf("parent order cannot be calculated")
+	}
+	var primeTerminusHeader *types.WorkObject
+	if parentOrder == common.PRIME_CTX {
+		primeTerminusHeader = parent
+	} else {
+		primeTerminusHeader = chain.GetHeaderByHash(primeTerminus)
+		if primeTerminusHeader == nil {
+			log.Global.Error("Prime terminus header not found", "headerHash", header.Hash(), "primeTerminus", primeTerminus)
+			return vm.BlockContext{}, ErrSubNotSyncedToDom
+		}
 	}
 	etxEligibleSlices := primeTerminusHeader.EtxEligibleSlices()
 

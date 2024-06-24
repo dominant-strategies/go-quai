@@ -69,7 +69,7 @@ type Backend interface {
 	AddressOutpoints(ctx context.Context, address common.Address) (map[string]*types.OutpointAndDenomination, error)
 	UTXOsByAddressAtState(ctx context.Context, state *state.StateDB, address common.Address) ([]*types.UtxoEntry, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
-	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error)
+	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, parent *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SetCurrentExpansionNumber(expansionNumber uint8)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
