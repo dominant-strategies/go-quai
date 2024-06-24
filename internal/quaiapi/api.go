@@ -641,7 +641,11 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return nil, err
 	}
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
+	parent, err := b.BlockByHash(ctx, header.ParentHash(b.NodeCtx()))
+	if err != nil {
+		return nil, err
+	}
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, parent, &vm.Config{NoBaseFee: true})
 	if err != nil {
 		return nil, err
 	}
@@ -1293,7 +1297,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := vm.NewAccessListTracer(accessList, args.from(nodeLocation), to, precompiles)
 		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
-		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
+		parent, err := b.BlockByHash(ctx, header.ParentHash(b.NodeCtx()))
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, parent, &config)
 		if err != nil {
 			return nil, 0, nil, err
 		}
