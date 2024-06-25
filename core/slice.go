@@ -361,7 +361,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 
 		setHead = sl.poem(sl.engine.TotalLogS(sl.hc, block), sl.engine.TotalLogS(sl.hc, sl.hc.CurrentHeader()))
 
-		if subReorg || (sl.hc.CurrentHeader().NumberU64(nodeCtx) < block.NumberU64(nodeCtx)+c_currentStateComputeWindow) {
+		if subReorg {
 			err := sl.hc.SetCurrentState(block)
 			if err != nil {
 				sl.logger.WithFields(log.Fields{
@@ -371,6 +371,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				return nil, false, false, err
 			}
 		}
+
 		// Upate the local pending header
 		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, subReorg, false)
 		if err != nil {
@@ -1127,7 +1128,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		}
 		// Pick the head
 		if subReorg {
-			if (localPendingHeader.Header().EVMRoot() != types.EmptyRootHash && nodeCtx == common.ZONE_CTX) || nodeCtx == common.REGION_CTX {
+			if (nodeCtx == common.ZONE_CTX && rawdb.ReadProcessedState(sl.sliceDb, localPendingHeader.WorkObject().ParentHash(common.ZONE_CTX))) || nodeCtx == common.REGION_CTX {
 				sl.logger.WithFields(log.Fields{
 					"NumberArray": combinedPendingHeader.NumberArray(),
 					"Number":      combinedPendingHeader.Number(nodeCtx),
