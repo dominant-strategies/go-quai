@@ -555,18 +555,18 @@ func (progpow *Progpow) IsDomCoincident(chain consensus.ChainHeaderReader, heade
 }
 
 func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
-	powLight := func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+	powLight := func(size uint64, cache []uint32, hash common.Hash, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 		ethashCache := progpow.cache(blockNumber)
 		if ethashCache.cDag == nil {
 			cDag := make([]uint32, progpowCacheWords)
 			generateCDag(cDag, ethashCache.cache, blockNumber/epochLength, progpow.logger)
 			ethashCache.cDag = cDag
 		}
-		return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
+		return progpowLight(size, cache, hash.Bytes(), nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)
 	}
 	cache := progpow.cache(header.NumberU64())
 	size := datasetSize(header.NumberU64())
-	digest, result := powLight(size, cache.cache, header.SealHash().Bytes(), header.NonceU64(), header.NumberU64())
+	digest, result := powLight(size, cache.cache, header.SealHash(), header.NonceU64(), header.NumberU64())
 	mixHash = common.BytesToHash(digest)
 	powHash = common.BytesToHash(result)
 	header.PowDigest.Store(mixHash)

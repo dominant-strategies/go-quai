@@ -18,7 +18,13 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	mmap "github.com/edsrzf/mmap-go"
+
 	"github.com/hashicorp/golang-lru/simplelru"
+	goLRU "github.com/hashicorp/golang-lru/v2"
+)
+
+const (
+	c_dagItemsInCache = 10000
 )
 
 var (
@@ -165,7 +171,8 @@ type Config struct {
 type Progpow struct {
 	config Config
 
-	caches *lru // In memory caches to avoid regenerating too often
+	caches      *lru                         // In memory caches to avoid regenerating too often
+	lookupCache *goLRU.Cache[uint32, []byte] // Cache to store the last few block hashes
 
 	// Mining related fields
 	rand    *rand.Rand    // Properly seeded random source for nonces
@@ -197,12 +204,19 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 			"count": config.CachesOnDisk,
 		}).Info("Disk storage enabled for ethash caches")
 	}
+
+	lookupCache, err := goLRU.New[uint32, []byte](c_dagItemsInCache)
+	if err != nil {
+		logger.WithField("err", err).Fatal("Failed to create ethash lookup cache")
+	}
+
 	progpow := &Progpow{
-		config:  config,
-		caches:  newlru("cache", config.CachesInMem, newCache, logger),
-		update:  make(chan struct{}),
-		logger:  logger,
-		threads: config.NumThreads,
+		config:      config,
+		caches:      newlru("cache", config.CachesInMem, newCache, logger),
+		lookupCache: lookupCache,
+		update:      make(chan struct{}),
+		logger:      logger,
+		threads:     config.NumThreads,
 	}
 	if config.PowMode == ModeShared {
 		progpow.shared = sharedProgpow
