@@ -880,10 +880,6 @@ type PendingHeader struct {
 }
 
 // accessor methods for pending header
-func (ph PendingHeader) Header() *Header {
-	return ph.wo.woBody.header
-}
-
 func (ph PendingHeader) WorkObject() *WorkObject {
 	return ph.wo
 }
