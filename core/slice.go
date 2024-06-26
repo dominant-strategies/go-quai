@@ -418,7 +418,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	}
 
 	// Chain head feed is only used by the Zone chains
-	if subReorg && nodeCtx == common.ZONE_CTX {
+	if subReorg {
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 	}
 
