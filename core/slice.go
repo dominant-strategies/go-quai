@@ -439,7 +439,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 
 	time15 := common.PrettyDuration(time.Since(start))
 	// Relay the new pendingHeader
-	sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), subReorg)
+	go sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), subReorg)
 
 	time16 := common.PrettyDuration(time.Since(start))
 	sl.logger.WithFields(log.Fields{
