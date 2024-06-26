@@ -182,6 +182,7 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woHeader.SetParentHash(EmptyRootHash)
 	wo.woHeader.SetNumber(big.NewInt(0))
 	wo.woHeader.SetDifficulty(big.NewInt(0))
+	wo.woHeader.SetPrimeTerminusNumber(big.NewInt(0))
 	wo.woHeader.SetTxHash(EmptyRootHash)
 	wo.woHeader.SetLocation(common.Location{})
 	wo.woHeader.SetNonce(EncodeNonce(0))

@@ -967,19 +967,21 @@ func (wh *WorkObjectHeader) SealEncode() *ProtoWorkObjectHeader {
 	txHash := common.ProtoHash{Value: wh.TxHash().Bytes()}
 	number := wh.Number().Bytes()
 	difficulty := wh.Difficulty().Bytes()
+	primeTerminusNumber := wh.PrimeTerminusNumber().Bytes()
 	location := wh.Location().ProtoEncode()
 	time := wh.Time()
 	coinbase := common.ProtoAddress{Value: wh.Coinbase().Bytes()}
 
 	return &ProtoWorkObjectHeader{
-		HeaderHash: &hash,
-		ParentHash: &parentHash,
-		Number:     number,
-		Difficulty: difficulty,
-		TxHash:     &txHash,
-		Location:   location,
-		Time:       &time,
-		Coinbase:   &coinbase,
+		HeaderHash:          &hash,
+		ParentHash:          &parentHash,
+		Number:              number,
+		Difficulty:          difficulty,
+		TxHash:              &txHash,
+		PrimeTerminusNumber: primeTerminusNumber,
+		Location:            location,
+		Coinbase:            &coinbase,
+		Time:                &time,
 	}
 }
 

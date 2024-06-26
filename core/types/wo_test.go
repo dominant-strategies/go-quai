@@ -11,24 +11,26 @@ import (
 func woTestData() (*WorkObject, common.Hash) {
 	wo := &WorkObject{
 		woHeader: &WorkObjectHeader{
-			headerHash: common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"),
-			parentHash: common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1"),
-			number:     big.NewInt(1),
-			difficulty: big.NewInt(123456789),
-			txHash:     common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
-			location:   common.Location{0, 0},
-			mixHash:    common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
-			time:       uint64(1),
-			nonce:      EncodeNonce(uint64(1)),
+			headerHash:          common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"),
+			parentHash:          common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1"),
+			number:              big.NewInt(1),
+			difficulty:          big.NewInt(123456789),
+			primeTerminusNumber: big.NewInt(42),
+			txHash:              common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
+			location:            common.Location{0, 0},
+			mixHash:             common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
+			coinbase:            common.HexToAddress("0x123456789abcdef0123456789abcdef0123456789", common.Location{0, 0}),
+			time:                uint64(1),
+			nonce:               EncodeNonce(uint64(1)),
 		},
 	}
 	return wo, wo.Hash()
 }
 
 func TestWoHash(t *testing.T) {
-	_, hash := woTestData()
-	correctHash := common.HexToHash("0xce1b26f11a4694a6be74e23b92ce133de912799bc7e067fa05f3bb19fb356d2c")
-	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+	_, actualHash := woTestData()
+	expectedHash := common.HexToHash("0xfa015af438af2a7a4c2af2aa8d982da52fb879288338d4e44464cae3723daf85")
+	require.Equal(t, expectedHash, actualHash, "Hash not equal to expected hash")
 }
 
 func FuzzHeaderHash(f *testing.F) {

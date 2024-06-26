@@ -72,7 +72,7 @@ func TestHeaderStorage(t *testing.T) {
 	woBody := types.EmptyWorkObjectBody()
 	woBody.SetHeader(header)
 
-	woHeader := types.NewWorkObjectHeader(header.Hash(), common.Hash{1}, big.NewInt(1), big.NewInt(30000), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{1}, common.Location{0, 0}))
+	woHeader := types.NewWorkObjectHeader(header.Hash(), common.Hash{1}, big.NewInt(1), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{1}, common.Location{0, 0}))
 
 	wo := types.NewWorkObject(woHeader, woBody, nil)
 
@@ -219,7 +219,7 @@ func TestPbCacheStorage(t *testing.T) {
 	woBody.SetExtTransactions([]*types.Transaction{})
 	woBody.SetHeader(types.EmptyHeader())
 
-	woHeader := types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{1}, common.Location{0, 0}))
+	woHeader := types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{1}, common.Location{0, 0}))
 	wo := types.NewWorkObject(woHeader, woBody, nil)
 	WritePbCacheBody(db, common.Hash{1}, wo)
 
@@ -398,7 +398,7 @@ func TestBlockHashesIterator(t *testing.T) {
 			blockHeader := types.EmptyHeader()
 			blockBody := types.EmptyWorkObjectBody()
 			blockBody.SetHeader(blockHeader)
-			blockWoHeader := types.NewWorkObjectHeader(blockHeader.Hash(), types.EmptyHash, big.NewInt(int64(i+1)), big.NewInt(3000), types.EmptyRootHash, types.BlockNonce{23}, 2, common.Location{0, byte(j)}, common.BytesToAddress([]byte{1}, common.Location{0, byte(j)}))
+			blockWoHeader := types.NewWorkObjectHeader(blockHeader.Hash(), types.EmptyHash, big.NewInt(int64(i+1)), big.NewInt(3000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 2, common.Location{0, byte(j)}, common.BytesToAddress([]byte{1}, common.Location{0, byte(j)}))
 			block := types.NewWorkObject(blockWoHeader, blockBody, nil)
 			WriteWorkObject(db, block.Hash(), block, types.BlockObject, common.ZONE_CTX)
 			hashes[i][block.Hash()] = true
@@ -423,7 +423,7 @@ func TestCommonAncestor(t *testing.T) {
 	regionHeader.SetNumber(big.NewInt(1), common.REGION_CTX)
 	regionBody := types.EmptyWorkObjectBody()
 	regionBody.SetHeader(regionHeader)
-	regionWoHeader := types.NewWorkObjectHeader(regionHeader.Hash(), types.EmptyRootHash, big.NewInt(1), big.NewInt(3000), types.EmptyRootHash, types.BlockNonce{23}, 1, common.Location{0}, common.BytesToAddress([]byte{0}, common.Location{0, 0}))
+	regionWoHeader := types.NewWorkObjectHeader(regionHeader.Hash(), types.EmptyRootHash, big.NewInt(1), big.NewInt(3000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.Location{0}, common.BytesToAddress([]byte{0}, common.Location{0, 0}))
 	regionBlock := types.NewWorkObject(regionWoHeader, regionBody, nil)
 	WriteWorkObject(db, regionBlock.Hash(), regionBlock, types.BlockObject, common.REGION_CTX)
 
@@ -431,7 +431,7 @@ func TestCommonAncestor(t *testing.T) {
 	zone0Header := types.EmptyHeader()
 	zone0Body := types.EmptyWorkObjectBody()
 	zone0Body.SetHeader(zone0Header)
-	zone0WoHeader := types.NewWorkObjectHeader(zone0Header.Hash(), regionBlock.Hash(), big.NewInt(2), big.NewInt(3000), types.EmptyRootHash, types.BlockNonce{23}, 2, common.Location{0, 0}, common.BytesToAddress([]byte{0}, common.Location{0, 0}))
+	zone0WoHeader := types.NewWorkObjectHeader(zone0Header.Hash(), regionBlock.Hash(), big.NewInt(2), big.NewInt(3000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 2, common.Location{0, 0}, common.BytesToAddress([]byte{0}, common.Location{0, 0}))
 	zone0Block := types.NewWorkObject(zone0WoHeader, zone0Body, nil)
 	WriteWorkObject(db, zone0Block.Hash(), zone0Block, types.BlockObject, common.ZONE_CTX)
 
@@ -439,14 +439,14 @@ func TestCommonAncestor(t *testing.T) {
 	zone1Header1 := types.EmptyHeader()
 	zone1Body1 := types.EmptyWorkObjectBody()
 	zone1Body1.SetHeader(zone1Header1)
-	zone1WoHeader1 := types.NewWorkObjectHeader(zone1Header1.Hash(), regionBlock.Hash(), big.NewInt(2), big.NewInt(3000), types.EmptyRootHash, types.BlockNonce{23}, 2, common.Location{0, 1}, common.BytesToAddress([]byte{0}, common.Location{0, 1}))
+	zone1WoHeader1 := types.NewWorkObjectHeader(zone1Header1.Hash(), regionBlock.Hash(), big.NewInt(2), big.NewInt(3000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 2, common.Location{0, 1}, common.BytesToAddress([]byte{0}, common.Location{0, 1}))
 	zone1Block1 := types.NewWorkObject(zone1WoHeader1, zone1Body1, nil)
 	WriteWorkObject(db, zone1Block1.Hash(), zone1Block1, types.BlockObject, common.ZONE_CTX)
 
 	zone1Header2 := types.EmptyHeader()
 	zone1Body2 := types.EmptyWorkObjectBody()
 	zone1Body2.SetHeader(zone1Header2)
-	zone1WoHeader2 := types.NewWorkObjectHeader(zone1Header2.Hash(), zone1Block1.Hash(), big.NewInt(3), big.NewInt(3000), types.EmptyRootHash, types.BlockNonce{23}, 3, common.Location{0, 1}, common.BytesToAddress([]byte{0}, common.Location{0, 1}))
+	zone1WoHeader2 := types.NewWorkObjectHeader(zone1Header2.Hash(), zone1Block1.Hash(), big.NewInt(3), big.NewInt(3000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 3, common.Location{0, 1}, common.BytesToAddress([]byte{0}, common.Location{0, 1}))
 	zone1Block2 := types.NewWorkObject(zone1WoHeader2, zone1Body2, nil)
 	WriteWorkObject(db, zone1Block2.Hash(), zone1Block2, types.BlockObject, common.ZONE_CTX)
 
@@ -639,7 +639,7 @@ func TestWorkObjectStorage(t *testing.T) {
 	woBody.SetTransactions([]*types.Transaction{})
 	woBody.SetExtTransactions([]*types.Transaction{})
 	woBody.SetHeader(types.EmptyHeader())
-	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
+	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
 
 	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
