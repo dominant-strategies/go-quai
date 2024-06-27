@@ -11,6 +11,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -245,6 +246,11 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 			return nil, false, false, err
 		}
 	}
+
+	protoBlock, _ := block.ProtoEncode(types.BlockObject)
+	data, _ := proto.Marshal(protoBlock)
+
+	log.Global.WithFields(log.Fields{"len of data": len(data) / 1024, "hash": block.Hash(), "txs": len(block.Transactions())}).Warn("Size of the proto encoded block")
 
 	if order < nodeCtx {
 		// Store the inbound etxs for all dom blocks and use
