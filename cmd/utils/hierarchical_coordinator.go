@@ -12,6 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/quai"
+	"github.com/spf13/viper"
 	"github.com/syndtr/goleveldb/leveldb"
 	"google.golang.org/protobuf/proto"
 )
@@ -146,7 +147,7 @@ func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error)
 
 func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.ConsensusAPI, location common.Location, genesisBlock *types.WorkObject) {
 	hc.wg.Add(1)
-	logger := log.NewLogger(logPath, hc.logLevel)
+	logger := log.NewLogger(logPath, hc.logLevel, viper.GetInt(LogSizeFlag.Name))
 	logger.Info("Starting Node at location", "location", location)
 	stack, apiBackend := makeFullNode(hc.p2p, location, hc.slicesRunning, hc.currentExpansionNumber, genesisBlock, logger)
 	quaiBackend.SetApiBackend(&apiBackend, location)

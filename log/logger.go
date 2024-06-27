@@ -15,7 +15,7 @@ type Logger = logrus.Logger
 const (
 	// default log level
 	defaultLogLevel = logrus.InfoLevel
-	DebugLogLevel   = logrus.DebugLevel
+	defaultLogSize  = 500 // megabytes
 
 	// log file name
 	globalLogFileName = "global.log"
@@ -38,7 +38,7 @@ var (
 )
 
 func init() {
-	Global = createStandardLogger(defaultLogFilePath, defaultLogLevel.String(), true)
+	Global = createStandardLogger(defaultLogFilePath, defaultLogLevel.String(), 500, true)
 }
 
 func SetGlobalLogger(logFilename string, logLevel string) {
@@ -70,11 +70,11 @@ func SetGlobalLogger(logFilename string, logLevel string) {
 	}).Info("Global logger started")
 }
 
-func NewLogger(logFilename string, logLevel string) *logrus.Logger {
+func NewLogger(logFilename string, logLevel string, logSize int) *logrus.Logger {
 	if logFilename == "" {
 		logFilename = defaultLogFilePath
 	}
-	shardLogger := createStandardLogger(filepath.Join(logDir, logFilename), logLevel, false)
+	shardLogger := createStandardLogger(filepath.Join(logDir, logFilename), logLevel, logSize, false)
 	shardLogger.WithFields(Fields{
 		"path":  logFilename,
 		"level": logLevel,
@@ -82,11 +82,11 @@ func NewLogger(logFilename string, logLevel string) *logrus.Logger {
 	return shardLogger
 }
 
-func createStandardLogger(logFilename string, logLevel string, stdOut bool) *logrus.Logger {
+func createStandardLogger(logFilename string, logLevel string, logSize int, stdOut bool) *logrus.Logger {
 	logger := logrus.New()
 	output := &lumberjack.Logger{
 		Filename:   logFilename,
-		MaxSize:    500, // megabytes
+		MaxSize:    logSize, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28, //days
 	}

@@ -61,6 +61,7 @@ var GlobalFlags = []Flag{
 	DataDirFlag,
 	AncientDirFlag,
 	LogLevelFlag,
+	LogSizeFlag,
 }
 
 var NodeFlags = []Flag{
@@ -186,6 +187,12 @@ var (
 		Abbreviation: "l",
 		Value:        "info",
 		Usage:        "log level (trace, debug, info, warn, error, fatal, panic)" + generateEnvDoc(c_GlobalFlagPrefix+"log-level"),
+	}
+
+	LogSizeFlag = Flag{
+		Name:  c_GlobalFlagPrefix + "log-size",
+		Value: 500,
+		Usage: "maximum log file size in MB before rolling (default = no limit)" + generateEnvDoc(c_GlobalFlagPrefix+"log-size"),
 	}
 )
 

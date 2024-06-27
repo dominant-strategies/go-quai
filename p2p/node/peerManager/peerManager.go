@@ -177,7 +177,7 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	logger := log.NewLogger("peers.log", viper.GetString(utils.PeersLogLevelFlag.Name))
+	logger := log.NewLogger("peers.log", viper.GetString(utils.PeersLogLevelFlag.Name), viper.GetInt(utils.LogSizeFlag.Name))
 
 	go func() {
 		defer func() {

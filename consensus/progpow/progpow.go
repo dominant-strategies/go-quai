@@ -227,7 +227,7 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 // NewTester creates a small sized progpow PoW scheme useful only for testing
 // purposes.
 func NewTester(notify []string, noverify bool) *Progpow {
-	return New(Config{PowMode: ModeTest}, notify, noverify, log.NewLogger("test-progpow.log", "info"))
+	return New(Config{PowMode: ModeTest}, notify, noverify, log.NewLogger("test-progpow.log", "info", 500))
 }
 
 // NewFaker creates a progpow consensus engine with a fake PoW scheme that accepts
