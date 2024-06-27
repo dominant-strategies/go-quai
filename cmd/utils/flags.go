@@ -1488,26 +1488,28 @@ func IsValidEnvironment(env string) bool {
 
 var configData = make(map[string]map[string]interface{})
 
-func addFlagsToCategory(flags []Flag) {
-	for _, flag := range flags {
-		split := strings.Split(flag.Name, ".")
-		if split[1] == "config-dir" {
-			continue
-		}
-		key := split[0]
+func addFlagsToCategory(flagCategories [][]Flag) {
+	for _, category := range flagCategories {
+		for _, flag := range category {
+			split := strings.Split(flag.Name, ".")
+			if split[1] == "config-dir" {
+				continue
+			}
+			key := split[0]
 
-		if len(split) == 3 {
-			key = split[0] + "." + split[1]
-		}
+			if len(split) == 3 {
+				key = split[0] + "." + split[1]
+			}
 
-		if configData[key] == nil {
-			configData[key] = make(map[string]interface{})
-		}
+			if configData[key] == nil {
+				configData[key] = make(map[string]interface{})
+			}
 
-		if val, ok := flag.Value.(*BigIntValue); ok {
-			configData[key][split[len(split)-1]] = val.String()
-		} else {
-			configData[key][split[len(split)-1]] = flag.Value
+			if val, ok := flag.Value.(*BigIntValue); ok {
+				configData[key][split[len(split)-1]] = val.String()
+			} else {
+				configData[key][split[len(split)-1]] = flag.Value
+			}
 		}
 	}
 }
@@ -1544,11 +1546,7 @@ func WriteDefaultConfigFile(configDir string, configFileName string, configType 
 	}
 	defer f.Close()
 
-	addFlagsToCategory(GlobalFlags)
-	addFlagsToCategory(NodeFlags)
-	addFlagsToCategory(TXPoolFlags)
-	addFlagsToCategory(RPCFlags)
-	addFlagsToCategory(MetricsFlags)
+	addFlagsToCategory(Flags)
 
 	// Remove bootpeers data from the configData to be written.
 	delete(configData["node"], "bootpeers")
