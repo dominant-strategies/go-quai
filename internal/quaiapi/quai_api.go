@@ -770,7 +770,9 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexu
 		txs, err := s.b.GetTxsFromBroadcastSet(workShare.TxHash())
 		if err != nil {
 			txs = types.Transactions{}
-			s.b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
+			if workShare.TxHash() != types.EmptyRootHash {
+				s.b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
+			}
 		}
 		if pendingBlockBody == nil {
 			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
