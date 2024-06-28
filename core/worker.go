@@ -963,6 +963,11 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				break
 			}
 			if err := w.processQiTx(tx, env, parent); err != nil {
+				if strings.Contains(err.Error(), "emits too many") {
+					// This is not an invalid tx, our block is just full of ETXs
+					txs.PopNoSort()
+					continue
+				}
 				hash := tx.Hash()
 				w.logger.WithFields(log.Fields{
 					"err": err,
