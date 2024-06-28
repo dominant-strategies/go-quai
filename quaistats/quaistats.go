@@ -94,7 +94,7 @@ type backend interface {
 	CurrentHeader() *types.WorkObject
 	TotalLogS(header *types.WorkObject) *big.Int
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
-	Stats() (pending int, queued int)
+	Stats() (pending int, queued int, qi int)
 	ChainConfig() *params.ChainConfig
 	ProcessingState() bool
 	NodeCtx() int

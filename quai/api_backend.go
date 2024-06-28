@@ -379,7 +379,7 @@ func (b *QuaiAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) 
 	return b.quai.core.Nonce(addr), nil
 }
 
-func (b *QuaiAPIBackend) Stats() (pending int, queued int) {
+func (b *QuaiAPIBackend) Stats() (pending int, queued int, qi int) {
 	return b.quai.core.Stats()
 }
 
