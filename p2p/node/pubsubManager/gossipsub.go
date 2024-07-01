@@ -42,7 +42,7 @@ type PubsubManager struct {
 // See https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub@v0.10.0#Option
 func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, error) {
 	cfg := pubsub.DefaultGossipSubParams()
-	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg), pubsub.WithMaxMessageSize(3*1024*1024))
+	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg), pubsub.WithMaxMessageSize(10*1024*1024))
 	if err != nil {
 		return nil, err
 	}
