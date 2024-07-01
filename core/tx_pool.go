@@ -1098,6 +1098,9 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			pool.qiMu.RUnlock()
 			qiNews = append(qiNews, tx)
 			continue
+		} else if tx.Type() == types.ExternalTxType {
+			errs[i] = errors.New("external tx is not supported in tx pool")
+			continue
 		}
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
@@ -1263,7 +1266,7 @@ func (pool *TxPool) removeQiTxsLocked(txs []*types.Transaction) {
 	qiTxGauge.Sub(float64(len(txs)))
 }
 
-// addTxsLocked attempts to queue a batch of transactions if they are valid.
+// addTxsLocked attempts to queue a batch of Quai transactions if they are valid.
 // The transaction pool lock must be held.
 func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet) {
 	dirty := newAccountSet(pool.signer)
@@ -1716,7 +1719,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 						return
 					}
 				}
-				reinject = types.TxDifference(discarded, included)
+				reinject = types.TxDifferenceWithoutETXs(discarded, included)
 			}
 		}
 	} else {
