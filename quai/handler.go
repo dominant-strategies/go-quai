@@ -98,6 +98,7 @@ func (h *handler) missingBlockLoop() {
 
 			_, exists := h.recentBlockReqCache.Get(blockRequest.Hash)
 			if !exists {
+				h.logger.WithField("hash", blockRequest.Hash).Info("Adding block to the recent block req cache")
 				// Add the block request to the cache to avoid requesting the same block multiple times
 				h.recentBlockReqCache.Add(blockRequest.Hash, true)
 			} else {
@@ -114,6 +115,7 @@ func (h *handler) missingBlockLoop() {
 						}).Fatal("Go-Quai Panicked")
 					}
 				}()
+				h.logger.WithField("hash", blockRequest.Hash).Info("Requesting block from the peer")
 				if !h.core.ProcessingState() && h.nodeLocation.Context() == common.ZONE_CTX {
 					resultCh := h.p2pBackend.Request(h.nodeLocation, blockRequest.Hash, &types.WorkObjectHeaderView{})
 					block := <-resultCh
@@ -127,6 +129,7 @@ func (h *handler) missingBlockLoop() {
 						h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
 					}
 				}
+				h.logger.WithField("hash", blockRequest.Hash).Info("Removing block from the recent block req cache")
 				h.recentBlockReqCache.Remove(blockRequest.Hash)
 			}()
 		case <-h.missingBlockSub.Err():
