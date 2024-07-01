@@ -171,7 +171,7 @@ search:
 			cache := progpow.cache(workObject.NumberU64(nodeCtx))
 			size := datasetSize(workObject.NumberU64(nodeCtx))
 			// Compute the PoW value of this nonce
-			digest, result := powLight(size, cache.cache, workObject.SealHash().Bytes(), nonce, workObject.NumberU64(common.ZONE_CTX))
+			digest, result := powLight(size, cache.cache, workObject.SealHash().Bytes(), nonce, workObject.PrimeTerminusNumber().Uint64())
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
 				workObject = types.CopyWorkObject(workObject)
