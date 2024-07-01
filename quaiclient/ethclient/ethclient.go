@@ -88,6 +88,10 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Wo
 	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
 }
 
+func (ec *Client) BlockOrCandidateByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
+	return ec.getBlock(ctx, "quai_getBlockOrCandidateByHash", hash, true)
+}
+
 // BlockNumber returns the most recent block number
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64

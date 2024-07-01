@@ -318,6 +318,14 @@ func (s *PublicBlockChainQuaiAPI) GetBlockByHash(ctx context.Context, hash commo
 	return nil, err
 }
 
+func (s *PublicBlockChainQuaiAPI) GetBlockOrCandidateByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
+	block := s.b.BlockOrCandidateByHash(hash)
+	if block != nil {
+		return s.rpcMarshalBlock(ctx, block, true, fullTx)
+	}
+	return nil, errors.New("block not found")
+}
+
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
 // all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainQuaiAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (map[string]interface{}, error) {

@@ -35,7 +35,7 @@ type ChainContext interface {
 
 	// GetHeader returns a block header from the database by hash.
 	// The header might not be on the canonical chain.
-	GetHeaderOrCandidate(common.Hash, uint64) *types.WorkObject
+	GetHeaderOrCandidateByHash(common.Hash) *types.WorkObject
 
 	// NodeCtx returns the context of the running node
 	NodeCtx() int
@@ -70,7 +70,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 
 	timestamp := header.Time() // base case, should only be the case in genesis block or before forkBlock (in testnet)
 	if header.Number(chain.NodeCtx()).Uint64() != 0 {
-		parent := chain.GetHeaderOrCandidate(header.ParentHash(chain.NodeCtx()), header.Number(chain.NodeCtx()).Uint64()-1)
+		parent := chain.GetHeaderOrCandidateByHash(header.ParentHash(chain.NodeCtx()))
 		if parent != nil {
 			timestamp = parent.Time()
 		} else {
@@ -144,7 +144,7 @@ func GetHashFn(ref *types.WorkObject, chain ChainContext) func(n uint64) common.
 		lastKnownNumber := ref.NumberU64(chain.NodeCtx()) - uint64(len(cache))
 
 		for {
-			header := chain.GetHeaderByHash(lastKnownHash)
+			header := chain.GetHeaderOrCandidateByHash(lastKnownHash)
 			if header == nil {
 				break
 			}

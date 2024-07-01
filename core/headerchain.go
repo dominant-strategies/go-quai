@@ -705,9 +705,9 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 	return header
 }
 
-// GetHeaderOrCandidate retrieves a block header from the database by hash and number,
+// GetHeaderOrCandidateByHash retrieves a block header from the database by hash,
 // caching it if found.
-func (hc *HeaderChain) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
+func (hc *HeaderChain) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkObject {
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return &header
@@ -743,17 +743,6 @@ func (hc *HeaderChain) RecoverCurrentHeader() *types.WorkObject {
 	hc.logger.WithField("Hash", header.Hash().String()).Info("Header Recovered")
 
 	return header
-}
-
-// GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
-// found.
-func (hc *HeaderChain) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkObject {
-	number := hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil
-	}
-
-	return hc.GetHeaderOrCandidate(hash, *number)
 }
 
 // HasHeader checks if a block header is present in the database or not.

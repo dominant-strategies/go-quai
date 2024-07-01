@@ -852,12 +852,6 @@ func (c *Core) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 	return c.sl.hc.GetHeaderByHash(hash)
 }
 
-// GetHeaderOrCandidate retrieves a block header from the database by hash and number,
-// caching it if found.
-func (c *Core) GetHeaderOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
-	return c.sl.hc.GetHeaderOrCandidate(hash, number)
-}
-
 // GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (c *Core) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkObject {

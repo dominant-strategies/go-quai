@@ -1354,7 +1354,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, utxoDatabase, etxDatabase, report = base, base.Database(), base.UTXODatabase(), base.ETXDatabase(), false
-		current = p.hc.GetHeaderOrCandidate(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
+		current = p.hc.GetHeaderOrCandidateByHash(block.ParentHash(nodeCtx))
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
 		current = types.CopyWorkObject(block)
@@ -1384,7 +1384,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			if current.NumberU64(nodeCtx) == 0 {
 				return nil, errors.New("genesis state is missing")
 			}
-			parent := p.hc.GetHeaderOrCandidate(current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
+			parent := p.hc.GetHeaderOrCandidateByHash(current.ParentHash(nodeCtx))
 			if parent == nil {
 				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
 			}

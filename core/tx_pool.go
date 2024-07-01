@@ -158,7 +158,7 @@ type blockChain interface {
 	IsGenesisHash(hash common.Hash) bool
 	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
 	Engine() consensus.Engine
-	GetHeaderOrCandidate(common.Hash, uint64) *types.WorkObject
+	GetHeaderOrCandidateByHash(common.Hash) *types.WorkObject
 	NodeCtx() int
 	GetHeaderByHash(common.Hash) *types.WorkObject
 	GetMaxTxInWorkShare() uint64
