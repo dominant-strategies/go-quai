@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	C_requestTimeout = 10 * time.Second
+	C_requestTimeout = 30 * time.Second
 )
 
 var (

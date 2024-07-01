@@ -24,7 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 )
 
-const requestTimeout = 10 * time.Second
+const requestTimeout = 30 * time.Second
 
 // Starts the node and all of its services
 func (p *P2PNode) Start() error {
