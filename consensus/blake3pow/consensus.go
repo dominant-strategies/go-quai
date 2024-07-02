@@ -607,7 +607,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 		}
 		state.CreateAccount(lockupContract)
 
-		alloc := core.ReadGenesisAlloc("genallocs/gen_quai_alloc_"+nodeLocation.Name()+".json", blake3pow.logger)
+		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_quai_"+nodeLocation.Name()+".json", blake3pow.logger)
 		blake3pow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 
 		for addressString, account := range alloc {
@@ -632,6 +632,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 		core.AddGenesisUtxos(state, nodeLocation, addressOutpointMap, blake3pow.logger)
 		if chain.Config().IndexAddressUtxos {
 			chain.WriteAddressOutpoints(addressOutpointMap)
+			blake3pow.logger.Info("Indexed genesis utxos")
 		}
 	}
 	header.Header().SetUTXORoot(state.UTXORoot())

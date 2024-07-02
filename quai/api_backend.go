@@ -256,7 +256,7 @@ func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 	return logs, nil
 }
 
-func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
+func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, parent *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
 	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -266,7 +266,7 @@ func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *st
 		vmConfig = b.quai.core.GetVMConfig()
 	}
 	txContext := core.NewEVMTxContext(msg)
-	context, err := core.NewEVMBlockContext(header, b.quai.Core(), nil)
+	context, err := core.NewEVMBlockContext(header, parent, b.quai.Core(), nil)
 	if err != nil {
 		return nil, vmError, err
 	}

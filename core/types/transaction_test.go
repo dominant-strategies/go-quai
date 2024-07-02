@@ -531,7 +531,7 @@ func etxData() (*Transaction, common.Hash) {
 
 func TestEtxHash(t *testing.T) {
 	_, hash := etxData()
-	correctHash := common.HexToHash("0x56b300ea99355ef39a7e4ccbfdfa9cf081307ec33c6b9c90212d9518763b154b")
+	correctHash := common.HexToHash("0x569200efce076a61575a3661dcb6f59e77e0407279c8db136ef9b2fa23d361ce")
 	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 
@@ -1021,4 +1021,22 @@ func FuzzQiTxHashingWorkNonce(f *testing.F) {
 			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.workNonce(), i)
 		}
 	})
+}
+
+func TestCoinbaseTxEncodeDecode(t *testing.T) {
+	toAddr := common.HexToAddress("0x0013e45aa16163F2663015b6695894D918866d19", common.Location{0, 0})
+	coinbaseTx := NewTx(&ExternalTx{To: &toAddr, Value: big.NewInt(10), Data: []byte{1}, OriginatingTxHash: common.HexToHash("0xa"), Sender: common.HexToAddress("0x0", common.Location{0, 0})})
+
+	// Encode transaction
+	protoTx, err := coinbaseTx.ProtoEncode()
+	require.Equal(t, err, nil)
+
+	// Decode transaction
+	tx := Transaction{}
+	err = tx.ProtoDecode(protoTx, common.Location{0, 0})
+	require.Equal(t, err, nil)
+
+	reflect.DeepEqual(coinbaseTx, tx)
+
+	require.Equal(t, coinbaseTx.Hash(), tx.Hash())
 }

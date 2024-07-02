@@ -333,6 +333,12 @@ func (ec *Client) BalanceAt(ctx context.Context, account common.MixedcaseAddress
 	return (*big.Int)(&result), err
 }
 
+func (ec *Client) GetOutpointsByAddress(ctx context.Context, address common.MixedcaseAddress) (map[string]*types.OutpointAndDenomination, error) {
+	var outpoints map[string]*types.OutpointAndDenomination
+	err := ec.c.CallContext(ctx, &outpoints, "quai_getOutpointsByAddress", address.Original())
+	return outpoints, err
+}
+
 // StorageAt returns the value of key in the contract storage of the given account.
 // The block number can be nil, in which case the value is taken from the latest known block.
 func (ec *Client) StorageAt(ctx context.Context, account common.MixedcaseAddress, key common.Hash, blockNumber *big.Int) ([]byte, error) {
