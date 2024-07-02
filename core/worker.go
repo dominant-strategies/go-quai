@@ -812,8 +812,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	}
 	if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
 		gasUsed := env.wo.GasUsed()
-		txGas := tx.Gas()
 		if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
+			txGas := tx.Gas()
 			lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
 			_, parentOrder, err := w.engine.CalcOrder(parent)
 			if err != nil {
@@ -828,6 +828,15 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					return nil, false, errors.New("prime terminus not found")
 				}
 			}
+			if txGas < params.TxGas {
+				// No gas, the result is a no-op but the tx is still valid
+				return nil, false, nil
+			}
+			txGas -= params.TxGas
+			if err := env.gasPool.SubGas(params.TxGas); err != nil {
+				return nil, false, err
+			}
+			gasUsed += params.TxGas
 			value := misc.QuaiToQi(primeTerminus.WorkObjectHeader(), tx.Value())
 			denominations := misc.FindMinDenominations(value)
 			outputIndex := uint16(0)
@@ -1616,6 +1625,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 		addresses[toAddr.Bytes20()] = struct{}{}
 
 		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai conversion
+			if conversion && !toAddr.Equal(convertAddress) { // All convert outputs must have the same To address for aggregation
+				return fmt.Errorf("tx %032x emits multiple convert UTXOs with different To addresses", tx.Hash())
+			}
 			conversion = true
 			convertAddress = toAddr
 			if txOut.Denomination < params.MinQiConversionDenomination {
@@ -1708,6 +1720,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 		if remainingGas.Uint64() > (env.wo.GasLimit() / params.MinimumEtxGasDivisor) {
 			// Limit ETX gas to max ETX gas limit (the rest is burned)
 			remainingGas = new(big.Int).SetUint64(env.wo.GasLimit() / params.MinimumEtxGasDivisor)
+		}
+		if remainingGas.Uint64() < params.TxGas {
+			// Minimum gas for ETX is TxGas
+			return fmt.Errorf("tx %032x has insufficient remaining gas for conversion ETX, have %d want %d", tx.Hash(), remainingGas.Uint64(), params.TxGas)
 		}
 		ETXPCount++ // conversion is technically a cross-prime ETX
 		if ETXPCount > env.etxPLimit {

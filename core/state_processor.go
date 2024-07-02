@@ -400,6 +400,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 							if err := statedb.CreateUTXO(etx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), block.Number(nodeCtx)))); err != nil {
 								return nil, nil, nil, nil, 0, err
 							}
+							p.logger.Debugf("Creating UTXO for coinbase %032x with denomination %d index %d\n", tx.Hash(), denomination, outputIndex)
 							outputIndex++
 						}
 					}
@@ -418,6 +419,15 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 					}
 					value := misc.QuaiToQi(primeTerminus.WorkObjectHeader(), etx.Value()) // convert Quai to Qi
 					txGas := etx.Gas()
+					if txGas < params.TxGas {
+						continue
+					}
+					txGas -= params.TxGas
+					if err := gp.SubGas(params.TxGas); err != nil {
+						return nil, nil, nil, nil, 0, err
+					}
+					*usedGas += params.TxGas
+					totalEtxGas += params.TxGas
 					denominations := misc.FindMinDenominations(value)
 					outputIndex := uint16(0)
 					// Iterate over the denominations in descending order
@@ -441,7 +451,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 							if err := statedb.CreateUTXO(etx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), etx.To().Bytes(), lock))); err != nil {
 								return nil, nil, nil, nil, 0, err
 							}
-							log.Global.Infof("Converting Quai to Qi %032x with denomination %d index %d lock %d", tx.Hash(), denomination, outputIndex, lock)
+							p.logger.Infof("Converting Quai to Qi %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, lock)
 							outputIndex++
 						}
 					}
@@ -470,7 +480,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 					// Convert Qi to Quai
 					msg.SetValue(misc.QiToQuai(primeTerminus.WorkObjectHeader(), etx.Value()))
 					msg.SetData([]byte{}) // data is not used in conversion
-					log.Global.Infof("Converting Qi to Quai for ETX %032x with value %d lock %d", tx.Hash(), msg.Value().Uint64(), msg.Lock().Uint64())
+					p.logger.Infof("Converting Qi to Quai for ETX %032x with value %d lock %d\n", tx.Hash(), msg.Value().Uint64(), msg.Lock().Uint64())
 				}
 				prevZeroBal := prepareApplyETX(statedb, msg.Value(), nodeLocation)
 				receipt, quaiFees, err = applyTransaction(msg, parent, p.config, p.hc, nil, gp, statedb, blockNumber, blockHash, etx, usedGas, vmenv, &etxRLimit, &etxPLimit, p.logger)
