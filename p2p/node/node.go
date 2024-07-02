@@ -9,10 +9,13 @@ import (
 	"github.com/libp2p/go-libp2p"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	dual "github.com/libp2p/go-libp2p-kad-dht/dual"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
@@ -69,6 +72,9 @@ type P2PNode struct {
 
 	// dht interface
 	dht *dual.DHT
+
+	// libp2p bandwidth counter
+	bandwidthCounter *libp2pmetrics.BandwidthCounter
 }
 
 // Returns a new libp2p node.
@@ -89,9 +95,29 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 		return nil, err
 	}
 
+	// Set up libp2p resource manager and stats reporter
+	rcmgr.MustRegisterWith(prometheus.DefaultRegisterer)
+
+	str, err := rcmgr.NewStatsTraceReporter()
+	if err != nil {
+		log.Global.Fatal(err)
+	}
+
+	rmgr, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.DefaultLimits.AutoScale()), rcmgr.WithTraceReporter(str))
+	if err != nil {
+		log.Global.Fatal(err)
+	}
+	bwctr := libp2pmetrics.NewBandwidthCounter()
+
 	// Create the libp2p host
 	var dht *dual.DHT
 	host, err := libp2p.New(
+		// Pass in the resource manager
+		libp2p.ResourceManager(rmgr),
+
+		// Set up libp2p bandwitdh reporting
+		libp2p.BandwidthReporter(bwctr),
+
 		// use a private key for persistent identity
 		libp2p.Identity(getNodeKey()),
 
@@ -187,15 +213,16 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	p2p := &P2PNode{
-		ctx:            ctx,
-		pubsub:         ps,
-		peerManager:    peerMgr,
-		requestManager: requestManager.NewManager(),
-		cache:          initializeCaches(common.GenerateLocations(common.MaxRegions, common.MaxZones)),
-		quitCh:         quitCh,
-		cancel:         cancel,
-		host:           host,
-		dht:            dht,
+		ctx:              ctx,
+		pubsub:           ps,
+		peerManager:      peerMgr,
+		requestManager:   requestManager.NewManager(),
+		cache:            initializeCaches(common.GenerateLocations(common.MaxRegions, common.MaxZones)),
+		quitCh:           quitCh,
+		cancel:           cancel,
+		host:             host,
+		dht:              dht,
+		bandwidthCounter: bwctr,
 	}
 
 	sm, err := streamManager.NewStreamManager(p2p, host)
