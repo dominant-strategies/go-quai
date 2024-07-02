@@ -35,7 +35,6 @@ func headerTestData() (*Header, common.Hash) {
 	header := &Header{
 		parentHash:            []common.Hash{common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"), common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0")},
 		uncleHash:             common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1"),
-		coinbase:              common.HexToAddress("0x9abcdef0123456789abcdef0123456789abcdef2", common.Location{0, 0}),
 		evmRoot:               common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
 		utxoRoot:              common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
 		txHash:                common.HexToHash("0x6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef5"),
@@ -65,7 +64,7 @@ func headerTestData() (*Header, common.Hash) {
 
 func TestHeaderHash(t *testing.T) {
 	_, hash := headerTestData()
-	correctHash := common.HexToHash("0xe2ebfa9a0164ae53adaefeabc124facd012eab05d1084a65ae15d1ed17e82ef7")
+	correctHash := common.HexToHash("0x87fedc319b0a7c3a64136d0eba5fe861e0abd1e873a8fd10bf958a1be875f374")
 	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 
@@ -175,21 +174,6 @@ func FuzzHeaderParentHash(f *testing.F) {
 
 func FuzzHeaderUncleHash(f *testing.F) {
 	fuzzHeaderHash(f, func(h *Header) common.Hash { return h.uncleHash }, func(h *Header, hash common.Hash) { h.uncleHash = hash })
-}
-
-func FuzzHeaderCoinbaseHash(f *testing.F) {
-	header, _ := headerTestData()
-	f.Add(testByte)
-	f.Add(header.coinbase.Bytes())
-	f.Fuzz(func(t *testing.T, b []byte) {
-		localHeader, hash := headerTestData()
-		sc := common.BytesToAddress(b, common.Location{0, 0})
-		if !localHeader.coinbase.Equal(sc) {
-			localHeader.coinbase = sc
-			require.NotEqual(t, localHeader.Hash(), hash, "Hash equal for Coinbase \noriginal: %v, modified: %v", header.coinbase, b)
-		}
-
-	})
 }
 
 func FuzzHeaderEvmRootHash(f *testing.F) {
