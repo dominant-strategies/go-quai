@@ -1300,10 +1300,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			return nil, err
 		}
 		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Time(), newWo.Location(), newWo.Coinbase())
-		proposedWoBody, err := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
-		if err != nil {
-			return nil, err
-		}
+		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		env, err := w.makeEnv(parent, proposedWo, w.coinbase)
 		if err != nil {
@@ -1351,11 +1348,8 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 		return env, nil
 	} else {
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(common.ZONE_CTX), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location(), newWo.Coinbase())
-		proposedWoBody, err := types.NewWorkObjectBody(newWo.Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
-		if err != nil {
-			return nil, err
-		}
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location(), newWo.Coinbase())
+		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		return &environment{wo: proposedWo}, nil
 	}

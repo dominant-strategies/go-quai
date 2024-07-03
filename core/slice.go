@@ -692,13 +692,12 @@ func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
 	} else {
 		ph := rawdb.ReadPendingHeader(sl.sliceDb, hash)
 		if ph != nil {
-			sl.phCache.Add(hash, *ph)
+			sl.phCache.Add(hash, *types.CopyPendingHeader(ph))
 			return *types.CopyPendingHeader(ph), true
 		} else {
 			return types.PendingHeader{}, false
 		}
 	}
-	return types.PendingHeader{}, false
 }
 
 // Write the phCache
@@ -1449,8 +1448,6 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Body().SetUncles(header.Uncles())
 		combinedPendingHeader.Body().SetManifest(header.Manifest())
 	}
-
-	combinedPendingHeader.Body().SetHeader(combinedPendingHeader.Header())
 
 	return combinedPendingHeader
 }

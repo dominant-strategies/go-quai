@@ -1032,13 +1032,38 @@ func (wh *WorkObjectHeader) ProtoDecode(data *ProtoWorkObjectHeader, location co
 	return nil
 }
 
+func NewWoBody(header *Header, txs []*Transaction, etxs []*Transaction, uncles []*WorkObjectHeader, manifest BlockManifest, interlinkHashes common.Hashes) *WorkObjectBody {
+	woBody := &WorkObjectBody{
+		header:          CopyHeader(header),
+		transactions:    make([]*Transaction, len(txs)),
+		uncles:          make([]*WorkObjectHeader, len(uncles)),
+		extTransactions: make([]*Transaction, len(etxs)),
+		manifest:        make(BlockManifest, len(manifest)),
+		interlinkHashes: make(common.Hashes, len(interlinkHashes)),
+	}
+	copy(woBody.transactions, txs)
+	copy(woBody.uncles, uncles)
+	copy(woBody.extTransactions, etxs)
+	copy(woBody.manifest, manifest)
+	copy(woBody.interlinkHashes, interlinkHashes)
+	for i := range uncles {
+		woBody.uncles[i] = CopyWorkObjectHeader(uncles[i])
+	}
+	return woBody
+}
+
 func CopyWorkObjectBody(wb *WorkObjectBody) *WorkObjectBody {
 	cpy := &WorkObjectBody{header: CopyHeader(wb.header)}
-	cpy.SetTransactions(wb.Transactions())
-	cpy.SetExtTransactions(wb.ExtTransactions())
-	cpy.SetUncles(wb.Uncles())
-	cpy.SetManifest(wb.Manifest())
-	cpy.SetInterlinkHashes(wb.InterlinkHashes())
+	cpy.transactions = make(Transactions, len(wb.Transactions()))
+	copy(cpy.transactions, wb.Transactions())
+	cpy.extTransactions = make(Transactions, len(wb.ExtTransactions()))
+	copy(cpy.extTransactions, wb.ExtTransactions())
+	cpy.uncles = make([]*WorkObjectHeader, len(wb.uncles))
+	copy(cpy.uncles, wb.Uncles())
+	cpy.manifest = make(BlockManifest, len(wb.Manifest()))
+	copy(cpy.manifest, wb.Manifest())
+	cpy.interlinkHashes = make(common.Hashes, len(wb.InterlinkHashes()))
+	copy(cpy.interlinkHashes, wb.InterlinkHashes())
 
 	return cpy
 }
@@ -1216,7 +1241,8 @@ type WorkObjectShareView struct {
 ////////////////////////////////////////////////////////////
 
 func (wo *WorkObject) ConvertToHeaderView() *WorkObjectHeaderView {
-	newWo := NewWorkObject(wo.woHeader, wo.woBody, wo.tx)
+	newWo := CopyWorkObject(wo)
+
 	newWo.Body().SetTransactions(Transactions{})
 	newWo.Body().SetManifest(BlockManifest{})
 	newWo.Body().SetInterlinkHashes(common.Hashes{})
