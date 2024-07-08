@@ -229,11 +229,6 @@ func processedStateKey(hash common.Hash) []byte {
 	return append(processedStatePrefix, hash.Bytes()...)
 }
 
-// blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
-func blockBodyKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
-}
-
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)

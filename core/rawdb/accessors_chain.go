@@ -182,7 +182,7 @@ func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
 		return true
 	}
-	if has, err := db.Has(blockBodyKey(number, hash)); !has || err != nil {
+	if has, err := db.Has(workObjectBodyKey(hash)); !has || err != nil {
 		return false
 	}
 	return true

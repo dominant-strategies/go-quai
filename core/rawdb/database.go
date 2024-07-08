@@ -391,7 +391,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *log.
 		switch {
 		case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
 			headers.Add(size)
-		case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
+		case bytes.HasPrefix(key, workObjectBodyPrefix) && len(key) == (len(workObjectBodyPrefix)+8+common.HashLength):
 			bodies.Add(size)
 		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 			receipts.Add(size)

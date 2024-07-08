@@ -561,15 +561,25 @@ func TestWorkObjectStorage(t *testing.T) {
 	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
-	t.Log("Header Hash stored", header.Hash())
+
+	if HasBody(db, header.Hash(), number.Uint64()) {
+		t.Fatalf("HasBody returned true on unexistent block")
+	}
+
 	// Write and verify the header in the database
 	WriteWorkObject(db, header.Hash(), header, types.BlockObject, common.ZONE_CTX)
+	t.Log("Header Hash stored", header.Hash())
 	entry := ReadWorkObject(db, header.Hash(), types.BlockObject)
 	if entry == nil {
 		t.Fatalf("Stored header not found with hash %s", entry.Hash())
 	} else if entry.Hash() != header.Hash() {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
 	}
+
+	if !HasBody(db, header.Hash(), number.Uint64()) {
+		t.Fatalf("HasBody returned false after writing block")
+	}
+
 	// Delete the header and verify the execution
 	DeleteWorkObject(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64(), types.BlockObject)
 	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
