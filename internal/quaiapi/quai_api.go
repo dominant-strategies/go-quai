@@ -29,9 +29,15 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 	"google.golang.org/protobuf/proto"
+)
+
+var (
+	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
+	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -779,10 +785,12 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexu
 			return nil
 		}
 		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
-		err = s.b.BroadcastWorkShare(wo.ConvertToWorkObjectShareView(txs), s.b.NodeLocation())
+		shareView := wo.ConvertToWorkObjectShareView(txs)
+		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
 		if err != nil {
 			s.b.Logger().WithField("err", err).Error("Error broadcasting work share")
 		}
+		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
 		powHash, err := s.b.Engine().ComputePowHash(workShare)
 		if err != nil {
 			s.b.Logger().Error("Error computing the powhash of the workshare")

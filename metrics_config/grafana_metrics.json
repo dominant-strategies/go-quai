@@ -984,7 +984,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(TxPropagation[1m])",
+          "expr": "rate(TxPropagation{label=~\".*\"}[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,

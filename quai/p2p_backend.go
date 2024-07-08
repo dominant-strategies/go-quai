@@ -21,7 +21,6 @@ var (
 	// TxPool propagation metrics
 	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
 	txIngressCounter     = txPropagationMetrics.WithLabelValues("ingress")
-	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
 
 	workObjectMetrics = metrics_config.NewCounterVec("WorkObjectCounters", "Tracks block statistics")
 	// Block propagation metrics
@@ -176,6 +175,7 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			backend.SendRemoteTxs(data.WorkObject.Transactions())
 
 			workShareIngressCounter.Inc()
+			txIngressCounter.Add(float64(len(data.WorkObject.Transactions())))
 		}
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)

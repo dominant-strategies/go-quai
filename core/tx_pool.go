@@ -105,6 +105,9 @@ var (
 )
 
 var (
+	//
+	// TxPool processing metrics
+	//
 	txpoolMetrics = metrics_config.NewGaugeVec("TxpoolGauges", "Txpool gauges")
 	// Pending pool metrics
 	pendingDiscardMeter   = txpoolMetrics.WithLabelValues("pending:discard")
