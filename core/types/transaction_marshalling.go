@@ -41,7 +41,7 @@ type txJSON struct {
 	To                   *common.Address `json:"to"`
 	AccessList           *AccessList     `json:"accessList"`
 	TxIn                 []TxIn          `json:"inputs,omitempty"`
-	TxOut                []TxOut         `json:"outputs,omitempty"`
+	TxOut                []txOutJSON     `json:"outputs,omitempty"`
 	UTXOSignature        *hexutil.Bytes  `json:"utxoSignature,omitempty"`
 
 	// Optional fields only present for internal transactions
@@ -57,6 +57,12 @@ type txJSON struct {
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
+}
+
+type txOutJSON struct {
+	Address      *hexutil.Bytes  `json:"address"`
+	Denomination *hexutil.Uint64 `json:"denomination"`
+	Lock         *hexutil.Big    `json:"lock,omitempty"`
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -95,7 +101,14 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		sig := tx.Signature.Serialize()
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.TxIn = tx.TxIn
-		enc.TxOut = tx.TxOut
+		for _, out := range tx.TxOut {
+			denom := uint64(out.Denomination)
+			enc.TxOut = append(enc.TxOut, txOutJSON{
+				Address:      (*hexutil.Bytes)(&out.Address),
+				Denomination: (*hexutil.Uint64)(&denom),
+				Lock:         (*hexutil.Big)(out.Lock),
+			})
+		}
 		enc.UTXOSignature = (*hexutil.Bytes)(&sig)
 	}
 	return json.Marshal(&enc)
@@ -208,7 +221,16 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		inner = &qiTx
 		qiTx.ChainID = (*big.Int)(dec.ChainID)
 		qiTx.TxIn = dec.TxIn
-		qiTx.TxOut = dec.TxOut
+		for _, out := range dec.TxOut {
+			if out.Denomination == nil {
+				return errors.New("missing required field 'denomination' in Qi transaction")
+			}
+			qiTx.TxOut = append(qiTx.TxOut, TxOut{
+				Address:      *out.Address,
+				Denomination: uint8(*out.Denomination),
+				Lock:         (*big.Int)(out.Lock),
+			})
+		}
 
 		sig, err := schnorr.ParseSignature(*dec.UTXOSignature)
 		if err != nil {
