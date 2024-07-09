@@ -558,8 +558,6 @@ func (c *Core) Stop() {
 
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.WorkObject) {
-	c.writeBlockLock.Lock()
-	defer c.writeBlockLock.Unlock()
 	nodeCtx := c.NodeCtx()
 
 	if block.Location() == nil {
