@@ -306,6 +306,7 @@ type TxPool struct {
 	locals         *accountSet                                     // Set of local transaction to exempt from eviction rules
 	journal        *txJournal                                      // Journal of local transaction to back up to disk
 	qiPool         map[common.Hash]*types.TxWithMinerFee           // Qi pool to store Qi transactions
+	qiTxFees       *lru.Cache[common.Hash, *big.Int]               // Recent Qi transaction fees
 	pending        map[common.InternalAddress]*txList              // All currently processable transactions
 	queue          map[common.InternalAddress]*txList              // Queued but non-processable transactions
 	beats          map[common.InternalAddress]time.Time            // Last heartbeat from each known account
@@ -313,6 +314,7 @@ type TxPool struct {
 	priced         *txPricedList                                   // All transactions sorted by price
 	senders        *lru.Cache[common.Hash, common.InternalAddress] // Tx hash to sender lookup cache (async populated)
 	sendersCh      chan newSender                                  // Channel for async senders cache goroutine
+	feesCh         chan newFee                                     // Channel for async Qi fees cache goroutine
 	SendersMu      sync.RWMutex                                    // Mutex for priority access of senders cache
 	localTxsCount  int                                             // count of txs in last 1 min. Purely for logging purpose
 	remoteTxsCount int                                             // count of txs in last 1 min. Purely for logging purpose
@@ -342,6 +344,10 @@ type txpoolResetRequest struct {
 type newSender struct {
 	hash   common.Hash
 	sender common.InternalAddress
+}
+type newFee struct {
+	hash common.Hash
+	fee  *big.Int
 }
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
@@ -385,6 +391,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		queue:           make(map[common.InternalAddress]*txList),
 		beats:           make(map[common.InternalAddress]time.Time),
 		sendersCh:       make(chan newSender, config.SendersChBuffer),
+		feesCh:          make(chan newFee, config.SendersChBuffer),
 		all:             newTxLookup(),
 		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
 		reqResetCh:      make(chan *txpoolResetRequest),
@@ -400,6 +407,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		logger:          logger,
 	}
 	pool.senders, _ = lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
+	pool.qiTxFees, _ = lru.New[common.Hash, *big.Int](int(config.MaxSenders))
 	pool.broadcastSetCache, _ = lru.New[common.Hash, types.Transactions](c_broadcastSetCacheSize)
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -433,6 +441,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	go pool.loop()
 	go pool.sendersGoroutine()
 	go pool.poolLimiterGoroutine()
+	go pool.feesGoroutine()
 	return pool
 }
 
@@ -1225,6 +1234,11 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 		default:
 			pool.logger.Error("sendersCh is full, skipping until there is room")
 		}
+		select {
+		case pool.feesCh <- newFee{tx.Hash(), fee}:
+		default:
+			pool.logger.Error("feesCh is full, skipping until there is room")
+		}
 		pool.logger.WithFields(logrus.Fields{
 			"tx":  tx.Hash().String(),
 			"fee": fee,
@@ -1236,9 +1250,43 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 
 func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 	for _, tx := range txs {
-		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, big.NewInt(0)) // TODO: Need to get the fee somehow without re-doing all the utxo lookups
+		fee, exists := pool.qiTxFees.Get(tx.Hash())
+		if fee == nil || !exists { // this should almost never happen
+			pool.logger.Errorf("Fee is nil or doesn't exist in cache for tx %s", tx.Hash().String())
+			currentBlock := pool.chain.CurrentBlock()
+			etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
+			if etxRLimit < params.ETXRLimitMin {
+				etxRLimit = params.ETXRLimitMin
+			}
+			etxPLimit := len(currentBlock.Transactions()) / params.ETXPrimeMaxFraction
+			if etxPLimit < params.ETXPLimitMin {
+				etxPLimit = params.ETXPLimitMin
+			}
+			totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.currentState, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
+			if err != nil {
+				pool.logger.WithFields(logrus.Fields{
+					"tx":  tx.Hash().String(),
+					"err": err,
+				}).Debug("Invalid Qi transaction, skipping re-inject")
+				continue
+			}
+			fee, err = ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
+			if err != nil {
+				pool.logger.WithFields(logrus.Fields{
+					"tx":  tx.Hash().String(),
+					"err": err,
+				}).Debug("Invalid Qi transaction, skipping re-inject")
+				continue
+			}
+			select {
+			case pool.feesCh <- newFee{tx.Hash(), fee}:
+			default:
+				pool.logger.Error("feesCh is full, skipping until there is room")
+			}
+		}
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
 		if err != nil {
-			pool.logger.Error("Error getting txWithMinerFee: " + err.Error())
+			pool.logger.Error("Error creating txWithMinerFee: " + err.Error())
 			continue
 		}
 		pool.qiPool[tx.Hash()] = txWithMinerFee
@@ -2138,6 +2186,32 @@ func (pool *TxPool) sendersGoroutine() {
 					"tx":     tx.hash.String(),
 					"sender": tx.sender.String(),
 				}).Debug("Tx already seen in sender cache (reorg?)")
+			}
+		}
+	}
+}
+
+// feesGoroutine asynchronously adds a new tx fee to the cache
+func (pool *TxPool) feesGoroutine() {
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	for {
+		select {
+		case <-pool.reorgShutdownCh:
+			return
+		case tx := <-pool.feesCh:
+			// Add transaction to sender cache
+			if contains, _ := pool.qiTxFees.ContainsOrAdd(tx.hash, tx.fee); contains {
+				pool.logger.WithFields(log.Fields{
+					"tx":  tx.hash.String(),
+					"fee": tx.fee.String(),
+				}).Debug("Tx already seen in fees cache (reorg?)")
 			}
 		}
 	}
