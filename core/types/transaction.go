@@ -931,6 +931,9 @@ type TxWithMinerFee struct {
 	minerFee *big.Int
 }
 
+func (tx *TxWithMinerFee) Tx() *Transaction   { return tx.tx }
+func (tx *TxWithMinerFee) MinerFee() *big.Int { return tx.minerFee }
+
 // NewTxWithMinerFee creates a wrapped transaction, calculating the effective
 // miner gasTipCap if a base fee is provided.
 // Returns error in case of a negative effective miner gasTipCap.
