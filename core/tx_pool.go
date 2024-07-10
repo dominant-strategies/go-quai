@@ -1040,6 +1040,9 @@ func (pool *TxPool) promoteTx(addr common.InternalAddress, hash common.Hash, tx 
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
 func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
+	if len(txs) == 0 {
+		return []error{}
+	}
 	return pool.addTxs(txs, !pool.config.NoLocals, true)
 }
 
@@ -1058,6 +1061,9 @@ func (pool *TxPool) AddLocal(tx *types.Transaction) error {
 // This method is used to add transactions from the p2p network and does not wait for pool
 // reorganization and internal event propagation.
 func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
+	if len(txs) == 0 {
+		return []error{}
+	}
 	pool.remoteTxsCount += len(txs)
 	return pool.addTxs(txs, false, false)
 }
@@ -1142,9 +1148,18 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
 	}
-	if len(qiNews) > 0 && uint64(len(pool.qiPool))+1 < pool.config.QiPoolSize {
+	if len(qiNews) > 0 && uint64(len(pool.qiPool)+1) > pool.config.QiPoolSize {
+		errs[0] = ErrTxPoolOverflow
+	} else if len(qiNews) > 0 {
 		qiErrs := pool.addQiTxs(qiNews)
-		errs = append(errs, qiErrs...)
+		var nilSlot = 0
+		for _, err := range qiErrs {
+			for errs[nilSlot] != nil {
+				nilSlot++
+			}
+			errs[nilSlot] = err
+			nilSlot++
+		}
 	}
 	if len(news) == 0 {
 		return errs
