@@ -1142,10 +1142,8 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
 	}
-	if len(qiNews) > 0 {
-		pool.qiMu.Lock()
-		qiErrs := pool.addQiTxsLocked(qiNews)
-		pool.qiMu.Unlock()
+	if len(qiNews) > 0 && uint64(len(pool.qiPool))+1 < pool.config.QiPoolSize {
+		qiErrs := pool.addQiTxs(qiNews)
 		errs = append(errs, qiErrs...)
 	}
 	if len(news) == 0 {
@@ -1172,9 +1170,9 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 var txPoolFullErrs uint64
 
-// addQiTx adds Qi transactions to the Qi pool.
-// The qiMu lock must be held by the caller.
-func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
+// addQiTxs adds Qi transactions to the Qi pool.
+// The qiMu lock must NOT be held by the caller.
+func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 	errs := make([]error, 0)
 	currentBlock := pool.chain.CurrentBlock()
 	etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
@@ -1185,9 +1183,9 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
-	transactionsWithoutErrors := make(types.Transactions, 0, len(txs))
-	totalQitIns := make([]*big.Int, 0, len(txs))
+	transactionsWithoutErrors := make([]*types.TxWithMinerFee, 0, len(txs))
 	for _, tx := range txs {
+
 		totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.currentState, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
 		if err != nil {
 			pool.logger.WithFields(logrus.Fields{
@@ -1197,11 +1195,7 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
-		transactionsWithoutErrors = append(transactionsWithoutErrors, tx)
-		totalQitIns = append(totalQitIns, totalQitIn)
-	}
-	for i, tx := range transactionsWithoutErrors {
-		fee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIns[i], currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
+		fee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
 		if err != nil {
 			pool.logger.WithFields(logrus.Fields{
 				"tx":  tx.Hash().String(),
@@ -1215,36 +1209,42 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
+		transactionsWithoutErrors = append(transactionsWithoutErrors, txWithMinerFee)
+	}
+	pool.qiMu.Lock()
+	for _, txWithFee := range transactionsWithoutErrors {
+
+		txHash := txWithFee.Tx().Hash()
 		if uint64(len(pool.qiPool))+1 > pool.config.QiPoolSize {
-			// If the pool is full, don't accept the transaction
+			// If the pool is full, don't accept the transaction (and any others)
 			errs = append(errs, ErrTxPoolOverflow)
 			if txPoolFullErrs%1000 == 0 {
 				pool.logger.WithFields(logrus.Fields{
-					"tx":  tx.Hash().String(),
-					"fee": fee,
+					"tx": txHash.String(),
 				}).Error("Qi tx pool is full")
 			}
 			txPoolFullErrs++
-			continue
+			break
 		}
-		pool.qiPool[tx.Hash()] = txWithMinerFee
-		pool.queueTxEvent(tx)
+		pool.qiPool[txHash] = txWithFee
+		pool.queueTxEvent(txWithFee.Tx())
 		select {
-		case pool.sendersCh <- newSender{tx.Hash(), common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
+		case pool.sendersCh <- newSender{txHash, common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
 		default:
 			pool.logger.Error("sendersCh is full, skipping until there is room")
 		}
 		select {
-		case pool.feesCh <- newFee{tx.Hash(), fee}:
+		case pool.feesCh <- newFee{txHash, txWithFee.MinerFee()}:
 		default:
 			pool.logger.Error("feesCh is full, skipping until there is room")
 		}
 		pool.logger.WithFields(logrus.Fields{
-			"tx":  tx.Hash().String(),
-			"fee": fee,
+			"tx":  txHash.String(),
+			"fee": txWithFee.MinerFee(),
 		}).Debug("Added qi tx to pool")
 		qiTxGauge.Add(1)
 	}
+	pool.qiMu.Unlock()
 	return errs
 }
 
