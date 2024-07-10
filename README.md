@@ -40,4 +40,4 @@ To run the included unit tests, run the following command:
 We welcome community contributions! If you find a bug, have a feature request, or would like to help out with development, we would love to hear from you; no fix is too small. Please take a look at `[CONTRIBUTING.md](CONTRIBUTING.md)` for guidelines for contributing to the project. 
 
 ## License
-This software is licensed under the GNU Genreral Public License, Version 3. See [LICENSE](LICENSE) for details.
+This software is licensed under the GNU General Public License, Version 3. See [LICENSE](LICENSE) for details.
