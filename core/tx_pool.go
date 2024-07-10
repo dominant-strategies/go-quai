@@ -1234,6 +1234,27 @@ func (pool *TxPool) addQiTxsLocked(txs types.Transactions) []error {
 	return errs
 }
 
+func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
+	for _, tx := range txs {
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, big.NewInt(0)) // TODO: Need to get the fee somehow without re-doing all the utxo lookups
+		if err != nil {
+			pool.logger.Error("Error getting txWithMinerFee: " + err.Error())
+			continue
+		}
+		pool.qiPool[tx.Hash()] = txWithMinerFee
+		select {
+		case pool.sendersCh <- newSender{tx.Hash(), common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
+		default:
+			pool.logger.Error("sendersCh is full, skipping until there is room")
+		}
+		pool.logger.WithFields(logrus.Fields{
+			"tx":  tx.Hash().String(),
+			"fee": 0,
+		}).Debug("Added qi tx to pool")
+		qiTxGauge.Add(1)
+	}
+}
+
 func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1764,14 +1785,18 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		pool.addTxsLocked(reinject, false)
+		if len(reinject) > 0 {
+			pool.addTxsLocked(reinject, false)
+		}
 		wg.Done()
 	}()
 	wg.Add(1)
 	go func() {
-		pool.qiMu.Lock()
-		pool.addQiTxsLocked(qiTxs)
-		pool.qiMu.Unlock()
+		if len(qiTxs) > 0 {
+			pool.qiMu.Lock()
+			pool.addQiTxsWithoutValidationLocked(qiTxs)
+			pool.qiMu.Unlock()
+		}
 		wg.Done()
 	}()
 	wg.Wait()
