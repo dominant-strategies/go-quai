@@ -578,7 +578,7 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 			parentHeader := c.GetHeaderByHash(block.ParentHash(nodeCtx))
 			if parentHeader != nil {
 				c.sl.WriteBlock(block)
-				c.InsertChain([]*types.WorkObject{block})
+				go c.InsertChain([]*types.WorkObject{block})
 			}
 			c.addToAppendQueue(block)
 			// If a dom block comes in and we havent appended it yet

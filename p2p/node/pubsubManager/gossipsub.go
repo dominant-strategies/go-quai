@@ -18,7 +18,7 @@ import (
 	"github.com/dominant-strategies/go-quai/quai"
 )
 
-const numWorkers = 10   // Number of workers per stream
+const numWorkers = 20   // Number of workers per stream
 const msgChanSize = 500 // 500 requests per subscription
 
 var (
