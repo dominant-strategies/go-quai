@@ -118,22 +118,6 @@ type Header struct {
 	sealHash atomic.Value
 }
 
-// field type overrides for gencodec
-type headerMarshaling struct {
-	Number                []*hexutil.Big
-	GasLimit              hexutil.Uint64
-	GasUsed               hexutil.Uint64
-	BaseFee               *hexutil.Big
-	ParentEntropy         []*hexutil.Big
-	ParentDeltaS          []*hexutil.Big
-	ParentUncledS         []*hexutil.Big
-	ParentUncledSubDeltaS []*hexutil.Big
-	UncledS               *hexutil.Big
-	Time                  hexutil.Uint64
-	Extr                  hexutil.Bytes
-	Hash                  common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-}
-
 func EmptyHeader() *Header {
 	h := &Header{}
 

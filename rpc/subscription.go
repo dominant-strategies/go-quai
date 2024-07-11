@@ -195,11 +195,6 @@ func (s *Subscription) Err() <-chan error {
 	return s.err
 }
 
-// MarshalJSON marshals a subscription as its ID.
-func (s *Subscription) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.ID)
-}
-
 // ClientSubscription is a subscription established through the Client's Subscribe or
 // EthSubscribe methods.
 type ClientSubscription struct {

@@ -3,10 +3,8 @@ package common
 import (
 	"database/sql/driver"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 
 	"io"
 	"math/big"
@@ -250,28 +248,6 @@ func (a *Address) UnmarshalText(input []byte) error {
 	return nil
 }
 
-// MarshalJSON marshals a subscription as its ID.
-func (a *Address) MarshalJSON() ([]byte, error) {
-	if a.inner == nil {
-		return []byte{}, nil
-	}
-	return json.Marshal(a.inner)
-}
-
-// UnmarshalJSON parses a hash in hex syntax.
-func (a *Address) UnmarshalJSON(input []byte) error {
-	var temp [AddressLength]byte
-	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, temp[:]); err != nil {
-		if len(input) == 0 {
-			a.inner = Bytes20ToAddress(ZeroExternal, Location{0, 0}).inner
-			return nil
-		}
-		return err
-	}
-	a.inner = Bytes20ToAddress(temp, Location{0, 0}).inner
-	return nil
-}
-
 // Scan implements Scanner for database/sql.
 func (a *Address) Scan(src interface{}, args ...Location) error {
 	var temp [20]byte
@@ -335,19 +311,6 @@ func IsHexAddress(s string) bool {
 		s = s[2:]
 	}
 	return len(s) == 2*AddressLength && isHex(s)
-}
-
-func (a *AddressBytes) UnmarshalJSON(input []byte) error {
-	var temp [AddressLength]byte
-	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(AddressBytes{}), input, temp[:]); err != nil {
-		return err
-	}
-	copy(a[:], temp[:])
-	return nil
-}
-
-func (a AddressBytes) MarshalJSON() ([]byte, error) {
-	return json.Marshal(a[:])
 }
 
 // Hex returns a hex string representation of the address.

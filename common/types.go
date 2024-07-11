@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -151,11 +150,6 @@ func (h *Hash) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Hash", input, h[:])
 }
 
-// UnmarshalJSON parses a hash in hex syntax.
-func (h *Hash) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalFixedJSON(hashT, input, h[:])
-}
-
 // MarshalText returns the hex representation of h.
 func (h Hash) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
@@ -283,27 +277,6 @@ func NewMixedcaseAddressFromString(hexaddr string, nodeLocation Location) (*Mixe
 	}
 	a := FromHex(hexaddr)
 	return &MixedcaseAddress{addr: BytesToAddress(a, nodeLocation), original: hexaddr}, nil
-}
-
-// UnmarshalJSON parses MixedcaseAddress
-func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
-	var temp [AddressLength]byte
-
-	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(InternalAddress{}), input, temp[:]); err != nil {
-		return err
-	}
-
-	ma.addr.inner = Bytes20ToAddress(temp, Location{}).inner
-
-	return json.Unmarshal(input, &ma.original)
-}
-
-// MarshalJSON marshals the original value
-func (ma *MixedcaseAddress) MarshalJSON() ([]byte, error) {
-	if strings.HasPrefix(ma.original, "0x") || strings.HasPrefix(ma.original, "0X") {
-		return json.Marshal(fmt.Sprintf("0x%s", ma.original[2:]))
-	}
-	return json.Marshal(fmt.Sprintf("0x%s", ma.original))
 }
 
 // Address returns the address
@@ -530,15 +503,6 @@ func (l Location) RPCMarshal() []hexutil.Uint64 {
 	}
 
 	return res
-}
-
-// MarshalJSON marshals the location into a JSON array of integers
-func (l Location) MarshalJSON() ([]byte, error) {
-	intSlice := make([]int, len(l))
-	for i, v := range l {
-		intSlice[i] = int(v)
-	}
-	return json.Marshal(intSlice)
 }
 
 // NewLocation verifies the inputs for region and zone and returns a valid location
