@@ -414,7 +414,7 @@ func DefaultLighthouseGenesisBlock(consensusEngine string) *Genesis {
 			Nonce:      66,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 			GasLimit:   40000000,
-			Difficulty: big.NewInt(100000),
+			Difficulty: big.NewInt(200000),
 		}
 	}
 	return &Genesis{
@@ -422,7 +422,7 @@ func DefaultLighthouseGenesisBlock(consensusEngine string) *Genesis {
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353537"),
 		GasLimit:   5000000,
-		Difficulty: big.NewInt(100000),
+		Difficulty: big.NewInt(200000),
 	}
 }
 
