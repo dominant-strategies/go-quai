@@ -103,22 +103,6 @@ func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *typ
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) TotalLogPhS(header *types.WorkObject) *big.Int {
-	switch blake3pow.config.NodeLocation.Context() {
-	case common.PRIME_CTX:
-		totalS := header.ParentEntropy(common.PRIME_CTX)
-		return totalS
-	case common.REGION_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaS(common.REGION_CTX))
-		return totalS
-	case common.ZONE_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaS(common.REGION_CTX))
-		totalS.Add(totalS, header.ParentDeltaS(common.ZONE_CTX))
-		return totalS
-	}
-	return big.NewInt(0)
-}
-
 func (blake3pow *Blake3pow) DeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
