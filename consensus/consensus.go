@@ -97,9 +97,6 @@ type Engine interface {
 	// TotalLogS returns the log of the total entropy reduction if the chain since genesis to the given header
 	TotalLogS(chain GenesisReader, header *types.WorkObject) *big.Int
 
-	// TotalLogPhS returns the log of the total entropy reduction if the chain since genesis for a pending header
-	TotalLogPhS(header *types.WorkObject) *big.Int
-
 	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
 	DeltaLogS(chain GenesisReader, header *types.WorkObject) *big.Int
 

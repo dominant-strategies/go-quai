@@ -827,10 +827,6 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexu
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {
-	nodeCtx := s.b.NodeCtx()
-	if nodeCtx != common.ZONE_CTX {
-		return nil, errors.New("getPendingHeader can only be called in zone chain")
-	}
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getPendingHeader call can only be made on chain processing the state")
 	}
