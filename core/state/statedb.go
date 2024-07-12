@@ -228,6 +228,7 @@ func (s *StateDB) StopPrefetcher() {
 
 // setError remembers the first non-nil error it is called with.
 func (s *StateDB) setError(err error) {
+	s.logger.Error("StateDB: " + err.Error())
 	if s.dbErr == nil {
 		s.dbErr = err
 	}
@@ -934,6 +935,8 @@ func (s *StateDB) Copy() *StateDB {
 		trie:                s.db.CopyTrie(s.trie),
 		utxoTrie:            s.utxoDb.CopyTrie(s.utxoTrie),
 		utxoDb:              s.utxoDb,
+		etxTrie:             s.etxDb.CopyTrie(s.etxTrie),
+		etxDb:               s.etxDb,
 		stateObjects:        make(map[common.InternalAddress]*stateObject, len(s.journal.dirties)),
 		stateObjectsPending: make(map[common.InternalAddress]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:   make(map[common.InternalAddress]struct{}, len(s.journal.dirties)),
@@ -943,6 +946,8 @@ func (s *StateDB) Copy() *StateDB {
 		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
+		nodeLocation:        s.nodeLocation,
+		logger:              s.logger,
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
