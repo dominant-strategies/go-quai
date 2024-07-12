@@ -476,6 +476,25 @@ func (ec *Client) EstimateGas(ctx context.Context, msg quai.CallMsg) (uint64, er
 	return uint64(hex), nil
 }
 
+// AccessListResult returns an optional accesslist
+// Its the result of the `quai_createAccessList` RPC call.
+// It contains an error if the transaction itself failed.
+type AccessListResult struct {
+	Accesslist *types.AccessList `json:"accessList"`
+	Error      string            `json:"error,omitempty"`
+	GasUsed    hexutil.Uint64    `json:"gasUsed"`
+}
+
+// CreateAccessList creates an access list for a transaction.
+func (ec *Client) CreateAccessList(ctx context.Context, msg quai.CallMsg) (AccessListResult, error) {
+	var accessList AccessListResult
+	err := ec.c.CallContext(ctx, &accessList, "quai_createAccessList", toCallArg(msg))
+	if err != nil {
+		return accessList, err
+	}
+	return accessList, nil
+}
+
 // SendTransaction injects a signed transaction into the pending pool for execution.
 //
 // If the transaction was a contract creation use the TransactionReceipt method to get the

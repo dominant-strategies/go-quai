@@ -158,13 +158,13 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			Data:                 args.Data,
 			AccessList:           args.AccessList,
 		}
-		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
 		if err != nil {
 			return err
 		}
 		args.Gas = &estimated
-		log.Global.WithField("gas", args.Gas).Trace("Estimate gas usage automatically")
+		log.Global.WithField("gas", args.Gas).Debug("Estimate gas usage automatically")
 	}
 	if args.ChainID == nil {
 		id := (*hexutil.Big)(b.ChainConfig().ChainID)

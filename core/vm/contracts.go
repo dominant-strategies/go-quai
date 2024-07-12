@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -50,16 +51,23 @@ var (
 )
 
 func InitializePrecompiles(nodeLocation common.Location) {
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000001", nodeLocation.BytePrefix()))] = &ecrecover{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000002", nodeLocation.BytePrefix()))] = &sha256hash{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000003", nodeLocation.BytePrefix()))] = &ripemd160hash{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000004", nodeLocation.BytePrefix()))] = &dataCopy{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000005", nodeLocation.BytePrefix()))] = &bigModExp{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000006", nodeLocation.BytePrefix()))] = &bn256Add{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000007", nodeLocation.BytePrefix()))] = &bn256ScalarMul{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000008", nodeLocation.BytePrefix()))] = &bn256Pairing{}
-	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%x00000000000000000000000000000000000009", nodeLocation.BytePrefix()))] = &blake2F{}
-	LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}] = common.HexToAddress(fmt.Sprintf("0x%x0000000000000000000000000000000000000A", nodeLocation.BytePrefix()), nodeLocation)
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000001", nodeLocation.BytePrefix()))] = &ecrecover{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000002", nodeLocation.BytePrefix()))] = &sha256hash{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000003", nodeLocation.BytePrefix()))] = &ripemd160hash{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000004", nodeLocation.BytePrefix()))] = &dataCopy{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000005", nodeLocation.BytePrefix()))] = &bigModExp{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000006", nodeLocation.BytePrefix()))] = &bn256Add{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000007", nodeLocation.BytePrefix()))] = &bn256ScalarMul{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000008", nodeLocation.BytePrefix()))] = &bn256Pairing{}
+	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000009", nodeLocation.BytePrefix()))] = &blake2F{}
+	LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}] = common.HexToAddress(fmt.Sprintf("0x%02x0000000000000000000000000000000000000A", nodeLocation.BytePrefix()), nodeLocation)
+
+	for address, _ := range PrecompiledContracts {
+		if address.Location().Equal(nodeLocation) {
+			PrecompiledAddresses[nodeLocation.Name()] = append(PrecompiledAddresses[nodeLocation.Name()], common.BytesToAddress(address[:], nodeLocation))
+			PrecompiledAddresses[nodeLocation.Name()] = append(PrecompiledAddresses[nodeLocation.Name()], common.HexToAddress(fmt.Sprintf("0x00000000000000000000000000000000000000%02x", address[19]), nodeLocation))
+		}
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
