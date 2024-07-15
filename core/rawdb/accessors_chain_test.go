@@ -1,13 +1,16 @@
 package rawdb
 
 import (
+	"bytes"
 	"math/big"
 	reflect "reflect"
+	"strings"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 func TestCanonicalHashStorage(t *testing.T) {
@@ -596,5 +599,88 @@ func TestWorkObjectStorage(t *testing.T) {
 	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 
+	}
+}
+
+func createTransaction(nonce uint64) *types.Transaction {
+	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
+	inner := &types.QuaiTx{
+		ChainID:    new(big.Int).SetUint64(1),
+		Nonce:      nonce,
+		GasTipCap:  new(big.Int).SetUint64(0),
+		GasFeeCap:  new(big.Int).SetUint64(0),
+		Gas:        uint64(0),
+		To:         &to,
+		Value:      new(big.Int).SetUint64(0),
+		Data:       []byte{},
+		AccessList: types.AccessList{},
+		V:          new(big.Int).SetUint64(0),
+		R:          new(big.Int).SetUint64(0),
+		S:          new(big.Int).SetUint64(0),
+	}
+	return types.NewTx(inner)
+}
+
+func createReceipt(txHash common.Hash, blockHash common.Hash) *types.Receipt {
+	receipt := types.NewReceipt([]byte{}, false, 55000)
+	receipt.TxHash = txHash
+	receipt.GasUsed = 55000
+	receipt.BlockHash = blockHash
+	receipt.BlockNumber = big.NewInt(11)
+	return receipt
+}
+
+func TestReceiptsStorage(t *testing.T) {
+	// Create a buffer to test Log calls
+	logBuf := bytes.Buffer{}
+	log.Global.SetOutput(&logBuf)
+
+	db := NewMemoryDatabase(log.Global)
+
+	tx1 := createTransaction(1)
+	tx2 := createTransaction(2)
+
+	// Block
+	woBody := &types.WorkObjectBody{}
+	woBody.SetTransactions([]*types.Transaction{tx1, tx2})
+	woBody.SetExtTransactions([]*types.Transaction{})
+	woBody.SetHeader(types.EmptyHeader())
+	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
+
+	hash := header.Hash()
+
+	blockNumber := uint64(11)
+
+	receipt1 := createReceipt(tx1.Hash(), hash)
+
+	receipt2 := createReceipt(tx2.Hash(), hash)
+
+	receipts := types.Receipts{receipt1, receipt2}
+
+	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
+		t.Fatalf("Non existent receipts returned: %v", entry)
+	}
+
+	WriteReceipts(db, hash, blockNumber, receipts)
+
+	// Test Read receipts with missing body
+	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
+		t.Fatalf("Receipt without body returned: %v", entry)
+	}
+	if !strings.Contains(logBuf.String(), "Missing body but have receipt") {
+		t.Errorf("Expected log to contain 'Missing body but have receipt', got %s", logBuf.String())
+	}
+
+	// Write Block
+	WriteWorkObject(db, hash, header, types.BlockObject, common.ZONE_CTX)
+
+	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); len(entry) != 2 {
+		t.Fatal("Stored receipts not found")
+	}
+
+	DeleteReceipts(db, hash, blockNumber)
+
+	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
+		t.Fatalf("Deleted receipts returned: %v", entry)
 	}
 }
