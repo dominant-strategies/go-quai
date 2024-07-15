@@ -14,8 +14,10 @@ import (
 
 	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/libp2p/go-libp2p/core/host"
+	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
 const (
@@ -52,7 +54,7 @@ type StreamManager interface {
 	CloseStream(peer.ID) error
 
 	// WriteMessageToStream writes the given message into the given stream
-	WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte) error
+	WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte, protoversion protocol.ID, reporter libp2pmetrics.Reporter) error
 }
 
 type basicStreamManager struct {
@@ -188,7 +190,7 @@ func (sm *basicStreamManager) GetHost() host.Host {
 }
 
 // Writes the message to the stream.
-func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte) error {
+func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte, protoversion protocol.ID, reporter libp2pmetrics.Reporter) error {
 	wrappedStream, found := sm.streamCache.Get(peerID)
 	if !found {
 		return errors.New("stream not found")
@@ -233,9 +235,13 @@ func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream net
 	msg = append(lenBytes, msg...)
 
 	// Then write the message
-	_, err := stream.Write(msg)
+	numWritten, err := stream.Write(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to write message to stream")
 	}
+	if reporter != nil {
+		reporter.LogSentMessageStream(int64(numWritten), protoversion, stream.Conn().RemotePeer())
+	}
+
 	return nil
 }

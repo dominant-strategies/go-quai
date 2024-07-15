@@ -5,7 +5,9 @@ import (
 	"io"
 	"time"
 
+	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
 )
 
@@ -16,7 +18,7 @@ const (
 )
 
 // Reads the message from the stream and returns a byte of data.
-func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
+func ReadMessageFromStream(stream network.Stream, protoversion protocol.ID, reporter libp2pmetrics.Reporter) ([]byte, error) {
 	// First read the length of the incoming message
 	lenBytes := make([]byte, 4)
 	if _, err := io.ReadFull(stream, lenBytes); err != nil {
@@ -26,8 +28,12 @@ func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 
 	// Now read the message
 	data := make([]byte, msgLen)
-	if _, err := io.ReadFull(stream, data); err != nil {
+	numRead, err := io.ReadFull(stream, data)
+	if err != nil {
 		return nil, errors.Wrap(err, "failed to read message")
+	}
+	if reporter != nil {
+		reporter.LogRecvMessageStream(int64(numRead), protoversion, stream.Conn().RemotePeer())
 	}
 
 	if messageMetrics != nil {
@@ -37,7 +43,7 @@ func ReadMessageFromStream(stream network.Stream) ([]byte, error) {
 }
 
 // Writes the message to the stream.
-func WriteMessageToStream(stream network.Stream, msg []byte) error {
+func WriteMessageToStream(stream network.Stream, msg []byte, protoversion protocol.ID, reporter libp2pmetrics.Reporter) error {
 	// Set the write deadline
 	if err := stream.SetWriteDeadline(time.Now().Add(c_stream_write_deadline)); err != nil {
 		return errors.Wrap(err, "failed to set write deadline")
@@ -52,9 +58,12 @@ func WriteMessageToStream(stream network.Stream, msg []byte) error {
 	msg = append(lenBytes, msg...)
 
 	// Then write the message
-	_, err := stream.Write(msg)
+	numWritten, err := stream.Write(msg)
 	if err != nil {
 		return errors.Wrap(err, "failed to write message to stream")
+	}
+	if reporter != nil {
+		reporter.LogSentMessageStream(int64(numWritten), protoversion, stream.Conn().RemotePeer())
 	}
 
 	if messageMetrics != nil {

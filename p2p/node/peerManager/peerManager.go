@@ -32,8 +32,10 @@ import (
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/host"
+	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	libp2pprotocol "github.com/libp2p/go-libp2p/core/protocol"
 	basicConnGater "github.com/libp2p/go-libp2p/p2p/net/conngater"
 	basicConnMgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
 )
@@ -706,6 +708,6 @@ func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
 	return pm.streamManager.CloseStream(peerID)
 }
 
-func (pm *BasicPeerManager) WriteMessageToStream(peerId p2p.PeerID, stream network.Stream, msg []byte) error {
-	return pm.streamManager.WriteMessageToStream(peerId, stream, msg)
+func (pm *BasicPeerManager) WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte, protoversion libp2pprotocol.ID, reporter libp2pmetrics.Reporter) error {
+	return pm.streamManager.WriteMessageToStream(peerID, stream, msg, protoversion, reporter)
 }

@@ -84,7 +84,7 @@ func TestWriteMessageToStream(t *testing.T) {
 			mockStream := mocks.NewMockStream(ctrl)
 			tt.setupMock(mockStream)
 
-			err := WriteMessageToStream(mockStream, tt.message)
+			err := WriteMessageToStream(mockStream, tt.message, "testproto", nil)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -164,7 +164,7 @@ func TestReadMessageFromStream(t *testing.T) {
 			mockStream := mocks.NewMockStream(ctrl)
 			tt.setupMock(mockStream)
 
-			got, err := ReadMessageFromStream(mockStream)
+			got, err := ReadMessageFromStream(mockStream, "testproto", nil)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {

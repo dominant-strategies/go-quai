@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
+	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
@@ -51,7 +53,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	}
 
 	// Send the request to the peer
-	err = p.GetPeerManager().WriteMessageToStream(peerID, stream, requestBytes)
+	err = p.GetPeerManager().WriteMessageToStream(peerID, stream, requestBytes, protocol.ProtocolVersion, p.GetBandwidthCounter())
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +143,10 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	// If this peer responded with an invalid response, ban them for misbehaving.
 	p.BanPeer(peerID)
 	return nil, errors.New("invalid response")
+}
+
+func (p *P2PNode) GetBandwidthCounter() libp2pmetrics.Reporter {
+	return p.bandwidthCounter
 }
 
 func (p *P2PNode) GetRequestManager() requestManager.RequestManager {

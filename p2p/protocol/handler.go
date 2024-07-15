@@ -59,8 +59,9 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	}()
 
 	// Enter the read loop for the stream and handle messages
+	bwc := node.GetBandwidthCounter()
 	for {
-		data, err := common.ReadMessageFromStream(stream)
+		data, err := common.ReadMessageFromStream(stream, ProtocolVersion, bwc)
 		if err != nil {
 			if errors.Is(err, network.ErrReset) || errors.Is(err, io.EOF) {
 				return
@@ -260,7 +261,7 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 	if err != nil {
 		return err
 	}
-	err = common.WriteMessageToStream(stream, data)
+	err = common.WriteMessageToStream(stream, data, ProtocolVersion, node.GetBandwidthCounter())
 	if err != nil {
 		return err
 	}
@@ -279,7 +280,7 @@ func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, s
 	if err != nil {
 		return err
 	}
-	err = common.WriteMessageToStream(stream, data)
+	err = common.WriteMessageToStream(stream, data, ProtocolVersion, node.GetBandwidthCounter())
 	if err != nil {
 		return err
 	}

@@ -10,11 +10,15 @@ import (
 )
 
 var (
-	bandwidthMetrics = metrics_config.NewGaugeVec("Bandwidth", "Bandwidth guages")
-	inRateTotal      = bandwidthMetrics.WithLabelValues("total bytes/s in")
-	outRateTotal     = bandwidthMetrics.WithLabelValues("total bytes/s out")
-	inRateGossipsub  = bandwidthMetrics.WithLabelValues("gossipsub bytes/s in")
-	outRateGossipsub = bandwidthMetrics.WithLabelValues("gossipsub bytes/s out")
+	bandwidthMetrics       = metrics_config.NewGaugeVec("Bandwidth", "Bandwidth guages")
+	inRateTotal            = bandwidthMetrics.WithLabelValues("total bytes/s in")
+	outRateTotal           = bandwidthMetrics.WithLabelValues("total bytes/s out")
+	inRateGossipsub        = bandwidthMetrics.WithLabelValues("gossipsub bytes/s in")
+	outRateGossipsub       = bandwidthMetrics.WithLabelValues("gossipsub bytes/s out")
+	inRateRelay            = bandwidthMetrics.WithLabelValues("relay bytes/s in")
+	outRateRelay           = bandwidthMetrics.WithLabelValues("relay bytes/s out")
+	inRateRequestResponse  = bandwidthMetrics.WithLabelValues("request-response bytes/s in")
+	outRateRequestResponse = bandwidthMetrics.WithLabelValues("request-response bytes/s out")
 )
 
 // Returns the number of peers in the routing table, as well as how many active
@@ -52,6 +56,12 @@ func (p *P2PNode) statsLoop() {
 			pubsubBw := p.bandwidthCounter.GetBandwidthForProtocol("/meshsub/1.1.0")
 			inRateGossipsub.Set(float64(pubsubBw.RateIn))
 			outRateGossipsub.Set(float64(pubsubBw.RateOut))
+			relayBw := p.bandwidthCounter.GetBandwidthForProtocol("/libp2p/circuit/relay/0.2.0/hop")
+			inRateRelay.Set(float64(relayBw.RateIn))
+			outRateRelay.Set(float64(relayBw.RateOut))
+			reqResBw := p.bandwidthCounter.GetBandwidthForProtocol("/quai/1.0.0")
+			inRateRequestResponse.Set(float64(reqResBw.RateIn))
+			outRateRequestResponse.Set(float64(reqResBw.RateOut))
 		case <-p.ctx.Done():
 			log.Global.Warnf("Context cancelled. Stopping stats loop...")
 			return

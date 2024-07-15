@@ -3,6 +3,7 @@ package protocol
 import (
 	"math/big"
 
+	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -20,6 +21,7 @@ type QuaiP2PNode interface {
 	GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash
 	GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse
 	GetRequestManager() requestManager.RequestManager
+	GetBandwidthCounter() libp2pmetrics.Reporter
 
 	Connect(peer.AddrInfo) error
 	GetStream(peer.ID) (network.Stream, error)
