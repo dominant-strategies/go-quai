@@ -684,3 +684,26 @@ func TestReceiptsStorage(t *testing.T) {
 		t.Fatalf("Deleted receipts returned: %v", entry)
 	}
 }
+
+func TestInterlinkHashesStorage(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+
+	hash := common.Hash{1}
+	if entry := ReadInterlinkHashes(db, hash); entry != nil {
+		t.Fatalf("Non existent interlink hashes returned: %v", entry)
+	}
+
+	interlinkHashes := common.Hashes{{2}, {3}}
+
+	WriteInterlinkHashes(db, hash, interlinkHashes)
+
+	if entry := ReadInterlinkHashes(db, common.Hash{1}); entry[0] != interlinkHashes[0] || entry[1] != interlinkHashes[1] {
+		t.Fatalf("Stored interlink hashes not found: %v", entry)
+	}
+
+	DeleteInterlinkHashes(db, common.Hash{1})
+
+	if entry := ReadInterlinkHashes(db, common.Hash{1}); entry != nil {
+		t.Fatalf("Deleted interlink hashes returned: %v", entry)
+	}
+}
