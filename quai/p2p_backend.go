@@ -189,7 +189,11 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 					"location": data.Location(),
 				}).Error("no backend found for this location")
 			}
-
+			err := backend.SanityCheckWorkObjectBlockViewBody(data.WorkObject)
+			if err != nil {
+				backend.Logger().WithField("err", err).Warn("Sanity check of work object failed")
+				return pubsub.ValidationReject
+			}
 			if backend.BadHashExistsInChain() {
 				backend.Logger().Warn("Bad Hashes still exist on chain, cannot handle block broadcast yet")
 				return pubsub.ValidationIgnore
@@ -210,7 +214,11 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 					"location": data.Location(),
 				}).Error("no backend found for this location")
 			}
-
+			err := backend.SanityCheckWorkObjectHeaderViewBody(data.WorkObject)
+			if err != nil {
+				backend.Logger().WithField("err", err).Warn("Sanity check of work object header view failed")
+				return pubsub.ValidationReject
+			}
 			if backend.BadHashExistsInChain() {
 				backend.Logger().Warn("Bad Hashes still exist on chain, cannot handle block broadcast yet")
 				return pubsub.ValidationIgnore
@@ -233,21 +241,13 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			}
 			// check if the work share is valid before accepting the transactions
 			// from the peer
-			if data.WorkObject == nil {
-				backend.Logger().Error("work share received from peer has a nil work object")
-				return pubsub.ValidationReject
-			}
-			if data.WorkObject.WorkObjectHeader() == nil {
-				backend.Logger().Error("work share received from peer has a nil work object header")
+			err := backend.SanityCheckWorkObjectShareViewBody(data.WorkObject)
+			if err != nil {
+				backend.Logger().WithField("err", err).Warn("Sanity check of work object share view failed")
 				return pubsub.ValidationReject
 			}
 			if ok := backend.CheckIfValidWorkShare(data.WorkObject.WorkObjectHeader()); !ok {
 				backend.Logger().Error("work share received from peer is not valid")
-				return pubsub.ValidationReject
-			}
-			// check if the txs in the workObject hash to the tx hash in the body header
-			if hash := types.DeriveSha(data.WorkObject.Transactions(), trie.NewStackTrie(nil)); hash != data.WorkObject.TxHash() {
-				backend.Logger().Error("TxHash doesnt match the hash of the transactions in the work object received from peer")
 				return pubsub.ValidationReject
 			}
 
@@ -255,8 +255,7 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				backend.Logger().Error("workshare contains more transactions than allowed")
 				return pubsub.ValidationReject
 			}
-
-			_, err := backend.Engine().ComputePowHash(data.WorkObject.WorkObjectHeader())
+			_, err = backend.Engine().ComputePowHash(data.WorkObject.WorkObjectHeader())
 			if err != nil {
 				backend.Logger().Error("Error computing the powHash of the work object header received from peer")
 				return pubsub.ValidationReject

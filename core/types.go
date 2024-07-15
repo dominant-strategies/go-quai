@@ -29,6 +29,12 @@ type Validator interface {
 	// ValidateBody validates the given block's content.
 	ValidateBody(block *types.WorkObject) error
 
+	SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error
+
+	SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObject) error
+
+	SanityCheckWorkObjectShareViewBody(wo *types.WorkObject) error
+
 	// ValidateState validates the given statedb and optionally the receipts and
 	// gas used.
 	ValidateState(block *types.WorkObject, state *state.StateDB, receipts types.Receipts, etxs types.Transactions, usedGas uint64) error

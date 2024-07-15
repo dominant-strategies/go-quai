@@ -765,6 +765,18 @@ func (c *Core) SetDomInterface(domInterface CoreBackend) {
 	c.sl.SetDomInterface(domInterface)
 }
 
+func (c *Core) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error {
+	return c.sl.validator.SanityCheckWorkObjectBlockViewBody(wo)
+}
+
+func (c *Core) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObject) error {
+	return c.sl.validator.SanityCheckWorkObjectHeaderViewBody(wo)
+}
+
+func (c *Core) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject) error {
+	return c.sl.validator.SanityCheckWorkObjectShareViewBody(wo)
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//

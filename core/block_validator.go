@@ -100,11 +100,160 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 			if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
 				return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
 			}
-			if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
-				return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
-			}
+		}
+		// The header view should have the etxs populated
+		if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
 		}
 	}
+	return nil
+}
+
+// SanityCheckWorkObjectBlockViewBody is used in the case of gossipsub validation, it quickly checks if any of the fields
+// that are supposed to be empty are not for the work object block view
+func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error {
+	if wo == nil {
+		return fmt.Errorf("wo is nil")
+	}
+	if wo.Header() == nil {
+		return fmt.Errorf("wo header is nil")
+	}
+	nodeCtx := v.config.Location.Context()
+	header := wo.Header()
+	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
+	// we have a subordinate (i.e. if we are not a zone)
+	if nodeCtx != common.ZONE_CTX {
+		// Region nodes should have body with zero length txs and etxs
+		if len(wo.Transactions()) != 0 {
+			return fmt.Errorf("region body has non zero transactions")
+		}
+		if len(wo.ExtTransactions()) != 0 {
+			return fmt.Errorf("region body has non zero etx transactions")
+		}
+		if len(wo.Uncles()) != 0 {
+			return fmt.Errorf("region body has non zero uncles")
+		}
+		subManifestHash := types.DeriveSha(wo.Manifest(), trie.NewStackTrie(nil))
+		if subManifestHash == types.EmptyRootHash || subManifestHash != header.ManifestHash(nodeCtx+1) {
+			// If we have a subordinate chain, it is impossible for the subordinate manifest to be empty
+			return ErrBadSubManifest
+		}
+		if nodeCtx == common.PRIME_CTX {
+			interlinkRootHash := types.DeriveSha(wo.InterlinkHashes(), trie.NewStackTrie(nil))
+			if interlinkRootHash != header.InterlinkRootHash() {
+				return ErrBadInterlink
+			}
+		}
+	} else {
+		if len(wo.Manifest()) != 0 {
+			return fmt.Errorf("zone body has non zero manifests")
+		}
+		if len(wo.InterlinkHashes()) != 0 {
+			return fmt.Errorf("zone body has non zero interlink hashes")
+		}
+		if hash := types.CalcUncleHash(wo.Uncles()); hash != header.UncleHash() {
+			return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash())
+		}
+		if hash := types.DeriveSha(wo.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
+			return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
+		}
+		// The header view should have the etxs populated
+		if hash := types.DeriveSha(wo.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+		}
+	}
+	return nil
+}
+
+// SanityCheckWorkObjectHeaderViewBody is used in the case of gossipsub validation, it quickly checks if any of the fields
+// that are supposed to be empty are not for the work object header view
+func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObject) error {
+	if wo == nil {
+		return fmt.Errorf("wo is nil")
+	}
+	if wo.Header() == nil {
+		return fmt.Errorf("wo header is nil")
+	}
+	header := wo.Header()
+	nodeCtx := v.config.Location.Context()
+	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
+	// we have a subordinate (i.e. if we are not a zone)
+	if nodeCtx != common.ZONE_CTX {
+		// Region nodes should have body with zero length txs and etxs
+		if len(wo.Transactions()) != 0 {
+			return fmt.Errorf("region body has non zero transactions")
+		}
+		if len(wo.ExtTransactions()) != 0 {
+			return fmt.Errorf("region body has non zero etx transactions")
+		}
+		if len(wo.Uncles()) != 0 {
+			return fmt.Errorf("region body has non zero uncles")
+		}
+		subManifestHash := types.DeriveSha(wo.Manifest(), trie.NewStackTrie(nil))
+		if subManifestHash == types.EmptyRootHash || subManifestHash != header.ManifestHash(nodeCtx+1) {
+			// If we have a subordinate chain, it is impossible for the subordinate manifest to be empty
+			return ErrBadSubManifest
+		}
+		if nodeCtx == common.PRIME_CTX {
+			interlinkRootHash := types.DeriveSha(wo.InterlinkHashes(), trie.NewStackTrie(nil))
+			if interlinkRootHash != header.InterlinkRootHash() {
+				return ErrBadInterlink
+			}
+		}
+	} else {
+		// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
+		if len(wo.Transactions()) != 0 {
+			return fmt.Errorf("zone body has non zero transactions")
+		}
+		if len(wo.Manifest()) != 0 {
+			return fmt.Errorf("zone body has non zero manifests")
+		}
+		if len(wo.InterlinkHashes()) != 0 {
+			return fmt.Errorf("zone body has non zero interlink hashes")
+		}
+		// The header view should have the etxs populated
+		if hash := types.DeriveSha(wo.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+		}
+	}
+
+	return nil
+}
+
+// SanityCheckWorkObjectShareViewBody is used in the case of gossipsub validation, it quickly checks if any of the fields
+// that are supposed to be empty are not for the work object share view
+func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject) error {
+	nodeCtx := v.config.Location.Context()
+	if nodeCtx != common.ZONE_CTX {
+		return fmt.Errorf("work object shares dont exist in non zone chains")
+	}
+	if wo == nil {
+		return fmt.Errorf("wo is nil")
+	}
+	if wo.WorkObjectHeader() == nil {
+		return fmt.Errorf("work object header is nil")
+	}
+	if wo.Header() == nil {
+		return fmt.Errorf("wo header is nil")
+	}
+	// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
+	if len(wo.ExtTransactions()) != 0 {
+		return fmt.Errorf("zone body has non zero transactions")
+	}
+	if len(wo.Manifest()) != 0 {
+		return fmt.Errorf("zone body has non zero manifests")
+	}
+	if len(wo.InterlinkHashes()) != 0 {
+		return fmt.Errorf("zone body has non zero interlink hashes")
+	}
+	if len(wo.Uncles()) != 0 {
+		return fmt.Errorf("zone body has non zero uncles")
+	}
+	// check if the txs in the workObject hash to the tx hash in the body header
+	if hash := types.DeriveSha(wo.Transactions(), trie.NewStackTrie(nil)); hash != wo.TxHash() {
+		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, wo.TxHash())
+	}
+
 	return nil
 }
 

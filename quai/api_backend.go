@@ -650,6 +650,18 @@ func (b *QuaiAPIBackend) WriteAddressOutpoints(outpointsMap map[string]map[strin
 	return b.quai.core.WriteAddressOutpoints(outpointsMap)
 }
 
+func (b *QuaiAPIBackend) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error {
+	return b.quai.core.SanityCheckWorkObjectBlockViewBody(wo)
+}
+
+func (b *QuaiAPIBackend) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObject) error {
+	return b.quai.core.SanityCheckWorkObjectHeaderViewBody(wo)
+}
+
+func (b *QuaiAPIBackend) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject) error {
+	return b.quai.core.SanityCheckWorkObjectShareViewBody(wo)
+}
+
 // ///////////////////////////
 // /////// P2P ///////////////
 // ///////////////////////////
