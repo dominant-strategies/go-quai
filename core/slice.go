@@ -347,7 +347,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	if nodeCtx == common.ZONE_CTX {
 		bestPh, exist = sl.readPhCache(sl.bestPhKey)
 		if !exist {
-			sl.logger.WithField("key", sl.bestPhKey).Fatal("BestPh Key does not exist")
+			return nil, false, false, ErrSubNotSyncedToDom
 		}
 
 		time8 = common.PrettyDuration(time.Since(start))
