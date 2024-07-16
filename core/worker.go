@@ -905,6 +905,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	return receipt.Logs, true, nil
 }
 
+var qiTxErrs uint64
+
 func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
 	qiTxsToRemove := make([]*common.Hash, 0)
 	gasLimit := env.wo.GasLimit
@@ -978,10 +980,19 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 					continue
 				}
 				hash := tx.Hash()
-				w.logger.WithFields(log.Fields{
-					"err": err,
-					"tx":  hash.Hex(),
-				}).Error("Error processing QiTx")
+				qiTxErrs++
+				if qiTxErrs%1000 == 0 {
+					w.logger.WithFields(log.Fields{
+						"err": err,
+						"tx":  hash.Hex(),
+					}).Error("Error processing QiTx")
+				} else {
+					w.logger.WithFields(log.Fields{
+						"err": err,
+						"tx":  hash.Hex(),
+					}).Debug("Error processing QiTx")
+				}
+
 				// It's unlikely that this transaction will be valid in the future so remove it asynchronously
 				qiTxsToRemove = append(qiTxsToRemove, &hash)
 			}

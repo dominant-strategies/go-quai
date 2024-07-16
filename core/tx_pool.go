@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
@@ -177,6 +178,7 @@ type TxPoolConfig struct {
 	AccountSlots    uint64        // Number of executable transaction slots guaranteed per account
 	GlobalSlots     uint64        // Maximum number of executable transaction slots for all accounts
 	MaxSenders      uint64        // Maximum number of senders in the senders cache
+	MaxFeesCached   uint64        // Maximum number of Qi fees to store
 	SendersChBuffer uint64        // Senders cache channel buffer size
 	AccountQueue    uint64        // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue     uint64        // Maximum number of non-executable transaction slots for all accounts
@@ -197,7 +199,8 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	AccountSlots:    10,
 	GlobalSlots:     19000 + 1024, // urgent + floating queue capacity with 4:1 ratio
 	MaxSenders:      10000,        // 5 MB - at least 10 blocks worth of transactions in case of reorg or high production rate
-	SendersChBuffer: 1024,         // at 500 TPS in zone, 2s buffer
+	MaxFeesCached:   50000,
+	SendersChBuffer: 1024, // at 500 TPS in zone, 2s buffer
 	AccountQueue:    3,
 	GlobalQueue:     20048,
 	QiPoolSize:      10024,
@@ -306,7 +309,7 @@ type TxPool struct {
 	locals         *accountSet                                     // Set of local transaction to exempt from eviction rules
 	journal        *txJournal                                      // Journal of local transaction to back up to disk
 	qiPool         map[common.Hash]*types.TxWithMinerFee           // Qi pool to store Qi transactions
-	qiTxFees       *lru.Cache[common.Hash, *big.Int]               // Recent Qi transaction fees
+	qiTxFees       *lru.Cache[[16]byte, *big.Int]                  // Recent Qi transaction fees (hash is truncated to 16 bytes to save space)
 	pending        map[common.InternalAddress]*txList              // All currently processable transactions
 	queue          map[common.InternalAddress]*txList              // Queued but non-processable transactions
 	beats          map[common.InternalAddress]time.Time            // Last heartbeat from each known account
@@ -346,7 +349,7 @@ type newSender struct {
 	sender common.InternalAddress
 }
 type newFee struct {
-	hash common.Hash
+	hash [16]byte
 	fee  *big.Int
 }
 
@@ -407,7 +410,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		logger:          logger,
 	}
 	pool.senders, _ = lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
-	pool.qiTxFees, _ = lru.New[common.Hash, *big.Int](int(config.MaxSenders))
+	pool.qiTxFees, _ = lru.New[[16]byte, *big.Int](int(config.MaxFeesCached))
 	pool.broadcastSetCache, _ = lru.New[common.Hash, types.Transactions](c_broadcastSetCacheSize)
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -1184,6 +1187,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 }
 
 var txPoolFullErrs uint64
+var feesErrs uint64
 
 // addQiTxs adds Qi transactions to the Qi pool.
 // The qiMu lock must NOT be held by the caller.
@@ -1249,7 +1253,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 			pool.logger.Error("sendersCh is full, skipping until there is room")
 		}
 		select {
-		case pool.feesCh <- newFee{txHash, txWithFee.MinerFee()}:
+		case pool.feesCh <- newFee{[16]byte(txHash[:]), txWithFee.MinerFee()}:
 		default:
 			pool.logger.Error("feesCh is full, skipping until there is room")
 		}
@@ -1265,9 +1269,16 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 
 func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 	for _, tx := range txs {
-		fee, exists := pool.qiTxFees.Get(tx.Hash())
+		hash := tx.Hash()
+		hash16 := [16]byte(hash[:])
+		fee, exists := pool.qiTxFees.Get(hash16)
 		if fee == nil || !exists { // this should almost never happen
-			pool.logger.Errorf("Fee is nil or doesn't exist in cache for tx %s", tx.Hash().String())
+			feesErrs++
+			if feesErrs%1000 == 0 {
+				pool.logger.Errorf("Fee is nil or doesn't exist in cache for tx %s", tx.Hash().String())
+			} else {
+				pool.logger.Debugf("Fee is nil or doesn't exist in cache for tx %s", tx.Hash().String())
+			}
 			currentBlock := pool.chain.CurrentBlock()
 			etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
 			if etxRLimit < params.ETXRLimitMin {
@@ -1294,7 +1305,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 				continue
 			}
 			select {
-			case pool.feesCh <- newFee{tx.Hash(), fee}:
+			case pool.feesCh <- newFee{hash16, fee}:
 			default:
 				pool.logger.Error("feesCh is full, skipping until there is room")
 			}
@@ -2224,7 +2235,7 @@ func (pool *TxPool) feesGoroutine() {
 			// Add transaction to sender cache
 			if contains, _ := pool.qiTxFees.ContainsOrAdd(tx.hash, tx.fee); contains {
 				pool.logger.WithFields(log.Fields{
-					"tx":  tx.hash.String(),
+					"tx":  hexutil.Encode(tx.hash[:]),
 					"fee": tx.fee.String(),
 				}).Debug("Tx already seen in fees cache (reorg?)")
 			}
