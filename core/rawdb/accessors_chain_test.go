@@ -760,3 +760,23 @@ func TestAddressOutpointsStorage(t *testing.T) {
 	}
 }
 
+func TestGenesisHashesStorage(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+
+	if entry := ReadGenesisHashes(db); len(entry) != 0 {
+		t.Fatalf("Non existent genesis hashes returned: %v", entry)
+	}
+
+	hashes := common.Hashes{{1}, {2}}
+	WriteGenesisHashes(db, hashes)
+
+	if entry := ReadGenesisHashes(db); entry[0] != hashes[0] || entry[1] != hashes[1] {
+		t.Fatalf("Stored genesis hashes not found: %v", entry)
+	}
+
+	DeleteGenesisHashes(db)
+
+	if entry := ReadGenesisHashes(db); len(entry) != 0 {
+		t.Fatalf("Deleted genesis hashes returned: %v", entry)
+	}
+}
