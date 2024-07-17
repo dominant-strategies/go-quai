@@ -101,6 +101,7 @@ func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 
 type rpcBlock struct {
 	Hash            common.Hash               `json:"hash"`
+	Header          *types.Header             `json:"header"`
 	Transactions    []rpcTransaction          `json:"transactions"`
 	UncleHashes     []*types.WorkObjectHeader `json:"uncles"`
 	ExtTransactions []rpcTransaction          `json:"extTransactions"`
@@ -148,7 +149,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	}
 	var interlinkHashes common.Hashes
 	copy(interlinkHashes, body.InterlinkHashes)
-	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(head.Header(), txs, etxs, body.UncleHashes, manifest, interlinkHashes), nil
+	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(body.Header, txs, etxs, body.UncleHashes, manifest, interlinkHashes), nil
 }
 
 // HeaderByHash returns the block header with the given hash.

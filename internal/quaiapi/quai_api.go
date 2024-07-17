@@ -556,8 +556,12 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func RPCMarshalBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeLocation common.Location) (map[string]interface{}, error) {
-	fields := block.RPCMarshalWorkObject()
+func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, fullTx bool, nodeLocation common.Location) (map[string]interface{}, error) {
+	fields := make(map[string]interface{})
+
+	fields["hash"] = block.Hash()
+	fields["woHeader"] = block.WorkObjectHeader().RPCMarshalWorkObjectHeader()
+	fields["header"] = block.Body().Header().RPCMarshalHeader()
 	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
@@ -592,7 +596,18 @@ func RPCMarshalBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeLoca
 		fields["extTransactions"] = extTransactions
 	}
 
-	fields["uncles"] = block.Uncles()
+	var marshalUncles []map[string]interface{}
+	for _, uncle := range block.Uncles() {
+		rpcMarshalUncle := uncle.RPCMarshalWorkObjectHeader()
+		_, err := backend.Engine().VerifySeal(uncle)
+		if err != nil {
+			rpcMarshalUncle["workShare"] = true
+		} else {
+			rpcMarshalUncle["workShare"] = false
+		}
+		marshalUncles = append(marshalUncles, rpcMarshalUncle)
+	}
+	fields["uncles"] = marshalUncles
 	fields["subManifest"] = block.Manifest()
 	fields["interlinkHashes"] = block.InterlinkHashes()
 
@@ -635,7 +650,7 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.WorkObject, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(b, inclTx, fullTx, s.b.NodeLocation())
+	fields, err := RPCMarshalBlock(s.b, b, inclTx, fullTx, s.b.NodeLocation())
 	if err != nil {
 		return nil, err
 	}
