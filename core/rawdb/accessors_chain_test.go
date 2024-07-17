@@ -707,3 +707,56 @@ func TestInterlinkHashesStorage(t *testing.T) {
 		t.Fatalf("Deleted interlink hashes returned: %v", entry)
 	}
 }
+
+func TestAddressOutpointsStorage(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+
+	address := "0x008aeeda4d805471df9b2a5b0f38a0c3bcba786b"
+	address2 := "0x008b2a5b0f38a0c3bcba786ba3df9b2a5b0f38a0"
+
+	if entry := ReadOutpointsForAddress(db, address); len(entry) != 0 {
+		t.Fatalf("Non existent address outpoints returned: %v", entry)
+	}
+
+	outpoint := types.OutpointAndDenomination{
+		TxHash:       common.Hash{1},
+		Index:        uint16(1),
+		Denomination: uint8(1),
+	}
+
+	outpoint2 := types.OutpointAndDenomination{
+		TxHash:       common.Hash{2},
+		Index:        uint16(1),
+		Denomination: uint8(1),
+	}
+
+	outpointMap := map[string]*types.OutpointAndDenomination{
+		outpoint.Key(): &outpoint,
+	}
+
+	outpointMap2 := map[string]*types.OutpointAndDenomination{
+		outpoint2.Key(): &outpoint2,
+	}
+
+	addressOutpointMap := map[string]map[string]*types.OutpointAndDenomination{
+		address:  outpointMap,
+		address2: outpointMap2,
+	}
+
+	WriteAddressOutpoints(db, addressOutpointMap)
+
+	if entry := ReadOutpointsForAddress(db, address); len(entry) == 0 || *entry[outpoint.Key()] != outpoint {
+		if len(entry) > 0 {
+			t.Fatalf("expected: %v \n found: %v", entry[outpoint.Key()], outpoint)
+		}
+		t.Fatal("Stored outpoint not found")
+	}
+
+	if entry := ReadOutpointsForAddress(db, address2); len(entry) == 0 || *entry[outpoint2.Key()] != outpoint2 {
+		if len(entry) > 0 {
+			t.Fatalf("expected: %v \n found: %v", entry[outpoint2.Key()], outpoint2)
+		}
+		t.Fatal("Stored outpoint not found")
+	}
+}
+
