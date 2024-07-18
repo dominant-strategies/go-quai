@@ -352,7 +352,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Set up the initial access list.
 	rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber)
-	st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules, st.evm.ChainConfig().Location), msg.AccessList())
+	activePrecompiles := vm.ActivePrecompiles(rules, st.evm.ChainConfig().Location)
+	st.state.PrepareAccessList(msg.From(), msg.To(), activePrecompiles, msg.AccessList(), st.evm.Config.Debug)
 
 	var (
 		ret          []byte

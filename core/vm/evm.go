@@ -458,10 +458,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err != nil {
 		return nil, common.Zero, 0, err
 	}
-
-	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
-	// the access-list change should not be rolled back
-	evm.StateDB.AddAddressToAccessList(address)
+	if addressOk := evm.StateDB.AddressInAccessList(internalContractAddr.Bytes20()); !addressOk {
+		return nil, common.Zero, 0, ErrInvalidAccessList
+	}
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(internalContractAddr)
@@ -489,6 +488,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if evm.Config.Debug && evm.depth == 0 {
 		evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
+	}
+	if evm.Config.Debug {
+		if tracer, ok := evm.Config.Tracer.(*AccessListTracer); ok {
+			tracer.list.addAddress(address)
+		}
 	}
 	start := time.Now()
 

@@ -647,7 +647,8 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return nil, err
 	}
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, parent, &vm.Config{NoBaseFee: true})
+	tracer := vm.NewAccessListTracer(types.AccessList{}, common.ZeroAddress(b.NodeLocation()), common.ZeroAddress(b.NodeLocation()), vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number(nodeCtx)), b.NodeLocation()))
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, parent, &vm.Config{Tracer: tracer, NoBaseFee: true, Debug: true})
 	if err != nil {
 		return nil, err
 	}
