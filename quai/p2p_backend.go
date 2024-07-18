@@ -107,6 +107,7 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 // Handle consensus data propagated to us from our peers
 func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic string, data interface{}, nodeLocation common.Location) bool {
 	defer types.ObjectPool.Put(data)
+	qbe.p2pBackend.AdjustPeerQuality(sourcePeer, p2p.QualityAdjOnBroadcast)
 	switch data := data.(type) {
 	case types.WorkObjectBlockView:
 		backend := *qbe.GetBackend(nodeLocation)
@@ -117,8 +118,6 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 
 		backend.WriteBlock(data.WorkObject)
 		blockIngressCounter.Inc()
-		// If it was a good broadcast, mark the peer as lively
-		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	case types.WorkObjectHeaderView:
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
@@ -131,8 +130,6 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 		}
 
 		headerIngressCounter.Inc()
-		// If it was a good broadcast, mark the peer as lively
-		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	case types.WorkObjectShareView:
 		backend := *qbe.GetBackend(nodeLocation)
 		if backend == nil {
@@ -149,8 +146,6 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			workShareIngressCounter.Inc()
 			txIngressCounter.Add(float64(len(data.WorkObject.Transactions())))
 		}
-		// If it was a good broadcast, mark the peer as lively
-		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)
 	default:
 		log.Global.WithFields(log.Fields{
 			"peer":     sourcePeer,
