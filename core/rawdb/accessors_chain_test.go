@@ -132,7 +132,7 @@ func TestHeadHeaderStorage(t *testing.T) {
 	}
 }
 
-func TestHeadBlockStorage(t *testing.T) {
+func TestHeadBlockHashStorage(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 
 	emptyHash := common.Hash{}
@@ -146,6 +146,34 @@ func TestHeadBlockStorage(t *testing.T) {
 	if entry := ReadHeadBlockHash(db); entry != hash {
 		t.Fatalf("Stored head block hash not found: %v", entry)
 	}
+}
+
+func TestHeadBlockStorage(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+
+	if entry := ReadHeadBlock(db); entry != nil {
+		t.Fatalf("Non existent head block returned: %v", entry)
+	}
+
+	hash := common.Hash{1}
+	WriteHeadBlockHash(db, hash)
+
+	if entry := ReadHeadBlock(db); entry != nil {
+		t.Fatalf("Non existent head block returned: %v", entry)
+	}
+
+	blockNumber := uint64(1)
+	WriteHeaderNumber(db, hash, blockNumber)
+
+	wo := types.EmptyWorkObject(common.ZONE_CTX)
+	wo.WorkObjectHeader().SetCoinbase(common.BytesToAddress([]byte{1}, common.Location{0, 0}))
+
+	WriteWorkObject(db, hash, wo, types.BlockObject, common.ZONE_CTX)
+
+	if entry := ReadHeadBlock(db); entry == nil || entry.Hash() != wo.Hash() {
+		t.Fatalf("Failed to read head block: expeted: %v \n found: %v", wo, entry)
+	}
+
 }
 
 func TestPbCacheStorage(t *testing.T) {
