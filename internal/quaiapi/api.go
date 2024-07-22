@@ -1054,13 +1054,14 @@ type RPCTransaction struct {
 	UTXOSignature     hexutil.Bytes     `json:"utxoSignature,omitempty"`
 	OriginatingTxHash *common.Hash      `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64   `json:"etxIndex,omitempty"`
+	IsCoinbase        *hexutil.Uint64   `json:"isCoinbase,omitempty"`
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
 }
 
 type RPCTxIn struct {
-	PreviousOutPoint types.OutPoint `json:"previousOutPoint,omitempty"`
-	PubKey           hexutil.Bytes  `json:"pubKey,omitempty"`
+	PreviousOutPoint types.OutpointJSON `json:"previousOutPoint,omitempty"`
+	PubKey           hexutil.Bytes      `json:"pubKey,omitempty"`
 }
 
 type RPCTxOut struct {
@@ -1087,7 +1088,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			UTXOSignature: hexutil.Bytes(sig),
 		}
 		for _, txin := range tx.TxIn() {
-			result.TxIn = append(result.TxIn, RPCTxIn{PreviousOutPoint: txin.PreviousOutPoint, PubKey: hexutil.Bytes(txin.PubKey)})
+			result.TxIn = append(result.TxIn, RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
 		}
 		for _, txout := range tx.TxOut() {
 			result.TxOut = append(result.TxOut, RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
@@ -1131,6 +1132,13 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.OriginatingTxHash = &originatingTxHash
 		result.Sender = &sender
 		result.ETXIndex = (*hexutil.Uint64)(&etxIndex)
+		if tx.IsCoinbase() {
+			isCoinbase := uint64(1)
+			result.IsCoinbase = (*hexutil.Uint64)(&isCoinbase)
+		} else {
+			isCoinbase := uint64(0)
+			result.IsCoinbase = (*hexutil.Uint64)(&isCoinbase)
+		}
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
