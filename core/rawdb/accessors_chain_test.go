@@ -184,9 +184,7 @@ func TestPbCacheStorage(t *testing.T) {
 	}
 
 	// Create a test header to move around the database and make sure it's really new
-	woBody := &types.WorkObjectBody{}
-	woBody.SetTransactions([]*types.Transaction{})
-	woBody.SetExtTransactions([]*types.Transaction{})
+	woBody := types.EmptyWorkObjectBody()
 	woBody.SetHeader(types.EmptyHeader())
 
 	woHeader := types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{1}, common.Location{0, 0}))
@@ -341,7 +339,6 @@ func TestBlockHashesIterator(t *testing.T) {
 	for i, tc := range testCases {
 		hashes[i] = make(map[common.Hash]bool)
 		for j := int64(1); j <= tc.blockAmount; j++ {
-			//TODO: FILL UP DATABASE
 			blockHeader := types.EmptyHeader()
 			blockBody := types.EmptyWorkObjectBody()
 			blockBody.SetHeader(blockHeader)
@@ -582,13 +579,13 @@ func TestWorkObjectStorage(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 
 	// Create a test header to move around the database and make sure it's really new
-	woBody := &types.WorkObjectBody{}
-	woBody.SetTransactions([]*types.Transaction{})
-	woBody.SetExtTransactions([]*types.Transaction{})
+	woBody := types.EmptyWorkObjectBody()
 	woBody.SetHeader(types.EmptyHeader())
 
 	number := big.NewInt(11)
-	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
+
+	woHeader := types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0}))
+	header := types.NewWorkObject(woHeader, woBody, nil)
 	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
