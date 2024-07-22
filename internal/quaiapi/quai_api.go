@@ -315,6 +315,9 @@ func (s *PublicBlockChainQuaiAPI) GetBlockByHash(ctx context.Context, hash commo
 	if block != nil {
 		return s.rpcMarshalBlock(ctx, block, true, fullTx)
 	}
+	if block == nil && err == nil {
+		return nil, errors.New("block not found")
+	}
 	return nil, err
 }
 

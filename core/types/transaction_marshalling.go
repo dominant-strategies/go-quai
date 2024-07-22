@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -40,10 +41,10 @@ type txJSON struct {
 	Data                 *hexutil.Bytes  `json:"input"`
 	To                   *common.Address `json:"to"`
 	AccessList           *AccessList     `json:"accessList"`
-	TxIn                 []TxIn          `json:"inputs,omitempty"`
-	TxOut                []txOutJSON     `json:"outputs,omitempty"`
+	TxIn                 []TxInJSON      `json:"inputs,omitempty"`
+	TxOut                []TxOutJSON     `json:"outputs,omitempty"`
 	UTXOSignature        *hexutil.Bytes  `json:"utxoSignature,omitempty"`
-
+	IsCoinbase           *hexutil.Uint64 `json:"isCoinbase"`
 	// Optional fields only present for internal transactions
 	ChainID *hexutil.Big `json:"chainId,omitempty"`
 	V       *hexutil.Big `json:"v,omitempty"`
@@ -59,10 +60,18 @@ type txJSON struct {
 	Hash common.Hash `json:"hash"`
 }
 
-type txOutJSON struct {
+type TxOutJSON struct {
 	Address      *hexutil.Bytes  `json:"address"`
 	Denomination *hexutil.Uint64 `json:"denomination"`
 	Lock         *hexutil.Big    `json:"lock,omitempty"`
+}
+type OutpointJSON struct {
+	TxHash common.Hash    `json:"txHash"`
+	Index  hexutil.Uint64 `json:"index"`
+}
+type TxInJSON struct {
+	PreviousOutPoint *OutpointJSON  `json:"previousOutPoint"`
+	PubKey           *hexutil.Bytes `json:"pubkey"`
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -97,16 +106,32 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.To = t.To()
 		enc.Sender = &tx.Sender
+		isCoinbase := hexutil.Uint64(0)
+		if tx.IsCoinbase {
+			isCoinbase = hexutil.Uint64(1)
+		}
+		enc.IsCoinbase = &isCoinbase
 	case *QiTx:
 		sig := tx.Signature.Serialize()
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.TxIn = tx.TxIn
+		for _, in := range tx.TxIn {
+			pubKey := hexutil.Bytes(in.PubKey)
+			enc.TxIn = append(enc.TxIn, TxInJSON{
+				PreviousOutPoint: &OutpointJSON{
+					TxHash: in.PreviousOutPoint.TxHash,
+					Index:  hexutil.Uint64(in.PreviousOutPoint.Index),
+				},
+				PubKey: &pubKey,
+			})
+		}
 		for _, out := range tx.TxOut {
 			denom := uint64(out.Denomination)
-			enc.TxOut = append(enc.TxOut, txOutJSON{
-				Address:      (*hexutil.Bytes)(&out.Address),
+			address := hexutil.Bytes(out.Address)
+			lock := hexutil.Big(*out.Lock)
+			enc.TxOut = append(enc.TxOut, TxOutJSON{
+				Address:      &address,
 				Denomination: (*hexutil.Uint64)(&denom),
-				Lock:         (*hexutil.Big)(out.Lock),
+				Lock:         &lock,
 			})
 		}
 		enc.UTXOSignature = (*hexutil.Bytes)(&sig)
@@ -215,15 +240,40 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'sender' in external transaction")
 		}
 		etx.Sender = *dec.Sender
+		if dec.IsCoinbase == nil {
+			return errors.New("missing required field 'isCoinbase' in external transaction")
+		}
+		if *dec.IsCoinbase == 1 {
+			etx.IsCoinbase = true
+		} else {
+			etx.IsCoinbase = false
+		}
 
 	case QiTxType:
 		var qiTx QiTx
 		inner = &qiTx
 		qiTx.ChainID = (*big.Int)(dec.ChainID)
-		qiTx.TxIn = dec.TxIn
+		for _, in := range dec.TxIn {
+			if in.PreviousOutPoint == nil {
+				return errors.New("missing required field 'previousOutPoint' in Qi transaction")
+			}
+			if in.PubKey == nil {
+				return errors.New("missing required field 'pubkey' in Qi transaction")
+			}
+			qiTx.TxIn = append(qiTx.TxIn, TxIn{
+				PreviousOutPoint: OutPoint{
+					TxHash: in.PreviousOutPoint.TxHash,
+					Index:  uint16(in.PreviousOutPoint.Index),
+				},
+				PubKey: *in.PubKey,
+			})
+		}
 		for _, out := range dec.TxOut {
 			if out.Denomination == nil {
 				return errors.New("missing required field 'denomination' in Qi transaction")
+			}
+			if out.Address == nil {
+				return errors.New("missing required field 'address' in Qi transaction")
 			}
 			qiTx.TxOut = append(qiTx.TxOut, TxOut{
 				Address:      *out.Address,
@@ -244,6 +294,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 
 	// Now set the inner transaction.
 	t.setDecoded(inner, 0)
+	if t.Hash() != dec.Hash {
+		return fmt.Errorf("transaction hash mismatch: have %v, want %v", t.Hash(), dec.Hash)
+	}
 
 	// TODO: check hash here?
 	return nil

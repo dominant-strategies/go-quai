@@ -97,7 +97,7 @@ func (txIn *TxIn) ProtoDecode(protoTxIn *ProtoTxIn) error {
 	return nil
 }
 
-// OutPoint defines a Qi data type that is used to track previous
+// OutPoint defines a Qi data type that is used to track previous outputs
 type OutPoint struct {
 	TxHash common.Hash
 	Index  uint16
