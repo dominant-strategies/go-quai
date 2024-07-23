@@ -6,8 +6,10 @@ import (
 	"io"
 	"math/big"
 	"runtime/debug"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -20,8 +22,39 @@ const (
 	numWorkers                 = 10  // Number of workers per stream
 	msgChanSize                = 100 // 100 requests per stream
 	protocolName               = "quai"
+	rateFilterAlphaPct         = 10 // alpha (in percent) for rate tracker filter
+	requestRateLimitRPS        = 50 // Maximum sustained requests per second a peer is allowed
 	C_NumPrimeBlocksToDownload = 10
 )
+
+type rateTracker struct {
+	rate int64     // avg time (ms) between requests
+	last time.Time // last time a request was fed to the tracker
+}
+
+var rateTrackers map[peer.ID]rateTracker
+
+// Feed the request rate tracker, recomputing the rate, and returning an error if the rate limit is exceeded
+func procRequestRate(peerID peer.ID) error {
+	if rateTrackers == nil {
+		rateTrackers = make(map[peer.ID]rateTracker)
+	}
+	if tracker, exists := rateTrackers[peerID]; exists {
+		t_now := time.Now()
+		dt_ms := t_now.UnixMilli() - tracker.last.UnixMilli()
+		tracker.last = t_now
+		tracker.rate = ((100-rateFilterAlphaPct)*tracker.rate + (rateFilterAlphaPct*dt_ms)/100)
+		if tracker.rate > 1/(1000*requestRateLimitRPS) {
+			return errors.New("peer exceeded request rate limit")
+		}
+	} else {
+		rateTrackers[peerID] = rateTracker{
+			rate: ^int64(0), // max i64 time since last request ~= 0 request rate
+			last: time.Now(),
+		}
+	}
+	return nil
+}
 
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
 func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
@@ -130,6 +163,12 @@ func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
 }
 
 func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node QuaiP2PNode) {
+	// if this peer exceeds the request rate limit, drop them
+	if err := procRequestRate(stream.Conn().RemotePeer()); err != nil {
+		stream.Close()
+		return
+	}
+
 	id, decodedType, loc, query, err := pb.DecodeQuaiRequest(quaiMsg)
 	if err != nil {
 		log.Global.WithField("err", err).Errorf("error decoding quai request")
