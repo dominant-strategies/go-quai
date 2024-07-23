@@ -29,6 +29,8 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 //go:generate gencodec -type Receipt -field-override receiptMarshaling -out gen_receipt_json.go
@@ -412,4 +414,22 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 		}
 	}
 	return nil
+}
+
+// Convert the receipts into their storage form and serialize them
+func (rs Receipts) Bytes(logger *logrus.Logger) []byte {
+	storageReceipts := make(ReceiptsForStorage, len(rs))
+	for i, r := range rs {
+		storageReceipts[i] = (*ReceiptForStorage)(r)
+	}
+
+	protoReceipts, err := storageReceipts.ProtoEncode()
+	if err != nil {
+		logger.WithField("err", err).Fatal("Failed to proto encode receipt")
+	}
+	bytes, err := proto.Marshal(protoReceipts)
+	if err != nil {
+		logger.WithField("err", err).Fatal("Failed to proto Marshal receipt")
+	}
+	return bytes
 }

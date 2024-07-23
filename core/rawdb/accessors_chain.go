@@ -764,22 +764,8 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 
 // WriteReceipts stores all the transaction receipts belonging to a block.
 func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, receipts types.Receipts) {
-	// Convert the receipts into their storage form and serialize them
-	storageReceipts := make(types.ReceiptsForStorage, len(receipts))
-	for i, receipt := range receipts {
-		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
-	}
-
-	protoReceipts, err := storageReceipts.ProtoEncode()
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto encode receipt")
-	}
-	bytes, err := proto.Marshal(protoReceipts)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal receipt")
-	}
 	// Store the flattened receipt slice
-	if err := db.Put(blockReceiptsKey(number, hash), bytes); err != nil {
+	if err := db.Put(blockReceiptsKey(number, hash), receipts.Bytes(db.Logger())); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store block receipts")
 	}
 }

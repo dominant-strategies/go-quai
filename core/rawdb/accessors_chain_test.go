@@ -3,14 +3,17 @@ package rawdb
 import (
 	"bytes"
 	"math/big"
+	"os"
 	reflect "reflect"
 	"strings"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCanonicalHashStorage(t *testing.T) {
@@ -646,6 +649,15 @@ func createTransaction(nonce uint64) *types.Transaction {
 	return types.NewTx(inner)
 }
 
+func createReceipts(txs types.Transactions) types.Receipts {
+
+	receipt1 := createReceipt(txs[0].Hash(), types.EmptyHash)
+
+	receipt2 := createReceipt(txs[1].Hash(), types.EmptyHash)
+
+	return types.Receipts{receipt1, receipt2}
+}
+
 func createReceipt(txHash common.Hash, blockHash common.Hash) *types.Receipt {
 	receipt := types.NewReceipt([]byte{}, false, 55000)
 	receipt.TxHash = txHash
@@ -664,23 +676,11 @@ func TestReceiptsStorage(t *testing.T) {
 
 	tx1 := createTransaction(1)
 	tx2 := createTransaction(2)
+	receipts := createReceipts(types.Transactions{tx1, tx2})
 
-	// Block
-	woBody := &types.WorkObjectBody{}
-	woBody.SetTransactions([]*types.Transaction{tx1, tx2})
-	woBody.SetExtTransactions([]*types.Transaction{})
-	woBody.SetHeader(types.EmptyHeader())
-	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
-
-	hash := header.Hash()
+	hash := receipts[0].BlockHash
 
 	blockNumber := uint64(11)
-
-	receipt1 := createReceipt(tx1.Hash(), hash)
-
-	receipt2 := createReceipt(tx2.Hash(), hash)
-
-	receipts := types.Receipts{receipt1, receipt2}
 
 	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
 		t.Fatalf("Non existent receipts returned: %v", entry)
@@ -697,7 +697,7 @@ func TestReceiptsStorage(t *testing.T) {
 	}
 
 	// Write Block
-	WriteWorkObject(db, hash, header, types.BlockObject, common.ZONE_CTX)
+	writeBlockForReceipts(db, hash, types.Transactions{tx1, tx2})
 
 	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); len(entry) != 2 {
 		t.Fatal("Stored receipts not found")
@@ -708,6 +708,63 @@ func TestReceiptsStorage(t *testing.T) {
 	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
 		t.Fatalf("Deleted receipts returned: %v", entry)
 	}
+}
+
+func createReceipts(txs types.Transactions) types.Receipts {
+
+	receipt1 := createReceipt(txs[0].Hash(), types.EmptyHash)
+
+	receipt2 := createReceipt(txs[1].Hash(), types.EmptyHash)
+
+	return types.Receipts{receipt1, receipt2}
+}
+
+func createReceipt(txHash common.Hash, blockHash common.Hash) *types.Receipt {
+	receipt := types.NewReceipt([]byte{}, false, 55000)
+	receipt.TxHash = txHash
+	receipt.GasUsed = 55000
+	receipt.BlockHash = blockHash
+	receipt.BlockNumber = big.NewInt(11)
+	return receipt
+}
+
+func TestAncientReceiptsStorage(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+
+	dataDir := os.TempDir() + "/testFreezer"
+	freezerDb, err := NewDatabaseWithFreezer(db, dataDir, os.TempDir(), false, common.ZONE_CTX, log.Global, common.Location{0, 0})
+
+	require.NoError(t, err)
+	defer func() {
+		err := freezerDb.Close()
+		require.NoError(t, err)
+
+		err = os.RemoveAll(dataDir)
+		require.NoError(t, err)
+	}()
+
+	tx1 := createTransaction(1)
+	tx2 := createTransaction(2)
+	receipts := createReceipts(types.Transactions{tx1, tx2})
+	hash := receipts[0].BlockHash
+
+	freezerDb.AppendAncient(0, hash.Bytes(), receipts.Bytes(freezerDb.Logger()))
+
+	txs := types.Transactions{tx1, tx2}
+	writeBlockForReceipts(db, hash, txs)
+
+	if entry := ReadReceipts(freezerDb, hash, 0, &params.ChainConfig{}); len(entry) != 2 {
+		t.Fatal("Stored receipts not found")
+	}
+
+}
+
+func writeBlockForReceipts(db ethdb.Database, hash common.Hash, txs types.Transactions) {
+	woBody := types.EmptyWorkObjectBody()
+	woBody.SetHeader(types.EmptyHeader())
+	woBody.SetTransactions(txs)
+	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
+	WriteWorkObject(db, hash, header, types.BlockObject, common.ZONE_CTX)
 }
 
 func TestInterlinkHashesStorage(t *testing.T) {
