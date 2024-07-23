@@ -577,56 +577,85 @@ func TestInboundEtxsStorage(t *testing.T) {
 	}
 }
 
-// Tests block header storage and retrieval operations.
-func TestWorkObjectStorage(t *testing.T) {
+func TestHasBody(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 
-	// Create a test header to move around the database and make sure it's really new
-	woBody := types.EmptyWorkObjectBody()
-	woBody.SetHeader(types.EmptyHeader())
+	wo := createTestWorkObject()
 
-	number := big.NewInt(11)
-
-	woHeader := types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0}))
-	header := types.NewWorkObject(woHeader, woBody, nil)
-	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
-		t.Fatalf("Non existent header returned: %v", entry)
-	}
-
-	if HasBody(db, header.Hash(), number.Uint64()) {
+	if HasBody(db, wo.Hash(), wo.NumberU64(common.ZONE_CTX)) {
 		t.Fatalf("HasBody returned true on unexistent block")
 	}
 
-	// Write and verify the header in the database
-	WriteWorkObject(db, header.Hash(), header, types.BlockObject, common.ZONE_CTX)
-	t.Log("Header Hash stored", header.Hash())
-	entry := ReadWorkObject(db, header.Hash(), types.BlockObject)
-	if entry == nil {
-		t.Fatalf("Stored header not found with hash %s", entry.Hash())
-	} else if entry.Hash() != header.Hash() {
-		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
-	}
+	WriteWorkObject(db, wo.Hash(), wo, types.BlockObject, common.ZONE_CTX)
 
-	if !HasBody(db, header.Hash(), number.Uint64()) {
+	if !HasBody(db, wo.Hash(), wo.NumberU64(common.ZONE_CTX)) {
 		t.Fatalf("HasBody returned false after writing block")
 	}
 
+	DeleteWorkObject(db, wo.Hash(), wo.Number(common.ZONE_CTX).Uint64(), types.BlockObject)
+
+	if HasBody(db, wo.Hash(), wo.NumberU64(common.ZONE_CTX)) {
+		t.Fatalf("HasBody returned true on deleted block")
+	}
+}
+
+func TestWorkObjectStorage(t *testing.T) {
+	t.Run("BlockObjectTest", func(t *testing.T) {
+		db := NewMemoryDatabase(log.Global)
+		testWorkObject(t, db, createTestWorkObject(), types.BlockObject)
+	})
+
+	t.Run("TxObjectTest", func(t *testing.T) {
+		db := NewMemoryDatabase(log.Global)
+		testWorkObject(t, db, createTestWorkObject(), types.TxObject)
+	})
+
+	t.Run("PhObjectTest", func(t *testing.T) {
+		db := NewMemoryDatabase(log.Global)
+		testWorkObject(t, db, createTestWorkObject(), types.PhObject)
+	})
+}
+
+func createTestWorkObject() *types.WorkObject {
+	woBody := types.EmptyWorkObjectBody()
+	woBody.SetHeader(types.EmptyHeader())
+
+	woHeader := types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0}))
+	return types.NewWorkObject(woHeader, woBody, nil)
+}
+
+func testWorkObject(t *testing.T, db ethdb.Database, wo *types.WorkObject, woType types.WorkObjectView) {
+	if entry := ReadWorkObject(db, wo.Hash(), woType); entry != nil {
+		t.Fatalf("Non existent header returned: %v", entry)
+	}
+
+	// Write and verify the header in the database
+	WriteWorkObject(db, wo.Hash(), wo, woType, common.ZONE_CTX)
+	t.Log("Wo Hash stored", wo.Hash())
+	entry := ReadWorkObject(db, wo.Hash(), woType)
+	if entry == nil {
+		t.Fatalf("Stored header not found with hash")
+	} else if entry.Hash() != wo.Hash() {
+		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, wo)
+	}
+	t.Log("Successfuly read WorkObject")
 	// Delete the header and verify the execution
-	DeleteWorkObject(db, header.Hash(), header.Number(common.ZONE_CTX).Uint64(), types.BlockObject)
-	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
+	DeleteWorkObject(db, wo.Hash(), wo.Number(common.ZONE_CTX).Uint64(), woType)
+	if entry := ReadWorkObject(db, wo.Hash(), woType); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 
 	}
-
+	t.Log("Deleted WorkObject")
 	//Write work object again to test delete without number
-	WriteWorkObject(db, header.Hash(), header, types.BlockObject, common.ZONE_CTX)
-	DeleteBlockWithoutNumber(db, header.Hash(), header.NumberU64(common.ZONE_CTX), types.BlockObject)
-	if entry := ReadHeaderNumber(db, header.Hash()); *entry != number.Uint64() {
-		t.Fatalf("Wrong header number returned: have %v, want %v", *entry, number.Uint64())
+	WriteWorkObject(db, wo.Hash(), wo, woType, common.ZONE_CTX)
+	t.Log("Wo Hash stored", wo.Hash())
+	DeleteBlockWithoutNumber(db, wo.Hash(), wo.NumberU64(common.ZONE_CTX), woType)
+	if entry := ReadHeaderNumber(db, wo.Hash()); *entry != wo.NumberU64(common.ZONE_CTX) {
+		t.Fatalf("Wrong header number returned: have %v, want %v", *entry, wo.NumberU64(common.ZONE_CTX))
 	}
-	if entry := ReadWorkObject(db, header.Hash(), types.BlockObject); entry != nil {
+	t.Log("Deleted Block without number")
+	if entry := ReadWorkObject(db, wo.Hash(), woType); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
-
 	}
 }
 
@@ -647,24 +676,6 @@ func createTransaction(nonce uint64) *types.Transaction {
 		S:          new(big.Int).SetUint64(0),
 	}
 	return types.NewTx(inner)
-}
-
-func createReceipts(txs types.Transactions) types.Receipts {
-
-	receipt1 := createReceipt(txs[0].Hash(), types.EmptyHash)
-
-	receipt2 := createReceipt(txs[1].Hash(), types.EmptyHash)
-
-	return types.Receipts{receipt1, receipt2}
-}
-
-func createReceipt(txHash common.Hash, blockHash common.Hash) *types.Receipt {
-	receipt := types.NewReceipt([]byte{}, false, 55000)
-	receipt.TxHash = txHash
-	receipt.GasUsed = 55000
-	receipt.BlockHash = blockHash
-	receipt.BlockNumber = big.NewInt(11)
-	return receipt
 }
 
 func TestReceiptsStorage(t *testing.T) {
