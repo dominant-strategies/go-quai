@@ -145,7 +145,7 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
 		return true
 	}
-	if has, err := db.Has(headerKey(number, hash)); !has || err != nil {
+	if has, err := db.Has(blockWorkObjectHeaderKey(hash)); !has || err != nil {
 		return false
 	}
 	return true
@@ -163,18 +163,8 @@ func ReadHeader(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 
 // DeleteHeader removes all block header data associated with a hash.
 func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	deleteHeaderWithoutNumber(db, hash, number)
-	if err := db.Delete(headerNumberKey(hash)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete hash to number mapping")
-	}
-}
-
-// deleteHeaderWithoutNumber removes only the block header but does not remove
-// the hash to number mapping.
-func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(headerKey(number, hash)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete header")
-	}
+	DeleteWorkObjectHeader(db, hash, types.BlockObject)
+	DeleteHeaderNumber(db, hash)
 }
 
 // HasBody verifies the existence of a block body corresponding to the hash.
@@ -465,7 +455,6 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteWorkObjectBody(db, hash)
 	DeleteWorkObjectHeader(db, hash, woType) //TODO: mmtx transaction
 	DeleteReceipts(db, hash, number)
-	deleteHeaderWithoutNumber(db, hash, number)
 }
 
 // ReadWorkObjectBody retreive's the work object body stored in hash.

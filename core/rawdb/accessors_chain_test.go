@@ -63,7 +63,7 @@ func TestHeaderStorage(t *testing.T) {
 
 	wo := types.NewWorkObject(woHeader, woBody, nil)
 
-	if HasHeader(db, header.Hash(), common.REGION_CTX) {
+	if HasHeader(db, wo.Hash(), common.REGION_CTX) {
 		t.Fatal("Non existent header returned")
 	}
 	if entry := ReadHeader(db, wo.Hash()); entry != nil {
@@ -73,7 +73,7 @@ func TestHeaderStorage(t *testing.T) {
 	WriteWorkObject(db, wo.Hash(), wo, types.BlockObject, common.REGION_CTX)
 	t.Log("Header Hash stored", header.Hash())
 
-	if HasHeader(db, header.Hash(), header.NumberU64(common.REGION_CTX)) {
+	if !HasHeader(db, wo.Hash(), header.NumberU64(common.REGION_CTX)) {
 		t.Fatal("HasHeader returned false")
 	}
 
