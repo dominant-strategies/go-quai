@@ -1074,7 +1074,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 		}
 	}
 	if len(qiTxsToRemove) > 0 {
-		go w.txPool.RemoveQiTxs(qiTxsToRemove)
+		w.txPool.AsyncRemoveQiTxs(qiTxsToRemove) // non-blocking
 	}
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
