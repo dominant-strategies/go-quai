@@ -318,6 +318,7 @@ type TxPool struct {
 	senders        *lru.Cache[common.Hash, common.InternalAddress] // Tx hash to sender lookup cache (async populated)
 	sendersCh      chan newSender                                  // Channel for async senders cache goroutine
 	feesCh         chan newFee                                     // Channel for async Qi fees cache goroutine
+	invalidQiTxsCh chan []*common.Hash                             // Channel for async invalid Qi transactions
 	SendersMu      sync.RWMutex                                    // Mutex for priority access of senders cache
 	localTxsCount  int                                             // count of txs in last 1 min. Purely for logging purpose
 	remoteTxsCount int                                             // count of txs in last 1 min. Purely for logging purpose
@@ -395,6 +396,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		beats:           make(map[common.InternalAddress]time.Time),
 		sendersCh:       make(chan newSender, config.SendersChBuffer),
 		feesCh:          make(chan newFee, config.SendersChBuffer),
+		invalidQiTxsCh:  make(chan []*common.Hash, config.SendersChBuffer),
 		all:             newTxLookup(),
 		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
 		reqResetCh:      make(chan *txpoolResetRequest),
@@ -445,6 +447,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	go pool.sendersGoroutine()
 	go pool.poolLimiterGoroutine()
 	go pool.feesGoroutine()
+	go pool.invalidQiTxGoroutine()
 	return pool
 }
 
@@ -1359,6 +1362,14 @@ func (pool *TxPool) removeQiTxsLocked(txs []*types.Transaction) {
 		delete(pool.qiPool, tx.Hash())
 	}
 	qiTxGauge.Sub(float64(len(txs)))
+}
+
+func (pool *TxPool) AsyncRemoveQiTxs(invalidTxHashes []*common.Hash) {
+	select {
+	case pool.invalidQiTxsCh <- invalidTxHashes:
+	default:
+		pool.logger.Error("invalidQiTxsCh is full, skipping until there is room")
+	}
 }
 
 // addTxsLocked attempts to queue a batch of Quai transactions if they are valid.
@@ -2326,6 +2337,25 @@ func (pool *TxPool) poolLimiterGoroutine() {
 		}
 	}
 
+}
+
+func (pool *TxPool) invalidQiTxGoroutine() {
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	for {
+		select {
+		case <-pool.reorgShutdownCh:
+			return
+		case invalidTxHashes := <-pool.invalidQiTxsCh:
+			pool.RemoveQiTxs(invalidTxHashes)
+		}
+	}
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
