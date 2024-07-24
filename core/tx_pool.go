@@ -300,7 +300,6 @@ type TxPool struct {
 	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
-	qiMu        sync.RWMutex
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -596,8 +595,6 @@ func (pool *TxPool) Nonce(addr common.InternalAddress) uint64 {
 func (pool *TxPool) Stats() (int, int, int) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
-	pool.qiMu.RLock()
-	defer pool.qiMu.RUnlock()
 
 	return pool.stats()
 }
@@ -651,8 +648,8 @@ func (pool *TxPool) ContentFrom(addr common.InternalAddress) (types.Transactions
 }
 
 func (pool *TxPool) QiPoolPending() map[common.Hash]*types.TxWithMinerFee {
-	pool.qiMu.RLock()
-	defer pool.qiMu.RUnlock()
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 	// Return a copy of the pool because it is not safe to access the pool pointer directly
 	qiTxs := make(map[common.Hash]*types.TxWithMinerFee)
 	for hash, qiTx := range pool.qiPool {
@@ -1102,6 +1099,8 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		news   = make([]*types.Transaction, 0, len(txs))
 		qiNews = make([]*types.Transaction, 0, len(txs))
 	)
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Get(tx.Hash()) != nil {
@@ -1110,13 +1109,10 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			continue
 		}
 		if tx.Type() == types.QiTxType {
-			pool.qiMu.RLock()
 			if _, hasTx := pool.qiPool[tx.Hash()]; hasTx {
-				pool.qiMu.RUnlock()
 				errs[i] = ErrAlreadyKnown
 				continue
 			}
-			pool.qiMu.RUnlock()
 			qiNews = append(qiNews, tx)
 			continue
 		} else if tx.Type() == types.ExternalTxType {
@@ -1172,9 +1168,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	}
 
 	// Process all the new transaction and merge any errors into the original slice
-	pool.mu.Lock()
 	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
-	pool.mu.Unlock()
 
 	var nilSlot = 0
 	for _, err := range newErrs {
@@ -1233,7 +1227,6 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 		}
 		transactionsWithoutErrors = append(transactionsWithoutErrors, txWithMinerFee)
 	}
-	pool.qiMu.Lock()
 	for _, txWithFee := range transactionsWithoutErrors {
 
 		txHash := txWithFee.Tx().Hash()
@@ -1266,7 +1259,6 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 		}).Debug("Added qi tx to pool")
 		qiTxGauge.Add(1)
 	}
-	pool.qiMu.Unlock()
 	return errs
 }
 
@@ -1335,35 +1327,16 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 	}
 }
 
-func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
-	defer func() {
-		if r := recover(); r != nil {
-			pool.logger.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Error("Go-Quai Panicked")
-		}
-	}()
-	pool.qiMu.Lock()
-	if _, exists := pool.qiPool[tx.Hash()]; exists {
-		delete(pool.qiPool, tx.Hash())
-		pool.qiMu.Unlock()
-		qiTxGauge.Sub(1)
-	} else {
-		pool.qiMu.Unlock()
-	}
-}
-
 func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
 	txsRemoved := 0
-	pool.qiMu.Lock()
+	pool.mu.Lock()
 	for _, tx := range txs {
 		if _, exists := pool.qiPool[*tx]; exists {
 			delete(pool.qiPool, *tx)
 			txsRemoved++
 		}
 	}
-	pool.qiMu.Unlock()
+	pool.mu.Unlock()
 	qiTxGauge.Sub(float64(txsRemoved))
 }
 
@@ -1845,9 +1818,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 		}
 	} else {
 		block := pool.chain.GetBlock(newHead.Hash(), newHead.Number(pool.chainconfig.Location.Context()).Uint64())
-		pool.qiMu.Lock()
 		pool.removeQiTxsLocked(block.QiTransactionsWithoutCoinbase())
-		pool.qiMu.Unlock()
 		pool.logger.WithField("count", len(block.QiTransactionsWithoutCoinbase())).Debug("Removed qi txs from pool")
 	}
 	// Initialize the internal state to the current head
@@ -1893,9 +1864,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	wg.Add(1)
 	go func() {
 		if len(qiTxs) > 0 {
-			pool.qiMu.Lock()
 			pool.addQiTxsWithoutValidationLocked(qiTxs)
-			pool.qiMu.Unlock()
 		}
 		wg.Done()
 	}()
