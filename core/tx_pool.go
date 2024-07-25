@@ -1273,6 +1273,9 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 	for _, tx := range txs {
 		hash := tx.Hash()
+		if _, exists := pool.qiPool[hash]; exists {
+			continue
+		}
 		hash16 := [16]byte(hash[:])
 		fee, exists := pool.qiTxFees.Get(hash16)
 		if fee == nil || !exists { // this should almost never happen
@@ -1342,26 +1345,38 @@ func (pool *TxPool) RemoveQiTx(tx *types.Transaction) {
 		}
 	}()
 	pool.qiMu.Lock()
-	delete(pool.qiPool, tx.Hash())
-	pool.qiMu.Unlock()
-	qiTxGauge.Sub(1)
+	if _, exists := pool.qiPool[tx.Hash()]; exists {
+		delete(pool.qiPool, tx.Hash())
+		pool.qiMu.Unlock()
+		qiTxGauge.Sub(1)
+	} else {
+		pool.qiMu.Unlock()
+	}
 }
 
 func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
+	txsRemoved := 0
 	pool.qiMu.Lock()
 	for _, tx := range txs {
-		delete(pool.qiPool, *tx)
+		if _, exists := pool.qiPool[*tx]; exists {
+			delete(pool.qiPool, *tx)
+			txsRemoved++
+		}
 	}
 	pool.qiMu.Unlock()
-	qiTxGauge.Sub(float64(len(txs)))
+	qiTxGauge.Sub(float64(txsRemoved))
 }
 
 // Mempool lock must be held.
 func (pool *TxPool) removeQiTxsLocked(txs []*types.Transaction) {
+	txsRemoved := 0
 	for _, tx := range txs {
-		delete(pool.qiPool, tx.Hash())
+		if _, exists := pool.qiPool[tx.Hash()]; exists {
+			delete(pool.qiPool, tx.Hash())
+			txsRemoved++
+		}
 	}
-	qiTxGauge.Sub(float64(len(txs)))
+	qiTxGauge.Sub(float64(txsRemoved))
 }
 
 func (pool *TxPool) AsyncRemoveQiTxs(invalidTxHashes []*common.Hash) {
