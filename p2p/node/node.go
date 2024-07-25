@@ -182,7 +182,7 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	}
 
 	idOpts := []identify.Option{
-		identify.UserAgent("go-quai " + params.VersionWithCommit()),
+		identify.UserAgent("go-quai " + params.VersionWithCommit("", "")),
 		identify.ProtocolVersion(string(protocol.ProtocolVersion)),
 	}
 
