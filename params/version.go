@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"io/ioutil"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -42,15 +41,6 @@ type version struct {
 func InitVersion() {
 	Version = CachedVersion{}
 	Version.load()
-}
-
-func GetGitHead() string {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	head, err := cmd.CombinedOutput()
-	if err != nil {
-		panic(err)
-	}
-	return string(head)
 }
 
 func readVersionFile() (version, error) {
@@ -118,7 +108,7 @@ func (v *CachedVersion) load() {
 	}
 	v.major.Store(ver.major)
 	v.minor.Store(ver.minor)
-	v.patch.Store(GetGitHead())
+	v.patch.Store(ver.patch)
 	v.meta.Store(ver.meta)
 	v.full.Store(ver.full)
 	v.short.Store(ver.short)
@@ -179,11 +169,13 @@ func (v *CachedVersion) Short() string {
 	return v.short.Load().(string)
 }
 
-func VersionWithCommit() string {
+func VersionWithCommit(gitCommit, gitDate string) string {
 	vsn := Version.Full()
-	gitCommit := GetGitHead()
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
+	}
+	if (Version.Meta() != "stable") && (gitDate != "") {
+		vsn += "-" + gitDate
 	}
 	return vsn
 }
