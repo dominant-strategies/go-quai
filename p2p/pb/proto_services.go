@@ -8,6 +8,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 var EmptyResponse = errors.New("received empty reponse from peer")
@@ -40,6 +41,8 @@ func EncodeQuaiRequest(id uint32, location common.Location, reqData interface{},
 	switch respDataType.(type) {
 	case *types.WorkObjectBlockView:
 		reqMsg.Request = &QuaiRequestMessage_WorkObjectBlock{}
+	case []*types.WorkObjectBlockView:
+		reqMsg.Request = &QuaiRequestMessage_WorkObjectBlocks{}
 	case *types.WorkObjectHeaderView:
 		reqMsg.Request = &QuaiRequestMessage_WorkObjectHeader{}
 	case common.Hash:
@@ -81,6 +84,8 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 	switch reqMsg.Request.(type) {
 	case *QuaiRequestMessage_WorkObjectBlock:
 		reqType = &types.WorkObjectBlockView{}
+	case *QuaiRequestMessage_WorkObjectBlocks:
+		reqType = []*types.WorkObjectBlockView{}
 	case *QuaiRequestMessage_WorkObjectHeader:
 		reqType = &types.WorkObjectHeaderView{}
 	case *QuaiRequestMessage_BlockHash:
@@ -125,7 +130,23 @@ func EncodeQuaiResponse(id uint32, location common.Location, respDataType interf
 			}
 			respMsg.Response = &QuaiResponseMessage_WorkObjectHeaderView{WorkObjectHeaderView: protoWorkObjectHeader}
 		}
-
+	case []*types.WorkObjectBlockView:
+		if data == nil {
+			respMsg.Response = &QuaiResponseMessage_WorkObjectBlocksView{}
+		} else {
+			protoWorkObjectBlocks := &types.ProtoWorkObjectBlocksView{}
+			workObjects := data.([]*types.WorkObjectBlockView)
+			for _, wo := range workObjects {
+				protoWo, err := wo.ProtoEncode()
+				if err != nil {
+					// There should not be error decoding the objects that we have apppended
+					log.Global.Error("Error encoding the work object in Encode Quai Reponse")
+					return nil, err
+				}
+				protoWorkObjectBlocks.WorkObjects = append(protoWorkObjectBlocks.WorkObjects, protoWo)
+			}
+			respMsg.Response = &QuaiResponseMessage_WorkObjectBlocksView{WorkObjectBlocksView: protoWorkObjectBlocks}
+		}
 	case *common.Hash:
 		if data == nil {
 			respMsg.Response = &QuaiResponseMessage_BlockHash{}
@@ -193,6 +214,29 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 			messageMetrics.WithLabelValues("blocks").Inc()
 		}
 		return id, block, nil
+	case *QuaiResponseMessage_WorkObjectBlocksView:
+		protoWorkObjects := respMsg.GetWorkObjectBlocksView()
+		if protoWorkObjects == nil {
+			return id, nil, errors.New("nil response, and is not valid")
+		}
+		if protoWorkObjects.WorkObjects == nil {
+			return id, nil, EmptyResponse
+		}
+		blocks := []*types.WorkObjectBlockView{}
+		for _, wo := range protoWorkObjects.WorkObjects {
+			block := &types.WorkObjectBlockView{
+				WorkObject: &types.WorkObject{},
+			}
+			err := block.ProtoDecode(wo, *sourceLocation)
+			if err != nil {
+				return id, nil, err
+			}
+			blocks = append(blocks, block)
+		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("blocks").Inc()
+		}
+		return id, blocks, nil
 	case *QuaiResponseMessage_BlockHash:
 		blockHash := respMsg.GetBlockHash()
 		if blockHash == nil {

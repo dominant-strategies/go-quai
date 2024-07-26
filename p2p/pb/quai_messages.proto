@@ -21,8 +21,9 @@ message QuaiRequestMessage {
     }
     oneof request {
         block.ProtoWorkObjectBlockView work_object_block = 5;
-        block.ProtoWorkObjectHeaderView work_object_header = 6;
-        common.ProtoHash block_hash = 7;
+        block.ProtoWorkObjectBlocksView work_object_blocks = 6;
+        block.ProtoWorkObjectHeaderView work_object_header = 7;
+        common.ProtoHash block_hash = 8;
     }
 }
 
@@ -33,7 +34,8 @@ message QuaiResponseMessage {
     oneof response {
         block.ProtoWorkObjectHeaderView work_object_header_view = 3;
         block.ProtoWorkObjectBlockView work_object_block_view = 4;
-        common.ProtoHash block_hash = 5;
+        block.ProtoWorkObjectBlocksView work_object_blocks_view = 5;
+        common.ProtoHash block_hash = 6;
     }
 }
 

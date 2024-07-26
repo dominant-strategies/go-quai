@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	numWorkers   = 10  // Number of workers per stream
-	msgChanSize  = 100 // 100 requests per stream
-	protocolName = "quai"
+	numWorkers                 = 10  // Number of workers per stream
+	msgChanSize                = 100 // 100 requests per stream
+	protocolName               = "quai"
+	C_NumPrimeBlocksToDownload = 10
 )
 
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
@@ -149,13 +150,15 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 	}
 
 	switch decodedType.(type) {
-	case *types.WorkObject, *types.WorkObjectHeaderView, *types.WorkObjectBlockView:
+	case *types.WorkObjectHeaderView, *types.WorkObjectBlockView, []*types.WorkObjectBlockView:
 		var requestedView types.WorkObjectView
 		switch decodedType.(type) {
 		case *types.WorkObjectHeaderView:
 			requestedView = types.HeaderObject
 		case *types.WorkObjectBlockView:
 			requestedView = types.BlockObject
+		case []*types.WorkObjectBlockView:
+			requestedView = types.BlockObjects
 		}
 
 		requestedHash := &common.Hash{}
@@ -247,6 +250,9 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 			block = fullWO.ConvertToHeaderView()
 		case types.BlockObject:
 			block = fullWO.ConvertToBlockView()
+		case types.BlockObjects:
+			// This is the case in which the Prime is asking for the next c_NumPrimeBlocksToDownload blocks
+			block = node.GetWorkObjectsFrom(hash, loc, C_NumPrimeBlocksToDownload)
 		}
 	}
 	var requestDataType interface{}
@@ -255,6 +261,8 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 		requestDataType = &types.WorkObjectBlockView{}
 	case types.HeaderObject:
 		requestDataType = &types.WorkObjectHeaderView{}
+	case types.BlockObjects:
+		requestDataType = []*types.WorkObjectBlockView{}
 	}
 	// create a Quai Message Response with the block
 	data, err = pb.EncodeQuaiResponse(id, loc, requestDataType, block)

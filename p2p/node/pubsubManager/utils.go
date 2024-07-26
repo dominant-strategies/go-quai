@@ -44,7 +44,7 @@ func (t *Topic) buildTopicString() string {
 	switch t.data.(type) {
 	case *types.WorkObjectHeaderView, *big.Int, common.Hash:
 		return strings.Join([]string{baseTopic, C_headerType}, "/")
-	case *types.WorkObjectBlockView:
+	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView:
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/")
 	case *types.WorkObjectShareView:
 		return strings.Join([]string{baseTopic, C_workObjectShareType}, "/")
@@ -77,7 +77,7 @@ func NewTopic(genesis common.Hash, location common.Location, data interface{}) (
 		requestDegree = C_defaultRequestDegree
 	case *types.WorkObjectHeaderView:
 		requestDegree = C_workObjectHeaderTypeRequestDegree
-	case *types.WorkObjectBlockView:
+	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView:
 		requestDegree = C_workObjectRequestDegree
 	default:
 		return nil, ErrUnsupportedType

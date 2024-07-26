@@ -110,6 +110,10 @@ message ProtoWorkObjectBlockView {
     optional ProtoWorkObject work_object = 1;
 }
 
+message ProtoWorkObjectBlocksView {
+  repeated ProtoWorkObjectBlockView work_objects = 1;
+}
+
 message ProtoWorkObjectHeaderView {
     optional ProtoWorkObject work_object = 1;
 }

@@ -387,6 +387,22 @@ func (qbe *QuaiBackend) LookupBlock(hash common.Hash, location common.Location) 
 	return backend.BlockOrCandidateByHash(hash)
 }
 
+func (qbe *QuaiBackend) LookupBlockByNumber(number *big.Int, location common.Location) *types.WorkObject {
+	if qbe == nil {
+		return nil
+	}
+	backend := *qbe.GetBackend(location)
+	if backend == nil {
+		log.Global.Error("no backend found")
+		return nil
+	}
+	block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(number.Int64()))
+	if err != nil {
+		return nil
+	}
+	return block
+}
+
 func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common.Location) *common.Hash {
 	backend := *qbe.GetBackend(location)
 	if backend == nil {

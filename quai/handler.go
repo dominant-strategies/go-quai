@@ -11,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 )
 
@@ -154,10 +155,11 @@ func (h *handler) checkNextPrimeBlock() {
 		select {
 		case <-checkNextPrimeBlockTimer.C:
 			currentHeight := h.core.CurrentHeader().Number(h.nodeLocation.Context())
-			// Try to fetch the next 3 blocks
+			// To prevent the node from downloading the chains that have been
+			// forked, every prime block request will require the peer to send
+			// the next 10 prime blocks this way, we can be sure to add a cost
+			// for the forked peers/attacking peers
 			h.GetNextPrimeBlock(currentHeight)
-			h.GetNextPrimeBlock(new(big.Int).Add(currentHeight, big.NewInt(1)))
-			h.GetNextPrimeBlock(new(big.Int).Add(currentHeight, big.NewInt(2)))
 		case <-h.quitCh:
 			return
 		}
@@ -176,10 +178,37 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) {
 		}()
 		// If the blockHash for the asked number is not present in the
 		// appended database we ask the peer for the block with this hash
-		resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(number, big.NewInt(1)), &types.WorkObjectBlockView{})
-		block := <-resultCh
-		if block != nil {
-			h.core.WriteBlock(block.(*types.WorkObjectBlockView).WorkObject)
+		resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(number, big.NewInt(1)), []*types.WorkObjectBlockView{})
+		blocks := <-resultCh
+		if blocks != nil {
+			// peer returns a slice of blocks from the requested number
+			workObjects := blocks.([]*types.WorkObjectBlockView)
+			if len(workObjects) != protocol.C_NumPrimeBlocksToDownload {
+				h.logger.Error("did not get expected number of workobjects in prime")
+				return
+			}
+			var parent *types.WorkObject
+			for i, wo := range workObjects {
+				if wo == nil {
+					h.logger.Error("one of the work objects is nil")
+					return
+				}
+				workObject := wo.WorkObject
+				// Check that all the prime blocks form a continous chain of blocks
+				if i != 0 {
+					if workObject.ParentHash(common.PRIME_CTX) != parent.Hash() {
+						h.logger.Error("downloaded non continous chain of prime blocks")
+						return
+					}
+				}
+				parent = workObject
+			}
+
+			// Write all the blocks are the sanity check into the database and
+			// add it to the append queue
+			for _, wo := range workObjects {
+				h.core.WriteBlock(wo.WorkObject)
+			}
 		}
 	}()
 }

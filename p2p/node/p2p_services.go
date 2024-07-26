@@ -113,6 +113,8 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 				if block.Number(nodeCtx).Cmp(reqData) == 0 {
 					return recvdType, nil
 				}
+			case []*types.WorkObjectBlockView:
+				return recvdType, nil
 			default:
 				return nil, errors.New("invalid response")
 			}

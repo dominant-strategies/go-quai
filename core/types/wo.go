@@ -59,6 +59,7 @@ type WorkObjectView int
 // Work object types
 const (
 	BlockObject WorkObjectView = iota
+	BlockObjects
 	TxObject
 	PEtxObject
 	HeaderObject

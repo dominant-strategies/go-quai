@@ -328,8 +328,35 @@ func (p *P2PNode) GetWorkObject(hash common.Hash, location common.Location) *typ
 	return p.consensus.LookupBlock(hash, location)
 }
 
+// Search for the block in the data base and get the count number of the next blocks
+func (p *P2PNode) GetWorkObjectsFrom(hash common.Hash, location common.Location, count int) []*types.WorkObjectBlockView {
+	response := []*types.WorkObjectBlockView{}
+	block := p.consensus.LookupBlock(hash, location)
+	if block == nil {
+		return nil
+	}
+	response = append(response, block.ConvertToBlockView())
+	for i := 1; i < count; i++ {
+		nextNumber := block.NumberU64(location.Context()) + uint64(i)
+		next := p.consensus.LookupBlockByNumber(big.NewInt(int64(nextNumber)), location)
+		if next == nil {
+			return nil
+		}
+		// The parent hash has to be continuous
+		if next.ParentHash(location.Context()) != response[i-1].Hash() {
+			return nil
+		}
+		response = append(response, next.ConvertToBlockView())
+	}
+	return response
+}
+
 func (p *P2PNode) GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash {
 	return p.consensus.LookupBlockHashByNumber(number, location)
+}
+
+func (p *P2PNode) GetBlockByNumber(number *big.Int, location common.Location) *types.WorkObject {
+	return p.consensus.LookupBlockByNumber(number, location)
 }
 
 func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, Id string, topic string, data interface{}, nodeLocation common.Location) {
