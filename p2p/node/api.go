@@ -16,7 +16,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/quai"
-	"github.com/dominant-strategies/go-quai/trie"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -331,10 +330,6 @@ func (p *P2PNode) GetWorkObject(hash common.Hash, location common.Location) *typ
 
 func (p *P2PNode) GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash {
 	return p.consensus.LookupBlockHashByNumber(number, location)
-}
-
-func (p *P2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse {
-	return p.consensus.GetTrieNode(hash, location)
 }
 
 func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, Id string, topic string, data interface{}, nodeLocation common.Location) {
