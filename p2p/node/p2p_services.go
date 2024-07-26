@@ -31,6 +31,13 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+
+	// Only proceed if we aren't violating our request rate to that peer
+	if protocol.ProcRequestRate(peerID, false) != nil {
+		log.Global.Warnf("Exceeded request rate to peer %s", peerID)
+		return nil, errors.Errorf("Exceeded request rate to peer %s", peerID)
+	}
+
 	log.Global.WithFields(log.Fields{
 		"peerId": peerID,
 		"topic":  topic,

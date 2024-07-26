@@ -32,23 +32,41 @@ type rateTracker struct {
 	last time.Time // last time a request was fed to the tracker
 }
 
-var rateTrackers map[peer.ID]rateTracker
+var inRateTrackers map[peer.ID]rateTracker
+var outRateTrackers map[peer.ID]rateTracker
 
 // Feed the request rate tracker, recomputing the rate, and returning an error if the rate limit is exceeded
-func procRequestRate(peerID peer.ID) error {
-	if rateTrackers == nil {
-		rateTrackers = make(map[peer.ID]rateTracker)
+func ProcRequestRate(peerId peer.ID, inbound bool) error {
+	var rateTrackers *map[peer.ID]rateTracker
+	if inRateTrackers == nil {
+		inRateTrackers = make(map[peer.ID]rateTracker)
 	}
-	if tracker, exists := rateTrackers[peerID]; exists {
+	if outRateTrackers == nil {
+		outRateTrackers = make(map[peer.ID]rateTracker)
+	}
+	if inbound {
+		rateTrackers = &inRateTrackers
+	} else {
+		rateTrackers = &outRateTrackers
+	}
+	if tracker, exists := (*rateTrackers)[peerId]; exists {
 		t_now := time.Now()
 		dt_ms := t_now.UnixMilli() - tracker.last.UnixMilli()
-		tracker.last = t_now
-		tracker.rate = ((100-rateFilterAlphaPct)*tracker.rate + (rateFilterAlphaPct*dt_ms)/100)
-		if tracker.rate > 1/(1000*requestRateLimitRPS) {
+		rate := ((100-rateFilterAlphaPct)*tracker.rate + (rateFilterAlphaPct*dt_ms)/100)
+		if inbound {
+			// inbound rate always updates, because request has already arrived
+			tracker.rate = rate
+			tracker.last = t_now
+		}
+		if rate > 1/(1000*requestRateLimitRPS) {
 			return errors.New("peer exceeded request rate limit")
+		} else {
+			// since outbound requests wont be sent if the limit is exceeded, only update the outbound rate if there is no error
+			tracker.rate = rate
+			tracker.last = t_now
 		}
 	} else {
-		rateTrackers[peerID] = rateTracker{
+		(*rateTrackers)[peerId] = rateTracker{
 			rate: ^int64(0), // max i64 time since last request ~= 0 request rate
 			last: time.Now(),
 		}
@@ -164,8 +182,9 @@ func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
 
 func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node QuaiP2PNode) {
 	// if this peer exceeds the request rate limit, drop them
-	if err := procRequestRate(stream.Conn().RemotePeer()); err != nil {
+	if err := ProcRequestRate(stream.Conn().RemotePeer(), true); err != nil {
 		stream.Close()
+		log.Global.Warn("closing stream to over-chatty peer")
 		return
 	}
 
