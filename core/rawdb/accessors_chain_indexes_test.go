@@ -5,7 +5,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -82,4 +84,36 @@ func TestTxLookupStorage(t *testing.T) {
 		t.Fatal("Wrong tx lookup returned for v4 hash")
 	}
 
+}
+
+func TestReadTransaction(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+	tx := createTransaction(1)
+	block := createBlockWithTransactions(types.Transactions{tx})
+
+	testNilReadTransaction(t, db, tx.Hash())
+
+	WriteTxLookupEntriesByBlock(db, block, common.ZONE_CTX)
+
+	testNilReadTransaction(t, db, tx.Hash())
+
+	WriteCanonicalHash(db, block.Hash(), block.NumberU64(common.ZONE_CTX))
+
+	testNilReadTransaction(t, db, tx.Hash())
+
+	WriteWorkObject(db, block.Hash(), block, types.BlockObject, common.ZONE_CTX)
+
+	rtx, rhash, rnumber, rindex := ReadTransaction(db, tx.Hash())
+	require.Equalf(t, tx.Hash(), rtx.Hash(), "Wrong transaction hash. have %v, want %v", rtx.Hash(), tx.Hash())
+	require.Equalf(t, block.Hash(), rhash, "Wrong block hash. have %v, want %v", rhash, block.Hash())
+	require.Equalf(t, block.NumberU64(common.ZONE_CTX), rnumber, "Wrong block number")
+	require.Equalf(t, uint64(0), rindex, "Wrong transaction index. have %d, want %d", rindex, 0)
+}
+
+func testNilReadTransaction(t *testing.T, db ethdb.Database, hash common.Hash) {
+	rtx, rhash, rnumber, rindex := ReadTransaction(db, hash)
+	require.Nil(t, rtx, "Non-nil transaction returned")
+	require.Equal(t, types.EmptyHash, rhash, "Non-nil block hash returned")
+	require.Equal(t, uint64(0), rnumber, "Non-zero block number returned")
+	require.Equal(t, uint64(0), rindex, "Non-negative transaction index returned")
 }
