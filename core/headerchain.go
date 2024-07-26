@@ -1077,3 +1077,11 @@ func (hc *HeaderChain) GetMaxTxInWorkShare() uint64 {
 	// (maxEoaInBlock*2)/(2^bits)
 	return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.WorkSharesThresholdDiff)))
 }
+
+func (hc *HeaderChain) GetUtxoRootHashes(hash common.Hash) []common.Hash {
+	return rawdb.ReadUtxoRootHashes(hc.headerDb, hash)
+}
+
+func (hc *HeaderChain) WriteUtxoRootHashes(hash common.Hash, hashes []common.Hash) {
+	rawdb.WriteUtxoRootHashes(hc.headerDb, hash, hashes)
+}

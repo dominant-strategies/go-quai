@@ -690,7 +690,16 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 			chain.WriteAddressOutpoints(addressOutpointMap)
 		}
 	}
-	header.Header().SetUTXORoot(state.UTXORoot())
+	if err := state.SetUTXOSetSizes(); err != nil {
+		progpow.logger.WithError(err).Error("Failed to set UTXO set sizes")
+		return
+	}
+	if err := state.CheckUTXOSetSize(); err != nil {
+		progpow.logger.WithError(err).Error("Failed to check UTXO set size")
+		return
+	}
+	utxoRoot := types.DeriveSha(state.UTXORoots(), trie.NewStackTrie(nil))
+	header.Header().SetUTXORoot(utxoRoot)
 	header.Header().SetEVMRoot(state.IntermediateRoot(true))
 	header.Header().SetEtxSetRoot(state.ETXRoot())
 }

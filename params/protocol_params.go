@@ -174,7 +174,8 @@ const (
 
 	ConversionLockPeriod          int64 = 10 // The number of zone blocks that a conversion output is locked for
 	MinQiConversionDenomination         = 1
-	ConversionConfirmationContext       = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
+	ConversionConfirmationContext       = common.PRIME_CTX   // A conversion requires a single coincident Dom confirmation
+	UTXOSetSizeLimit                    = uint64(1000000000) // The maximum number of UTXOs that can be stored in the UTXO set
 )
 
 var (

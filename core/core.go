@@ -1170,7 +1170,7 @@ func (c *Core) GetUTXOsByAddressAtState(state *state.StateDB, address common.Add
 	utxos := make([]*types.UtxoEntry, 0, len(outpointsForAddress))
 
 	for _, outpoint := range outpointsForAddress {
-		entry := state.GetUTXO(outpoint.TxHash, outpoint.Index)
+		entry := state.GetUTXO(outpoint.TxHash, outpoint.Index, outpoint.Denomination)
 		if entry == nil {
 			return nil, errors.New("failed to get UTXO for address")
 		}

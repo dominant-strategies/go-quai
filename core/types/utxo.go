@@ -99,8 +99,9 @@ func (txIn *TxIn) ProtoDecode(protoTxIn *ProtoTxIn) error {
 
 // OutPoint defines a Qi data type that is used to track previous
 type OutPoint struct {
-	TxHash common.Hash
-	Index  uint16
+	TxHash       common.Hash
+	Index        uint16
+	Denomination uint8
 }
 
 func (outPoint OutPoint) Key() string {
@@ -115,12 +116,15 @@ func (outPoint OutPoint) ProtoEncode() (*ProtoOutPoint, error) {
 	protoOutPoint.Hash = outPoint.TxHash.ProtoEncode()
 	index := uint32(outPoint.Index)
 	protoOutPoint.Index = &index
+	denomination := uint32(outPoint.Denomination)
+	protoOutPoint.Denomination = &denomination
 	return protoOutPoint, nil
 }
 
 func (outPoint *OutPoint) ProtoDecode(protoOutPoint *ProtoOutPoint) error {
 	outPoint.TxHash.ProtoDecode(protoOutPoint.Hash)
 	outPoint.Index = uint16(*protoOutPoint.Index)
+	outPoint.Denomination = uint8(*protoOutPoint.Denomination)
 	return nil
 }
 
@@ -157,10 +161,11 @@ func (outPoint *OutpointAndDenomination) ProtoDecode(protoOutPoint *ProtoOutPoin
 
 // NewOutPoint returns a new Qi transaction outpoint point with the
 // provided hash and index.
-func NewOutPoint(txHash *common.Hash, index uint16) *OutPoint {
+func NewOutPoint(txHash *common.Hash, index uint16, denomination uint8) *OutPoint {
 	return &OutPoint{
-		TxHash: *txHash,
-		Index:  index,
+		TxHash:       *txHash,
+		Index:        index,
+		Denomination: denomination,
 	}
 }
 

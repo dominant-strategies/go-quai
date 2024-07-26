@@ -104,11 +104,11 @@ var (
 	txWorkObjectPrefix          = []byte("to")    //txWorkObjectPrefix + hash -> []common.Hash
 	phWorkObjectPrefix          = []byte("po")    //phWorkObjectPrefix + hash -> []common.Hash
 	badHashesListPrefix         = []byte("bh")
-	inboundEtxsPrefix           = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
-	UtxoPrefix                  = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
-	spentUTXOsPrefix            = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
-	AddressUtxosPrefix          = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
-	processedStatePrefix        = []byte("ps")    // processedStatePrefix + hash -> boolean
+	inboundEtxsPrefix           = []byte("ie")  // inboundEtxsPrefix + hash -> types.Transactions
+	UtxoPrefix                  = []byte("ut")  // outpointPrefix + hash -> types.Outpoint
+	utxoRootHashesPrefix        = []byte("utr") // utxoRootHashesPrefix + hash -> []common.Hash
+	AddressUtxosPrefix          = []byte("au")  // addressUtxosPrefix + hash -> []types.UtxoEntry
+	processedStatePrefix        = []byte("ps")  // processedStatePrefix + hash -> boolean
 
 	blockBodyPrefix         = []byte("b")   // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")   // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -386,4 +386,8 @@ func inboundEtxsKey(hash common.Hash) []byte {
 
 func addressUtxosKey(address string) []byte {
 	return append(AddressUtxosPrefix, address[:]...)
+}
+
+func utxoRootHashesKey(hash common.Hash) []byte {
+	return append(utxoRootHashesPrefix, hash.Bytes()...)
 }

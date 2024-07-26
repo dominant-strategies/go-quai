@@ -1570,7 +1570,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 	utxosDelete := make([]types.OutPoint, 0)
 	inputs := make(map[uint]uint64)
 	for _, txIn := range tx.TxIn() {
-		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, txIn.PreviousOutPoint.Denomination)
 		if utxo == nil {
 			return fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		}
@@ -1687,7 +1687,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 		} else {
 			// This output creates a normal UTXO
 			utxo := types.NewUtxoEntry(&txOut)
-			utxosCreate[types.OutPoint{TxHash: tx.Hash(), Index: uint16(txOutIdx)}] = utxo
+			utxosCreate[types.OutPoint{TxHash: tx.Hash(), Index: uint16(txOutIdx), Denomination: txOut.Denomination}] = utxo
 		}
 	}
 	// Ensure the transaction does not spend more than its inputs.
@@ -1746,7 +1746,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 	env.txs = append(env.txs, tx)
 	env.utxoFees.Add(env.utxoFees, txFeeInQit)
 	for _, utxo := range utxosDelete {
-		env.state.DeleteUTXO(utxo.TxHash, utxo.Index)
+		env.state.DeleteUTXO(utxo.TxHash, utxo.Index, utxo.Denomination)
 	}
 	for outPoint, utxo := range utxosCreate {
 		if err := env.state.CreateUTXO(outPoint.TxHash, outPoint.Index, utxo); err != nil {

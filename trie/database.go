@@ -847,6 +847,10 @@ func (db *Database) SaveCache(dir string) error {
 	return db.saveCache(dir, runtime.GOMAXPROCS(0))
 }
 
+func (db *Database) SaveCacheSingleCore(dir string) error {
+	return db.saveCache(dir, 1)
+}
+
 // SaveCachePeriodically atomically saves fast cache data to the given dir with
 // the specified interval. All dump operation will only use a single CPU core.
 func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, stopCh <-chan struct{}) {

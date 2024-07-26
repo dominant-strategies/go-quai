@@ -179,6 +179,7 @@ message ProtoTxIn {
 message ProtoOutPoint {
   optional common.ProtoHash hash = 1;
   optional uint32 index = 2;
+  optional uint32 denomination = 3;
 }
 
 message ProtoTxOut {

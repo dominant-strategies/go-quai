@@ -1654,12 +1654,6 @@ func ReadOutpointsForAddress(db ethdb.Reader, address string) map[string]*types.
 	return outpoints
 }
 
-func DeleteAddressUtxos(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(AddressUtxosPrefix); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete utxos")
-	}
-}
-
 func WriteGenesisHashes(db ethdb.KeyValueWriter, hashes common.Hashes) {
 	protoHashes := hashes.ProtoEncode()
 	data, err := proto.Marshal(protoHashes)
@@ -1693,4 +1687,37 @@ func DeleteGenesisHashes(db ethdb.KeyValueWriter) {
 	if err := db.Delete(genesisHashesKey); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete genesis hashes")
 	}
+}
+
+func ReadUtxoRootHashes(db ethdb.Reader, hash common.Hash) common.Hashes {
+	data, _ := db.Get(utxoRootHashesKey(hash))
+	if len(data) == 0 {
+		db.Logger().WithField("hash", hash).Error("Failed to read utxo root hashes")
+		return nil
+	}
+	protoHashes := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoHashes)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal utxo root hashes")
+	}
+	hashes := common.Hashes{}
+	hashes.ProtoDecode(protoHashes)
+	return hashes
+}
+
+func WriteUtxoRootHashes(db ethdb.KeyValueWriter, hash common.Hash, hashes common.Hashes) {
+	protoHashes := hashes.ProtoEncode()
+	data, err := proto.Marshal(protoHashes)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal utxo root hashes")
+	}
+	if err := db.Put(utxoRootHashesKey(hash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store utxo root hashes")
+	}
+	db.Logger().WithFields(log.Fields{
+		"hash":   hash,
+		"hashes": hashes,
+		"len":    len(hashes),
+	}).Info("Stored utxo root hashes")
+
 }

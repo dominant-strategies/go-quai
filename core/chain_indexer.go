@@ -649,7 +649,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 					return err
 				}
 
-				entry := state.GetUTXO(outpoint.TxHash, outpoint.Index)
+				entry := state.GetUTXO(outpoint.TxHash, outpoint.Index, outpoint.Denomination)
 				if entry == nil {
 					// missing entry while tryig to add back outpoint
 					continue

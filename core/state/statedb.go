@@ -34,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -48,7 +49,7 @@ var (
 	emptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	newestEtxKey = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // max hash
 	oldestEtxKey = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffe") // max hash - 1
-
+	utxoCountKey = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 )
 
 type proofList [][]byte
@@ -96,14 +97,15 @@ func registerMetrics() {
 // * Accounts
 type StateDB struct {
 	db           Database
-	utxoDb       Database
+	utxoDbs      []Database
 	etxDb        Database
 	prefetcher   *triePrefetcher
 	originalRoot common.Hash // The pre-state root, before any changes were made
 	trie         Trie
-	utxoTrie     Trie
-	etxTrie      Trie
-	hasher       crypto.KeccakState
+	utxoTries    []Trie
+
+	etxTrie Trie
+	hasher  crypto.KeccakState
 
 	logger *log.Logger
 
@@ -146,6 +148,9 @@ type StateDB struct {
 	validRevisions []revision
 	nextRevisionId int
 
+	utxoSetSizes       [types.MaxDenomination + 1]uint64
+	etxKeySharedBigInt *big.Int
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads         time.Duration
 	AccountHashes        time.Duration
@@ -161,12 +166,8 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Database, utxoDb Database, etxDb Database, snaps *snapshot.Tree, nodeLocation common.Location, logger *log.Logger) (*StateDB, error) {
+func New(root common.Hash, utxoRoots []common.Hash, etxRoot common.Hash, db Database, utxoDbs []Database, etxDb Database, snaps *snapshot.Tree, nodeLocation common.Location, logger *log.Logger) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
-	if err != nil {
-		return nil, err
-	}
-	utxoTr, err := utxoDb.OpenTrie(utxoRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -174,12 +175,14 @@ func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Databas
 	if err != nil {
 		return nil, err
 	}
+	if len(utxoRoots) != len(utxoDbs) {
+		return nil, fmt.Errorf("utxoRoots and utxoDbs must have the same length, have %d and %d", len(utxoRoots), len(utxoDbs))
+	}
 	sdb := &StateDB{
 		db:                  db,
-		utxoDb:              utxoDb,
+		utxoDbs:             utxoDbs,
 		etxDb:               etxDb,
 		trie:                tr,
-		utxoTrie:            utxoTr,
 		etxTrie:             etxTr,
 		originalRoot:        root,
 		snaps:               snaps,
@@ -193,6 +196,14 @@ func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Databas
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
 		nodeLocation:        nodeLocation,
+		etxKeySharedBigInt:  new(big.Int),
+	}
+	for i, _ := range utxoDbs {
+		utxoTrie, err := utxoDbs[i].OpenTrie(utxoRoots[i])
+		if err != nil {
+			return nil, err
+		}
+		sdb.utxoTries = append(sdb.utxoTries, utxoTrie)
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -200,6 +211,10 @@ func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Databas
 			sdb.snapAccounts = make(map[common.Hash][]byte)
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
+	}
+	sdb.utxoSetSizes, err = sdb.GetUTXOSetSizes()
+	if err != nil {
+		return nil, err
 	}
 	return sdb, nil
 }
@@ -400,8 +415,8 @@ func (s *StateDB) Database() Database {
 	return s.db
 }
 
-func (s *StateDB) UTXODatabase() Database {
-	return s.utxoDb
+func (s *StateDB) UTXODatabases() []Database {
+	return s.utxoDbs
 }
 
 func (s *StateDB) ETXDatabase() Database {
@@ -561,11 +576,16 @@ func (s *StateDB) getStateObject(addr common.InternalAddress) *stateObject {
 
 // GetUTXO retrieves a UTXO entry given by the hash, returning nil if the object
 // is not found or was deleted in this execution context.
-func (s *StateDB) GetUTXO(txHash common.Hash, outputIndex uint16) *types.UtxoEntry {
+func (s *StateDB) GetUTXO(txHash common.Hash, outputIndex uint16, denomination uint8) *types.UtxoEntry {
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("GetUTXO").Add(float64(time.Since(start))) }(time.Now())
 	}
-	enc, err := s.utxoTrie.TryGet(utxoKey(txHash, outputIndex))
+	if int(denomination) >= len(s.utxoTries) {
+		s.logger.Errorf("GetUTXO: denomination %d out of range", denomination)
+		return nil
+	}
+
+	enc, err := s.utxoTries[denomination].TryGet(utxoKey(txHash, outputIndex))
 	if err != nil {
 		s.setError(fmt.Errorf("getUTXO (%x) error: %v", txHash, err))
 		return nil
@@ -585,15 +605,21 @@ func (s *StateDB) GetUTXO(txHash common.Hash, outputIndex uint16) *types.UtxoEnt
 }
 
 // DeleteUTXO removes the given utxo from the state trie.
-func (s *StateDB) DeleteUTXO(txHash common.Hash, outputIndex uint16) {
+func (s *StateDB) DeleteUTXO(txHash common.Hash, outputIndex uint16, denomination uint8) {
 	// Track the amount of time wasted on deleting the utxo from the trie
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("DeleteUTXO").Add(float64(time.Since(start))) }(time.Now())
 	}
-	// Delete the utxo from the trie
-	if err := s.utxoTrie.TryDelete(utxoKey(txHash, outputIndex)); err != nil {
-		s.setError(fmt.Errorf("deleteUTXO (%x) error: %v", txHash, err))
+	if int(denomination) >= len(s.utxoTries) {
+		s.logger.Errorf("GetUTXO: denomination %d out of range", denomination)
+		return
 	}
+	// Delete the utxo from the trie
+	if err := s.utxoTries[denomination].TryDelete(utxoKey(txHash, outputIndex)); err != nil {
+		s.setError(fmt.Errorf("deleteUTXO (%x) error: %v", txHash, err))
+		return
+	}
+	s.utxoSetSizes[denomination]--
 }
 
 // CreateUTXO explicitly creates a UTXO entry.
@@ -605,41 +631,118 @@ func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint16, utxo *types
 	if err := common.CheckIfBytesAreInternalAndQiAddress(utxo.Address, s.nodeLocation); err != nil {
 		return err
 	}
-	if utxo.Denomination > types.MaxDenomination { // sanity check
+	if utxo.Denomination > types.MaxDenomination || int(utxo.Denomination) >= len(s.utxoTries) { // sanity check
 		return fmt.Errorf("tx %032x emits UTXO with value %d greater than max denomination", txHash, utxo.Denomination)
 	}
 	data, err := rlp.EncodeToBytes(utxo)
 	if err != nil {
 		panic(fmt.Errorf("can't encode UTXO entry at %x: %v", txHash, err))
 	}
-	if err := s.utxoTrie.TryUpdate(utxoKey(txHash, outputIndex), data); err != nil {
+	if err := s.utxoTries[utxo.Denomination].TryUpdate(utxoKey(txHash, outputIndex), data); err != nil {
 		s.setError(fmt.Errorf("createUTXO (%x) error: %v", txHash, err))
+		return err
 	}
+	s.utxoSetSizes[utxo.Denomination]++
 	return nil
 }
 
-func (s *StateDB) CommitUTXOs() (common.Hash, error) {
+func (s *StateDB) CommitUTXOs() ([]common.Hash, error) {
 	// Track the amount of time wasted on committing the utxos to the trie
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("CommitUTXOs").Add(float64(time.Since(start))) }(time.Now())
 	}
-	if s.utxoTrie == nil {
-		return common.Hash{}, errors.New("UTXO trie is not initialized")
+	if s.utxoTries == nil {
+		return nil, errors.New("UTXO tries are not initialized")
 	}
-	root, err := s.utxoTrie.Commit(nil)
-	if err != nil {
-		s.setError(fmt.Errorf("commitUTXOs error: %v", err))
+	roots := make([]common.Hash, 0, len(s.utxoTries))
+	for i, trie := range s.utxoTries {
+		if trie == nil {
+			return nil, fmt.Errorf("UTXO trie %d is not initialized", i)
+		}
+		root, err := trie.Commit(nil)
+		if err != nil {
+			return nil, fmt.Errorf("commitUTXOs error: %v", err)
+		}
+		roots = append(roots, root)
 	}
-	return root, err
+	if len(roots) != len(types.Denominations) {
+		return nil, fmt.Errorf("expected %d UTXO roots, got %d", len(types.Denominations), len(roots))
+	}
+	return roots, nil
 }
 
-func (s *StateDB) UTXORoot() common.Hash {
-	return s.utxoTrie.Hash()
+func (s *StateDB) UTXORoots() common.Hashes {
+	roots := make([]common.Hash, 0, len(s.utxoTries))
+	for _, trie := range s.utxoTries {
+		roots = append(roots, trie.Hash())
+	}
+	return roots
 }
 
-func (s *StateDB) GetUTXOProof(hash common.Hash, index uint16) ([][]byte, error) {
+func (s *StateDB) UTXORoot(denomination uint8) common.Hash {
+	if int(denomination) >= len(s.utxoTries) {
+		return common.Hash{}
+	}
+	return s.utxoTries[denomination].Hash()
+}
+
+func (s *StateDB) GetUTXOSetSizes() (setSizes [types.MaxDenomination + 1]uint64, err error) {
+	for i, _ := range s.utxoTries {
+		b, err := s.utxoTries[i].TryGet(utxoCountKey[:])
+		if err != nil {
+			s.setError(fmt.Errorf("getUTXOSetSizes error: %v", err))
+			return setSizes, err
+		}
+		if len(b) == 8 {
+			setSizes[i] = binary.BigEndian.Uint64(b)
+		}
+	}
+	return setSizes, nil
+}
+
+func (s *StateDB) SetUTXOSetSizes() error {
+	for i, _ := range s.utxoTries {
+		bytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(bytes, s.utxoSetSizes[i])
+		if err := s.utxoTries[i].TryUpdate(utxoCountKey[:], bytes); err != nil {
+			s.setError(fmt.Errorf("setUTXOSetSizes error: %v", err))
+			return err
+		}
+	}
+	s.logger.Infof("Set UTXO set sizes: %+v", s.utxoSetSizes)
+	return nil
+}
+
+func (s *StateDB) CheckUTXOSetSize() error {
+	totalUtxoSetSize := uint64(0)
+	for _, size := range s.utxoSetSizes {
+		totalUtxoSetSize += size
+	}
+	if totalUtxoSetSize > params.UTXOSetSizeLimit {
+		s.logger.Warn("UTXO set size exceeds limit")
+		var err error
+		if len(s.utxoTries) != len(s.utxoDbs) {
+			return fmt.Errorf("utxoTries and utxoDbs must have the same length, have %d and %d", len(s.utxoTries), len(s.utxoDbs))
+		}
+		for i, _ := range s.utxoTries {
+			s.logger.Warnf("Resetting UTXO trie %d", i)
+			s.utxoTries[i], err = s.utxoDbs[i].OpenTrie(emptyRoot)
+			if err != nil {
+				return err
+			}
+			totalUtxoSetSize -= s.utxoSetSizes[i]
+			s.utxoSetSizes[i] = 0
+			if totalUtxoSetSize <= params.UTXOSetSizeLimit {
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func (s *StateDB) GetUTXOProof(hash common.Hash, index uint16, denomination uint8) ([][]byte, error) {
 	var proof proofList
-	err := s.utxoTrie.Prove(utxoKey(hash, index), 0, &proof)
+	err := s.utxoTries[denomination].Prove(utxoKey(hash, index), 0, &proof)
 	return proof, err
 }
 
@@ -933,8 +1036,8 @@ func (s *StateDB) Copy() *StateDB {
 	state := &StateDB{
 		db:                  s.db,
 		trie:                s.db.CopyTrie(s.trie),
-		utxoTrie:            s.utxoDb.CopyTrie(s.utxoTrie),
-		utxoDb:              s.utxoDb,
+		utxoTries:           make([]Trie, len(s.utxoTries)),
+		utxoDbs:             make([]Database, len(s.utxoDbs)),
 		etxTrie:             s.etxDb.CopyTrie(s.etxTrie),
 		etxDb:               s.etxDb,
 		stateObjects:        make(map[common.InternalAddress]*stateObject, len(s.journal.dirties)),
@@ -948,6 +1051,14 @@ func (s *StateDB) Copy() *StateDB {
 		hasher:              crypto.NewKeccakState(),
 		nodeLocation:        s.nodeLocation,
 		logger:              s.logger,
+		etxKeySharedBigInt:  new(big.Int),
+		utxoSetSizes:        s.utxoSetSizes,
+	}
+	for i, trie := range s.utxoTries {
+		state.utxoTries[i] = s.utxoDbs[i].CopyTrie(trie)
+	}
+	for i, db := range s.utxoDbs {
+		state.utxoDbs[i] = db
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
