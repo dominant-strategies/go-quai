@@ -770,12 +770,16 @@ func TestAncientReceiptsStorage(t *testing.T) {
 
 }
 
-func writeBlockForReceipts(db ethdb.Database, hash common.Hash, txs types.Transactions) {
+func createBlockWithTransactions(txs types.Transactions) *types.WorkObject {
 	woBody := types.EmptyWorkObjectBody()
 	woBody.SetHeader(types.EmptyHeader())
 	woBody.SetTransactions(txs)
-	header := types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
-	WriteWorkObject(db, hash, header, types.BlockObject, common.ZONE_CTX)
+	return types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(11), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0})), woBody, nil)
+}
+
+func writeBlockForReceipts(db ethdb.Database, hash common.Hash, txs types.Transactions) {
+	wo := createBlockWithTransactions(txs)
+	WriteWorkObject(db, hash, wo, types.BlockObject, common.ZONE_CTX)
 }
 
 func TestInterlinkHashesStorage(t *testing.T) {
