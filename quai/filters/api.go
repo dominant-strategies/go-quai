@@ -563,6 +563,10 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	if raw.NodeLocation == nil {
+		return fmt.Errorf("NodeLocation is required but was not provided")
+	}
+
 	args.Addresses = []common.Address{}
 
 	if raw.Addresses != nil {
