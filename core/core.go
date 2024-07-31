@@ -284,7 +284,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 			parentBlock := c.sl.hc.GetBlockOrCandidate(block.ParentHash(c.NodeCtx()), block.NumberU64(c.NodeCtx())-1)
 			if parentBlock != nil {
 				// If parent header is dom, send a signal to dom to request for the block if it doesnt have it
-				_, parentHeaderOrder, err := c.sl.engine.CalcOrder(parentBlock)
+				_, parentHeaderOrder, err := c.CalcOrder(parentBlock)
 				if err != nil {
 					c.logger.WithFields(log.Fields{
 						"Hash":   parentBlock.Hash(),
@@ -376,7 +376,7 @@ func (c *Core) addToQueueIfNotAppended(block *types.WorkObject) {
 // addToAppendQueue adds a block to the append queue
 func (c *Core) addToAppendQueue(block *types.WorkObject) error {
 	nodeCtx := c.NodeLocation().Context()
-	_, order, err := c.engine.CalcOrder(block)
+	_, order, err := c.CalcOrder(block)
 	if err != nil {
 		return err
 	}
@@ -853,7 +853,7 @@ func (c *Core) TotalLogS(header *types.WorkObject) *big.Int {
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (c *Core) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
-	return c.engine.CalcOrder(header)
+	return c.engine.CalcOrder(c, header)
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if

@@ -162,6 +162,7 @@ type blockChain interface {
 	GetHeaderOrCandidateByHash(common.Hash) *types.WorkObject
 	NodeCtx() int
 	GetHeaderByHash(common.Hash) *types.WorkObject
+	GetBlockByHash(common.Hash) *types.WorkObject
 	GetMaxTxInWorkShare() uint64
 }
 

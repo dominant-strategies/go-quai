@@ -259,7 +259,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		// difficulty adjustment can only be checked in zone
 		if nodeCtx == common.ZONE_CTX {
 			parent := chain.GetHeaderByHash(uncle.ParentHash())
-			expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), block.ExpansionNumber())
+			expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), parent.ExpansionNumber())
 			if expected.Cmp(uncle.Difficulty()) != 0 {
 				return fmt.Errorf("uncle has invalid difficulty: have %v, want %v", uncle.Difficulty(), expected)
 			}
@@ -301,13 +301,13 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	// difficulty adjustment can only be checked in zone
 	if nodeCtx == common.ZONE_CTX {
-		expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber())
+		expected := blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), parent.ExpansionNumber())
 		if expected.Cmp(header.Difficulty()) != 0 {
 			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 		}
 	}
 	// Verify the engine specific seal securing the block
-	_, order, err := blake3pow.CalcOrder(header)
+	_, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
 		return err
 	}
@@ -327,7 +327,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 
 	// If not prime, verify the parentDeltaS field as well
 	if nodeCtx > common.PRIME_CTX {
-		_, parentOrder, _ := blake3pow.CalcOrder(parent)
+		_, parentOrder, _ := blake3pow.CalcOrder(chain, parent)
 		// If parent was dom, deltaS is zero and otherwise should be the calc delta s on the parent
 		if parentOrder < nodeCtx {
 			if common.Big0.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
@@ -343,7 +343,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 
 	// If not prime, verify the parentUncledSubDeltaS field as well
 	if nodeCtx > common.PRIME_CTX {
-		_, parentOrder, _ := blake3pow.CalcOrder(parent)
+		_, parentOrder, _ := blake3pow.CalcOrder(chain, parent)
 		// If parent was dom, parent uncled sub deltaS is zero and otherwise should be the calc uncled sub delta s on the parent
 		if parentOrder < nodeCtx {
 			if common.Big0.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
@@ -458,7 +458,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
 		}
 		var expectedPrimeTerminus common.Hash
-		_, parentOrder, _ := blake3pow.CalcOrder(parent)
+		_, parentOrder, _ := blake3pow.CalcOrder(chain, parent)
 		if parentOrder == common.PRIME_CTX {
 			expectedPrimeTerminus = parent.Hash()
 		} else {
@@ -550,7 +550,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 }
 
 func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.WorkObject) bool {
-	_, order, err := blake3pow.CalcOrder(header)
+	_, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
 		return false
 	}
@@ -589,7 +589,7 @@ func (blake3pow *Blake3pow) verifySeal(header *types.WorkObjectHeader) error {
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the blake3pow protocol. The changes are done inline.
 func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *types.WorkObject, parent *types.WorkObject) error {
-	header.WorkObjectHeader().SetDifficulty(blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber()))
+	header.WorkObjectHeader().SetDifficulty(blake3pow.CalcDifficulty(chain, parent.WorkObjectHeader(), parent.ExpansionNumber()))
 	return nil
 }
 

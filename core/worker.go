@@ -595,7 +595,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		}
 
 		// If the current block is a prime block, its a prime terminus
-		_, order, err := w.engine.CalcOrder(block)
+		_, order, err := w.CalcOrder(block)
 		if err != nil {
 			return nil, err
 		}
@@ -815,7 +815,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
 			txGas := tx.Gas()
 			lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
-			_, parentOrder, err := w.engine.CalcOrder(parent)
+			_, parentOrder, err := w.CalcOrder(parent)
 			if err != nil {
 				return nil, false, err
 			}
@@ -1133,7 +1133,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	newWo.WorkObjectHeader().SetLocation(w.hc.NodeLocation())
 
 	// Only calculate entropy if the parent is not the genesis block
-	_, order, err := w.engine.CalcOrder(parent)
+	_, order, err := w.CalcOrder(parent)
 	if err != nil {
 		return nil, err
 	}
@@ -1672,7 +1672,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 				return err
 			}
 
-			_, parentOrder, err := w.engine.CalcOrder(parent)
+			_, parentOrder, err := w.CalcOrder(parent)
 			if err != nil {
 				return err
 			}
@@ -1765,4 +1765,8 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 	}
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil
+}
+
+func (w *worker) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
+	return w.engine.CalcOrder(w.hc, header)
 }

@@ -283,3 +283,20 @@ func (ec *Client) TxPoolStatus(ctx context.Context) (map[string]hexutil.Uint, er
 	err := ec.c.CallContext(ctx, &result, "txpool_status")
 	return result, err
 }
+
+func (ec *Client) CalcOrder(ctx context.Context, header *types.WorkObject) (int, error) {
+	protoWo, err := header.ProtoEncode(types.PEtxObject)
+	if err != nil {
+		return -1, err
+	}
+	data, err := proto.Marshal(protoWo)
+	if err != nil {
+		return -1, err
+	}
+	var result hexutil.Uint
+	err = ec.c.CallContext(ctx, &result, "quai_calcOrder", hexutil.Bytes(data))
+	if err != nil {
+		return -1, err
+	}
+	return int(result), nil
+}

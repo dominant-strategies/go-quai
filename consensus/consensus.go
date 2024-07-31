@@ -76,11 +76,6 @@ type ChainReader interface {
 	GetWorkObjectWithWorkShares(hash common.Hash) *types.WorkObject
 }
 
-type GenesisReader interface {
-	// IsGenesisHash returns true if the given hash is the genesis block hash.
-	IsGenesisHash(hash common.Hash) bool
-}
-
 // Engine is an algorithm agnostic consensus engine.
 type Engine interface {
 	// Author retrieves the Quai address of the account that minted the given
@@ -92,13 +87,13 @@ type Engine interface {
 	IntrinsicLogS(powHash common.Hash) *big.Int
 
 	// CalcOrder returns the order of the block within the hierarchy of chains
-	CalcOrder(header *types.WorkObject) (*big.Int, int, error)
+	CalcOrder(chain BlockReader, header *types.WorkObject) (*big.Int, int, error)
 
 	// TotalLogS returns the log of the total entropy reduction if the chain since genesis to the given header
-	TotalLogS(chain GenesisReader, header *types.WorkObject) *big.Int
+	TotalLogS(chain ChainHeaderReader, header *types.WorkObject) *big.Int
 
 	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
-	DeltaLogS(chain GenesisReader, header *types.WorkObject) *big.Int
+	DeltaLogS(chain ChainHeaderReader, header *types.WorkObject) *big.Int
 
 	// UncledLogS returns the log of the entropy reduction by uncles referenced in the block
 	UncledLogS(block *types.WorkObject) *big.Int
@@ -111,10 +106,10 @@ type Engine interface {
 	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool
 
 	// UncledUncledSubDeltaLogS returns the log of the uncled entropy reduction  since the past coincident
-	UncledSubDeltaLogS(chain GenesisReader, header *types.WorkObject) *big.Int
+	UncledSubDeltaLogS(chain ChainHeaderReader, header *types.WorkObject) *big.Int
 
 	// CalcRank calculates the rank of the prime block
-	CalcRank(chain GenesisReader, header *types.WorkObject) (int, error)
+	CalcRank(chain ChainHeaderReader, header *types.WorkObject) (int, error)
 
 	ComputePowLight(header *types.WorkObjectHeader) (mixHash, powHash common.Hash)
 
@@ -178,6 +173,10 @@ type Engine interface {
 	VerifySeal(header *types.WorkObjectHeader) (common.Hash, error)
 
 	SetThreads(threads int)
+}
+
+type BlockReader interface {
+	GetBlockByHash(hash common.Hash) *types.WorkObject
 }
 
 func TargetToDifficulty(target *big.Int) *big.Int {

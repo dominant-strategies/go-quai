@@ -14,12 +14,17 @@ import (
 )
 
 // CalcOrder returns the order of the block within the hierarchy of chains
-func (blake3pow *Blake3pow) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
+func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types.WorkObject) (*big.Int, int, error) {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
 	}
-	expansionNum := header.ExpansionNumber()
+	// Need to use the prime terminus expansion number
+	primeTerminus := chain.GetBlockByHash(header.PrimeTerminus())
+	if primeTerminus == nil {
+		return big0, -1, errors.New("prime terminus cannot be found during the calc order")
+	}
+	expansionNum := primeTerminus.ExpansionNumber()
 
 	// Verify the seal and get the powHash for the given header
 	err := blake3pow.verifySeal(header.WorkObjectHeader())
@@ -70,12 +75,12 @@ func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
+func (blake3pow *Blake3pow) TotalLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
-	intrinsicS, order, err := blake3pow.CalcOrder(header)
+	intrinsicS, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
 		return big.NewInt(0)
 	}
@@ -103,12 +108,12 @@ func (blake3pow *Blake3pow) TotalLogS(chain consensus.GenesisReader, header *typ
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) DeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
+func (blake3pow *Blake3pow) DeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
-	intrinsicS, order, err := blake3pow.CalcOrder(header)
+	intrinsicS, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
 		return big.NewInt(0)
 	}
@@ -200,12 +205,12 @@ func (blake3pow *Blake3pow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error
 	return totalWsEntropy, nil
 }
 
-func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
+func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
-	_, order, err := blake3pow.CalcOrder(header)
+	_, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
 		return big.NewInt(0)
 	}
@@ -226,11 +231,11 @@ func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.GenesisReader, he
 
 // CalcRank returns the rank of the block within the hierarchy of chains, this
 // determines the level of the interlink
-func (blake3pow *Blake3pow) CalcRank(chain consensus.GenesisReader, header *types.WorkObject) (int, error) {
+func (blake3pow *Blake3pow) CalcRank(chain consensus.ChainHeaderReader, header *types.WorkObject) (int, error) {
 	if chain.IsGenesisHash(header.Hash()) {
 		return 0, nil
 	}
-	_, order, err := blake3pow.CalcOrder(header)
+	_, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
 		return 0, err
 	}

@@ -14,13 +14,18 @@ import (
 )
 
 // CalcOrder returns the order of the block within the hierarchy of chains
-func (progpow *Progpow) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
+func (progpow *Progpow) CalcOrder(chain consensus.BlockReader, header *types.WorkObject) (*big.Int, int, error) {
 	nodeCtx := progpow.config.NodeLocation.Context()
 	// Except for the slice [0,0] have to check if the header hash is the genesis hash
 	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
 	}
-	expansionNum := header.ExpansionNumber()
+	// Need to use the prime terminus expansion number
+	primeTerminus := chain.GetBlockByHash(header.PrimeTerminus())
+	if primeTerminus == nil {
+		return big0, -1, errors.New("prime terminus cannot be found during the calc order")
+	}
+	expansionNum := primeTerminus.ExpansionNumber()
 
 	// Verify the seal and get the powHash for the given header
 	powHash, err := progpow.verifySeal(header.WorkObjectHeader())
@@ -71,11 +76,11 @@ func (progpow *Progpow) IntrinsicLogS(powHash common.Hash) *big.Int {
 }
 
 // TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
+func (progpow *Progpow) TotalLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
-	intrinsicS, order, err := progpow.CalcOrder(header)
+	intrinsicS, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
 		return big.NewInt(0)
 	}
@@ -103,11 +108,11 @@ func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.W
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) DeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
+func (progpow *Progpow) DeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
-	intrinsicS, order, err := progpow.CalcOrder(header)
+	intrinsicS, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
 		return big.NewInt(0)
 	}
@@ -197,12 +202,12 @@ func (progpow *Progpow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error) {
 	return totalWsEntropy, nil
 }
 
-func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
+func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
-	_, order, err := progpow.CalcOrder(header)
+	_, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
 		return big.NewInt(0)
 	}
@@ -223,11 +228,11 @@ func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.GenesisReader, header
 
 // CalcRank returns the rank of the block within the hierarchy of chains, this
 // determines the level of the interlink
-func (progpow *Progpow) CalcRank(chain consensus.GenesisReader, header *types.WorkObject) (int, error) {
+func (progpow *Progpow) CalcRank(chain consensus.ChainHeaderReader, header *types.WorkObject) (int, error) {
 	if chain.IsGenesisHash(header.Hash()) {
 		return 0, nil
 	}
-	_, order, err := progpow.CalcOrder(header)
+	_, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
 		return 0, err
 	}

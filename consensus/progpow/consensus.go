@@ -260,7 +260,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 		// difficulty adjustment can only be checked in zone
 		if nodeCtx == common.ZONE_CTX {
 			parent := chain.GetHeaderByHash(uncle.ParentHash())
-			expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), block.ExpansionNumber())
+			expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), parent.ExpansionNumber())
 			if expected.Cmp(uncle.Difficulty()) != 0 {
 				return fmt.Errorf("uncle has invalid difficulty: have %v, want %v", uncle.Difficulty(), expected)
 			}
@@ -302,13 +302,13 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	// difficulty adjustment can only be checked in zone
 	if nodeCtx == common.ZONE_CTX {
-		expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber())
+		expected := progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), parent.ExpansionNumber())
 		if expected.Cmp(header.Difficulty()) != 0 {
 			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty(), expected)
 		}
 	}
 	// Verify the engine specific seal securing the block
-	_, order, err := progpow.CalcOrder(parent)
+	_, order, err := progpow.CalcOrder(chain, parent)
 	if err != nil {
 		return err
 	}
@@ -326,7 +326,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	}
 	// If not prime, verify the parentDeltaS field as well
 	if nodeCtx > common.PRIME_CTX {
-		_, parentOrder, _ := progpow.CalcOrder(parent)
+		_, parentOrder, _ := progpow.CalcOrder(chain, parent)
 		// If parent was dom, deltaS is zero and otherwise should be the calc delta s on the parent
 		if parentOrder < nodeCtx {
 			if common.Big0.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
@@ -341,7 +341,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	}
 	// If not prime, verify the parentUncledSubDeltaS field as well
 	if nodeCtx > common.PRIME_CTX {
-		_, parentOrder, _ := progpow.CalcOrder(parent)
+		_, parentOrder, _ := progpow.CalcOrder(chain, parent)
 		// If parent was dom, parent uncled sub deltaS is zero and otherwise should be the calc parent uncled sub delta s on the parent
 		if parentOrder < nodeCtx {
 			if common.Big0.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
@@ -456,7 +456,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 		var expectedPrimeTerminus common.Hash
 		var expectedPrimeTerminusNumber *big.Int
-		_, parentOrder, _ := progpow.CalcOrder(parent)
+		_, parentOrder, _ := progpow.CalcOrder(chain, parent)
 		if parentOrder == common.PRIME_CTX {
 			expectedPrimeTerminus = parent.Hash()
 			expectedPrimeTerminusNumber = parent.Number(common.PRIME_CTX)
@@ -554,7 +554,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 }
 
 func (progpow *Progpow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.WorkObject) bool {
-	_, order, err := progpow.CalcOrder(header)
+	_, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
 		return false
 	}
@@ -645,7 +645,7 @@ func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.H
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the progpow protocol. The changes are done inline.
 func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types.WorkObject, parent *types.WorkObject) error {
-	header.WorkObjectHeader().SetDifficulty(progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), header.ExpansionNumber()))
+	header.WorkObjectHeader().SetDifficulty(progpow.CalcDifficulty(chain, parent.WorkObjectHeader(), parent.ExpansionNumber()))
 	return nil
 }
 

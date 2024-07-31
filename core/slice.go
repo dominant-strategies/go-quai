@@ -198,7 +198,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	time0_2 := common.PrettyDuration(time.Since(start))
 
 	location := header.Location()
-	_, order, err := sl.engine.CalcOrder(header)
+	_, order, err := sl.CalcOrder(header)
 	if err != nil {
 		return nil, false, err
 	}
@@ -778,7 +778,7 @@ func (sl *Slice) CollectNewlyConfirmedEtxs(block *types.WorkObject, blockOrder i
 		// optimized but this is performant enough and in some cases might have to
 		// go through few more region blocks than necessary
 		var err error
-		_, order, err := sl.Engine().CalcOrder(parent)
+		_, order, err := sl.CalcOrder(parent)
 		if err != nil {
 			return nil, err
 		}
@@ -1884,6 +1884,10 @@ func (sl *Slice) asyncWorkShareUpdateLoop() {
 func (sl *Slice) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
 	sl.txPool.broadcastSet = types.Transactions{}
 	return sl.txPool.GetTxsFromBroadcastSet(hash)
+}
+
+func (sl *Slice) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
+	return sl.engine.CalcOrder(sl.hc, header)
 }
 
 ////// Expansion related logic

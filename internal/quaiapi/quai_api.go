@@ -893,3 +893,22 @@ func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockRef 
 
 	return misc.QuaiToQi(header.WorkObjectHeader(), new(big.Int).SetUint64(quaiAmount))
 }
+
+func (s *PublicBlockChainQuaiAPI) CalcOrder(ctx context.Context, raw hexutil.Bytes) (hexutil.Uint, error) {
+	protoWorkObject := &types.ProtoWorkObject{}
+	err := proto.Unmarshal(raw, protoWorkObject)
+	if err != nil {
+		return 0, err
+	}
+
+	woHeader := &types.WorkObject{}
+	err = woHeader.ProtoDecode(protoWorkObject, s.b.NodeLocation(), types.PEtxObject)
+	if err != nil {
+		return 0, err
+	}
+	_, order, err := s.b.CalcOrder(woHeader)
+	if err != nil {
+		return 0, errors.New("cannot calculate prime terminus order")
+	}
+	return hexutil.Uint(order), nil
+}

@@ -46,6 +46,9 @@ type ChainContext interface {
 	// GetHeaderByHash returns a block header from the database by hash.
 	GetHeaderByHash(common.Hash) *types.WorkObject
 
+	// GetBlockByHash returns a block from the database by hash
+	GetBlockByHash(hash common.Hash) *types.WorkObject
+
 	// CheckIfEtxIsEligible checks if the given slice is eligible to accept the
 	// etx based on the EtxEligibleSlices
 	CheckIfEtxIsEligible(common.Hash, common.Location) bool
@@ -81,7 +84,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 
 	// Prime terminus determines which location is eligible to accept the etx
 	primeTerminus := header.PrimeTerminus()
-	_, parentOrder, err := chain.Engine().CalcOrder(parent)
+	_, parentOrder, err := chain.Engine().CalcOrder(chain, parent)
 	if err != nil {
 		return vm.BlockContext{}, fmt.Errorf("parent order cannot be calculated")
 	}
