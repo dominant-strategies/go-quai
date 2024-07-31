@@ -1273,9 +1273,10 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 
 				// Place i in the [32]byte array.
 				binary.BigEndian.PutUint64(salt[16:24], uint64(i))
+				codeSalt := append(*args.Data, salt[:]...)
 
 				// Generate a potential contract address.
-				contractAddr := crypto.CreateAddress2(args.from(nodeLocation), salt, crypto.Keccak256Hash(*args.Data).Bytes(), nodeLocation)
+				contractAddr := crypto.CreateAddress(args.from(nodeLocation), uint64(*args.Nonce), codeSalt, nodeLocation)
 
 				// Check if the generated address is valid.
 				if _, err := contractAddr.InternalAndQuaiAddress(); err == nil {
