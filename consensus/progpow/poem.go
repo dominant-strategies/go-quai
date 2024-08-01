@@ -85,7 +85,7 @@ func (progpow *Progpow) TotalLogS(chain consensus.ChainHeaderReader, header *typ
 		return big.NewInt(0)
 	}
 	if progpow.NodeLocation().Context() == common.ZONE_CTX {
-		workShareS, err := progpow.WorkShareLogS(header)
+		workShareS, err := progpow.WorkShareLogS(chain, header)
 		if err != nil {
 			return big.NewInt(0)
 		}
@@ -117,7 +117,7 @@ func (progpow *Progpow) DeltaLogS(chain consensus.ChainHeaderReader, header *typ
 		return big.NewInt(0)
 	}
 	if progpow.NodeLocation().Context() == common.ZONE_CTX {
-		workShareS, err := progpow.WorkShareLogS(header)
+		workShareS, err := progpow.WorkShareLogS(chain, header)
 		if err != nil {
 			return big.NewInt(0)
 		}
@@ -153,7 +153,7 @@ func (progpow *Progpow) UncledLogS(block *types.WorkObject) *big.Int {
 	return totalUncledLogS
 }
 
-func (progpow *Progpow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error) {
+func (progpow *Progpow) WorkShareLogS(chain consensus.ChainHeaderReader, wo *types.WorkObject) (*big.Int, error) {
 	workShares := wo.Uncles()
 	totalWsEntropy := big.NewInt(0)
 	for _, ws := range workShares {
@@ -194,8 +194,47 @@ func (progpow *Progpow) WorkShareLogS(wo *types.WorkObject) (*big.Int, error) {
 		} else {
 			wsEntropy = new(big.Int).Set(progpow.IntrinsicLogS(powHash))
 		}
+		var distance int64 = 0
 		// Discount 2) applies to all shares regardless of the weight
-		wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(wo.NumberU64(common.ZONE_CTX)-ws.NumberU64())), nil))
+		// a workshare cannot reference another workshare, it has to be either a block or an uncle
+		// check that the parent hash referenced by the workshare is an uncle or a canonical block
+		// then if its an uncle, traverse back until we hit a canonical block, other wise, use that
+		// as a reference to calculate the distance
+		parent := chain.GetBlockByHash(ws.ParentHash())
+		if parent == nil {
+			return big.NewInt(0), errors.New("error finding the parent of the work share")
+		}
+		// checking if the parent is an uncle
+		canonicalBlockForParentNum := chain.GetHeaderByNumber(parent.NumberU64(common.ZONE_CTX))
+		if canonicalBlockForParentNum == nil {
+			return big.NewInt(0), errors.New("cannot find a canonical block for the parent number")
+		}
+		// If this check passes, the parent block is not a canonical block, we have to trace back
+		if canonicalBlockForParentNum.Hash() != parent.Hash() {
+			var prevBlock *types.WorkObject
+			var uncleDist int64 = 0
+			for {
+				uncleDist++
+				prevBlock = chain.GetBlockByHash(parent.Hash())
+				if prevBlock == nil {
+					return big.NewInt(0), errors.New("cannot find a parent block of an uncle")
+				}
+				blockForPrevBlockNumber := chain.GetHeaderByNumber(prevBlock.NumberU64(common.ZONE_CTX))
+				if blockForPrevBlockNumber == nil {
+					return big.NewInt(0), errors.New("cannot find a canonical block for the uncle block number")
+				}
+				if prevBlock.Hash() == blockForPrevBlockNumber.Hash() {
+					break
+				}
+				if uncleDist > int64(params.WorkSharesInclusionDepth) {
+					return big.NewInt(0), errors.New("uncle referenced by the workshare is more than WorkShareInclusionDepth distance")
+				}
+			}
+			distance = int64(wo.NumberU64(common.ZONE_CTX)-prevBlock.NumberU64(common.ZONE_CTX)) + uncleDist - 1
+		} else {
+			distance = int64(wo.NumberU64(common.ZONE_CTX)-parent.NumberU64(common.ZONE_CTX)) - 1
+		}
+		wsEntropy = new(big.Int).Div(wsEntropy, new(big.Int).Exp(big.NewInt(2), big.NewInt(distance), nil))
 		// Add the entropy into the total entropy once the discount calculation is done
 		totalWsEntropy.Add(totalWsEntropy, wsEntropy)
 	}

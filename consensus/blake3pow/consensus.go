@@ -263,7 +263,6 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 			if expected.Cmp(uncle.Difficulty()) != 0 {
 				return fmt.Errorf("uncle has invalid difficulty: have %v, want %v", uncle.Difficulty(), expected)
 			}
-
 			// Verify that the work share number is parent's +1
 			parentNumber := parent.Number(nodeCtx)
 			if chain.IsGenesisHash(parent.Hash()) {

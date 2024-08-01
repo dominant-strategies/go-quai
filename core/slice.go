@@ -460,7 +460,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	}).Info("Times during sub append")
 
 	intrinsicS := sl.engine.IntrinsicLogS(block.Hash())
-	workShare, err := sl.engine.WorkShareLogS(block)
+	workShare, err := sl.engine.WorkShareLogS(sl.hc, block)
 	if err != nil {
 		workShare = big.NewInt(0)
 	}

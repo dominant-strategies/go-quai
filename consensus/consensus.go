@@ -99,7 +99,7 @@ type Engine interface {
 	UncledLogS(block *types.WorkObject) *big.Int
 
 	// WorkShareLogS returns the log of the entropy reduction by the workshare referenced in the block
-	WorkShareLogS(block *types.WorkObject) (*big.Int, error)
+	WorkShareLogS(chain ChainHeaderReader, block *types.WorkObject) (*big.Int, error)
 
 	// CheckIfValidWorkShare checks if the workshare meets the work share
 	// requirements defined by the protocol
