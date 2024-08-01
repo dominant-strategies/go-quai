@@ -581,16 +581,16 @@ func calculateKeccakGas(data []byte) (int64, error) {
 
 // attemptContractCreation tries to create a contract address by iterating through possible nonce values.
 // It returns the modified data for contract creation and any error encountered.
-func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, gas uint64, gasCost int64, code []byte) (common.Address, uint64, [32]byte, error) {
+func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, gas uint64, gasCost int64, code []byte) (common.Address, uint64, [4]byte, error) {
 	senderAddress := caller.Address()
 
-	codeAndHash := &codeAndHash{code: code}
-	var salt [32]byte
-	binary.BigEndian.PutUint64(salt[24:], nonce)
+	var salt [4]byte
+	binary.BigEndian.PutUint32(salt[:], uint32(nonce))
+
+	codeHash := crypto.Keccak256(code)
 
 	// Iterate through possible nonce values to find a suitable contract address.
 	for i := 0; i < params.MaxAddressGrindAttempts; i++ {
-
 		// Check if there is enough gas left to continue.
 		if gas < uint64(gasCost) {
 			return common.Zero, 0, salt, fmt.Errorf("out of gas grinding contract address for %v", caller.Address().Hex())
@@ -599,16 +599,17 @@ func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, g
 		// Subtract the gas cost for each attempt.
 		gas -= uint64(gasCost)
 
-		// Place i in the [32]byte array.
-		binary.BigEndian.PutUint64(salt[16:24], uint64(i))
-		bytesAndSalt := append(codeAndHash.code, salt[:]...)
-
 		// Generate a potential contract address.
-		contractAddr := crypto.CreateAddress(senderAddress, nonce, bytesAndSalt, evm.chainConfig.Location)
+		contractAddr := crypto.EVMCreateAddress(senderAddress, nonce, codeHash, salt, evm.chainConfig.Location)
 		// Check if the generated address is valid.
 		if _, err := contractAddr.InternalAndQuaiAddress(); err == nil {
 			return contractAddr, gas, salt, nil
 		}
+
+		// Increment the salt for the next attempt
+		saltValue := binary.BigEndian.Uint32(salt[:])
+		saltValue++
+		binary.BigEndian.PutUint32(salt[:], saltValue)
 	}
 	// Return an error if a valid address could not be found after the maximum number of attempts.
 	return common.Zero, 0, salt, fmt.Errorf("exceeded number of attempts grinding address %v", caller.Address().Hex())

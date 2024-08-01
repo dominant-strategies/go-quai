@@ -1266,13 +1266,16 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	} else {
 		to = crypto.CreateAddress(args.from(nodeLocation), uint64(*args.Nonce), *args.Data, nodeLocation)
 		if _, err := to.InternalAndQuaiAddress(); err != nil {
-			var salt [32]byte
-			binary.BigEndian.PutUint64(salt[24:], uint64(*args.Nonce))
+			var salt [4]byte
+			binary.BigEndian.PutUint32(salt[:], uint32(*args.Nonce))
+
 			// Iterate through possible nonce values to find a suitable contract address.
 			for i := 0; i < params.MaxAddressGrindAttempts; i++ {
+				// Increment the salt
+				saltValue := binary.BigEndian.Uint32(salt[:])
+				saltValue++
+				binary.BigEndian.PutUint32(salt[:], saltValue)
 
-				// Place i in the [32]byte array.
-				binary.BigEndian.PutUint64(salt[16:24], uint64(i))
 				codeSalt := append(*args.Data, salt[:]...)
 
 				// Generate a potential contract address.
