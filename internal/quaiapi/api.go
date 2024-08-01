@@ -1055,6 +1055,7 @@ type RPCTransaction struct {
 	OriginatingTxHash *common.Hash      `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64   `json:"etxIndex,omitempty"`
 	IsCoinbase        *hexutil.Uint64   `json:"isCoinbase,omitempty"`
+	ETxType           string            `json:"etxType"`
 	// Optional fields only present for external transactions
 	Sender *common.Address `json:"sender,omitempty"`
 }
@@ -1138,6 +1139,18 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			isCoinbase := uint64(0)
 			result.IsCoinbase = (*hexutil.Uint64)(&isCoinbase)
+		}
+		coinbase := types.IsCoinBaseTx(tx)
+		if coinbase {
+			result.ETxType = "coinbase"
+		} else {
+			conversion := types.IsConversionTx(tx)
+			if conversion {
+				result.ETxType = "conversion"
+			} else {
+				// Neither coinbase nor conversion
+				result.ETxType = "etx"
+			}
 		}
 	}
 	if blockHash != (common.Hash{}) {
