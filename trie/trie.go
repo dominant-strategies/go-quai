@@ -64,6 +64,8 @@ type Trie struct {
 	// hashing operation. This number will not directly map to the number of
 	// actually unhashed nodes
 	unhashed int
+	stales   []node
+	hasher   *hasher
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -82,7 +84,9 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 		panic("trie.New called without a database")
 	}
 	trie := &Trie{
-		db: db,
+		db:     db,
+		hasher: newHasher(true),
+		stales: make([]node, 0),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
@@ -282,6 +286,11 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 	}
 	switch n := n.(type) {
 	case *shortNode:
+		var old *shortNode
+		virgin := !n.flags.dirty
+		if virgin {
+			old = n.copy()
+		}
 		matchlen := prefixLen(key, n.Key)
 		// If the whole key matches, keep this short node as is
 		// and only update the value.
@@ -290,18 +299,26 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			if !dirty || err != nil {
 				return false, n, err
 			}
+			if dirty && virgin {
+				t.stales = append(t.stales, old)
+			}
 			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
 		}
 		// Otherwise branch out at the index where they differ.
 		branch := &fullNode{flags: t.newFlag()}
 		var err error
-		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
+		var dirty bool
+		var dirty2 bool
+		dirty, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
 		if err != nil {
 			return false, nil, err
 		}
-		_, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
+		dirty2, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
 		if err != nil {
 			return false, nil, err
+		}
+		if (dirty || dirty2) && virgin {
+			t.stales = append(t.stales, old)
 		}
 		// Replace this shortNode with the branch if it occurs at index 0.
 		if matchlen == 0 {
@@ -311,9 +328,17 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
 
 	case *fullNode:
+		virgin := !n.flags.dirty
+		var old *fullNode
+		if virgin {
+			old = n.copy()
+		}
 		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
 		if !dirty || err != nil {
 			return false, n, err
+		}
+		if dirty && virgin {
+			t.stales = append(t.stales, old)
 		}
 		n = n.copy()
 		n.flags = t.newFlag()
@@ -324,6 +349,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, &shortNode{key, value, t.newFlag()}, nil
 
 	case hashNode:
+		old := n
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and insert into it. This leaves all child nodes on
 		// the path to the value in the trie.
@@ -334,6 +360,9 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		dirty, nn, err := t.insert(rn, prefix, key, value)
 		if !dirty || err != nil {
 			return false, rn, err
+		}
+		if dirty {
+			t.stales = append(t.stales, old)
 		}
 		return true, nn, nil
 
@@ -368,6 +397,11 @@ func (t *Trie) TryDelete(key []byte) error {
 func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 	switch n := n.(type) {
 	case *shortNode:
+		virgin := !n.flags.dirty
+		var old *shortNode
+		if virgin {
+			old = n.copy()
+		}
 		matchlen := prefixLen(key, n.Key)
 		if matchlen < len(n.Key) {
 			return false, n, nil // don't replace n on mismatch
@@ -383,6 +417,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		if !dirty || err != nil {
 			return false, n, err
 		}
+		if dirty && virgin {
+			t.stales = append(t.stales, old)
+		}
 		switch child := child.(type) {
 		case *shortNode:
 			// Deleting from the subtrie reduced it to another
@@ -397,9 +434,17 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		}
 
 	case *fullNode:
+		virgin := !n.flags.dirty
+		var old *fullNode
+		if virgin {
+			old = n.copy()
+		}
 		dirty, nn, err := t.delete(n.Children[key[0]], append(prefix, key[0]), key[1:])
 		if !dirty || err != nil {
 			return false, n, err
+		}
+		if dirty && virgin {
+			t.stales = append(t.stales, old)
 		}
 		n = n.copy()
 		n.flags = t.newFlag()
@@ -464,6 +509,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		return false, nil, nil
 
 	case hashNode:
+		old := n
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and delete from it. This leaves all child nodes on
 		// the path to the value in the trie.
@@ -474,6 +520,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		dirty, nn, err := t.delete(rn, prefix, key)
 		if !dirty || err != nil {
 			return false, rn, err
+		}
+		if dirty {
+			t.stales = append(t.stales, old)
 		}
 		return true, nn, nil
 
@@ -577,4 +626,44 @@ func (t *Trie) hashRoot() (node, node, error) {
 func (t *Trie) Reset() {
 	t.root = nil
 	t.unhashed = 0
+}
+
+func (t *Trie) GetKey(key []byte) []byte {
+	return key
+}
+
+// Copy returns a copy of SecureTrie.
+func (t *Trie) Copy() *Trie {
+	cpy := *t
+	return &cpy
+}
+
+func (t *Trie) Stales() []*common.Hash {
+	t.db.Logger().Infof("Stales len %d", len(t.stales))
+	hashes := make([]*common.Hash, 0, len(t.stales))
+	for _, n := range t.stales {
+		if cachedHash, _ := n.cache(); cachedHash != nil {
+			hash := common.BytesToHash(cachedHash)
+			hashes = append(hashes, &hash)
+			continue
+		}
+		switch node := (n).(type) {
+		case *shortNode:
+			shortNodeHash, _ := t.hasher.hash(node, true)
+			hash := common.BytesToHash(shortNodeHash.(hashNode))
+			hashes = append(hashes, &hash)
+
+		case *fullNode:
+			fullNodeHash, _ := t.hasher.hash(node, true)
+			hash := common.BytesToHash(fullNodeHash.(hashNode))
+			hashes = append(hashes, &hash)
+
+		case hashNode:
+			hash := common.BytesToHash(node)
+			hashes = append(hashes, &hash)
+		default:
+			t.db.Logger().Errorf("Node type %T", node)
+		}
+	}
+	return hashes
 }

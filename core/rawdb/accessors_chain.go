@@ -1320,3 +1320,45 @@ func DeleteGenesisHashes(db ethdb.KeyValueWriter) {
 		db.Logger().WithField("err", err).Fatal("Failed to delete genesis hashes")
 	}
 }
+
+func WriteUTXOStales(db ethdb.KeyValueWriter, blockHash common.Hash, stales []*common.Hash) {
+	protoStales := make([]*common.ProtoHash, len(stales))
+	for i, hash := range stales {
+		protoStales[i] = hash.ProtoEncode()
+	}
+	data, err := proto.Marshal(&common.ProtoHashes{Hashes: protoStales})
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal utxo stales")
+	}
+
+	if err := db.Put(utxoStalesKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store utxo stales")
+	}
+}
+
+func ReadUTXOStales(db ethdb.Reader, blockHash common.Hash) []*common.Hash {
+	data, _ := db.Get(utxoStalesKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+
+	protoStales := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoStales)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal utxo stales")
+	}
+
+	stales := make([]*common.Hash, len(protoStales.Hashes))
+	for i, protoHash := range protoStales.Hashes {
+		stales[i] = new(common.Hash)
+		stales[i].ProtoDecode(protoHash)
+	}
+
+	return stales
+}
+
+func DeleteUTXOStales(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(utxoStalesKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete utxo stales")
+	}
+}

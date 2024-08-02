@@ -166,11 +166,11 @@ func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Databas
 	if err != nil {
 		return nil, err
 	}
-	utxoTr, err := utxoDb.OpenTrie(utxoRoot)
+	utxoTr, err := utxoDb.OpenRegularTrie(utxoRoot)
 	if err != nil {
 		return nil, err
 	}
-	etxTr, err := etxDb.OpenTrie(etxRoot)
+	etxTr, err := etxDb.OpenRegularTrie(etxRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -631,6 +631,10 @@ func (s *StateDB) CommitUTXOs() (common.Hash, error) {
 		s.setError(fmt.Errorf("commitUTXOs error: %v", err))
 	}
 	return root, err
+}
+
+func (s *StateDB) UTXOStales() []*common.Hash {
+	return s.utxoTrie.Stales()
 }
 
 func (s *StateDB) UTXORoot() common.Hash {

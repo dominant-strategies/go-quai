@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 )
 
@@ -80,6 +81,9 @@ func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 
 // WriteTrieNode writes the provided trie node database.
 func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
+	if hash != crypto.Keccak256Hash(node) {
+		db.Logger().WithField("hash", hash).Fatal("Trie node hash mismatch")
+	}
 	if err := db.Put(hash.Bytes(), node); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store trie node")
 	}

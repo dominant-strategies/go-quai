@@ -36,6 +36,8 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 )
 
+var PruneDepth = uint64(5) // Number of blocks behind in which we begin pruning old state data
+
 // ChainIndexerBackend defines the methods needed to process chain segments in
 // the background and write the segment results into the database. These can be
 // used to create filter blooms or CHTs.
@@ -237,6 +239,9 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			errc <- nil
 			return
 		case block := <-qiIndexerCh:
+			if block.NumberU64(nodeCtx) > PruneDepth {
+				c.PruneStaleUTXOs(block.NumberU64(nodeCtx) - PruneDepth)
+			}
 			var validUtxoIndex bool
 			var addressOutpoints map[string]map[string]*types.OutpointAndDenomination
 			if c.indexAddressUtxos {
@@ -293,6 +298,20 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 
 			prevHeader, prevHash = block, block.Hash()
 		}
+	}
+}
+
+func (c *ChainIndexer) PruneStaleUTXOs(blockHeight uint64) {
+	blockHash := rawdb.ReadCanonicalHash(c.chainDb, blockHeight)
+	stales := rawdb.ReadUTXOStales(c.chainDb, blockHash)
+	for _, stale := range stales {
+		if err := c.chainDb.Delete(stale.Bytes()); err != nil {
+			c.logger.Error("Failed to delete stale utxo trie node", "err", err)
+		}
+	}
+	if len(stales) > 0 {
+		rawdb.DeleteUTXOStales(c.chainDb, blockHash)
+		c.logger.Info("Pruned stale utxo trie nodes", "num", "block", len(stales), blockHeight)
 	}
 }
 

@@ -83,19 +83,18 @@ var (
 	phWorkObjectHeaderPrefix    = []byte("pw")    //phWorkObjectHeaderPrefix + hash -> []common.Hash
 	workObjectBodyPrefix        = []byte("wb")    //workObjectBodyPrefix + hash -> []common.Hash
 	badHashesListPrefix         = []byte("bh")
-	inboundEtxsPrefix           = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
-	UtxoPrefix                  = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
-	spentUTXOsPrefix            = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
-	AddressUtxosPrefix          = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
-	processedStatePrefix        = []byte("ps")    // processedStatePrefix + hash -> boolean
+	inboundEtxsPrefix           = []byte("ie") // inboundEtxsPrefix + hash -> types.Transactions
+	UtxoPrefix                  = []byte("ut") // outpointPrefix + hash -> types.Outpoint
+	AddressUtxosPrefix          = []byte("au") // addressUtxosPrefix + hash -> []types.UtxoEntry
+	processedStatePrefix        = []byte("ps") // processedStatePrefix + hash -> boolean
 
-	blockBodyPrefix         = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 	pendingEtxsPrefix       = []byte("pe") // pendingEtxsPrefix + hash -> PendingEtxs at block
 	pendingEtxsRollupPrefix = []byte("pr") // pendingEtxsRollupPrefix + hash -> PendingEtxsRollup at block
 	manifestPrefix          = []byte("ma") // manifestPrefix + hash -> Manifest at block
 	interlinkPrefix         = []byte("il") // interlinkPrefix + hash -> Interlink at block
 	bloomPrefix             = []byte("bl") // bloomPrefix + hash -> bloom at block
+	utxoStalesPrefix        = []byte("us") // utxoStalesPrefix + hash -> UtxoStales at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -310,6 +309,10 @@ func interlinkHashKey(hash common.Hash) []byte {
 
 func bloomKey(hash common.Hash) []byte {
 	return append(bloomPrefix, hash.Bytes()...)
+}
+
+func utxoStalesKey(hash common.Hash) []byte {
+	return append(utxoStalesPrefix, hash.Bytes()...)
 }
 
 func inboundEtxsKey(hash common.Hash) []byte {

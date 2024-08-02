@@ -42,6 +42,8 @@ type Database interface {
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
 
+	OpenRegularTrie(root common.Hash) (Trie, error)
+
 	// OpenStorageTrie opens the storage trie of an account.
 	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
 
@@ -104,6 +106,8 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+
+	Stales() []*common.Hash
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -142,6 +146,14 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	return tr, nil
 }
 
+func (db *cachingDB) OpenRegularTrie(root common.Hash) (Trie, error) {
+	tr, err := trie.New(root, db.db)
+	if err != nil {
+		return nil, err
+	}
+	return tr, nil
+}
+
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 	tr, err := trie.NewSecure(root, db.db)
@@ -155,6 +167,8 @@ func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.SecureTrie:
+		return t.Copy()
+	case *trie.Trie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
