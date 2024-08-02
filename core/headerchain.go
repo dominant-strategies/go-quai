@@ -32,7 +32,7 @@ const (
 	numberCacheLimit      = 2048
 	c_subRollupCacheSize  = 50
 	primeHorizonThreshold = 20
-	headsLimit            = 1000
+	hashesLimit           = 5000
 )
 
 // getPendingEtxsRollup gets the pendingEtxsRollup rollup from appropriate Region
@@ -74,7 +74,8 @@ type HeaderChain struct {
 	procInterrupt int32          // interrupt signaler for block processing
 
 	headermu        sync.RWMutex
-	heads           []*types.WorkObject
+	hashes          []*types.HashAndNumber
+	staleUncleCh    chan *types.HashAndNumber
 	slicesRunning   []common.Location
 	processingState bool
 
@@ -83,7 +84,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger, quit chan struct{}) (*HeaderChain, error) {
 	headerCache, _ := lru.New[common.Hash, types.WorkObject](headerCacheLimit)
 	numberCache, _ := lru.New[common.Hash, uint64](numberCacheLimit)
 	nodeCtx := chainConfig.Location.Context()
@@ -99,6 +100,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		fetchPEtx:              pEtxsFetcher,
 		logger:                 logger,
 		currentExpansionNumber: currentExpansionNumber,
+		staleUncleCh:           make(chan *types.HashAndNumber, hashesLimit),
 	}
 
 	genesisHash := hc.GetGenesisHashes()[0]
@@ -142,9 +144,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	hc.subRollupCache = subRollupCache
 
 	// Initialize the heads slice
-	heads := make([]*types.WorkObject, 0)
-	hc.heads = heads
-
+	hashes := make([]*types.HashAndNumber, 0)
+	hc.hashes = hashes
+	go hc.asyncStaleUncleRemovalWorker(quit)
 	return hc, nil
 }
 
@@ -556,11 +558,16 @@ func (hc *HeaderChain) loadLastState() error {
 		hc.currentHeader.Store(recoveredHeader)
 	}
 
-	heads := make([]*types.WorkObject, 0)
+	hashes := make([]*types.HashAndNumber, 0)
 	for _, hash := range headsHashes {
-		heads = append(heads, hc.GetHeaderByHash(hash))
+		number := rawdb.ReadHeaderNumber(hc.headerDb, hash)
+		if number == nil {
+			hc.logger.Errorf("Failed to read header number for hash %x", hash)
+			number = new(uint64)
+		}
+		hashes = append(hashes, &types.HashAndNumber{hash, *number})
 	}
-	hc.heads = heads
+	hc.hashes = hashes
 
 	return nil
 }
@@ -573,8 +580,8 @@ func (hc *HeaderChain) Stop() {
 	}
 
 	hashes := make(common.Hashes, 0)
-	for i := 0; i < len(hc.heads); i++ {
-		hashes = append(hashes, hc.heads[i].Hash())
+	for i := 0; i < len(hc.hashes); i++ {
+		hashes = append(hashes, hc.hashes[i].Hash)
 	}
 	// Save the heads
 	rawdb.WriteHeadsHashes(hc.headerDb, hashes)
@@ -1056,4 +1063,25 @@ func (hc *HeaderChain) GetMaxTxInWorkShare() uint64 {
 	maxEoaInBlock := currentGasLimit / params.TxGas
 	// (maxEoaInBlock*2)/(2^bits)
 	return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.WorkSharesThresholdDiff)))
+}
+
+func (hc *HeaderChain) asyncStaleUncleRemovalWorker(quit chan struct{}) {
+	for {
+		select {
+		case uncleHashAndNumber := <-hc.staleUncleCh:
+			uncleHash := uncleHashAndNumber.Hash
+			number := uncleHashAndNumber.Number
+			rawdb.DeleteInboundEtxs(hc.bc.db, uncleHash)
+			rawdb.DeletePendingEtxs(hc.headerDb, uncleHash)
+			rawdb.DeleteUTXOStales(hc.bc.db, uncleHash)
+			rawdb.DeleteWorkObject(hc.bc.db, uncleHash, number, types.BlockObject)
+			rawdb.DeletePendingEtxsRollup(hc.headerDb, uncleHash)
+			rawdb.DeleteManifest(hc.headerDb, uncleHash)
+			rawdb.DeletePbCacheBody(hc.bc.db, uncleHash)
+			rawdb.DeletePendingHeader(hc.headerDb, uncleHash)
+			rawdb.DeleteBloom(hc.headerDb, uncleHash, number)
+		case <-quit:
+			return
+		}
+	}
 }

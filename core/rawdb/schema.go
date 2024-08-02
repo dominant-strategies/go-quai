@@ -95,6 +95,7 @@ var (
 	interlinkPrefix         = []byte("il") // interlinkPrefix + hash -> Interlink at block
 	bloomPrefix             = []byte("bl") // bloomPrefix + hash -> bloom at block
 	utxoStalesPrefix        = []byte("us") // utxoStalesPrefix + hash -> UtxoStales at block
+	utxoUpdatesPrefix       = []byte("up") // utxoStalesPrefix + hash -> UtxoStales at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -313,6 +314,10 @@ func bloomKey(hash common.Hash) []byte {
 
 func utxoStalesKey(hash common.Hash) []byte {
 	return append(utxoStalesPrefix, hash.Bytes()...)
+}
+
+func utxoUpdatesKey(hash common.Hash) []byte {
+	return append(utxoUpdatesPrefix, hash.Bytes()...)
 }
 
 func inboundEtxsKey(hash common.Hash) []byte {

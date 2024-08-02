@@ -313,6 +313,13 @@ func (c *ChainIndexer) PruneStaleUTXOs(blockHeight uint64) {
 		rawdb.DeleteUTXOStales(c.chainDb, blockHash)
 		c.logger.Info("Pruned stale utxo trie nodes", "num", "block", len(stales), blockHeight)
 	}
+
+	rawdb.DeleteInboundEtxs(c.chainDb, blockHash)
+	rawdb.DeletePendingEtxs(c.chainDb, blockHash)
+	rawdb.DeletePendingEtxsRollup(c.chainDb, blockHash)
+	rawdb.DeleteManifest(c.chainDb, blockHash)
+	rawdb.DeletePbCacheBody(c.chainDb, blockHash)
+	rawdb.DeletePendingHeader(c.chainDb, blockHash)
 }
 
 // newHead notifies the indexer about new chain heads and/or reorgs.

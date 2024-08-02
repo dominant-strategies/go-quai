@@ -1353,12 +1353,52 @@ func ReadUTXOStales(db ethdb.Reader, blockHash common.Hash) []*common.Hash {
 		stales[i] = new(common.Hash)
 		stales[i].ProtoDecode(protoHash)
 	}
-
 	return stales
 }
 
 func DeleteUTXOStales(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	if err := db.Delete(utxoStalesKey(blockHash)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxo stales")
+	}
+}
+
+func WriteUTXOUpdates(db ethdb.KeyValueWriter, blockHash common.Hash, updates []*common.Hash) {
+	protoUpdates := make([]*common.ProtoHash, len(updates))
+	for i, hash := range updates {
+		protoUpdates[i] = hash.ProtoEncode()
+	}
+	data, err := proto.Marshal(&common.ProtoHashes{Hashes: protoUpdates})
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal utxo updates")
+	}
+
+	if err := db.Put(utxoUpdatesKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store utxo updates")
+	}
+}
+
+func ReadUTXOUpdates(db ethdb.Reader, blockHash common.Hash) []*common.Hash {
+	data, _ := db.Get(utxoUpdatesKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+
+	protoUpdates := new(common.ProtoHashes)
+	err := proto.Unmarshal(data, protoUpdates)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal utxo updates")
+	}
+
+	updates := make([]*common.Hash, len(protoUpdates.Hashes))
+	for i, protoHash := range protoUpdates.Hashes {
+		updates[i] = new(common.Hash)
+		updates[i].ProtoDecode(protoHash)
+	}
+	return updates
+}
+
+func DeleteUTXOUpdates(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(utxoUpdatesKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete utxo updates")
 	}
 }

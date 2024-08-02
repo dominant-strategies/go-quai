@@ -117,7 +117,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.AddGenesisHash(genesisBlock.Hash())
 	}
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger)
+	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger, sl.quit)
 	if err != nil {
 		return nil, err
 	}
@@ -487,17 +487,16 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"location":             block.Location(),
 		"elapsed":              common.PrettyDuration(time.Since(start)),
 	}).Info("Appended new block")
-	sl.hc.heads = append(sl.hc.heads, block)
-	for i, head := range sl.hc.heads {
-		if head.Hash() == block.ParentHash(nodeCtx) {
-			sl.hc.heads = append(sl.hc.heads[:i], sl.hc.heads[i+1:]...) // Remove the parent from the heads
-			break
-		}
-	}
-	if len(sl.hc.heads) > headsLimit {
-		if sl.hc.GetHeaderByNumber(sl.hc.heads[0].NumberU64(nodeCtx)).Hash() != sl.hc.heads[0].Hash() { // Head is not canonical
+	sl.hc.hashes = append(sl.hc.hashes, &types.HashAndNumber{Hash: block.Hash(), Number: block.NumberU64(nodeCtx)})
+	if len(sl.hc.hashes) > hashesLimit {
+		if sl.hc.GetHeaderByNumber(sl.hc.hashes[0].Number).Hash() != sl.hc.hashes[0].Hash { // Hash is not canonical
 			// TODO: Delete all data associated with this non-canonical old uncle asynchronously
-			sl.hc.heads = sl.hc.heads[1:]
+			select {
+			case sl.hc.staleUncleCh <- sl.hc.hashes[0]: // Non-blocking
+			default:
+				sl.logger.Error("staleUncleCh is full, skipping until there is room")
+			}
+			sl.hc.hashes = sl.hc.hashes[1:]
 		}
 	}
 
