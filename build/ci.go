@@ -24,7 +24,7 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
--  build    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
+-  build    [ -arch architecture ] [ -cc compiler ] [ -race ] [ packages... ]                          -- builds packages and executables
 -  test       [ -coverage ] [ packages... ]                                                    -- runs the tests
 -  lint                                                                                        -- runs certain pre-selected linters
 
@@ -119,6 +119,7 @@ func doBuild(cmdline []string) {
 		dlgo = flag.Bool("dlgo", false, "Download Go and build with it")
 		arch = flag.String("arch", "", "Architecture to cross build for")
 		cc   = flag.String("cc", "", "C compiler to cross build with")
+		race = flag.Bool("race", false, "Enable race detector")
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -145,6 +146,11 @@ func doBuild(cmdline []string) {
 
 	// Show packages during build.
 	gobuild.Args = append(gobuild.Args, "-v")
+
+	// Add race flag if specified.
+	if *race {
+		gobuild.Args = append(gobuild.Args, "-race")
+	}
 
 	// Now we choose what we're even building.
 	// Default: collect all 'main' packages in cmd/ and build those.
@@ -254,3 +260,4 @@ func downloadLinter(cachedir string) string {
 	}
 	return filepath.Join(cachedir, base, "golangci-lint")
 }
+
