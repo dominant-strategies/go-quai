@@ -198,3 +198,7 @@ func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 	}
 	return t.secKeyCache
 }
+
+func (t *SecureTrie) Stales() []*common.Hash {
+	return t.trie.Stales()
+}

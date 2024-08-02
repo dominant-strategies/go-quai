@@ -103,22 +103,6 @@ func (progpow *Progpow) TotalLogS(chain consensus.GenesisReader, header *types.W
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) TotalLogPhS(header *types.WorkObject) *big.Int {
-	switch progpow.config.NodeLocation.Context() {
-	case common.PRIME_CTX:
-		totalS := header.ParentEntropy(common.PRIME_CTX)
-		return totalS
-	case common.REGION_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaS(common.REGION_CTX))
-		return totalS
-	case common.ZONE_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaS(common.REGION_CTX))
-		totalS.Add(totalS, header.ParentDeltaS(common.ZONE_CTX))
-		return totalS
-	}
-	return big.NewInt(0)
-}
-
 func (progpow *Progpow) DeltaLogS(chain consensus.GenesisReader, header *types.WorkObject) *big.Int {
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)

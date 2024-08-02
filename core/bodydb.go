@@ -92,11 +92,13 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 
 // Append
 func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, error) {
+	startLock := time.Now()
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
 	batch := bc.db.NewBatch()
 	stateApply := time.Now()
+	locktime := time.Since(startLock)
 	nodeCtx := bc.NodeCtx()
 	var logs []*types.Log
 	var err error
@@ -108,6 +110,13 @@ func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, error) {
 		}
 		rawdb.WriteTxLookupEntriesByBlock(batch, block, nodeCtx)
 	}
+	bc.logger.WithFields(log.Fields{
+		"block":      block.Number,
+		"hash":       block.Hash(),
+		"startLock":  common.PrettyDuration(locktime),
+		"stateApply": common.PrettyDuration(time.Since(stateApply)),
+	}).Info("Time taken to write block body")
+
 	bc.logger.WithField("apply state", common.PrettyDuration(time.Since(stateApply))).Debug("Time taken to")
 	if err = batch.Write(); err != nil {
 		return nil, err
@@ -211,6 +220,10 @@ func (bc *BodyDb) GetWorkObjectWithWorkShares(hash common.Hash) *types.WorkObjec
 // GetBlockOrCandidate retrieves any known block from the database by hash and number,
 // caching it if found.
 func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.WorkObject {
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return &block
+	}
+
 	block := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
 	if block == nil {
 		return nil

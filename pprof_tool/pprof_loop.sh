@@ -37,6 +37,7 @@ while true; do
         curl http://localhost:$port/debug/pprof/heap -o "traces/$folder/$name"_"$timestamp"_"$port"_heap.pb.gz
         curl http://localhost:$port/debug/pprof/mutex -o "traces/$folder/$name"_"$timestamp"_"$port"_mutex.pb.gz
         curl http://localhost:$port/debug/pprof/trace?seconds=5 -o "traces/$folder/$name"_"$timestamp"_"$port"_trace.pb.gz
+        curl http://localhost:$port/debug/pprof/profile -o "traces/$folder/$name"_"$timestamp"_"$port"_profile.pb.gz
     done
     sleep 600 
 done
