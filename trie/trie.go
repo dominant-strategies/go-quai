@@ -64,7 +64,7 @@ type Trie struct {
 	// hashing operation. This number will not directly map to the number of
 	// actually unhashed nodes
 	unhashed int
-	stales   []node
+	stales   map[common.Hash]node
 	hasher   *hasher
 }
 
@@ -86,7 +86,7 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 	trie := &Trie{
 		db:     db,
 		hasher: newHasher(true),
-		stales: make([]node, 0),
+		stales: make(map[common.Hash]node),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
@@ -300,7 +300,14 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 				return false, n, err
 			}
 			if dirty && virgin {
-				t.stales = append(t.stales, old)
+				hash := old.flags.hash
+				if hash != nil {
+					t.stales[common.Hash(hash)] = old
+				} else {
+					hash := t.hasher.shortnodeToHash(old, true)
+					t.stales[common.Hash(hash.(hashNode))] = old
+				}
+
 			}
 			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
 		}
@@ -318,7 +325,13 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return false, nil, err
 		}
 		if (dirty || dirty2) && virgin {
-			t.stales = append(t.stales, old)
+			hash := old.flags.hash
+			if hash != nil {
+				t.stales[common.Hash(hash)] = old
+			} else {
+				hash := t.hasher.shortnodeToHash(old, true)
+				t.stales[common.Hash(hash.(hashNode))] = old
+			}
 		}
 		// Replace this shortNode with the branch if it occurs at index 0.
 		if matchlen == 0 {
@@ -338,7 +351,13 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return false, n, err
 		}
 		if dirty && virgin {
-			t.stales = append(t.stales, old)
+			hash := old.flags.hash
+			if hash != nil {
+				t.stales[common.Hash(hash)] = old
+			} else {
+				hash := t.hasher.fullnodeToHash(old, true)
+				t.stales[common.Hash(hash.(hashNode))] = old
+			}
 		}
 		n = n.copy()
 		n.flags = t.newFlag()
@@ -362,7 +381,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return false, rn, err
 		}
 		if dirty {
-			t.stales = append(t.stales, old)
+			t.stales[common.Hash(old)] = old
 		}
 		return true, nn, nil
 
@@ -418,7 +437,13 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, n, err
 		}
 		if dirty && virgin {
-			t.stales = append(t.stales, old)
+			hash := old.flags.hash
+			if hash != nil {
+				t.stales[common.Hash(hash)] = old
+			} else {
+				hash := t.hasher.shortnodeToHash(old, true)
+				t.stales[common.Hash(hash.(hashNode))] = old
+			}
 		}
 		switch child := child.(type) {
 		case *shortNode:
@@ -444,7 +469,13 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, n, err
 		}
 		if dirty && virgin {
-			t.stales = append(t.stales, old)
+			hash := old.flags.hash
+			if hash != nil {
+				t.stales[common.Hash(hash)] = old
+			} else {
+				hash := t.hasher.fullnodeToHash(old, true)
+				t.stales[common.Hash(hash.(hashNode))] = old
+			}
 		}
 		n = n.copy()
 		n.flags = t.newFlag()
@@ -522,7 +553,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, rn, err
 		}
 		if dirty {
-			t.stales = append(t.stales, old)
+			t.stales[common.Hash(old)] = old
 		}
 		return true, nn, nil
 
@@ -643,23 +674,23 @@ func (t *Trie) Stales() []*common.Hash {
 	hashes := make([]*common.Hash, 0, len(t.stales))
 	for _, n := range t.stales {
 		if cachedHash, _ := n.cache(); cachedHash != nil {
-			hash := common.BytesToHash(cachedHash)
+			hash := common.Hash(cachedHash)
 			hashes = append(hashes, &hash)
 			continue
 		}
 		switch node := (n).(type) {
 		case *shortNode:
 			shortNodeHash, _ := t.hasher.hash(node, true)
-			hash := common.BytesToHash(shortNodeHash.(hashNode))
+			hash := common.Hash(shortNodeHash.(hashNode))
 			hashes = append(hashes, &hash)
 
 		case *fullNode:
 			fullNodeHash, _ := t.hasher.hash(node, true)
-			hash := common.BytesToHash(fullNodeHash.(hashNode))
+			hash := common.Hash(fullNodeHash.(hashNode))
 			hashes = append(hashes, &hash)
 
 		case hashNode:
-			hash := common.BytesToHash(node)
+			hash := common.Hash(node)
 			hashes = append(hashes, &hash)
 		default:
 			t.db.Logger().Errorf("Node type %T", node)

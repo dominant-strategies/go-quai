@@ -36,7 +36,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 )
 
-var PruneDepth = uint64(5) // Number of blocks behind in which we begin pruning old state data
+var PruneDepth = uint64(100) // Number of blocks behind in which we begin pruning old state data
 
 // ChainIndexerBackend defines the methods needed to process chain segments in
 // the background and write the segment results into the database. These can be
