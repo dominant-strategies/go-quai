@@ -22,8 +22,13 @@ RUN make go-quai
 FROM alpine:latest
 
 # Install any dependencies required to run the application
-RUN apk --no-cache add ca-certificates
-
+RUN apk update && apk add --no-cache \
+    coreutils \
+    findutils \
+    procps \
+    util-linux \
+    curl \
+    ca-certificates
 
 # Set the Current Working Directory inside the container
 WORKDIR /root/
