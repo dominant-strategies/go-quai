@@ -261,6 +261,7 @@ func TestPendingHeaderStorage(t *testing.T) {
 
 	emptyPendingHeader := types.EmptyPendingHeader()
 	emptyPendingHeader.SetHeader(emptyHeader)
+	emptyPendingHeader.WorkObject().SetTx(nil)
 
 	WritePendingHeader(db, common.Hash{1}, emptyPendingHeader)
 
