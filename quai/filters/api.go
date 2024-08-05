@@ -45,7 +45,7 @@ const (
 // and associated subscription in the event system.
 type filter struct {
 	typ      Type
-	deadline *time.Timer // filter is inactiv when deadline triggers
+	deadline *time.Timer // filter is inactive when deadline triggers
 	hashes   []common.Hash
 	crit     FilterCriteria
 	logs     []*types.Log
@@ -395,7 +395,7 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	return logsSub.ID, nil
 }
 
-// GetLogs returns logs matching the given argument that are stored within the state.
+// GetLogs returns logs matching the given argument that is stored within the state.
 //
 // https://eth.wiki/json-rpc/API#eth_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {

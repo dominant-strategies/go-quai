@@ -48,7 +48,7 @@ const (
 // from the storage and therefore requires no Tx to be sent to the
 // network. A method such as `Transact` does require a Tx and thus will
 // be flagged `false`.
-// Input specifies the required input parameters for this gives method.
+// Input specifies the required input parameters for this given method.
 type Method struct {
 	// Name is the method name used for internal representation. It's derived from
 	// the raw name and a suffix will be added in the case of a function overload.
