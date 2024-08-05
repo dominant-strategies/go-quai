@@ -109,9 +109,9 @@ type StateProcessor struct {
 	engine        consensus.Engine    // Consensus engine used for block rewards
 	logsFeed      event.Feed
 	rmLogsFeed    event.Feed
-	cacheConfig   *CacheConfig                            // CacheConfig for StateProcessor
-	stateCache    state.Database                          // State database to reuse between imports (contains state cache)
-	utxoCache     state.Database                          // UTXO database to reuse between imports (contains UTXO cache)
+	cacheConfig   *CacheConfig   // CacheConfig for StateProcessor
+	stateCache    state.Database // State database to reuse between imports (contains state cache)
+	utxoCaches    []state.Database
 	etxCache      state.Database                          // ETX database to reuse between imports (contains ETX cache)
 	receiptsCache *lru.Cache[common.Hash, types.Receipts] // Cache for the most recent receipts per block
 	txLookupCache *lru.Cache[common.Hash, rawdb.LegacyTxLookupEntry]
@@ -151,11 +151,6 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
 		}),
-		utxoCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
-			Cache:     cacheConfig.TrieCleanLimit,
-			Journal:   cacheConfig.UTXOTrieCleanJournal,
-			Preimages: cacheConfig.Preimages,
-		}),
 		etxCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.ETXTrieCleanJournal,
@@ -165,6 +160,13 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		triegc: prque.New(nil),
 		quit:   make(chan struct{}),
 		logger: hc.logger,
+	}
+	for i := 0; i <= types.MaxDenomination; i++ {
+		sp.utxoCaches = append(sp.utxoCaches, state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
+			Cache:     cacheConfig.TrieCleanLimit,
+			Journal:   fmt.Sprintf("%s%s", cacheConfig.UTXOTrieCleanJournal, string(i)),
+			Preimages: cacheConfig.Preimages,
+		}))
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
 
@@ -187,14 +189,25 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 			sp.cacheConfig.TrieCleanRejournal = time.Minute
 		}
 		triedb := sp.stateCache.TrieDB()
-		utxoTrieDb := sp.utxoCache.TrieDB()
 		etxTrieDb := sp.etxCache.TrieDB()
 		sp.wg.Add(1)
 		go func() {
 			defer sp.wg.Done()
-			triedb.SaveCachePeriodically(sp.cacheConfig.TrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
-			utxoTrieDb.SaveCachePeriodically(sp.cacheConfig.UTXOTrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
-			etxTrieDb.SaveCachePeriodically(sp.cacheConfig.ETXTrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
+
+			ticker := time.NewTicker(sp.cacheConfig.TrieCleanRejournal)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					triedb.SaveCacheSingleCore(sp.cacheConfig.TrieCleanJournal)
+					etxTrieDb.SaveCacheSingleCore(sp.cacheConfig.ETXTrieCleanJournal)
+					for i, _ := range sp.utxoCaches {
+						sp.utxoCaches[i].TrieDB().SaveCacheSingleCore(fmt.Sprintf("%s%s", sp.cacheConfig.UTXOTrieCleanJournal, string(i)))
+					}
+				case <-sp.quit:
+					return
+				}
+			}
 		}()
 	}
 	return sp
@@ -229,13 +242,18 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 	parentEvmRoot := parent.Header().EVMRoot()
 	parentUtxoRoot := parent.Header().UTXORoot()
 	parentEtxSetRoot := parent.Header().EtxSetRoot()
+	parentUtxoRoots := p.hc.GetUtxoRootHashes(parentUtxoRoot)
+
 	if p.hc.IsGenesisHash(parent.Hash()) {
 		parentEvmRoot = types.EmptyRootHash
-		parentUtxoRoot = types.EmptyRootHash
 		parentEtxSetRoot = types.EmptyRootHash
+		parentUtxoRoots = make([]common.Hash, len(types.Denominations))
+		for i := 0; i <= types.MaxDenomination; i++ {
+			parentUtxoRoots[i] = types.EmptyRootHash
+		}
 	}
 	// Initialize a statedb
-	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, parentEtxSetRoot, p.stateCache, p.utxoCache, p.etxCache, p.snaps, nodeLocation, p.logger)
+	statedb, err := state.New(parentEvmRoot, parentUtxoRoots, parentEtxSetRoot, p.stateCache, p.utxoCaches, p.etxCache, p.snaps, nodeLocation, p.logger)
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, err
 	}
@@ -695,7 +713,7 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, statedb *stat
 	addresses := make(map[common.AddressBytes]struct{})
 	inputs := make(map[uint]uint64)
 	for _, txIn := range tx.TxIn() {
-		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, txIn.PreviousOutPoint.Denomination)
 		if utxo == nil {
 			return nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		}
@@ -926,7 +944,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 	totalQitIn := big.NewInt(0)
 	pubKeys := make([]*btcec.PublicKey, 0)
 	for _, txIn := range tx.TxIn() {
-		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		utxo := statedb.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, txIn.PreviousOutPoint.Denomination)
 		if utxo == nil {
 			return nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index), nil
 		}
@@ -964,7 +982,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
 		inputs[uint(denomination)]++
 		if updateState { // only update the state if requested (txpool check does not need to update the state)
-			statedb.DeleteUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+			statedb.DeleteUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, txIn.PreviousOutPoint.Denomination)
 		}
 	}
 	elapsedTime = time.Since(stepStart)
@@ -1213,7 +1231,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 	if err != nil {
 		return nil, err
 	}
-	utxoRoot, err := statedb.CommitUTXOs()
+	utxoRoots, err := statedb.CommitUTXOs()
 	if err != nil {
 		return nil, err
 	}
@@ -1227,8 +1245,13 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 	if err := p.stateCache.TrieDB().Commit(root, false, nil); err != nil {
 		return nil, err
 	}
-	if err := p.utxoCache.TrieDB().Commit(utxoRoot, false, nil); err != nil {
-		return nil, err
+	if len(utxoRoots) != len(p.utxoCaches) { // sanity check
+		return nil, fmt.Errorf("utxoRoots length %d does not match utxoCaches length %d", len(utxoRoots), len(p.utxoCaches))
+	}
+	for i, utxoRoot := range utxoRoots {
+		if err := p.utxoCaches[i].TrieDB().Commit(utxoRoot, false, nil); err != nil {
+			return nil, err
+		}
 	}
 	if err := p.etxCache.TrieDB().Commit(etxRoot, false, nil); err != nil {
 		return nil, err
@@ -1247,6 +1270,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		"t8":   time8,
 	}).Info("times during state processor apply")
 	// Indicate that we have processed the state of the block
+	rawdb.WriteUtxoRootHashes(batch, block.UTXORoot(), utxoRoots)
 	rawdb.WriteProcessedState(batch, block.Hash())
 	return logs, nil
 }
@@ -1298,7 +1322,8 @@ func (p *StateProcessor) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (p *StateProcessor) StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error) {
-	return state.New(root, utxoRoot, etxRoot, p.stateCache, p.utxoCache, p.etxCache, p.snaps, p.hc.NodeLocation(), p.logger)
+	utxoRoots := p.hc.GetUtxoRootHashes(utxoRoot)
+	return state.New(root, utxoRoots, etxRoot, p.stateCache, p.utxoCaches, p.etxCache, p.snaps, p.hc.NodeLocation(), p.logger)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1394,14 +1419,14 @@ func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error
 //     storing trash persistently
 func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, base *state.StateDB, checkLive bool) (statedb *state.StateDB, err error) {
 	var (
-		current      *types.WorkObject
-		database     state.Database
-		utxoDatabase state.Database
-		etxDatabase  state.Database
-		report       = true
-		nodeLocation = p.hc.NodeLocation()
-		nodeCtx      = p.hc.NodeCtx()
-		origin       = block.NumberU64(nodeCtx)
+		current       *types.WorkObject
+		database      state.Database
+		utxoDatabases []state.Database
+		etxDatabase   state.Database
+		report        = true
+		nodeLocation  = p.hc.NodeLocation()
+		nodeCtx       = p.hc.NodeCtx()
+		origin        = block.NumberU64(nodeCtx)
 	)
 	// Check the live database first if we have the state fully available, use that.
 	if checkLive {
@@ -1414,7 +1439,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 	var newHeads []*types.WorkObject
 	if base != nil {
 		// The optional base statedb is given, mark the start point as parent block
-		statedb, database, utxoDatabase, etxDatabase, report = base, base.Database(), base.UTXODatabase(), base.ETXDatabase(), false
+		statedb, database, utxoDatabases, etxDatabase, report = base, base.Database(), base.UTXODatabases(), base.ETXDatabase(), false
 		current = p.hc.GetHeaderOrCandidateByHash(block.ParentHash(nodeCtx))
 	} else {
 		// Otherwise try to reexec blocks until we find a state or reach our limit
@@ -1425,7 +1450,9 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		database = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
 		// Create an ephemeral trie.Database for isolating the live one. Otherwise
 		// the internal junks created by tracing will be persisted into the disk.
-		utxoDatabase = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
+		for i := 0; i <= types.MaxDenomination; i++ {
+			utxoDatabases = append(utxoDatabases, state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16}))
+		}
 		// Create an ephemeral trie.Database for isolating the live one. Otherwise
 		// the internal junks created by tracing will be persisted into the disk.
 		etxDatabase = state.NewDatabaseWithConfig(p.hc.headerDb, &trie.Config{Cache: 16})
@@ -1434,7 +1461,8 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		// we would rewind past a persisted block (specific corner case is chain
 		// tracing from the genesis).
 		if !checkLive {
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
+			utxoRoots := p.hc.GetUtxoRootHashes(current.UTXORoot())
+			statedb, err = state.New(current.EVMRoot(), utxoRoots, current.EtxSetRoot(), database, utxoDatabases, etxDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				return statedb, nil
 			}
@@ -1450,8 +1478,8 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(nodeCtx), current.NumberU64(nodeCtx)-1)
 			}
 			current = types.CopyWorkObject(parent)
-
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
+			utxoRoots := p.hc.GetUtxoRootHashes(current.UTXORoot())
+			statedb, err = state.New(current.EVMRoot(), utxoRoots, current.EtxSetRoot(), database, utxoDatabases, etxDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				break
 			}
@@ -1498,7 +1526,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
-		utxoRoot, err := statedb.CommitUTXOs()
+		utxoRoots, err := statedb.CommitUTXOs()
 		if err != nil {
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
@@ -1508,7 +1536,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
-		statedb, err = state.New(root, utxoRoot, etxRoot, database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
+		statedb, err = state.New(root, utxoRoots, etxRoot, database, utxoDatabases, etxDatabase, nil, nodeLocation, p.logger)
 		if err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}
@@ -1584,8 +1612,9 @@ func (p *StateProcessor) Stop() {
 		triedb.SaveCache(p.cacheConfig.TrieCleanJournal)
 	}
 	if p.cacheConfig.UTXOTrieCleanJournal != "" {
-		utxoTrieDB := p.utxoCache.TrieDB()
-		utxoTrieDB.SaveCache(p.cacheConfig.UTXOTrieCleanJournal)
+		for i, _ := range p.utxoCaches {
+			p.utxoCaches[i].TrieDB().SaveCache(fmt.Sprintf("%s%s", p.cacheConfig.UTXOTrieCleanJournal, string(i)))
+		}
 	}
 	if p.cacheConfig.ETXTrieCleanJournal != "" {
 		etxTrieDB := p.etxCache.TrieDB()

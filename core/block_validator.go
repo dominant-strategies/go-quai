@@ -281,7 +281,7 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 	if root := statedb.IntermediateRoot(true); header.EVMRoot() != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.EVMRoot(), root)
 	}
-	if root := statedb.UTXORoot(); header.UTXORoot() != root {
+	if root := types.DeriveSha(statedb.UTXORoots(), trie.NewStackTrie(nil)); header.UTXORoot() != root {
 		return fmt.Errorf("invalid utxo root (remote: %x local: %x)", header.UTXORoot(), root)
 	}
 	if root := statedb.ETXRoot(); header.EtxSetRoot() != root {

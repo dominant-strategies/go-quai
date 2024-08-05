@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
@@ -107,9 +108,12 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg = new(Config)
 	}
 	setDefaults(cfg)
-
+	var databases []state.Database
+	for i := 0; i <= types.MaxDenomination; i++ {
+		databases = append(databases, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)))
+	}
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
+		cfg.State, _ = state.New(common.Hash{}, common.Hashes{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), databases, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"), cfg.ChainConfig.Location)
@@ -145,9 +149,12 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		cfg = new(Config)
 	}
 	setDefaults(cfg)
-
+	var databases []state.Database
+	for i := 0; i <= types.MaxDenomination; i++ {
+		databases = append(databases, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)))
+	}
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
+		cfg.State, _ = state.New(common.Hash{}, common.Hashes{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), databases, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
 		vmenv  = NewEnv(cfg)

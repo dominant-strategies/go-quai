@@ -186,7 +186,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored)
-	if _, err := state.New(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
+	parentUtxoRoots := rawdb.ReadUtxoRootHashes(db, header.UTXORoot())
+	utxoDatabases := make([]state.Database, 0, len(types.Denominations)) // One database per denomination
+	for i := 0; i <= types.MaxDenomination; i++ {
+		utxoDatabases = append(utxoDatabases, state.NewDatabaseWithConfig(db, nil))
+	}
+	if _, err := state.New(header.EVMRoot(), parentUtxoRoots, header.EtxSetRoot(), state.NewDatabaseWithConfig(db, nil), utxoDatabases, state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -319,6 +324,11 @@ func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location, starti
 	rawdb.WriteHeadBlockHash(db, block.Hash())
 	rawdb.WriteHeadHeaderHash(db, block.Hash())
 	rawdb.WriteChainConfig(db, block.Hash(), config)
+	roots := make(common.Hashes, len(types.Denominations)) // One root per denomination
+	for i := 0; i <= types.MaxDenomination; i++ {
+		roots[i] = types.EmptyRootHash
+	}
+	rawdb.WriteUtxoRootHashes(db, types.EmptyRootHash, roots)
 	return block, nil
 }
 
