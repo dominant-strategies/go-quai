@@ -64,15 +64,15 @@ const (
 type environment struct {
 	signer types.Signer
 
-	state     *state.StateDB // apply state changes here
-	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family    mapset.Set     // family set (used for checking uncle invalidity)
-	tcount    int            // tx count in cycle
-	gasPool   *types.GasPool // available gas used to pack transactions
-	coinbase  common.Address
-	etxRLimit int // Remaining number of cross-region ETXs that can be included
-	etxPLimit int // Remaining number of cross-prime ETXs that can be included
-
+	state       *state.StateDB // apply state changes here
+	ancestors   mapset.Set     // ancestor set (used for checking uncle parent validity)
+	family      mapset.Set     // family set (used for checking uncle invalidity)
+	tcount      int            // tx count in cycle
+	gasPool     *types.GasPool // available gas used to pack transactions
+	coinbase    common.Address
+	etxRLimit   int // Remaining number of cross-region ETXs that can be included
+	etxPLimit   int // Remaining number of cross-prime ETXs that can be included
+	parentOrder *int
 	wo          *types.WorkObject
 	txs         []*types.Transaction
 	etxs        []*types.Transaction
@@ -82,46 +82,6 @@ type environment struct {
 	receipts    []*types.Receipt
 	uncleMu     sync.RWMutex
 	uncles      map[common.Hash]*types.WorkObjectHeader
-}
-
-// copy creates a deep copy of environment.
-func (env *environment) copy(processingState bool, nodeCtx int) *environment {
-	if nodeCtx == common.ZONE_CTX && processingState {
-		cpy := &environment{
-			signer:    env.signer,
-			state:     env.state.Copy(),
-			ancestors: env.ancestors.Clone(),
-			family:    env.family.Clone(),
-			tcount:    env.tcount,
-			coinbase:  env.coinbase,
-			etxRLimit: env.etxRLimit,
-			etxPLimit: env.etxPLimit,
-			wo:        types.CopyWorkObject(env.wo),
-			receipts:  copyReceipts(env.receipts),
-			utxoFees:  new(big.Int).Set(env.utxoFees),
-			quaiFees:  new(big.Int).Set(env.quaiFees),
-		}
-		if env.gasPool != nil {
-			gasPool := *env.gasPool
-			cpy.gasPool = &gasPool
-		}
-		// The content of txs and uncles are immutable, unnecessary
-		// to do the expensive deep copy for them.
-		cpy.txs = make([]*types.Transaction, len(env.txs))
-		copy(cpy.txs, env.txs)
-		cpy.etxs = make([]*types.Transaction, len(env.etxs))
-		copy(cpy.etxs, env.etxs)
-
-		env.uncleMu.Lock()
-		cpy.uncles = make(map[common.Hash]*types.WorkObjectHeader)
-		for hash, uncle := range env.uncles {
-			cpy.uncles[hash] = uncle
-		}
-		env.uncleMu.Unlock()
-		return cpy
-	} else {
-		return &environment{wo: types.CopyWorkObject(env.wo)}
-	}
 }
 
 // unclelist returns the contained uncles as the list format.
@@ -594,13 +554,11 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			}).Info("Filled and sorted pending transactions")
 		}
 
-		// If the current block is a prime block, its a prime terminus
-		_, order, err := w.CalcOrder(block)
-		if err != nil {
-			return nil, err
+		if work.parentOrder == nil {
+			return nil, fmt.Errorf("parent order not set")
 		}
 		var primeTerminus *types.WorkObject
-		if order == common.PRIME_CTX {
+		if *work.parentOrder == common.PRIME_CTX {
 			primeTerminus = block
 		} else {
 			// convert the Quai reward into Qi and add it to the utxoFees
@@ -815,12 +773,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
 			txGas := tx.Gas()
 			lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
-			_, parentOrder, err := w.CalcOrder(parent)
-			if err != nil {
-				return nil, false, err
+			if env.parentOrder == nil {
+				return nil, false, errors.New("parent order not set")
 			}
 			var primeTerminus *types.WorkObject
-			if parentOrder == common.PRIME_CTX {
+			if *env.parentOrder == common.PRIME_CTX {
 				primeTerminus = parent
 			} else {
 				primeTerminus = w.hc.GetPrimeTerminus(env.wo)
@@ -881,7 +838,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	snap := env.state.Snapshot()
 	// retrieve the gas used int and pass in the reference to the ApplyTransaction
 	gasUsed := env.wo.GasUsed()
-	receipt, quaiFees, err := ApplyTransaction(w.chainConfig, parent, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+	receipt, quaiFees, err := ApplyTransaction(w.chainConfig, parent, *env.parentOrder, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
 	if err != nil {
 		w.logger.WithFields(log.Fields{
 			"err":     err,
@@ -1307,6 +1264,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
 			return nil, err
 		}
+		env.parentOrder = &order
 		// Accumulate the uncles for the sealing work.
 		commitUncles := func(wos *lru.Cache[common.Hash, types.WorkObjectHeader]) {
 			var uncles []*types.WorkObjectHeader
@@ -1672,12 +1630,11 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 				return err
 			}
 
-			_, parentOrder, err := w.CalcOrder(parent)
-			if err != nil {
-				return err
+			if env.parentOrder == nil {
+				return errors.New("parent order not set")
 			}
 			var primeTerminus *types.WorkObject
-			if parentOrder == common.PRIME_CTX {
+			if *env.parentOrder == common.PRIME_CTX {
 				primeTerminus = parent
 			} else {
 				primeTerminus = w.hc.GetPrimeTerminus(env.wo)
