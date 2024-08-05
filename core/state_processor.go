@@ -1255,7 +1255,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
+func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, parentOrder int, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
 	nodeCtx := config.Location.Context()
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
@@ -1263,9 +1263,14 @@ func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, bc C
 	}
 	if tx.Type() == types.ExternalTxType && tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
 		msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod)))
-		primeTerminus := bc.GetHeaderByHash(header.PrimeTerminus())
-		if primeTerminus == nil {
-			return nil, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+		var primeTerminus *types.WorkObject
+		if parentOrder == common.PRIME_CTX {
+			primeTerminus = parent
+		} else {
+			primeTerminus = bc.GetHeaderByHash(header.PrimeTerminus())
+			if primeTerminus == nil {
+				return nil, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+			}
 		}
 		// Convert Qi to Quai
 		msg.SetValue(misc.QiToQuai(primeTerminus.WorkObjectHeader(), tx.Value()))
