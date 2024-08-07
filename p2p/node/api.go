@@ -11,6 +11,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
@@ -21,6 +22,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/dominant-strategies/go-quai/common"
+)
+
+var (
+	propagationTimes      = metrics_config.NewHistogramVec("PropagationTimes", "message propagation times by type (sec)")
+	blockPropagationHist  = propagationTimes.WithLabelValues("block propagation time (sec)")
+	headerPropagationHist = propagationTimes.WithLabelValues("header propagation time (sec)")
 )
 
 const requestTimeout = 10 * time.Second
@@ -371,8 +378,12 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, Id string, topic string, d
 
 	switch v := data.(type) {
 	case types.WorkObjectHeaderView:
+		dt := uint64(time.Now().Unix()) - v.Time()
+		headerPropagationHist.Observe(float64(dt))
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	case types.WorkObjectBlockView:
+		dt := uint64(time.Now().Unix()) - v.Time()
+		blockPropagationHist.Observe(float64(dt))
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
 	}
 

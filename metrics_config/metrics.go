@@ -27,6 +27,7 @@ var enabled bool
 
 var registeredGauges = make(map[string]*prometheus.GaugeVec)
 var registeredCounters = make(map[string]*prometheus.CounterVec)
+var registeredHistograms = make(map[string]*prometheus.HistogramVec)
 
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
@@ -110,6 +111,19 @@ func NewCounterVec(name string, help string) *prometheus.CounterVec {
 	prometheus.Register(counterVec)
 	registeredCounters[name] = counterVec
 	return counterVec
+}
+
+func NewHistogramVec(name string, help string) *prometheus.HistogramVec {
+	if histVec, exists := registeredHistograms[name]; exists {
+		return histVec
+	}
+	histVec := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: name,
+		Help: help,
+	}, []string{"label"})
+	prometheus.Register(histVec)
+	registeredHistograms[name] = histVec
+	return histVec
 }
 
 func NewTimer(name string, help string) *prometheus.Timer {
