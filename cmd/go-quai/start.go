@@ -39,23 +39,10 @@ To bootstrap to a private node, use the --bootstrap flag.`,
 func init() {
 	rootCmd.AddCommand(startCmd)
 
-	// Create and bind all node flags to the start command
-	for _, flag := range utils.NodeFlags {
-		utils.CreateAndBindFlag(flag, startCmd)
-	}
-
-	for _, flag := range utils.TXPoolFlags {
-		utils.CreateAndBindFlag(flag, startCmd)
-	}
-
-	// Create and bind all rpc flags to the start command
-	for _, flag := range utils.RPCFlags {
-		utils.CreateAndBindFlag(flag, startCmd)
-	}
-
-	// Create and bind all metrics flags to the start command
-	for _, flag := range utils.MetricsFlags {
-		utils.CreateAndBindFlag(flag, startCmd)
+	for _, flagGroup := range utils.Flags {
+		for _, flag := range flagGroup {
+			utils.CreateAndBindFlag(flag, startCmd)
+		}
 	}
 }
 
