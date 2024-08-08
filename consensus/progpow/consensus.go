@@ -459,6 +459,11 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
 		}
+		// Verify the StateLimit is correct based on the parent header.
+		expectedStateLimit := misc.CalcStateLimit()
+		if header.StateLimit() != expectedStateLimit {
+			return fmt.Errorf("invalid StateLimit: have %d, want %d, parentStateLimit %d", expectedStateLimit, header.StateLimit(), parent.StateLimit())
+		}
 		var expectedPrimeTerminus common.Hash
 		var expectedPrimeTerminusNumber *big.Int
 		_, parentOrder, _ := progpow.CalcOrder(chain, parent)

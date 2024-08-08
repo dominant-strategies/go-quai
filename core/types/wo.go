@@ -239,6 +239,10 @@ func (wo *WorkObject) BaseFee() *big.Int {
 	return wo.Header().BaseFee()
 }
 
+func (wo *WorkObject) StateLimit() uint64 {
+	return wo.Header().StateLimit()
+}
+
 func (wo *WorkObject) GasUsed() uint64 {
 	return wo.Header().GasUsed()
 }

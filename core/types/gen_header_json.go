@@ -40,6 +40,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		GasLimit    					hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
 		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
+		StateLimit     					hexutil.Uint64   		`json:"StateLimit"      			gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
 	}
 	// Initialize the enc struct
@@ -77,6 +78,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.ExpansionNumber = hexutil.Uint64(h.ExpansionNumber())
 	enc.EtxEligibleSlices = h.EtxEligibleSlices()
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee())
+	enc.StateLimit = hexutil.Uint64(h.StateLimit())
 	enc.Extra = hexutil.Bytes(h.Extra())
 	raw, err := json.Marshal(&enc)
 	return raw, err
@@ -109,6 +111,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		GasLimit    					*hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					*hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
 		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
+		StateLimit                      *hexutil.Uint64         `json:"StateLimit"                  gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -183,6 +186,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.BaseFee == nil {
 		return errors.New("missing required field 'baseFee' for Header")
 	}
+	if dec.StateLimit == nil {
+		return errors.New("missing required field 'StateLimit' for Header")
+	}
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
@@ -236,6 +242,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetExpansionNumber(uint8(*dec.ExpansionNumber))
 	h.SetEtxEligibleSlices(*dec.EtxEligibleSlices)
 	h.SetBaseFee((*big.Int)(dec.BaseFee))
+	h.SetStateLimit(uint64(*dec.StateLimit))
 	h.SetExtra(dec.Extra)
 	return nil
 }

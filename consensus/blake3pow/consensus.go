@@ -461,6 +461,11 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
 				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
 		}
+		// Verify the stateLimit is correct based on the parent header.
+		expectedStateLimit := misc.CalcStateLimit()
+		if header.StateLimit() != expectedStateLimit {
+			return fmt.Errorf("invalid stateLimit: have %v, want %v, parentStateLimit %v", expectedStateLimit, header.StateLimit(), parent.StateLimit())
+		}
 		var expectedPrimeTerminus common.Hash
 		_, parentOrder, _ := blake3pow.CalcOrder(chain, parent)
 		if parentOrder == common.PRIME_CTX {
