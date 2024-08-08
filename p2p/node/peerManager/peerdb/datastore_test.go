@@ -102,7 +102,7 @@ func TestQuery(t *testing.T) {
 
 	// Test query with prefix
 	t.Run("Test query with prefix", func(t *testing.T) {
-		q := query.Query{Prefix: peers[0].AddrInfo.ID.String()[0:10]}
+		q := query.Query{Prefix: peers[0].AddrInfo.ID.String()[0:40]}
 		results, err := ps.Query(context.Background(), q)
 		require.NoError(t, err)
 		resultsPrefix, err := results.Rest()
