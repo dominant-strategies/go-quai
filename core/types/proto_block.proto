@@ -35,6 +35,7 @@ message ProtoHeader {
   optional common.ProtoHash etx_eligible_slices = 27;
   optional common.ProtoHash prime_terminus = 28;
   optional common.ProtoHash interlink_root_hash = 29;
+  optional uint64 state_limit = 30;
 }
 
 message ProtoTransaction {

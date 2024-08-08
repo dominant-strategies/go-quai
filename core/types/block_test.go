@@ -56,6 +56,7 @@ func headerTestData() (*Header, common.Hash) {
 		gasLimit:              123456789,
 		gasUsed:               987654321,
 		baseFee:               big.NewInt(123456789),
+		stateLimit:            1234567,
 		extra:                 []byte("SGVsbG8gd29ybGQ="),
 	}
 
@@ -289,6 +290,12 @@ func FuzzHeaderBaseFeeHash(f *testing.F) {
 	fuzzHeaderBigIntHash(f,
 		func(h *Header) *big.Int { return h.baseFee },
 		func(h *Header, bi *big.Int) { h.baseFee = bi })
+}
+
+func FuzzHeaderStateLimitHash(f *testing.F) {
+	fuzzHeaderUint64Hash(f,
+		func(h *Header) uint64 { return h.stateLimit },
+		func(h *Header, bi uint64) { h.stateLimit = bi })
 }
 
 func FuzzHeaderExtraHash(f *testing.F) {

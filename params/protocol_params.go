@@ -119,6 +119,7 @@ const (
 	ElasticityMultiplier     = 2          // Bounds the maximum gas limit a block may have.
 	InitialBaseFee           = 1 * GWei   // Initial base fee for blocks.
 	MaxBaseFee               = 100 * GWei // Maximum base fee for blocks.
+	InitialStateLimit        = 1 * GWei   // Initial state fee for blocks.
 
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 
