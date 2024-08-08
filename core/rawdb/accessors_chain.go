@@ -1150,9 +1150,7 @@ func WriteOutpointsForAddress(db ethdb.KeyValueWriter, address string, outpoints
 	if err := db.Put(addressUtxosKey(address), data); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store utxos")
 	}
-
-	// And finally, store the data in the database under the appropriate key
-	return db.Put(AddressUtxosPrefix, data)
+	return nil
 }
 
 func ReadOutpointsForAddress(db ethdb.Reader, address string) map[string]*types.OutpointAndDenomination {
@@ -1185,8 +1183,8 @@ func ReadOutpointsForAddress(db ethdb.Reader, address string) map[string]*types.
 	return outpoints
 }
 
-func DeleteAddressUtxos(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	if err := db.Delete(AddressUtxosPrefix); err != nil {
+func DeleteOutpointsForAddress(db ethdb.KeyValueWriter, address string) {
+	if err := db.Delete(addressUtxosKey(address)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxos")
 	}
 }
