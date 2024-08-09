@@ -362,8 +362,8 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *lo
 		}
 	}()
 	c.once.Do(func() {
-		size := cacheSize(c.epoch*epochLength + 1)
-		seed := seedHash(c.epoch*epochLength + 1)
+		size := cacheSize(c.epoch*C_epochLength + 1)
+		seed := seedHash(c.epoch*C_epochLength + 1)
 		if test {
 			size = 1024
 		}
@@ -409,7 +409,7 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool, logger *lo
 		generateCDag(c.cDag, c.cache, c.epoch, logger)
 		// Iterate over all previous instances and delete old ones
 		for ep := int(c.epoch) - limit; ep >= 0; ep-- {
-			seed := seedHash(uint64(ep)*epochLength + 1)
+			seed := seedHash(uint64(ep)*C_epochLength + 1)
 			path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x%s", algorithmRevision, seed[:8], endian))
 			os.Remove(path)
 		}
@@ -429,7 +429,7 @@ func (c *cache) finalizer() {
 // by first checking against a list of in-memory caches, then against caches
 // stored on disk, and finally generating one if none can be found.
 func (progpow *Progpow) cache(block uint64) *cache {
-	epoch := block / epochLength
+	epoch := block / C_epochLength
 	currentI, futureI := progpow.caches.get(epoch)
 	current := currentI.(*cache)
 

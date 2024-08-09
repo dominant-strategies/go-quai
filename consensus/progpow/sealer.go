@@ -163,7 +163,7 @@ search:
 				ethashCache := progpow.cache(blockNumber)
 				if ethashCache.cDag == nil {
 					cDag := make([]uint32, progpowCacheWords)
-					generateCDag(cDag, ethashCache.cache, blockNumber/epochLength, progpow.logger)
+					generateCDag(cDag, ethashCache.cache, blockNumber/C_epochLength, progpow.logger)
 					ethashCache.cDag = cDag
 				}
 				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)

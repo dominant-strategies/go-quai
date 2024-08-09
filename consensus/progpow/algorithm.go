@@ -41,7 +41,7 @@ const (
 	datasetGrowthBytes = 1 << 23 // Dataset growth per epoch
 	cacheInitBytes     = 1 << 24 // Bytes in cache at genesis
 	cacheGrowthBytes   = 1 << 17 // Cache growth per epoch
-	epochLength        = 4320    // Blocks per epoch
+	C_epochLength        = 4320    // Blocks per epoch
 	mixBytes           = 128     // Width of mix
 	hashBytes          = 64      // Hash length in bytes
 	hashWords          = 16      // Number of 32 bit ints in a hash
@@ -53,7 +53,7 @@ const (
 // cacheSize returns the size of the ethash verification cache that belongs to a certain
 // block number.
 func cacheSize(block uint64) uint64 {
-	epoch := int(block / epochLength)
+	epoch := int(block / C_epochLength)
 	if epoch < maxEpoch {
 		return cacheSizes[epoch]
 	}
@@ -74,7 +74,7 @@ func calcCacheSize(epoch int) uint64 {
 // datasetSize returns the size of the ethash mining dataset that belongs to a certain
 // block number.
 func datasetSize(block uint64) uint64 {
-	epoch := int(block / epochLength)
+	epoch := int(block / C_epochLength)
 	if epoch < maxEpoch {
 		return datasetSizes[epoch]
 	}
@@ -122,11 +122,11 @@ func makeHasher(h hash.Hash) hasher {
 // dataset.
 func seedHash(block uint64) []byte {
 	seed := make([]byte, 32)
-	if block < epochLength {
+	if block < C_epochLength {
 		return seed
 	}
 	keccak256 := makeHasher(sha3.NewLegacyKeccak256())
-	for i := 0; i < int(block/epochLength); i++ {
+	for i := 0; i < int(block/C_epochLength); i++ {
 		keccak256(seed, seed)
 	}
 	return seed
