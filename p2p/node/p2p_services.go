@@ -13,6 +13,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
@@ -72,12 +73,15 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 			"requestID": id,
 			"peerId":    peerID,
 		}).Warn("Peer did not respond in time")
-		p.peerManager.MarkUnresponsivePeer(peerID, topic)
+		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnTimeout)
 		return nil, errors.New("peer did not respond in time")
 	}
 
 	if recvdType == nil {
+		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnNack)
 		return nil, nil
+	} else {
+		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnResponse)
 	}
 
 	// Check the received data type & hash matches the request

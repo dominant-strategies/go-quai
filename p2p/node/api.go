@@ -15,6 +15,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
+	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/quai"
 
@@ -159,6 +160,10 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 
 		var requestWg sync.WaitGroup
 		for peerID := range peers {
+			// if we have exceeded the outbound rate limit for this peer, skip them for now
+			if err := protocol.ProcRequestRate(peerID, false); err != nil {
+				continue
+			}
 			requestWg.Add(1)
 			go func(peerID peer.ID) {
 				defer requestWg.Done()
@@ -196,8 +201,6 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			"topic":  topic.String(),
 		}).Trace("Received data from peer")
 
-		// Mark this peer as behaving well
-		p.peerManager.MarkResponsivePeer(peerID, topic)
 		select {
 		case resultChan <- recvd:
 			// Data sent successfully
@@ -224,7 +227,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			"err":    err,
 		}).Error("Error requesting the data from peer")
 		// Mark this peer as not responding
-		p.peerManager.MarkUnresponsivePeer(peerID, topic)
+		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnTimeout)
 	}
 }
 
@@ -258,40 +261,8 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 	return resultChan
 }
 
-func (p *P2PNode) MarkLivelyPeer(peer p2p.PeerID, topic string) {
-	log.Global.WithFields(log.Fields{
-		"peer":  peer,
-		"topic": topic,
-	}).Debug("Recording well-behaving peer")
-
-	t, err := pubsubManager.TopicFromString(topic)
-	if err != nil {
-		log.Global.WithFields(log.Fields{
-			"topic": topic,
-			"err":   err,
-		}).Error("Error getting topic name")
-		panic(err)
-	}
-
-	p.peerManager.MarkLivelyPeer(peer, t)
-}
-
-func (p *P2PNode) MarkLatentPeer(peer p2p.PeerID, topic string) {
-	log.Global.WithFields(log.Fields{
-		"peer":  peer,
-		"topic": topic,
-	}).Debug("Recording misbehaving peer")
-
-	t, err := pubsubManager.TopicFromString(topic)
-	if err != nil {
-		log.Global.WithFields(log.Fields{
-			"topic": topic,
-			"err":   err,
-		}).Error("Error getting topic name")
-		panic(err)
-	}
-
-	p.peerManager.MarkLatentPeer(peer, t)
+func (p *P2PNode) AdjustPeerQuality(peer p2p.PeerID, adjFn func(int) int) {
+	p.peerManager.AdjustPeerQuality(peer, adjFn)
 }
 
 func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {
