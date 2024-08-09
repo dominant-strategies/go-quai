@@ -55,7 +55,7 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, comm
 	if !ok {
 		// to translate the address, we add the last byte of the address to the location-specific zero address
 		// to support more than 255 precompiles, we could use the last two bytes, but it's likely unnecessary
-		translatedAddress := common.HexToAddressBytes(fmt.Sprintf("0x%x000000000000000000000000000000000000%02x", evm.chainConfig.Location.BytePrefix(), addr.Bytes20()[19]))
+		translatedAddress := common.HexToAddressBytes(fmt.Sprintf("0x%02x000000000000000000000000000000000000%02x", evm.chainConfig.Location.BytePrefix(), addr.Bytes20()[19]))
 		p, ok = PrecompiledContracts[translatedAddress]
 		if ok {
 			addr = common.Bytes20ToAddress(translatedAddress, evm.chainConfig.Location)
