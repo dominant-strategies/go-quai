@@ -55,7 +55,7 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, comm
 	if !ok {
 		// to translate the address, we add the last byte of the address to the location-specific zero address
 		// to support more than 255 precompiles, we could use the last two bytes, but it's likely unnecessary
-		translatedAddress := common.HexToAddressBytes(fmt.Sprintf("0x%x000000000000000000000000000000000000%02x", evm.chainConfig.Location.BytePrefix(), addr.Bytes20()[19]))
+		translatedAddress := common.HexToAddressBytes(fmt.Sprintf("0x%02x000000000000000000000000000000000000%02x", evm.chainConfig.Location.BytePrefix(), addr.Bytes20()[19]))
 		p, ok = PrecompiledContracts[translatedAddress]
 		if ok {
 			addr = common.Bytes20ToAddress(translatedAddress, evm.chainConfig.Location)
@@ -458,10 +458,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err != nil {
 		return nil, common.Zero, 0, err
 	}
-
-	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
-	// the access-list change should not be rolled back
-	evm.StateDB.AddAddressToAccessList(address)
+	if addressOk := evm.StateDB.AddressInAccessList(internalContractAddr.Bytes20()); !addressOk {
+		return nil, common.Zero, 0, ErrInvalidAccessList
+	}
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(internalContractAddr)
@@ -489,6 +488,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if evm.Config.Debug && evm.depth == 0 {
 		evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
+	}
+	if evm.Config.Debug {
+		if tracer, ok := evm.Config.Tracer.(*AccessListTracer); ok {
+			tracer.list.addAddress(address)
+		}
 	}
 	start := time.Now()
 
@@ -554,10 +558,11 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	}
 
 	// attempt to grind the address
-	contractAddr, remainingGas, err := evm.attemptGrindContractCreation(caller, nonce, gas, gasCost, code)
+	contractAddr, remainingGas, salt, err := evm.attemptGrindContractCreation(caller, nonce, gas, gasCost, code)
 	if err != nil {
 		return nil, common.Zero, 0, err
 	}
+	code = append(code, salt[:]...)
 
 	gas = remainingGas
 
@@ -576,37 +581,38 @@ func calculateKeccakGas(data []byte) (int64, error) {
 
 // attemptContractCreation tries to create a contract address by iterating through possible nonce values.
 // It returns the modified data for contract creation and any error encountered.
-func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, gas uint64, gasCost int64, code []byte) (common.Address, uint64, error) {
+func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, gas uint64, gasCost int64, code []byte) (common.Address, uint64, [4]byte, error) {
 	senderAddress := caller.Address()
 
-	codeAndHash := &codeAndHash{code: code}
-	var salt [32]byte
-	binary.BigEndian.PutUint64(salt[24:], nonce)
+	var salt [4]byte
+	binary.BigEndian.PutUint32(salt[:], uint32(nonce))
+
+	codeHash := crypto.Keccak256(code)
 
 	// Iterate through possible nonce values to find a suitable contract address.
 	for i := 0; i < params.MaxAddressGrindAttempts; i++ {
-
 		// Check if there is enough gas left to continue.
 		if gas < uint64(gasCost) {
-			return common.Zero, 0, fmt.Errorf("out of gas grinding contract address for %v", caller.Address().Hex())
+			return common.Zero, 0, salt, fmt.Errorf("out of gas grinding contract address for %v", caller.Address().Hex())
 		}
 
 		// Subtract the gas cost for each attempt.
 		gas -= uint64(gasCost)
 
-		// Place i in the [32]byte array.
-		binary.BigEndian.PutUint64(salt[16:24], uint64(i))
-
 		// Generate a potential contract address.
-		contractAddr := crypto.CreateAddress2(senderAddress, salt, codeAndHash.Hash().Bytes(), evm.chainConfig.Location)
-
+		contractAddr := crypto.EVMCreateAddress(senderAddress, nonce, codeHash, salt, evm.chainConfig.Location)
 		// Check if the generated address is valid.
 		if _, err := contractAddr.InternalAndQuaiAddress(); err == nil {
-			return contractAddr, gas, nil
+			return contractAddr, gas, salt, nil
 		}
+
+		// Increment the salt for the next attempt
+		saltValue := binary.BigEndian.Uint32(salt[:])
+		saltValue++
+		binary.BigEndian.PutUint32(salt[:], saltValue)
 	}
 	// Return an error if a valid address could not be found after the maximum number of attempts.
-	return common.Zero, 0, fmt.Errorf("exceeded number of attempts grinding address %v", caller.Address().Hex())
+	return common.Zero, 0, salt, fmt.Errorf("exceeded number of attempts grinding address %v", caller.Address().Hex())
 }
 
 // Create2 creates a new contract using code as deployment code.

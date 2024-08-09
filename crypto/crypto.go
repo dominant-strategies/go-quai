@@ -108,7 +108,20 @@ func Keccak512(data ...[]byte) []byte {
 func CreateAddress(b common.Address, nonce uint64, code []byte, nodeLocation common.Location) common.Address {
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, uint64(nonce))
-	return common.BytesToAddress(Keccak256(b.Bytes(), nonceBytes, code)[12:], nodeLocation)
+
+	codeHashLessSalt := Keccak256(code[:len(code)-4])
+	var lastFourBytes [4]byte
+	copy(lastFourBytes[:], code[len(code)-4:])
+	return common.BytesToAddress(Keccak256(b.Bytes(), nonceBytes, codeHashLessSalt, lastFourBytes[:])[12:], nodeLocation)
+}
+
+// EVMCreateAddress creates an quai address given the bytes and the nonce from the EVM.
+// Interface is changed to not break prior compatibility from CreateAddress with the salt being part of the code.
+// The goal is to save cycles avoiding a Keccak256 call in the EVM when grinding a valid CREATE address.
+func EVMCreateAddress(b common.Address, nonce uint64, codeHashLessSalt []byte, lastFourBytes [4]byte, nodeLocation common.Location) common.Address {
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, uint64(nonce))
+	return common.BytesToAddress(Keccak256(b.Bytes(), nonceBytes, codeHashLessSalt, lastFourBytes[:])[12:], nodeLocation)
 }
 
 // CreateAddress2 creates an quai address given the address bytes, initial
