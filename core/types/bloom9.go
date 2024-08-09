@@ -31,7 +31,7 @@ type bytesBacked interface {
 
 const (
 	// BloomByteLength represents the number of bytes used in a header log bloom.
-	BloomByteLength = 256
+	BloomByteLength = 10240
 
 	// BloomBitLength represents the number of bits used in a header log bloom.
 	BloomBitLength = 8 * BloomByteLength
