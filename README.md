@@ -17,18 +17,22 @@ cd go-quai
 make go-quai
 ```
 
+After a successful build, the binary will be located at `build/bin/go-quai`.
+
 ### Running a node
-To run a node with default options, simply execute:
+To run a go-quai node, simply execute the `go-quai start` command. Be sure to specify the parameters you wish to use, such as your coinbase address (if you plan on mining), and which slices you wish to participate in.
+
+For example, here is the run command for miner (0x00a3e45aa16163F2663015b6695894D918866d19) in cyprus-1 (zone-0-0) on the "garden" test network:
 ```shell
-make run
+./build/bin/go-quai start --node.slices "[0 0]" --node.coinbases "0x00a3e45aa16163F2663015b6695894D918866d19" --node.environment "garden"
 ```
 
-There are several options and subcommands available when running the go-quai client. See the help menu for a complete list:
+For the full list of available options and their default values, consult the help menu:
 ```shell
 ./build/go-quai --help
 ```
 
-Any options may be provided as command-line arguments or specified in the config file at `config.yaml`.
+All configuration options may be supplied in a config file too, located in the directory specified by `--global.config-dir`. Note specified on the command-line will override options specified in the config file.
 
 ### Running tests
 To run the included unit tests, run the following command:
