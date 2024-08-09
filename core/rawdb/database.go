@@ -433,7 +433,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, logger *log.
 				databaseVersionKey, headHeaderKey, headWorkObjectKey,
 				snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey,
-				uncleanShutdownKey, badWorkObjectKey,
+				uncleanShutdownKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
