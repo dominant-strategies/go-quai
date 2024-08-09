@@ -16,6 +16,7 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -24,8 +25,9 @@ const (
 
 var (
 	// TxPool propagation metrics
-	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
-	txIngressCounter     = txPropagationMetrics.WithLabelValues("ingress")
+	txPropagationMetrics = metrics_config.NewCounterVec("TxCount", "Transaction counter")
+	txTotalCounter       = txPropagationMetrics.WithLabelValues("total txs")
+	txCountersBySlice    = make(map[string]prometheus.Counter)
 
 	workObjectMetrics = metrics_config.NewCounterVec("WorkObjectCounters", "Tracks block statistics")
 	// Block propagation metrics
@@ -147,7 +149,16 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			backend.SendRemoteTxs(data.WorkObject.Transactions())
 
 			workShareIngressCounter.Inc()
-			txIngressCounter.Add(float64(len(data.WorkObject.Transactions())))
+			sliceName := data.Location().Name()
+			txCount := float64(len(data.WorkObject.Transactions()))
+			txTotalCounter.Add(txCount)
+			if counter, exists := txCountersBySlice[sliceName]; exists {
+				counter.Add(txCount)
+			} else {
+				newCounter := txPropagationMetrics.WithLabelValues(sliceName + " txs")
+				newCounter.Add(txCount)
+				txCountersBySlice[sliceName] = newCounter
+			}
 		}
 		// If it was a good broadcast, mark the peer as lively
 		qbe.p2pBackend.MarkLivelyPeer(sourcePeer, topic)

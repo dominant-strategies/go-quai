@@ -187,6 +187,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -215,7 +216,7 @@
         "x": 12,
         "y": 1
       },
-      "id": 21,
+      "id": 23,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -242,7 +243,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "TxpoolGauges{label=\"slots\"}",
+          "expr": "TxpoolGauges{label=\"queued\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -252,7 +253,7 @@
           "useBackend": false
         }
       ],
-      "title": "Transaction slots used",
+      "title": "Gapped",
       "type": "stat"
     },
     {
@@ -435,7 +436,6 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -464,7 +464,7 @@
         "x": 12,
         "y": 5
       },
-      "id": 23,
+      "id": 21,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -491,7 +491,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "TxpoolGauges{label=\"queued\"}",
+          "expr": "TxpoolGauges{label=\"slots\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -501,7 +501,7 @@
           "useBackend": false
         }
       ],
-      "title": "Gapped",
+      "title": "Transaction slots used",
       "type": "stat"
     },
     {
@@ -939,7 +939,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -967,21 +967,20 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
+        "h": 14,
         "w": 12,
         "x": 12,
         "y": 19
       },
-      "id": 25,
+      "id": 30,
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "table",
-          "placement": "right",
+          "displayMode": "list",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "maxHeight": 600,
           "mode": "single",
           "sort": "none"
         }
@@ -994,7 +993,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(TxPropagation{label=~\".*\"}[1m])",
+          "expr": "rate(TxCount{label=~\".*\"}[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1004,7 +1003,7 @@
           "useBackend": false
         }
       ],
-      "title": "Transaction Propagation",
+      "title": "Transaction Count",
       "type": "timeseries"
     },
     {
@@ -1935,8 +1934,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2137,8 +2135,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
