@@ -24,7 +24,7 @@ To run a go-quai node, simply execute the `go-quai start` command. Be sure to sp
 
 For example, here is the run command for miner (0x00a3e45aa16163F2663015b6695894D918866d19) in cyprus-1 (zone-0-0) on the "garden" test network:
 ```shell
-./build/bin/go-quai start --node.slices "[0 0]" --node.coinbases "0x00a3e45aa16163F2663015b6695894D918866d19" --node.environment "garden"
+./build/bin/go-quai start --node.slices "[0 0]"
 ```
 
 For the full list of available options and their default values, consult the help menu:
