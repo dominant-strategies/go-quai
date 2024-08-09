@@ -10,8 +10,8 @@ import (
 
 type QiTx struct {
 	ChainID *big.Int // replay protection
-	TxIn    TxIns
-	TxOut   TxOuts
+	TxIn    TxIns    `json:"txIns"`
+	TxOut   TxOuts   `json:"txOuts"`
 
 	Signature *schnorr.Signature
 

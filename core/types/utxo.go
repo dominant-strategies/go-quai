@@ -71,8 +71,8 @@ func (txIns *TxIns) ProtoDecode(protoTxIns *ProtoTxIns) error {
 
 // TxIn defines a Qi transaction input
 type TxIn struct {
-	PreviousOutPoint OutPoint
-	PubKey           []byte
+	PreviousOutPoint OutPoint `json:"previousOutPoint"`
+	PubKey           []byte   `json:"pubKey"`
 }
 
 func (txIn TxIn) ProtoEncode() (*ProtoTxIn, error) {
@@ -99,8 +99,8 @@ func (txIn *TxIn) ProtoDecode(protoTxIn *ProtoTxIn) error {
 
 // OutPoint defines a Qi data type that is used to track previous outputs
 type OutPoint struct {
-	TxHash common.Hash
-	Index  uint16
+	TxHash common.Hash `json:"txHash"`
+	Index  uint16      `json:"index"`
 }
 
 func (outPoint OutPoint) Key() string {
