@@ -138,8 +138,8 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList *accessList
-
+	accessList      *accessList
+	accessListDebug bool // used for simulating the EVM to create an access list
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -996,7 +996,7 @@ func (s *StateDB) Copy() *StateDB {
 	// However, it doesn't cost us much to copy an empty list, so we do it anyway
 	// to not blow up if we ever decide copy it in the middle of a transaction
 	state.accessList = s.accessList.Copy()
-
+	state.accessListDebug = s.accessListDebug
 	// If there's a prefetcher running, make an inactive copy of it that can
 	// only access data but does not actively preload (since the user will not
 	// know that they need to explicitly terminate an active copy).
@@ -1268,58 +1268,63 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Add destination to access list
 // - Add precompiles to access list
 // - Add the contents of the optional tx access list
-func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	s.AddAddressToAccessList(sender)
+func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList, debug bool) {
+	s.accessListDebug = debug
+	s.AddAddressToAccessList(sender.Bytes20())
 	if dst != nil {
-		s.AddAddressToAccessList(*dst)
+		s.AddAddressToAccessList(dst.Bytes20())
 		// If it's a create-tx, the destination will be added inside evm.create
 	}
 	for _, addr := range precompiles {
-		s.AddAddressToAccessList(addr)
+		s.AddAddressToAccessList(addr.Bytes20())
 	}
 	for _, el := range list {
-		s.AddAddressToAccessList(el.Address)
+		s.AddAddressToAccessList(el.Address.Bytes20())
 		for _, key := range el.StorageKeys {
-			s.AddSlotToAccessList(el.Address, key)
+			s.AddSlotToAccessList(el.Address.Bytes20(), key)
 		}
 	}
 }
 
 // AddAddressToAccessList adds the given address to the access list
-func (s *StateDB) AddAddressToAccessList(addr common.Address) {
-	addrBytes := addr.Bytes20()
-	if s.accessList.AddAddress(addrBytes) {
-		s.journal.append(accessListAddAccountChange{&addrBytes})
+func (s *StateDB) AddAddressToAccessList(addr common.AddressBytes) {
+	if s.accessList.AddAddress(addr) {
+		s.journal.append(accessListAddAccountChange{&addr})
 	}
 }
 
 // AddSlotToAccessList adds the given (address, slot)-tuple to the access list
-func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
-	addrBytes := addr.Bytes20()
-	addrMod, slotMod := s.accessList.AddSlot(addrBytes, slot)
+func (s *StateDB) AddSlotToAccessList(addr common.AddressBytes, slot common.Hash) {
+	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
 	if addrMod {
 		// In practice, this should not happen, since there is no way to enter the
 		// scope of 'address' without having the 'address' become already added
 		// to the access list (via call-variant, create, etc).
 		// Better safe than sorry, though
-		s.journal.append(accessListAddAccountChange{&addrBytes})
+		s.journal.append(accessListAddAccountChange{&addr})
 	}
 	if slotMod {
 		s.journal.append(accessListAddSlotChange{
-			address: &addrBytes,
+			address: &addr,
 			slot:    &slot,
 		})
 	}
 }
 
 // AddressInAccessList returns true if the given address is in the access list.
-func (s *StateDB) AddressInAccessList(addr common.Address) bool {
-	return s.accessList.ContainsAddress(addr.Bytes20())
+func (s *StateDB) AddressInAccessList(addr common.AddressBytes) bool {
+	if s.accessListDebug {
+		return true
+	}
+	return s.accessList.ContainsAddress(addr)
 }
 
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
-func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
-	return s.accessList.Contains(addr.Bytes20(), slot)
+func (s *StateDB) SlotInAccessList(addr common.AddressBytes, slot common.Hash) (addressPresent bool, slotPresent bool) {
+	if s.accessListDebug {
+		return true, true
+	}
+	return s.accessList.Contains(addr, slot)
 }
 
 // This can be optimized via VLQ encoding as btcd has done
