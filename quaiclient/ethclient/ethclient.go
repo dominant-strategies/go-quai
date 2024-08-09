@@ -477,6 +477,49 @@ func (ec *Client) EstimateGas(ctx context.Context, msg quai.CallMsg) (uint64, er
 	return uint64(hex), nil
 }
 
+type TransactionArgs struct {
+	From                 *common.Address `json:"from"`
+	To                   *common.Address `json:"to"`
+	Gas                  *hexutil.Uint64 `json:"gas"`
+	GasPrice             *hexutil.Big    `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	Value                *hexutil.Big    `json:"value"`
+	Nonce                *hexutil.Uint64 `json:"nonce"`
+
+	// We accept "data" and "input" for backwards-compatibility reasons.
+	// "input" is the newer name and should be preferred by clients.
+	Data  *hexutil.Bytes `json:"data"`
+	Input *hexutil.Bytes `json:"input"`
+
+	// Introduced by AccessListTxType transaction.
+	AccessList *types.AccessList `json:"accessList,omitempty"`
+	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	// Support for Qi (UTXO) transaction
+	TxIn   types.TxIns  `json:"txIn,omitempty"`
+	TxOut  types.TxOuts `json:"txOut,omitempty"`
+	TxType uint8        `json:"txType,omitempty"`
+}
+
+// EstimateGas tries to estimate the gas needed to execute a specific transaction based on
+// the current pending state of the backend blockchain. There is no guarantee that this is
+// the true gas limit requirement as other transactions may be added or removed by miners,
+// but it should provide a basis for setting a reasonable default.
+func (ec *Client) EstimateFeeForQi(ctx context.Context, tx *types.Transaction) (*big.Int, error) {
+	args := TransactionArgs{
+		TxIn:   tx.TxIn(),
+		TxOut:  tx.TxOut(),
+		TxType: types.QiTxType,
+	}
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "quai_estimateFeeForQi", args)
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(&result), nil
+}
+
 // SendTransaction injects a signed transaction into the pending pool for execution.
 //
 // If the transaction was a contract creation use the TransactionReceipt method to get the
