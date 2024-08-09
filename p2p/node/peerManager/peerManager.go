@@ -43,7 +43,8 @@ import (
 const (
 	// Represents the minimum ratio of positive to negative reports
 	// 	e.g. live_reports / latent_reports = 0.8
-	c_qualityThreshold = 0.8
+	c_bestThreshold  = 0.8
+	c_worstThreshold = 0.2
 
 	// c_minBestPeersFromDb is the number of peers we want to randomly read from the db
 	c_minBestPeersFromDb = 6
@@ -108,15 +109,8 @@ type PeerManager interface {
 	// RefreshBootpeers returns all the current bootpeers for bootstrapping
 	RefreshBootpeers() []peer.AddrInfo
 
-	// Increases the peer's liveliness score
-	MarkLivelyPeer(peerID p2p.PeerID, topic *pubsubManager.Topic)
-	// Decreases the peer's liveliness score
-	MarkLatentPeer(peerID p2p.PeerID, topic *pubsubManager.Topic)
-
-	// Increases the peer's liveliness score. Not exposed outside of NetworkingAPI
-	MarkResponsivePeer(peerID p2p.PeerID, topic *pubsubManager.Topic)
-	// Decreases the peer's liveliness score. Not exposed outside of NetworkingAPI
-	MarkUnresponsivePeer(peerID p2p.PeerID, topic *pubsubManager.Topic)
+	// Adjust the quality score of a peer by applying the given adjustment function
+	AdjustPeerQuality(p2p.PeerID, func(int) int)
 
 	// Protects the peer's connection from being disconnected
 	ProtectPeer(p2p.PeerID)
@@ -403,6 +397,21 @@ func (pm *BasicPeerManager) removePeerFromTopic(peerID p2p.PeerID, topicStr stri
 	return nil
 }
 
+// Looks up which topics a peer participates in
+func (pm *BasicPeerManager) getPeerTopics(peerID p2p.PeerID) []string {
+	key := datastore.NewKey(peerID.String())
+	qualities := []PeerQuality{Best, Responsive, LastResort}
+	topics := []string{}
+	for topic, dbs := range pm.peerDBs {
+		for quality := range qualities {
+			if exists, _ := dbs[quality].Has(pm.ctx, key); exists {
+				topics = append(topics, topic)
+			}
+		}
+	}
+	return topics
+}
+
 func (pm *BasicPeerManager) SetSelfID(selfID p2p.PeerID) {
 	pm.selfID = selfID
 }
@@ -504,20 +513,12 @@ func (pm *BasicPeerManager) getLastResortPeers(topic *pubsubManager.Topic) map[p
 	return pm.getPeersHelper(pm.peerDBs[topic.String()][LastResort], c_minLastResortPeersFromDb)
 }
 
-func (pm *BasicPeerManager) MarkLivelyPeer(peer p2p.PeerID, topic *pubsubManager.Topic) {
+func (pm *BasicPeerManager) AdjustPeerQuality(peer p2p.PeerID, adjFn func(int) int) {
 	if peer == pm.selfID {
 		return
 	}
-	pm.TagPeer(peer, "liveness_reports", 1)
-	pm.recategorizePeer(peer, topic)
-}
-
-func (pm *BasicPeerManager) MarkLatentPeer(peer p2p.PeerID, topic *pubsubManager.Topic) {
-	if peer == pm.selfID {
-		return
-	}
-	pm.TagPeer(peer, "latency_reports", 1)
-	pm.recategorizePeer(peer, topic)
+	pm.UpsertTag(peer, "quality", adjFn)
+	pm.recategorizePeer(peer)
 }
 
 func (pm *BasicPeerManager) calculatePeerLiveness(peer p2p.PeerID) float64 {
@@ -531,16 +532,6 @@ func (pm *BasicPeerManager) calculatePeerLiveness(peer p2p.PeerID) float64 {
 	return float64(liveness) / float64(latents)
 }
 
-func (pm *BasicPeerManager) MarkResponsivePeer(peer p2p.PeerID, topic *pubsubManager.Topic) {
-	pm.TagPeer(peer, "responses_served", 1)
-	pm.recategorizePeer(peer, topic)
-}
-
-func (pm *BasicPeerManager) MarkUnresponsivePeer(peer p2p.PeerID, topic *pubsubManager.Topic) {
-	pm.TagPeer(peer, "responses_missed", 1)
-	pm.recategorizePeer(peer, topic)
-}
-
 func (pm *BasicPeerManager) calculatePeerResponsiveness(peer p2p.PeerID) float64 {
 	peerTag := pm.GetTagInfo(peer)
 	if peerTag == nil {
@@ -551,57 +542,49 @@ func (pm *BasicPeerManager) calculatePeerResponsiveness(peer p2p.PeerID) float64
 	return float64(responses) / float64(misses)
 }
 
-// Each peer can only be in one of the following buckets:
-// 1. bestPeers
-//   - peers with high liveness and responsiveness
-//
-// 2. responsivePeers
-//   - peers with high responsiveness, but low liveness
-//
-// 3. peers
-//   - all other peers
-func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID, topic *pubsubManager.Topic) error {
-	liveness := pm.calculatePeerLiveness(peerID)
-	responsiveness := pm.calculatePeerResponsiveness(peerID)
+// Peers will be divided into three buckets (good, bad, ugly) based on their quality score
+func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID) error {
+	peerQuality := pm.GetTagInfo(peerID).Tags["quality"]
+	topics := pm.getPeerTopics(peerID)
 
-	// remove peer from DB first
-	err := pm.removePeerFromTopic(peerID, topic.String())
-	if err != nil {
-		return err
-	}
+	// remove peer from DBs first
+	for _, topic := range topics {
+		err := pm.removePeerFromTopic(peerID, topic)
+		if err != nil {
+			return err
+		}
 
-	key := datastore.NewKey(peerID.String())
-	// TODO: construct peerDB.PeerInfo and marshal it to bytes
-	peerInfo, err := proto.Marshal((&peerdb.PeerInfo{
-		AddrInfo: peerdb.AddrInfo{
-			AddrInfo: peer.AddrInfo{
-				ID: peerID,
+		key := datastore.NewKey(peerID.String())
+		peerInfo, err := proto.Marshal((&peerdb.PeerInfo{
+			AddrInfo: peerdb.AddrInfo{
+				AddrInfo: peer.AddrInfo{
+					ID: peerID,
+				},
 			},
-		},
-	}).ProtoEncode())
-	if err != nil {
-		return errors.Wrap(err, "error marshaling peer info")
-	}
-
-	if liveness >= c_qualityThreshold && responsiveness >= c_qualityThreshold {
-		// Best peers: high liveness and responsiveness
-		err := pm.peerDBs[topic.String()][Best].Put(pm.ctx, key, peerInfo)
+		}).ProtoEncode())
 		if err != nil {
-			return errors.Wrap(err, "error putting peer in bestPeersDB")
+			return errors.Wrap(err, "error marshaling peer info")
 		}
 
-	} else if responsiveness >= c_qualityThreshold {
-		// Responsive peers: high responsiveness, but low liveness
-		err := pm.peerDBs[topic.String()][Responsive].Put(pm.ctx, key, peerInfo)
-		if err != nil {
-			return errors.Wrap(err, "error putting peer in responsivePeersDB")
-		}
+		if peerQuality > c_bestThreshold*p2p.MaxScore {
+			// Best peers: high liveness and responsiveness
+			err := pm.peerDBs[topic][Best].Put(pm.ctx, key, peerInfo)
+			if err != nil {
+				return errors.Wrap(err, "error putting peer in bestPeersDB")
+			}
 
-	} else {
-		// All other peers
-		err := pm.peerDBs[topic.String()][LastResort].Put(pm.ctx, key, peerInfo)
-		if err != nil {
-			return errors.Wrap(err, "error putting peer in allPeersDB")
+		} else if peerQuality >= c_worstThreshold*p2p.MaxScore {
+			err := pm.peerDBs[topic][Responsive].Put(pm.ctx, key, peerInfo)
+			if err != nil {
+				return errors.Wrap(err, "error putting peer in responsivePeersDB")
+			}
+
+		} else {
+			// All other peers
+			err := pm.peerDBs[topic][LastResort].Put(pm.ctx, key, peerInfo)
+			if err != nil {
+				return errors.Wrap(err, "error putting peer in allPeersDB")
+			}
 		}
 	}
 

@@ -88,11 +88,8 @@ type NetworkingAPI interface {
 	// Specify location, data hash, and data type to request
 	Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{}
 
-	// Methods to report a peer to the P2PClient as behaving maliciously
-	// Should be called whenever a peer sends us data that is acceptably lively
-	MarkLivelyPeer(peerID core.PeerID, topic string)
-	// Should be called whenever a peer sends us data that is stale or latent
-	MarkLatentPeer(peerID core.PeerID, topic string)
+	// Adjust a peer's quality score
+	AdjustPeerQuality(core.PeerID, func(int) int)
 
 	// Protects the peer's connection from being pruned
 	ProtectPeer(core.PeerID)
