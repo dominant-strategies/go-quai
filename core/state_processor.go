@@ -1200,11 +1200,11 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		return nil, err
 	}
 	time4 := common.PrettyDuration(time.Since(start))
-	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(nodeCtx), receipts)
+	rawdb.WriteReceipts(batch, blockHash, block.NumberU64(nodeCtx), receipts)
 	time4_5 := common.PrettyDuration(time.Since(start))
 	// Create bloom filter and write it to cache/db
 	bloom := types.CreateBloom(receipts)
-	p.hc.AddBloom(bloom, block.Hash())
+	p.hc.AddBloom(bloom, blockHash)
 	time5 := common.PrettyDuration(time.Since(start))
 	rawdb.WritePreimages(batch, statedb.Preimages())
 	time6 := common.PrettyDuration(time.Since(start))
@@ -1232,6 +1232,10 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 	}
 	if err := p.etxCache.TrieDB().Commit(etxRoot, false, nil); err != nil {
 		return nil, err
+	}
+	stales := statedb.UTXOStales()
+	if len(stales) > 0 {
+		rawdb.WriteUTXOStales(batch, blockHash, stales)
 	}
 	time8 = common.PrettyDuration(time.Since(start))
 

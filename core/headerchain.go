@@ -32,6 +32,7 @@ const (
 	numberCacheLimit      = 2048
 	c_subRollupCacheSize  = 50
 	primeHorizonThreshold = 20
+	headsLimit            = 1000
 )
 
 // getPendingEtxsRollup gets the pendingEtxsRollup rollup from appropriate Region

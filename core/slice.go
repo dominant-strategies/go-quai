@@ -487,6 +487,19 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"location":             block.Location(),
 		"elapsed":              common.PrettyDuration(time.Since(start)),
 	}).Info("Appended new block")
+	sl.hc.heads = append(sl.hc.heads, block)
+	for i, head := range sl.hc.heads {
+		if head.Hash() == block.ParentHash(nodeCtx) {
+			sl.hc.heads = append(sl.hc.heads[:i], sl.hc.heads[i+1:]...) // Remove the parent from the heads
+			break
+		}
+	}
+	if len(sl.hc.heads) > headsLimit {
+		if sl.hc.GetHeaderByNumber(sl.hc.heads[0].NumberU64(nodeCtx)).Hash() != sl.hc.heads[0].Hash() { // Head is not canonical
+			// TODO: Delete all data associated with this non-canonical old uncle asynchronously
+			sl.hc.heads = sl.hc.heads[1:]
+		}
+	}
 
 	if nodeCtx == common.ZONE_CTX {
 		if updateDom {

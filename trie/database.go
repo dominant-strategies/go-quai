@@ -29,6 +29,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
@@ -733,6 +734,12 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	})
 	if err != nil {
 		return err
+	}
+	if hash != crypto.Keccak256Hash(node.rlp()) {
+		return fmt.Errorf("hash mismatch: %v, %v", hash, crypto.Keccak256Hash(node.rlp()))
+	}
+	if hash == common.HexToHash("0xdec97608747592cd9732f98b30cdb37c856420b779ef684f5fee7480f9c5cfd0") {
+		fmt.Println("commit", hash, node.rlp())
 	}
 	// If we've reached an optimal batch size, commit and start over
 	rawdb.WriteTrieNode(batch, hash, node.rlp())
