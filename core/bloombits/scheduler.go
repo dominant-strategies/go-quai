@@ -91,8 +91,6 @@ func (s *scheduler) reset() {
 // channel for a database or network layer to honour.
 func (s *scheduler) scheduleRequests(reqs chan uint64, dist chan *request, pend chan uint64, quit chan struct{}, wg *sync.WaitGroup) {
 	// Clean up the goroutine and pipeline when done
-	defer wg.Done()
-	defer close(pend)
 	defer func() {
 		if r := recover(); r != nil {
 			s.logger.WithFields(log.Fields{
@@ -101,6 +99,8 @@ func (s *scheduler) scheduleRequests(reqs chan uint64, dist chan *request, pend 
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	defer wg.Done()
+	defer close(pend)
 
 	// Keep reading and scheduling section requests
 	for {
@@ -146,8 +146,6 @@ func (s *scheduler) scheduleRequests(reqs chan uint64, dist chan *request, pend 
 // to be delivered, pushing them into the output data buffer.
 func (s *scheduler) scheduleDeliveries(pend chan uint64, done chan []byte, quit chan struct{}, wg *sync.WaitGroup) {
 	// Clean up the goroutine and pipeline when done
-	defer wg.Done()
-	defer close(done)
 	defer func() {
 		if r := recover(); r != nil {
 			s.logger.WithFields(log.Fields{
@@ -156,6 +154,8 @@ func (s *scheduler) scheduleDeliveries(pend chan uint64, done chan []byte, quit 
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	defer wg.Done()
+	defer close(done)
 
 	// Keep reading notifications and scheduling deliveries
 	for {

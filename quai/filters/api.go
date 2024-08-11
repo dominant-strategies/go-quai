@@ -680,6 +680,14 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 			select {
 			case b := <-header:
 				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							api.backend.Logger().WithFields(log.Fields{
+								"error":      r,
+								"stacktrace": string(debug.Stack()),
+							}).Fatal("Go-Quai Panicked")
+						}
+					}()
 					// Marshal the header data
 					// Only keep the Header in the body
 					pendingHeaderForMining := b.WithBody(b.Header(), nil, nil, nil, nil, nil)

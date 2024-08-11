@@ -114,6 +114,14 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 // the number of blocks which were successfully consumed (either appended, or
 // cached), and an error.
 func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	nodeCtx := c.NodeCtx()
 	for idx, block := range blocks {
 		// Only attempt to append a block, if it is not coincident with our dominant
@@ -324,6 +332,14 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 }
 
 func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	// TODO: optimize to check if the block is in the appendqueue or already
 	// appended to reduce the network bandwidth utilization
 	nodeCtx := c.NodeLocation().Context()

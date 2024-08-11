@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -142,7 +143,18 @@ func (h *httpServer) start() error {
 		return err
 	}
 	h.listener = listener
-	go h.server.Serve(listener)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			h.server.Serve(listener)
+		}()
+	}()
 
 	if h.wsAllowed() {
 		url := fmt.Sprintf("ws://%v", listener.Addr())

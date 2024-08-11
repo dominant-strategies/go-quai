@@ -545,6 +545,14 @@ func (c *Client) reconnect(ctx context.Context) error {
 // It sends read messages to waiting calls to Call and BatchCall
 // and subscription notifications to registered subscriptions.
 func (c *Client) dispatch(codec ServerCodec) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.log.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	var (
 		lastOp      *requestOp  // tracks last send operation
 		reqInitLock = c.reqInit // nil while the send lock is held
@@ -558,14 +566,6 @@ func (c *Client) dispatch(codec ServerCodec) {
 			c.drainRead()
 		}
 		close(c.didClose)
-	}()
-	defer func() {
-		if r := recover(); r != nil {
-			c.log.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
-		}
 	}()
 
 	// Spawn the initial read loop.

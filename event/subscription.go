@@ -163,7 +163,6 @@ func (s *resubscribeSub) Err() <-chan error {
 }
 
 func (s *resubscribeSub) loop() {
-	defer close(s.err)
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -172,6 +171,8 @@ func (s *resubscribeSub) loop() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	defer close(s.err)
+
 	var done bool
 	for !done {
 		sub := s.subscribe()

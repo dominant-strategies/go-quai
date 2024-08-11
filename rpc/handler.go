@@ -217,9 +217,6 @@ func (h *handler) cancelServerSubscriptions(err error) {
 func (h *handler) startCallProc(fn func(*callProc)) {
 	h.callWG.Add(1)
 	go func() {
-		ctx, cancel := context.WithCancel(h.rootCtx)
-		defer h.callWG.Done()
-		defer cancel()
 		defer func() {
 			if r := recover(); r != nil {
 				h.log.WithFields(log.Fields{
@@ -228,6 +225,9 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 				}).Fatal("Go-Quai Panicked")
 			}
 		}()
+		ctx, cancel := context.WithCancel(h.rootCtx)
+		defer h.callWG.Done()
+		defer cancel()
 		fn(&callProc{ctx: ctx})
 	}()
 }
@@ -297,7 +297,17 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 		return
 	}
 	if op.err = json.Unmarshal(msg.Result, &op.sub.subid); op.err == nil {
-		go op.sub.run()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					h.log.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Fatal("Go-Quai Panicked")
+				}
+			}()
+			go op.sub.run()
+		}()
 		h.clientSubs[op.sub.subid] = op.sub
 	}
 }

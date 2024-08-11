@@ -634,7 +634,6 @@ func (pm *BasicPeerManager) Stop() error {
 
 	for _, closeFunc := range closeFuncs {
 		go func(cf func() error) {
-			defer wg.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					log.Global.WithFields(log.Fields{
@@ -643,6 +642,7 @@ func (pm *BasicPeerManager) Stop() error {
 					}).Fatal("Go-Quai Panicked")
 				}
 			}()
+			defer wg.Done()
 			if err := cf(); err != nil {
 				mu.Lock()
 				closeErrors = append(closeErrors, err.Error())
@@ -655,7 +655,6 @@ func (pm *BasicPeerManager) Stop() error {
 		for _, peerDB := range db {
 			wg.Add(1)
 			go func(db *peerdb.PeerDB) {
-				defer wg.Done()
 				defer func() {
 					if r := recover(); r != nil {
 						log.Global.WithFields(log.Fields{
@@ -664,6 +663,7 @@ func (pm *BasicPeerManager) Stop() error {
 						}).Fatal("Go-Quai Panicked")
 					}
 				}()
+				defer wg.Done()
 				if err := db.Close(); err != nil {
 					mu.Lock()
 					closeErrors = append(closeErrors, err.Error())

@@ -226,6 +226,14 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 }
 
 func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh chan *types.WorkObject, nodeCtx int, config params.ChainConfig) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	var (
 		prevHeader = currentHeader
 		prevHash   = currentHeader.Hash()

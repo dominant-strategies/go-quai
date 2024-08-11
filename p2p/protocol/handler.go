@@ -25,7 +25,6 @@ const (
 
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
 func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
-	defer stream.Close()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -34,6 +33,7 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	defer stream.Close()
 
 	log.Global.Debugf("Received a new stream from %s", stream.Conn().RemotePeer())
 
@@ -49,6 +49,14 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		for {
 			select {
 			case message := <-msgChan:

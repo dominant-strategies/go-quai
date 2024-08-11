@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -191,6 +192,14 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		etxTrieDb := sp.etxCache.TrieDB()
 		sp.wg.Add(1)
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					hc.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			defer sp.wg.Done()
 			triedb.SaveCachePeriodically(sp.cacheConfig.TrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
 			utxoTrieDb.SaveCachePeriodically(sp.cacheConfig.UTXOTrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)

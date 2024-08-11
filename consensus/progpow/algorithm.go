@@ -345,6 +345,14 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32, logger *log.Lo
 	var progress uint32
 	for i := 0; i < threads; i++ {
 		go func(id int) {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			defer pend.Done()
 
 			// Create a hasher to reuse between invocations

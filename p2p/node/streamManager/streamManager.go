@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -110,6 +111,14 @@ func (sm *basicStreamManager) Start() {
 }
 
 func (sm *basicStreamManager) listenForNewStreamRequest() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	for {
 		select {
 		case peerID := <-sm.newStreamRequestChan:

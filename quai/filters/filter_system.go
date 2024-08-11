@@ -365,6 +365,14 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			es.backend.Logger().WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	nodeCtx := es.backend.NodeCtx()
 	// Ensure all subscriptions get cleaned up
 	defer func() {
@@ -374,12 +382,7 @@ func (es *EventSystem) eventLoop() {
 			es.pendingLogsSub.Unsubscribe()
 		}
 		es.chainSub.Unsubscribe()
-		if r := recover(); r != nil {
-			es.backend.Logger().WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
-		}
+
 	}()
 
 	index := make(filterIndex)
