@@ -19,6 +19,7 @@ package node
 import (
 	"net"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
@@ -44,7 +45,17 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 		WriteTimeout: timeouts.WriteTimeout,
 		IdleTimeout:  timeouts.IdleTimeout,
 	}
-	go httpSrv.Serve(listener)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			httpSrv.Serve(listener)
+		}()
+	}()
 	return httpSrv, listener.Addr(), err
 }
 

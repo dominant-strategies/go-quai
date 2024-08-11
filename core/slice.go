@@ -535,6 +535,14 @@ func (sl *Slice) relayPh(block *types.WorkObject, pendingHeaderWithTermini types
 // If a zone changes its best ph key on a dom block, it sends a signal to the
 // dom and we can relay that information to the coords, to build on the right dom header
 func (sl *Slice) UpdateDom(oldDomReference common.Hash, pendingHeader *types.WorkObject, location common.Location) {
+	defer func() {
+		if r := recover(); r != nil {
+			sl.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	nodeLocation := sl.NodeLocation()
 	nodeCtx := sl.NodeLocation().Context()
 
@@ -988,6 +996,14 @@ func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Locatio
 
 // SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
 func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int, updateDomLocation common.Location) {
+	defer func() {
+		if r := recover(); r != nil {
+			sl.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	nodeCtx := sl.NodeLocation().Context()
 	var err error
 

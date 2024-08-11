@@ -43,6 +43,14 @@ func (p *P2PNode) eventLoop() {
 		select {
 		case evt := <-sub.Out():
 			go func(evt interface{}) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Global.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Error("Go-Quai Panicked")
+					}
+				}()
 				switch e := evt.(type) {
 				case event.EvtLocalProtocolsUpdated:
 					log.Global.Debugf("Event: 'Local protocols updated' - added: %+v, removed: %+v", e.Added, e.Removed)

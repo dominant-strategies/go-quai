@@ -455,7 +455,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
 func (pool *TxPool) loop() {
-	defer pool.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			pool.logger.WithFields(log.Fields{
@@ -464,6 +463,7 @@ func (pool *TxPool) loop() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	defer pool.wg.Done()
 
 	var (
 		// Start the stats reporting and transaction eviction tickers
@@ -1511,7 +1511,6 @@ func (pool *TxPool) queueTxEvent(tx *types.Transaction) {
 // call those methods directly, but request them being run using requestReset and
 // requestPromoteExecutables instead.
 func (pool *TxPool) scheduleReorgLoop() {
-	defer pool.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			pool.logger.WithFields(log.Fields{
@@ -1520,6 +1519,8 @@ func (pool *TxPool) scheduleReorgLoop() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	defer pool.wg.Done()
+
 	var (
 		curDone        chan struct{} // non-nil while runReorg is active
 		nextDone       = make(chan struct{})
@@ -1609,7 +1610,6 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.InternalAddress]*txSortedMap, queuedQiTxs []*types.Transaction) {
-	defer close(done)
 	defer func() {
 		if r := recover(); r != nil {
 			pool.logger.WithFields(log.Fields{
@@ -1618,6 +1618,7 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	defer close(done)
 
 	for {
 		select {
@@ -1857,6 +1858,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				pool.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		if len(reinject) > 0 {
 			pool.addTxsLocked(reinject, false)
 		}
@@ -1864,6 +1873,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	}()
 	wg.Add(1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				pool.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		if len(qiTxs) > 0 {
 			pool.addQiTxsWithoutValidationLocked(qiTxs)
 		}

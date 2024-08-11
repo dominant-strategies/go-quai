@@ -416,7 +416,6 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 // distributor receives requests from the schedulers and queues them into a set
 // of pending requests, which are assigned to retrievers wanting to fulfil them.
 func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
-	defer session.pend.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			m.logger.WithFields(log.Fields{
@@ -425,6 +424,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	defer session.pend.Done()
 
 	var (
 		requests   = make(map[uint][]uint64) // Per-bit list of section requests, ordered by section number

@@ -84,7 +84,6 @@ func (h *handler) Stop() {
 
 // missingBlockLoop announces new pendingEtxs to connected peers.
 func (h *handler) missingBlockLoop() {
-	defer h.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			h.logger.WithFields(log.Fields{
@@ -93,6 +92,8 @@ func (h *handler) missingBlockLoop() {
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	defer h.wg.Done()
+
 	for {
 		select {
 		case blockRequest := <-h.missingBlockCh:
@@ -140,7 +141,6 @@ func (h *handler) missingBlockLoop() {
 
 // checkNextPrimeBlock runs every c_checkNextPrimeBlockInterval and ask the peer for the next Block
 func (h *handler) checkNextPrimeBlock() {
-	defer h.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			h.logger.WithFields(log.Fields{
@@ -149,6 +149,8 @@ func (h *handler) checkNextPrimeBlock() {
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	defer h.wg.Done()
+
 	checkNextPrimeBlockTimer := time.NewTicker(c_checkNextPrimeBlockInterval)
 	defer checkNextPrimeBlockTimer.Stop()
 	for {

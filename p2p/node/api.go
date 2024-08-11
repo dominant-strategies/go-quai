@@ -59,6 +59,14 @@ func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) erro
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		ticker := time.NewTicker(time.Second)
 		timeout := time.NewTicker(60 * time.Second)
 		for {
@@ -161,7 +169,6 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		for peerID := range peers {
 			requestWg.Add(1)
 			go func(peerID peer.ID) {
-				defer requestWg.Done()
 				defer func() {
 					if r := recover(); r != nil {
 						log.Global.WithFields(log.Fields{
@@ -170,6 +177,7 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 						}).Error("Go-Quai Panicked")
 					}
 				}()
+				defer requestWg.Done()
 				p.requestAndWait(peerID, topic, requestData, respDataType, resultChan)
 			}(peerID)
 		}

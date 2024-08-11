@@ -277,9 +277,6 @@ func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}) error {
 
 // pingLoop sends periodic ping frames when the connection is idle.
 func (wc *websocketCodec) pingLoop() {
-	var timer = time.NewTimer(wsPingInterval)
-	defer wc.wg.Done()
-	defer timer.Stop()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -288,6 +285,9 @@ func (wc *websocketCodec) pingLoop() {
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	var timer = time.NewTimer(wsPingInterval)
+	defer wc.wg.Done()
+	defer timer.Stop()
 
 	for {
 		select {
