@@ -244,7 +244,7 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 		parentEtxSetRoot = types.EmptyRootHash
 	}
 	// Initialize a statedb
-	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, parentEtxSetRoot, p.stateCache, p.utxoCache, p.etxCache, p.snaps, nodeLocation, p.logger)
+	statedb, err := state.New(parentEvmRoot, parentUtxoRoot, parentEtxSetRoot, parent.QuaiStateSize(), p.stateCache, p.utxoCache, p.etxCache, p.snaps, nodeLocation, p.logger)
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, err
 	}
@@ -1307,12 +1307,12 @@ func (p *StateProcessor) GetVMConfig() *vm.Config {
 
 // State returns a new mutable state based on the current HEAD block.
 func (p *StateProcessor) State() (*state.StateDB, error) {
-	return p.StateAt(p.hc.CurrentHeader().EVMRoot(), p.hc.CurrentHeader().UTXORoot(), p.hc.CurrentHeader().EtxSetRoot())
+	return p.StateAt(p.hc.CurrentHeader().EVMRoot(), p.hc.CurrentHeader().UTXORoot(), p.hc.CurrentHeader().EtxSetRoot(), p.hc.CurrentHeader().QuaiStateSize())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (p *StateProcessor) StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error) {
-	return state.New(root, utxoRoot, etxRoot, p.stateCache, p.utxoCache, p.etxCache, p.snaps, p.hc.NodeLocation(), p.logger)
+func (p *StateProcessor) StateAt(root, utxoRoot, etxRoot common.Hash, quaiStateSize *big.Int) (*state.StateDB, error) {
+	return state.New(root, utxoRoot, etxRoot, quaiStateSize, p.stateCache, p.utxoCache, p.etxCache, p.snaps, p.hc.NodeLocation(), p.logger)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1419,7 +1419,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 	)
 	// Check the live database first if we have the state fully available, use that.
 	if checkLive {
-		statedb, err = p.StateAt(block.EVMRoot(), block.UTXORoot(), block.EtxSetRoot())
+		statedb, err = p.StateAt(block.EVMRoot(), block.UTXORoot(), block.EtxSetRoot(), block.QuaiStateSize())
 		if err == nil {
 			return statedb, nil
 		}
@@ -1448,7 +1448,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		// we would rewind past a persisted block (specific corner case is chain
 		// tracing from the genesis).
 		if !checkLive {
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), current.QuaiStateSize(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				return statedb, nil
 			}
@@ -1465,7 +1465,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			}
 			current = types.CopyWorkObject(parent)
 
-			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
+			statedb, err = state.New(current.EVMRoot(), current.UTXORoot(), current.EtxSetRoot(), current.QuaiStateSize(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
 			if err == nil {
 				break
 			}
@@ -1522,7 +1522,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
-		statedb, err = state.New(root, utxoRoot, etxRoot, database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
+		statedb, err = state.New(root, utxoRoot, etxRoot, currentBlock.QuaiStateSize(), database, utxoDatabase, etxDatabase, nil, nodeLocation, p.logger)
 		if err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}

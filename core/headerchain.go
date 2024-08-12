@@ -1011,8 +1011,8 @@ func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.S
 	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
 }
 
-func (hc *HeaderChain) StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error) {
-	return hc.bc.processor.StateAt(root, utxoRoot, etxRoot)
+func (hc *HeaderChain) StateAt(root, utxoRoot, etxRoot common.Hash, quaiStateSize *big.Int) (*state.StateDB, error) {
+	return hc.bc.processor.StateAt(root, utxoRoot, etxRoot, quaiStateSize)
 }
 
 func (hc *HeaderChain) SlicesRunning() []common.Location {

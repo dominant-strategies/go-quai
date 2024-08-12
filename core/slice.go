@@ -1405,6 +1405,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 
 		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.Header().SetUncledS(header.Header().UncledS())
+		combinedPendingHeader.Header().SetQuaiStateSize(header.Header().QuaiStateSize())
 		combinedPendingHeader.Header().SetUncleHash(header.UncleHash())
 		combinedPendingHeader.Header().SetTxHash(header.Header().TxHash())
 		combinedPendingHeader.Header().SetEtxHash(header.EtxHash())

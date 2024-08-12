@@ -154,7 +154,7 @@ const (
 type blockChain interface {
 	CurrentBlock() *types.WorkObject
 	GetBlock(hash common.Hash, number uint64) *types.WorkObject
-	StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error)
+	StateAt(root, utxoRoot, etxRoot common.Hash, quaiStateSize *big.Int) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	IsGenesisHash(hash common.Hash) bool
 	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
@@ -1831,12 +1831,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	evmRoot := newHead.EVMRoot()
 	utxoRoot := newHead.UTXORoot()
 	etxRoot := newHead.EtxSetRoot()
+	quaiStateSize := newHead.QuaiStateSize()
 	if pool.chain.IsGenesisHash(newHead.Hash()) {
 		evmRoot = types.EmptyRootHash
 		utxoRoot = types.EmptyRootHash
 		etxRoot = types.EmptyRootHash
+		quaiStateSize = big.NewInt(0)
 	}
-	statedb, err := pool.chain.StateAt(evmRoot, utxoRoot, etxRoot)
+	statedb, err := pool.chain.StateAt(evmRoot, utxoRoot, etxRoot, quaiStateSize)
 	if err != nil {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return

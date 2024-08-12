@@ -36,6 +36,7 @@ func headerTestData() (*Header, common.Hash) {
 		parentHash:            []common.Hash{common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"), common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0")},
 		uncleHash:             common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1"),
 		evmRoot:               common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
+		quaiStateSize:         big.NewInt(1000),
 		utxoRoot:              common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
 		txHash:                common.HexToHash("0x6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef5"),
 		etxHash:               common.HexToHash("0x789abcdef0123456789abcdef0123456789abcdef0123456789abcdef6"),
@@ -66,7 +67,7 @@ func headerTestData() (*Header, common.Hash) {
 
 func TestHeaderHash(t *testing.T) {
 	_, hash := headerTestData()
-	correctHash := common.HexToHash("0x89d7716b39e330a7532700c919b83e9d699f41823adf2bd97a64c3f98d560457")
+	correctHash := common.HexToHash("0xc8110a0bb8fe2f98081d1202ce0dcf299dc42a14df271a994e1925c78931177b")
 	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 
@@ -302,6 +303,11 @@ func FuzzHeaderStateUsedHash(f *testing.F) {
 	fuzzHeaderUint64Hash(f,
 		func(h *Header) uint64 { return h.stateUsed },
 		func(h *Header, bi uint64) { h.stateUsed = bi })
+}
+func FuzzHeaderQuaiStateSize(f *testing.F) {
+	fuzzHeaderBigIntHash(f,
+		func(h *Header) *big.Int { return h.quaiStateSize },
+		func(h *Header, bi *big.Int) { h.quaiStateSize = bi })
 }
 func FuzzHeaderExtraHash(f *testing.F) {
 	header, _ := headerTestData()

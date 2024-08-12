@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
@@ -67,7 +68,7 @@ type ChainIndexerChain interface {
 	// NodeCtx returns the context of the chain
 	NodeCtx() int
 	// StateAt returns the state for a state trie root and utxo root
-	StateAt(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash) (*state.StateDB, error)
+	StateAt(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, quaiStateSize *big.Int) (*state.StateDB, error)
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -85,7 +86,7 @@ type ChainIndexer struct {
 	backend   ChainIndexerBackend // Background processor generating the index data content
 	children  []*ChainIndexer     // Child indexers to cascade chain updates to
 	GetBloom  func(common.Hash) (*types.Bloom, error)
-	StateAt   func(common.Hash, common.Hash, common.Hash) (*state.StateDB, error)
+	StateAt   func(common.Hash, common.Hash, common.Hash, *big.Int) (*state.StateDB, error)
 	active    uint32          // Flag whether the event loop was started
 	update    chan struct{}   // Notification channel that headers should be processed
 	quit      chan chan error // Quit channel to tear down running goroutines
@@ -666,7 +667,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 				}
 				parent := rawdb.ReadHeader(c.chainDb, *parentNumber, block.ParentHash(nodeCtx))
 
-				state, err := c.StateAt(parent.EVMRoot(), parent.UTXORoot(), parent.EtxSetRoot())
+				state, err := c.StateAt(parent.EVMRoot(), parent.UTXORoot(), parent.EtxSetRoot(), parent.QuaiStateSize())
 				if err != nil {
 					return err
 				}

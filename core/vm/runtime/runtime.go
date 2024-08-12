@@ -109,7 +109,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
+		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, big.NewInt(0), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"), cfg.ChainConfig.Location)
@@ -147,7 +147,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
+		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, big.NewInt(0), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
 		vmenv  = NewEnv(cfg)

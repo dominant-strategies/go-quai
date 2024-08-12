@@ -19,6 +19,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
 		UncleHash    					common.Hash    			`json:"sha3Uncles"         			gencodec:"required"`
 		EVMRoot      					common.Hash   			`json:"evmRoot"            			gencodec:"required"`
+		QuaiStateSize                   *hexutil.Big            `json:"quaiStateSize"               gencodec:"required"`
 		UTXORoot		 				common.Hash	 			`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
@@ -63,6 +64,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	}
 	enc.UncleHash = h.UncleHash()
 	enc.EVMRoot = h.EVMRoot()
+	enc.QuaiStateSize = (*hexutil.Big)(h.QuaiStateSize())
 	enc.UTXORoot = h.UTXORoot()
 	enc.TxHash = h.TxHash()
 	enc.EtxHash = h.EtxHash()
@@ -92,6 +94,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
 		UncleHash    					*common.Hash    		`json:"sha3Uncles"         			gencodec:"required"`
 		EVMRoot      					*common.Hash   			`json:"evmRoot"            			gencodec:"required"`
+		QuaiStateSize                   *hexutil.Big            `json:"quaiStateSize"               gencodec:"required"`
 		UTXORoot		 				*common.Hash	 		`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					*common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					*common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
@@ -198,6 +201,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
+	if dec.QuaiStateSize == nil {
+		return errors.New("missing required field 'quaiStateSize' for Header")
+	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
@@ -232,6 +238,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 
 	h.SetUncleHash(*dec.UncleHash)
 	h.SetEVMRoot(*dec.EVMRoot)
+	h.SetQuaiStateSize((*big.Int)(dec.QuaiStateSize))
 	h.SetUTXORoot(*dec.UTXORoot)
 	h.SetTxHash(*dec.TxHash)
 	h.SetReceiptHash(*dec.ReceiptHash)

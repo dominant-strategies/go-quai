@@ -215,6 +215,10 @@ func (wo *WorkObject) NonceU64() uint64 {
 	return wo.WorkObjectHeader().Nonce().Uint64()
 }
 
+func (wo *WorkObject) QuaiStateSize() *big.Int {
+	return wo.Header().QuaiStateSize()
+}
+
 func (wo *WorkObject) UncledS() *big.Int {
 	return wo.Header().UncledS()
 }

@@ -662,12 +662,14 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 	evmRoot := parent.EVMRoot()
 	utxoRoot := parent.UTXORoot()
 	etxRoot := parent.EtxSetRoot()
+	quaiStateSize := parent.QuaiStateSize()
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		evmRoot = types.EmptyRootHash
 		utxoRoot = types.EmptyRootHash
 		etxRoot = types.EmptyRootHash
+		quaiStateSize = big.NewInt(0)
 	}
-	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot, etxRoot)
+	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot, etxRoot, quaiStateSize)
 	if err != nil {
 		return nil, err
 	}

@@ -281,6 +281,9 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 	if root := statedb.IntermediateRoot(true); header.EVMRoot() != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.EVMRoot(), root)
 	}
+	if stateSize := statedb.GetQuaiTrieSize(); header.QuaiStateSize().Cmp(stateSize) != 0 {
+		return fmt.Errorf("invalid quai trie size (remote: %x local: %x)", header.QuaiStateSize(), stateSize)
+	}
 	if root := statedb.UTXORoot(); header.UTXORoot() != root {
 		return fmt.Errorf("invalid utxo root (remote: %x local: %x)", header.UTXORoot(), root)
 	}
