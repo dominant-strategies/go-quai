@@ -85,6 +85,8 @@ type stateObject struct {
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
 	fakeStorage    Storage // Fake storage which constructed by caller for debugging purpose.
 
+	uniqueNewKeysStorage Storage //Storage cache for the new entries being considered to be added to the storage trie
+
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
 	// during the "update" phase of the state transition.
@@ -95,7 +97,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash) && s.data.Size.Sign() == 0
 }
 
 // Account is the Quai consensus representation of accounts.
@@ -105,6 +107,7 @@ type Account struct {
 	Balance  *big.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+	Size     *big.Int // size of the storage trie for the contract
 }
 
 // newObject creates a state object.
@@ -118,14 +121,18 @@ func newObject(db *StateDB, address common.InternalAddress, data Account) *state
 	if data.Root == (common.Hash{}) {
 		data.Root = emptyRoot
 	}
+	if data.Size == nil {
+		data.Size = new(big.Int)
+	}
 	return &stateObject{
-		db:             db,
-		address:        address,
-		addrHash:       crypto.Keccak256Hash(address[:]),
-		data:           data,
-		originStorage:  make(Storage),
-		pendingStorage: make(Storage),
-		dirtyStorage:   make(Storage),
+		db:                   db,
+		address:              address,
+		addrHash:             crypto.Keccak256Hash(address[:]),
+		data:                 data,
+		originStorage:        make(Storage),
+		pendingStorage:       make(Storage),
+		dirtyStorage:         make(Storage),
+		uniqueNewKeysStorage: make(Storage),
 	}
 }
 
@@ -218,6 +225,11 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		defer func() {
 			stateMetrics.WithLabelValues("StorageReads").Add(float64(time.Since(readStart)))
 		}()
+	}
+
+	if enc, err = s.getTrie(db).TryGet(key.Bytes()); len(enc) == 0 && err == nil {
+		// This key didnt exist in  the database, we need to add it to the uniqueKeys
+		s.uniqueNewKeysStorage[key] = common.Hash{}
 	}
 
 	if s.db.snap != nil {
@@ -347,10 +359,23 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		var v []byte
 		if (value == common.Hash{}) {
 			s.setError(tr.TryDelete(key[:]))
+			// While writing the value is nil check in the uniqueNewKeysStorage
+			// and if the key doesnt exist that means we are deleting key that
+			// previously existed in the storage trie lower the size of the
+			// storage trie
+			_, exists := s.uniqueNewKeysStorage[key]
+			if !exists {
+				s.SubSize()
+			}
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 			s.setError(tr.TryUpdate(key[:], v))
+			// While writing the values to the trie, check if the key exists in the uniqueKeys
+			_, exists := s.uniqueNewKeysStorage[key]
+			if exists {
+				s.AddSize()
+			}
 		}
 		// If state snapshotting is active, cache the data til commit
 		if s.db.snap != nil {
@@ -370,6 +395,9 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	}
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
+	}
+	if len(s.uniqueNewKeysStorage) > 0 {
+		s.uniqueNewKeysStorage = make(Storage)
 	}
 	return tr
 }
@@ -441,6 +469,26 @@ func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
 }
 
+func (s *stateObject) SetSize(size *big.Int) {
+	s.db.journal.append(sizeChange{
+		account: &s.address,
+		prev:    new(big.Int).Set(s.data.Size),
+	})
+	s.setSize(size)
+}
+
+func (s *stateObject) AddSize() {
+	s.SetSize(new(big.Int).Add(s.Size(), common.Big1))
+}
+
+func (s *stateObject) SubSize() {
+	s.SetSize(new(big.Int).Sub(s.Size(), common.Big1))
+}
+
+func (s *stateObject) setSize(size *big.Int) {
+	s.data.Size = size
+}
+
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject := newObject(db, s.address, s.data)
 	if s.trie != nil {
@@ -450,6 +498,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
 	stateObject.originStorage = s.originStorage.Copy()
 	stateObject.pendingStorage = s.pendingStorage.Copy()
+	stateObject.uniqueNewKeysStorage = s.uniqueNewKeysStorage.Copy()
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
@@ -536,6 +585,10 @@ func (s *stateObject) Balance() *big.Int {
 
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
+}
+
+func (s *stateObject) Size() *big.Int {
+	return s.data.Size
 }
 
 // Never called, but must be present to allow stateObject to be used

@@ -566,6 +566,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			Balance  *big.Int
 			Root     common.Hash
 			CodeHash []byte
+			Size     *big.Int
 		}
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			stats.logger.WithField("err", err).Fatal("Invalid account encountered during snapshot creation")
@@ -581,7 +582,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					dataLen -= 32
 				}
 			} else {
-				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
+				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash, acc.Size)
 				dataLen = len(data)
 				rawdb.WriteAccountSnapshot(batch, accountHash, data)
 			}
