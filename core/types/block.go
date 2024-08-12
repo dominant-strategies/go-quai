@@ -91,6 +91,7 @@ type Header struct {
 	uncleHash             common.Hash   `json:"sha3Uncles"            gencodec:"required"`
 	evmRoot               common.Hash   `json:"evmRoot"               gencodec:"required"`
 	utxoRoot              common.Hash   `json:"utxoRoot"              gencodec:"required"`
+	quaiStateSize         *big.Int      `json:"quaiStateSize"         gencodec:"required"`
 	txHash                common.Hash   `json:"transactionsRoot"      gencodec:"required"`
 	etxHash               common.Hash   `json:"extTransactionsRoot"   gencodec:"required"`
 	etxSetRoot            common.Hash   `json:"etxSetRoot"            gencodec:"required"`
@@ -148,6 +149,7 @@ func EmptyHeader() *Header {
 	h.uncledS = big.NewInt(0)
 	h.evmRoot = EmptyRootHash
 	h.utxoRoot = EmptyRootHash
+	h.quaiStateSize = big.NewInt(0)
 	h.txHash = EmptyRootHash
 	h.etxHash = EmptyRootHash
 	h.etxSetRoot = EmptyRootHash
@@ -231,6 +233,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		TxHash:            &txHash,
 		EtxHash:           &etxhash,
 		EtxSetRoot:        &etxSetRoot,
+		QuaiStateSize:     h.QuaiStateSize().Bytes(),
 		EtxRollupHash:     &etxRollupHash,
 		ReceiptHash:       &receiptHash,
 		PrimeTerminus:     &primeTerminus,
@@ -341,6 +344,9 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.PrimeTerminus == nil {
 		return errors.New("missing required field 'PrimeTerminus' in Header")
 	}
+	if protoHeader.QuaiStateSize == nil {
+		return errors.New("missing required field 'QuaiStateSize' in Header")
+	}
 
 	// Initialize the array fields before setting
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
@@ -363,6 +369,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 
 	h.SetUncleHash(common.BytesToHash(protoHeader.GetUncleHash().GetValue()))
 	h.SetEVMRoot(common.BytesToHash(protoHeader.GetEvmRoot().GetValue()))
+	h.SetQuaiStateSize(new(big.Int).SetBytes(protoHeader.GetQuaiStateSize()))
 	h.SetUTXORoot(common.BytesToHash(protoHeader.GetUtxoRoot().GetValue()))
 	h.SetTxHash(common.BytesToHash(protoHeader.GetTxHash().GetValue()))
 	h.SetReceiptHash(common.BytesToHash(protoHeader.GetReceiptHash().GetValue()))
@@ -399,6 +406,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"hash":                h.Hash(),
 		"parentHash":          h.ParentHashArray(),
 		"uncledS":             (*hexutil.Big)(h.UncledS()),
+		"quaiStateSize":       (*hexutil.Big)(h.QuaiStateSize()),
 		"sha3Uncles":          h.UncleHash(),
 		"evmRoot":             h.EVMRoot(),
 		"utxoRoot":            h.UTXORoot(),
@@ -461,6 +469,9 @@ func (h *Header) EVMRoot() common.Hash {
 }
 func (h *Header) UTXORoot() common.Hash {
 	return h.utxoRoot
+}
+func (h *Header) QuaiStateSize() *big.Int {
+	return h.quaiStateSize
 }
 func (h *Header) TxHash() common.Hash {
 	return h.txHash
@@ -543,6 +554,11 @@ func (h *Header) SetEVMRoot(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.evmRoot = val
+}
+func (h *Header) SetQuaiStateSize(val *big.Int) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // clear sealHash cache
+	h.quaiStateSize = val
 }
 func (h *Header) SetUTXORoot(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -710,6 +726,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		ReceiptHash:       &receiptHash,
 		GasLimit:          &gasLimit,
 		GasUsed:           &gasUsed,
+		QuaiStateSize:     h.QuaiStateSize().Bytes(),
 		BaseFee:           h.BaseFee().Bytes(),
 		StateLimit:        &stateLimit,
 		StateUsed:         &stateUsed,
@@ -887,6 +904,7 @@ func CopyHeader(h *Header) *Header {
 		cpy.SetParentHash(h.ParentHash(i), i)
 		cpy.SetNumber(h.Number(i), i)
 	}
+	cpy.SetQuaiStateSize(h.QuaiStateSize())
 	cpy.SetUncledS(h.UncledS())
 	cpy.SetUncleHash(h.UncleHash())
 	cpy.SetEVMRoot(h.EVMRoot())

@@ -1,0 +1,31 @@
+Added state used field in the header
+
+# Conflicts:
+#	core/types/block_test.go
+#	core/types/proto_block.pb.go
+#	core/types/proto_block.proto
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# interactive rebase in progress; onto 29852d1c
+# Last commands done (3 commands done):
+#    pick dd2756a1 Added state limit field into the header
+#    pick cd6caf13 Added state used field in the header
+# Next commands to do (4 remaining commands):
+#    pick 37034a6f Computing the contract size and refunding the fees on the OpSuicide
+#    pick dda0483b Computing the size of the statedb, still need to store
+# You are currently rebasing branch 'stateprice' on '29852d1c'.
+#
+# Changes to be committed:
+#	modified:   consensus/blake3pow/consensus.go
+#	modified:   consensus/progpow/consensus.go
+#	modified:   core/genesis.go
+#	modified:   core/slice.go
+#	modified:   core/types/block.go
+#	modified:   core/types/block_test.go
+#	modified:   core/types/gen_header_json.go
+#	modified:   core/types/proto_block.pb.go
+#	modified:   core/types/proto_block.proto
+#	modified:   core/types/wo.go
+#

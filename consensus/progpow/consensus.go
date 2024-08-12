@@ -702,6 +702,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 	header.Header().SetUTXORoot(state.UTXORoot())
 	header.Header().SetEVMRoot(state.IntermediateRoot(true))
 	header.Header().SetEtxSetRoot(state.ETXRoot())
+	header.Header().SetQuaiStateSize(state.GetQuaiTrieSize())
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and

@@ -164,7 +164,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Database, utxoDb Database, etxDb Database, snaps *snapshot.Tree, nodeLocation common.Location, logger *log.Logger) (*StateDB, error) {
+func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, quaiStateSize *big.Int, db Database, utxoDb Database, etxDb Database, snaps *snapshot.Tree, nodeLocation common.Location, logger *log.Logger) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -186,7 +186,7 @@ func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Databas
 		etxTrie:             etxTr,
 		originalRoot:        root,
 		snaps:               snaps,
-		size:                common.Big0, //  TODO: this needs to be store for each block or commited to in the state
+		size:                quaiStateSize,
 		newAccountsAdded:    make(map[common.AddressBytes]bool),
 		logger:              logger,
 		stateObjects:        make(map[common.InternalAddress]*stateObject),
