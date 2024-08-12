@@ -404,7 +404,7 @@ func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353536"),
 		GasLimit:   5000000,
-		Difficulty: big.NewInt(300000000),
+		Difficulty: big.NewInt(30000000000),
 	}
 }
 
