@@ -502,6 +502,7 @@ func (s *StateDB) Suicide(addr common.InternalAddress) bool {
 	})
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)
+	stateObject.data.Size = new(big.Int)
 
 	return true
 }
@@ -532,7 +533,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
+		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, obj.data.Size)
 	}
 }
 
@@ -801,6 +802,7 @@ func (s *StateDB) getDeletedStateObject(addr common.InternalAddress) *stateObjec
 				Balance:  acc.Balance,
 				CodeHash: acc.CodeHash,
 				Root:     common.BytesToHash(acc.Root),
+				Size:     acc.Size,
 			}
 			if len(data.CodeHash) == 0 {
 				data.CodeHash = emptyCodeHash
@@ -894,6 +896,7 @@ func (s *StateDB) CreateAccount(addr common.InternalAddress) {
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
+		newObj.setSize(prev.data.Size)
 	}
 }
 

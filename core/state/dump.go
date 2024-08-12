@@ -53,6 +53,7 @@ type DumpAccount struct {
 	Root      hexutil.Bytes           `json:"root"`
 	CodeHash  hexutil.Bytes           `json:"codeHash"`
 	Code      hexutil.Bytes           `json:"code,omitempty"`
+	Size      string                  `json:"size"`
 	Storage   map[common.Hash]string  `json:"storage,omitempty"`
 	Address   *common.InternalAddress `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
 	SecureKey hexutil.Bytes           `json:"key,omitempty"`     // If we don't have address, we can output the key
@@ -149,6 +150,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			Nonce:     data.Nonce,
 			Root:      data.Root[:],
 			CodeHash:  data.CodeHash,
+			Size:      data.Size.String(),
 			SecureKey: it.Key,
 		}
 		addrBytes := s.trie.GetKey(it.Key)
