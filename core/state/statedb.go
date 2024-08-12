@@ -105,6 +105,9 @@ type StateDB struct {
 	etxTrie      Trie
 	hasher       crypto.KeccakState
 
+	newAccountsAdded map[common.AddressBytes]bool
+	size             *big.Int
+
 	logger *log.Logger
 
 	nodeLocation common.Location
@@ -183,6 +186,8 @@ func New(root common.Hash, utxoRoot common.Hash, etxRoot common.Hash, db Databas
 		etxTrie:             etxTr,
 		originalRoot:        root,
 		snaps:               snaps,
+		size:                common.Big0, //  TODO: this needs to be store for each block or commited to in the state
+		newAccountsAdded:    make(map[common.AddressBytes]bool),
 		logger:              logger,
 		stateObjects:        make(map[common.InternalAddress]*stateObject),
 		stateObjectsPending: make(map[common.InternalAddress]struct{}),
@@ -295,6 +300,16 @@ func (s *StateDB) SubRefund(gas uint64) {
 	s.refund -= gas
 }
 
+// AddSize increases the size variable for the statedb by 1
+func (s *StateDB) AddSize() {
+	s.size = new(big.Int).Add(s.size, common.Big1)
+}
+
+// SubSize decreases the size variable for the statedb by 1
+func (s *StateDB) SubSize() {
+	s.size = new(big.Int).Sub(s.size, common.Big1)
+}
+
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
 func (s *StateDB) Exist(addr common.InternalAddress) bool {
@@ -323,6 +338,17 @@ func (s *StateDB) GetNonce(addr common.InternalAddress) uint64 {
 	}
 
 	return 0
+}
+func (s *StateDB) GetSize(addr common.InternalAddress) *big.Int {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Size()
+	}
+	return common.Big0
+}
+
+func (s *StateDB) GetQuaiTrieSize() *big.Int {
+	return s.size
 }
 
 // TxIndex returns the current transaction index set by Prepare.
@@ -871,6 +897,9 @@ func (s *StateDB) createObject(addr common.InternalAddress) (newobj, prev *state
 	}
 	newobj = newObject(s, addr, Account{})
 	if prev == nil {
+		// Add this new account to the collection of accounts that might be
+		// created during the execution of the state in this block
+		s.newAccountsAdded[addr.Bytes20()] = true
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
@@ -940,6 +969,8 @@ func (s *StateDB) Copy() *StateDB {
 		utxoDb:              s.utxoDb,
 		etxTrie:             s.etxDb.CopyTrie(s.etxTrie),
 		etxDb:               s.etxDb,
+		size:                new(big.Int).Set(s.size),
+		newAccountsAdded:    make(map[common.AddressBytes]bool, len(s.newAccountsAdded)),
 		stateObjects:        make(map[common.InternalAddress]*stateObject, len(s.journal.dirties)),
 		stateObjectsPending: make(map[common.InternalAddress]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:   make(map[common.InternalAddress]struct{}, len(s.journal.dirties)),
@@ -1005,6 +1036,13 @@ func (s *StateDB) Copy() *StateDB {
 	// know that they need to explicitly terminate an active copy).
 	if s.prefetcher != nil {
 		state.prefetcher = s.prefetcher.copy()
+	}
+	// If len of the new accounts added is non zero, we can copy the map into
+	// the state variable
+	if len(s.newAccountsAdded) > 0 {
+		for acc, val := range s.newAccountsAdded {
+			state.newAccountsAdded[acc] = val
+		}
 	}
 	if s.snaps != nil {
 		// In order for the miner to be able to use and make additions
@@ -1148,8 +1186,22 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; obj.deleted {
 			s.deleteStateObject(obj)
+			// In the case of deletion because the balance was nil or that the
+			// address was deleted using opSuicide we need to lower the size of
+			// the quai state trie if this was not a newAccont created during the
+			// execution of this block
+			_, exists := s.newAccountsAdded[addr.Bytes20()]
+			if !exists {
+				s.SubSize()
+			}
 		} else {
 			s.updateStateObject(obj)
+			// If this address exists in the newAccountsAdded map, we can
+			// increase the size of the statedb
+			_, exists := s.newAccountsAdded[addr.Bytes20()]
+			if exists {
+				s.AddSize()
+			}
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
@@ -1163,6 +1215,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("AccountHashes").Add(float64(time.Since(start))) }(time.Now())
 	}
+
+	log.Global.Error("No of new accounts added to the state", s.size)
+
 	return s.trie.Hash()
 }
 
