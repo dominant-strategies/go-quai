@@ -45,6 +45,9 @@ const (
 	c_RPCFlagPrefix     = "rpc."
 	c_PeersFlagPrefix   = "peers."
 	c_MetricsFlagPrefix = "metrics."
+
+	c_regionPortOffset = 1
+	c_zonePortOffset   = 199
 )
 
 var Flags = [][]Flag{
@@ -135,11 +138,13 @@ var RPCFlags = []Flag{
 	HTTPVirtualHostsFlag,
 	HTTPApiFlag,
 	HTTPPathPrefixFlag,
+	HTTPPortStartFlag,
 	WSEnabledFlag,
 	WSListenAddrFlag,
 	WSApiFlag,
 	WSAllowedOriginsFlag,
 	WSPathPrefixFlag,
+	WSPortStartFlag,
 	PreloadJSFlag,
 	RPCGlobalTxFeeCapFlag,
 	RPCGlobalGasCapFlag,
@@ -604,6 +609,12 @@ var (
 		Usage: "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths." + generateEnvDoc(c_RPCFlagPrefix+"http-rpcprefix"),
 	}
 
+	HTTPPortStartFlag = Flag{
+		Name:  c_RPCFlagPrefix + "http-port",
+		Value: 9001,
+		Usage: "HTTP-RPC server listening port" + generateEnvDoc(c_RPCFlagPrefix+"http-port"),
+	}
+
 	WSEnabledFlag = Flag{
 		Name:  c_RPCFlagPrefix + "ws",
 		Value: false,
@@ -632,6 +643,12 @@ var (
 		Name:  c_RPCFlagPrefix + "ws-rpcprefix",
 		Value: "",
 		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths." + generateEnvDoc(c_RPCFlagPrefix+"ws-rpcprefix"),
+	}
+
+	WSPortStartFlag = Flag{
+		Name:  c_RPCFlagPrefix + "ws-port",
+		Value: 8001,
+		Usage: "WS-RPC server listening port" + generateEnvDoc(c_RPCFlagPrefix+"ws-port"),
 	}
 
 	PreloadJSFlag = Flag{
@@ -826,13 +843,14 @@ func setHTTP(cfg *node.Config, nodeLocation common.Location) {
 }
 
 func GetHttpPort(nodeLocation common.Location) int {
+	startPort := viper.GetInt(HTTPPortStartFlag.Name)
 	switch nodeLocation.Context() {
 	case common.PRIME_CTX:
-		return 9001
+		return startPort
 	case common.REGION_CTX:
-		return 9002 + nodeLocation.Region()
+		return (startPort + c_regionPortOffset) + nodeLocation.Region()
 	case common.ZONE_CTX:
-		return 9200 + 20*nodeLocation.Region() + nodeLocation.Zone()
+		return (startPort + c_zonePortOffset) + 20*nodeLocation.Region() + nodeLocation.Zone()
 	}
 	panic("node location is not valid")
 }
@@ -863,13 +881,14 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 }
 
 func GetWSPort(nodeLocation common.Location) int {
+	startPort := viper.GetInt(WSPortStartFlag.Name)
 	switch nodeLocation.Context() {
 	case common.PRIME_CTX:
-		return 8001
+		return startPort
 	case common.REGION_CTX:
-		return 8002 + nodeLocation.Region()
+		return (startPort + c_regionPortOffset) + nodeLocation.Region()
 	case common.ZONE_CTX:
-		return 8200 + 20*nodeLocation.Region() + nodeLocation.Zone()
+		return (startPort + c_zonePortOffset) + 20*nodeLocation.Region() + nodeLocation.Zone()
 	}
 	panic("node location is not valid")
 }
