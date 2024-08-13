@@ -3,7 +3,6 @@ syntax = "proto3";
 package db;
 option go_package = "github.com/dominant-strategies/go-quai/core/rawdb";
 
-import "core/types/proto_block.proto";
 import "common/proto_common.proto";
 
 message ProtoNumber { uint64 number = 1; }
