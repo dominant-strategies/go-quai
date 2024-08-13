@@ -766,6 +766,101 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+const badWorkObjectToKeep = 10
+
+type badWorkObject struct {
+	woHeader *types.WorkObjectHeader
+	woBody   *types.WorkObjectBody
+	tx       types.Transaction
+}
+
+// ProtoEncode returns the protobuf encoding of the bad workObject.
+func (b badWorkObject) ProtoEncode() *ProtoBadWorkObject {
+	protoWorkObjectHeader, err := b.woHeader.ProtoEncode()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto encode header")
+	}
+	protoWorkObjectBody, err := b.woBody.ProtoEncode(types.BlockObject)
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Failed to proto encode body")
+	}
+	return &ProtoBadWorkObject{
+		WoHeader: protoWorkObjectHeader,
+		WoBody:   protoWorkObjectBody,
+	}
+}
+
+// ProtoDecode decodes the protobuf encoding of the bad workObject.
+func (b *badWorkObject) ProtoDecode(pb *ProtoBadWorkObject, location common.Location) error {
+	woHeader := new(types.WorkObjectHeader)
+	if err := woHeader.ProtoDecode(pb.WoHeader, location); err != nil {
+		return err
+	}
+	b.woHeader = woHeader
+	woBody := new(types.WorkObjectBody)
+	if err := woBody.ProtoDecode(pb.WoBody, b.woHeader.Location(), types.BlockObject); err != nil {
+		return err
+	}
+	b.woBody = woBody
+	return nil
+}
+
+// badWorkObjectList implements the sort interface to allow sorting a list of
+// bad blocks by their number in the reverse order.
+type badWorkObjectList []*badWorkObject
+
+func (s badWorkObjectList) Len() int { return len(s) }
+func (s badWorkObjectList) Less(i, j int) bool {
+	return s[i].woHeader.NumberU64() < s[j].woHeader.NumberU64()
+}
+func (s badWorkObjectList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func (s badWorkObjectList) ProtoEncode() *ProtoBadWorkObjects {
+	protoList := make([]*ProtoBadWorkObject, len(s))
+	for i, bad := range s {
+		protoList[i] = bad.ProtoEncode()
+	}
+	return &ProtoBadWorkObjects{BadWorkObjects: protoList}
+}
+
+func (s *badWorkObjectList) ProtoDecode(pb *ProtoBadWorkObjects, location common.Location) error {
+	list := make(badWorkObjectList, len(pb.BadWorkObjects))
+	for i, protoBlock := range pb.BadWorkObjects {
+		block := new(badWorkObject)
+		if err := block.ProtoDecode(protoBlock, location); err != nil {
+			return err
+		}
+		list[i] = block
+	}
+	*s = list
+	return nil
+}
+
+// ReadBadWorkObject retrieves the bad workObject with the corresponding workObject hash.
+func ReadBadWorkObject(db ethdb.Reader, hash common.Hash) *types.WorkObject {
+	blob, err := db.Get(badWorkObjectKey)
+	if err != nil {
+		return nil
+	}
+	protoBadWorkObjects := new(ProtoBadWorkObjects)
+	err = proto.Unmarshal(blob, protoBadWorkObjects)
+	if err != nil {
+		return nil
+	}
+
+	badWorkObjects := new(badWorkObjectList)
+	err = badWorkObjects.ProtoDecode(protoBadWorkObjects, db.Location())
+	if err != nil {
+		return nil
+	}
+	for _, bad := range *badWorkObjects {
+		if bad.woHeader.Hash() == hash {
+			return types.NewWorkObject(bad.woHeader, bad.woBody, nil)
+		}
+	}
+	return nil
+}
+
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) *types.WorkObject {
 	for bn := b.NumberU64(nodeCtx); a.NumberU64(nodeCtx) > bn; {

@@ -69,6 +69,116 @@ func (x *ProtoNumber) GetNumber() uint64 {
 	return 0
 }
 
+type ProtoBadWorkObject struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	WoHeader *types.ProtoWorkObjectHeader `protobuf:"bytes,1,opt,name=wo_header,json=woHeader,proto3" json:"wo_header,omitempty"`
+	WoBody   *types.ProtoWorkObjectBody   `protobuf:"bytes,2,opt,name=wo_body,json=woBody,proto3" json:"wo_body,omitempty"`
+	Tx       *types.ProtoTransaction      `protobuf:"bytes,3,opt,name=tx,proto3" json:"tx,omitempty"`
+}
+
+func (x *ProtoBadWorkObject) Reset() {
+	*x = ProtoBadWorkObject{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_core_rawdb_db_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ProtoBadWorkObject) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProtoBadWorkObject) ProtoMessage() {}
+
+func (x *ProtoBadWorkObject) ProtoReflect() protoreflect.Message {
+	mi := &file_core_rawdb_db_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProtoBadWorkObject.ProtoReflect.Descriptor instead.
+func (*ProtoBadWorkObject) Descriptor() ([]byte, []int) {
+	return file_core_rawdb_db_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ProtoBadWorkObject) GetWoHeader() *types.ProtoWorkObjectHeader {
+	if x != nil {
+		return x.WoHeader
+	}
+	return nil
+}
+
+func (x *ProtoBadWorkObject) GetWoBody() *types.ProtoWorkObjectBody {
+	if x != nil {
+		return x.WoBody
+	}
+	return nil
+}
+
+func (x *ProtoBadWorkObject) GetTx() *types.ProtoTransaction {
+	if x != nil {
+		return x.Tx
+	}
+	return nil
+}
+
+type ProtoBadWorkObjects struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	BadWorkObjects []*ProtoBadWorkObject `protobuf:"bytes,1,rep,name=bad_work_objects,json=badWorkObjects,proto3" json:"bad_work_objects,omitempty"`
+}
+
+func (x *ProtoBadWorkObjects) Reset() {
+	*x = ProtoBadWorkObjects{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_core_rawdb_db_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ProtoBadWorkObjects) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProtoBadWorkObjects) ProtoMessage() {}
+
+func (x *ProtoBadWorkObjects) ProtoReflect() protoreflect.Message {
+	mi := &file_core_rawdb_db_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProtoBadWorkObjects.ProtoReflect.Descriptor instead.
+func (*ProtoBadWorkObjects) Descriptor() ([]byte, []int) {
+	return file_core_rawdb_db_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ProtoBadWorkObjects) GetBadWorkObjects() []*ProtoBadWorkObject {
+	if x != nil {
+		return x.BadWorkObjects
+	}
+	return nil
+}
+
 type ProtoLegacyTxLookupEntry struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -188,6 +298,8 @@ func file_core_rawdb_db_proto_rawDescGZIP() []byte {
 var file_core_rawdb_db_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_core_rawdb_db_proto_goTypes = []any{
 	(*ProtoNumber)(nil),                 // 0: db.ProtoNumber
+	(*ProtoBadWorkObject)(nil),          // 1: db.ProtoBadWorkObject
+	(*ProtoBadWorkObjects)(nil),         // 2: db.ProtoBadWorkObjects
 	(*ProtoLegacyTxLookupEntry)(nil),    // 3: db.ProtoLegacyTxLookupEntry
 	(*types.ProtoWorkObjectHeader)(nil), // 4: block.ProtoWorkObjectHeader
 	(*types.ProtoWorkObjectBody)(nil),   // 5: block.ProtoWorkObjectBody
@@ -195,6 +307,10 @@ var file_core_rawdb_db_proto_goTypes = []any{
 	(*common.ProtoHash)(nil),            // 7: common.ProtoHash
 }
 var file_core_rawdb_db_proto_depIdxs = []int32{
+	4, // 0: db.ProtoBadWorkObject.wo_header:type_name -> block.ProtoWorkObjectHeader
+	5, // 1: db.ProtoBadWorkObject.wo_body:type_name -> block.ProtoWorkObjectBody
+	6, // 2: db.ProtoBadWorkObject.tx:type_name -> block.ProtoTransaction
+	1, // 3: db.ProtoBadWorkObjects.bad_work_objects:type_name -> db.ProtoBadWorkObject
 	7, // 4: db.ProtoLegacyTxLookupEntry.hash:type_name -> common.ProtoHash
 	5, // [5:5] is the sub-list for method output_type
 	5, // [5:5] is the sub-list for method input_type
@@ -211,6 +327,30 @@ func file_core_rawdb_db_proto_init() {
 	if !protoimpl.UnsafeEnabled {
 		file_core_rawdb_db_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*ProtoNumber); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_core_rawdb_db_proto_msgTypes[1].Exporter = func(v any, i int) any {
+			switch v := v.(*ProtoBadWorkObject); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_core_rawdb_db_proto_msgTypes[2].Exporter = func(v any, i int) any {
+			switch v := v.(*ProtoBadWorkObjects); i {
 			case 0:
 				return &v.state
 			case 1:

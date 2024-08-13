@@ -59,6 +59,9 @@ var (
 	// snapshotSyncStatusKey tracks the snapshot sync status across restarts.
 	snapshotSyncStatusKey = []byte("SnapshotSyncStatus")
 
+	// badWorkObjectKey tracks the list of bad blocks seen by local
+	badWorkObjectKey = []byte("InvalidWorkObject")
+
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
