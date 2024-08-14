@@ -58,8 +58,9 @@ type Contract struct {
 	CodeAddr *common.Address
 	Input    []byte
 
-	Gas   uint64
-	value *big.Int
+	StateGas uint64
+	Gas      uint64
+	value    *big.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -78,6 +79,9 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 	c.Gas = gas
 	// ensures a value is set
 	c.value = value
+
+	// Create a state gas
+	c.StateGas = 0
 
 	return c
 }
@@ -170,6 +174,11 @@ func (c *Contract) UseGas(gas uint64) (ok bool) {
 	}
 	c.Gas -= gas
 	return true
+}
+
+// UseState keeps a counter on the gas used for state operation
+func (c *Contract) UseState(gas uint64) {
+	c.StateGas += gas
 }
 
 // Address returns the contracts address

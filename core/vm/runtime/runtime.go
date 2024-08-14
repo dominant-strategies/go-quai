@@ -35,20 +35,21 @@ import (
 // Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
-	ChainConfig *params.ChainConfig
-	Difficulty  *big.Int
-	Origin      common.Address
-	Coinbase    common.Address
-	BlockNumber *big.Int
-	Time        *big.Int
-	GasLimit    uint64
-	GasPrice    *big.Int
-	Value       *big.Int
-	Lock        *big.Int
-	Debug       bool
-	EVMConfig   vm.Config
-	BaseFee     *big.Int
-	Logger      *logrus.Logger
+	ChainConfig   *params.ChainConfig
+	Difficulty    *big.Int
+	Origin        common.Address
+	Coinbase      common.Address
+	BlockNumber   *big.Int
+	Time          *big.Int
+	GasLimit      uint64
+	GasPrice      *big.Int
+	Value         *big.Int
+	Lock          *big.Int
+	Debug         bool
+	EVMConfig     vm.Config
+	BaseFee       *big.Int
+	QuaiStateSize *big.Int
+	Logger        *logrus.Logger
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
@@ -70,6 +71,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.GasLimit == 0 {
 		cfg.GasLimit = math.MaxUint64
+	}
+	if cfg.QuaiStateSize == nil {
+		cfg.QuaiStateSize = new(big.Int)
 	}
 	if cfg.GasPrice == nil {
 		cfg.GasPrice = new(big.Int)
@@ -127,7 +131,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(internal, code)
 	// Call the code with the given configuration.
-	ret, _, err := vmenv.Call(
+	ret, _, _, err := vmenv.Call(
 		sender,
 		common.BytesToAddress([]byte("contract"), cfg.ChainConfig.Location),
 		input,
@@ -140,7 +144,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 }
 
 // Create executes the code using the EVM create method
-func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
+func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, uint64, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -157,13 +161,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules, cfg.ChainConfig.Location), nil)
 
 	// Call the code with the given configuration.
-	code, address, leftOverGas, err := vmenv.Create(
+	code, address, leftOverGas, stateUsed, err := vmenv.Create(
 		sender,
 		input,
 		cfg.GasLimit,
 		cfg.Value,
 	)
-	return code, address, leftOverGas, err
+	return code, address, leftOverGas, stateUsed, err
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -171,13 +175,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, uint64, error) {
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg)
 	_, err := cfg.Origin.InternalAndQuaiAddress()
 	if err != nil {
-		return []byte{}, 0, err
+		return []byte{}, 0, 0, err
 	}
 
 	statedb := cfg.State
@@ -186,7 +190,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules, cfg.ChainConfig.Location), nil)
 
 	// Call the code with the given configuration.
-	ret, leftOverGas, err := vmenv.Call(
+	ret, leftOverGas, stateGas, err := vmenv.Call(
 		vm.AccountRef(cfg.Origin),
 		address,
 		input,
@@ -194,5 +198,5 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		cfg.Value,
 		cfg.Lock,
 	)
-	return ret, leftOverGas, err
+	return ret, leftOverGas, stateGas, err
 }

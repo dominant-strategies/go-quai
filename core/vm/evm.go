@@ -79,12 +79,13 @@ type BlockContext struct {
 	CheckIfEtxEligible CheckIfEtxEligibleFunc
 
 	// Block information
-	Coinbase    common.Address // Provides information for COINBASE
-	GasLimit    uint64         // Provides information for GASLIMIT
-	BlockNumber *big.Int       // Provides information for NUMBER
-	Time        *big.Int       // Provides information for TIME
-	Difficulty  *big.Int       // Provides information for DIFFICULTY
-	BaseFee     *big.Int       // Provides information for BASEFEE
+	Coinbase      common.Address // Provides information for COINBASE
+	GasLimit      uint64         // Provides information for GASLIMIT
+	BlockNumber   *big.Int       // Provides information for NUMBER
+	Time          *big.Int       // Provides information for TIME
+	Difficulty    *big.Int       // Provides information for DIFFICULTY
+	BaseFee       *big.Int       // Provides information for BASEFEE
+	QuaiStateSize *big.Int       // Provides information for QUAISTATESIZE
 
 	// Prime Terminus information for the given block
 	EtxEligibleSlices common.Hash
@@ -186,44 +187,46 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, lock *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, lock *big.Int) (ret []byte, leftOverGas uint64, stateGas uint64, err error) {
 	if evm.Config.NoRecursion && evm.depth > 0 {
-		return nil, gas, nil
+		return nil, gas, 0, nil
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, gas, ErrDepth
+		return nil, gas, 0, ErrDepth
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, gas, ErrInsufficientBalance
+		return nil, gas, 0, ErrInsufficientBalance
 	}
 	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
 	if addr.Equal(lockupContractAddress) {
-		gasUsed, err := RedeemQuai(evm.StateDB, caller.Address(), new(types.GasPool).AddGas(gas), evm.Context.BlockNumber, lockupContractAddress)
+		gasUsed, stateGasUsed, err := RedeemQuai(evm.Context, evm.StateDB, caller.Address(), new(types.GasPool).AddGas(gas), evm.Context.BlockNumber, lockupContractAddress)
 		if gas > gasUsed {
 			gas = gas - gasUsed
 		} else {
 			gas = 0
 		}
+		stateGas += stateGasUsed
 		if err != nil {
 			log.Global.Error("RedeemQuai failed", "err", err)
 		}
-		return []byte{}, gas, err
+		return []byte{}, gas, stateGas, err
 	} else if lock != nil && lock.Sign() != 0 {
 		if err := evm.Context.Transfer(evm.StateDB, caller.Address(), lockupContractAddress, value); err != nil {
-			return nil, gas, err
+			return nil, gas, stateGas, err
 		}
-		gasUsed, err := AddNewLock(evm.StateDB, addr, new(types.GasPool).AddGas(gas), lock, evm.Context.BlockNumber, lockupContractAddress)
+		gasUsed, stateGasUsed, err := AddNewLock(evm.Context, evm.StateDB, addr, new(types.GasPool).AddGas(gas), lock, evm.Context.BlockNumber, lockupContractAddress)
 		if gas > gasUsed {
 			gas = gas - gasUsed
 		} else {
 			gas = 0
 		}
+		stateGas += stateGasUsed
 		if err != nil {
 			log.Global.Error("AddNewLock failed", "err", err)
 		}
-		return []byte{}, gas, err
+		return []byte{}, gas, stateGas, err
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
@@ -238,12 +241,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 				evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
 				evm.Config.Tracer.CaptureEnd(ret, 0, 0, nil)
 			}
-			return nil, gas, nil
+			return nil, gas, stateGas, nil
 		}
+		stateGas += params.CallNewAccountGas(evm.Context.QuaiStateSize)
 		evm.StateDB.CreateAccount(internalAddr)
 	}
 	if err := evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value); err != nil {
-		return nil, gas, err
+		return nil, gas, stateGas, err
 	}
 
 	// Capture the tracer start/end events in debug mode
@@ -270,6 +274,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), code)
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
+			stateGas += contract.StateGas
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code
@@ -284,7 +289,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
-	return ret, gas, err
+	return ret, gas, stateGas, err
 }
 
 // CallCode executes the contract associated with the addr with the given input
@@ -438,10 +443,10 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address) ([]byte, common.Address, uint64, error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address) ([]byte, common.Address, uint64, uint64, error) {
 	internalCallerAddr, err := caller.Address().InternalAndQuaiAddress()
 	if err != nil {
-		return nil, common.Zero, 0, err
+		return nil, common.Zero, 0, 0, err
 	}
 	nonce := evm.StateDB.GetNonce(internalCallerAddr)
 	evm.StateDB.SetNonce(internalCallerAddr, nonce+1)
@@ -449,15 +454,15 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
-		return nil, common.Zero, gas, ErrDepth
+		return nil, common.Zero, gas, 0, ErrDepth
 	}
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		return nil, common.Zero, gas, ErrInsufficientBalance
+		return nil, common.Zero, gas, 0, ErrInsufficientBalance
 	}
 
 	internalContractAddr, err := address.InternalAndQuaiAddress()
 	if err != nil {
-		return nil, common.Zero, 0, err
+		return nil, common.Zero, 0, 0, err
 	}
 
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
@@ -467,16 +472,17 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(internalContractAddr)
 	if evm.StateDB.GetNonce(internalContractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
-		return nil, common.Zero, 0, ErrContractAddressCollision
+		return nil, common.Zero, 0, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
+	stateUsed := params.CallNewAccountGas(evm.Context.QuaiStateSize)
 	evm.StateDB.CreateAccount(internalContractAddr)
 
 	evm.StateDB.SetNonce(internalContractAddr, 1)
 
 	if err := evm.Context.Transfer(evm.StateDB, caller.Address(), address, value); err != nil {
-		return nil, common.Zero, 0, err
+		return nil, common.Zero, 0, stateUsed, err
 	}
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
@@ -485,7 +491,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
 	if evm.Config.NoRecursion && evm.depth > 0 {
-		return nil, address, gas, nil
+		return nil, address, gas, stateUsed, nil
 	}
 
 	if evm.Config.Debug && evm.depth == 0 {
@@ -531,14 +537,14 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.Config.Debug && evm.depth == 0 {
 		evm.Config.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 	}
-	return ret, address, contract.Gas, err
+	return ret, address, contract.Gas, stateUsed, err
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, stateUsed uint64, err error) {
 	internalAddr, err := caller.Address().InternalAndQuaiAddress()
 	if err != nil {
-		return nil, common.Zero, 0, err
+		return nil, common.Zero, 0, 0, err
 	}
 
 	nonce := evm.StateDB.GetNonce(internalAddr)
@@ -551,13 +557,13 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// Calculate the gas required for the keccak256 computation of the input data.
 	gasCost, err := calculateKeccakGas(code)
 	if err != nil {
-		return nil, common.Zero, 0, err
+		return nil, common.Zero, 0, 0, err
 	}
 
 	// attempt to grind the address
 	contractAddr, remainingGas, err := evm.attemptGrindContractCreation(caller, nonce, gas, gasCost, code)
 	if err != nil {
-		return nil, common.Zero, 0, err
+		return nil, common.Zero, 0, 0, err
 	}
 
 	gas = remainingGas
@@ -614,44 +620,44 @@ func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, g
 //
 // The different between Create2 with Create is Create2 uses sha3(0xff ++ msg.sender ++ salt ++ sha3(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
-func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, stateUsed uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes(), evm.chainConfig.Location)
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
 }
 
-func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas uint64, value *big.Int, data []byte) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas uint64, value *big.Int, data []byte) (ret []byte, leftOverGas uint64, stateGas uint64, err error) {
 
 	// Verify address is not in context
 	if toAddr.IsInQuaiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
-		return []byte{}, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
+		return []byte{}, 0, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
 	}
 	conversion := false
 	if toAddr.IsInQiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
 		conversion = true
 	}
 	if toAddr.IsInQiLedgerScope() && !common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
-		return []byte{}, 0, fmt.Errorf("%x is in qi scope and is not in the same location, but CreateETX was called", toAddr)
+		return []byte{}, 0, 0, fmt.Errorf("%x is in qi scope and is not in the same location, but CreateETX was called", toAddr)
 	} else if conversion && value.Cmp(params.MinQuaiConversionAmount) < 0 {
-		return []byte{}, 0, fmt.Errorf("CreateETX conversion error: %d is not sufficient value, required amount: %d", value, params.MinQuaiConversionAmount)
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX conversion error: %d is not sufficient value, required amount: %d", value, params.MinQuaiConversionAmount)
 	}
 	if gas < params.ETXGas {
-		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas, required amount: %d", gas, params.ETXGas)
 	}
 	fromInternal, err := fromAddr.InternalAndQuaiAddress()
 	if err != nil {
-		return []byte{}, 0, fmt.Errorf("CreateETX error: %s", err.Error())
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX error: %s", err.Error())
 	}
 
 	gas = gas - params.ETXGas
 
 	if gas < params.TxGas { // ETX must have enough gas to create a transaction
-		return []byte{}, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas for ETX, required amount: %d", gas, params.TxGas)
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas for ETX, required amount: %d", gas, params.TxGas)
 	}
 
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, fromAddr, value) {
-		return []byte{}, 0, fmt.Errorf("CreateETX: %x cannot transfer %d", fromAddr, value.Uint64())
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX: %x cannot transfer %d", fromAddr, value.Uint64())
 	}
 
 	evm.StateDB.SubBalance(fromInternal, value)
@@ -660,7 +666,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	index := len(evm.ETXCache) // this is virtually guaranteed to be zero, but the logic is the same as opETX
 	evm.ETXCacheLock.RUnlock()
 	if index > math.MaxUint16 {
-		return []byte{}, 0, fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
 	}
 	// create external transaction
 	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: gas, Data: data, AccessList: evm.AccessList}
@@ -668,14 +674,14 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 
 	// check if the etx is eligible to be sent to the to location
 	if !conversion && !evm.Context.CheckIfEtxEligible(evm.Context.EtxEligibleSlices, *etx.To().Location()) {
-		return []byte{}, 0, fmt.Errorf("CreateETX error: ETX is not eligible to be sent to %x", etx.To())
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX error: ETX is not eligible to be sent to %x", etx.To())
 	}
 
 	evm.ETXCacheLock.Lock()
 	evm.ETXCache = append(evm.ETXCache, etx)
 	evm.ETXCacheLock.Unlock()
 
-	return []byte{}, 0, nil // all leftover gas goes to the ETX
+	return []byte{}, 0, 0, nil // all leftover gas goes to the ETX
 }
 
 // Emitted ETXs must include some multiple of BaseFee as miner tip, to

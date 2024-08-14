@@ -90,6 +90,7 @@ type Message interface {
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
 	UsedGas      uint64               // Total used gas but include the refunded gas
+	UsedState    uint64               // Total used state
 	Err          error                // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData   []byte               // Returned data from evm(function result or data supplied with revert opcode)
 	Etxs         []*types.Transaction // External transactions generated from opETX
@@ -317,6 +318,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if strings.Contains(err.Error(), ErrEtxGasLimitReached.Error()) {
 			return &ExecutionResult{
 				UsedGas:      params.TxGas,
+				UsedState:    params.EtxStateUsed,
 				Err:          err,
 				ReturnData:   []byte{},
 				Etxs:         nil,
@@ -359,9 +361,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		vmerr        error // vm errors do not effect consensus and are therefore not assigned to err
 		contractAddr *common.Address
 	)
+	var stateUsed uint64
 	if contractCreation {
 		var contract common.Address
-		ret, contract, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
+		ret, contract, st.gas, stateUsed, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 		contractAddr = &contract
 	} else {
 		// Increment the nonce for the next transaction
@@ -374,7 +377,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 		st.state.SetNonce(from, st.state.GetNonce(addr)+1)
-		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.msg.Lock())
+		ret, st.gas, stateUsed, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.msg.Lock())
 	}
 
 	// At this point, the execution completed, so the ETX cache can be dumped and reset
@@ -400,6 +403,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	return &ExecutionResult{
 		UsedGas:      st.gasUsed(),
+		UsedState:    stateUsed,
 		Err:          vmerr,
 		ReturnData:   ret,
 		Etxs:         etxs,

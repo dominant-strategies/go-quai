@@ -144,7 +144,7 @@ func CalculateQiTxGas(transaction *Transaction, location common.Location) uint64
 			txGas += params.ETXGas + params.TxGas
 		} else if location.Equal(*toAddr.Location()) && toAddr.IsInQuaiLedgerScope() {
 			// This output creates a conversion
-			txGas += params.ETXGas + params.TxGas + params.ColdSloadCost + params.ColdSloadCost + params.SstoreSetGas + params.SstoreSetGas
+			txGas += params.ETXGas + params.TxGas + params.ColdSloadCost(big.NewInt(0), big.NewInt(0)) + params.ColdSloadCost(big.NewInt(0), big.NewInt(0)) + params.SstoreSetGas(big.NewInt(0), big.NewInt(0)) + params.SstoreSetGas(big.NewInt(0), big.NewInt(0))
 		}
 	}
 	return txGas

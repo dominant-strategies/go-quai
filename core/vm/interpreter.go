@@ -185,11 +185,16 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				return nil, ErrWriteProtection
 			}
 		}
-		// Static portion of gas
-		cost = operation.constantGas // For tracing
-		if !contract.UseGas(operation.constantGas) {
+		// Static portion of gas, the static portion now only applies to the compute operations
+		// previously considered state access static costs are modified based on the size of the
+		// state trie and the contract storage size trie
+		staticCost, stateCost, err := operation.constantGas(in.evm, contract)
+		if !contract.UseGas(staticCost) {
 			return nil, ErrOutOfGas
 		}
+
+		// Add the stateGas used into the contract.StateGas
+		contract.UseState(stateCost)
 
 		var memorySize uint64
 		// calculate the new memory size and expand the memory to fit
@@ -212,11 +217,16 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// cost is explicitly set so that the capture state defer method can get the proper cost
 		if operation.dynamicGas != nil {
 			var dynamicCost uint64
-			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
+			var stateCost uint64
+			dynamicCost, stateCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // total cost, for debug tracing
+
 			if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
+
+			// Add the stateGas used into the contract.StateGas
+			contract.UseState(stateCost)
 		}
 		if memorySize > 0 {
 			mem.Resize(memorySize)
