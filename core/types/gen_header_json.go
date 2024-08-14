@@ -40,7 +40,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		GasLimit    					hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
 		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
-		StateLimit     					hexutil.Uint64   		`json:"StateLimit"      			gencodec:"required"`
+		StateLimit     					hexutil.Uint64   		`json:"stateLimit"      			gencodec:"required"`
+		StateUsed                       hexutil.Uint64          `json:"stateUsed"                   gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
 	}
 	// Initialize the enc struct
@@ -79,6 +80,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.EtxEligibleSlices = h.EtxEligibleSlices()
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee())
 	enc.StateLimit = hexutil.Uint64(h.StateLimit())
+	enc.StateUsed = hexutil.Uint64(h.StateUsed())
 	enc.Extra = hexutil.Bytes(h.Extra())
 	raw, err := json.Marshal(&enc)
 	return raw, err
@@ -111,7 +113,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		GasLimit    					*hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					*hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
 		BaseFee     					*hexutil.Big   		 	`json:"baseFeePerGas"      			gencodec:"required"`
-		StateLimit                      *hexutil.Uint64         `json:"StateLimit"                  gencodec:"required"`
+		StateLimit                      *hexutil.Uint64         `json:"stateLimit"                  gencodec:"required"`
+		StateUsed                       *hexutil.Uint64         `json:"stateUsed"                   gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -187,7 +190,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'baseFee' for Header")
 	}
 	if dec.StateLimit == nil {
-		return errors.New("missing required field 'StateLimit' for Header")
+		return errors.New("missing required field 'stateLimit' for Header")
+	}
+	if dec.StateUsed == nil {
+		return errors.New("missing required field 'stateUsed' for Header")
 	}
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
@@ -243,6 +249,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetEtxEligibleSlices(*dec.EtxEligibleSlices)
 	h.SetBaseFee((*big.Int)(dec.BaseFee))
 	h.SetStateLimit(uint64(*dec.StateLimit))
+	h.SetStateUsed(uint64(*dec.StateUsed))
 	h.SetExtra(dec.Extra)
 	return nil
 }

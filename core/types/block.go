@@ -113,6 +113,7 @@ type Header struct {
 	baseFee               *big.Int      `json:"baseFeePerGas"         gencodec:"required"`
 	extra                 []byte        `json:"extraData"             gencodec:"required"`
 	stateLimit            uint64        `json:"StateLimit" 			  gencodec:"required"`
+	stateUsed             uint64        `json:"StateUsed"             gencodec:"required"`
 
 	// caches
 	hash     atomic.Value
@@ -154,6 +155,7 @@ func EmptyHeader() *Header {
 	h.uncleHash = EmptyUncleHash
 	h.baseFee = big.NewInt(0)
 	h.stateLimit = 0
+	h.stateUsed = 0
 	h.extra = []byte{}
 	h.efficiencyScore = 0
 	h.thresholdCount = 0
@@ -217,6 +219,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
 	stateLimit := h.StateLimit()
+	stateUsed := h.StateUsed()
 	efficiencyScore := uint64(h.EfficiencyScore())
 	thresholdCount := uint64(h.ThresholdCount())
 	expansionNumber := uint64(h.ExpansionNumber())
@@ -241,6 +244,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		ExpansionNumber:   &expansionNumber,
 		BaseFee:           h.BaseFee().Bytes(),
 		StateLimit:        &stateLimit,
+		StateUsed:         &stateUsed,
 		Extra:             h.Extra(),
 	}
 
@@ -372,6 +376,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.SetGasUsed(protoHeader.GetGasUsed())
 	h.SetBaseFee(new(big.Int).SetBytes(protoHeader.GetBaseFee()))
 	h.SetStateLimit((protoHeader.GetStateLimit()))
+	h.SetStateUsed((protoHeader.GetStateUsed()))
 	h.SetExtra(protoHeader.GetExtra())
 	h.SetEfficiencyScore(uint16(protoHeader.GetEfficiencyScore()))
 	h.SetThresholdCount(uint16(protoHeader.GetThresholdCount()))
@@ -414,6 +419,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"expansionNumber":     hexutil.Uint64(h.ExpansionNumber()),
 		"etxEligibleSlices":   h.EtxEligibleSlices(),
 		"stateLimit":          hexutil.Uint64(h.StateLimit()),
+		"stateUsed":           hexutil.Uint64(h.StateUsed()),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
@@ -515,6 +521,9 @@ func (h *Header) BaseFee() *big.Int {
 }
 func (h *Header) StateLimit() uint64 {
 	return h.stateLimit
+}
+func (h *Header) StateUsed() uint64 {
+	return h.stateUsed
 }
 func (h *Header) Extra() []byte                  { return common.CopyBytes(h.extra) }
 func (h *Header) PrimeTerminus() common.Hash     { return h.primeTerminus }
@@ -649,6 +658,11 @@ func (h *Header) SetStateLimit(val uint64) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.stateLimit = val
 }
+func (h *Header) SetStateUsed(val uint64) {
+	h.hash = atomic.Value{}     // clear hash cache
+	h.sealHash = atomic.Value{} // 	clear sealHash cache
+	h.stateUsed = val
+}
 func (h *Header) SetExtra(val []byte) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
@@ -683,6 +697,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
 	stateLimit := h.StateLimit()
+	stateUsed := h.StateUsed()
 
 	protoSealData := &ProtoHeader{
 		UncleHash:         &uncleHash,
@@ -697,6 +712,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		GasUsed:           &gasUsed,
 		BaseFee:           h.BaseFee().Bytes(),
 		StateLimit:        &stateLimit,
+		StateUsed:         &stateUsed,
 		UncledS:           h.UncledS().Bytes(),
 		PrimeTerminus:     &primeTerminus,
 		InterlinkRootHash: &interlinkRootHash,
@@ -789,7 +805,10 @@ func (h *Header) SanityCheck() error {
 		return fmt.Errorf("field cannot be `nil`: baseFee")
 	}
 	if h.StateLimit == nil {
-		return fmt.Errorf("fields cannot be `nil`: StateLimit")
+		return fmt.Errorf("fields cannot be `nil`: stateLimit")
+	}
+	if h.StateUsed == nil {
+		return fmt.Errorf("fields cannot be `nil`: stateUsed")
 	}
 	if bfLen := h.baseFee.BitLen(); bfLen > 256 {
 		return fmt.Errorf("too large base fee: bitlen %d", bfLen)
@@ -890,6 +909,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetEtxEligibleSlices(h.EtxEligibleSlices())
 	cpy.SetBaseFee(h.BaseFee())
 	cpy.SetStateLimit(h.StateLimit())
+	cpy.SetStateUsed(h.StateUsed())
 	return &cpy
 }
 
