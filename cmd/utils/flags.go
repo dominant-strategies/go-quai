@@ -843,7 +843,12 @@ func setHTTP(cfg *node.Config, nodeLocation common.Location) {
 }
 
 func GetHttpPort(nodeLocation common.Location) int {
-	startPort := viper.GetInt(HTTPPortStartFlag.Name)
+	var startPort int
+	if viper.IsSet(HTTPPortStartFlag.Name) {
+		startPort = viper.GetInt(HTTPPortStartFlag.Name)
+	} else {
+		startPort = HTTPPortStartFlag.Value.(int)
+	}
 	switch nodeLocation.Context() {
 	case common.PRIME_CTX:
 		return startPort
@@ -881,7 +886,12 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 }
 
 func GetWSPort(nodeLocation common.Location) int {
-	startPort := viper.GetInt(WSPortStartFlag.Name)
+	var startPort int
+	if viper.IsSet(WSPortStartFlag.Name) {
+		startPort = viper.GetInt(WSPortStartFlag.Name)
+	} else {
+		startPort = WSPortStartFlag.Value.(int)
+	}
 	switch nodeLocation.Context() {
 	case common.PRIME_CTX:
 		return startPort
