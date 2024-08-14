@@ -459,7 +459,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			return fmt.Errorf("invalid stateUsed: have %d, stateLimit %d", header.StateUsed(), header.StateLimit())
 		}
 		// Verify the StateLimit is correct based on the parent header.
-		expectedStateLimit := misc.CalcStateLimit()
+		expectedStateLimit := misc.CalcStateLimit(parent, params.StateCeil)
 		if header.StateLimit() != expectedStateLimit {
 			return fmt.Errorf("invalid StateLimit: have %s, want %s, parentStateLimit %s", expectedStateLimit, header.StateLimit(), parent.StateLimit())
 		}
