@@ -1415,6 +1415,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetEtxSetRoot(header.EtxSetRoot())
 		combinedPendingHeader.Header().SetBaseFee(header.BaseFee())
 		combinedPendingHeader.Header().SetStateLimit(header.StateLimit())
+		combinedPendingHeader.Header().SetStateUsed(header.StateUsed())
 		combinedPendingHeader.Header().SetGasLimit(header.GasLimit())
 		combinedPendingHeader.Header().SetGasUsed(header.GasUsed())
 		combinedPendingHeader.Header().SetExtra(header.Extra())

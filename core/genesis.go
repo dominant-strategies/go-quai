@@ -289,6 +289,7 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	}
 	wo.Header().SetBaseFee(new(big.Int).SetUint64(params.InitialBaseFee))
 	wo.Header().SetStateLimit(params.InitialStateLimit)
+	wo.Header().SetStateUsed(0)
 	wo.Header().SetEtxSetRoot(types.EmptyRootHash)
 	if g.GasLimit == 0 {
 		wo.Header().SetGasLimit(params.GenesisGasLimit)

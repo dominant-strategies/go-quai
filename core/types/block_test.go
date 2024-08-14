@@ -57,6 +57,7 @@ func headerTestData() (*Header, common.Hash) {
 		gasUsed:               987654321,
 		baseFee:               big.NewInt(123456789),
 		stateLimit:            1234567,
+		stateUsed:             1234567,
 		extra:                 []byte("SGVsbG8gd29ybGQ="),
 	}
 
@@ -65,7 +66,7 @@ func headerTestData() (*Header, common.Hash) {
 
 func TestHeaderHash(t *testing.T) {
 	_, hash := headerTestData()
-	correctHash := common.HexToHash("0x515124fb51712f1ebf42c36d7eb22ad4f2ca4eab4d36df42db656251b876addb")
+	correctHash := common.HexToHash("0x89d7716b39e330a7532700c919b83e9d699f41823adf2bd97a64c3f98d560457")
 	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 
@@ -297,7 +298,11 @@ func FuzzHeaderStateLimitHash(f *testing.F) {
 		func(h *Header) uint64 { return h.stateLimit },
 		func(h *Header, bi uint64) { h.stateLimit = bi })
 }
-
+func FuzzHeaderStateUsedHash(f *testing.F) {
+	fuzzHeaderUint64Hash(f,
+		func(h *Header) uint64 { return h.stateUsed },
+		func(h *Header, bi uint64) { h.stateUsed = bi })
+}
 func FuzzHeaderExtraHash(f *testing.F) {
 	header, _ := headerTestData()
 	f.Add(testByte)

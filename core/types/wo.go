@@ -243,6 +243,10 @@ func (wo *WorkObject) StateLimit() uint64 {
 	return wo.Header().StateLimit()
 }
 
+func (wo *WorkObject) StateUsed() uint64 {
+	return wo.Header().StateUsed()
+}
+
 func (wo *WorkObject) GasUsed() uint64 {
 	return wo.Header().GasUsed()
 }
