@@ -261,12 +261,15 @@ func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, etxs types.Transactions, usedGas uint64) error {
+func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, etxs types.Transactions, usedGas uint64, usedState uint64) error {
 	start := time.Now()
 	header := types.CopyHeader(block.Header())
 	time1 := common.PrettyDuration(time.Since(start))
 	if block.GasUsed() != usedGas {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
+	}
+	if block.StateUsed() != usedState {
+		return fmt.Errorf("invalid state used (remote: %d local: %d)", block.StateUsed(), usedState)
 	}
 	time2 := common.PrettyDuration(time.Since(start))
 	time3 := common.PrettyDuration(time.Since(start))

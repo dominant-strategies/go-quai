@@ -112,6 +112,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 		GasLimit:           header.GasLimit(),
 		CheckIfEtxEligible: chain.CheckIfEtxIsEligible,
 		EtxEligibleSlices:  etxEligibleSlices,
+		QuaiStateSize:      parent.QuaiStateSize(), // using the state size at the parent for all the gas calculations
 	}, nil
 }
 

@@ -840,7 +840,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	snap := env.state.Snapshot()
 	// retrieve the gas used int and pass in the reference to the ApplyTransaction
 	gasUsed := env.wo.GasUsed()
-	receipt, quaiFees, err := ApplyTransaction(w.chainConfig, parent, *env.parentOrder, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+	stateUsed := env.wo.StateUsed()
+	receipt, quaiFees, err := ApplyTransaction(w.chainConfig, parent, *env.parentOrder, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, &stateUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
 	if err != nil {
 		w.logger.WithFields(log.Fields{
 			"err":     err,

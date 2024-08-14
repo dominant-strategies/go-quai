@@ -17,6 +17,7 @@
 package params
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -31,7 +32,8 @@ const (
 	MinGasLimit                     uint64 = 40000000 // Minimum the gas limit may ever be.
 	GenesisGasLimit                 uint64 = 5000000  // Gas limit of the Genesis block.
 
-	StateCeil uint64 = 40000000 // Maximum the StateCeil may ever be
+	StateCeil    uint64 = 40000000 // Maximum the StateCeil may ever be
+	EtxStateUsed uint64 = 10000    // state used by a simple etx
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
 	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
@@ -54,21 +56,8 @@ const (
 	Sha3Gas     uint64 = 30 // Once per SHA3 operation.
 	Sha3WordGas uint64 = 6  // Once per word of the SHA3 operation's data.
 
-	SstoreClearGas  uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
-	SstoreRefundGas uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
-
-	NetSstoreNoopGas  uint64 = 200   // Once per SSTORE operation if the value doesn't change.
-	NetSstoreInitGas  uint64 = 20000 // Once per SSTORE operation from clean zero.
-	NetSstoreCleanGas uint64 = 5000  // Once per SSTORE operation from clean non-zero.
-	NetSstoreDirtyGas uint64 = 200   // Once per SSTORE operation from dirty.
-
-	NetSstoreClearRefund      uint64 = 15000 // Once per SSTORE operation for clearing an originally existing storage slot
-	NetSstoreResetRefund      uint64 = 4800  // Once per SSTORE operation for resetting to the original non-zero value
-	NetSstoreResetClearRefund uint64 = 19800 // Once per SSTORE operation for resetting to the original zero value
-
-	SstoreSentryGas uint64 = 2300  // Minimum gas required to be present for an SSTORE call, not consumed
-	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation from clean zero to non-zero
-	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
+	SstoreSetGas   uint64 = 20000 // Once per SSTORE operation from clean zero to non-zero
+	SstoreResetGas uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
 
 	ColdAccountAccessCost = uint64(2600) // COLD_ACCOUNT_ACCESS_COST
 	ColdSloadCost         = uint64(2100) // COLD_SLOAD_COST
@@ -99,11 +88,7 @@ const (
 	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in access list
 
 	// These have been changed during the course of the chain
-	CallGas         uint64 = 700 // Static portion of gas for CALL-derivates
-	BalanceGas      uint64 = 700 // The cost of a BALANCE operation
-	ExtcodeSizeGas  uint64 = 700 // Cost of EXTCODESIZE
 	SloadGas        uint64 = 800
-	ExtcodeHashGas  uint64 = 700  // Cost of EXTCODEHASH
 	SelfdestructGas uint64 = 5000 // Cost of SELFDESTRUCT
 
 	// EXP has a dynamic portion depending on the size of the exponent
@@ -220,4 +205,16 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 	_, numZones := common.GetHierarchySizeForExpansionNumber(expansionNum)
 	timeFactor := int64(max(numZones, 2))
 	return new(big.Int).Mul(big.NewInt(timeFactor), new(big.Int).SetUint64(numZones))
+}
+
+func SstoreSentryGas(stateSize, contractSize *big.Int) uint64 {
+	return 2300 * CalculateGasScalingFactor(stateSize, contractSize) // Minimum gas required to be present for an SSTORE call, not consumed
+}
+
+func CalculateGasScalingFactor(stateSize, contractSize *big.Int) uint64 {
+	stateSizeFloat, _ := stateSize.Float64()
+	contractSizeFloat, _ := contractSize.Float64()
+	scalingFactor := math.Log(stateSizeFloat) + math.Log(contractSizeFloat)
+	// If we can assume that the gas price constants is correct for level 7 trie
+	return uint64(scalingFactor) / 7
 }

@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"errors"
-
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/params"
@@ -26,9 +24,9 @@ import (
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
 // only for the memory region that is expanded, not the total memory.
-func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
+func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, uint64, error) {
 	if newMemSize == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
 	// The maximum that will fit in a uint64 is max_word_count - 1. Anything above
 	// that will result in an overflow. Additionally, a newMemSize which results in
@@ -36,7 +34,7 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 	// overflow. The constant 0x1FFFFFFFE0 is the highest number that can be used
 	// without overflowing the gas calculation.
 	if newMemSize > 0x1FFFFFFFE0 {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
 	newMemSizeWords := toWordSize(newMemSize)
 	newMemSize = newMemSizeWords * 32
@@ -50,9 +48,9 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 		fee := newTotalFee - mem.lastGasCost
 		mem.lastGasCost = newTotalFee
 
-		return fee, nil
+		return fee, 0, nil
 	}
-	return 0, nil
+	return 0, 0, nil
 }
 
 // memoryCopierGas creates the gas functions for the following opcodes, and takes
@@ -63,26 +61,26 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 // EXTCODECOPY (stack poition 3)
 // RETURNDATACOPY (stack position 2)
 func memoryCopierGas(stackpos int) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
 		// Gas for expanding the memory
-		gas, err := memoryGasCost(mem, memorySize)
+		gas, _, err := memoryGasCost(mem, memorySize)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 		// And gas for copying data, charged per word at param.CopyGas
 		words, overflow := stack.Back(stackpos).Uint64WithOverflow()
 		if overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
 
 		if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
 
 		if gas, overflow = math.SafeAdd(gas, words); overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
-		return gas, nil
+		return gas, 0, nil
 	}
 }
 
@@ -92,117 +90,59 @@ var (
 	gasReturnDataCopy = memoryCopierGas(2)
 )
 
-//  0. If *gasleft* is less than or equal to 2300, fail the current call.
-//  1. If current value equals new value (this is a no-op), SLOAD_GAS is deducted.
-//  2. If current value does not equal new value:
-//     2.1. If original value equals current value (this storage slot has not been changed by the current execution context):
-//     2.1.1. If original value is 0, SSTORE_SET_GAS (20K) gas is deducted.
-//     2.1.2. Otherwise, SSTORE_RESET_GAS gas is deducted. If new value is 0, add SSTORE_CLEARS_SCHEDULE to refund counter.
-//     2.2. If original value does not equal current value (this storage slot is dirty), SLOAD_GAS gas is deducted. Apply both of the following clauses:
-//     2.2.1. If original value is not 0:
-//     2.2.1.1. If current value is 0 (also means that new value is not 0), subtract SSTORE_CLEARS_SCHEDULE gas from refund counter.
-//     2.2.1.2. If new value is 0 (also means that current value is not 0), add SSTORE_CLEARS_SCHEDULE gas to refund counter.
-//     2.2.2. If original value equals new value (this storage slot is reset):
-//     2.2.2.1. If original value is 0, add SSTORE_SET_GAS - SLOAD_GAS to refund counter.
-//     2.2.2.2. Otherwise, add SSTORE_RESET_GAS - SLOAD_GAS gas to refund counter.
-func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	// If we fail the minimum gas availability invariant, fail (0)
-	if contract.Gas <= params.SstoreSentryGas {
-		return 0, errors.New("not enough gas for reentrancy sentry")
-	}
-	// Gas sentry honoured, do the actual gas calculation based on the stored value
-	var (
-		y, x                      = stack.Back(1), stack.Back(0)
-		internalContractAddr, err = contract.Address().InternalAndQuaiAddress()
-	)
-	if err != nil {
-		return 0, err
-	}
-	current := evm.StateDB.GetState(internalContractAddr, x.Bytes32())
-	value := common.Hash(y.Bytes32())
-
-	if current == value { // noop (1)
-		return params.SloadGas, nil
-	}
-	original := evm.StateDB.GetCommittedState(internalContractAddr, x.Bytes32())
-	if original == current {
-		if original == (common.Hash{}) { // create slot (2.1.1)
-			return params.SstoreSetGas, nil
-		}
-		if value == (common.Hash{}) { // delete slot (2.1.2b)
-			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefund)
-		}
-		return params.SstoreResetGas, nil // write existing slot (2.1.2)
-	}
-	if original != (common.Hash{}) {
-		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
-			evm.StateDB.SubRefund(params.SstoreClearsScheduleRefund)
-		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
-			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefund)
-		}
-	}
-	if original == value {
-		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			evm.StateDB.AddRefund(params.SstoreSetGas - params.SloadGas)
-		} else { // reset to original existing slot (2.2.2.2)
-			evm.StateDB.AddRefund(params.SstoreResetGas - params.SloadGas)
-		}
-	}
-	return params.SloadGas, nil // dirty update (2.2)
-}
-
 func makeGasLog(n uint64) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
 		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
 		if overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
 
-		gas, err := memoryGasCost(mem, memorySize)
+		gas, _, err := memoryGasCost(mem, memorySize)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 
 		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
 		if gas, overflow = math.SafeAdd(gas, n*params.LogTopicGas); overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
 
 		var memorySizeGas uint64
 		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
 		if gas, overflow = math.SafeAdd(gas, memorySizeGas); overflow {
-			return 0, ErrGasUintOverflow
+			return 0, 0, ErrGasUintOverflow
 		}
-		return gas, nil
+		// make gas log doesnt use any state operation, so return 0 for stateGas used
+		return gas, 0, nil
 	}
 }
 
-func gasSha3(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas, err := memoryGasCost(mem, memorySize)
+func gasSha3(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
+	gas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	wordGas, overflow := stack.Back(1).Uint64WithOverflow()
 	if overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Sha3WordGas); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
 	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return gas, 0, nil
 }
 
 // pureMemoryGascost is used by several operations, which aside from their
 // static cost have a dynamic cost which is solely based on the memory
 // expansion
-func pureMemoryGascost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func pureMemoryGascost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
 	return memoryGasCost(mem, memorySize)
 }
 
@@ -215,25 +155,25 @@ var (
 	gasCreate  = pureMemoryGascost
 )
 
-func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas, err := memoryGasCost(mem, memorySize)
+func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
+	gas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	wordGas, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Sha3WordGas); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
 	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return gas, 0, nil
 }
 
-func gasExp(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasExp(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
 	expByteLen := uint64((stack.data[stack.len()-2].BitLen() + 7) / 8)
 
 	var (
@@ -241,19 +181,20 @@ func gasExp(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize 
 		overflow bool
 	)
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return gas, 0, nil
 }
 
-func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
 	var (
 		gas            uint64
+		stateGas       uint64
 		transfersValue = !stack.Back(2).IsZero()
 		address, err   = common.Bytes20ToAddress(stack.Back(1).Bytes20(), evm.chainConfig.Location).InternalAndQuaiAddress()
 	)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if transfersValue && evm.StateDB.Empty(address) {
 		gas += params.CallNewAccountGas
@@ -261,80 +202,81 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if transfersValue {
 		gas += params.CallValueTransferGas
 	}
-	memoryGas, err := memoryGasCost(mem, memorySize)
+	memoryGas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
 
 	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return gas, stateGas, nil
 }
 
-func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	memoryGas, err := memoryGasCost(mem, memorySize)
+func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
+	memoryGas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	var (
 		gas      uint64
+		stateGas uint64
 		overflow bool
 	)
 	if stack.Back(2).Sign() != 0 {
 		gas += params.CallValueTransferGas
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
 	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return gas, stateGas, nil
 }
 
-func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas, err := memoryGasCost(mem, memorySize)
+func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
+	gas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return gas, 0, nil // TODO: Need to check if this method acceses state
 }
 
-func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas, err := memoryGasCost(mem, memorySize)
+func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
+	gas, _, err := memoryGasCost(mem, memorySize)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	evm.callGasTemp, err = callGas(contract.Gas, gas, stack.Back(0))
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
-		return 0, ErrGasUintOverflow
+		return 0, 0, ErrGasUintOverflow
 	}
-	return gas, nil
+	return gas, 0, nil // TODO: check of this method needs state gas
 }
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {

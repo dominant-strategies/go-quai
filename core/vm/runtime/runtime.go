@@ -35,20 +35,21 @@ import (
 // Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
-	ChainConfig *params.ChainConfig
-	Difficulty  *big.Int
-	Origin      common.Address
-	Coinbase    common.Address
-	BlockNumber *big.Int
-	Time        *big.Int
-	GasLimit    uint64
-	GasPrice    *big.Int
-	Value       *big.Int
-	Lock        *big.Int
-	Debug       bool
-	EVMConfig   vm.Config
-	BaseFee     *big.Int
-	Logger      *logrus.Logger
+	ChainConfig   *params.ChainConfig
+	Difficulty    *big.Int
+	Origin        common.Address
+	Coinbase      common.Address
+	BlockNumber   *big.Int
+	Time          *big.Int
+	GasLimit      uint64
+	GasPrice      *big.Int
+	Value         *big.Int
+	Lock          *big.Int
+	Debug         bool
+	EVMConfig     vm.Config
+	BaseFee       *big.Int
+	QuaiStateSize *big.Int
+	Logger        *logrus.Logger
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
@@ -70,6 +71,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.GasLimit == 0 {
 		cfg.GasLimit = math.MaxUint64
+	}
+	if cfg.QuaiStateSize == nil {
+		cfg.QuaiStateSize = new(big.Int)
 	}
 	if cfg.GasPrice == nil {
 		cfg.GasPrice = new(big.Int)
@@ -109,7 +113,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
+		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, new(big.Int), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"), cfg.ChainConfig.Location)
@@ -147,7 +151,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
+		cfg.State, _ = state.New(common.Hash{}, common.Hash{}, common.Hash{}, new(big.Int), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), state.NewDatabase(rawdb.NewMemoryDatabase(cfg.Logger)), &snapshot.Tree{}, cfg.ChainConfig.Location, cfg.Logger)
 	}
 	var (
 		vmenv  = NewEnv(cfg)

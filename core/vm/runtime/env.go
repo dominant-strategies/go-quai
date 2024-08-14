@@ -27,15 +27,16 @@ func NewEnv(cfg *Config) *vm.EVM {
 		GasPrice: cfg.GasPrice,
 	}
 	blockContext := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		GetHash:     cfg.GetHashFn,
-		Coinbase:    cfg.Coinbase,
-		BlockNumber: cfg.BlockNumber,
-		Time:        cfg.Time,
-		Difficulty:  cfg.Difficulty,
-		GasLimit:    cfg.GasLimit,
-		BaseFee:     cfg.BaseFee,
+		CanTransfer:   core.CanTransfer,
+		Transfer:      core.Transfer,
+		GetHash:       cfg.GetHashFn,
+		Coinbase:      cfg.Coinbase,
+		BlockNumber:   cfg.BlockNumber,
+		Time:          cfg.Time,
+		Difficulty:    cfg.Difficulty,
+		GasLimit:      cfg.GasLimit,
+		BaseFee:       cfg.BaseFee,
+		QuaiStateSize: cfg.QuaiStateSize,
 	}
 
 	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

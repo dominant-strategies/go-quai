@@ -55,6 +55,7 @@ type StateTransition struct {
 	gp         *types.GasPool
 	msg        Message
 	gas        uint64
+	stateGas   uint64
 	gasPrice   *big.Int
 	gasFeeCap  *big.Int
 	gasTipCap  *big.Int
@@ -90,6 +91,7 @@ type Message interface {
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
 	UsedGas      uint64               // Total used gas but include the refunded gas
+	UsedState    uint64               // Total used state
 	Err          error                // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData   []byte               // Returned data from evm(function result or data supplied with revert opcode)
 	Etxs         []*types.Transaction // External transactions generated from opETX
@@ -317,6 +319,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if strings.Contains(err.Error(), ErrEtxGasLimitReached.Error()) {
 			return &ExecutionResult{
 				UsedGas:      params.TxGas,
+				UsedState:    params.EtxStateUsed,
 				Err:          err,
 				ReturnData:   []byte{},
 				Etxs:         nil,
@@ -432,4 +435,8 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
+}
+
+func (st *StateTransition) stateUsed() uint64 {
+	return 0
 }

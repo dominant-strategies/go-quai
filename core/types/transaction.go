@@ -1092,6 +1092,7 @@ type Message struct {
 	nonce      uint64
 	amount     *big.Int
 	gasLimit   uint64
+	stateLimit uint64
 	gasPrice   *big.Int
 	gasFeeCap  *big.Int
 	gasTipCap  *big.Int
@@ -1156,6 +1157,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *common.InternalAddress) (Message, error) {
 	msg := Message{
 		gasLimit:   tx.Gas(),
+		stateLimit: tx.Gas(),
 		gasPrice:   new(big.Int).Set(tx.GasPrice()),
 		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
 		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
