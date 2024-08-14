@@ -466,7 +466,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return fmt.Errorf("invalid stateUsed: have %d, stateLimit %d", header.StateUsed(), header.StateLimit())
 		}
 		// Verify the stateLimit is correct based on the parent header.
-		expectedStateLimit := misc.CalcStateLimit()
+		expectedStateLimit := misc.CalcStateLimit(parent, params.StateCeil)
 		if header.StateLimit() != expectedStateLimit {
 			return fmt.Errorf("invalid stateLimit: have %v, want %v, parentStateLimit %v", expectedStateLimit, header.StateLimit(), parent.StateLimit())
 		}
