@@ -43,7 +43,7 @@ func TestOpenStream(t *testing.T) {
 	MockLibp2pStream := mock_p2p.NewMockStream(ctrl)
 	MockConn := mock_p2p.NewMockConn(ctrl)
 
-	mockNode.EXPECT().GetBandwidthCounter().Return(nil).Times(1)
+	mockNode.EXPECT().GetBandwidthCounter().Return(nil).AnyTimes()
 	MockLibp2pStream.EXPECT().Close().Return(nil).AnyTimes()
 	MockLibp2pStream.EXPECT().Conn().Return(MockConn).Times(1)
 	MockLibp2pStream.EXPECT().Protocol().Return(protocol.ProtocolVersion).Times(1)
@@ -51,7 +51,17 @@ func TestOpenStream(t *testing.T) {
 	MockConn.EXPECT().RemotePeer().Return(peerID)
 	mockHost.EXPECT().NewStream(gomock.Any(), gomock.Any(), gomock.Any()).Return(MockLibp2pStream, nil).Times(1)
 
+	// GetStream Error
+	entry, err := sm.GetStream(peerID)
+	require.Error(t, err)
+	require.Nil(t, entry)
+
 	err = sm.OpenStream(mockHost2.ID())
 
 	require.NoError(t, err)
+
+	// Get Stream Success
+	entry, err = sm.GetStream(peerID)
+	require.NoError(t, err)
+	require.Equal(t, MockLibp2pStream, entry)
 }
