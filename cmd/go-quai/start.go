@@ -103,6 +103,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 		metrics_config.EnableMetrics()
 		go metrics_config.StartProcessMetrics()
 	}
+	if viper.GetBool(utils.TestFaultyP2PFlag.Name) {
+		log.Global.Warn("TEST MODE! Running with faulty p2p")
+	}
 
 	// wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)

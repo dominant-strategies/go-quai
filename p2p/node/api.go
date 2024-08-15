@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 
+	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
@@ -376,19 +378,21 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, Id string, topic string, d
 		return
 	}
 
-	switch v := data.(type) {
-	case types.WorkObjectHeaderView:
-		dt := uint64(time.Now().Unix()) - v.Time()
-		headerPropagationHist.Observe(float64(dt))
-		p.cacheAdd(v.Hash(), &v, nodeLocation)
-	case types.WorkObjectBlockView:
-		dt := uint64(time.Now().Unix()) - v.Time()
-		blockPropagationHist.Observe(float64(dt))
-		p.cacheAdd(v.Hash(), &v, nodeLocation)
-	}
+	if !viper.GetBool(utils.TestFaultyP2PFlag.Name) {
+		switch v := data.(type) {
+		case types.WorkObjectHeaderView:
+			dt := uint64(time.Now().Unix()) - v.Time()
+			headerPropagationHist.Observe(float64(dt))
+			p.cacheAdd(v.Hash(), &v, nodeLocation)
+		case types.WorkObjectBlockView:
+			dt := uint64(time.Now().Unix()) - v.Time()
+			blockPropagationHist.Observe(float64(dt))
+			p.cacheAdd(v.Hash(), &v, nodeLocation)
+		}
 
-	// If we made it here, pass the data on to the consensus backend
-	if p.consensus != nil {
-		p.consensus.OnNewBroadcast(sourcePeer, Id, topic, data, nodeLocation)
+		// If we made it here, pass the data on to the consensus backend
+		if p.consensus != nil {
+			p.consensus.OnNewBroadcast(sourcePeer, Id, topic, data, nodeLocation)
+		}
 	}
 }

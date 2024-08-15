@@ -115,6 +115,7 @@ var NodeFlags = []Flag{
 	IndexAddressUtxos,
 	StartingExpansionNumberFlag,
 	NodeLogLevelFlag,
+	TestFaultyP2PFlag,
 }
 
 var TXPoolFlags = []Flag{
@@ -564,6 +565,12 @@ var (
 		Name:  c_NodeFlagPrefix + "log-level",
 		Value: "info",
 		Usage: "log level (trace, debug, info, warn, error, fatal, panic)" + generateEnvDoc(c_GlobalFlagPrefix+"log-level"),
+	}
+
+	TestFaultyP2PFlag = Flag{
+		Name:  c_NodeFlagPrefix + "faultyp2p",
+		Value: false,
+		Usage: "Run node with intentional P2P faults, to test P2P behavior",
 	}
 )
 
