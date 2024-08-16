@@ -53,11 +53,12 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, common.Address) {
 	p, ok := PrecompiledContracts[addr.Bytes20()]
 	if !ok {
-		// to translate the address, we add the last byte of the address to the location-specific zero address
-		// to support more than 255 precompiles, we could use the last two bytes, but it's likely unnecessary
-		translatedAddress := common.HexToAddressBytes(fmt.Sprintf("0x%x000000000000000000000000000000000000%02x", evm.chainConfig.Location.BytePrefix(), addr.Bytes20()[19]))
+		// to translate the address, we set the location-specific byte prefix to the first byte and check if it's a precompile
+		translatedAddress := addr.Bytes20()
+		translatedAddress[0] = evm.chainConfig.Location.BytePrefix()
 		p, ok = PrecompiledContracts[translatedAddress]
 		if ok {
+			// if it's a precompile, set the address to the precompile address
 			addr = common.Bytes20ToAddress(translatedAddress, evm.chainConfig.Location)
 		}
 	}
