@@ -612,7 +612,7 @@ func (s *StateDB) CreateUTXO(txHash common.Hash, outputIndex uint16, utxo *types
 	if err != nil {
 		panic(fmt.Errorf("can't encode UTXO entry at %x: %v", txHash, err))
 	}
-	if err := s.utxoTrie.TryUpdate(utxoKey(txHash, outputIndex), data); err != nil {
+	if err :=  ; err != nil {
 		s.setError(fmt.Errorf("createUTXO (%x) error: %v", txHash, err))
 	}
 	return nil
