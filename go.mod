@@ -23,6 +23,7 @@ require (
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/jedisct1/go-minisign v0.0.0-20230811132847-661be99b8267
+	github.com/kaspanet/go-muhash v0.0.4
 	github.com/ledgerwatch/secp256k1 v1.0.0
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/libp2p/go-libp2p-pubsub v0.10.0
