@@ -90,27 +90,102 @@ func TestStreamManager(t *testing.T) {
 		require.Same(t, newMockHost, sm.host, "Expected new host to be set")
 	})
 }
+
+func TestWriteMessageToStream(t *testing.T) {
+	ctrl, mockNode, mockHost, sm := setup(t)
+	defer ctrl.Finish()
+
+	peerID := peer.ID("mockPeerID")
+	mockHost.EXPECT().ID().Return(peerID).Times(2)
+
+	t.Run("WriteMessageToStream - Stream not found", func(t *testing.T) {
+		err := sm.WriteMessageToStream(peerID, nil, nil, protocol.ProtocolVersion, nil)
+		require.ErrorIs(t, err, ErrStreamNotFound, "Expected error when stream not found")
+	})
+
+	mockLibp2pStream := mock_p2p.NewMockStream(ctrl)
+	mockHost.EXPECT().NewStream(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLibp2pStream, nil).AnyTimes()
+
 	MockConn := mock_p2p.NewMockConn(ctrl)
 
 	mockNode.EXPECT().GetBandwidthCounter().Return(nil).AnyTimes()
-	MockLibp2pStream.EXPECT().Close().Return(nil).AnyTimes()
-	MockLibp2pStream.EXPECT().Conn().Return(MockConn).Times(1)
-	MockLibp2pStream.EXPECT().Protocol().Return(protocol.ProtocolVersion).Times(1)
-	MockLibp2pStream.EXPECT().Read(gomock.Any()).Return(0, nil).AnyTimes()
-	MockConn.EXPECT().RemotePeer().Return(peerID)
-	mockHost.EXPECT().NewStream(gomock.Any(), gomock.Any(), gomock.Any()).Return(MockLibp2pStream, nil).Times(1)
+	mockLibp2pStream.EXPECT().Close().Return(nil).AnyTimes()
+	mockLibp2pStream.EXPECT().Conn().Return(MockConn).AnyTimes()
+	mockLibp2pStream.EXPECT().Protocol().Return(protocol.ProtocolVersion).AnyTimes()
+	mockLibp2pStream.EXPECT().Read(gomock.Any()).Return(0, nil).AnyTimes()
+	MockConn.EXPECT().RemotePeer().Return(peerID).AnyTimes()
 
-	// GetStream Error
-	entry, err := sm.GetStream(peerID)
-	require.Error(t, err)
-	require.Nil(t, entry)
+	err := sm.OpenStream(mockHost.ID())
+	require.NoError(t, err, "Expected no error when opening stream")
 
-	err = sm.OpenStream(mockHost2.ID())
+	t.Run("Stream mismatch", func(t *testing.T) {
 
-	require.NoError(t, err)
+		anotherStream := mock_p2p.NewMockStream(ctrl)
+		err = sm.WriteMessageToStream(peerID, anotherStream, []byte("message"), protocol.ProtocolVersion, nil)
+		require.ErrorIs(t, err, ErrStreamMismatch, "Expected error when stream mismatch")
+	})
 
-	// Get Stream Success
-	entry, err = sm.GetStream(peerID)
-	require.NoError(t, err)
-	require.Equal(t, MockLibp2pStream, entry)
+	t.Run("Too many pending requests", func(t *testing.T) {
+		// small semaphore to block the stream
+		wrappedStream := streamWrapper{
+			stream:    mockLibp2pStream,
+			semaphore: make(chan struct{}, 1),
+			errCount:  0,
+		}
+		// block semaphore
+		wrappedStream.semaphore <- struct{}{}
+		sm.streamCache.Add(peerID, wrappedStream)
+		err := sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, nil)
+		require.ErrorIs(t, err, ErrorTooManyPendingRequests, "Expected error when too many pending requests")
+
+		// errCount is maxed out so it should close stream
+		wrappedStream.errCount = c_maxPendingRequests
+		sm.streamCache.Add(peerID, wrappedStream)
+
+		// make sure stream exists
+		entry, err := sm.GetStream(peerID)
+		require.NoError(t, err, "Expected no error when getting stream")
+		require.Equal(t, mockLibp2pStream, entry, "Expected correct stream entry")
+
+		err = sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, nil)
+		require.ErrorIs(t, err, ErrorTooManyPendingRequests, "Expected error when too many pending requests")
+
+		// check if stream was closed
+		entry, err = sm.GetStream(peerID)
+		require.Nil(t, entry, "Expected nil entry")
+		require.ErrorIs(t, err, ErrStreamNotFound, "Expected error when stream not found")
+	})
+
+	t.Run("Failed to set write deadline", func(t *testing.T) {
+		err := sm.OpenStream(mockHost.ID())
+		require.NoError(t, err, "Expected no error when opening stream")
+
+		mockLibp2pStream.EXPECT().SetWriteDeadline(gomock.Any()).Return(errors.New("mock error")).Times(1)
+
+		err = sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, nil)
+		require.Error(t, err, "Expected error when failed to set write deadline")
+	})
+
+	t.Run("Failed to write message to stream", func(t *testing.T) {
+		mockLibp2pStream.EXPECT().SetWriteDeadline(gomock.Any()).Return(nil).Times(1)
+		mockLibp2pStream.EXPECT().Write(gomock.Any()).Return(0, errors.New("mock error")).Times(1)
+
+		err = sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, nil)
+		require.Error(t, err, "Expected error when failed to write message to stream")
+	})
+
+	t.Run("Succes write message to stream", func(t *testing.T) {
+		mockLibp2pStream.EXPECT().SetWriteDeadline(gomock.Any()).Return(nil).Times(2)
+		mockLibp2pStream.EXPECT().Write(gomock.Any()).Return(10, nil).Times(2)
+
+		// without reporter
+		err = sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, nil)
+		require.NoError(t, err, "Expected no error when writing message to stream")
+
+		//with reporter
+		mockReporter := mock_p2p.NewMockReporter(ctrl)
+		mockReporter.EXPECT().LogSentMessageStream(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+		err = sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, mockReporter)
+		require.NoError(t, err, "Expected no error when writing message to stream")
+	})
 }
