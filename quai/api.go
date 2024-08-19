@@ -260,7 +260,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 	if block == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.quai.core.StateAt(block.EVMRoot(), block.UTXORoot(), block.EtxSetRoot(), block.QuaiStateSize())
+	stateDb, err := api.quai.core.StateAt(block.EVMRoot(), block.EtxSetRoot(), block.QuaiStateSize())
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -311,7 +311,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 			if block == nil {
 				return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.quai.core.StateAt(block.EVMRoot(), block.UTXORoot(), block.EtxSetRoot(), block.QuaiStateSize())
+			stateDb, err = api.quai.core.StateAt(block.EVMRoot(), block.EtxSetRoot(), block.QuaiStateSize())
 			if err != nil {
 				return state.IteratorDump{}, err
 			}
@@ -321,7 +321,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 		if block == nil {
 			return state.IteratorDump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.quai.core.StateAt(block.EVMRoot(), block.UTXORoot(), block.EtxSetRoot(), block.QuaiStateSize())
+		stateDb, err = api.quai.core.StateAt(block.EVMRoot(), block.EtxSetRoot(), block.QuaiStateSize())
 		if err != nil {
 			return state.IteratorDump{}, err
 		}

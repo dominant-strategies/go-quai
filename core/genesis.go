@@ -186,7 +186,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, 0, stored)
-	if _, err := state.New(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot(), header.QuaiStateSize(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
+	if _, err := state.New(header.EVMRoot(), header.EtxSetRoot(), header.QuaiStateSize(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -515,7 +515,7 @@ func ReadGenesisQiAlloc(filename string, logger *log.Logger) map[string]GenesisU
 }
 
 // WriteGenesisUtxoSet writes the genesis utxo set to the database
-func AddGenesisUtxos(state *state.StateDB, nodeLocation common.Location, addressOutpointMap map[string]map[string]*types.OutpointAndDenomination, logger *log.Logger) {
+func AddGenesisUtxos(db ethdb.Database, utxosCreate *[]common.Hash, nodeLocation common.Location, addressOutpointMap map[string]map[string]*types.OutpointAndDenomination, logger *log.Logger) {
 	qiAlloc := ReadGenesisQiAlloc("genallocs/gen_alloc_qi_"+nodeLocation.Name()+".json", logger)
 	// logger.WithField("alloc", len(qiAlloc)).Info("Allocating genesis accounts")
 	for addressString, utxo := range qiAlloc {
@@ -537,9 +537,10 @@ func AddGenesisUtxos(state *state.StateDB, nodeLocation common.Location, address
 			Denomination: uint8(utxo.Denomination),
 		}
 
-		if err := state.CreateUTXO(hash, uint16(utxo.Index), newUtxo); err != nil {
+		if err := rawdb.CreateUTXO(db, hash, uint16(utxo.Index), newUtxo); err != nil {
 			panic(fmt.Sprintf("Failed to create genesis UTXO: %v", err))
 		}
+		*utxosCreate = append(*utxosCreate, hash) // this is not exactly a proper UTXO hash but it is unique
 
 		outpointAndDenomination := &types.OutpointAndDenomination{
 			TxHash:       hash,

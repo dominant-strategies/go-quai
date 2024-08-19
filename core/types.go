@@ -20,6 +20,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/multiset"
 )
 
 // Validator is an interface which defines the standard for block validation. It
@@ -37,7 +38,7 @@ type Validator interface {
 
 	// ValidateState validates the given statedb and optionally the receipts and
 	// gas used.
-	ValidateState(block *types.WorkObject, state *state.StateDB, receipts types.Receipts, etxs types.Transactions, usedGas uint64, usedState uint64) error
+	ValidateState(block *types.WorkObject, state *state.StateDB, receipts types.Receipts, etxs types.Transactions, multiSet *multiset.MultiSet, usedGas uint64, usedState uint64) error
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.

@@ -1168,8 +1168,8 @@ func (c *Core) State() (*state.StateDB, error) {
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (c *Core) StateAt(root, utxoRoot, etxRoot common.Hash, quaiStateSize *big.Int) (*state.StateDB, error) {
-	return c.sl.hc.bc.processor.StateAt(root, utxoRoot, etxRoot, quaiStateSize)
+func (c *Core) StateAt(root, etxRoot common.Hash, quaiStateSize *big.Int) (*state.StateDB, error) {
+	return c.sl.hc.bc.processor.StateAt(root, etxRoot, quaiStateSize)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1206,7 +1206,7 @@ func (c *Core) GetUTXOsByAddressAtState(state *state.StateDB, address common.Add
 	utxos := make([]*types.UtxoEntry, 0, len(outpointsForAddress))
 
 	for _, outpoint := range outpointsForAddress {
-		entry := state.GetUTXO(outpoint.TxHash, outpoint.Index)
+		entry := rawdb.GetUTXO(c.sl.sliceDb, outpoint.TxHash, outpoint.Index)
 		if entry == nil {
 			return nil, errors.New("failed to get UTXO for address")
 		}
