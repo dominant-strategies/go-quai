@@ -24,33 +24,33 @@ import (
 	"github.com/pkg/errors"
 )
 
-type multiset struct {
+type MultiSet struct {
 	ms *muhash.MuHash
 }
 
-func (m multiset) Add(data []byte) {
+func (m MultiSet) Add(data []byte) {
 	m.ms.Add(data)
 }
 
-func (m multiset) Remove(data []byte) {
+func (m MultiSet) Remove(data []byte) {
 	m.ms.Remove(data)
 }
 
-func (m multiset) Hash() common.Hash {
+func (m MultiSet) Hash() common.Hash {
 	finalizedHash := m.ms.Finalize()
-	return common.BytesToHash(finalizedHash[:])
+	return common.Hash(finalizedHash)
 }
 
-func (m multiset) Serialize() []byte {
+func (m MultiSet) Serialize() []byte {
 	return m.ms.Serialize()[:]
 }
 
-func (m multiset) Clone() *multiset {
-	return &multiset{ms: m.ms.Clone()}
+func (m MultiSet) Clone() *MultiSet {
+	return &MultiSet{ms: m.ms.Clone()}
 }
 
 // FromBytes deserializes the given bytes slice and returns a multiset.
-func FromBytes(multisetBytes []byte) (*multiset, error) {
+func FromBytes(multisetBytes []byte) (*MultiSet, error) {
 	serialized := &muhash.SerializedMuHash{}
 	if len(serialized) != len(multisetBytes) {
 		return nil, errors.Errorf("mutliset bytes expected to be in length of %d but got %d",
@@ -62,10 +62,10 @@ func FromBytes(multisetBytes []byte) (*multiset, error) {
 		return nil, err
 	}
 
-	return &multiset{ms: ms}, nil
+	return &MultiSet{ms: ms}, nil
 }
 
 // New returns a new model.Multiset
-func New() *multiset {
-	return &multiset{ms: muhash.NewMuHash()}
+func New() *MultiSet {
+	return &MultiSet{ms: muhash.NewMuHash()}
 }

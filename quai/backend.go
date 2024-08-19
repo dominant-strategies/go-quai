@@ -226,16 +226,15 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
 		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:       config.TrieCleanCache,
-			TrieCleanJournal:     stack.ResolvePath(config.TrieCleanCacheJournal),
-			UTXOTrieCleanJournal: stack.ResolvePath(config.UTXOTrieCleanCacheJournal),
-			ETXTrieCleanJournal:  stack.ResolvePath(config.ETXTrieCleanCacheJournal),
-			TrieCleanRejournal:   config.TrieCleanCacheRejournal,
-			TrieCleanNoPrefetch:  config.NoPrefetch,
-			TrieDirtyLimit:       config.TrieDirtyCache,
-			TrieTimeLimit:        config.TrieTimeout,
-			SnapshotLimit:        config.SnapshotCache,
-			Preimages:            config.Preimages,
+			TrieCleanLimit:      config.TrieCleanCache,
+			TrieCleanJournal:    stack.ResolvePath(config.TrieCleanCacheJournal),
+			ETXTrieCleanJournal: stack.ResolvePath(config.ETXTrieCleanCacheJournal),
+			TrieCleanRejournal:  config.TrieCleanCacheRejournal,
+			TrieCleanNoPrefetch: config.NoPrefetch,
+			TrieDirtyLimit:      config.TrieDirtyCache,
+			TrieTimeLimit:       config.TrieTimeout,
+			SnapshotLimit:       config.SnapshotCache,
+			Preimages:           config.Preimages,
 		}
 	)
 

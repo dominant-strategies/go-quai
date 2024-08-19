@@ -33,6 +33,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
@@ -154,7 +155,7 @@ const (
 type blockChain interface {
 	CurrentBlock() *types.WorkObject
 	GetBlock(hash common.Hash, number uint64) *types.WorkObject
-	StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error)
+	StateAt(root, etxRoot common.Hash) (*state.StateDB, error)
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	IsGenesisHash(hash common.Hash) bool
 	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
@@ -303,8 +304,9 @@ type TxPool struct {
 	mu          sync.RWMutex
 
 	currentState  *state.StateDB // Current state in the blockchain head
-	pendingNonces *txNoncer      // Pending state tracking virtual nonces
-	currentMaxGas uint64         // Current gas limit for transaction caps
+	db            ethdb.Reader
+	pendingNonces *txNoncer // Pending state tracking virtual nonces
+	currentMaxGas uint64    // Current gas limit for transaction caps
 
 	locals         *accountSet                                     // Set of local transaction to exempt from eviction rules
 	journal        *txJournal                                      // Journal of local transaction to back up to disk
@@ -356,7 +358,7 @@ type newFee struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, logger *log.Logger) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, logger *log.Logger, db ethdb.Reader) *TxPool {
 	// Pending pool metrics
 	pendingDiscardMeter.Set(0)
 	pendingReplaceMeter.Set(0)
@@ -410,6 +412,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		remoteTxsCount:  0,
 		reOrgCounter:    0,
 		logger:          logger,
+		db:              db,
 	}
 	pool.senders, _ = lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
 	pool.qiTxFees, _ = lru.New[[16]byte, *big.Int](int(config.MaxFeesCached))
@@ -1203,7 +1206,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 	transactionsWithoutErrors := make([]*types.TxWithMinerFee, 0, len(txs))
 	for _, tx := range txs {
 
-		totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.currentState, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
+		totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.db, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
 		if err != nil {
 			pool.logger.WithFields(logrus.Fields{
 				"tx":  tx.Hash().String(),
@@ -1287,7 +1290,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 			if etxPLimit < params.ETXPLimitMin {
 				etxPLimit = params.ETXPLimitMin
 			}
-			totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.currentState, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
+			totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.db, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
 			if err != nil {
 				pool.logger.WithFields(logrus.Fields{
 					"tx":  tx.Hash().String(),
@@ -1829,14 +1832,12 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	}
 
 	evmRoot := newHead.EVMRoot()
-	utxoRoot := newHead.UTXORoot()
 	etxRoot := newHead.EtxSetRoot()
 	if pool.chain.IsGenesisHash(newHead.Hash()) {
 		evmRoot = types.EmptyRootHash
-		utxoRoot = types.EmptyRootHash
 		etxRoot = types.EmptyRootHash
 	}
-	statedb, err := pool.chain.StateAt(evmRoot, utxoRoot, etxRoot)
+	statedb, err := pool.chain.StateAt(evmRoot, etxRoot)
 	if err != nil {
 		pool.logger.WithField("err", err).Error("Failed to reset txpool state")
 		return

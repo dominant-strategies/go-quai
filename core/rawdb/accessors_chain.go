@@ -23,6 +23,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 )
@@ -1224,4 +1225,88 @@ func DeleteGenesisHashes(db ethdb.KeyValueWriter) {
 	if err := db.Delete(genesisHashesKey); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete genesis hashes")
 	}
+}
+
+func CreateUTXO(db ethdb.KeyValueWriter, txHash common.Hash, index uint16, utxo *types.UtxoEntry) error {
+	utxoProto, err := utxo.ProtoEncode()
+	if err != nil {
+		return err
+	}
+
+	// Now, marshal utxoProto to protobuf bytes
+	data, err := proto.Marshal(utxoProto)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+
+	// And finally, store the data in the database under the appropriate key
+	return db.Put(utxoKey(txHash, index), data)
+}
+
+func GetUTXO(db ethdb.KeyValueReader, txHash common.Hash, index uint16) *types.UtxoEntry {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(utxoKey(txHash, index))
+	if len(data) == 0 {
+		return nil
+	}
+
+	utxoProto := new(types.ProtoTxOut)
+	if err := proto.Unmarshal(data, utxoProto); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal utxo")
+	}
+
+	utxo := new(types.UtxoEntry)
+	if err := utxo.ProtoDecode(utxoProto); err != nil {
+		db.Logger().WithFields(log.Fields{
+			"txHash": txHash,
+			"index":  index,
+			"err":    err,
+		}).Error("Invalid utxo Proto")
+		return nil
+	}
+
+	return utxo
+}
+
+func DeleteUTXO(db ethdb.KeyValueWriter, txHash common.Hash, index uint16) {
+	if err := db.Delete(utxoKey(txHash, index)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete utxo")
+	}
+}
+
+func ReadMultiSet(db ethdb.Reader, blockHash common.Hash) *multiset.MultiSet {
+	data, _ := db.Get(multiSetKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+	multiSet, err := multiset.FromBytes(data)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to decode multiSet")
+	}
+	return multiSet
+}
+
+func WriteMultiSet(db ethdb.KeyValueWriter, blockHash common.Hash, multiSet *multiset.MultiSet) {
+	data := multiSet.Serialize()
+	if err := db.Put(multiSetKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store multiSet")
+	}
+}
+
+func WriteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXOs map[common.Hash]*types.UtxoEntry) error {
+	protoTxOuts := &types.ProtoTxOuts{}
+	for _, utxo := range spentUTXOs {
+		utxoProto, err := utxo.ProtoEncode()
+		if err != nil {
+			return err
+		}
+		protoTxOuts.TxOuts = append(protoTxOuts.TxOuts, utxoProto)
+	}
+	data, err := proto.Marshal(protoTxOuts)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+
+	// And finally, store the data in the database under the appropriate key
+	return db.Put(spentUTXOsKey(blockHash), data)
 }

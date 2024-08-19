@@ -186,7 +186,7 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.quai.Core().StateAt(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot())
+	stateDb, err := b.quai.Core().StateAt(header.EVMRoot(), header.EtxSetRoot())
 	return stateDb, header, err
 }
 
@@ -209,7 +209,7 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, block
 		if blockNrOrHash.RequireCanonical && b.quai.core.GetCanonicalHash(header.NumberU64(b.NodeCtx())) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
-		stateDb, err := b.quai.Core().StateAt(header.EVMRoot(), header.UTXORoot(), header.EtxSetRoot())
+		stateDb, err := b.quai.Core().StateAt(header.EVMRoot(), header.EtxSetRoot())
 		return stateDb, header, err
 	}
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
@@ -668,6 +668,10 @@ func (b *QuaiAPIBackend) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 
 func (b *QuaiAPIBackend) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error) {
 	return b.quai.core.WorkShareDistance(wo, ws)
+}
+
+func (b *QuaiAPIBackend) Database() ethdb.Database {
+	return b.quai.ChainDb()
 }
 
 // ///////////////////////////

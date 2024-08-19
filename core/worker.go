@@ -82,6 +82,8 @@ type environment struct {
 	receipts    []*types.Receipt
 	uncleMu     sync.RWMutex
 	uncles      map[common.Hash]*types.WorkObjectHeader
+	utxosCreate []common.Hash
+	utxosDelete []common.Hash
 }
 
 // unclelist returns the contained uncles as the list format.
@@ -591,7 +593,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	}
 
 	// Create a local environment copy, avoid the data race with snapshot state.
-	newWo, err := w.FinalizeAssemble(w.hc, work.wo, block, work.state, work.txs, uncles, work.etxs, work.subManifest, work.receipts)
+	newWo, err := w.FinalizeAssemble(w.hc, work.wo, block, work.state, work.txs, uncles, work.etxs, work.subManifest, work.receipts, work.utxosCreate, work.utxosDelete)
 	if err != nil {
 		return nil, err
 	}
@@ -660,14 +662,12 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
 	evmRoot := parent.EVMRoot()
-	utxoRoot := parent.UTXORoot()
 	etxRoot := parent.EtxSetRoot()
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		evmRoot = types.EmptyRootHash
-		utxoRoot = types.EmptyRootHash
 		etxRoot = types.EmptyRootHash
 	}
-	state, err := w.hc.bc.processor.StateAt(evmRoot, utxoRoot, etxRoot)
+	state, err := w.hc.bc.processor.StateAt(evmRoot, etxRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -767,9 +767,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 						break
 					}
 					// the ETX hash is guaranteed to be unique
-					if err := env.state.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), env.wo.Number(w.hc.NodeCtx())))); err != nil {
-						return nil, false, err
-					}
+					utxoHash := types.UTXOHash(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), env.wo.Number(w.hc.NodeCtx()))))
+					env.utxosCreate = append(env.utxosCreate, utxoHash)
 					outputIndex++
 				}
 			}
@@ -827,9 +826,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					}
 					gasUsed += params.CallValueTransferGas
 					// the ETX hash is guaranteed to be unique
-					if err := env.state.CreateUTXO(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))); err != nil {
-						return nil, false, err
-					}
+					utxoHash := types.UTXOHash(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock)))
+					env.utxosCreate = append(env.utxosCreate, utxoHash)
 					outputIndex++
 				}
 			}
@@ -838,9 +836,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
 				return nil, false, err
 			}
-			if err := env.state.CreateUTXO(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), big.NewInt(0)))); err != nil {
-				return nil, false, err
-			}
+			utxoHash := types.UTXOHash(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), common.Big0)))
+			env.utxosCreate = append(env.utxosCreate, utxoHash)
 			gasUsed += params.CallValueTransferGas
 		}
 		env.wo.Header().SetGasUsed(gasUsed)
@@ -1419,9 +1416,9 @@ func (w *worker) ComputeManifestHash(header *types.WorkObject) common.Hash {
 	return manifestHash
 }
 
-func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *types.WorkObject, parent *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObjectHeader, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.WorkObject, error) {
+func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *types.WorkObject, parent *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObjectHeader, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt, utxosCreate, utxosDelete []common.Hash) (*types.WorkObject, error) {
 	nodeCtx := w.hc.NodeCtx()
-	wo, err := w.engine.FinalizeAndAssemble(chain, newWo, state, txs, uncles, etxs, subManifest, receipts)
+	wo, err := w.engine.FinalizeAndAssemble(chain, newWo, state, txs, uncles, etxs, subManifest, receipts, utxosCreate, utxosDelete)
 	if err != nil {
 		return nil, err
 	}
@@ -1548,10 +1545,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 
 	addresses := make(map[common.AddressBytes]struct{})
 	totalQitIn := big.NewInt(0)
-	utxosDelete := make([]types.OutPoint, 0)
+	utxosDelete := make(map[types.OutPoint]*types.UtxoEntry)
 	inputs := make(map[uint]uint64)
 	for _, txIn := range tx.TxIn() {
-		utxo := env.state.GetUTXO(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		utxo := rawdb.GetUTXO(w.workerDb, txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
 			return fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		}
@@ -1574,7 +1571,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 		}
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
-		utxosDelete = append(utxosDelete, txIn.PreviousOutPoint)
+		utxosDelete[txIn.PreviousOutPoint] = utxo
 		inputs[uint(denomination)]++
 	}
 	var ETXRCount int
@@ -1725,15 +1722,13 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 	}
 	env.txs = append(env.txs, tx)
 	env.utxoFees.Add(env.utxoFees, txFeeInQit)
-	for _, utxo := range utxosDelete {
-		env.state.DeleteUTXO(utxo.TxHash, utxo.Index)
+	for outpoint, utxo := range utxosDelete {
+		utxoHash := types.UTXOHash(outpoint.TxHash, outpoint.Index, utxo)
+		env.utxosDelete = append(env.utxosDelete, utxoHash)
 	}
 	for outPoint, utxo := range utxosCreate {
-		if err := env.state.CreateUTXO(outPoint.TxHash, outPoint.Index, utxo); err != nil {
-			// This should never happen and will invalidate the block
-			log.Global.Errorf("Failed to create UTXO %032x:%d: %v", outPoint.TxHash, outPoint.Index, err)
-			return err
-		}
+		utxoHash := types.UTXOHash(outPoint.TxHash, outPoint.Index, utxo)
+		env.utxosCreate = append(env.utxosCreate, utxoHash)
 	}
 	if err := CheckDenominations(inputs, outputs); err != nil {
 		return err

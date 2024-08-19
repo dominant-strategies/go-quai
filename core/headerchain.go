@@ -982,8 +982,8 @@ func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.S
 	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
 }
 
-func (hc *HeaderChain) StateAt(root, utxoRoot, etxRoot common.Hash) (*state.StateDB, error) {
-	return hc.bc.processor.StateAt(root, utxoRoot, etxRoot)
+func (hc *HeaderChain) StateAt(root, etxRoot common.Hash) (*state.StateDB, error) {
+	return hc.bc.processor.StateAt(root, etxRoot)
 }
 
 func (hc *HeaderChain) SlicesRunning() []common.Location {
@@ -1079,4 +1079,8 @@ func (hc *HeaderChain) GetMaxTxInWorkShare() uint64 {
 	maxEoaInBlock := currentGasLimit / params.TxGas
 	// (maxEoaInBlock*2)/(2^bits)
 	return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.WorkSharesThresholdDiff)))
+}
+
+func (hc *HeaderChain) Database() ethdb.Database {
+	return hc.headerDb
 }

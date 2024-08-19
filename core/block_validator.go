@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -261,7 +262,7 @@ func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, etxs types.Transactions, usedGas uint64) error {
+func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.StateDB, receipts types.Receipts, etxs types.Transactions, multiSet *multiset.MultiSet, usedGas uint64) error {
 	start := time.Now()
 	header := types.CopyHeader(block.Header())
 	time1 := common.PrettyDuration(time.Since(start))
@@ -281,7 +282,7 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 	if root := statedb.IntermediateRoot(true); header.EVMRoot() != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.EVMRoot(), root)
 	}
-	if root := statedb.UTXORoot(); header.UTXORoot() != root {
+	if root := multiSet.Hash(); header.UTXORoot() != root {
 		return fmt.Errorf("invalid utxo root (remote: %x local: %x)", header.UTXORoot(), root)
 	}
 	if root := statedb.ETXRoot(); header.EtxSetRoot() != root {
