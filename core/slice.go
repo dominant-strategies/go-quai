@@ -125,7 +125,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 
 	// tx pool is only used in zone
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
-		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc, logger)
+		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc, logger, sl.sliceDb)
 		sl.hc.pool = sl.txPool
 	}
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState(), sl.logger)

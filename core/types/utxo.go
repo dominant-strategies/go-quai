@@ -278,3 +278,34 @@ type AddressUtxos struct {
 	Address common.Address
 	Utxos   []*UtxoEntry
 }
+
+func (utxo *UtxoEntry) ProtoEncode() (*ProtoTxOut, error) {
+	protoTxOut := &ProtoTxOut{}
+
+	denomination := uint32(utxo.Denomination)
+	protoTxOut.Denomination = &denomination
+	protoTxOut.Address = utxo.Address
+	if utxo.Lock == nil {
+		protoTxOut.Lock = big.NewInt(0).Bytes()
+	} else {
+		protoTxOut.Lock = utxo.Lock.Bytes()
+	}
+	return protoTxOut, nil
+}
+
+func (utxo *UtxoEntry) ProtoDecode(protoTxOut *ProtoTxOut) error {
+	// check if protoTxOut.Denomination is above the max uint8 value
+	if *protoTxOut.Denomination > math.MaxUint8 {
+		return errors.New("protoTxOut.Denomination is above the max uint8 value")
+	}
+	utxo.Denomination = uint8(protoTxOut.GetDenomination())
+	utxo.Address = protoTxOut.Address
+	utxo.Lock = new(big.Int).SetBytes(protoTxOut.Lock)
+	return nil
+}
+
+func UTXOHash(txHash common.Hash, index uint16, utxo *UtxoEntry) common.Hash {
+	indexBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(indexBytes, index)
+	return RlpHash([]interface{}{txHash, indexBytes, utxo}) // TODO: Consider encoding to protobuf instead
+}

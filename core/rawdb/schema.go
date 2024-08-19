@@ -82,6 +82,8 @@ var (
 	spentUTXOsPrefix     = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	AddressUtxosPrefix   = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
 	processedStatePrefix = []byte("ps")    // processedStatePrefix + hash -> boolean
+	multiSetPrefix       = []byte("ms")    // multiSetPrefix + hash -> multiset
+	utxoPrefix           = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 
 	blockBodyPrefix         = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -292,4 +294,20 @@ func inboundEtxsKey(hash common.Hash) []byte {
 
 func addressUtxosKey(address string) []byte {
 	return append(AddressUtxosPrefix, address[:]...)
+}
+
+// This can be optimized via VLQ encoding as btcd has done
+// this key is 36 bytes long and can probably be reduced to 32 bytes
+func utxoKey(hash common.Hash, index uint16) []byte {
+	indexBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(indexBytes, index)
+	return append(utxoPrefix, append(hash.Bytes(), indexBytes...)...)
+}
+
+func spentUTXOsKey(blockHash common.Hash) []byte {
+	return append(spentUTXOsPrefix, blockHash[:]...)
+}
+
+func multiSetKey(hash common.Hash) []byte {
+	return append(multiSetPrefix, hash.Bytes()...)
 }

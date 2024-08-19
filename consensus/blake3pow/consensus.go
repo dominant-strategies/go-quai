@@ -12,10 +12,12 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	"modernc.org/mathutil"
@@ -591,15 +593,16 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
-func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB) {
+func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB, setRoots bool, utxosCreate, utxosDelete []common.Hash) (*multiset.MultiSet, error) {
 	nodeLocation := blake3pow.config.NodeLocation
 	nodeCtx := blake3pow.config.NodeLocation.Context()
-
+	var multiSet *multiset.MultiSet
 	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
+		multiSet = multiset.New()
 		// Create the lockup contract account
 		lockupContract, err := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}].InternalAndQuaiAddress()
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		state.CreateAccount(lockupContract)
 
@@ -625,25 +628,39 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 			}
 		}
 		addressOutpointMap := make(map[string]map[string]*types.OutpointAndDenomination)
-		core.AddGenesisUtxos(state, nodeLocation, addressOutpointMap, blake3pow.logger)
+		core.AddGenesisUtxos(chain.Database(), &utxosCreate, nodeLocation, addressOutpointMap, blake3pow.logger)
 		if chain.Config().IndexAddressUtxos {
 			chain.WriteAddressOutpoints(addressOutpointMap)
 			blake3pow.logger.Info("Indexed genesis utxos")
 		}
+	} else {
+		multiSet = rawdb.ReadMultiSet(chain.Database(), header.ParentHash(nodeCtx))
 	}
-	header.Header().SetUTXORoot(state.UTXORoot())
-	header.Header().SetEVMRoot(state.IntermediateRoot(true))
-	header.Header().SetEtxSetRoot(state.ETXRoot())
-	header.Header().SetQuaiStateSize(state.GetQuaiTrieSize())
+	if multiSet == nil {
+		return nil, fmt.Errorf("Multiset is nil for block %s", header.ParentHash(nodeCtx).String())
+	}
+	for _, hash := range utxosCreate {
+		multiSet.Add(hash.Bytes())
+	}
+	for _, hash := range utxosDelete {
+		multiSet.Remove(hash.Bytes())
+	}
+	if setRoots {
+		header.Header().SetUTXORoot(multiSet.Hash())
+		header.Header().SetEVMRoot(state.IntermediateRoot(true))
+		header.Header().SetEtxSetRoot(state.ETXRoot())
+		header.Header().SetQuaiStateSize(state.GetQuaiTrieSize())
+	}
+	return multiSet, nil
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObjectHeader, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt) (*types.WorkObject, error) {
+func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObjectHeader, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt, utxosCreate, utxosDelete []common.Hash) (*types.WorkObject, error) {
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX && chain.ProcessingState() {
 		// Finalize block
-		blake3pow.Finalize(chain, header, state)
+		blake3pow.Finalize(chain, header, state, true, utxosCreate, utxosDelete)
 	}
 
 	woBody, err := types.NewWorkObjectBody(header.Header(), txs, etxs, uncles, subManifest, receipts, trie.NewStackTrie(nil), nodeCtx)
