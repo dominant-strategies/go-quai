@@ -349,6 +349,7 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
+	nodeCtx := hc.NodeCtx()
 
 	prevHeader := hc.CurrentHeader()
 	// if trying to set the same header, escape
@@ -367,7 +368,13 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash(hc.NodeCtx()) {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64(hc.NodeCtx()))
-		return nil
+		if nodeCtx == common.ZONE_CTX {
+			err := hc.AppendBlock(head)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
 	}
 
 	//Find a common header
@@ -411,6 +418,16 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64(hc.NodeCtx()))
+		if nodeCtx == common.ZONE_CTX {
+			block := hc.GetBlockOrCandidate(hashStack[i].Hash(), hashStack[i].NumberU64(nodeCtx))
+			if block == nil {
+				return errors.New("could not find block during SetCurrentState: " + hashStack[i].Hash().String())
+			}
+			err := hc.AppendBlock(block)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	if hc.NodeCtx() == common.ZONE_CTX && hc.ProcessingState() {
@@ -436,50 +453,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		}()
 	}
 
-	return nil
-}
-
-// SetCurrentState updates the current Quai state and Qi UTXO set upon which the current pending block is built
-func (hc *HeaderChain) SetCurrentState(head *types.WorkObject) error {
-	hc.headermu.Lock()
-	defer hc.headermu.Unlock()
-
-	nodeCtx := hc.NodeCtx()
-	if nodeCtx != common.ZONE_CTX || !hc.ProcessingState() {
-		return nil
-	}
-
-	current := types.CopyWorkObject(head)
-	var headersWithoutState []*types.WorkObject
-	for {
-		headersWithoutState = append(headersWithoutState, current)
-		header := hc.GetHeaderByHash(current.ParentHash(nodeCtx))
-		if header == nil {
-			return ErrSubNotSyncedToDom
-		}
-		if hc.IsGenesisHash(header.Hash()) {
-			break
-		}
-
-		// Check if the state has been processed for this block
-		processedState := rawdb.ReadProcessedState(hc.headerDb, header.Hash())
-		if processedState {
-			break
-		}
-		current = types.CopyWorkObject(header)
-	}
-
-	// Run through the hash stack to update canonicalHash and forward state processor
-	for i := len(headersWithoutState) - 1; i >= 0; i-- {
-		block := hc.GetBlockOrCandidate(headersWithoutState[i].Hash(), headersWithoutState[i].NumberU64(nodeCtx))
-		if block == nil {
-			return errors.New("could not find block during SetCurrentState: " + headersWithoutState[i].Hash().String())
-		}
-		err := hc.AppendBlock(block)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
