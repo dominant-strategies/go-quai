@@ -319,7 +319,14 @@ func (es *EventSystem) handleLogs(filters filterIndex, ev []*types.Log) {
 		return
 	}
 	for _, f := range filters[LogsSubscription] {
-		matchedLogs := filterLogs(ev, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
+		var addresses []common.Address
+		if f.logsCrit.Addresses != nil {
+			addresses = make([]common.Address, len(f.logsCrit.Addresses))
+			for i, addr := range f.logsCrit.Addresses {
+				addresses[i] = common.Bytes20ToAddress(addr, es.backend.NodeLocation())
+			}
+		}
+		matchedLogs := filterLogs(ev, f.logsCrit.FromBlock, f.logsCrit.ToBlock, addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
 		}
@@ -331,7 +338,14 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 		return
 	}
 	for _, f := range filters[PendingLogsSubscription] {
-		matchedLogs := filterLogs(ev, nil, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
+		var addresses []common.Address
+		if f.logsCrit.Addresses != nil {
+			addresses = make([]common.Address, len(f.logsCrit.Addresses))
+			for i, addr := range f.logsCrit.Addresses {
+				addresses[i] = common.Bytes20ToAddress(addr, es.backend.NodeLocation())
+			}
+		}
+		matchedLogs := filterLogs(ev, nil, f.logsCrit.ToBlock, addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
 		}
@@ -340,7 +354,14 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 
 func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev core.RemovedLogsEvent) {
 	for _, f := range filters[LogsSubscription] {
-		matchedLogs := filterLogs(ev.Logs, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
+		var addresses []common.Address
+		if f.logsCrit.Addresses != nil {
+			addresses = make([]common.Address, len(f.logsCrit.Addresses))
+			for i, addr := range f.logsCrit.Addresses {
+				addresses[i] = common.Bytes20ToAddress(addr, es.backend.NodeLocation())
+			}
+		}
+		matchedLogs := filterLogs(ev.Logs, f.logsCrit.FromBlock, f.logsCrit.ToBlock, addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
 		}

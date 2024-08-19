@@ -135,10 +135,10 @@ type ContractCaller interface {
 
 // FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
-	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
-	FromBlock *big.Int         // beginning of the queried range, nil means genesis block
-	ToBlock   *big.Int         // end of the range, nil means latest block
-	Addresses []common.Address // restricts matches to events created by specific contracts
+	BlockHash *common.Hash          // used by eth_getLogs, return logs only from block with this hash
+	FromBlock *big.Int              // beginning of the queried range, nil means genesis block
+	ToBlock   *big.Int              // end of the range, nil means latest block
+	Addresses []common.AddressBytes // restricts matches to events created by specific contracts
 
 	// The Topic list restricts matches to particular event topics. Each event has a list
 	// of topics. Topics matches a prefix of that list. An empty element slice matches any
@@ -152,8 +152,6 @@ type FilterQuery struct {
 	// {{A}, {B}}         matches topic A in first position AND B in second position
 	// {{A, B}, {C, D}}   matches topic (A OR B) in first position AND (C OR D) in second position
 	Topics [][]common.Hash
-
-	NodeLocation common.Location
 }
 
 // LogFilterer provides access to contract log events using a one-off query or continuous

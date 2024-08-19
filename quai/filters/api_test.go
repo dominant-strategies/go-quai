@@ -77,7 +77,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test2.Addresses) != 1 {
 		t.Fatalf("expected 1 address, got %d address(es)", len(test2.Addresses))
 	}
-	if test2.Addresses[0] != address0 {
+	if test2.Addresses[0] != address0.Bytes20() {
 		t.Fatalf("expected address %x, got %x", address0, test2.Addresses[0])
 	}
 
@@ -90,10 +90,10 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test3.Addresses) != 2 {
 		t.Fatalf("expected 2 addresses, got %d address(es)", len(test3.Addresses))
 	}
-	if test3.Addresses[0] != address0 {
+	if test3.Addresses[0] != address0.Bytes20() {
 		t.Fatalf("expected address %x, got %x", address0, test3.Addresses[0])
 	}
-	if test3.Addresses[1] != address1 {
+	if test3.Addresses[1] != address1.Bytes20() {
 		t.Fatalf("expected address %x, got %x", address1, test3.Addresses[1])
 	}
 
