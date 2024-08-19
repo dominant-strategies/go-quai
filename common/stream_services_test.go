@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dominant-strategies/go-quai/common/mocks"
-	"github.com/golang/mock/gomock"
+	mock_p2p "github.com/dominant-strategies/go-quai/p2p/mocks"
 	"github.com/stretchr/testify/assert"
+	gomock "go.uber.org/mock/gomock"
 )
 
 const (
@@ -24,13 +24,13 @@ func TestWriteMessageToStream(t *testing.T) {
 		name      string
 		message   []byte
 		wantErr   bool
-		setupMock func(*mocks.MockStream)
+		setupMock func(*mock_p2p.MockStream)
 	}{
 		{
 			name:    "successful write with short message",
 			message: []byte(shortMessage),
 			wantErr: false,
-			setupMock: func(m *mocks.MockStream) {
+			setupMock: func(m *mock_p2p.MockStream) {
 				m.EXPECT().SetWriteDeadline(gomock.Any()).Return(nil)
 				gomock.InOrder(
 					// first expect the length of the message to be written
@@ -50,7 +50,7 @@ func TestWriteMessageToStream(t *testing.T) {
 			name:    "successful write with long message",
 			message: []byte(longMessage),
 			wantErr: false,
-			setupMock: func(m *mocks.MockStream) {
+			setupMock: func(m *mock_p2p.MockStream) {
 				m.EXPECT().SetWriteDeadline(gomock.Any()).Return(nil)
 				gomock.InOrder(
 					// first expect the length of the message to be written
@@ -70,7 +70,7 @@ func TestWriteMessageToStream(t *testing.T) {
 			name:    "error on write deadline",
 			message: []byte(shortMessage),
 			wantErr: true,
-			setupMock: func(m *mocks.MockStream) {
+			setupMock: func(m *mock_p2p.MockStream) {
 				m.EXPECT().SetWriteDeadline(gomock.Any()).Return(fmt.Errorf("error"))
 			},
 		},
@@ -81,7 +81,7 @@ func TestWriteMessageToStream(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockStream := mocks.NewMockStream(ctrl)
+			mockStream := mock_p2p.NewMockStream(ctrl)
 			tt.setupMock(mockStream)
 
 			err := WriteMessageToStream(mockStream, tt.message, "testproto", nil)
@@ -98,13 +98,13 @@ func TestReadMessageFromStream(t *testing.T) {
 	t.Skip("Todo: fix failing test")
 	tests := []struct {
 		name      string
-		setupMock func(*mocks.MockStream)
+		setupMock func(*mock_p2p.MockStream)
 		want      []byte
 		wantErr   bool
 	}{
 		{
 			name: "successful read with short message",
-			setupMock: func(m *mocks.MockStream) {
+			setupMock: func(m *mock_p2p.MockStream) {
 				m.EXPECT().SetReadDeadline(gomock.Any()).Return(nil)
 				gomock.InOrder(
 					// assert that the length of the message is read first
@@ -127,7 +127,7 @@ func TestReadMessageFromStream(t *testing.T) {
 		},
 		{
 			name: "successful read with long message",
-			setupMock: func(m *mocks.MockStream) {
+			setupMock: func(m *mock_p2p.MockStream) {
 				m.EXPECT().SetReadDeadline(gomock.Any()).Return(nil)
 				gomock.InOrder(
 					// assert that the length of the message is read first
@@ -149,7 +149,7 @@ func TestReadMessageFromStream(t *testing.T) {
 		},
 		{
 			name: "error on read deadline",
-			setupMock: func(m *mocks.MockStream) {
+			setupMock: func(m *mock_p2p.MockStream) {
 				m.EXPECT().SetReadDeadline(gomock.Any()).Return(fmt.Errorf("error"))
 			},
 			wantErr: true,
@@ -161,7 +161,7 @@ func TestReadMessageFromStream(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockStream := mocks.NewMockStream(ctrl)
+			mockStream := mock_p2p.NewMockStream(ctrl)
 			tt.setupMock(mockStream)
 
 			got, err := ReadMessageFromStream(mockStream, "testproto", nil)

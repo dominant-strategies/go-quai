@@ -1,4 +1,4 @@
-package mocks
+package mock_p2p
 
 import (
 	"io"
