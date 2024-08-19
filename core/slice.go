@@ -353,13 +353,15 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 
 		setHead = sl.poem(sl.engine.TotalLogS(sl.hc, block), sl.engine.TotalLogS(sl.hc, sl.hc.CurrentHeader()))
 
-		err = sl.hc.SetCurrentState(block)
-		if err != nil {
-			sl.logger.WithFields(log.Fields{
-				"err":  err,
-				"Hash": block.Hash(),
-			}).Error("Error setting current state")
-			return nil, false, err
+		if setHead {
+			err := sl.hc.SetCurrentHeader(block)
+			if err != nil {
+				sl.logger.WithFields(log.Fields{
+					"err":  err,
+					"Hash": block.Hash(),
+				}).Error("Error setting current header")
+				return nil, false, err
+			}
 		}
 
 		// Upate the local pending header
@@ -400,7 +402,8 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 
 	time12 := common.PrettyDuration(time.Since(start))
 
-	if setHead {
+	// SetCurrentHeader for prime and region is already called above
+	if setHead && nodeCtx != common.ZONE_CTX {
 		sl.hc.SetCurrentHeader(block)
 	} else if !setHead && nodeCtx == common.ZONE_CTX && sl.hc.ProcessingState() {
 		sl.logger.WithFields(log.Fields{
@@ -1115,11 +1118,29 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 			}).Info("Choosing phHeader pickPhHead")
 			parent := sl.hc.GetBlockByHash(localPendingHeader.WorkObject().ParentHash(nodeCtx))
 			if parent != nil {
-				sl.hc.SetCurrentHeader(parent)
+				err := sl.hc.SetCurrentHeader(parent)
+				if err != nil {
+					sl.logger.WithField("err", err).Error("cannot set the current header in sub relay pending header")
+					return nil
+				}
+				newPendingHeader, err := sl.generateSlicePendingHeader(parent, localPendingHeader.Termini(), combinedPendingHeader, true, true, false)
+				if err != nil {
+					sl.logger.WithField("err", err).Error("Error generating slice pending header")
+					return err
+				}
+				combinedPendingHeader = types.CopyWorkObject(newPendingHeader.WorkObject())
+				sl.logger.WithFields(log.Fields{
+					"NumberArray": combinedPendingHeader.Header().NumberArray(),
+					"ParentHash":  combinedPendingHeader.ParentHash(nodeCtx),
+					"Terminus":    localPendingHeader.Termini().DomTerminus(nodeLocation),
+				}).Info("Choosing phHeader pickPhHead")
 			} else {
 				sl.logger.WithFields(log.Fields{
 					"hash": localPendingHeader.WorkObject().ParentHash(nodeCtx),
 				}).Warn("Parent not found")
+				// This should not be possible, we cannot update the ph cache if
+				// parent cannot be found
+				return nil
 			}
 			sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus(nodeLocation))
 		}
@@ -1257,7 +1278,11 @@ func (sl *Slice) init() error {
 			return err
 		}
 		// This is just done for the startup process
-		sl.hc.SetCurrentHeader(genesisHeader)
+		err = sl.hc.SetCurrentHeader(genesisHeader)
+		if err != nil {
+			sl.logger.WithField("err", err).Error("Error setting the current header in slice init")
+			return err
+		}
 
 		if sl.NodeLocation().Context() == common.PRIME_CTX {
 			go sl.NewGenesisPendingHeader(nil, genesisHash, genesisHash)
