@@ -107,10 +107,10 @@ type Backend interface {
 	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 	GetMaxTxInWorkShare() uint64
 	GetExpansionNumber() uint8
+	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool
-	consensus.ChainHeaderReader
 
 	// Validator methods that checks the sanity of the Body
 	SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error

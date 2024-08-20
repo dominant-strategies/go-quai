@@ -256,6 +256,11 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 			return err
 		}
 
+		_, err = chain.WorkShareDistance(block, uncle)
+		if err != nil {
+			return err
+		}
+
 		// Verify the block's difficulty based on its timestamp and parent's difficulty
 		// difficulty adjustment can only be checked in zone
 		if nodeCtx == common.ZONE_CTX {

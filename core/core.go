@@ -910,6 +910,12 @@ func (c *Core) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCano
 	return c.sl.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
+// WorkShareDistance calculates the geodesic distance between the
+// workshare and the workobject in which that workshare is included.
+func (c *Core) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error) {
+	return c.sl.hc.WorkShareDistance(wo, ws)
+}
+
 // Genesis retrieves the chain's genesis block.
 func (c *Core) Genesis() *types.WorkObject {
 	return c.GetBlockByHash(c.sl.hc.genesisHeader.Hash())

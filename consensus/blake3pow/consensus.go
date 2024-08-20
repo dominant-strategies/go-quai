@@ -255,6 +255,11 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 			return err
 		}
 
+		_, err = chain.WorkShareDistance(block, uncle)
+		if err != nil {
+			return err
+		}
+
 		// Verify the block's difficulty based on its timestamp and parent's difficulty
 		// difficulty adjustment can only be checked in zone
 		if nodeCtx == common.ZONE_CTX {
