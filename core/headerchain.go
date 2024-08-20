@@ -417,6 +417,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64(hc.NodeCtx()))
 		err := hc.AppendBlock(head)
 		if err != nil {
+			rawdb.DeleteCanonicalHash(hc.headerDb, head.NumberU64(hc.NodeCtx()))
 			return err
 		}
 		// write the head block hash to the db
@@ -457,6 +458,21 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		}
 		prevHashStack = append(prevHashStack, prevHeader)
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64(hc.NodeCtx()))
+		// UTXO Rollback logic: Recreate deleted UTXOs and delete created UTXOs
+		sutxos, err := rawdb.ReadSpentUTXOs(hc.headerDb, prevHeader.Hash())
+		if err != nil {
+			return err
+		}
+		for _, sutxo := range sutxos {
+			rawdb.CreateUTXO(hc.headerDb, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
+		}
+		utxoKeys, err := rawdb.ReadCreatedUTXOKeys(hc.headerDb, prevHeader.Hash())
+		if err != nil {
+			return err
+		}
+		for _, key := range utxoKeys {
+			hc.headerDb.Delete(key)
+		}
 		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
 		if prevHeader == nil {
 			return errors.New("Could not find previously canonical header during reorg")
@@ -477,6 +493,48 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			}
 			err := hc.AppendBlock(block)
 			if err != nil {
+				hc.logger.WithFields(log.Fields{
+					"error": err,
+					"block": block.Hash(),
+				}).Error("Error appending block during reorg")
+				rawdb.DeleteCanonicalHash(hc.headerDb, hashStack[i].NumberU64(hc.NodeCtx()))
+				// Append failed, rollback the UTXO set to the common header
+				for j := i + 1; j < len(hashStack); j++ {
+					rawdb.DeleteCanonicalHash(hc.headerDb, hashStack[j].NumberU64(hc.NodeCtx()))
+					if nodeCtx == common.ZONE_CTX && hc.ProcessingState() {
+						sutxos, err := rawdb.ReadSpentUTXOs(hc.headerDb, hashStack[j].Hash())
+						if err != nil {
+							return err
+						}
+						for _, sutxo := range sutxos {
+							rawdb.CreateUTXO(hc.headerDb, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
+						}
+						utxoKeys, err := rawdb.ReadCreatedUTXOKeys(hc.headerDb, hashStack[j].Hash())
+						if err != nil {
+							return err
+						}
+						for _, key := range utxoKeys {
+							hc.headerDb.Delete(key)
+						}
+					}
+				}
+				for k := len(prevHashStack) - 1; k >= 0; k-- {
+					rawdb.WriteCanonicalHash(hc.headerDb, prevHashStack[k].Hash(), prevHashStack[k].NumberU64(hc.NodeCtx()))
+					if nodeCtx == common.ZONE_CTX {
+						block := hc.GetBlockOrCandidate(prevHashStack[k].Hash(), prevHashStack[k].NumberU64(nodeCtx))
+						if block == nil {
+							return errors.New("could not find block during SetCurrentState: " + prevHashStack[k].Hash().String())
+						}
+						err := hc.AppendBlock(block)
+						if err != nil {
+							hc.logger.WithFields(log.Fields{
+								"error": err,
+								"block": block.Hash(),
+							}).Error("Error appending block during reorg")
+							return err
+						}
+					}
+				}
 				return err
 			}
 		}

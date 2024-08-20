@@ -252,6 +252,40 @@ type UtxoEntry struct {
 	Lock         *big.Int // Block height the entry unlocks. 0 = unlocked
 }
 
+// SpentUtxoEntry houses details about a spent UtxoEntry.
+type SpentUtxoEntry struct {
+	OutPoint
+	*UtxoEntry
+}
+
+func (sutxo *SpentUtxoEntry) ProtoEncode() (*ProtoSpentUTXO, error) {
+	protoSpentUtxoEntry := &ProtoSpentUTXO{}
+
+	protoOutPoint, err := sutxo.OutPoint.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoSpentUtxoEntry.Outpoint = protoOutPoint
+
+	protoUtxoEntry, err := sutxo.UtxoEntry.ProtoEncode()
+	if err != nil {
+		return nil, err
+	}
+	protoSpentUtxoEntry.Sutxo = protoUtxoEntry
+
+	return protoSpentUtxoEntry, nil
+}
+
+func (sutxo *SpentUtxoEntry) ProtoDecode(protoSpentUtxoEntry *ProtoSpentUTXO) error {
+	if err := sutxo.OutPoint.ProtoDecode(protoSpentUtxoEntry.Outpoint); err != nil {
+		return err
+	}
+	if err := sutxo.UtxoEntry.ProtoDecode(protoSpentUtxoEntry.Sutxo); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Clone returns a shallow copy of the utxo entry.
 func (entry *UtxoEntry) Clone() *UtxoEntry {
 	if entry == nil {
