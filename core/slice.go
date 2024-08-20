@@ -1180,7 +1180,7 @@ func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inS
 		if !exists {
 			return
 		}
-		if !sl.poem(bestPh.WorkObject().ParentEntropy(common.ZONE_CTX), pendingHeaderWithTermini.WorkObject().ParentEntropy(common.ZONE_CTX)) {
+		if !sl.poem(pendingHeaderWithTermini.WorkObject().ParentEntropy(common.ZONE_CTX), bestPh.WorkObject().ParentEntropy(common.ZONE_CTX)) {
 			return
 		}
 	}
