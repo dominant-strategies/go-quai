@@ -405,6 +405,21 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		}
 		prevHashStack = append(prevHashStack, prevHeader)
 		rawdb.DeleteCanonicalHash(hc.headerDb, prevHeader.NumberU64(hc.NodeCtx()))
+		// UTXO Rollback logic: Recreate deleted UTXOs and delete created UTXOs
+		sutxos, err := rawdb.ReadSpentUTXOs(hc.headerDb, prevHeader.Hash())
+		if err != nil {
+			return err
+		}
+		for _, sutxo := range sutxos {
+			rawdb.CreateUTXO(hc.headerDb, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
+		}
+		utxoKeys, err := rawdb.ReadCreatedUTXOKeys(hc.headerDb, prevHeader.Hash())
+		if err != nil {
+			return err
+		}
+		for _, key := range utxoKeys {
+			hc.headerDb.Delete(key)
+		}
 		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
 		if prevHeader == nil {
 			return errors.New("Could not find previously canonical header during reorg")

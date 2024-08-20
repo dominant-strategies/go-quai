@@ -1240,12 +1240,12 @@ func CreateUTXO(db ethdb.KeyValueWriter, txHash common.Hash, index uint16, utxo 
 	}
 
 	// And finally, store the data in the database under the appropriate key
-	return db.Put(utxoKey(txHash, index), data)
+	return db.Put(UtxoKey(txHash, index), data)
 }
 
 func GetUTXO(db ethdb.KeyValueReader, txHash common.Hash, index uint16) *types.UtxoEntry {
 	// Try to look up the data in leveldb.
-	data, _ := db.Get(utxoKey(txHash, index))
+	data, _ := db.Get(UtxoKey(txHash, index))
 	if len(data) == 0 {
 		return nil
 	}
@@ -1269,7 +1269,7 @@ func GetUTXO(db ethdb.KeyValueReader, txHash common.Hash, index uint16) *types.U
 }
 
 func DeleteUTXO(db ethdb.KeyValueWriter, txHash common.Hash, index uint16) {
-	if err := db.Delete(utxoKey(txHash, index)); err != nil {
+	if err := db.Delete(UtxoKey(txHash, index)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxo")
 	}
 }
@@ -1293,20 +1293,68 @@ func WriteMultiSet(db ethdb.KeyValueWriter, blockHash common.Hash, multiSet *mul
 	}
 }
 
-func WriteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXOs map[common.Hash]*types.UtxoEntry) error {
-	protoTxOuts := &types.ProtoTxOuts{}
+func WriteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXOs []*types.SpentUtxoEntry) error {
+	protoSpentUTXOs := &types.ProtoSpentUTXOs{}
 	for _, utxo := range spentUTXOs {
 		utxoProto, err := utxo.ProtoEncode()
 		if err != nil {
 			return err
 		}
-		protoTxOuts.TxOuts = append(protoTxOuts.TxOuts, utxoProto)
+		protoSpentUTXOs.Sutxos = append(protoSpentUTXOs.Sutxos, utxoProto)
 	}
-	data, err := proto.Marshal(protoTxOuts)
+	data, err := proto.Marshal(protoSpentUTXOs)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
 	}
 
 	// And finally, store the data in the database under the appropriate key
 	return db.Put(spentUTXOsKey(blockHash), data)
+}
+
+func ReadSpentUTXOs(db ethdb.Reader, blockHash common.Hash) ([]*types.SpentUtxoEntry, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(spentUTXOsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	protoSpentUTXOs := new(types.ProtoSpentUTXOs)
+	if err := proto.Unmarshal(data, protoSpentUTXOs); err != nil {
+		return nil, err
+	}
+
+	spentUTXOs := make([]*types.SpentUtxoEntry, 0, len(protoSpentUTXOs.Sutxos))
+	for _, utxoProto := range protoSpentUTXOs.Sutxos {
+		utxo := new(types.SpentUtxoEntry)
+		if err := utxo.ProtoDecode(utxoProto); err != nil {
+			return nil, err
+		}
+		spentUTXOs = append(spentUTXOs, utxo)
+	}
+	return spentUTXOs, nil
+}
+
+func WriteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash, createdUTXOKeys [][]byte) error {
+	protoKeys := &types.ProtoKeys{}
+
+	protoKeys.Keys = append(protoKeys.Keys, createdUTXOKeys...)
+
+	data, err := proto.Marshal(protoKeys)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(createdUTXOsKey(blockHash), data)
+}
+
+func ReadCreatedUTXOKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(createdUTXOsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeys := new(types.ProtoKeys)
+	if err := proto.Unmarshal(data, protoKeys); err != nil {
+		return nil, err
+	}
+	return protoKeys.Keys, nil
 }
