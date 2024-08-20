@@ -280,6 +280,7 @@ func (sutxo *SpentUtxoEntry) ProtoDecode(protoSpentUtxoEntry *ProtoSpentUTXO) er
 	if err := sutxo.OutPoint.ProtoDecode(protoSpentUtxoEntry.Outpoint); err != nil {
 		return err
 	}
+	sutxo.UtxoEntry = &UtxoEntry{}
 	if err := sutxo.UtxoEntry.ProtoDecode(protoSpentUtxoEntry.Sutxo); err != nil {
 		return err
 	}
