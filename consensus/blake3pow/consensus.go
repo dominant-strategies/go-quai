@@ -645,6 +645,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 	for _, hash := range utxosDelete {
 		multiSet.Remove(hash.Bytes())
 	}
+	blake3pow.logger.Infof("Parent hash: %s, header hash: %s, muhash: %s, block height: %d, setroots: %t, UtxosCreated: %d, UtxosDeleted: %d", header.ParentHash(nodeCtx).String(), header.Hash().String(), multiSet.Hash().String(), header.NumberU64(nodeCtx), setRoots, len(utxosCreate), len(utxosDelete))
 	if setRoots {
 		header.Header().SetUTXORoot(multiSet.Hash())
 		header.Header().SetEVMRoot(state.IntermediateRoot(true))

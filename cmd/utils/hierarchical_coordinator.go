@@ -543,7 +543,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 				modifiedConstraintMap, err = hc.calculateFrontierPoints(modifiedConstraintMap, leaderBlock, first)
 				first = false
 				if err != nil {
-					log.Global.Error("error tracing back from block ", leaderBlock.Hash())
+					log.Global.Errorf("error tracing back from block %s: %+v", leaderBlock.Hash().String(), err)
 				} else {
 					break
 				}
@@ -832,26 +832,32 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 		zoneBackend := *hc.consensus.GetBackend(location)
 		primeBlock := primeBackend.BlockOrCandidateByHash(primeNode)
 		if primeBlock == nil {
+			log.Global.Errorf("prime block not found for hash %s", primeNode.String())
 			return
 		}
 		primePendingHeader, err := primeBackend.GeneratePendingHeader(primeBlock, false, stopChan)
 		if err != nil {
+			log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating prime pending header")
 			return
 		}
 		regionBlock := regionBackend.BlockOrCandidateByHash(regionNode)
 		if regionBlock == nil {
+			log.Global.Errorf("region block not found for hash %s", regionNode.String())
 			return
 		}
 		regionPendingHeader, err := regionBackend.GeneratePendingHeader(regionBlock, false, stopChan)
 		if err != nil {
+			log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating region pending header")
 			return
 		}
 		zoneBlock := zoneBackend.GetBlockByHash(zoneNode)
 		if zoneBlock == nil {
+			log.Global.Errorf("zone block not found for hash %s", zoneNode.String())
 			return
 		}
 		zonePendingHeader, err := zoneBackend.GeneratePendingHeader(zoneBlock, false, stopChan)
 		if err != nil {
+			log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating zone pending header")
 			return
 		}
 		zoneBackend.MakeFullPendingHeader(primePendingHeader, regionPendingHeader, zonePendingHeader)

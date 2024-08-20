@@ -207,3 +207,15 @@ message ProtoAddressOutPoints {
 message ProtoOutPointsMap {
   map<string, ProtoAddressOutPoints> entries = 1;
 }
+
+message ProtoSpentUTXO {
+  optional ProtoOutPoint outpoint = 1;
+  optional ProtoTxOut sutxo = 2;
+}
+
+message ProtoSpentUTXOs {
+  repeated ProtoSpentUTXO sutxos = 1;
+}
+message ProtoKeys {
+  repeated bytes keys = 1;
+}
