@@ -108,10 +108,12 @@ type Backend interface {
 	GetMaxTxInWorkShare() uint64
 	GetExpansionNumber() uint8
 	SuggestFinalityDepth(ctx context.Context, qiValue *big.Int, correlatedRisk *big.Int) (*big.Int, error)
+	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
+
+	consensus.ChainHeaderReader
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool
-	consensus.ChainHeaderReader
 
 	// Validator methods that checks the sanity of the Body
 	SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error

@@ -61,6 +61,10 @@ type ChainHeaderReader interface {
 
 	// WriteAddressOutpoints writes the address outpoints to the database
 	WriteAddressOutpoints(outpointsMap map[string]map[string]*types.OutpointAndDenomination) error
+
+	// WorkShareDistance calculates the geodesic distance between the
+	// workshare and the workobject in which that workshare is included.
+	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
 }
 
 // ChainReader defines a small collection of methods needed to access the local

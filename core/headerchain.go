@@ -501,6 +501,47 @@ func (hc *HeaderChain) findCommonAncestor(header *types.WorkObject) *types.WorkO
 	}
 
 }
+func (hc *HeaderChain) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error) {
+	current := wo
+	// Create a list of ancestor blocks to the work object
+	ancestors := make(map[common.Hash]struct{})
+	for i := 0; i < params.WorkSharesInclusionDepth; i++ {
+		parent := hc.GetBlockByHash(current.ParentHash(common.ZONE_CTX))
+		if parent == nil {
+			return big.NewInt(0), errors.New("error finding the parent")
+		}
+		ancestors[parent.Hash()] = struct{}{}
+		current = parent
+	}
+
+	var distance int64 = 0
+	// trace back from the workshare and check if any of the parents exist in
+	// the ancestors list
+	parentHash := ws.ParentHash()
+	for {
+		parent := hc.GetBlockByHash(parentHash)
+		if parent == nil {
+			return big.NewInt(0), errors.New("error finding the parent")
+		}
+		if _, exists := ancestors[parent.Hash()]; exists {
+			distance += int64(wo.NumberU64(common.ZONE_CTX) - parent.NumberU64(common.ZONE_CTX) - 1)
+			break
+		}
+		distance++
+		// If distance is greater than the WorkSharesInclusionDepth, exit the for loop
+		if distance > int64(params.WorkSharesInclusionDepth) {
+			break
+		}
+		parentHash = parent.ParentHash(common.ZONE_CTX)
+	}
+
+	// If distance is greater than the WorkSharesInclusionDepth, reject the workshare
+	if distance > int64(params.WorkSharesInclusionDepth) {
+		return big.NewInt(0), errors.New("workshare is at distance more than WorkSharesInclusionDepth")
+	}
+
+	return big.NewInt(distance), nil
+}
 
 func (hc *HeaderChain) AddPendingEtxs(pEtxs types.PendingEtxs) error {
 	if !pEtxs.IsValid(trie.NewStackTrie(nil)) && !hc.IsGenesisHash(pEtxs.Header.Hash()) {

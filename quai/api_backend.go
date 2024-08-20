@@ -674,6 +674,10 @@ func (b *QuaiAPIBackend) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 	return b.quai.core.SanityCheckWorkObjectShareViewBody(wo)
 }
 
+func (b *QuaiAPIBackend) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error) {
+	return b.quai.core.WorkShareDistance(wo, ws)
+}
+
 // ///////////////////////////
 // /////// P2P ///////////////
 // ///////////////////////////
