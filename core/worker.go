@@ -712,6 +712,10 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	if err != nil {
 		workShare = true
 	}
+	_, err = w.hc.WorkShareDistance(env.wo, uncle)
+	if err != nil {
+		return err
+	}
 	if !workShare && (env.wo.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash()) {
 		return errors.New("uncle is sibling")
 	}
