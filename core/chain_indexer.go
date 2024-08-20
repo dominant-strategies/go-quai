@@ -36,6 +36,8 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 )
 
+var PruneDepth = uint64(100) // Number of blocks behind in which we begin pruning old block data
+
 // ChainIndexerBackend defines the methods needed to process chain segments in
 // the background and write the segment results into the database. These can be
 // used to create filter blooms or CHTs.
@@ -245,6 +247,16 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			errc <- nil
 			return
 		case block := <-qiIndexerCh:
+			if block.NumberU64(nodeCtx) > PruneDepth {
+				// Ensure block is canonical before pruning
+				if rawdb.ReadCanonicalHash(c.chainDb, block.NumberU64(nodeCtx)) != block.Hash() {
+					if rawdb.ReadCanonicalHash(c.chainDb, block.NumberU64(nodeCtx)-1) != block.ParentHash(nodeCtx) {
+						c.logger.Errorf("Block %d sent to ChainIndexer is not canonical, skipping hash %s", block.NumberU64(nodeCtx), block.Hash())
+						return
+					}
+				}
+				c.PruneOldBlockData(block.NumberU64(nodeCtx) - PruneDepth)
+			}
 			var validUtxoIndex bool
 			var addressOutpoints map[string]map[string]*types.OutpointAndDenomination
 			if c.indexAddressUtxos {
@@ -302,6 +314,18 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			prevHeader, prevHash = block, block.Hash()
 		}
 	}
+}
+
+func (c *ChainIndexer) PruneOldBlockData(blockHeight uint64) {
+	blockHash := rawdb.ReadCanonicalHash(c.chainDb, blockHeight)
+	rawdb.DeleteInboundEtxs(c.chainDb, blockHash)
+	rawdb.DeletePendingEtxs(c.chainDb, blockHash)
+	rawdb.DeletePendingEtxsRollup(c.chainDb, blockHash)
+	rawdb.DeleteManifest(c.chainDb, blockHash)
+	rawdb.DeletePbCacheBody(c.chainDb, blockHash)
+	rawdb.DeletePendingHeader(c.chainDb, blockHash)
+	rawdb.DeleteSpentUTXOs(c.chainDb, blockHash)
+	rawdb.DeleteCreatedUTXOKeys(c.chainDb, blockHash)
 }
 
 // newHead notifies the indexer about new chain heads and/or reorgs.

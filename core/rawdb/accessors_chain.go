@@ -1334,6 +1334,12 @@ func ReadSpentUTXOs(db ethdb.Reader, blockHash common.Hash) ([]*types.SpentUtxoE
 	return spentUTXOs, nil
 }
 
+func DeleteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(spentUTXOsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete spent utxos")
+	}
+}
+
 func WriteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash, createdUTXOKeys [][]byte) error {
 	protoKeys := &types.ProtoKeys{}
 
@@ -1357,4 +1363,10 @@ func ReadCreatedUTXOKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, erro
 		return nil, err
 	}
 	return protoKeys.Keys, nil
+}
+
+func DeleteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(createdUTXOsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete created utxo keys")
+	}
 }
