@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
@@ -31,6 +32,7 @@ import (
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
+var suicide = []byte("Suicide")
 
 /*
 The State Transitioning Model
@@ -356,6 +358,33 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber)
 	st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules, st.evm.ChainConfig().Location), msg.AccessList())
 
+	if !st.msg.IsETX() && !contractCreation && len(st.data) == 27 && bytes.Equal(st.data[:7], suicide) && st.to().Equal(st.msg.From()) {
+		// Caller requests self-destruct
+		beneficiary, err := common.BytesToAddress(st.data[7:27], st.evm.ChainConfig().Location).InternalAndQuaiAddress()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to self-destruct: %v", err)
+		}
+		fromInternal, err := msg.From().InternalAndQuaiAddress()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to self-destruct: %v", err)
+		}
+		balance := st.evm.StateDB.GetBalance(fromInternal)
+		st.evm.StateDB.Suicide(fromInternal)
+		refund := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(st.evm.Context.QuaiStateSize)))
+		balance.Add(balance, refund)
+		st.evm.StateDB.AddBalance(beneficiary, balance)
+
+		effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+		return &ExecutionResult{
+			UsedGas:      st.gasUsed(),
+			UsedState:    0,
+			Err:          nil,
+			ReturnData:   []byte{},
+			Etxs:         nil,
+			QuaiFees:     new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip),
+			ContractAddr: nil,
+		}, nil
+	}
 	var (
 		ret          []byte
 		vmerr        error // vm errors do not effect consensus and are therefore not assigned to err

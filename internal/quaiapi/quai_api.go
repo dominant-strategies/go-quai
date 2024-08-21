@@ -19,6 +19,7 @@ package quaiapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -910,7 +911,7 @@ func (s *PublicBlockChainQuaiAPI) CalcOrder(ctx context.Context, raw hexutil.Byt
 	}
 	_, order, err := s.b.CalcOrder(woHeader)
 	if err != nil {
-		return 0, errors.New("cannot calculate prime terminus order")
+		return 0, fmt.Errorf("cannot calculate prime terminus order: %v", err)
 	}
 	return hexutil.Uint(order), nil
 }
