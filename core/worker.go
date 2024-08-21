@@ -210,12 +210,16 @@ type worker struct {
 }
 
 type RollingAverage struct {
-	windowSize int
 	durations  []time.Duration
 	sum        time.Duration
+	windowSize int
+	mu         sync.Mutex
 }
 
 func (ra *RollingAverage) Add(d time.Duration) {
+	ra.mu.Lock()
+	defer ra.mu.Unlock()
+
 	if len(ra.durations) == ra.windowSize {
 		// Remove the oldest duration from the sum
 		ra.sum -= ra.durations[0]
@@ -224,7 +228,11 @@ func (ra *RollingAverage) Add(d time.Duration) {
 	ra.durations = append(ra.durations, d)
 	ra.sum += d
 }
+
 func (ra *RollingAverage) Average() time.Duration {
+	ra.mu.Lock()
+	defer ra.mu.Unlock()
+
 	if len(ra.durations) == 0 {
 		return 0
 	}
