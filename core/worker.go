@@ -1244,8 +1244,14 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 
 		// Get the latest transactions to be broadcasted from the pool
 		if len(w.txPool.broadcastSet) > 0 {
-			txs := make(types.Transactions, len(w.txPool.broadcastSet))
-			copy(txs, w.txPool.broadcastSet)
+			txsDirty := make(types.Transactions, len(w.txPool.broadcastSet))
+			copy(txsDirty, w.txPool.broadcastSet)
+			txs := make(types.Transactions, 0)
+			for _, tx := range txsDirty {
+				if tx != nil {
+					txs = append(txs, tx)
+				}
+			}
 			hash := types.DeriveSha(txs, trie.NewStackTrie(nil))
 			newWo.WorkObjectHeader().SetTxHash(hash)
 			w.txPool.broadcastSetCache.Add(hash, txs)
