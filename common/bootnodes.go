@@ -12,9 +12,9 @@ var (
 			"/ip4/34.136.140.151/tcp/4001/p2p/12D3KooWJnWmBukEbZtGPPJvT1r4tQ97CRSGmnjHewcrjNB8oRxU",
 		},
 		"orchard": {
-			"/ip4/34.23.101.139/tcp/4001/p2p/12D3KooW9tqyvhhEV5A6Fc1UDaPfF9vzQfr67tck8gHD6rhhyUV7",
-			"/ip4/34.122.101.50/tcp/4001/p2p/12D3KooWCeucchYeo3Ayn6RwYazEppCzsuVTFryqsut2F3jYtjvM",
-			"/ip4/34.136.175.169/tcp/4001/p2p/12D3KooWScCUPsMigdHmATmSjt2YH6qok2THVpXo6ea74zL3Emb9",
+			"/ip4/34.23.101.139/tcp/4001/p2p/12D3KooWKm7ofNnBKDL2ETzfuaKHHxFxdZxgSk45HAepn1m9Y4kq",
+			"/ip4/34.122.101.50/tcp/4001/p2p/12D3KooWMCLAgSHLnfiKBXKprRP4KDjP3aqoVeHY1KVLahCHdKp5",
+			"/ip4/34.136.175.169/tcp/4001/p2p/12D3KooWNhJWXsu2G19QV75D6UPsRmRNvGQL4JWA37SUjxubpVdj",
 		},
 	}
 )
