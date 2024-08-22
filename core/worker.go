@@ -601,6 +601,8 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	work.wo = newWo
 
 	w.printPendingHeaderInfo(work, newWo, start)
+	work.utxosCreate = nil
+	work.utxosDelete = nil
 
 	return newWo, nil
 }

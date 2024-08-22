@@ -310,7 +310,7 @@ type TxPool struct {
 
 	locals         *accountSet                                     // Set of local transaction to exempt from eviction rules
 	journal        *txJournal                                      // Journal of local transaction to back up to disk
-	qiPool         map[common.Hash]*types.TxWithMinerFee           // Qi pool to store Qi transactions
+	qiPool         *lru.Cache[common.Hash, *types.TxWithMinerFee]  // Qi pool to store Qi transactions
 	qiTxFees       *lru.Cache[[16]byte, *big.Int]                  // Recent Qi transaction fees (hash is truncated to 16 bytes to save space)
 	pending        map[common.InternalAddress]*txList              // All currently processable transactions
 	queue          map[common.InternalAddress]*txList              // Queued but non-processable transactions
@@ -393,7 +393,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		chain:           chain,
 		signer:          types.LatestSigner(chainconfig),
 		pending:         make(map[common.InternalAddress]*txList),
-		qiPool:          make(map[common.Hash]*types.TxWithMinerFee),
 		queue:           make(map[common.InternalAddress]*txList),
 		beats:           make(map[common.InternalAddress]time.Time),
 		sendersCh:       make(chan newSender, config.SendersChBuffer),
@@ -414,6 +413,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		logger:          logger,
 		db:              db,
 	}
+	pool.qiPool, _ = lru.New[common.Hash, *types.TxWithMinerFee](int(config.QiPoolSize))
 	pool.senders, _ = lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
 	pool.qiTxFees, _ = lru.New[[16]byte, *big.Int](int(config.MaxFeesCached))
 	pool.broadcastSetCache, _ = lru.New[common.Hash, types.Transactions](c_broadcastSetCacheSize)
@@ -614,7 +614,7 @@ func (pool *TxPool) stats() (int, int, int) {
 	for _, list := range pool.queue {
 		queued += list.Len()
 	}
-	return pending, queued, len(pool.qiPool)
+	return pending, queued, pool.qiPool.Len()
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
@@ -651,15 +651,10 @@ func (pool *TxPool) ContentFrom(addr common.InternalAddress) (types.Transactions
 	return pending, queued
 }
 
-func (pool *TxPool) QiPoolPending() map[common.Hash]*types.TxWithMinerFee {
+func (pool *TxPool) QiPoolPending() []*types.TxWithMinerFee {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
-	// Return a copy of the pool because it is not safe to access the pool pointer directly
-	qiTxs := make(map[common.Hash]*types.TxWithMinerFee)
-	for hash, qiTx := range pool.qiPool {
-		qiTxs[hash] = qiTx
-	}
-	return qiTxs
+	return pool.qiPool.Values()
 }
 
 func (pool *TxPool) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
@@ -1113,7 +1108,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			continue
 		}
 		if tx.Type() == types.QiTxType {
-			if _, hasTx := pool.qiPool[tx.Hash()]; hasTx {
+			if _, hasTx := pool.qiPool.Get(tx.Hash()); hasTx {
 				errs[i] = ErrAlreadyKnown
 				continue
 			}
@@ -1154,9 +1149,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
 	}
-	if len(qiNews) > 0 && uint64(len(pool.qiPool)+1) > pool.config.QiPoolSize {
-		errs[0] = ErrTxPoolOverflow
-	} else if len(qiNews) > 0 {
+	if len(qiNews) > 0 {
 		qiErrs := pool.addQiTxs(qiNews)
 		var nilSlot = 0
 		for _, err := range qiErrs {
@@ -1234,18 +1227,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 	for _, txWithFee := range transactionsWithoutErrors {
 
 		txHash := txWithFee.Tx().Hash()
-		if uint64(len(pool.qiPool))+1 > pool.config.QiPoolSize {
-			// If the pool is full, don't accept the transaction (and any others)
-			errs = append(errs, ErrTxPoolOverflow)
-			if txPoolFullErrs%1000 == 0 {
-				pool.logger.WithFields(logrus.Fields{
-					"tx": txHash.String(),
-				}).Error("Qi tx pool is full")
-			}
-			txPoolFullErrs++
-			break
-		}
-		pool.qiPool[txHash] = txWithFee
+		pool.qiPool.Add(txHash, txWithFee)
 		pool.queueTxEvent(txWithFee.Tx())
 		select {
 		case pool.sendersCh <- newSender{txHash, common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
@@ -1269,7 +1251,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 	for _, tx := range txs {
 		hash := tx.Hash()
-		if _, exists := pool.qiPool[hash]; exists {
+		if _, exists := pool.qiPool.Get(hash); exists {
 			continue
 		}
 		hash16 := [16]byte(hash[:])
@@ -1317,7 +1299,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 			pool.logger.Error("Error creating txWithMinerFee: " + err.Error())
 			continue
 		}
-		pool.qiPool[tx.Hash()] = txWithMinerFee
+		pool.qiPool.Add(tx.Hash(), txWithMinerFee)
 		select {
 		case pool.sendersCh <- newSender{tx.Hash(), common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
 		default:
@@ -1335,8 +1317,8 @@ func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
 	txsRemoved := 0
 	pool.mu.Lock()
 	for _, tx := range txs {
-		if _, exists := pool.qiPool[*tx]; exists {
-			delete(pool.qiPool, *tx)
+		if _, exists := pool.qiPool.Get(*tx); exists {
+			pool.qiPool.Remove(*tx)
 			txsRemoved++
 		}
 	}
@@ -1348,8 +1330,8 @@ func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
 func (pool *TxPool) removeQiTxsLocked(txs []*types.Transaction) {
 	txsRemoved := 0
 	for _, tx := range txs {
-		if _, exists := pool.qiPool[tx.Hash()]; exists {
-			delete(pool.qiPool, tx.Hash())
+		if _, exists := pool.qiPool.Get(tx.Hash()); exists {
+			pool.qiPool.Remove(tx.Hash())
 			txsRemoved++
 		}
 	}
@@ -2285,7 +2267,7 @@ func (pool *TxPool) poolLimiterGoroutine() {
 				pending += uint64(list.Len())
 			}
 			pool.mu.RUnlock()
-			pool.logger.Infof("PoolSize: Pending: %d, Queued: %d, Number of accounts in queue: %d, Qi Pool: %d", pending, queued, len(pool.queue), len(pool.qiPool))
+			pool.logger.Infof("PoolSize: Pending: %d, Queued: %d, Number of accounts in queue: %d, Qi Pool: %d", pending, queued, len(pool.queue), pool.qiPool.Len())
 			pendingTxGauge.Set(float64(pending))
 			queuedGauge.Set(float64(queued))
 			if queued > pool.config.GlobalQueue {
