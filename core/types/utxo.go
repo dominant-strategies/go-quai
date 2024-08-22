@@ -189,6 +189,7 @@ func (txOuts TxOuts) ProtoEncode() (*ProtoTxOuts, error) {
 }
 
 func (txOuts *TxOuts) ProtoDecode(protoTxOuts *ProtoTxOuts) error {
+	*txOuts = make(TxOuts, 0, len(protoTxOuts.TxOuts))
 	for _, protoTxOut := range protoTxOuts.TxOuts {
 		decodedTxOut := &TxOut{}
 		err := decodedTxOut.ProtoDecode(protoTxOut)
@@ -287,19 +288,6 @@ func (sutxo *SpentUtxoEntry) ProtoDecode(protoSpentUtxoEntry *ProtoSpentUTXO) er
 	return nil
 }
 
-// Clone returns a shallow copy of the utxo entry.
-func (entry *UtxoEntry) Clone() *UtxoEntry {
-	if entry == nil {
-		return nil
-	}
-
-	return &UtxoEntry{
-		Denomination: entry.Denomination,
-		Address:      entry.Address,
-		Lock:         new(big.Int).Set(entry.Lock),
-	}
-}
-
 // NewUtxoEntry returns a new UtxoEntry built from the arguments.
 func NewUtxoEntry(txOut *TxOut) *UtxoEntry {
 	return &UtxoEntry{
@@ -335,7 +323,11 @@ func (utxo *UtxoEntry) ProtoDecode(protoTxOut *ProtoTxOut) error {
 	}
 	utxo.Denomination = uint8(protoTxOut.GetDenomination())
 	utxo.Address = protoTxOut.Address
-	utxo.Lock = new(big.Int).SetBytes(protoTxOut.Lock)
+	if protoTxOut.Lock == nil {
+		utxo.Lock = nil
+	} else {
+		utxo.Lock = new(big.Int).SetBytes(protoTxOut.Lock)
+	}
 	return nil
 }
 
