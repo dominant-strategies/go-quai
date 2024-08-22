@@ -491,6 +491,24 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	}
 }
 
+// GetContractSize gives the size of the contract at the block hash or number
+func (s *PublicBlockChainQuaiAPI) GetContractSize(ctx context.Context, address common.AddressBytes, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	addr := common.Bytes20ToAddress(address, s.b.NodeLocation())
+	if addr.IsInQuaiLedgerScope() {
+		state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if state == nil || err != nil {
+			return nil, err
+		}
+		internal, err := addr.InternalAndQuaiAddress()
+		if err != nil {
+			return nil, err
+		}
+		return (*hexutil.Big)(state.GetSize(internal)), state.Error()
+	} else {
+		return nil, errors.New("getContractSize cannot be called on a Qi Address")
+	}
+}
+
 // BaseFee returns the base fee for a tx to be included in the next block.
 // If txType is set to "true" returns the Quai base fee in units of Wei.
 // If txType is set to "false" returns the Qi base fee in units of Qit.

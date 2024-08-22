@@ -338,6 +338,12 @@ func (ec *Client) BalanceAt(ctx context.Context, account common.MixedcaseAddress
 	return (*big.Int)(&result), err
 }
 
+func (ec *Client) ContractSizeAt(ctx context.Context, account common.MixedcaseAddress, blockNumber *big.Int) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "quai_getContractSize", account.Original(), toBlockNumArg(blockNumber))
+	return (*big.Int)(&result), err
+}
+
 func (ec *Client) GetOutpointsByAddress(ctx context.Context, address common.MixedcaseAddress) (map[string]*types.OutpointAndDenomination, error) {
 	var outpoints map[string]*types.OutpointAndDenomination
 	err := ec.c.CallContext(ctx, &outpoints, "quai_getOutpointsByAddress", address.Original())
