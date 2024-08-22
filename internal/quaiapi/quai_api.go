@@ -861,14 +861,15 @@ func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() hexutil.Uint {
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
-func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockRef interface{}, qiAmount uint64) *hexutil.Big {
+func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, qiAmount uint64) *hexutil.Big {
 	var header *types.WorkObject
 	var err error
-	switch b := blockRef.(type) {
-	case common.Hash:
-		header, err = s.b.HeaderByHash(ctx, b)
-	case uint64:
-		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(b))
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+	} else if hash, ok := blockNrOrHash.Hash(); ok {
+		header, err = s.b.HeaderByHash(ctx, hash)
+	} else {
+		return nil
 	}
 	if err != nil {
 		return nil
@@ -878,14 +879,15 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockRef in
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
-func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockRef interface{}, quaiAmount uint64) *hexutil.Big {
+func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, quaiAmount uint64) *hexutil.Big {
 	var header *types.WorkObject
 	var err error
-	switch b := blockRef.(type) {
-	case common.Hash:
-		header, err = s.b.HeaderByHash(ctx, b)
-	case uint64:
-		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(b))
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+	} else if hash, ok := blockNrOrHash.Hash(); ok {
+		header, err = s.b.HeaderByHash(ctx, hash)
+	} else {
+		return nil
 	}
 	if err != nil {
 		return nil
