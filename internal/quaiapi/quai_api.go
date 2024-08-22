@@ -856,9 +856,8 @@ func (s *PublicBlockChainQuaiAPI) ListRunningChains() []common.Location {
 	return s.b.GetSlicesRunning()
 }
 
-func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() int {
-	// TODO: Implement this
-	return 0
+func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() hexutil.Uint {
+	return hexutil.Uint(s.b.GetExpansionNumber())
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"

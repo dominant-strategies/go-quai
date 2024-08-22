@@ -106,6 +106,7 @@ type Backend interface {
 	SetDomInterface(domInterface core.CoreBackend)
 	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 	GetMaxTxInWorkShare() uint64
+	GetExpansionNumber() uint8
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool

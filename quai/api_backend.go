@@ -530,6 +530,10 @@ func (b *QuaiAPIBackend) SetCurrentExpansionNumber(expansionNumber uint8) {
 	b.quai.core.SetCurrentExpansionNumber(expansionNumber)
 }
 
+func (b *QuaiAPIBackend) GetExpansionNumber() uint8 {
+	return b.quai.core.GetExpansionNumber()
+}
+
 func (b *QuaiAPIBackend) WriteGenesisBlock(block *types.WorkObject, location common.Location) {
 	b.quai.core.WriteGenesisBlock(block, location)
 }
