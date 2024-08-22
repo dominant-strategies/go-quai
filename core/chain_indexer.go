@@ -323,6 +323,11 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 				}
 			}
 
+			for key, _ := range addressOutpoints {
+				addressOutpoints[key] = nil
+			}
+			addressOutpoints = nil
+
 			prevHeader, prevHash = block, block.Hash()
 		}
 	}
@@ -335,7 +340,6 @@ func (c *ChainIndexer) PruneOldBlockData(blockHeight uint64) {
 	rawdb.DeletePendingEtxsRollup(c.chainDb, blockHash)
 	rawdb.DeleteManifest(c.chainDb, blockHash)
 	rawdb.DeletePbCacheBody(c.chainDb, blockHash)
-	rawdb.DeletePendingHeader(c.chainDb, blockHash)
 	rawdb.DeleteSpentUTXOs(c.chainDb, blockHash)
 	rawdb.DeleteCreatedUTXOKeys(c.chainDb, blockHash)
 }

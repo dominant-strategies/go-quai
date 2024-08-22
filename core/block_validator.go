@@ -95,9 +95,6 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 			return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash())
 		}
 		if v.hc.ProcessingState() {
-			if len(block.Transactions()) == 0 {
-				v.hc.logger.Error("zone body has zero transactions")
-			}
 			if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
 				return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
 			}
