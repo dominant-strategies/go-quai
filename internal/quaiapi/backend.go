@@ -111,6 +111,7 @@ type Backend interface {
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool
+	consensus.ChainHeaderReader
 
 	// Validator methods that checks the sanity of the Body
 	SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error

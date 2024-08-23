@@ -554,11 +554,18 @@ func (sl *Slice) UpdateDom(oldDomReference common.Hash, pendingHeader *types.Wor
 	if nodeCtx == common.REGION_CTX {
 		var oldDomTerminus, newDomTerminus common.Hash
 		oldTermini := sl.hc.GetTerminiByHash(oldDomReference)
+
 		if oldTermini == nil {
 			sl.logger.Warn("old prime terminus not found in the database in the region")
 			return
 		}
 		oldDomTerminus = oldTermini.DomTerminus(nodeLocation)
+		oldPhRegionParent, exists := sl.readPhCache(oldDomTerminus)
+		if !exists {
+			sl.logger.WithFields(log.Fields{
+				"hash": oldDomTerminus,
+			}).Warn("old prime terminus not found in the phCache")
+		}
 		newTermini := sl.hc.GetTerminiByHash(pendingHeader.ParentHash(common.REGION_CTX))
 		if newTermini == nil {
 			sl.logger.Warn("new prime terminus not found in the database in the region")
@@ -568,7 +575,7 @@ func (sl *Slice) UpdateDom(oldDomReference common.Hash, pendingHeader *types.Wor
 		// If the old Prime terminus and the new prime terminus is the same,
 		// then the conflict is intra region and using the subrelay we can
 		// resolve this
-		if oldDomTerminus == newDomTerminus {
+		if oldPhRegionParent.WorkObject().ParentHash(common.PRIME_CTX) == pendingHeader.ParentHash(common.PRIME_CTX) {
 			// Can update
 			parent := sl.hc.GetBlockByHash(pendingHeader.ParentHash(nodeCtx))
 			if parent != nil {
@@ -597,7 +604,7 @@ func (sl *Slice) UpdateDom(oldDomReference common.Hash, pendingHeader *types.Wor
 		// In the prime case, the newDomReference is the key to use for the ph
 		// cache, because the termini for any block in prime chain is the parent
 		// block itself
-		parent := sl.hc.GetBlockByHash(pendingHeader.ParentHash(nodeCtx))
+		parent := sl.hc.GetBlockByHash(pendingHeader.ParentHash(common.PRIME_CTX))
 		if parent != nil {
 			sl.hc.SetCurrentHeader(parent)
 		} else {
