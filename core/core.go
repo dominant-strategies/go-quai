@@ -1018,7 +1018,7 @@ func (c *Core) Snapshots() *snapshot.Tree {
 }
 
 func (c *Core) TxLookupLimit() uint64 {
-	return 0
+	return c.Processor().txLookupLimit
 }
 
 func (c *Core) SetExtra(extra []byte) error {
