@@ -124,14 +124,14 @@ func newFilter(backend Backend, addresses []common.Address, topics [][]common.Ha
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// If we're doing singleton block filtering, execute and return
 	if f.block != (common.Hash{}) {
-		header, err := f.backend.HeaderByHash(ctx, f.block)
+		workObject, err := f.backend.HeaderByHash(ctx, f.block)
 		if err != nil {
 			return nil, err
 		}
-		if header == nil {
+		if workObject == nil {
 			return nil, errors.New("unknown block")
 		}
-		return f.blockLogs(ctx, header.Header())
+		return f.blockLogs(ctx, workObject)
 	}
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -199,11 +199,11 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 			f.begin = int64(number) + 1
 
 			// Retrieve the suggested block and pull any truly matching logs
-			header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
-			if header == nil || err != nil {
+			workObject, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
+			if workObject == nil || err != nil {
 				return logs, err
 			}
-			found, err := f.checkMatches(ctx, header.Header())
+			found, err := f.checkMatches(ctx, workObject)
 			if err != nil {
 				return logs, err
 			}
@@ -221,11 +221,11 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 	var logs []*types.Log
 
 	for ; f.begin <= int64(end); f.begin++ {
-		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
-		if header == nil || err != nil {
+		workObject, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
+		if workObject == nil || err != nil {
 			return logs, err
 		}
-		found, err := f.blockLogs(ctx, header.Header())
+		found, err := f.blockLogs(ctx, workObject)
 		if err != nil {
 			return logs, err
 		}
@@ -235,14 +235,14 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
-func (f *Filter) blockLogs(ctx context.Context, header *types.Header) (logs []*types.Log, err error) {
+func (f *Filter) blockLogs(ctx context.Context, workObject *types.WorkObject) (logs []*types.Log, err error) {
 	// Get block bloom from the database
-	bloom, err := f.backend.GetBloom(header.Hash())
+	bloom, err := f.backend.GetBloom(workObject.Hash())
 	if err != nil {
 		return logs, err
 	}
 	if bloomFilter(*bloom, f.addresses, f.topics) {
-		found, err := f.checkMatches(ctx, header)
+		found, err := f.checkMatches(ctx, workObject)
 		if err != nil {
 			return logs, err
 		}
@@ -253,9 +253,9 @@ func (f *Filter) blockLogs(ctx context.Context, header *types.Header) (logs []*t
 
 // checkMatches checks if the receipts belonging to the given header contain any log events that
 // match the filter criteria. This function is called when the bloom filter signals a potential match.
-func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs []*types.Log, err error) {
+func (f *Filter) checkMatches(ctx context.Context, workObject *types.WorkObject) (logs []*types.Log, err error) {
 	// Get the logs of the block
-	logsList, err := f.backend.GetLogs(ctx, header.Hash())
+	logsList, err := f.backend.GetLogs(ctx, workObject.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 	if len(logs) > 0 {
 		// We have matching logs, check if we need to resolve full logs via the light client
 		if logs[0].TxHash == (common.Hash{}) {
-			receipts, err := f.backend.GetReceipts(ctx, header.Hash())
+			receipts, err := f.backend.GetReceipts(ctx, workObject.Hash())
 			if err != nil {
 				return nil, err
 			}
