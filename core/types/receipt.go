@@ -241,7 +241,9 @@ func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
 	ProtoReceiptForStorage := &ProtoReceiptForStorage{
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
+		TxHash:            r.TxHash.ProtoEncode(),
 		ContractAddress:   r.ContractAddress.ProtoEncode(),
+		GasUsed:           r.GasUsed,
 	}
 	protoEtxs, err := r.Etxs.ProtoEncode()
 	if err != nil {
@@ -255,6 +257,7 @@ func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
 		protoLog := (*LogForStorage)(log).ProtoEncode()
 		protoLogs.Logs[i] = protoLog
 	}
+	ProtoReceiptForStorage.Logs = protoLogs
 	return ProtoReceiptForStorage, nil
 }
 
