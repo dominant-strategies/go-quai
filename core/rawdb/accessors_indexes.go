@@ -24,7 +24,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -129,33 +128,6 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 		"hash":   blockHash,
 		"txhash": hash,
 	}).Error("Transaction not found")
-	return nil, common.Hash{}, 0, 0
-}
-
-// ReadReceipt retrieves a specific transaction receipt from the database, along with
-// its added positional metadata.
-func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
-	// Retrieve the context of the receipt based on the transaction hash
-	blockNumber := ReadTxLookupEntry(db, hash)
-	if blockNumber == nil {
-		return nil, common.Hash{}, 0, 0
-	}
-	blockHash := ReadCanonicalHash(db, *blockNumber)
-	if blockHash == (common.Hash{}) {
-		return nil, common.Hash{}, 0, 0
-	}
-	// Read all the receipts from the block and return the one with the matching hash
-	receipts := ReadReceipts(db, blockHash, *blockNumber, config)
-	for receiptIndex, receipt := range receipts {
-		if receipt.TxHash == hash {
-			return receipt, blockHash, *blockNumber, uint64(receiptIndex)
-		}
-	}
-	db.Logger().WithFields(log.Fields{
-		"number": *blockNumber,
-		"hash":   blockHash,
-		"txhash": hash,
-	}).Error("Receipt not found")
 	return nil, common.Hash{}, 0, 0
 }
 
