@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -49,9 +50,10 @@ func (h *nonceHeap) Pop() interface{} {
 // txSortedMap is a nonce->transaction hash map with a heap based index to allow
 // iterating over the contents in a nonce-incrementing way.
 type txSortedMap struct {
-	items map[uint64]*types.Transaction // Hash map storing the transaction data
-	index *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
-	cache types.Transactions            // Cache of the transactions already sorted
+	items     map[uint64]*types.Transaction // Hash map storing the transaction data
+	index     *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
+	cache     types.Transactions            // Cache of the transactions already sorted
+	cacheLock sync.RWMutex                  // Lock to protect the cache
 }
 
 // newTxSortedMap creates a new nonce-sorted transaction map.
@@ -74,7 +76,9 @@ func (m *txSortedMap) Put(tx *types.Transaction) {
 	if m.items[nonce] == nil {
 		heap.Push(m.index, nonce)
 	}
+	m.cacheLock.Lock()
 	m.items[nonce], m.cache = tx, nil
+	m.cacheLock.Unlock()
 }
 
 // Forward removes all transactions from the map with a nonce lower than the
@@ -90,8 +94,14 @@ func (m *txSortedMap) Forward(threshold uint64) types.Transactions {
 		delete(m.items, nonce)
 	}
 	// If we had a cached order, shift the front
+	m.cacheLock.RLock()
 	if m.cache != nil {
+		m.cacheLock.RUnlock()
+		m.cacheLock.Lock()
 		m.cache = m.cache[len(removed):]
+		m.cacheLock.Unlock()
+	} else {
+		m.cacheLock.RUnlock()
 	}
 	return removed
 }
@@ -116,7 +126,9 @@ func (m *txSortedMap) reheap() {
 		*m.index = append(*m.index, nonce)
 	}
 	heap.Init(m.index)
+	m.cacheLock.Lock()
 	m.cache = nil
+	m.cacheLock.Unlock()
 }
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
@@ -132,7 +144,9 @@ func (m *txSortedMap) filter(filter func(*types.Transaction) bool) types.Transac
 		}
 	}
 	if len(removed) > 0 {
+		m.cacheLock.Lock()
 		m.cache = nil
+		m.cacheLock.Unlock()
 	}
 	return removed
 }
@@ -156,8 +170,14 @@ func (m *txSortedMap) Cap(threshold int) types.Transactions {
 	heap.Init(m.index)
 
 	// If we had a cache, shift the back
+	m.cacheLock.RLock()
 	if m.cache != nil {
+		m.cacheLock.RUnlock()
+		m.cacheLock.Lock()
 		m.cache = m.cache[:len(m.cache)-len(drops)]
+		m.cacheLock.Unlock()
+	} else {
+		m.cacheLock.RUnlock()
 	}
 	return drops
 }
@@ -178,7 +198,9 @@ func (m *txSortedMap) Remove(nonce uint64) bool {
 		}
 	}
 	delete(m.items, nonce)
+	m.cacheLock.Lock()
 	m.cache = nil
+	m.cacheLock.Unlock()
 
 	return true
 }
@@ -202,7 +224,9 @@ func (m *txSortedMap) Ready(start uint64) types.Transactions {
 		delete(m.items, next)
 		heap.Pop(m.index)
 	}
+	m.cacheLock.Lock()
 	m.cache = nil
+	m.cacheLock.Unlock()
 
 	return ready
 }
@@ -214,12 +238,18 @@ func (m *txSortedMap) Len() int {
 
 func (m *txSortedMap) flatten() types.Transactions {
 	// If the sorting was not cached yet, create and cache it
+	m.cacheLock.RLock()
 	if m.cache == nil {
+		m.cacheLock.RUnlock()
+		m.cacheLock.Lock()
 		m.cache = make(types.Transactions, 0, len(m.items))
 		for _, tx := range m.items {
 			m.cache = append(m.cache, tx)
 		}
 		sort.Sort(types.TxByNonce(m.cache))
+		m.cacheLock.Unlock()
+	} else {
+		m.cacheLock.RUnlock()
 	}
 	return m.cache
 }
