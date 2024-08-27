@@ -794,6 +794,14 @@ func (c *Core) Database() ethdb.Database {
 	return c.sl.sliceDb
 }
 
+func (c *Core) GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error) {
+	return c.sl.GeneratePendingHeader(block, fill)
+}
+
+func (c *Core) MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject {
+	return c.sl.MakeFullPendingHeader(primePh, regionPh, zonePh)
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//

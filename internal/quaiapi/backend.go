@@ -108,6 +108,8 @@ type Backend interface {
 	GetMaxTxInWorkShare() uint64
 	GetExpansionNumber() uint8
 	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
+	GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error)
+	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool

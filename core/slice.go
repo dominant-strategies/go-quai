@@ -89,6 +89,7 @@ type Slice struct {
 	asyncPhCh      chan *types.WorkObject
 	asyncPhSub     event.Subscription
 
+	bestPh           *types.WorkObject
 	bestPhKey        common.Hash
 	phCache          *lru.Cache[common.Hash, types.PendingHeader]
 	inboundEtxsCache *lru.Cache[common.Hash, types.Transactions]
@@ -536,7 +537,7 @@ func (sl *Slice) relayPh(block *types.WorkObject, pendingHeaderWithTermini types
 		bestPh, exists := sl.readPhCache(sl.bestPhKey)
 		if exists {
 			bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-			sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
+			// sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
 			return
 		} else {
 			sl.logger.WithField("bestPhKey", sl.bestPhKey).Warn("Pending Header for Best ph key does not exist")
@@ -684,7 +685,7 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 			if exists {
 				bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
 				sl.writePhCache(sl.bestPhKey, bestPh)
-				sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
+				// sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
 			}
 		case <-sl.asyncPhSub.Err():
 			return
@@ -931,6 +932,15 @@ func (sl *Slice) GetPendingHeader() (*types.WorkObject, error) {
 	}
 }
 
+func (sl *Slice) SetBestPh(pendingHeader *types.WorkObject) {
+	pendingHeader.WorkObjectHeader().SetLocation(sl.NodeLocation())
+	pendingHeader.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
+	pendingHeader.WorkObjectHeader().SetHeaderHash(pendingHeader.Header().Hash())
+	sl.miner.worker.AddPendingWorkObjectBody(pendingHeader)
+	sl.bestPh = pendingHeader
+	sl.miner.worker.pendingHeaderFeed.Send(pendingHeader)
+}
+
 // GetManifest gathers the manifest of ancestor block hashes since the last
 // coincident block.
 func (sl *Slice) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
@@ -1067,7 +1077,7 @@ func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEnt
 			bestPh, exists := sl.readPhCache(sl.bestPhKey)
 			if exists {
 				bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-				sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
+				// sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
 			}
 		}
 	}
@@ -1609,6 +1619,17 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 	return nil
 }
 
+func (sl *Slice) MakeFullPendingHeader(primePendingHeader, regionPendingHeader, zonePendingHeader *types.WorkObject) *types.WorkObject {
+	combinedPendingHeader := sl.combinePendingHeader(regionPendingHeader, primePendingHeader, common.REGION_CTX, true)
+	combinedPendingHeader = sl.combinePendingHeader(zonePendingHeader, combinedPendingHeader, common.ZONE_CTX, true)
+	sl.SetBestPh(combinedPendingHeader)
+	return combinedPendingHeader
+}
+
+func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error) {
+	return sl.miner.worker.GeneratePendingHeader(block, fill)
+}
+
 func (sl *Slice) GetPendingBlockBody(wo *types.WorkObjectHeader) *types.WorkObject {
 	blockBody, _ := sl.miner.worker.GetPendingBlockBody(wo)
 	return blockBody
@@ -1939,7 +1960,7 @@ func (sl *Slice) asyncWorkShareUpdateLoop() {
 					bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
 					bestPh.WorkObject().WorkObjectHeader().SetTxHash(hash)
 					sl.writePhCache(sl.bestPhKey, bestPh)
-					sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
+					// sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
 				}
 				sl.txPool.broadcastSetCache.Add(hash, txs)
 			}

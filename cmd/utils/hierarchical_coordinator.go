@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"math/big"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/quai"
 	"github.com/spf13/viper"
@@ -27,6 +29,18 @@ var (
 	c_currentExpansionNumberKey = []byte("cexp")
 )
 
+type Child struct {
+	hash     common.Hash
+	location common.Location
+	entropy  *big.Int
+}
+
+func (ch *Child) Empty() bool {
+	return ch.hash == common.Hash{} && ch.location.Equal(common.Location{}) && ch.entropy == nil
+}
+
+type Children []Child
+
 type HierarchicalCoordinator struct {
 	db *leveldb.DB
 	// APIS
@@ -41,6 +55,9 @@ type HierarchicalCoordinator struct {
 
 	newBlockCh    chan *types.WorkObject
 	chainHeadSubs []event.Subscription
+	chainSubs     []event.Subscription
+
+	childrenStore map[common.Hash][common.HierarchyDepth]Children
 
 	expansionCh  chan core.ExpansionEvent
 	expansionSub event.Subscription
@@ -66,6 +83,7 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 		treeExpansionTriggerStarted: false,
 		quitCh:                      quitCh,
 		newBlockCh:                  make(chan *types.WorkObject),
+		childrenStore:               make(map[common.Hash][common.HierarchyDepth]Children),
 	}
 
 	if startingExpansionNumber > common.MaxExpansionNumber {
@@ -109,12 +127,18 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 		for j := 0; j < int(numZones); j++ {
 			backend := *hc.consensus.GetBackend(common.Location{byte(i), byte(j)})
 			chainHeadCh := make(chan core.ChainHeadEvent)
-			sub := backend.SubscribeChainHeadEvent(chainHeadCh)
-			hc.chainHeadSubs = append(hc.chainHeadSubs, sub)
+			chainHeadSub := backend.SubscribeChainHeadEvent(chainHeadCh)
+			hc.chainHeadSubs = append(hc.chainHeadSubs, chainHeadSub)
 
 			// start an chain head event loop to handle the chainhead events
 			hc.wg.Add(1)
-			go hc.ChainHeadEventLoop(chainHeadCh, sub)
+			go hc.ChainHeadEventLoop(chainHeadCh, chainHeadSub)
+
+			chainEventCh := make(chan core.ChainEvent)
+			chainSub := backend.SubscribeChainEvent(chainEventCh)
+			hc.wg.Add(1)
+			hc.chainSubs = append(hc.chainSubs, chainSub)
+			go hc.ChainEventLoop(chainEventCh, chainSub)
 		}
 	}
 
@@ -208,6 +232,9 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 func (hc *HierarchicalCoordinator) Stop() {
 	for _, chainHeadSub := range hc.chainHeadSubs {
 		chainHeadSub.Unsubscribe()
+	}
+	for _, chainEventSub := range hc.chainSubs {
+		chainEventSub.Unsubscribe()
 	}
 	hc.expansionSub.Unsubscribe()
 	hc.db.Close()
@@ -384,6 +411,76 @@ func (hc *HierarchicalCoordinator) ChainHeadEventLoop(chainHead chan core.ChainH
 	}
 }
 
+func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEvent, sub event.Subscription) {
+	defer hc.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
+	for {
+		select {
+		case head := <-chainEvent:
+			hc.UpdateChildrenStore(head.Block)
+		case <-sub.Err():
+			return
+		}
+	}
+}
+
+func (hc *HierarchicalCoordinator) UpdateChildrenStore(block *types.WorkObject) {
+	backend := *hc.consensus.GetBackend(block.Location())
+	_, blockOrder, err := backend.CalcOrder(block)
+	if err != nil {
+		log.Global.Error("error calculating block order")
+		return
+	}
+	switch blockOrder {
+	case common.PRIME_CTX:
+		childrenInfo, exists := hc.childrenStore[block.ParentHash(common.ZONE_CTX)]
+		if !exists {
+			childrenInfo[common.PRIME_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
+			childrenInfo[common.REGION_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
+			childrenInfo[common.ZONE_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
+			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = childrenInfo
+		} else {
+			copyChildrenInfo := childrenInfo
+			// modify the region and zone entry
+			copyChildrenInfo[common.PRIME_CTX] = append(copyChildrenInfo[common.PRIME_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
+			copyChildrenInfo[common.REGION_CTX] = append(copyChildrenInfo[common.REGION_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
+			copyChildrenInfo[common.ZONE_CTX] = append(copyChildrenInfo[common.ZONE_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
+			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = copyChildrenInfo
+		}
+	case common.REGION_CTX:
+		childrenInfo, exists := hc.childrenStore[block.ParentHash(common.ZONE_CTX)]
+		if !exists {
+			childrenInfo[common.REGION_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
+			childrenInfo[common.ZONE_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
+			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = childrenInfo
+		} else {
+			copyChildrenInfo := childrenInfo
+			// modify the region and zone entry
+			copyChildrenInfo[common.REGION_CTX] = append(copyChildrenInfo[common.REGION_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
+			copyChildrenInfo[common.ZONE_CTX] = append(copyChildrenInfo[common.ZONE_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
+			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = copyChildrenInfo
+		}
+	case common.ZONE_CTX:
+		childrenInfo, exists := hc.childrenStore[block.ParentHash(common.ZONE_CTX)]
+		if !exists {
+			childrenInfo[common.ZONE_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
+			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = childrenInfo
+		} else {
+			copyChildrenInfo := childrenInfo
+			// modify the zone entry
+			copyChildrenInfo[common.ZONE_CTX] = append(copyChildrenInfo[common.ZONE_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
+			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = copyChildrenInfo
+		}
+	}
+}
+
 // newBlockEventLoop
 func (hc *HierarchicalCoordinator) NewBlockEventLoop() {
 	defer hc.wg.Done()
@@ -399,8 +496,197 @@ func (hc *HierarchicalCoordinator) NewBlockEventLoop() {
 		select {
 		case newBlock := <-hc.newBlockCh:
 			log.Global.Error("Received a new head event", newBlock.NumberArray())
+			hc.BuildPendingHeaders(newBlock)
 		case <-hc.quitCh:
 			return
 		}
 	}
+}
+
+func (hc *HierarchicalCoordinator) BuildPendingHeaders(block *types.WorkObject) {
+	// Pick the leader among all the slices
+
+	var leader *types.WorkObject
+	var currentLeaderBackend quaiapi.Backend
+	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
+	log.Global.Error("NumRegions", numRegions, "NumZones", numZones)
+	for i := 0; i < int(numRegions); i++ {
+		for j := 0; j < int(numZones); j++ {
+			location := common.Location{byte(i), byte(j)}
+			backend := *hc.consensus.GetBackend(location)
+			currentBlock := backend.CurrentBlock()
+			// get the currrent header from all the zones
+			if leader == nil {
+				leader = currentBlock
+				currentLeaderBackend = backend
+			} else {
+				if backend.Engine().TotalLogS(backend, currentBlock).Cmp(backend.Engine().TotalLogS(currentLeaderBackend, leader)) > 0 {
+					leader = currentBlock
+					currentLeaderBackend = backend
+				}
+			}
+		}
+	}
+
+	leaderLocation := leader.Location()
+
+	log.Global.Error("Leader", leader.Hash(), leaderLocation)
+	leaderBackend := *hc.consensus.GetBackend(leaderLocation)
+
+	// trace back from the leader and stop after finding a prime block from each region or reach genesis
+	_, leaderOrder, err := leaderBackend.CalcOrder(leader)
+	if err != nil {
+		log.Global.Error("Cannot calculate the order for the leader")
+	}
+
+	frontierPoints := make(map[string]*types.WorkObject) // we need prime blocks for each region
+
+	regionPrime := make(map[int]bool)
+
+	switch leaderOrder {
+	case common.PRIME_CTX:
+		frontierPoints[common.Location{byte(leaderLocation.Region())}.Name()] = leader
+		frontierPoints["leaderRegion-"+common.Location{byte(leaderLocation.Region())}.Name()] = leader
+		frontierPoints[leaderLocation.Name()] = leader
+		regionPrime[leader.Location().Region()] = true
+	case common.REGION_CTX:
+		frontierPoints["leaderRegion-"+common.Location{byte(leaderLocation.Region())}.Name()] = leader
+		frontierPoints[leaderLocation.Name()] = leader
+	case common.ZONE_CTX:
+		frontierPoints[leaderLocation.Name()] = leader
+	}
+
+	backend := hc.GetBackendForLocationAndOrder(leaderLocation, leaderOrder)
+
+	context := leaderOrder
+	current := leader
+	for {
+		parent := backend.GetHeaderByHash(current.ParentHash(context))
+
+		// TODO: the genesis check has to be done correctly based on the hash
+		if parent.NumberU64(context) == 0 {
+			break
+		}
+
+		_, parentOrder, err := backend.CalcOrder(parent)
+		if err != nil {
+			log.Global.Error("error calculating the order of the parent")
+		}
+
+		if parentOrder < context {
+			context = parentOrder
+			backend = hc.GetBackendForLocationAndOrder(parent.Location(), parentOrder)
+		}
+
+		if parentOrder == common.PRIME_CTX {
+			regionPrime[parent.Location().Region()] = true
+			_, exists := frontierPoints[common.Location{byte(parent.Location().Region())}.Name()]
+			if !exists {
+				// this makes sure that only the latest prime block for each
+				// region is stored in the map
+				frontierPoints[common.Location{byte(parent.Location().Region())}.Name()] = parent
+			}
+			if parent.Location().Region() == leader.Location().Region() {
+				_, exists = frontierPoints["leaderRegion-"+common.Location{byte(parent.Location().Region())}.Name()]
+				if !exists {
+					frontierPoints["leaderRegion-"+common.Location{byte(parent.Location().Region())}.Name()] = parent
+				}
+			}
+		} else if parentOrder == common.REGION_CTX {
+			_, exists := frontierPoints["leaderRegion-"+common.Location{byte(parent.Location().Region())}.Name()]
+			if !exists {
+				frontierPoints["leaderRegion-"+common.Location{byte(parent.Location().Region())}.Name()] = parent
+			}
+		}
+
+		// Once we collect all the prime blocks for the region we stop
+		if len(regionPrime) == int(numRegions) {
+			break
+		}
+		current = parent
+	}
+
+	// If an expected region doesnt exist in this list, that means that it hasnt
+	// had a Prime block yet, so we need to use the genesis hash
+	for key, points := range frontierPoints {
+		log.Global.WithFields(log.Fields{"key": key, "hash": points.Hash(), "number": points.NumberArray(), "location": points.Location()}).Error("frontier points")
+	}
+
+	// get zone-0-0 leader region
+	bestChildInZone := hc.findBestChild(Child{hash: leaderBackend.Config().DefaultGenesisHash, location: common.Location{}, entropy: big.NewInt(0)}, common.ZONE_CTX)
+	log.Global.Error("Best child", bestChildInZone.hash.String())
+
+	var bestPrimeHash, bestRegionHash common.Hash
+	block, exists := frontierPoints[common.Location{byte(leaderLocation.Region())}.Name()]
+	if !exists {
+		bestPrimeHash = leaderBackend.Config().DefaultGenesisHash
+	} else {
+		bestPrimeHash = block.Hash()
+	}
+
+	block, exists = frontierPoints["leaderRegion-"+common.Location{byte(leaderLocation.Region())}.Name()]
+	if !exists {
+		bestRegionHash = leaderBackend.Config().DefaultGenesisHash
+	} else {
+		bestRegionHash = block.Hash()
+	}
+
+	// generatePrimePendingHeader
+	primeBackend := *hc.consensus.GetBackend(common.Location{})
+	primePendingHeader, err := primeBackend.GeneratePendingHeader(primeBackend.GetBlockByHash(bestPrimeHash), false)
+	if err != nil {
+		log.Global.Error("error generating prime pending header")
+	}
+	region0Backend := *hc.consensus.GetBackend(common.Location{byte(0)})
+	regionPendingHeader, err := region0Backend.GeneratePendingHeader(region0Backend.GetBlockByHash(bestRegionHash), false)
+	if err != nil {
+		log.Global.Error("error generating region pending header")
+	}
+	bestChildBlock := leaderBackend.GetBlockByHash(bestChildInZone.hash)
+	zonePendingHeader, err := leaderBackend.GeneratePendingHeader(bestChildBlock, false)
+	if err != nil {
+		log.Global.Error("error generating zone pending header")
+	}
+
+	log.Global.Error("PendingHeaders", primePendingHeader.NumberU64(common.PRIME_CTX), regionPendingHeader.NumberU64(common.REGION_CTX), zonePendingHeader.NumberU64(common.ZONE_CTX))
+
+	fullPh := leaderBackend.MakeFullPendingHeader(primePendingHeader, regionPendingHeader, zonePendingHeader)
+	log.Global.Error("Full ph", fullPh.NumberArray())
+}
+
+func (hc *HierarchicalCoordinator) findBestChild(node Child, ctx int) Child {
+	// Fetch children from the store
+	children, exists := hc.childrenStore[node.hash]
+	if !exists {
+		return node
+	}
+
+	var bestChild Child
+	var bestEntropy = node.entropy
+
+	for _, child := range children[ctx] {
+		childBest := hc.findBestChild(child, ctx)
+
+		if childBest.entropy.Cmp(bestEntropy) > 0 {
+			bestChild = childBest
+			bestEntropy = childBest.entropy
+		}
+	}
+
+	if bestChild.Empty() {
+		return node
+	}
+	return bestChild
+}
+
+func (hc *HierarchicalCoordinator) GetBackendForLocationAndOrder(location common.Location, order int) quaiapi.Backend {
+	switch order {
+	case common.PRIME_CTX:
+		return *hc.consensus.GetBackend(common.Location{})
+	case common.REGION_CTX:
+		return *hc.consensus.GetBackend(common.Location{byte(location.Region())})
+	case common.ZONE_CTX:
+		return *hc.consensus.GetBackend(common.Location{byte(location.Region()), byte(location.Zone())})
+	}
+	return nil
 }
