@@ -39,6 +39,9 @@ type HierarchicalCoordinator struct {
 
 	slicesRunning []common.Location
 
+	newBlockCh    chan *types.WorkObject
+	chainHeadSubs []event.Subscription
+
 	expansionCh  chan core.ExpansionEvent
 	expansionSub event.Subscription
 	wg           *sync.WaitGroup
@@ -62,6 +65,7 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 		slicesRunning:               GetRunningZones(),
 		treeExpansionTriggerStarted: false,
 		quitCh:                      quitCh,
+		newBlockCh:                  make(chan *types.WorkObject),
 	}
 
 	if startingExpansionNumber > common.MaxExpansionNumber {
@@ -97,6 +101,25 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 
 	hc.wg.Add(1)
 	go hc.expansionEventLoop()
+
+	hc.chainHeadSubs = []event.Subscription{}
+
+	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
+	for i := 0; i < int(numRegions); i++ {
+		for j := 0; j < int(numZones); j++ {
+			backend := *hc.consensus.GetBackend(common.Location{byte(i), byte(j)})
+			chainHeadCh := make(chan core.ChainHeadEvent)
+			sub := backend.SubscribeChainHeadEvent(chainHeadCh)
+			hc.chainHeadSubs = append(hc.chainHeadSubs, sub)
+
+			// start an chain head event loop to handle the chainhead events
+			hc.wg.Add(1)
+			go hc.ChainHeadEventLoop(chainHeadCh, sub)
+		}
+	}
+
+	hc.wg.Add(1)
+	go hc.NewBlockEventLoop()
 
 	return nil
 }
@@ -183,6 +206,9 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 }
 
 func (hc *HierarchicalCoordinator) Stop() {
+	for _, chainHeadSub := range hc.chainHeadSubs {
+		chainHeadSub.Unsubscribe()
+	}
 	hc.expansionSub.Unsubscribe()
 	hc.db.Close()
 	close(hc.quitCh)
@@ -336,4 +362,45 @@ func (hc *HierarchicalCoordinator) writeCurrentExpansionNumber(number uint8) err
 		Fatalf("error setting current expansion number: %s", err)
 	}
 	return nil
+}
+
+func (hc *HierarchicalCoordinator) ChainHeadEventLoop(chainHead chan core.ChainHeadEvent, sub event.Subscription) {
+	defer hc.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
+	for {
+		select {
+		case head := <-chainHead:
+			hc.newBlockCh <- head.Block
+		case <-sub.Err():
+			return
+		}
+	}
+}
+
+// newBlockEventLoop
+func (hc *HierarchicalCoordinator) NewBlockEventLoop() {
+	defer hc.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
+	for {
+		select {
+		case newBlock := <-hc.newBlockCh:
+			log.Global.Error("Received a new head event", newBlock.NumberArray())
+		case <-hc.quitCh:
+			return
+		}
+	}
 }
