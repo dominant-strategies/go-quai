@@ -87,6 +87,7 @@ var (
 	AddressUtxosPrefix          = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
 	processedStatePrefix        = []byte("ps")    // processedStatePrefix + hash -> boolean
 	multiSetPrefix              = []byte("ms")    // multiSetPrefix + hash -> multiset
+	childrenPrefix              = []byte("ch")    // childrenPrefix + hash -> children
 
 	blockBodyPrefix         = []byte("b")  // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix     = []byte("r")  // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -337,4 +338,8 @@ func createdUTXOsKey(blockHash common.Hash) []byte {
 
 func multiSetKey(hash common.Hash) []byte {
 	return append(multiSetPrefix, hash.Bytes()...)
+}
+
+func childrenKey(hash common.Hash) []byte {
+	return append(childrenPrefix, hash.Bytes()...)
 }

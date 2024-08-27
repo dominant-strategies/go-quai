@@ -395,6 +395,21 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	}
 	time11 := common.PrettyDuration(time.Since(start))
 
+	// Add this block hash into the children list of the parent
+	var childrenHashes common.Hashes
+	if sl.hc.IsGenesisHash(header.ParentHash(nodeCtx)) {
+		childrenHashes = common.Hashes{}
+	} else {
+		childrenHashes, err = rawdb.ReadChildren(sl.sliceDb, header.ParentHash(nodeCtx))
+		if err != nil {
+			sl.logger.Error("error reading children hashes", header.ParentHash(nodeCtx))
+		}
+	}
+	// Append this block hash into the childrenHashes
+	childrenHashes = append(childrenHashes, header.Hash())
+	sl.logger.Info("Updating Children hash of the parent", childrenHashes, header.ParentHash(nodeCtx), nodeCtx)
+	rawdb.WriteChildren(batch, header.ParentHash(nodeCtx), childrenHashes)
+
 	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
 		return nil, false, err

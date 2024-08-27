@@ -1370,3 +1370,39 @@ func DeleteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
 		db.Logger().WithField("err", err).Fatal("Failed to delete created utxo keys")
 	}
 }
+
+func ReadChildren(db ethdb.KeyValueReader, blockHash common.Hash) (common.Hashes, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(childrenKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoChildrenHashes := new(common.ProtoHashes)
+	if err := proto.Unmarshal(data, protoChildrenHashes); err != nil {
+		return nil, err
+	}
+
+	childrenHashes := common.Hashes{}
+	childrenHashes.ProtoDecode(protoChildrenHashes)
+
+	return childrenHashes, nil
+}
+
+func WriteChildren(db ethdb.KeyValueWriter, blockHash common.Hash, childrenHashes common.Hashes) error {
+	protoChildrenHashes := &common.ProtoHashes{}
+	protoChildrenHashes = childrenHashes.ProtoEncode()
+	data, err := proto.Marshal(protoChildrenHashes)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto encode children hashes")
+	}
+	if err := db.Put(childrenKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store children hashes")
+	}
+	return nil
+}
+
+func DeleteChildren(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(childrenKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete children hashes")
+	}
+}
