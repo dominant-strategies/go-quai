@@ -445,7 +445,7 @@ func (w *worker) asyncStateLoop() {
 					return
 				default:
 					wo := head.Block
-					header, err := w.GeneratePendingHeader(wo, true)
+					header, err := w.GeneratePendingHeader(wo, true, nil)
 					if err != nil {
 						w.logger.WithField("err", err).Error("Error generating pending header")
 						return
@@ -484,120 +484,124 @@ func (w *worker) asyncStateLoop() {
 }
 
 // GeneratePendingBlock generates pending block given a commited block.
-func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error) {
-	nodeCtx := w.hc.NodeCtx()
+func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, stopChan chan struct{}) (*types.WorkObject, error) {
+	select {
+	case <-stopChan:
+		return nil, errors.New("stop signal received")
+	default:
+		nodeCtx := w.hc.NodeCtx()
 
-	w.interruptAsyncPhGen()
+		w.interruptAsyncPhGen()
 
-	var (
-		interrupt *int32
-		timestamp int64 // timestamp for each round of sealing.
-	)
+		var (
+			interrupt *int32
+			timestamp int64 // timestamp for each round of sealing.
+		)
 
-	if interrupt != nil {
-		atomic.StoreInt32(interrupt, commitInterruptNewHead)
-	}
-	interrupt = new(int32)
-	atomic.StoreInt32(&w.newTxs, 0)
-
-	start := time.Now()
-	// Set the coinbase if the worker is running or it's required
-	var coinbase common.Address
-	if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) && w.hc.ProcessingState() {
-		w.logger.Error("Refusing to mine without etherbase")
-		return nil, errors.New("etherbase not found")
-	} else if w.coinbase.Equal(common.Address{}) {
-		w.coinbase = common.Zero
-	}
-	coinbase = w.coinbase // Use the preset address as the fee recipient
-
-	work, err := w.prepareWork(&generateParams{
-		timestamp: uint64(timestamp),
-		coinbase:  coinbase,
-	}, block)
-	if err != nil {
-		return nil, err
-	}
-
-	uncles := work.unclelist()
-	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
-		// First etx is always the coinbase etx
-		// If workshares are included that are not uncles(?)
-		// create a placeholder for the coinbase and create etx for the rest of the workshares
-		if coinbase.IsInQiLedgerScope() {
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
-		} else if coinbase.IsInQuaiLedgerScope() {
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
+		if interrupt != nil {
+			atomic.StoreInt32(interrupt, commitInterruptNewHead)
 		}
+		interrupt = new(int32)
+		atomic.StoreInt32(&w.newTxs, 0)
 
-		// Encode the parent hash with the correct origin location and use it in the OriginatingTxHash field for coinbase
-		origin := block.Hash()
-		origin[0] = byte(w.hc.NodeLocation().Region())
-		origin[1] = byte(w.hc.NodeLocation().Zone())
-
-		// Add an etx for each workshare for it to be rewarded
-		for i, uncle := range uncles {
-			reward := misc.CalculateReward(uncle)
-			uncleCoinbase := uncle.Coinbase()
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(i) + 1, Sender: uncleCoinbase}))
-		}
-
-		// Fill pending transactions from the txpool
-		w.adjustGasLimit(work, block)
-		work.utxoFees = big.NewInt(0)
-		work.quaiFees = big.NewInt(0)
 		start := time.Now()
-		if err := w.fillTransactions(interrupt, work, block, fill); err != nil {
-			return nil, fmt.Errorf("error generating pending header: %v", err)
+		// Set the coinbase if the worker is running or it's required
+		var coinbase common.Address
+		if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) && w.hc.ProcessingState() {
+			w.logger.Error("Refusing to mine without etherbase")
+			return nil, errors.New("etherbase not found")
+		} else if w.coinbase.Equal(common.Address{}) {
+			w.coinbase = common.Zero
 		}
-		if fill {
-			w.fillTransactionsRollingAverage.Add(time.Since(start))
-			w.logger.WithFields(log.Fields{
-				"count":   len(work.txs),
-				"elapsed": common.PrettyDuration(time.Since(start)),
-				"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
-			}).Info("Filled and sorted pending transactions")
+		coinbase = w.coinbase // Use the preset address as the fee recipient
+
+		work, err := w.prepareWork(&generateParams{
+			timestamp: uint64(timestamp),
+			coinbase:  coinbase,
+		}, block)
+		if err != nil {
+			return nil, err
 		}
 
-		if work.parentOrder == nil {
-			return nil, fmt.Errorf("parent order not set")
-		}
-		var primeTerminus *types.WorkObject
-		if *work.parentOrder == common.PRIME_CTX {
-			primeTerminus = block
-		} else {
-			// convert the Quai reward into Qi and add it to the utxoFees
-			primeTerminus = w.hc.GetHeaderByHash(work.wo.PrimeTerminus())
-			if primeTerminus == nil {
-				return nil, fmt.Errorf("could not find prime terminus header %032x", work.wo.PrimeTerminus())
+		uncles := work.unclelist()
+		if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
+			// First etx is always the coinbase etx
+			// If workshares are included that are not uncles(?)
+			// create a placeholder for the coinbase and create etx for the rest of the workshares
+			if coinbase.IsInQiLedgerScope() {
+				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
+			} else if coinbase.IsInQuaiLedgerScope() {
+				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
+			}
+
+			// Encode the parent hash with the correct origin location and use it in the OriginatingTxHash field for coinbase
+			origin := block.Hash()
+			origin[0] = byte(w.hc.NodeLocation().Region())
+			origin[1] = byte(w.hc.NodeLocation().Zone())
+
+			// Add an etx for each workshare for it to be rewarded
+			for i, uncle := range uncles {
+				reward := misc.CalculateReward(uncle)
+				uncleCoinbase := uncle.Coinbase()
+				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(i) + 1, Sender: uncleCoinbase}))
+			}
+
+			// Fill pending transactions from the txpool
+			w.adjustGasLimit(work, block)
+			work.utxoFees = big.NewInt(0)
+			work.quaiFees = big.NewInt(0)
+			start := time.Now()
+			if err := w.fillTransactions(interrupt, work, block, fill); err != nil {
+				return nil, fmt.Errorf("error generating pending header: %v", err)
+			}
+			if fill {
+				w.fillTransactionsRollingAverage.Add(time.Since(start))
+				w.logger.WithFields(log.Fields{
+					"count":   len(work.txs),
+					"elapsed": common.PrettyDuration(time.Since(start)),
+					"average": common.PrettyDuration(w.fillTransactionsRollingAverage.Average()),
+				}).Info("Filled and sorted pending transactions")
+			}
+
+			if work.parentOrder == nil {
+				return nil, fmt.Errorf("parent order not set")
+			}
+			var primeTerminus *types.WorkObject
+			if *work.parentOrder == common.PRIME_CTX {
+				primeTerminus = block
+			} else {
+				// convert the Quai reward into Qi and add it to the utxoFees
+				primeTerminus = w.hc.GetHeaderByHash(work.wo.PrimeTerminus())
+				if primeTerminus == nil {
+					return nil, fmt.Errorf("could not find prime terminus header %032x", work.wo.PrimeTerminus())
+				}
+			}
+			if coinbase.IsInQiLedgerScope() {
+				coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
+				blockFees := new(big.Int).Add(work.utxoFees, misc.QuaiToQi(primeTerminus.WorkObjectHeader(), work.quaiFees))
+				blockReward := new(big.Int).Add(coinbaseReward, blockFees)
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase})
+				work.etxs[0] = coinbaseEtx
+			} else if coinbase.IsInQuaiLedgerScope() {
+				coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
+				blockFees := new(big.Int).Add(work.quaiFees, misc.QiToQuai(primeTerminus.WorkObjectHeader(), work.utxoFees))
+				blockReward := new(big.Int).Add(coinbaseReward, blockFees)
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase})
+				work.etxs[0] = coinbaseEtx
 			}
 		}
-		if coinbase.IsInQiLedgerScope() {
-			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
-			blockFees := new(big.Int).Add(work.utxoFees, misc.QuaiToQi(primeTerminus.WorkObjectHeader(), work.quaiFees))
-			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase})
-			work.etxs[0] = coinbaseEtx
-		} else if coinbase.IsInQuaiLedgerScope() {
-			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
-			blockFees := new(big.Int).Add(work.quaiFees, misc.QiToQuai(primeTerminus.WorkObjectHeader(), work.utxoFees))
-			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase})
-			work.etxs[0] = coinbaseEtx
+
+		// Create a local environment copy, avoid the data race with snapshot state.
+		newWo, err := w.FinalizeAssemble(w.hc, work.wo, block, work.state, work.txs, uncles, work.etxs, work.subManifest, work.receipts)
+		if err != nil {
+			return nil, err
 		}
+
+		work.wo = newWo
+
+		w.printPendingHeaderInfo(work, newWo, start)
+		return newWo, nil
 	}
-
-	// Create a local environment copy, avoid the data race with snapshot state.
-	newWo, err := w.FinalizeAssemble(w.hc, work.wo, block, work.state, work.txs, uncles, work.etxs, work.subManifest, work.receipts)
-	if err != nil {
-		return nil, err
-	}
-
-	work.wo = newWo
-
-	w.printPendingHeaderInfo(work, newWo, start)
-
-	return newWo, nil
 }
 
 // printPendingHeaderInfo logs the pending header information
@@ -1214,31 +1218,11 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 	}
 
-	var interlinkHashes common.Hashes
 	if nodeCtx == common.PRIME_CTX {
-		if w.hc.IsGenesisHash(parent.Hash()) {
-			// On genesis, the interlink hashes are all the same and should start with genesis hash
-			interlinkHashes = common.Hashes{parent.Hash(), parent.Hash(), parent.Hash(), parent.Hash()}
-		} else {
-			// check if parent belongs to any interlink level
-			rank, err := w.engine.CalcRank(w.hc, parent)
-			if err != nil {
-				return nil, err
-			}
-			if rank == 0 { // No change in the interlink hashes, so carry
-				interlinkHashes = parent.InterlinkHashes()
-			} else if rank > 0 && rank <= common.InterlinkDepth {
-				interlinkHashes = parent.InterlinkHashes()
-				// update the interlink hashes for each level below the rank
-				for i := 0; i < rank; i++ {
-					interlinkHashes[i] = parent.Hash()
-				}
-			} else {
-				w.logger.Error("Not possible to find rank greater than the max interlink levels")
-			}
+		interlinkHashes, err := w.hc.CalculateInterlink(parent)
+		if err != nil {
+			return nil, err
 		}
-		// Store the interlink hashes in the database
-		rawdb.WriteInterlinkHashes(w.workerDb, parent.Hash(), interlinkHashes)
 		interlinkRootHash := types.DeriveSha(interlinkHashes, trie.NewStackTrie(nil))
 		newWo.Header().SetInterlinkRootHash(interlinkRootHash)
 	}
@@ -1399,25 +1383,8 @@ func (w *worker) adjustGasLimit(env *environment, parent *types.WorkObject) {
 // ComputeManifestHash given a header computes the manifest hash for the header
 // and stores it in the database
 func (w *worker) ComputeManifestHash(header *types.WorkObject) common.Hash {
-	manifest := rawdb.ReadManifest(w.workerDb, header.Hash())
-	if manifest == nil {
-		nodeCtx := w.hc.NodeCtx()
-		// Compute and set manifest hash
-		manifest = types.BlockManifest{}
-		if nodeCtx == common.PRIME_CTX {
-			// Nothing to do for prime chain
-			manifest = types.BlockManifest{}
-		} else if w.engine.IsDomCoincident(w.hc, header) {
-			manifest = types.BlockManifest{header.Hash()}
-		} else {
-			parentManifest := rawdb.ReadManifest(w.workerDb, header.ParentHash(nodeCtx))
-			manifest = append(parentManifest, header.Hash())
-		}
-		// write the manifest into the disk
-		rawdb.WriteManifest(w.workerDb, header.Hash(), manifest)
-	}
+	manifest := w.hc.CalculateManifest(header)
 	manifestHash := types.DeriveSha(manifest, trie.NewStackTrie(nil))
-
 	return manifestHash
 }
 

@@ -250,53 +250,27 @@ func TestTerminiStorage(t *testing.T) {
 	}
 }
 
-func TestPendingHeaderStorage(t *testing.T) {
+func TestBestPendingHeaderStorage(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 
-	if entry := ReadPendingHeader(db, common.Hash{1}); entry != nil {
+	if entry := ReadBestPendingHeader(db); entry != nil {
 		t.Fatalf("Non existent pending header returned: %v", entry)
 	}
 
 	emptyHeader := types.EmptyWorkObject(common.ZONE_CTX)
 
-	emptyPendingHeader := types.EmptyPendingHeader()
-	emptyPendingHeader.SetHeader(emptyHeader)
-	emptyPendingHeader.WorkObject().SetTx(nil)
+	emptyHeader.SetTx(nil)
 
-	WritePendingHeader(db, common.Hash{1}, emptyPendingHeader)
+	WriteBestPendingHeader(db, emptyHeader)
 
-	if entry := ReadPendingHeader(db, common.Hash{1}); entry == nil {
+	if entry := ReadBestPendingHeader(db); entry == nil {
 		t.Fatalf("Stored pb  bodyKeys not found: %v", entry)
 	}
 
-	DeletePendingHeader(db, common.Hash{1})
+	DeleteBestPendingHeader(db)
 
-	if entry := ReadPendingHeader(db, common.Hash{1}); entry != nil {
+	if entry := ReadBestPendingHeader(db); entry != nil {
 		t.Fatalf("Deleted pb  bodyKeys returned: %v", entry)
-	}
-}
-
-func TestBestPhKeyStorage(t *testing.T) {
-	db := NewMemoryDatabase(log.Global)
-
-	emptyHash := common.Hash{}
-
-	if entry := ReadBestPhKey(db); entry != emptyHash {
-		t.Fatalf("Non existent best phKey returned: %v", entry)
-	}
-
-	hash := common.Hash{1}
-
-	WriteBestPhKey(db, hash)
-
-	if entry := ReadBestPhKey(db); entry != hash {
-		t.Fatalf("Stored best phKey not found: %v", entry)
-	}
-
-	DeleteBestPhKey(db)
-
-	if entry := ReadBestPhKey(db); entry != emptyHash {
-		t.Fatalf("Failed to delete key: %v", entry)
 	}
 }
 

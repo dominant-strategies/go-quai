@@ -179,11 +179,6 @@ func workObjectBodyKey(hash common.Hash) []byte {
 	return append(workObjectBodyPrefix, hash.Bytes()...)
 }
 
-// pendingHeaderKey = pendingHeaderPrefix + hash
-func pendingHeaderKey(hash common.Hash) []byte {
-	return append(pendingHeaderPrefix, hash.Bytes()...)
-}
-
 // pbBodyKey = pbBodyPrefix + hash
 func pbBodyKey(hash common.Hash) []byte {
 	return append(pbBodyPrefix, hash.Bytes()...)

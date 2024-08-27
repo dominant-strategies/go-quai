@@ -413,6 +413,14 @@ func (wo *WorkObject) TransactionsInfo() map[string]interface{} {
 	return txInfo
 }
 
+func (wo *WorkObject) ParentHashArray() []common.Hash {
+	parentHashArray := make([]common.Hash, common.HierarchyDepth)
+	for i := 0; i < common.HierarchyDepth; i++ {
+		parentHashArray[i] = wo.ParentHash(i)
+	}
+	return parentHashArray
+}
+
 func (wo *WorkObject) NumberArray() []*big.Int {
 	numArray := make([]*big.Int, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {

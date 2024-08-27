@@ -308,6 +308,57 @@ func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 
 	return nil
 }
+
+func (hc *HeaderChain) CalculateInterlink(header *types.WorkObject) (common.Hashes, error) {
+	var interlinkHashes common.Hashes
+	if hc.IsGenesisHash(header.Hash()) {
+		// On genesis, the interlink hashes are all the same and should start with genesis hash
+		interlinkHashes = common.Hashes{header.Hash(), header.Hash(), header.Hash(), header.Hash()}
+	} else {
+		// check if parent belongs to any interlink level
+		rank, err := hc.engine.CalcRank(hc, header)
+		if err != nil {
+			return nil, err
+		}
+		if rank == 0 { // No change in the interlink hashes, so carry
+			interlinkHashes = header.InterlinkHashes()
+		} else if rank > 0 && rank <= common.InterlinkDepth {
+			interlinkHashes = header.InterlinkHashes()
+			// update the interlink hashes for each level below the rank
+			for i := 0; i < rank; i++ {
+				interlinkHashes[i] = header.Hash()
+			}
+		} else {
+			hc.logger.Error("Not possible to find rank greater than the max interlink levels")
+			return nil, errors.New("not possible to find rank greater than the max interlink levels")
+		}
+	}
+	// Store the interlink hashes in the database
+	rawdb.WriteInterlinkHashes(hc.headerDb, header.Hash(), interlinkHashes)
+	return interlinkHashes, nil
+}
+
+func (hc *HeaderChain) CalculateManifest(header *types.WorkObject) types.BlockManifest {
+	manifest := rawdb.ReadManifest(hc.headerDb, header.Hash())
+	if manifest == nil {
+		nodeCtx := hc.NodeCtx()
+		// Compute and set manifest hash
+		var manifest types.BlockManifest
+		if nodeCtx == common.PRIME_CTX {
+			// Nothing to do for prime chain
+			manifest = types.BlockManifest{}
+		} else if hc.engine.IsDomCoincident(hc, header) {
+			manifest = types.BlockManifest{header.Hash()}
+		} else {
+			parentManifest := rawdb.ReadManifest(hc.headerDb, header.ParentHash(nodeCtx))
+			manifest = append(parentManifest, header.Hash())
+		}
+		// write the manifest into the disk
+		rawdb.WriteManifest(hc.headerDb, header.Hash(), manifest)
+	}
+	return manifest
+}
+
 func (hc *HeaderChain) ProcessingState() bool {
 	return hc.processingState
 }
@@ -341,7 +392,6 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 	}
 	hc.logger.WithField("append block", common.PrettyDuration(time.Since(blockappend))).Debug("Time taken to")
 
-	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		hc.bc.logsFeed.Send(logs)
 	}
@@ -353,6 +403,8 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	hc.headermu.Lock()
 	defer hc.headermu.Unlock()
+
+	nodeCtx := hc.NodeCtx()
 
 	prevHeader := hc.CurrentHeader()
 	// if trying to set the same header, escape
@@ -371,6 +423,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash(hc.NodeCtx()) {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64(hc.NodeCtx()))
+		err := hc.AppendBlock(head)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -415,6 +471,16 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64(hc.NodeCtx()))
+		if nodeCtx == common.ZONE_CTX {
+			block := hc.GetBlockOrCandidate(hashStack[i].Hash(), hashStack[i].NumberU64(nodeCtx))
+			if block == nil {
+				return errors.New("could not find block during SetCurrentState: " + hashStack[i].Hash().String())
+			}
+			err := hc.AppendBlock(block)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	if hc.NodeCtx() == common.ZONE_CTX && hc.ProcessingState() {
@@ -440,50 +506,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		}()
 	}
 
-	return nil
-}
-
-// SetCurrentState updates the current Quai state and Qi UTXO set upon which the current pending block is built
-func (hc *HeaderChain) SetCurrentState(head *types.WorkObject) error {
-	hc.headermu.Lock()
-	defer hc.headermu.Unlock()
-
-	nodeCtx := hc.NodeCtx()
-	if nodeCtx != common.ZONE_CTX || !hc.ProcessingState() {
-		return nil
-	}
-
-	current := types.CopyWorkObject(head)
-	var headersWithoutState []*types.WorkObject
-	for {
-		headersWithoutState = append(headersWithoutState, current)
-		header := hc.GetHeaderByHash(current.ParentHash(nodeCtx))
-		if header == nil {
-			return ErrSubNotSyncedToDom
-		}
-		if hc.IsGenesisHash(header.Hash()) {
-			break
-		}
-
-		// Check if the state has been processed for this block
-		processedState := rawdb.ReadProcessedState(hc.headerDb, header.Hash())
-		if processedState {
-			break
-		}
-		current = types.CopyWorkObject(header)
-	}
-
-	// Run through the hash stack to update canonicalHash and forward state processor
-	for i := len(headersWithoutState) - 1; i >= 0; i-- {
-		block := hc.GetBlockOrCandidate(headersWithoutState[i].Hash(), headersWithoutState[i].NumberU64(nodeCtx))
-		if block == nil {
-			return errors.New("could not find block during SetCurrentState: " + headersWithoutState[i].Hash().String())
-		}
-		err := hc.AppendBlock(block)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

@@ -521,39 +521,35 @@ func DeleteWorkObjectBody(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadPendingHeader retreive's the pending header stored in hash.
-func ReadPendingHeader(db ethdb.Reader, hash common.Hash) *types.PendingHeader {
-	key := pendingHeaderKey(hash)
-	data, _ := db.Get(key)
+// ReadBestPendingHeader retreive's the pending header stored in hash.
+func ReadBestPendingHeader(db ethdb.Reader) *types.WorkObject {
+	data, _ := db.Get(pendingHeaderPrefix)
 	if len(data) == 0 {
-		db.Logger().WithField("hash", hash).Debug("Pending Header is nil")
 		return nil
 	}
 
-	protoPendingHeader := new(types.ProtoPendingHeader)
+	protoPendingHeader := new(types.ProtoWorkObject)
 	err := proto.Unmarshal(data, protoPendingHeader)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal pending header")
 	}
 
-	pendingHeader := new(types.PendingHeader)
+	pendingHeader := new(types.WorkObject)
 
-	err = pendingHeader.ProtoDecode(protoPendingHeader, db.Location())
+	err = pendingHeader.ProtoDecode(protoPendingHeader, db.Location(), types.BlockObject)
 	if err != nil {
 		db.Logger().WithFields(log.Fields{
-			"hash": hash,
-			"err":  err,
+			"err": err,
 		}).Error("Invalid pendingHeader Proto")
 		return nil
 	}
 	return pendingHeader
 }
 
-// WritePendingHeader writes the pending header of the terminus hash.
-func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader types.PendingHeader) {
-	key := pendingHeaderKey(hash)
+// WriteBestPendingHeader writes the pending header of the terminus hash.
+func WriteBestPendingHeader(db ethdb.KeyValueWriter, pendingHeader *types.WorkObject) {
 
-	protoPendingHeader, err := pendingHeader.ProtoEncode()
+	protoPendingHeader, err := pendingHeader.ProtoEncode(types.BlockObject)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to proto encode pending header")
 	}
@@ -561,33 +557,16 @@ func WritePendingHeader(db ethdb.KeyValueWriter, hash common.Hash, pendingHeader
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal pending header")
 	}
-	if err := db.Put(key, data); err != nil {
+	if err := db.Put(pendingHeaderPrefix, data); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store header")
 	}
 }
 
-// DeletePendingHeader deletes the pending header stored for the header hash.
-func DeletePendingHeader(db ethdb.KeyValueWriter, hash common.Hash) {
-	key := pendingHeaderKey(hash)
-	if err := db.Delete(key); err != nil {
+// DeleteBestPendingHeader deletes the pending header stored for the header hash.
+func DeleteBestPendingHeader(db ethdb.KeyValueWriter) {
+	if err := db.Delete(pendingHeaderPrefix); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete slice pending header ")
 	}
-}
-
-// ReadBestPhKey retreive's the bestPhKey of the blockchain
-func ReadBestPhKey(db ethdb.Reader) common.Hash {
-	data, _ := db.Get(phHeadKey)
-	// get the ph cache keys.
-	if len(data) == 0 {
-		return common.Hash{}
-	}
-	protoBestPhKey := new(common.ProtoHash)
-	if err := proto.Unmarshal(data, protoBestPhKey); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal best ph key")
-	}
-	bestPhKey := new(common.Hash)
-	bestPhKey.ProtoDecode(protoBestPhKey)
-	return *bestPhKey
 }
 
 // WriteBestPhKey writes the bestPhKey of the blockchain

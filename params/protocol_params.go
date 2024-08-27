@@ -170,7 +170,7 @@ var (
 	GardenDurationLimit               = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	OrchardDurationLimit              = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LighthouseDurationLimit           = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LocalDurationLimit                = big.NewInt(2)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LocalDurationLimit                = big.NewInt(1)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TimeToStartTx              uint64 = 0 * BlocksPerDay
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
 	DifficultyAdjustmentPeriod        = big.NewInt(360)                                             // This is the number of blocks over which the average has to be taken
