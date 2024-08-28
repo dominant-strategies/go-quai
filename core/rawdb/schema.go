@@ -20,6 +20,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/dominant-strategies/go-quai/common"
 )
@@ -65,6 +66,8 @@ var (
 	// genesisHashesKey tracks the list of genesis hashes
 	genesisHashesKey = []byte("GenesisHashes")
 
+	lastTrimmedBlockPrefix = []byte("ltb")
+
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
 	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
@@ -83,8 +86,10 @@ var (
 	multiSetPrefix          = []byte("ms")    // multiSetPrefix + hash -> multiset
 	utxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix        = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
+	trimmedUTXOsPrefix      = []byte("tutxo") // trimmedUTXOsPrefix + hash -> []types.SpentTxOut
 	createdUTXOsPrefix      = []byte("cutxo") // createdUTXOsPrefix + hash -> []common.Hash
-	blockBodyPrefix         = []byte("b")     // blockBodyPrefix + num (uint64 big endian) + hash -> block body
+	prunedUTXOKeysPrefix    = []byte("putxo") // prunedUTXOKeysPrefix + num (uint64 big endian) -> hash
+	utxoSetSizePrefix       = []byte("us")    // utxoSetSizePrefix + hash -> uint64
 	blockReceiptsPrefix     = []byte("r")     // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 	pendingEtxsPrefix       = []byte("pe")    // pendingEtxsPrefix + hash -> PendingEtxs at block
 	pendingEtxsRollupPrefix = []byte("pr")    // pendingEtxsRollupPrefix + hash -> PendingEtxsRollup at block
@@ -303,8 +308,21 @@ func UtxoKey(hash common.Hash, index uint16) []byte {
 	return append(utxoPrefix, append(hash.Bytes(), indexBytes...)...)
 }
 
+func ReverseUtxoKey(key []byte) (common.Hash, uint16, error) {
+	if len(key) != len(utxoPrefix)+common.HashLength+2 {
+		return common.Hash{}, 0, fmt.Errorf("invalid key length %d", len(key))
+	}
+	hash := common.BytesToHash(key[len(utxoPrefix) : common.HashLength+len(utxoPrefix)])
+	index := binary.BigEndian.Uint16(key[common.HashLength+len(utxoPrefix):])
+	return hash, index, nil
+}
+
 func spentUTXOsKey(blockHash common.Hash) []byte {
 	return append(spentUTXOsPrefix, blockHash[:]...)
+}
+
+func trimmedUTXOsKey(blockHash common.Hash) []byte {
+	return append(trimmedUTXOsPrefix, blockHash[:]...)
 }
 
 func createdUTXOsKey(blockHash common.Hash) []byte {
@@ -313,4 +331,16 @@ func createdUTXOsKey(blockHash common.Hash) []byte {
 
 func multiSetKey(hash common.Hash) []byte {
 	return append(multiSetPrefix, hash.Bytes()...)
+}
+
+func utxoSetSizeKey(hash common.Hash) []byte {
+	return append(utxoSetSizePrefix, hash.Bytes()...)
+}
+
+func prunedUTXOsKey(blockHeight uint64) []byte {
+	return append(prunedUTXOKeysPrefix, encodeBlockNumber(blockHeight)...)
+}
+
+func lastTrimmedBlockKey(hash common.Hash) []byte {
+	return append(lastTrimmedBlockPrefix, hash.Bytes()...)
 }

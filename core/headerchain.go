@@ -493,6 +493,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			if err != nil {
 				return err
 			}
+			trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(hc.headerDb, prevHeader.Hash())
+			if err != nil {
+				return err
+			}
+			sutxos = append(sutxos, trimmedUtxos...)
 			for _, sutxo := range sutxos {
 				rawdb.CreateUTXO(hc.headerDb, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
 			}
