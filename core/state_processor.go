@@ -219,7 +219,7 @@ type UtxosCreatedDeleted struct {
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (types.Receipts, []*types.Transaction, []*types.Log, *state.StateDB, uint64, uint64, *multiset.MultiSet, error) {
+func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (types.Receipts, []*types.Transaction, []*types.Log, *state.StateDB, uint64, uint64, uint64, *multiset.MultiSet, error) {
 	var (
 		receipts     types.Receipts
 		usedGas      = new(uint64)
@@ -235,7 +235,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	start := time.Now()
 	parent := p.hc.GetBlock(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
 	if parent == nil {
-		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, nil, errors.New("parent block is nil for the block given to process")
+		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, 0, nil, errors.New("parent block is nil for the block given to process")
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 
@@ -250,14 +250,14 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	// Initialize a statedb
 	statedb, err := state.New(parentEvmRoot, parentEtxSetRoot, parentQuaiStateSize, p.stateCache, p.etxCache, p.snaps, nodeLocation, p.logger)
 	if err != nil {
-		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, nil, err
+		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, 0, nil, err
 	}
 	utxosCreatedDeleted := new(UtxosCreatedDeleted) // utxos created and deleted in this block
 	// Apply the previous inbound ETXs to the ETX set state
 	prevInboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, header.ParentHash(nodeCtx))
 	if len(prevInboundEtxs) > 0 {
 		if err := statedb.PushETXs(prevInboundEtxs); err != nil {
-			return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not push prev inbound etxs: %w", err)
+			return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not push prev inbound etxs: %w", err)
 		}
 	}
 	time2 := common.PrettyDuration(time.Since(start))
@@ -287,7 +287,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	blockContext, err := NewEVMBlockContext(header, parent, p.hc, nil)
 	if err != nil {
-		return nil, nil, nil, nil, 0, 0, nil, err
+		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
 	time3 := common.PrettyDuration(time.Since(start))
@@ -318,7 +318,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 	if primeTerminus == nil {
-		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 	}
 	// Set the min gas price to the lowest gas price in the transaction If that
 	// value is not the basefee mentioned in the block, the block is invalid In
@@ -336,7 +336,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 			qiTxFee, fees, etxs, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit, utxosCreatedDeleted)
 			if err != nil {
-				return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 			firstQiTx = false
 			startEtxAppend := time.Now()
@@ -375,7 +375,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 		msg, err := tx.AsMessageWithSender(types.MakeSigner(p.config, header.Number(nodeCtx)), header.BaseFee(), senders[tx.Hash()])
 		if err != nil {
-			return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		timeSignDelta := time.Since(startProcess)
 		timeSign += timeSignDelta
@@ -392,13 +392,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			// ETXs MUST be included in order, so popping the first from the queue must equal the first in the block
 			etx, err := statedb.PopETX()
 			if err != nil {
-				return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not pop etx from statedb: %w", err)
+				return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not pop etx from statedb: %w", err)
 			}
 			if etx == nil {
-				return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("etx %x is nil", tx.Hash())
+				return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("etx %x is nil", tx.Hash())
 			}
 			if etx.Hash() != tx.Hash() {
-				return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("invalid external transaction: etx %x is not in order or not found in unspent etx set", tx.Hash())
+				return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("invalid external transaction: etx %x is not in order or not found in unspent etx set", tx.Hash())
 			}
 
 			// check if the tx is a coinbase tx
@@ -409,22 +409,22 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			// 4) etx emit threshold numbers
 			if types.IsCoinBaseTx(tx) {
 				if tx.To() == nil {
-					return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("coinbase tx %x has no recipient", tx.Hash())
+					return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase tx %x has no recipient", tx.Hash())
 				}
 				if len(tx.Data()) == 0 {
-					return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("coinbase tx %x has no lockup byte", tx.Hash())
+					return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase tx %x has no lockup byte", tx.Hash())
 				}
 				if _, err := tx.To().InternalAddress(); err != nil {
-					return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
+					return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 				}
 				lockupByte := tx.Data()[0]
 				if tx.To().IsInQiLedgerScope() {
 					if int(lockupByte) > len(params.LockupByteToBlockDepth) {
-						return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
+						return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
 					}
 					lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 					if lockup.Uint64() < params.ConversionLockPeriod {
-						return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+						return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 					}
 					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
 					denominations := misc.FindMinDenominations(value)
@@ -443,7 +443,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lockup))
 							// the ETX hash is guaranteed to be unique
 							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
-								return nil, nil, nil, nil, 0, 0, nil, err
+								return nil, nil, nil, nil, 0, 0, 0, nil, err
 							}
 							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
 							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKey(etx.Hash(), outputIndex))
@@ -465,7 +465,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				}
 				// subtract the minimum tx gas from the gas pool
 				if err := gp.SubGas(params.TxGas); err != nil {
-					return nil, nil, nil, nil, 0, 0, nil, err
+					return nil, nil, nil, nil, 0, 0, 0, nil, err
 				}
 				*usedGas += params.TxGas
 				totalEtxGas += params.TxGas
@@ -478,7 +478,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					lock := new(big.Int).Add(header.Number(nodeCtx), new(big.Int).SetUint64(params.ConversionLockPeriod))
 					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 					if primeTerminus == nil {
-						return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
+						return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 					}
 					value := misc.QuaiToQi(primeTerminus.WorkObjectHeader(), etx.Value()) // convert Quai to Qi
 					txGas := etx.Gas()
@@ -487,7 +487,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					}
 					txGas -= params.TxGas
 					if err := gp.SubGas(params.TxGas); err != nil {
-						return nil, nil, nil, nil, 0, 0, nil, err
+						return nil, nil, nil, nil, 0, 0, 0, nil, err
 					}
 					*usedGas += params.TxGas
 					totalEtxGas += params.TxGas
@@ -506,14 +506,14 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							}
 							txGas -= params.CallValueTransferGas
 							if err := gp.SubGas(params.CallValueTransferGas); err != nil {
-								return nil, nil, nil, nil, 0, 0, nil, err
+								return nil, nil, nil, nil, 0, 0, 0, nil, err
 							}
 							*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
 							totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
 							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), etx.To().Bytes(), lock))
 							// the ETX hash is guaranteed to be unique
 							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
-								return nil, nil, nil, nil, 0, 0, nil, err
+								return nil, nil, nil, nil, 0, 0, 0, nil, err
 							}
 							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
 							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKey(etx.Hash(), outputIndex))
@@ -525,13 +525,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					utxo := types.NewUtxoEntry(types.NewTxOut(uint8(etx.Value().Uint64()), etx.To().Bytes(), big.NewInt(0)))
 					// There are no more checks to be made as the ETX is worked so add it to the set
 					if err := rawdb.CreateUTXO(batch, etx.OriginatingTxHash(), etx.ETXIndex(), utxo); err != nil {
-						return nil, nil, nil, nil, 0, 0, nil, err
+						return nil, nil, nil, nil, 0, 0, 0, nil, err
 					}
 					utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.OriginatingTxHash(), etx.ETXIndex(), utxo))
 					utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKey(etx.OriginatingTxHash(), etx.ETXIndex()))
 					// This Qi ETX should cost more gas
 					if err := gp.SubGas(params.CallValueTransferGas); err != nil {
-						return nil, nil, nil, nil, 0, 0, nil, err
+						return nil, nil, nil, nil, 0, 0, 0, nil, err
 					}
 					*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
 					totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
@@ -551,7 +551,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				receipt, fees, err = applyTransaction(msg, parent, p.config, p.hc, gp, statedb, blockNumber, blockHash, etx, usedGas, usedState, vmenv, &etxRLimit, &etxPLimit, p.logger)
 				statedb.SetBalance(common.ZeroInternal(nodeLocation), prevZeroBal) // Reset the balance to what it previously was. Residual balance will be lost
 				if err != nil {
-					return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+					return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
 				addReceipt = true
 
@@ -567,7 +567,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			fees := big.NewInt(0)
 			receipt, fees, err = applyTransaction(msg, parent, p.config, p.hc, gp, statedb, blockNumber, blockHash, tx, usedGas, usedState, vmenv, &etxRLimit, &etxPLimit, p.logger)
 			if err != nil {
-				return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
 			addReceipt = true
 			timeTxDelta := time.Since(startTimeTx)
@@ -586,7 +586,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 
 		} else {
-			return nil, nil, nil, nil, 0, 0, nil, ErrTxTypeNotSupported
+			return nil, nil, nil, nil, 0, 0, 0, nil, ErrTxTypeNotSupported
 		}
 		for _, etx := range receipt.OutboundEtxs {
 			if receipt.Status == types.ReceiptStatusSuccessful {
@@ -601,29 +601,29 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	}
 
 	if nonEtxExists && block.BaseFee().Cmp(big.NewInt(0)) == 0 {
-		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("block base fee is nil though non etx transactions exist")
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("block base fee is nil though non etx transactions exist")
 	}
 
 	if minGasPrice != nil && block.BaseFee().Cmp(minGasPrice) != 0 {
-		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("invalid base fee used (remote: %d local: %d)", block.BaseFee(), minGasPrice)
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("invalid base fee used (remote: %d local: %d)", block.BaseFee(), minGasPrice)
 	}
 
 	etxAvailable := false
 	oldestIndex, err := statedb.GetOldestIndex()
 	if err != nil {
-		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not get oldest index: %w", err)
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not get oldest index: %w", err)
 	}
 	// Check if there is at least one ETX in the set
 	etx, err := statedb.ReadETX(oldestIndex)
 	if err != nil {
-		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not read etx: %w", err)
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not read etx: %w", err)
 	}
 	if etx != nil {
 		etxAvailable = true
 	}
 	if (etxAvailable && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
 		p.logger.Errorf("prevInboundEtxs: %d, oldestIndex: %d, etxHash: %s", len(prevInboundEtxs), oldestIndex.Int64(), etx.Hash().Hex())
-		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
 	}
 	lockupContractAddress := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}]
 	for coinbaseAddrWithLockup, value := range quaiCoinbaseEtxs {
@@ -631,23 +631,23 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		lockupByte := coinbaseAddrWithLockup[20]
 		lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 		if lockup.Uint64() < params.ConversionLockPeriod {
-			return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+			return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 		}
 		value := params.CalculateCoinbaseValueWithLockup(value, lockupByte)
 		gasUsed, _, err := vm.AddNewLock(parent.QuaiStateSize(), statedb, addr, new(types.GasPool).AddGas(math.MaxUint64), lockup, value, lockupContractAddress)
 		if err != nil {
-			return nil, nil, nil, nil, 0, 0, nil, err
+			return nil, nil, nil, nil, 0, 0, 0, nil, err
 		}
 		p.logger.Debugf("Creating Lockup for coinbase addr %s with value %d lock %d gasUsed %d\n", addr.String(), value.Uint64(), lockup.Int64(), gasUsed)
 	}
 
 	quaiCoinbase, err := block.QuaiCoinbase()
 	if err != nil {
-		return nil, nil, nil, nil, 0, 0, nil, err
+		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
 	qiCoinbase, err := block.QiCoinbase()
 	if err != nil {
-		return nil, nil, nil, nil, 0, 0, nil, err
+		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
 
 	primaryCoinbase := block.PrimaryCoinbase()
@@ -688,9 +688,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	time4 := common.PrettyDuration(time.Since(start))
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	multiSet, err := p.engine.Finalize(p.hc, block, statedb, false, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes)
+	multiSet, utxoSetSize, err := p.engine.Finalize(p.hc, batch, block, statedb, false, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes)
 	if err != nil {
-		return nil, nil, nil, nil, 0, 0, nil, err
+		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
 	time5 := common.PrettyDuration(time.Since(start))
 
@@ -731,12 +731,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		"numTxs":                      len(block.Transactions()),
 	}).Info("Total Tx Processing Time")
 	if err := rawdb.WriteSpentUTXOs(batch, blockHash, utxosCreatedDeleted.UtxosDeleted); err != nil { // Could do this in Apply instead
-		return nil, nil, nil, nil, 0, 0, nil, err
+		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
 	if err := rawdb.WriteCreatedUTXOKeys(batch, blockHash, utxosCreatedDeleted.UtxosCreatedKeys); err != nil { // Could do this in Apply instead
-		return nil, nil, nil, nil, 0, 0, nil, err
+		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
-	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, multiSet, nil
+	utxosCreatedDeleted = nil // Release memory
+	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, utxoSetSize, multiSet, nil
 }
 
 func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
@@ -1307,7 +1308,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 	time1 := common.PrettyDuration(time.Since(start))
 	time2 := common.PrettyDuration(time.Since(start))
 	// Process our block
-	receipts, etxs, logs, statedb, usedGas, usedState, multiSet, err := p.Process(block, batch)
+	receipts, etxs, logs, statedb, usedGas, usedState, utxoSetSize, multiSet, err := p.Process(block, batch)
 	if err != nil {
 		return nil, err
 	}
@@ -1363,6 +1364,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		"t8":   time8,
 	}).Info("times during state processor apply")
 	rawdb.WriteMultiSet(batch, block.Hash(), multiSet)
+	rawdb.WriteUTXOSetSize(batch, block.Hash(), utxoSetSize)
 	// Indicate that we have processed the state of the block
 	rawdb.WriteProcessedState(batch, block.Hash())
 	return logs, nil
@@ -1607,7 +1609,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		if currentBlock == nil {
 			return nil, errors.New("detached block found trying to regenerate state")
 		}
-		_, _, _, _, _, _, _, err := p.Process(currentBlock, batch)
+		_, _, _, _, _, _, _, _, err := p.Process(currentBlock, batch)
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(nodeCtx), err)
 		}

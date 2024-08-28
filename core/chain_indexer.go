@@ -36,6 +36,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"google.golang.org/protobuf/proto"
 )
 
 var PruneDepth = uint64(1000000) // Number of blocks behind in which we begin pruning old block data
@@ -108,6 +109,7 @@ type ChainIndexer struct {
 	lock   sync.Mutex
 
 	indexAddressUtxos bool
+	utxoKeyPrunerChan chan []*types.SpentUtxoEntry
 }
 
 // NewChainIndexer creates a new chain indexer to do background processing on
@@ -125,6 +127,7 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 		throttling:        throttling,
 		logger:            logger,
 		indexAddressUtxos: indexAddressUtxos,
+		utxoKeyPrunerChan: make(chan []*types.SpentUtxoEntry, 1000),
 	}
 	// Initialize database dependent fields and start the updater
 	c.loadValidSections()
@@ -144,6 +147,7 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain, config params.ChainConfig)
 	c.GetBloom = chain.GetBloom
 	c.StateAt = chain.StateAt
 	go c.eventLoop(chain.CurrentHeader(), events, sub, chain.NodeCtx(), config)
+	go c.UTXOKeyPruner()
 }
 
 // Close tears down all goroutines belonging to the indexer and returns any error
@@ -376,8 +380,94 @@ func (c *ChainIndexer) PruneOldBlockData(blockHeight uint64) {
 	rawdb.DeletePendingEtxsRollup(c.chainDb, blockHash)
 	rawdb.DeleteManifest(c.chainDb, blockHash)
 	rawdb.DeletePbCacheBody(c.chainDb, blockHash)
-	rawdb.DeleteSpentUTXOs(c.chainDb, blockHash)
+	createdUtxos, _ := rawdb.ReadCreatedUTXOKeys(c.chainDb, blockHash)
+	createdUtxosToKeep := make([][]byte, 0, len(createdUtxos))
+	for _, key := range createdUtxos {
+		data, _ := c.chainDb.Get(key)
+		if len(data) == 0 {
+			// Don't keep it if it doesn't exist
+			continue
+		}
+		utxoProto := new(types.ProtoTxOut)
+		if err := proto.Unmarshal(data, utxoProto); err != nil {
+			// Don't keep it if it can't be unmarshaled
+			continue
+		}
+
+		utxo := new(types.UtxoEntry)
+		if err := utxo.ProtoDecode(utxoProto); err != nil {
+			// Don't keep it if it can't be decoded into UtxoEntry
+			continue
+		}
+		// Reduce key size to 8 bytes
+		key = key[:8]
+		createdUtxosToKeep = append(createdUtxosToKeep, key)
+	}
+	rawdb.WritePrunedUTXOKeys(c.chainDb, blockHeight, createdUtxosToKeep)
 	rawdb.DeleteCreatedUTXOKeys(c.chainDb, blockHash)
+	sutxos, err := rawdb.ReadSpentUTXOs(c.chainDb, blockHash)
+	if err != nil {
+		c.logger.Error("Failed to read spent utxos", "err", err)
+	} else {
+		select {
+		case c.utxoKeyPrunerChan <- sutxos:
+		default:
+			c.logger.Warn("utxoKeyPrunerChan is full, dropping spent utxos")
+		}
+	}
+	rawdb.DeleteSpentUTXOs(c.chainDb, blockHash)
+}
+
+func (c *ChainIndexer) UTXOKeyPruner() {
+	for {
+		select {
+		case errc := <-c.quit:
+			// Chain indexer terminating, report no failure and abort
+			errc <- nil
+			return
+		case spentUtxos := <-c.utxoKeyPrunerChan:
+			for _, spentUtxo := range spentUtxos {
+				blockheight := rawdb.ReadTxLookupEntry(c.chainDb, spentUtxo.TxHash)
+				if blockheight == nil {
+					continue
+				}
+				utxoKeys, err := rawdb.ReadPrunedUTXOKeys(c.chainDb, *blockheight)
+				if err != nil || utxoKeys == nil {
+					c.logger.Errorf("Failed to read pruned utxo keys: height %d err %+v", *blockheight, err)
+					continue
+				}
+				key := rawdb.UtxoKey(spentUtxo.TxHash, spentUtxo.Index)
+				for i := 0; i < len(utxoKeys); i++ {
+					if compareMinLength(utxoKeys[i], key) {
+						// Remove the element by shifting the slice to the left
+						utxoKeys = append(utxoKeys[:i], utxoKeys[i+1:]...)
+						break
+					} else {
+						i++ // Only increment i if no element was removed
+					}
+				}
+				rawdb.WritePrunedUTXOKeys(c.chainDb, *blockheight, utxoKeys)
+
+			}
+		}
+	}
+}
+
+func compareMinLength(a, b []byte) bool {
+	minLen := len(a)
+	if len(b) < minLen {
+		minLen = len(b)
+	}
+
+	// Compare the slices up to the length of the shorter slice
+	for i := 0; i < minLen; i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	// If the slices are identical up to the shorter length, return true
+	return true
 }
 
 // newHead notifies the indexer about new chain heads and/or reorgs.
