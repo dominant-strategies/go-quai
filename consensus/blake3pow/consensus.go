@@ -16,10 +16,12 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
+	"google.golang.org/protobuf/proto"
 	"modernc.org/mathutil"
 )
 
@@ -603,16 +605,17 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
-func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *types.WorkObject, state *state.StateDB, setRoots bool, utxosCreate, utxosDelete []common.Hash) (*multiset.MultiSet, error) {
+func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.Batch, header *types.WorkObject, state *state.StateDB, setRoots bool, utxosCreate, utxosDelete []common.Hash) (*multiset.MultiSet, uint64, error) {
 	nodeLocation := blake3pow.config.NodeLocation
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	var multiSet *multiset.MultiSet
-	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
+	var utxoSetSize uint64
+	if chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		multiSet = multiset.New()
 		// Create the lockup contract account
 		lockupContract, err := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}].InternalAndQuaiAddress()
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		state.CreateAccount(lockupContract)
 		state.SetNonce(lockupContract, 1) // so it's not considered "empty"
@@ -645,11 +648,49 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 			chain.WriteAddressOutpoints(addressOutpointMap)
 			blake3pow.logger.Info("Indexed genesis utxos")
 		}
-	} else {
+	} else if nodeCtx == common.ZONE_CTX {
 		multiSet = rawdb.ReadMultiSet(chain.Database(), header.ParentHash(nodeCtx))
+		utxoSetSize = rawdb.ReadUTXOSetSize(chain.Database(), header.ParentHash(nodeCtx))
 	}
 	if multiSet == nil {
-		return nil, fmt.Errorf("Multiset is nil for block %s", header.ParentHash(nodeCtx).String())
+		return nil, 0, fmt.Errorf("Multiset is nil for block %s", header.ParentHash(nodeCtx).String())
+	}
+
+	utxoSetSize += uint64(len(utxosCreate))
+	utxoSetSize -= uint64(len(utxosDelete))
+	if utxoSetSize > params.MaxUTXOSetSize {
+		trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
+		blake3pow.logger.WithFields(log.Fields{
+			"utxoSetSize":    utxoSetSize,
+			"maxUTXOSetSize": params.MaxUTXOSetSize,
+		}).Info("UTXO set size is greater than the maximum allowed UTXO set size. Begin trimming process.")
+		lastTrimmedBlockHeight := rawdb.ReadLastTrimmedBlock(chain.Database(), header.ParentHash(nodeCtx))
+		if lastTrimmedBlockHeight == 0 {
+			lastTrimmedBlockHeight++
+		}
+		for utxoSetSize > params.MaxUTXOSetSize {
+			prevUtxoSetSize := utxoSetSize
+
+			nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), lastTrimmedBlockHeight+1)
+
+			TrimBlock(chain, batch, lastTrimmedBlockHeight+1, nextBlockToTrim, &utxosDelete, &trimmedUtxos, &utxoSetSize, !setRoots, blake3pow.logger) // setRoots is false when we are processing the block
+
+			lastTrimmedBlockHeight++
+			if lastTrimmedBlockHeight == header.NumberU64(nodeCtx) {
+				blake3pow.logger.Fatal("Last trimmed block height is equal to the current block height. This is a bug.")
+			}
+			blake3pow.logger.WithFields(log.Fields{
+				"prevUtxoSetSize":  prevUtxoSetSize,
+				"utxosDeleted":     prevUtxoSetSize - utxoSetSize,
+				"utxoSetSizeAfter": utxoSetSize,
+				"maxUTXOSetSize":   params.MaxUTXOSetSize,
+				"lastTrimmedBlock": lastTrimmedBlockHeight,
+			}).Info("Trimmed block UTXOs")
+		}
+		if !setRoots {
+			rawdb.WriteLastTrimmedBlock(batch, header.Hash(), lastTrimmedBlockHeight)
+			rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
+		}
 	}
 	for _, hash := range utxosCreate {
 		multiSet.Add(hash.Bytes())
@@ -657,14 +698,88 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 	for _, hash := range utxosDelete {
 		multiSet.Remove(hash.Bytes())
 	}
-	blake3pow.logger.Infof("Parent hash: %s, header hash: %s, muhash: %s, block height: %d, setroots: %t, UtxosCreated: %d, UtxosDeleted: %d", header.ParentHash(nodeCtx).String(), header.Hash().String(), multiSet.Hash().String(), header.NumberU64(nodeCtx), setRoots, len(utxosCreate), len(utxosDelete))
+	blake3pow.logger.Infof("Parent hash: %s, header hash: %s, muhash: %s, block height: %d, setroots: %t, UtxosCreated: %d, UtxosDeleted: %d, UTXO Set Size: %d", header.ParentHash(nodeCtx).String(), header.Hash().String(), multiSet.Hash().String(), header.NumberU64(nodeCtx), setRoots, len(utxosCreate), len(utxosDelete), utxoSetSize)
+
+	if utxoSetSize < uint64(len(utxosDelete)) {
+		return nil, 0, fmt.Errorf("UTXO set size is less than the number of utxos to delete. This is a bug. UTXO set size: %d, UTXOs to delete: %d", utxoSetSize, len(utxosDelete))
+	}
+
 	if setRoots {
 		header.Header().SetUTXORoot(multiSet.Hash())
 		header.Header().SetEVMRoot(state.IntermediateRoot(true))
 		header.Header().SetEtxSetRoot(state.ETXRoot())
 		header.Header().SetQuaiStateSize(state.GetQuaiTrieSize())
 	}
-	return multiSet, nil
+	return multiSet, utxoSetSize, nil
+}
+
+type UtxoEntryWithIndex struct {
+	*types.UtxoEntry
+	Index uint16
+	Key   []byte
+}
+
+func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, utxoSetSize *uint64, deleteFromDb bool, logger *log.Logger) {
+	utxosCreated, _ := rawdb.ReadCreatedUTXOKeys(chain.Database(), blockHash)
+	if utxosCreated == nil {
+		// This is likely always going to be the case, as the prune depth will almost always be shorter than the trim depth
+		utxosCreated, _ = rawdb.ReadPrunedUTXOKeys(chain.Database(), blockHeight)
+	}
+	logger.Infof("UTXOs created in block %d: %d", blockHeight, len(utxosCreated))
+	utxos := make(map[common.Hash][]*UtxoEntryWithIndex)
+	// Start by grabbing all the UTXOs created in the block (that are still in the UTXO set)
+	for _, key := range utxosCreated {
+		if len(key) == 0 {
+			continue
+		}
+		it := chain.Database().NewIterator(key, nil)
+		for it.Next() {
+			data := it.Value()
+			if len(data) == 0 {
+				continue
+			}
+			utxoProto := new(types.ProtoTxOut)
+			if err := proto.Unmarshal(data, utxoProto); err != nil {
+				logger.Errorf("Failed to unmarshal ProtoTxOut: %+v data: %+v key: %+v", err, data, key)
+				continue
+			}
+
+			utxo := new(types.UtxoEntry)
+			if err := utxo.ProtoDecode(utxoProto); err != nil {
+				logger.WithFields(log.Fields{
+					"key":  key,
+					"data": data,
+					"err":  err,
+				}).Error("Invalid utxo Proto")
+				continue
+			}
+			txHash, index, err := rawdb.ReverseUtxoKey(it.Key())
+			if err != nil {
+				logger.WithField("err", err).Error("Failed to parse utxo key")
+				continue
+			}
+			utxos[txHash] = append(utxos[txHash], &UtxoEntryWithIndex{utxo, index, it.Key()})
+		}
+		it.Release()
+	}
+
+	// Next, check if they are eligible for deletion and delete them
+	for txHash, utxoEntries := range utxos {
+		blockNumberForTx := rawdb.ReadTxLookupEntry(chain.Database(), txHash)
+		if blockNumberForTx != nil && *blockNumberForTx != blockHeight { // collision, wrong tx
+			continue
+		}
+		for _, utxo := range utxoEntries {
+			if utxo.Denomination < types.MaxDenomination {
+				*utxosDelete = append(*utxosDelete, types.UTXOHash(txHash, utxo.Index, utxo.UtxoEntry))
+				if deleteFromDb {
+					batch.Delete(utxo.Key)
+					*trimmedUtxos = append(*trimmedUtxos, &types.SpentUtxoEntry{OutPoint: types.OutPoint{txHash, utxo.Index}, UtxoEntry: utxo.UtxoEntry})
+				}
+				*utxoSetSize--
+			}
+		}
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
@@ -673,7 +788,9 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX && chain.ProcessingState() {
 		// Finalize block
-		blake3pow.Finalize(chain, header, state, true, utxosCreate, utxosDelete)
+		if _, _, err := blake3pow.Finalize(chain, nil, header, state, true, utxosCreate, utxosDelete); err != nil {
+			return nil, err
+		}
 	}
 
 	woBody, err := types.NewWorkObjectBody(header.Header(), txs, etxs, uncles, subManifest, receipts, trie.NewStackTrie(nil), nodeCtx)
