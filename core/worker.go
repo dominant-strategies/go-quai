@@ -1236,6 +1236,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			}
 		}
 		// Store the interlink hashes in the database
+		log.Global.Error("writing interlink hashes", parent.Hash())
 		rawdb.WriteInterlinkHashes(w.workerDb, parent.Hash(), interlinkHashes)
 		interlinkRootHash := types.DeriveSha(interlinkHashes, trie.NewStackTrie(nil))
 		newWo.Header().SetInterlinkRootHash(interlinkRootHash)

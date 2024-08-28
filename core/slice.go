@@ -938,6 +938,9 @@ func (sl *Slice) SetBestPh(pendingHeader *types.WorkObject) {
 	pendingHeader.WorkObjectHeader().SetHeaderHash(pendingHeader.Header().Hash())
 	sl.miner.worker.AddPendingWorkObjectBody(pendingHeader)
 	sl.bestPh = pendingHeader
+	bestPh, _ := sl.readPhCache(sl.bestPhKey)
+	log.Global.Error("Best PH HC", pendingHeader.NumberArray(), pendingHeader.Hash(), sl.NodeLocation())
+	log.Global.Error("Best PH phcache", bestPh.WorkObject().NumberArray(), bestPh.WorkObject().Hash(), sl.NodeLocation())
 	sl.miner.worker.pendingHeaderFeed.Send(pendingHeader)
 }
 
