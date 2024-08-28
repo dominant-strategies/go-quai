@@ -575,7 +575,7 @@ var (
 	// ****************************************
 	HTTPEnabledFlag = Flag{
 		Name:  c_RPCFlagPrefix + "http",
-		Value: false,
+		Value: true,
 		Usage: "Enable the HTTP-RPC server" + generateEnvDoc(c_RPCFlagPrefix+"http"),
 	}
 
@@ -617,7 +617,7 @@ var (
 
 	WSEnabledFlag = Flag{
 		Name:  c_RPCFlagPrefix + "ws",
-		Value: false,
+		Value: true,
 		Usage: "Enable the WS-RPC server" + generateEnvDoc(c_RPCFlagPrefix+"ws"),
 	}
 
