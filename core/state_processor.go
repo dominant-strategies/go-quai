@@ -736,7 +736,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if err := rawdb.WriteCreatedUTXOKeys(batch, blockHash, utxosCreatedDeleted.UtxosCreatedKeys); err != nil { // Could do this in Apply instead
 		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
-	utxosCreatedDeleted = nil // Release memory
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, utxoSetSize, multiSet, nil
 }
 

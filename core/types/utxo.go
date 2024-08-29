@@ -21,6 +21,8 @@ var MaxQi = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)
 // Denominations is a map of denomination to number of Qi
 var Denominations map[uint8]*big.Int
 
+var TrimDepths map[uint8]uint64
+
 func init() {
 	// Initialize denominations
 	Denominations = make(map[uint8]*big.Int)
@@ -41,6 +43,17 @@ func init() {
 	Denominations[14] = big.NewInt(10000000)   // 10000 Qi
 	Denominations[15] = big.NewInt(100000000)  // 100000 Qi
 	Denominations[16] = big.NewInt(1000000000) // 1000000 Qi
+
+	TrimDepths = make(map[uint8]uint64)
+	TrimDepths[0] = 100
+	TrimDepths[1] = 200
+	TrimDepths[2] = 300
+	TrimDepths[3] = 400
+	TrimDepths[4] = 500
+	TrimDepths[5] = 600
+	TrimDepths[6] = 700
+	TrimDepths[7] = 800
+	TrimDepths[8] = 900
 }
 
 type TxIns []TxIn
