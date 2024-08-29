@@ -107,6 +107,7 @@ type Backend interface {
 	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 	GetMaxTxInWorkShare() uint64
 	GetExpansionNumber() uint8
+	SuggestFinalityDepth(ctx context.Context, qiValue *big.Int, correlatedRisk *big.Int) (*big.Int, error)
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool

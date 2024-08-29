@@ -407,6 +407,14 @@ func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	return b.gpo.SuggestTipCap(ctx)
 }
 
+func (b *QuaiAPIBackend) SuggestFinalityDepth(ctx context.Context, qiValue *big.Int, correlatedRisk *big.Int) (*big.Int, error) {
+	nodeCtx := b.quai.core.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return common.Big0, errors.New("suggestFinalityDepth can only be called in zone chain")
+	}
+	return b.quai.core.SuggestFinalityDepth(qiValue, correlatedRisk), nil
+}
+
 func (b *QuaiAPIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, err error) {
 	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 }
