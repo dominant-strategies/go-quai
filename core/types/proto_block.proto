@@ -224,3 +224,7 @@ message ProtoSpentUTXOs {
 message ProtoKeys {
   repeated bytes keys = 1;
 }
+
+message ProtoTrimDepths {
+  map<uint32, uint64> trim_depths = 1;
+}
