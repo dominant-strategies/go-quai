@@ -566,45 +566,27 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(block *types.WorkObject) 
 		case common.PRIME_CTX:
 			if bestPrime.Empty() {
 				bestPrime = child
-				regionLocation := common.Location{byte(child.location.Region())}.Name()
-				_, exists := bestRegions[regionLocation]
-				if !exists {
-					bestRegions[regionLocation] = child
-				} else {
-					if bestRegions[regionLocation].number[common.REGION_CTX].Cmp(child.number[common.REGION_CTX]) < 0 {
-						bestRegions[regionLocation] = child
-					}
-				}
-				zoneLocation := child.location.Name()
-				_, exists = bestZones[zoneLocation]
-				if !exists {
-					bestZones[zoneLocation] = child
-				} else {
-					if bestZones[zoneLocation].number[common.ZONE_CTX].Cmp(child.number[common.ZONE_CTX]) < 0 {
-						bestZones[zoneLocation] = child
-					}
-				}
 			} else {
 				if bestPrime.number[common.PRIME_CTX].Cmp(child.number[common.PRIME_CTX]) < 0 {
 					bestPrime = child
-					regionLocation := common.Location{byte(child.location.Region())}.Name()
-					_, exists := bestRegions[regionLocation]
-					if !exists {
-						bestRegions[regionLocation] = child
-					} else {
-						if bestRegions[regionLocation].number[common.REGION_CTX].Cmp(child.number[common.REGION_CTX]) < 0 {
-							bestRegions[regionLocation] = child
-						}
-					}
-					zoneLocation := child.location.Name()
-					_, exists = bestZones[zoneLocation]
-					if !exists {
-						bestZones[zoneLocation] = child
-					} else {
-						if bestZones[zoneLocation].number[common.ZONE_CTX].Cmp(child.number[common.ZONE_CTX]) < 0 {
-							bestZones[zoneLocation] = child
-						}
-					}
+				}
+			}
+			regionLocation := common.Location{byte(child.location.Region())}.Name()
+			_, exists := bestRegions[regionLocation]
+			if !exists {
+				bestRegions[regionLocation] = child
+			} else {
+				if bestRegions[regionLocation].number[common.REGION_CTX].Cmp(child.number[common.REGION_CTX]) < 0 {
+					bestRegions[regionLocation] = child
+				}
+			}
+			zoneLocation := child.location.Name()
+			_, exists = bestZones[zoneLocation]
+			if !exists {
+				bestZones[zoneLocation] = child
+			} else {
+				if bestZones[zoneLocation].number[common.ZONE_CTX].Cmp(child.number[common.ZONE_CTX]) < 0 {
+					bestZones[zoneLocation] = child
 				}
 			}
 
@@ -613,27 +595,18 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(block *types.WorkObject) 
 			_, exists := bestRegions[regionLocation]
 			if !exists {
 				bestRegions[regionLocation] = child
-				zoneLocation := child.location.Name()
-				_, exists = bestZones[zoneLocation]
-				if !exists {
-					bestZones[zoneLocation] = child
-				} else {
-					if bestZones[zoneLocation].number[common.ZONE_CTX].Cmp(child.number[common.ZONE_CTX]) < 0 {
-						bestZones[zoneLocation] = child
-					}
-				}
 			} else {
 				if bestRegions[regionLocation].number[common.REGION_CTX].Cmp(child.number[common.REGION_CTX]) < 0 {
 					bestRegions[regionLocation] = child
-					zoneLocation := child.location.Name()
-					_, exists = bestZones[zoneLocation]
-					if !exists {
-						bestZones[zoneLocation] = child
-					} else {
-						if bestZones[zoneLocation].number[common.ZONE_CTX].Cmp(child.number[common.ZONE_CTX]) < 0 {
-							bestZones[zoneLocation] = child
-						}
-					}
+				}
+			}
+			zoneLocation := child.location.Name()
+			_, exists = bestZones[zoneLocation]
+			if !exists {
+				bestZones[zoneLocation] = child
+			} else {
+				if bestZones[zoneLocation].number[common.ZONE_CTX].Cmp(child.number[common.ZONE_CTX]) < 0 {
+					bestZones[zoneLocation] = child
 				}
 			}
 
@@ -764,10 +737,12 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 					AddToConstraintMap(constraintMap, parent, -1, parentOrder)
 				} else {
 					if child.constraint < -1 {
-						parent := backend.BlockOrCandidateByHash(parent.ParentHash(common.ZONE_CTX))
+						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
 						}
+						// Remove this leader from the startingConstraintMap
+						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
 					} else if child.constraint == -1 {
 						break
@@ -779,10 +754,12 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 					AddToConstraintMap(constraintMap, parent, 0, parentOrder)
 				} else {
 					if child.constraint < 0 {
-						parent := backend.BlockOrCandidateByHash(parent.ParentHash(common.ZONE_CTX))
+						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
 						}
+						// Remove this leader from the startingConstraintMap
+						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
 					} else if child.constraint == 0 {
 						break
@@ -798,10 +775,12 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 					AddToConstraintMap(constraintMap, parent, 0, parentOrder)
 				} else {
 					if child.constraint < 0 {
-						parent := backend.BlockOrCandidateByHash(parent.ParentHash(common.ZONE_CTX))
+						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
 						}
+						// Remove this leader from the startingConstraintMap
+						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
 					} else if child.constraint == 0 {
 						break
@@ -813,10 +792,12 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 					AddToConstraintMap(constraintMap, parent, 1, parentOrder)
 				} else {
 					if child.constraint < 1 {
-						parent := backend.BlockOrCandidateByHash(parent.ParentHash(common.ZONE_CTX))
+						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
 						}
+						// Remove this leader from the startingConstraintMap
+						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
 					} else if child.constraint == 1 {
 						break
@@ -826,7 +807,7 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 		}
 
 		// Once we collect all the prime blocks for the region we stop
-		if numPrimeBlocks == 10 {
+		if numPrimeBlocks == 3 {
 			break
 		}
 		current = parent
