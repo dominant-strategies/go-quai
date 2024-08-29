@@ -444,10 +444,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash(hc.NodeCtx()) {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64(hc.NodeCtx()))
-		err := hc.AppendBlock(head)
-		if err != nil {
-			rawdb.DeleteCanonicalHash(hc.headerDb, head.NumberU64(hc.NodeCtx()))
-			return err
+		if nodeCtx == common.ZONE_CTX {
+			err := hc.AppendBlock(head)
+			if err != nil {
+				rawdb.DeleteCanonicalHash(hc.headerDb, head.NumberU64(hc.NodeCtx()))
+				return err
+			}
 		}
 		// write the head block hash to the db
 		rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())

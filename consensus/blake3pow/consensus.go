@@ -648,7 +648,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 			chain.WriteAddressOutpoints(addressOutpointMap)
 			blake3pow.logger.Info("Indexed genesis utxos")
 		}
-	} else if nodeCtx == common.ZONE_CTX {
+	} else {
 		multiSet = rawdb.ReadMultiSet(chain.Database(), header.ParentHash(nodeCtx))
 		utxoSetSize = rawdb.ReadUTXOSetSize(chain.Database(), header.ParentHash(nodeCtx))
 	}
@@ -658,39 +658,35 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 
 	utxoSetSize += uint64(len(utxosCreate))
 	utxoSetSize -= uint64(len(utxosDelete))
-	if utxoSetSize > params.MaxUTXOSetSize {
-		trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
-		blake3pow.logger.WithFields(log.Fields{
-			"utxoSetSize":    utxoSetSize,
-			"maxUTXOSetSize": params.MaxUTXOSetSize,
-		}).Info("UTXO set size is greater than the maximum allowed UTXO set size. Begin trimming process.")
-		lastTrimmedBlockHeight := rawdb.ReadLastTrimmedBlock(chain.Database(), header.ParentHash(nodeCtx))
-		if lastTrimmedBlockHeight == 0 {
-			lastTrimmedBlockHeight++
-		}
-		for utxoSetSize > params.MaxUTXOSetSize {
-			prevUtxoSetSize := utxoSetSize
-
-			nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), lastTrimmedBlockHeight+1)
-
-			TrimBlock(chain, batch, lastTrimmedBlockHeight+1, nextBlockToTrim, &utxosDelete, &trimmedUtxos, &utxoSetSize, !setRoots, blake3pow.logger) // setRoots is false when we are processing the block
-
-			lastTrimmedBlockHeight++
-			if lastTrimmedBlockHeight == header.NumberU64(nodeCtx) {
-				blake3pow.logger.Fatal("Last trimmed block height is equal to the current block height. This is a bug.")
+	trimDepths := types.TrimDepths
+	if utxoSetSize > params.MaxUTXOSetSize/2 {
+		var err error
+		trimDepths, err = rawdb.ReadTrimDepths(chain.Database(), header.ParentHash(nodeCtx))
+		if err != nil || trimDepths == nil {
+			blake3pow.logger.Errorf("Failed to read trim depths for block %s: %+v", header.ParentHash(nodeCtx).String(), err)
+			trimDepths = make(map[uint8]uint64, len(types.TrimDepths))
+			for denomination, depth := range types.TrimDepths { // copy the default trim depths
+				trimDepths[denomination] = depth
 			}
-			blake3pow.logger.WithFields(log.Fields{
-				"prevUtxoSetSize":  prevUtxoSetSize,
-				"utxosDeleted":     prevUtxoSetSize - utxoSetSize,
-				"utxoSetSizeAfter": utxoSetSize,
-				"maxUTXOSetSize":   params.MaxUTXOSetSize,
-				"lastTrimmedBlock": lastTrimmedBlockHeight,
-			}).Info("Trimmed block UTXOs")
+		}
+		if UpdateTrimDepths(trimDepths, utxoSetSize) {
+			blake3pow.logger.Infof("Updated trim depths at height %d new depths: %+v", header.NumberU64(nodeCtx), trimDepths)
 		}
 		if !setRoots {
-			rawdb.WriteLastTrimmedBlock(batch, header.Hash(), lastTrimmedBlockHeight)
-			rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
+			rawdb.WriteTrimDepths(batch, header.Hash(), trimDepths)
 		}
+	}
+	start := time.Now()
+	trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
+	for denomination, depth := range trimDepths {
+		if header.NumberU64(nodeCtx) > depth+1 {
+			nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), header.NumberU64(nodeCtx)-depth)
+			TrimBlock(chain, batch, true, denomination, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, &utxoSetSize, !setRoots, blake3pow.logger) // setRoots is false when we are processing the block
+		}
+	}
+	blake3pow.logger.Infof("Trimmed %d UTXOs from db in %s", len(trimmedUtxos), common.PrettyDuration(time.Since(start)))
+	if !setRoots {
+		rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
 	}
 	for _, hash := range utxosCreate {
 		multiSet.Add(hash.Bytes())
@@ -698,7 +694,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 	for _, hash := range utxosDelete {
 		multiSet.Remove(hash.Bytes())
 	}
-	blake3pow.logger.Infof("Parent hash: %s, header hash: %s, muhash: %s, block height: %d, setroots: %t, UtxosCreated: %d, UtxosDeleted: %d, UTXO Set Size: %d", header.ParentHash(nodeCtx).String(), header.Hash().String(), multiSet.Hash().String(), header.NumberU64(nodeCtx), setRoots, len(utxosCreate), len(utxosDelete), utxoSetSize)
+	blake3pow.logger.Infof("Parent hash: %s, header hash: %s, muhash: %s, block height: %d, setroots: %t, UtxosCreated: %d, UtxosDeleted: %d, UTXOs Trimmed from DB: %d, UTXO Set Size: %d", header.ParentHash(nodeCtx).String(), header.Hash().String(), multiSet.Hash().String(), header.NumberU64(nodeCtx), setRoots, len(utxosCreate), len(utxosDelete), len(trimmedUtxos), utxoSetSize)
 
 	if utxoSetSize < uint64(len(utxosDelete)) {
 		return nil, 0, fmt.Errorf("UTXO set size is less than the number of utxos to delete. This is a bug. UTXO set size: %d, UTXOs to delete: %d", utxoSetSize, len(utxosDelete))
@@ -719,7 +715,7 @@ type UtxoEntryWithIndex struct {
 	Key   []byte
 }
 
-func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, utxoSetSize *uint64, deleteFromDb bool, logger *log.Logger) {
+func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, checkDenomination bool, denomination uint8, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, utxoSetSize *uint64, deleteFromDb bool, logger *log.Logger) {
 	utxosCreated, _ := rawdb.ReadCreatedUTXOKeys(chain.Database(), blockHash)
 	if utxosCreated == nil {
 		// This is likely always going to be the case, as the prune depth will almost always be shorter than the trim depth
@@ -753,6 +749,9 @@ func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, blockHeight
 				}).Error("Invalid utxo Proto")
 				continue
 			}
+			if checkDenomination && utxo.Denomination != denomination {
+				continue
+			}
 			txHash, index, err := rawdb.ReverseUtxoKey(it.Key())
 			if err != nil {
 				logger.WithField("err", err).Error("Failed to parse utxo key")
@@ -767,19 +766,46 @@ func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, blockHeight
 	for txHash, utxoEntries := range utxos {
 		blockNumberForTx := rawdb.ReadTxLookupEntry(chain.Database(), txHash)
 		if blockNumberForTx != nil && *blockNumberForTx != blockHeight { // collision, wrong tx
+			logger.Infof("Collision: tx %s was created in block %d, but is in block %d", txHash.String(), *blockNumberForTx, blockHeight)
 			continue
 		}
 		for _, utxo := range utxoEntries {
-			if utxo.Denomination < types.MaxDenomination {
-				*utxosDelete = append(*utxosDelete, types.UTXOHash(txHash, utxo.Index, utxo.UtxoEntry))
-				if deleteFromDb {
-					batch.Delete(utxo.Key)
-					*trimmedUtxos = append(*trimmedUtxos, &types.SpentUtxoEntry{OutPoint: types.OutPoint{txHash, utxo.Index}, UtxoEntry: utxo.UtxoEntry})
-				}
-				*utxoSetSize--
+			*utxosDelete = append(*utxosDelete, types.UTXOHash(txHash, utxo.Index, utxo.UtxoEntry))
+			if deleteFromDb {
+				batch.Delete(utxo.Key)
+				*trimmedUtxos = append(*trimmedUtxos, &types.SpentUtxoEntry{OutPoint: types.OutPoint{txHash, utxo.Index}, UtxoEntry: utxo.UtxoEntry})
 			}
+			*utxoSetSize--
 		}
 	}
+}
+
+func UpdateTrimDepths(trimDepths map[uint8]uint64, utxoSetSize uint64) bool {
+	switch {
+	case utxoSetSize > params.MaxUTXOSetSize/2 && trimDepths[255] == 0: // 50% full
+		for denomination, depth := range trimDepths {
+			trimDepths[denomination] = depth - (depth / 10) // decrease lifespan of this denomination by 10%
+		}
+		trimDepths[255] = 1 // level 1
+	case utxoSetSize > params.MaxUTXOSetSize-(params.MaxUTXOSetSize/4) && trimDepths[255] == 1: // 75% full
+		for denomination, depth := range trimDepths {
+			trimDepths[denomination] = depth - (depth / 5) // decrease lifespan of this denomination by an additional 20%
+		}
+		trimDepths[255] = 2 // level 2
+	case utxoSetSize > params.MaxUTXOSetSize-(params.MaxUTXOSetSize/10) && trimDepths[255] == 2: // 90% full
+		for denomination, depth := range trimDepths {
+			trimDepths[denomination] = depth - (depth / 2) // decrease lifespan of this denomination by an additional 50%
+		}
+		trimDepths[255] = 3 // level 3
+	case utxoSetSize > params.MaxUTXOSetSize && trimDepths[255] == 3:
+		for denomination, depth := range trimDepths {
+			trimDepths[denomination] = depth - (depth / 2) // decrease lifespan of this denomination by an additional 50%
+		}
+		trimDepths[255] = 4 // level 4
+	default:
+		return false
+	}
+	return true
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
