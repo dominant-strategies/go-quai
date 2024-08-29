@@ -1457,3 +1457,43 @@ func WriteTrimmedUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXO
 	// And finally, store the data in the database under the appropriate key
 	return db.Put(trimmedUTXOsKey(blockHash), data)
 }
+
+func DeleteTrimmedUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(trimmedUTXOsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete trimmed utxos")
+	}
+}
+
+func ReadTrimDepths(db ethdb.Reader, blockHash common.Hash) (map[uint8]uint64, error) {
+	data, _ := db.Get(trimDepthsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoTrimDepths := new(types.ProtoTrimDepths)
+	if err := proto.Unmarshal(data, protoTrimDepths); err != nil {
+		return nil, err
+	}
+	trimDepths := make(map[uint8]uint64, len(protoTrimDepths.TrimDepths))
+	for denomination, depth := range protoTrimDepths.TrimDepths {
+		trimDepths[uint8(denomination)] = depth
+	}
+	return trimDepths, nil
+}
+
+func WriteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash, trimDepths map[uint8]uint64) error {
+	protoTrimDepths := &types.ProtoTrimDepths{TrimDepths: make(map[uint32]uint64, len(trimDepths))}
+	for denomination, depth := range trimDepths {
+		protoTrimDepths.TrimDepths[uint32(denomination)] = depth
+	}
+	data, err := proto.Marshal(protoTrimDepths)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(trimDepthsKey(blockHash), data)
+}
+
+func DeleteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(trimDepthsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete trim depths")
+	}
+}
