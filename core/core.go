@@ -17,6 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
@@ -1239,4 +1240,12 @@ func (c *Core) ContentFrom(addr common.Address) (types.Transactions, types.Trans
 		return nil, nil
 	}
 	return c.sl.txPool.ContentFrom(internal)
+}
+
+func (c *Core) SuggestFinalityDepth(qiValue *big.Int, correlatedRisk *big.Int) *big.Int {
+	qiRewardPerBlock := misc.CalculateQiReward(c.CurrentHeader().WorkObjectHeader())
+
+	// Finality qiValue * correlatedRisk / qiRewardPerBlock
+	finalityDepth := new(big.Int).Div(new(big.Int).Mul(qiValue, correlatedRisk), qiRewardPerBlock)
+	return finalityDepth
 }
