@@ -72,8 +72,6 @@ type HierarchicalCoordinator struct {
 	chainHeadSubs []event.Subscription
 	chainSubs     []event.Subscription
 
-	childrenStore map[common.Hash][common.HierarchyDepth]Children
-
 	bestBlocks map[string]*types.WorkObject
 
 	expansionCh  chan core.ExpansionEvent
@@ -100,7 +98,6 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 		treeExpansionTriggerStarted: false,
 		quitCh:                      quitCh,
 		newBlockCh:                  make(chan *types.WorkObject),
-		childrenStore:               make(map[common.Hash][common.HierarchyDepth]Children),
 		bestBlocks:                  make(map[string]*types.WorkObject),
 	}
 
@@ -451,59 +448,8 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 					hc.bestBlocks[head.Block.Location().Name()] = head.Block
 				}
 			}
-			hc.UpdateChildrenStore(head.Block)
 		case <-sub.Err():
 			return
-		}
-	}
-}
-
-func (hc *HierarchicalCoordinator) UpdateChildrenStore(block *types.WorkObject) {
-	backend := *hc.consensus.GetBackend(block.Location())
-	_, blockOrder, err := backend.CalcOrder(block)
-	if err != nil {
-		log.Global.Error("error calculating block order")
-		return
-	}
-	switch blockOrder {
-	case common.PRIME_CTX:
-		childrenInfo, exists := hc.childrenStore[block.ParentHash(common.ZONE_CTX)]
-		if !exists {
-			childrenInfo[common.PRIME_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
-			childrenInfo[common.REGION_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
-			childrenInfo[common.ZONE_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
-			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = childrenInfo
-		} else {
-			copyChildrenInfo := childrenInfo
-			// modify the region and zone entry
-			copyChildrenInfo[common.PRIME_CTX] = append(copyChildrenInfo[common.PRIME_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
-			copyChildrenInfo[common.REGION_CTX] = append(copyChildrenInfo[common.REGION_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
-			copyChildrenInfo[common.ZONE_CTX] = append(copyChildrenInfo[common.ZONE_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
-			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = copyChildrenInfo
-		}
-	case common.REGION_CTX:
-		childrenInfo, exists := hc.childrenStore[block.ParentHash(common.ZONE_CTX)]
-		if !exists {
-			childrenInfo[common.REGION_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
-			childrenInfo[common.ZONE_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
-			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = childrenInfo
-		} else {
-			copyChildrenInfo := childrenInfo
-			// modify the region and zone entry
-			copyChildrenInfo[common.REGION_CTX] = append(copyChildrenInfo[common.REGION_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
-			copyChildrenInfo[common.ZONE_CTX] = append(copyChildrenInfo[common.ZONE_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
-			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = copyChildrenInfo
-		}
-	case common.ZONE_CTX:
-		childrenInfo, exists := hc.childrenStore[block.ParentHash(common.ZONE_CTX)]
-		if !exists {
-			childrenInfo[common.ZONE_CTX] = Children{{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)}}
-			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = childrenInfo
-		} else {
-			copyChildrenInfo := childrenInfo
-			// modify the zone entry
-			copyChildrenInfo[common.ZONE_CTX] = append(copyChildrenInfo[common.ZONE_CTX], Child{hash: block.Hash(), location: block.Location(), entropy: backend.TotalLogS(block)})
-			hc.childrenStore[block.ParentHash(common.ZONE_CTX)] = copyChildrenInfo
 		}
 	}
 }
