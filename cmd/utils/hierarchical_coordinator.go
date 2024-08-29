@@ -25,6 +25,17 @@ const (
 	c_expansionChSize = 10
 )
 
+type Constraint int
+
+const (
+	FirstPrime Constraint = iota
+	FirstRegion
+	FirstZone
+	SecondPrime
+	SecondRegion
+	SecondZone
+)
+
 var (
 	c_currentExpansionNumberKey = []byte("cexp")
 )
@@ -34,7 +45,7 @@ type Child struct {
 	number     []*big.Int
 	location   common.Location
 	entropy    *big.Int
-	constraint int
+	constraint Constraint
 	order      int
 }
 
@@ -431,6 +442,15 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 	for {
 		select {
 		case head := <-chainEvent:
+			bestBlock, exists := hc.bestBlocks[head.Block.Location().Name()]
+			if !exists {
+				hc.bestBlocks[head.Block.Location().Name()] = head.Block
+			} else {
+				backend := *hc.consensus.GetBackend(head.Block.Location())
+				if backend.TotalLogS(bestBlock).Cmp(backend.TotalLogS(head.Block)) < 0 {
+					hc.bestBlocks[head.Block.Location().Name()] = head.Block
+				}
+			}
 			hc.UpdateChildrenStore(head.Block)
 		case <-sub.Err():
 			return
@@ -503,23 +523,14 @@ func (hc *HierarchicalCoordinator) NewBlockEventLoop() {
 		select {
 		case newBlock := <-hc.newBlockCh:
 			log.Global.Error("Received a new head event", newBlock.NumberArray())
-			bestBlock, exists := hc.bestBlocks[newBlock.Location().Name()]
-			if !exists {
-				hc.bestBlocks[newBlock.Location().Name()] = newBlock
-			} else {
-				backend := *hc.consensus.GetBackend(newBlock.Location())
-				if backend.TotalLogS(bestBlock).Cmp(backend.TotalLogS(newBlock)) < 0 {
-					hc.bestBlocks[newBlock.Location().Name()] = newBlock
-				}
-			}
-			hc.BuildPendingHeaders(newBlock)
+			hc.BuildPendingHeaders()
 		case <-hc.quitCh:
 			return
 		}
 	}
 }
 
-func (hc *HierarchicalCoordinator) BuildPendingHeaders(block *types.WorkObject) {
+func (hc *HierarchicalCoordinator) BuildPendingHeaders() {
 	// Pick the leader among all the slices
 
 	constraintMap := make(map[common.Hash]Child)
@@ -681,7 +692,20 @@ func CopyConstraintMap(constraintMap map[common.Hash]Child) map[common.Hash]Chil
 	return newMap
 }
 
-func AddToConstraintMap(constraintMap map[common.Hash]Child, block *types.WorkObject, constraint int, order int) {
+// Quai Trace algorithm
+
+// If a dom block doesn’t exist it will automatically be a first prime or a first region
+// also applies to the zone - done
+
+// If the current is first then parent is always second if it doesnt exist - done
+
+// If the parent exists and is second, we can discard the trace, we restart the trace from the zone parent - done
+
+// If the parent exists and is first we can stop the trace regardless of the current - done
+
+// Every time a prime block is added to the constraint list every hash in its manifest gets added to the the constraint list as second
+
+func AddToConstraintMap(constraintMap map[common.Hash]Child, block *types.WorkObject, constraint Constraint, order int) {
 	constraintMap[block.Hash()] = Child{hash: block.Hash(), number: block.NumberArray(), constraint: constraint, order: order, location: block.Location()}
 }
 
@@ -699,7 +723,26 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 		log.Global.Error("Cannot calculate the order for the leader")
 	}
 
-	AddToConstraintMap(constraintMap, leader, 2, leaderOrder)
+	// check if the leader exists in the constraintMap
+	_, exists := constraintMap[leader.Hash()]
+	if !exists {
+		switch leaderOrder {
+		case common.PRIME_CTX:
+			AddToConstraintMap(constraintMap, leader, FirstPrime, leaderOrder)
+			// get the region backend that belongs to this
+			regionBackend := *hc.consensus.GetBackend(common.Location{byte(leader.Location().Region())})
+			if len(leader.Manifest()) > 0 {
+				for _, hash := range leader.Manifest()[:len(leader.Manifest())-1] {
+					block := regionBackend.GetBlockByHash(hash)
+					AddToConstraintMap(constraintMap, block, SecondRegion, common.REGION_CTX)
+				}
+			}
+		case common.REGION_CTX:
+			AddToConstraintMap(constraintMap, leader, FirstRegion, leaderOrder)
+		case common.ZONE_CTX:
+			AddToConstraintMap(constraintMap, leader, FirstZone, leaderOrder)
+		}
+	}
 
 	// copy the starting constraint map
 	startingConstraintMap := CopyConstraintMap(constraintMap)
@@ -734,34 +777,42 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 				numPrimeBlocks++
 				child, exists := constraintMap[parent.Hash()]
 				if !exists {
-					AddToConstraintMap(constraintMap, parent, -1, parentOrder)
+					AddToConstraintMap(constraintMap, parent, FirstPrime, parentOrder)
+					// get the region backend that belongs to this
+					regionBackend := *hc.consensus.GetBackend(common.Location{byte(parent.Location().Region())})
+					if len(parent.Manifest()) > 0 {
+						for _, hash := range parent.Manifest()[:len(parent.Manifest())-1] {
+							block := regionBackend.GetBlockByHash(hash)
+							AddToConstraintMap(constraintMap, block, SecondRegion, common.REGION_CTX)
+						}
+					}
 				} else {
-					if child.constraint < -1 {
-						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
+					if child.constraint == SecondPrime {
+						parent := backend.GetBlockByHash(leader.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
 						}
 						// Remove this leader from the startingConstraintMap
 						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
-					} else if child.constraint == -1 {
+					} else if child.constraint == FirstPrime {
 						break
 					}
 				}
 			case common.REGION_CTX:
 				child, exists := constraintMap[parent.Hash()]
 				if !exists {
-					AddToConstraintMap(constraintMap, parent, 0, parentOrder)
+					AddToConstraintMap(constraintMap, parent, FirstRegion, parentOrder)
 				} else {
-					if child.constraint < 0 {
-						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
+					if child.constraint == SecondRegion {
+						parent := backend.GetBlockByHash(leader.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
 						}
 						// Remove this leader from the startingConstraintMap
 						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
-					} else if child.constraint == 0 {
+					} else if child.constraint == FirstRegion {
 						break
 					}
 				}
@@ -772,26 +823,36 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 				numPrimeBlocks++
 				child, exists := constraintMap[parent.Hash()]
 				if !exists {
-					AddToConstraintMap(constraintMap, parent, 0, parentOrder)
+					AddToConstraintMap(constraintMap, parent, SecondPrime, parentOrder)
+					// Add all the hashes in this Primes manifest except for the
+					// last index (prev Prime) into the constraintMap
+					// get the region backend that belongs to this
+					regionBackend := *hc.consensus.GetBackend(common.Location{byte(parent.Location().Region())})
+					if len(parent.Manifest()) > 0 {
+						for _, hash := range parent.Manifest()[:len(parent.Manifest())-1] {
+							block := regionBackend.GetBlockByHash(hash)
+							AddToConstraintMap(constraintMap, block, SecondRegion, common.REGION_CTX)
+						}
+					}
 				} else {
-					if child.constraint < 0 {
-						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
+					if child.constraint == SecondPrime {
+						parent := backend.GetBlockByHash(leader.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
 						}
 						// Remove this leader from the startingConstraintMap
 						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
-					} else if child.constraint == 0 {
+					} else if child.constraint == FirstPrime {
 						break
 					}
 				}
 			case common.REGION_CTX:
 				child, exists := constraintMap[parent.Hash()]
 				if !exists {
-					AddToConstraintMap(constraintMap, parent, 1, parentOrder)
+					AddToConstraintMap(constraintMap, parent, SecondRegion, parentOrder)
 				} else {
-					if child.constraint < 1 {
+					if child.constraint == SecondRegion {
 						parent := backend.GetBlockByHash(parent.ParentHash(common.ZONE_CTX))
 						if parent == nil {
 							break
@@ -799,10 +860,14 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[com
 						// Remove this leader from the startingConstraintMap
 						delete(startingConstraintMap, leader.Hash())
 						return hc.calculateFrontierPoints(startingConstraintMap, parent)
-					} else if child.constraint == 1 {
+					} else if child.constraint == FirstRegion {
+						// we can stop the trace
 						break
 					}
 				}
+			case common.ZONE_CTX:
+				// In zone, if the current is FirstZone, then the subsequent zones become secondZone
+				AddToConstraintMap(constraintMap, parent, SecondZone, parentOrder)
 			}
 		}
 
