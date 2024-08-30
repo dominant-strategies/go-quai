@@ -337,7 +337,7 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 	}
 	hc.logger.WithField("append block", common.PrettyDuration(time.Since(blockappend))).Debug("Time taken to")
 
-	hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+	// hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		hc.bc.logsFeed.Send(logs)
 	}
@@ -373,8 +373,8 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			if err != nil {
 				return err
 			}
-			return nil
 		}
+		return nil
 	}
 
 	//Find a common header
