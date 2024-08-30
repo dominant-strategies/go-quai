@@ -1946,7 +1946,6 @@ func (pool *TxPool) promoteExecutables(accounts []common.InternalAddress) []*typ
 		queuedRateLimitMeter.Add(float64(len(caps)))
 		// Mark all the items dropped as removed
 		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
-		queuedRateLimitMeter.Sub(float64(len(forwards) + len(drops) + len(caps)))
 		if pool.locals.contains(addr) {
 			localTxGauge.Sub(float64(len(forwards) + len(drops) + len(caps)))
 		}
