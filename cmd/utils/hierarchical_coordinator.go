@@ -531,6 +531,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders() {
 					}
 					modifiedConstraintMap, err = hc.calculateFrontierPoints(modifiedConstraintMap, leader)
 					if err != nil {
+						log.Global.Error("error tracing back from block ", leader.Hash())
 						continue
 					} else {
 						break
@@ -542,9 +543,9 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders() {
 
 	for loc, t := range modifiedConstraintMap {
 		if len(t.termini) == 1 {
-			log.Global.Error("Constraint Map", "loc", loc, "termini", t.termini[0], "block location", t.location)
+			log.Global.Error("Constraint Map ", "loc ", loc, "termini ", t.termini[0], "block location ", t.location)
 		} else {
-			log.Global.Error("Constraint Map", "loc", loc, "termini", fmt.Sprintf("%v, %v, %v", t.termini[0], t.termini[1], t.termini[2]), "block location", t.location)
+			log.Global.Error("Constraint Map ", "loc ", loc, "termini ", fmt.Sprintf("%v, %v, %v", t.termini[0], t.termini[1], t.termini[2]), "block location ", t.location)
 		}
 	}
 
@@ -699,7 +700,10 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 					if regionTermini == nil {
 						panic("termini shouldnt be nil in region")
 					}
-					constraintMap[hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name()] = TerminiLocation{termini: regionTermini.SubTermini(), location: parent.Location()}
+					_, exists := constraintMap[hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name()]
+					if !exists {
+						constraintMap[hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name()] = TerminiLocation{termini: regionTermini.SubTermini(), location: parent.Location()}
+					}
 				} else {
 					// 1) If parent is in the current leaders termini
 					// 2) else fail
@@ -737,16 +741,17 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 					// 1) If entry for the current block region in constraintMap exists in the current block termini
 					// 3) else fail
 					newTermini := primeBackend.GetTerminiByHash(current.Hash()).SubTermini()
-					if newTermini[parent.Location().Region()] == parent.Hash() {
+					if newTermini[parent.Location().Region()] == parent.Hash() || current.Location().Region() == parent.Location().Region() {
 						constraintMap[location.Name()] = TerminiLocation{termini: newTermini, location: current.Location()}
 						// If the region matches when attaching prime, the region also needs to be updated
 						if current.Location().Region() == t.location.Region() {
-							regionBackend := hc.GetBackend(hc.GetContextLocation(parent.Location(), common.REGION_CTX))
+							regionBackend := hc.GetBackend(hc.GetContextLocation(current.Location(), common.REGION_CTX))
 							regionTermini := regionBackend.GetTerminiByHash(parent.Hash())
 							if regionTermini == nil {
 								panic("termini shouldnt be nil in region")
 							}
-							constraintMap[hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name()] = TerminiLocation{termini: regionTermini.SubTermini(), location: parent.Location()}
+							// TODO: Need a termini check here?
+							constraintMap[hc.GetContextLocation(current.Location(), common.REGION_CTX).Name()] = TerminiLocation{termini: regionTermini.SubTermini(), location: current.Location()}
 						}
 						break
 					} else {
@@ -763,7 +768,7 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 					// 1) If entry for the current block region in constraintMap exists in the current block termini
 					// 3) else fail
 					newTermini := regionBackend.GetTerminiByHash(current.Hash()).SubTermini()
-					if newTermini[parent.Location().Zone()] == parent.Hash() {
+					if newTermini[parent.Location().Zone()] == parent.Hash() || current.Location().Zone() == parent.Location().Zone() {
 						constraintMap[location.Name()] = TerminiLocation{termini: newTermini, location: current.Location()}
 						break
 					} else {
