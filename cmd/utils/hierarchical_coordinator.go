@@ -633,10 +633,10 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 
 	// trace back from the leader and stop after finding a prime block from each region or reach genesis
 	_, leaderOrder, err := leaderBackend.CalcOrder(leader)
+	log.Global.Error("Calculating the frontier points for the leader", "order:", leaderOrder, "number:", leader.NumberArray(), "location:", leader.Location(), "hash:", leader.Hash())
 	if err != nil {
 		log.Global.Error("Cannot calculate the order for the leader")
 	}
-
 	switch leaderOrder {
 	case common.PRIME_CTX:
 		primeBackend := hc.GetBackend(common.Location{})
@@ -669,117 +669,77 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 
 	backend := hc.GetBackendForLocationAndOrder(leaderLocation, leaderOrder)
 
-	context := leaderOrder
+	currentOrder := leaderOrder
 	current := leader
 
+	log.Global.Error("Starting the trace back from the leader", "order:", leaderOrder, "number:", leader.NumberArray(), "location:", leader.Location(), "hash:", leader.Hash())
 	for {
-		parent := backend.GetHeaderByHash(current.ParentHash(context))
-
 		// TODO: the genesis check has to be done correctly based on the hash
-		if parent.NumberU64(context) == 0 {
+		if current.NumberU64(currentOrder) == 1 {
 			break
 		}
+		parent := backend.GetHeaderByHash(current.ParentHash(currentOrder))
 
 		_, parentOrder, err := backend.CalcOrder(parent)
 		if err != nil {
 			log.Global.Error("error calculating the order of the parent")
 		}
 
-		if parentOrder < context {
-			context = parentOrder
-			backend = hc.GetBackendForLocationAndOrder(parent.Location(), parentOrder)
-			switch parentOrder {
-			case common.PRIME_CTX:
-				location := hc.GetContextLocation(parent.Location(), common.PRIME_CTX)
-				primeBackend := hc.GetBackend(location)
-				t, exists := constraintMap[location.Name()]
-				if !exists {
-					constraintMap[location.Name()] = TerminiLocation{termini: primeBackend.GetTerminiByHash(parent.Hash()).SubTermini(), location: parent.Location()}
-					regionBackend := hc.GetBackend(hc.GetContextLocation(parent.Location(), common.REGION_CTX))
-					regionTermini := regionBackend.GetTerminiByHash(parent.Hash())
-					if regionTermini == nil {
-						panic("termini shouldnt be nil in region")
-					}
-					_, exists := constraintMap[hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name()]
-					if !exists {
-						constraintMap[hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name()] = TerminiLocation{termini: regionTermini.SubTermini(), location: parent.Location()}
+		log.Global.Error("Parent block", "order:", parentOrder, "number:", parent.NumberArray(), "location:", parent.Location(), "hash:", parent.Hash())
+		// If there is a change in order update constraint or break
+		if parentOrder < currentOrder {
+			// If a constraint exists
+			t, exists := constraintMap[string(hc.GetContextLocation(parent.Location(), parentOrder).Name())]
+			if exists {
+				log.Global.Error("Constraint exists for the parent", t.termini, t.location)
+				// check that it meets the constraint
+				if parentOrder == common.PRIME_CTX {
+					if t.termini[parent.Location().Region()] == parent.Hash() {
+						log.Global.Error("Prime constraint met")
+						break
+					} else {
+						return startingConstraintMap, errors.New("region not in prime constraint")
 					}
 				} else {
-					// 1) If parent is in the current leaders termini
-					// 2) else fail
 					if t.termini[parent.Location().Zone()] == parent.Hash() {
+						log.Global.Error("Region constraint met")
 						break
 					} else {
-						return startingConstraintMap, errors.New("region parent doesnt exists")
+						return startingConstraintMap, errors.New("zone not in region constraint")
 					}
 				}
-			case common.REGION_CTX:
-				location := hc.GetContextLocation(parent.Location(), common.REGION_CTX)
-				regionBackend := hc.GetBackend(location)
-				t, exists := constraintMap[location.Name()]
-				if !exists {
-					constraintMap[location.Name()] = TerminiLocation{termini: regionBackend.GetTerminiByHash(parent.Hash()).SubTermini(), location: parent.Location()}
+			} else {
+				log.Global.Error("Constraint does not exist for the parent")
+				// create a new constraint
+				backend := hc.GetBackend(hc.GetContextLocation(parent.Location(), parentOrder))
+				termini := backend.GetTerminiByHash(parent.Hash())
+				if termini == nil {
+					panic("termini shouldnt be nil for the parent")
+				}
+				if parent.NumberU64(parentOrder) == 0 {
+					if parentOrder == common.PRIME_CTX {
+						constraintMap[common.Location{}.Name()] = TerminiLocation{termini: termini.SubTermini(), location: current.Location()}
+						constraintMap[string(hc.GetContextLocation(current.Location(), common.REGION_CTX).Name())] = TerminiLocation{termini: termini.SubTermini(), location: current.Location()}
+					} else {
+						constraintMap[string(hc.GetContextLocation(current.Location(), common.REGION_CTX).Name())] = TerminiLocation{termini: termini.SubTermini(), location: current.Location()}
+					}
 				} else {
-					// 1) If parent is in the current leaders termini
-					// 2) else fail
-					if t.termini[parent.Location().Zone()] == parent.Hash() {
-						break
+					if parentOrder == common.PRIME_CTX && currentOrder == common.REGION_CTX {
+						constraintMap[string(hc.GetContextLocation(parent.Location(), common.PRIME_CTX).Name())] = TerminiLocation{termini: termini.SubTermini(), location: parent.Location()}
+					} else if parentOrder == common.PRIME_CTX {
+						constraintMap[string(hc.GetContextLocation(parent.Location(), common.PRIME_CTX).Name())] = TerminiLocation{termini: termini.SubTermini(), location: parent.Location()}
+						constraintMap[string(hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name())] = TerminiLocation{termini: termini.SubTermini(), location: parent.Location()}
 					} else {
-						return startingConstraintMap, errors.New("region parent doesnt exists")
+						constraintMap[string(hc.GetContextLocation(parent.Location(), common.REGION_CTX).Name())] = TerminiLocation{termini: termini.SubTermini(), location: parent.Location()}
 					}
 				}
-			}
-		} else {
-			switch parentOrder {
-			case common.PRIME_CTX:
-				location := hc.GetContextLocation(parent.Location(), common.PRIME_CTX)
-				primeBackend := hc.GetBackend(location)
-				t, exists := constraintMap[location.Name()]
-				if !exists {
-					panic("this cannot happen, we should have already registered a region block")
-				} else {
-					// 1) If entry for the current block region in constraintMap exists in the current block termini
-					// 3) else fail
-					newTermini := primeBackend.GetTerminiByHash(current.Hash()).SubTermini()
-					if newTermini[parent.Location().Region()] == parent.Hash() || current.Location().Region() == parent.Location().Region() {
-						constraintMap[location.Name()] = TerminiLocation{termini: newTermini, location: current.Location()}
-						// If the region matches when attaching prime, the region also needs to be updated
-						if current.Location().Region() == t.location.Region() {
-							regionBackend := hc.GetBackend(hc.GetContextLocation(current.Location(), common.REGION_CTX))
-							regionTermini := regionBackend.GetTerminiByHash(parent.Hash())
-							if regionTermini == nil {
-								panic("termini shouldnt be nil in region")
-							}
-							// TODO: Need a termini check here?
-							constraintMap[hc.GetContextLocation(current.Location(), common.REGION_CTX).Name()] = TerminiLocation{termini: regionTermini.SubTermini(), location: current.Location()}
-						}
-						break
-					} else {
-						return startingConstraintMap, errors.New("region parent doesnt exists")
-					}
-				}
-			case common.REGION_CTX:
-				location := hc.GetContextLocation(parent.Location(), common.REGION_CTX)
-				regionBackend := hc.GetBackend(location)
-				_, exists := constraintMap[location.Name()]
-				if !exists {
-					panic("this cannot happen, we should have already registered a region block")
-				} else {
-					// 1) If entry for the current block region in constraintMap exists in the current block termini
-					// 3) else fail
-					newTermini := regionBackend.GetTerminiByHash(current.Hash()).SubTermini()
-					if newTermini[parent.Location().Zone()] == parent.Hash() || current.Location().Zone() == parent.Location().Zone() {
-						constraintMap[location.Name()] = TerminiLocation{termini: newTermini, location: current.Location()}
-						break
-					} else {
-						return startingConstraintMap, errors.New("region parent doesnt exists")
-					}
-				}
-			}
-		}
 
-		// Once we collect all the prime blocks for the region we stop
+			}
+			// Leader order should only be used once
+			leaderOrder = common.ZONE_CTX
+		}
 		current = parent
+		currentOrder = parentOrder
 	}
 	return constraintMap, nil
 }
