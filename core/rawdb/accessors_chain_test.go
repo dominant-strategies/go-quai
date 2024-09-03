@@ -372,7 +372,10 @@ func TestCommonAncestor(t *testing.T) {
 	zone1Block2 := types.NewWorkObject(zone1WoHeader2, zone1Body2, nil)
 	WriteWorkObject(db, zone1Block2.Hash(), zone1Block2, types.BlockObject, common.ZONE_CTX)
 
-	ancestor := FindCommonAncestor(db, zone0Block, zone1Block2, common.ZONE_CTX)
+	ancestor, err := FindCommonAncestor(db, zone0Block, zone1Block2, common.ZONE_CTX)
+	if err != nil {
+		t.Fatalf("Error finding common ancestor: %v", err)
+	}
 	if ancestor == nil || ancestor.Hash() != regionBlock.Hash() {
 		t.Fatalf("Common ancestor not found: %v", ancestor)
 	}

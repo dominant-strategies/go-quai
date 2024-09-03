@@ -132,11 +132,11 @@ func (tx *QiTx) isCoinbase() bool {
 }
 
 // CalculateQiTxGas calculates the total amount of gas a Qi tx uses (for fee calculation)
-func CalculateQiTxGas(transaction *Transaction, location common.Location) uint64 {
+func CalculateQiTxGas(transaction *Transaction, qiScalingFactor float64, location common.Location) uint64 {
 	if transaction.Type() != QiTxType {
 		panic("CalculateQiTxGas called on a transaction that is not a Qi transaction")
 	}
-	txGas := CalculateIntrinsicQiTxGas(transaction)
+	txGas := CalculateIntrinsicQiTxGas(transaction, qiScalingFactor)
 	for _, output := range transaction.TxOut() {
 		toAddr := common.AddressBytes(output.Address)
 		if !location.Equal(*toAddr.Location()) {
@@ -151,11 +151,11 @@ func CalculateQiTxGas(transaction *Transaction, location common.Location) uint64
 }
 
 // CalculateBlockQiTxGas calculates the amount of gas a Qi tx uses in a block (for block gas limit calculation)
-func CalculateBlockQiTxGas(transaction *Transaction, location common.Location) uint64 {
+func CalculateBlockQiTxGas(transaction *Transaction, qiScalingFactor float64, location common.Location) uint64 {
 	if transaction.Type() != QiTxType {
 		panic("CalculateQiTxGas called on a transaction that is not a Qi transaction")
 	}
-	txGas := CalculateIntrinsicQiTxGas(transaction)
+	txGas := CalculateIntrinsicQiTxGas(transaction, qiScalingFactor)
 	for _, output := range transaction.TxOut() {
 		toAddr := common.AddressBytes(output.Address)
 		if !location.Equal(*toAddr.Location()) {
@@ -170,11 +170,12 @@ func CalculateBlockQiTxGas(transaction *Transaction, location common.Location) u
 }
 
 // CalculateIntrinsicQiTxGas calculates the intrinsic gas for a Qi tx without ETXs
-func CalculateIntrinsicQiTxGas(transaction *Transaction) uint64 {
+func CalculateIntrinsicQiTxGas(transaction *Transaction, scalingFactor float64) uint64 {
 	if transaction.Type() != QiTxType {
 		panic("CalculateIntrinsicQiTxGas called on a transaction that is not a Qi transaction")
 	}
-	return uint64(len(transaction.TxIn()))*params.SloadGas + uint64(len(transaction.TxOut()))*params.CallValueTransferGas + params.EcrecoverGas
+	baseRate := uint64(len(transaction.TxIn()))*params.SloadGas + uint64(len(transaction.TxOut()))*params.CallValueTransferGas + params.EcrecoverGas
+	return params.CalculateQiGasWithUTXOSetSizeScalingFactor(scalingFactor, baseRate)
 }
 
 func (tx *QiTx) setTo(to common.Address) {
