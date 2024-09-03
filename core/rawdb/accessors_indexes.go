@@ -110,7 +110,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	wo := ReadWorkObject(db, blockHash, types.BlockObject)
+	wo := ReadWorkObject(db, *blockNumber, blockHash, types.BlockObject)
 	if wo == nil {
 		db.Logger().WithFields(log.Fields{
 			"number": blockNumber,

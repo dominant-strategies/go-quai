@@ -18,6 +18,7 @@ package filters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -74,11 +75,15 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		num = uint64(blockNr)
 		hash = rawdb.ReadCanonicalHash(b.db, num)
 	}
-	return rawdb.ReadHeader(b.db, hash), nil
+	return rawdb.ReadHeader(b.db, num, hash), nil
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
-	return rawdb.ReadHeader(b.db, hash), nil
+	number := rawdb.ReadHeaderNumber(b.db, hash)
+	if number == nil {
+		return nil, errors.New("could not read the header number")
+	}
+	return rawdb.ReadHeader(b.db, *number, hash), nil
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {

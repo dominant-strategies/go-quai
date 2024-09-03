@@ -342,7 +342,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int, location common.Lo
 			backoff = true
 			continue
 		}
-		head := ReadHeader(nfdb, hash)
+		head := ReadHeader(nfdb, *number, hash)
 		if head == nil {
 			f.logger.WithFields(log.Fields{
 				"number": *number,
@@ -439,7 +439,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore, nodeCtx int, location common.Lo
 				children := ReadAllHashes(db, tip)
 				for i := 0; i < len(children); i++ {
 					// Dig up the child and ensure it's dangling
-					child := ReadHeader(nfdb, children[i])
+					child := ReadHeader(nfdb, tip, children[i])
 					if child == nil {
 						f.logger.WithFields(log.Fields{
 							"number": tip,

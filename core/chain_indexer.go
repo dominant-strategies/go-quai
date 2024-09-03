@@ -19,6 +19,7 @@ package core
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -263,7 +264,12 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 						// TODO: Need to be able to turn on/off indexer and fix corrupted state
 						if c.indexAddressUtxos {
 							reorgHeaders := make([]*types.WorkObject, 0)
-							for prev := prevHeader; prev.Hash() != h.Hash(); prev = rawdb.ReadHeader(c.chainDb, prev.ParentHash(nodeCtx)) {
+							for prev := prevHeader; prev.Hash() != h.Hash(); {
+								prevNumber := rawdb.ReadHeaderNumber(c.chainDb, prev.ParentHash(nodeCtx))
+								if prevNumber == nil {
+									break
+								}
+								prev = rawdb.ReadHeader(c.chainDb, *prevNumber, prev.ParentHash(nodeCtx))
 								reorgHeaders = append(reorgHeaders, h)
 							}
 
@@ -275,8 +281,13 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 							}
 
 							// Add new blocks from current hash back to common ancestor
-							for curr := block; curr.Hash() != h.Hash(); curr = rawdb.ReadHeader(c.chainDb, curr.ParentHash(nodeCtx)) {
-								block := rawdb.ReadWorkObject(c.chainDb, curr.Hash(), types.BlockObject)
+							for curr := block; curr.Hash() != h.Hash(); {
+								prevNumber := rawdb.ReadHeaderNumber(c.chainDb, curr.ParentHash(nodeCtx))
+								if prevNumber == nil {
+									break
+								}
+								curr = rawdb.ReadHeader(c.chainDb, *prevNumber, curr.ParentHash(nodeCtx))
+								block := rawdb.ReadWorkObject(c.chainDb, *prevNumber, curr.Hash(), types.BlockObject)
 								c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, block)
 							}
 						}
@@ -457,7 +468,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash, node
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
 		}
-		header := rawdb.ReadHeader(c.chainDb, hash)
+		header := rawdb.ReadHeader(c.chainDb, number, hash)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
 		} else if header.ParentHash(nodeCtx) != lastHead {
@@ -619,7 +630,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpoints map[string]map[str
 // This is done in reverse order from the old header to the common ancestor.
 func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutpoints map[string]map[string]*types.OutpointAndDenomination, nodeCtx int, config params.ChainConfig) error {
 	for _, header := range headers {
-		block := rawdb.ReadWorkObject(c.chainDb, header.Hash(), types.BlockObject)
+		block := rawdb.ReadWorkObject(c.chainDb, header.NumberU64(nodeCtx), header.Hash(), types.BlockObject)
 
 		for _, tx := range block.QiTransactions() {
 			for i, out := range tx.TxOut() {
@@ -649,8 +660,11 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 			for _, in := range tx.TxIn() {
 				outpoint := in.PreviousOutPoint
 				address := crypto.PubkeyBytesToAddress(in.PubKey, config.Location).Hex()
-
-				parent := rawdb.ReadHeader(c.chainDb, block.ParentHash(nodeCtx))
+				parentNumber := rawdb.ReadHeaderNumber(c.chainDb, block.ParentHash(nodeCtx))
+				if parentNumber == nil {
+					return errors.New("parent number cannot be found")
+				}
+				parent := rawdb.ReadHeader(c.chainDb, *parentNumber, block.ParentHash(nodeCtx))
 
 				state, err := c.StateAt(parent.EVMRoot(), parent.UTXORoot(), parent.EtxSetRoot())
 				if err != nil {

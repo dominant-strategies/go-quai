@@ -101,7 +101,11 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	}
 
 	genesisHash := hc.GetGenesisHashes()[0]
-	hc.genesisHeader = rawdb.ReadWorkObject(db, genesisHash, types.BlockObject)
+	genesisNumber := rawdb.ReadHeaderNumber(db, genesisHash)
+	if genesisNumber == nil {
+		return nil, ErrNoGenesis
+	}
+	hc.genesisHeader = rawdb.ReadWorkObject(db, *genesisNumber, genesisHash, types.BlockObject)
 	if bytes.Equal(chainConfig.Location, common.Location{0, 0}) {
 		if hc.genesisHeader == nil {
 			return nil, ErrNoGenesis
@@ -736,7 +740,11 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return &header
 	}
-	header := rawdb.ReadHeader(hc.headerDb, hash)
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	header := rawdb.ReadHeader(hc.headerDb, *number, hash)
 	if header == nil {
 		return nil
 	}
@@ -752,7 +760,11 @@ func (hc *HeaderChain) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkO
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return &header
 	}
-	header := rawdb.ReadHeader(hc.headerDb, hash)
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	header := rawdb.ReadHeader(hc.headerDb, *number, hash)
 	if header == nil {
 		return nil
 	}
@@ -948,7 +960,7 @@ func (hc *HeaderChain) GetBody(hash common.Hash) *types.WorkObject {
 	if number == nil {
 		return nil
 	}
-	body := rawdb.ReadWorkObject(hc.headerDb, hash, types.BlockObject)
+	body := rawdb.ReadWorkObject(hc.headerDb, *number, hash, types.BlockObject)
 	if body == nil {
 		return nil
 	}
@@ -1052,13 +1064,7 @@ func (hc *HeaderChain) CheckIfEtxIsEligible(etxEligibleSlices common.Hash, to co
 
 // IsGenesisHash checks if a hash is a genesis hash
 func (hc *HeaderChain) IsGenesisHash(hash common.Hash) bool {
-	genesisHashes := rawdb.ReadGenesisHashes(hc.headerDb)
-	for _, genesisHash := range genesisHashes {
-		if hash == genesisHash {
-			return true
-		}
-	}
-	return false
+	return rawdb.IsGenesisHash(hc.headerDb, hash)
 }
 
 // AddGenesisHash appends the given hash to the genesis hash list

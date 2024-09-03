@@ -174,7 +174,7 @@ func (bc *BodyDb) GetBlock(hash common.Hash, number uint64) *types.WorkObject {
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return &block
 	}
-	block := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
+	block := rawdb.ReadWorkObject(bc.db, number, hash, types.BlockObject)
 	if block == nil {
 		return nil
 	}
@@ -194,7 +194,12 @@ func (bc *BodyDb) GetWorkObject(hash common.Hash) *types.WorkObject {
 	if wo, ok := bc.woCache.Get(hash); ok {
 		return &wo
 	}
-	wo := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
+
+	number := rawdb.ReadHeaderNumber(bc.db, hash)
+	if number == nil {
+		return nil
+	}
+	wo := rawdb.ReadWorkObject(bc.db, *number, hash, types.BlockObject)
 	if wo == nil {
 		return nil
 	}
@@ -210,7 +215,11 @@ func (bc *BodyDb) GetWorkObjectWithWorkShares(hash common.Hash) *types.WorkObjec
 	if termini == nil {
 		return nil
 	}
-	wo := rawdb.ReadWorkObjectWithWorkShares(bc.db, hash)
+	number := rawdb.ReadHeaderNumber(bc.db, hash)
+	if number == nil {
+		return nil
+	}
+	wo := rawdb.ReadWorkObjectWithWorkShares(bc.db, *number, hash)
 	if wo == nil {
 		return nil
 	}
@@ -224,7 +233,7 @@ func (bc *BodyDb) GetBlockOrCandidate(hash common.Hash, number uint64) *types.Wo
 		return &block
 	}
 
-	block := rawdb.ReadWorkObject(bc.db, hash, types.BlockObject)
+	block := rawdb.ReadWorkObject(bc.db, number, hash, types.BlockObject)
 	if block == nil {
 		return nil
 	}

@@ -145,25 +145,25 @@ func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
 	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
 		return true
 	}
-	if has, err := db.Has(blockWorkObjectHeaderKey(hash)); !has || err != nil {
+	if has, err := db.Has(headerKey(number, hash)); !has || err != nil {
 		return false
 	}
 	return true
 }
 
 // ReadHeader retrieves the block header corresponding to the hash.
-func ReadHeader(db ethdb.Reader, hash common.Hash) *types.WorkObject {
-	wo := ReadWorkObjectHeaderOnly(db, hash, types.BlockObject)
+func ReadHeader(db ethdb.Reader, number uint64, hash common.Hash) *types.WorkObject {
+	wo := ReadWorkObjectHeaderOnly(db, number, hash, types.BlockObject)
 	if wo == nil || wo.Body() == nil || wo.Header() == nil {
 		// Try backup function
-		return ReadWorkObject(db, hash, types.BlockObject)
+		return ReadWorkObject(db, number, hash, types.BlockObject)
 	}
 	return wo
 }
 
 // DeleteHeader removes all block header data associated with a hash.
 func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
-	DeleteWorkObjectHeader(db, hash, types.BlockObject)
+	DeleteWorkObjectHeader(db, number, hash, types.BlockObject)
 	DeleteHeaderNumber(db, hash)
 }
 
@@ -326,11 +326,11 @@ func DeleteTermini(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // ReadWorkObjectHeader retreive's the work object header stored in hash.
-func ReadWorkObjectHeader(db ethdb.Reader, hash common.Hash, woType types.WorkObjectView) *types.WorkObjectHeader {
+func ReadWorkObjectHeader(db ethdb.Reader, number uint64, hash common.Hash, woType types.WorkObjectView) *types.WorkObjectHeader {
 	var key []byte
 	switch woType {
 	case types.BlockObject:
-		key = blockWorkObjectHeaderKey(hash)
+		key = headerKey(number, hash)
 	}
 	data, _ := db.Get(key)
 	if len(data) == 0 {
@@ -358,7 +358,7 @@ func WriteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, workObject
 	var key []byte
 	switch woType {
 	case types.BlockObject:
-		key = blockWorkObjectHeaderKey(hash)
+		key = headerKey(workObject.NumberU64(nodeCtx), hash)
 	}
 	protoWorkObjectHeader, err := workObject.WorkObjectHeader().ProtoEncode()
 	if err != nil {
@@ -374,11 +374,11 @@ func WriteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, workObject
 }
 
 // DeleteWorkObjectHeader deletes the work object header stored for the header hash.
-func DeleteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, woType types.WorkObjectView) {
+func DeleteWorkObjectHeader(db ethdb.KeyValueWriter, number uint64, hash common.Hash, woType types.WorkObjectView) {
 	var key []byte
 	switch woType {
 	case types.BlockObject:
-		key = blockWorkObjectHeaderKey(hash)
+		key = headerKey(number, hash)
 	}
 	if err := db.Delete(key); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete work object header ")
@@ -386,8 +386,8 @@ func DeleteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, woType ty
 }
 
 // ReadWorkObject retreive's the work object stored in hash.
-func ReadWorkObject(db ethdb.Reader, hash common.Hash, woType types.WorkObjectView) *types.WorkObject {
-	workObjectHeader := ReadWorkObjectHeader(db, hash, woType)
+func ReadWorkObject(db ethdb.Reader, number uint64, hash common.Hash, woType types.WorkObjectView) *types.WorkObject {
+	workObjectHeader := ReadWorkObjectHeader(db, number, hash, woType)
 	if workObjectHeader == nil {
 		return nil
 	}
@@ -399,8 +399,8 @@ func ReadWorkObject(db ethdb.Reader, hash common.Hash, woType types.WorkObjectVi
 }
 
 // ReadWorkObjectWithWorkShares retreive's the work object stored in hash.
-func ReadWorkObjectWithWorkShares(db ethdb.Reader, hash common.Hash) *types.WorkObject {
-	workObjectHeader := ReadWorkObjectHeader(db, hash, types.BlockObject)
+func ReadWorkObjectWithWorkShares(db ethdb.Reader, number uint64, hash common.Hash) *types.WorkObject {
+	workObjectHeader := ReadWorkObjectHeader(db, number, hash, types.BlockObject)
 	if workObjectHeader == nil {
 		return nil
 	}
@@ -411,8 +411,8 @@ func ReadWorkObjectWithWorkShares(db ethdb.Reader, hash common.Hash) *types.Work
 	return types.NewWorkObject(workObjectHeader, workObjectBody, nil) //TODO: mmtx transaction
 }
 
-func ReadWorkObjectHeaderOnly(db ethdb.Reader, hash common.Hash, woType types.WorkObjectView) *types.WorkObject {
-	workObjectHeader := ReadWorkObjectHeader(db, hash, woType)
+func ReadWorkObjectHeaderOnly(db ethdb.Reader, number uint64, hash common.Hash, woType types.WorkObjectView) *types.WorkObject {
+	workObjectHeader := ReadWorkObjectHeader(db, number, hash, woType)
 	if workObjectHeader == nil {
 		return nil
 	}
@@ -432,7 +432,7 @@ func WriteWorkObject(db ethdb.KeyValueWriter, hash common.Hash, workObject *type
 // DeleteWorkObject deletes the work object stored for the header hash.
 func DeleteWorkObject(db ethdb.KeyValueWriter, hash common.Hash, number uint64, woType types.WorkObjectView) {
 	DeleteWorkObjectBody(db, hash)
-	DeleteWorkObjectHeader(db, hash, woType) //TODO: mmtx transaction
+	DeleteWorkObjectHeader(db, number, hash, woType) //TODO: mmtx transaction
 	DeleteHeader(db, hash, number)
 	DeleteReceipts(db, hash, number)
 }
@@ -441,7 +441,7 @@ func DeleteWorkObject(db ethdb.KeyValueWriter, hash common.Hash, number uint64, 
 // the hash to number mapping.
 func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64, woType types.WorkObjectView) {
 	DeleteWorkObjectBody(db, hash)
-	DeleteWorkObjectHeader(db, hash, woType) //TODO: mmtx transaction
+	DeleteWorkObjectHeader(db, number, hash, woType) //TODO: mmtx transaction
 	DeleteReceipts(db, hash, number)
 }
 
@@ -720,7 +720,7 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 	if receipts == nil {
 		return nil
 	}
-	body := ReadWorkObject(db, hash, types.BlockObject)
+	body := ReadWorkObject(db, number, hash, types.BlockObject)
 	if body == nil {
 		db.Logger().WithFields(log.Fields{
 			"hash":   hash,
@@ -754,27 +754,46 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+func IsGenesisHash(db ethdb.Reader, hash common.Hash) bool {
+	genesisHashes := ReadGenesisHashes(db)
+	for _, genesisHash := range genesisHashes {
+		if hash == genesisHash {
+			return true
+		}
+	}
+	return false
+}
+
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) *types.WorkObject {
 	for bn := b.NumberU64(nodeCtx); a.NumberU64(nodeCtx) > bn; {
-		a = ReadHeader(db, a.ParentHash(nodeCtx))
+		a = ReadHeader(db, a.NumberU64(nodeCtx)-1, a.ParentHash(nodeCtx))
+		if IsGenesisHash(db, b.ParentHash(nodeCtx)) {
+			return nil
+		}
 		if a == nil {
 			return nil
 		}
 	}
 	for an := a.NumberU64(nodeCtx); an < b.NumberU64(nodeCtx); {
-		b = ReadHeader(db, b.ParentHash(nodeCtx))
+		b = ReadHeader(db, b.NumberU64(nodeCtx)-1, b.ParentHash(nodeCtx))
+		if IsGenesisHash(db, b.ParentHash(nodeCtx)) {
+			return nil
+		}
 		if b == nil {
 			return nil
 		}
 	}
 	for a.Hash() != b.Hash() {
-		a = ReadHeader(db, a.ParentHash(nodeCtx))
+		a = ReadHeader(db, a.NumberU64(nodeCtx)-1, a.ParentHash(nodeCtx))
 		if a == nil {
 			return nil
 		}
-		b = ReadHeader(db, b.ParentHash(nodeCtx))
+		b = ReadHeader(db, b.NumberU64(nodeCtx)-1, b.ParentHash(nodeCtx))
 		if b == nil {
+			return nil
+		}
+		if IsGenesisHash(db, a.ParentHash(nodeCtx)) || IsGenesisHash(db, b.ParentHash(nodeCtx)) {
 			return nil
 		}
 	}
@@ -791,7 +810,7 @@ func ReadHeadBlock(db ethdb.Reader) *types.WorkObject {
 	if headWorkObjectNumber == nil {
 		return nil
 	}
-	return ReadWorkObject(db, headWorkObjectHash, types.BlockObject)
+	return ReadWorkObject(db, *headWorkObjectNumber, headWorkObjectHash, types.BlockObject)
 }
 
 // ReadPendingEtxsProto retrieves the set of pending ETXs for the given block, in Proto encoding

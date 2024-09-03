@@ -1290,7 +1290,7 @@ func (sl *Slice) init() error {
 // from the candidate body db. This method is used when peers give the block as a placeholder
 // for the body.
 func (sl *Slice) ConstructLocalBlock(header *types.WorkObject) (*types.WorkObject, error) {
-	block := rawdb.ReadWorkObject(sl.sliceDb, header.Hash(), types.BlockObject)
+	block := rawdb.ReadWorkObject(sl.sliceDb, header.NumberU64(sl.NodeCtx()), header.Hash(), types.BlockObject)
 	if block == nil {
 		return nil, ErrBodyNotFound
 	}

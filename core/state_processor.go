@@ -1498,7 +1498,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			}).Info("Regenerating historical state")
 			logged = time.Now()
 		}
-		currentBlock := rawdb.ReadWorkObject(p.hc.bc.db, current.Hash(), types.BlockObject)
+		currentBlock := rawdb.ReadWorkObject(p.hc.bc.db, current.NumberU64(nodeCtx), current.Hash(), types.BlockObject)
 		if currentBlock == nil {
 			return nil, errors.New("detached block found trying to regenerate state")
 		}

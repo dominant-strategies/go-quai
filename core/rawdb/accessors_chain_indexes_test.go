@@ -1,6 +1,7 @@
 package rawdb
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -29,6 +30,7 @@ func TestTxLookupStorage(t *testing.T) {
 	tx1 := createTransaction(1)
 	tx2 := createTransaction(2)
 	block := createBlockWithTransactions(types.Transactions{tx1, tx2})
+	block.SetNumber(big.NewInt(1), common.ZONE_CTX)
 
 	WriteTxLookupEntriesByBlock(db, block, common.ZONE_CTX)
 
@@ -90,6 +92,7 @@ func TestReadTransaction(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 	tx := createTransaction(1)
 	block := createBlockWithTransactions(types.Transactions{tx})
+	block.SetNumber(big.NewInt(1), common.ZONE_CTX)
 
 	testNilReadTransaction(t, db, tx.Hash())
 
