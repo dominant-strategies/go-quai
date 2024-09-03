@@ -187,7 +187,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 }
 
 // CalculateQiTxGas calculates the gas usage of a Qi transaction.
-func (args *TransactionArgs) CalculateQiTxGas(location common.Location) (hexutil.Uint64, error) {
+func (args *TransactionArgs) CalculateQiTxGas(qiScalingFactor float64, location common.Location) (hexutil.Uint64, error) {
 	if args.TxType != types.QiTxType {
 		return 0, errors.New("not a Qi transaction")
 	}
@@ -202,5 +202,5 @@ func (args *TransactionArgs) CalculateQiTxGas(location common.Location) (hexutil
 	}
 
 	tx := types.NewTx(qiTx)
-	return hexutil.Uint64(types.CalculateQiTxGas(tx, location)), nil
+	return hexutil.Uint64(types.CalculateQiTxGas(tx, qiScalingFactor, location)), nil
 }
