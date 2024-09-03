@@ -76,7 +76,6 @@ var (
 	pbBodyHashPrefix            = []byte("pbKey") // pbBodyPrefix -> []common.Hash
 	terminiPrefix               = []byte("tk")    //terminiPrefix + hash -> []common.Hash
 	blockWorkObjectHeaderPrefix = []byte("bw")    //blockWObjectHeaderPrefix + hash -> []common.Hash
-	txWorkObjectHeaderPrefix    = []byte("tw")    //txWorkObjectHeaderPrefix + hash -> []common.Hash
 	phWorkObjectHeaderPrefix    = []byte("pw")    //phWorkObjectHeaderPrefix + hash -> []common.Hash
 	workObjectBodyPrefix        = []byte("wb")    //workObjectBodyPrefix + hash -> []common.Hash
 	badHashesListPrefix         = []byte("bh")
@@ -180,11 +179,6 @@ func terminiKey(hash common.Hash) []byte {
 // blockWorkObjectHeaderKey = workObjectHeaderPrefix + hash
 func blockWorkObjectHeaderKey(hash common.Hash) []byte {
 	return append(blockWorkObjectHeaderPrefix, hash.Bytes()...)
-}
-
-// txObjectHeaderKey = workObjectHeaderPrefix + hash
-func txWorkObjectHeaderKey(hash common.Hash) []byte {
-	return append(txWorkObjectHeaderPrefix, hash.Bytes()...)
 }
 
 // phObjectHeaderKey = workObjectHeaderPrefix + hash

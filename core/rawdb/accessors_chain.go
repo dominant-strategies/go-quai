@@ -331,8 +331,6 @@ func ReadWorkObjectHeader(db ethdb.Reader, hash common.Hash, woType types.WorkOb
 	switch woType {
 	case types.BlockObject:
 		key = blockWorkObjectHeaderKey(hash)
-	case types.TxObject:
-		key = txWorkObjectHeaderKey(hash)
 	case types.PhObject:
 		key = phWorkObjectHeaderKey(hash)
 	}
@@ -363,8 +361,6 @@ func WriteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, workObject
 	switch woType {
 	case types.BlockObject:
 		key = blockWorkObjectHeaderKey(hash)
-	case types.TxObject:
-		key = txWorkObjectHeaderKey(hash)
 	case types.PhObject:
 		key = phWorkObjectHeaderKey(hash)
 	}
@@ -387,8 +383,6 @@ func DeleteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, woType ty
 	switch woType {
 	case types.BlockObject:
 		key = blockWorkObjectHeaderKey(hash)
-	case types.TxObject:
-		key = txWorkObjectHeaderKey(hash)
 	case types.PhObject:
 		key = phWorkObjectHeaderKey(hash)
 	}
