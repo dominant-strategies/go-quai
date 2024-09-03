@@ -39,9 +39,8 @@ type AddressData interface {
 }
 
 var (
-	ErrNilInner     = errors.New("Address has nil inner")
-	ErrInvalidScope = errors.New("address is not in scope")
-	ErrQuaiAddress  = errors.New("address is in Quai ledger scope and is not in Qi ledger scope")
+	ErrNilInner        = errors.New("Address has nil inner")
+	ErrExternalAddress = errors.New("Address belongs to other zone")
 )
 
 func (a Address) InternalAddress() (InternalAddress, error) {
@@ -50,7 +49,7 @@ func (a Address) InternalAddress() (InternalAddress, error) {
 	}
 	internal, ok := a.inner.(*InternalAddress)
 	if !ok {
-		return InternalAddress{}, ErrInvalidScope
+		return InternalAddress{}, ErrExternalAddress
 	}
 	if internal == nil {
 		return InternalAddress{}, ErrNilInner
@@ -67,7 +66,7 @@ func (a Address) InternalAndQuaiAddress() (InternalAddress, error) {
 	}
 	internal, ok := a.inner.(*InternalAddress)
 	if !ok {
-		return InternalAddress{}, ErrInvalidScope
+		return InternalAddress{}, ErrExternalAddress
 	}
 	if internal == nil {
 		return InternalAddress{}, ErrNilInner
@@ -80,10 +79,10 @@ func CheckIfBytesAreInternalAndQiAddress(b []byte, nodeLocation Location) error 
 		return fmt.Errorf("address %s is not %d bytes long", hexutil.Encode(b), AddressLength)
 	}
 	if !IsInChainScope(b, nodeLocation) {
-		return ErrInvalidScope
+		return ErrExternalAddress
 	}
 	if AddressBytes(b).IsInQuaiLedgerScope() {
-		return ErrQuaiAddress
+		return MakeErrQuaiAddress(AddressBytes(b).Hex())
 	}
 	return nil
 }
@@ -93,11 +92,11 @@ func (a Address) InternalAndQiAddress() (InternalAddress, error) {
 		return InternalAddress{}, ErrNilInner
 	}
 	if a.IsInQuaiLedgerScope() {
-		return InternalAddress{}, ErrQuaiAddress
+		return InternalAddress{}, MakeErrQuaiAddress(a.Hex())
 	}
 	internal, ok := a.inner.(*InternalAddress)
 	if !ok {
-		return InternalAddress{}, ErrInvalidScope
+		return InternalAddress{}, ErrExternalAddress
 	}
 	if internal == nil {
 		return InternalAddress{}, ErrNilInner
@@ -401,7 +400,11 @@ func (a AddressBytes) IsInQuaiLedgerScope() bool {
 }
 
 func MakeErrQiAddress(addr string) error {
-	return fmt.Errorf("address %s is in Qi ledger scope and is not in Quai ledger scope", addr)
+	return fmt.Errorf("expected Quai address, but found Qi address: %s", addr)
+}
+
+func MakeErrQuaiAddress(addr string) error {
+	return fmt.Errorf("expected Qi address, but found Quai address: %s", addr)
 }
 
 func (a Address) MixedcaseAddress() MixedcaseAddress {

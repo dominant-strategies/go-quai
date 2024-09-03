@@ -854,8 +854,12 @@ func (s *StateDB) GetOrNewStateObject(addr common.InternalAddress) *stateObject 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
 func (s *StateDB) createObject(addr common.InternalAddress) (newobj, prev *stateObject) {
-	if !common.IsInChainScope(addr.Bytes(), s.nodeLocation) || !addr.IsInQuaiLedgerScope() {
-		s.setError(fmt.Errorf("createObject (%x) error: %v", addr.Bytes(), common.ErrInvalidScope))
+	if !common.IsInChainScope(addr.Bytes(), s.nodeLocation) {
+		s.setError(fmt.Errorf("createObject (%x) error: %v", addr.Bytes(), common.ErrExternalAddress))
+		return nil, nil
+	}
+	if !addr.IsInQuaiLedgerScope() {
+		s.setError(fmt.Errorf("createObject (%x) error: %v", addr.Bytes(), common.MakeErrQiAddress(addr.Hex())))
 		return nil, nil
 	}
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
