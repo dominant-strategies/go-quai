@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
@@ -435,7 +437,15 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	}
 	switch args.TxType {
 	case types.QiTxType:
-		return args.CalculateQiTxGas(s.b.NodeLocation())
+		block, err := s.b.BlockByNumberOrHash(ctx, bNrOrHash)
+		if err != nil {
+			return 0, err
+		}
+		if block == nil {
+			return 0, errors.New("block not found: " + fmt.Sprintf("%v", bNrOrHash))
+		}
+		scalingFactor := math.Log(float64(rawdb.ReadUTXOSetSize(s.b.Database(), block.Hash())))
+		return args.CalculateQiTxGas(scalingFactor, s.b.NodeLocation())
 	case types.QuaiTxType:
 		return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 	default:
@@ -497,11 +507,6 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*he
 // EstimateFeeForQi returns an estimate of the amount of Qi in qits needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args TransactionArgs) (*hexutil.Big, error) {
-	// Estimate the gas
-	gas, err := args.CalculateQiTxGas(s.b.NodeLocation())
-	if err != nil {
-		return nil, err
-	}
 	header := s.b.CurrentBlock()
 	if header == nil {
 		return nil, errors.New("no header available")
@@ -511,6 +516,13 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	if chainCfg == nil {
 		return nil, errors.New("no chain config available")
 	}
+	scalingFactor := math.Log(float64(rawdb.ReadUTXOSetSize(s.b.Database(), header.Hash())))
+	// Estimate the gas
+	gas, err := args.CalculateQiTxGas(scalingFactor, s.b.NodeLocation())
+	if err != nil {
+		return nil, err
+	}
+
 	// Calculate the base fee
 	quaiBaseFee := header.BaseFee()
 	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), quaiBaseFee)

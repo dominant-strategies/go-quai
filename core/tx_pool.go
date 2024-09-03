@@ -30,6 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -315,10 +316,11 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
-	currentState  *state.StateDB // Current state in the blockchain head
-	db            ethdb.Reader
-	pendingNonces *txNoncer // Pending state tracking virtual nonces
-	currentMaxGas uint64    // Current gas limit for transaction caps
+	currentState       *state.StateDB // Current state in the blockchain head
+	qiGasScalingFactor float64
+	db                 ethdb.Reader
+	pendingNonces      *txNoncer // Pending state tracking virtual nonces
+	currentMaxGas      uint64    // Current gas limit for transaction caps
 
 	locals         *accountSet                                     // Set of local transaction to exempt from eviction rules
 	journal        *txJournal                                      // Journal of local transaction to back up to disk
@@ -1227,7 +1229,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
-		txFee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
+		txFee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, pool.qiGasScalingFactor, etxRLimit, etxPLimit)
 		if err != nil {
 			pool.logger.WithFields(logrus.Fields{
 				"tx":  tx.Hash().String(),
@@ -1299,7 +1301,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 				}).Debug("Invalid Qi transaction, skipping re-inject")
 				continue
 			}
-			fee, err = ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
+			fee, err = ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, pool.qiGasScalingFactor, etxRLimit, etxPLimit)
 			if err != nil {
 				pool.logger.WithFields(logrus.Fields{
 					"tx":  tx.Hash().String(),
@@ -1852,6 +1854,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 		return
 	}
 	pool.currentState = statedb
+	pool.qiGasScalingFactor = math.Log(float64(rawdb.ReadUTXOSetSize(pool.db, newHead.Hash())))
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit()
 
