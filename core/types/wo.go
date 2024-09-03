@@ -62,7 +62,6 @@ const (
 	BlockObjects
 	PEtxObject
 	HeaderObject
-	PhObject
 	WorkShareObject
 	WorkShareTxObject
 )

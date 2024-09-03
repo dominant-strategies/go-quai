@@ -605,11 +605,6 @@ func TestWorkObjectStorage(t *testing.T) {
 		db := NewMemoryDatabase(log.Global)
 		testWorkObject(t, db, createTestWorkObject(), types.BlockObject)
 	})
-
-	t.Run("PhObjectTest", func(t *testing.T) {
-		db := NewMemoryDatabase(log.Global)
-		testWorkObject(t, db, createTestWorkObject(), types.PhObject)
-	})
 }
 
 func createTestWorkObject() *types.WorkObject {

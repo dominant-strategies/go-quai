@@ -196,7 +196,7 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal body")
 	}
 	body := new(types.WorkObject)
-	err = body.ProtoDecode(protoWorkObject, db.Location(), types.PhObject)
+	err = body.ProtoDecode(protoWorkObject, db.Location(), types.BlockObject)
 	if err != nil {
 		db.Logger().WithFields(log.Fields{
 			"hash": hash,
@@ -209,7 +209,7 @@ func ReadPbCacheBody(db ethdb.Reader, hash common.Hash) *types.WorkObject {
 
 // WritePbCacheBody stores a block body into the database.
 func WritePbCacheBody(db ethdb.KeyValueWriter, hash common.Hash, body *types.WorkObject) {
-	protoBody, err := body.ProtoEncode(types.PhObject)
+	protoBody, err := body.ProtoEncode(types.BlockObject)
 	if err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to proto encode body")
 	}
@@ -331,8 +331,6 @@ func ReadWorkObjectHeader(db ethdb.Reader, hash common.Hash, woType types.WorkOb
 	switch woType {
 	case types.BlockObject:
 		key = blockWorkObjectHeaderKey(hash)
-	case types.PhObject:
-		key = phWorkObjectHeaderKey(hash)
 	}
 	data, _ := db.Get(key)
 	if len(data) == 0 {
@@ -361,8 +359,6 @@ func WriteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, workObject
 	switch woType {
 	case types.BlockObject:
 		key = blockWorkObjectHeaderKey(hash)
-	case types.PhObject:
-		key = phWorkObjectHeaderKey(hash)
 	}
 	protoWorkObjectHeader, err := workObject.WorkObjectHeader().ProtoEncode()
 	if err != nil {
@@ -383,8 +379,6 @@ func DeleteWorkObjectHeader(db ethdb.KeyValueWriter, hash common.Hash, woType ty
 	switch woType {
 	case types.BlockObject:
 		key = blockWorkObjectHeaderKey(hash)
-	case types.PhObject:
-		key = phWorkObjectHeaderKey(hash)
 	}
 	if err := db.Delete(key); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete work object header ")
