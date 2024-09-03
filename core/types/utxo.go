@@ -13,7 +13,9 @@ import (
 const (
 	MaxDenomination = 16
 
-	MaxOutputIndex = math.MaxUint16
+	MaxOutputIndex                  = math.MaxUint16
+	MaxTrimDenomination             = 6
+	MaxTrimCollisionsPerKeyPerBlock = 1000
 )
 
 var MaxQi = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
@@ -45,15 +47,13 @@ func init() {
 	Denominations[16] = big.NewInt(1000000000) // 1000000 Qi
 
 	TrimDepths = make(map[uint8]uint64)
-	TrimDepths[0] = 100
-	TrimDepths[1] = 200
-	TrimDepths[2] = 300
-	TrimDepths[3] = 400
-	TrimDepths[4] = 500
-	TrimDepths[5] = 600
-	TrimDepths[6] = 700
-	TrimDepths[7] = 800
-	TrimDepths[8] = 900
+	TrimDepths[0] = 720  // 2 hours
+	TrimDepths[1] = 720  // 2 hours
+	TrimDepths[2] = 1080 // 3 hours
+	TrimDepths[3] = 1080 // 3 hours
+	TrimDepths[4] = 2160 // 6 hours
+	TrimDepths[5] = 4320 // 12 hours
+	TrimDepths[6] = 8640 // 24 hours
 }
 
 type TxIns []TxIn

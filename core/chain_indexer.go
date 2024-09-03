@@ -104,9 +104,9 @@ type ChainIndexer struct {
 
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
-	logger *log.Logger
-	lock   sync.Mutex
-
+	logger            *log.Logger
+	lock              sync.Mutex
+	pruneLock         sync.Mutex
 	indexAddressUtxos bool
 }
 
@@ -275,7 +275,8 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 				// TODO: This seems a bit brittle, can we detect this case explicitly?
 
 				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.NumberU64(nodeCtx)) != prevHash {
-					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, block, nodeCtx); h != nil {
+					h, err := rawdb.FindCommonAncestor(c.chainDb, prevHeader, block, nodeCtx)
+					if h != nil {
 
 						// If indexAddressUtxos flag is enabled, update the address utxo map
 						// TODO: Need to be able to turn on/off indexer and fix corrupted state
@@ -318,6 +319,9 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 						time5 = time.Since(start)
 
 						c.newHead(h.NumberU64(nodeCtx), true)
+					} else if err != nil {
+						c.logger.WithField("err", err).Error("Failed to index: failed to find common ancestor")
+						continue
 					}
 				}
 			}
@@ -370,24 +374,43 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 }
 
 func (c *ChainIndexer) PruneOldBlockData(blockHeight uint64) {
+	c.pruneLock.Lock()
 	blockHash := rawdb.ReadCanonicalHash(c.chainDb, blockHeight)
+	if rawdb.ReadAlreadyPruned(c.chainDb, blockHash) {
+		return
+	}
+	rawdb.WriteAlreadyPruned(c.chainDb, blockHash) // Pruning can only happen once per block
+	c.pruneLock.Unlock()
+
 	rawdb.DeleteInboundEtxs(c.chainDb, blockHash)
 	rawdb.DeletePendingEtxs(c.chainDb, blockHash)
 	rawdb.DeletePendingEtxsRollup(c.chainDb, blockHash)
 	rawdb.DeleteManifest(c.chainDb, blockHash)
 	rawdb.DeletePbCacheBody(c.chainDb, blockHash)
 	createdUtxos, _ := rawdb.ReadCreatedUTXOKeys(c.chainDb, blockHash)
-	createdUtxosToKeep := make([][]byte, 0, len(createdUtxos))
-	for _, key := range createdUtxos {
-		// Reduce key size to 8 bytes
-		key = key[:8]
-		createdUtxosToKeep = append(createdUtxosToKeep, key)
+	if len(createdUtxos) > 0 {
+		createdUtxosToKeep := make([][]byte, 0, len(createdUtxos)/2)
+		for _, key := range createdUtxos {
+			if len(key) == rawdb.UtxoKeyWithDenominationLength {
+				if key[len(key)-1] > types.MaxTrimDenomination {
+					// Don't keep it if the denomination is not trimmed
+					// The keys are sorted in order of denomination, so we can break here
+					break
+				}
+				key[rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)-1] = key[len(key)-1] // place the denomination at the end of the pruned key (11th byte will become 9th byte)
+			}
+			// Reduce key size to 9 bytes and cut off the prefix
+			key = key[len(rawdb.UtxoPrefix) : rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)]
+			createdUtxosToKeep = append(createdUtxosToKeep, key)
+		}
+		c.logger.Infof("Removed %d utxo keys from block %d", len(createdUtxos)-len(createdUtxosToKeep), blockHeight)
+		rawdb.WritePrunedUTXOKeys(c.chainDb, blockHeight, createdUtxosToKeep)
 	}
-	rawdb.WritePrunedUTXOKeys(c.chainDb, blockHeight, createdUtxosToKeep)
 	rawdb.DeleteCreatedUTXOKeys(c.chainDb, blockHash)
 	rawdb.DeleteSpentUTXOs(c.chainDb, blockHash)
 	rawdb.DeleteTrimmedUTXOs(c.chainDb, blockHash)
 	rawdb.DeleteTrimDepths(c.chainDb, blockHash)
+	rawdb.DeleteCollidingKeys(c.chainDb, blockHash)
 }
 
 func compareMinLength(a, b []byte) bool {
@@ -396,8 +419,9 @@ func compareMinLength(a, b []byte) bool {
 		minLen = len(b)
 	}
 
-	// Compare the slices up to the length of the shorter slice
-	for i := 0; i < minLen; i++ {
+	// Compare the slices up to the length of the pruned key
+	// The 9th byte (position 8) is the denomination in the pruned utxo key
+	for i := 0; i < rawdb.PrunedUtxoKeyWithDenominationLength-1; i++ {
 		if a[i] != b[i] {
 			return false
 		}

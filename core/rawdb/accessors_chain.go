@@ -18,6 +18,8 @@ package rawdb
 
 import (
 	"encoding/binary"
+	"fmt"
+	"sort"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -745,39 +747,44 @@ func IsGenesisHash(db ethdb.Reader, hash common.Hash) bool {
 }
 
 // FindCommonAncestor returns the last common ancestor of two block headers
-func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) *types.WorkObject {
+func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) (*types.WorkObject, error) {
 	for bn := b.NumberU64(nodeCtx); a.NumberU64(nodeCtx) > bn; {
 		a = ReadHeader(db, a.NumberU64(nodeCtx)-1, a.ParentHash(nodeCtx))
-		if IsGenesisHash(db, b.ParentHash(nodeCtx)) {
-			return nil
+		if IsGenesisHash(db, a.ParentHash(nodeCtx)) {
+			return nil, fmt.Errorf("no common ancestor found")
 		}
 		if a == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", a.ParentHash(nodeCtx).String())
 		}
 	}
 	for an := a.NumberU64(nodeCtx); an < b.NumberU64(nodeCtx); {
 		b = ReadHeader(db, b.NumberU64(nodeCtx)-1, b.ParentHash(nodeCtx))
 		if IsGenesisHash(db, b.ParentHash(nodeCtx)) {
-			return nil
+			return nil, fmt.Errorf("no common ancestor found")
 		}
 		if b == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", b.ParentHash(nodeCtx).String())
 		}
 	}
 	for a.Hash() != b.Hash() {
 		a = ReadHeader(db, a.NumberU64(nodeCtx)-1, a.ParentHash(nodeCtx))
 		if a == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", a.ParentHash(nodeCtx).String())
 		}
 		b = ReadHeader(db, b.NumberU64(nodeCtx)-1, b.ParentHash(nodeCtx))
 		if b == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", b.ParentHash(nodeCtx).String())
 		}
-		if IsGenesisHash(db, a.ParentHash(nodeCtx)) || IsGenesisHash(db, b.ParentHash(nodeCtx)) {
-			return nil
+		if IsGenesisHash(db, a.ParentHash(nodeCtx)) && IsGenesisHash(db, b.ParentHash(nodeCtx)) {
+			number := ReadHeaderNumber(db, a.ParentHash(nodeCtx))
+			header := ReadHeader(db, *number, a.ParentHash(nodeCtx))
+			if header == nil {
+				return nil, fmt.Errorf("unable to find hash %s", a.ParentHash(nodeCtx).String())
+			}
+			return header, nil
 		}
 	}
-	return a
+	return a, nil
 }
 
 // ReadHeadBlock returns the current canonical head block.
@@ -1325,6 +1332,10 @@ func DeleteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash) {
 }
 
 func WriteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash, createdUTXOKeys [][]byte) error {
+	// Sort each key by the denomination in the key
+	sort.Slice(createdUTXOKeys, func(i, j int) bool {
+		return createdUTXOKeys[i][len(createdUTXOKeys[i])-1] < createdUTXOKeys[j][len(createdUTXOKeys[j])-1] // the last byte is the denomination
+	})
 	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(createdUTXOKeys))}
 
 	protoKeys.Keys = append(protoKeys.Keys, createdUTXOKeys...)
@@ -1495,5 +1506,45 @@ func WriteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash, trimDepths 
 func DeleteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	if err := db.Delete(trimDepthsKey(blockHash)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete trim depths")
+	}
+}
+
+func ReadCollidingKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, error) {
+	data, _ := db.Get(collidingKeysKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeys := new(types.ProtoKeys)
+	if err := proto.Unmarshal(data, protoKeys); err != nil {
+		return nil, err
+	}
+	return protoKeys.Keys, nil
+}
+
+func WriteCollidingKeys(db ethdb.KeyValueWriter, blockHash common.Hash, keys [][]byte) error {
+	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(keys))}
+	protoKeys.Keys = append(protoKeys.Keys, keys...)
+
+	data, err := proto.Marshal(protoKeys)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(collidingKeysKey(blockHash), data)
+}
+
+func DeleteCollidingKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(collidingKeysKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete colliding keys")
+	}
+}
+
+func ReadAlreadyPruned(db ethdb.Reader, blockHash common.Hash) bool {
+	data, _ := db.Get(alreadyPrunedKey(blockHash))
+	return len(data) > 0
+}
+
+func WriteAlreadyPruned(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Put(alreadyPrunedKey(blockHash), []byte{1}); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store already pruned")
 	}
 }
