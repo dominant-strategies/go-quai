@@ -33,33 +33,33 @@ func TestManifestEncodeDecode(t *testing.T) {
 
 func headerTestData() (*Header, common.Hash) {
 	header := &Header{
-		parentHash:            []common.Hash{common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"), common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0")},
-		uncleHash:             common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1"),
-		evmRoot:               common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
-		quaiStateSize:         big.NewInt(1000),
-		utxoRoot:              common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
-		txHash:                common.HexToHash("0x6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef5"),
-		etxHash:               common.HexToHash("0x789abcdef0123456789abcdef0123456789abcdef0123456789abcdef6"),
-		etxRollupHash:         common.HexToHash("0x9abcdef0123456789abcdef0123456789abcdef0123456789abcdef8"),
-		manifestHash:          []common.Hash{common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9")},
-		receiptHash:           common.HexToHash("0xbcdef0123456789abcdef0123456789abcdef0123456789abcdefa"),
-		parentEntropy:         []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
-		parentDeltaS:          []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
-		parentUncledSubDeltaS: []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
-		efficiencyScore:       12345,
-		thresholdCount:        12345,
-		expansionNumber:       123,
-		etxEligibleSlices:     common.HexToHash("0xcdef0123456789abcdef0123456789abcdef0123456789abcdefb"),
-		primeTerminusHash:     common.HexToHash("0xdef0123456789abcdef0123456789abcdef0123456789abcdefc"),
-		interlinkRootHash:     common.HexToHash("0xef0123456789abcdef0123456789abcdef0123456789abcdefd"),
-		uncledS:               big.NewInt(123456789),
-		number:                []*big.Int{big.NewInt(123456789), big.NewInt(123456789)},
-		gasLimit:              123456789,
-		gasUsed:               987654321,
-		baseFee:               big.NewInt(123456789),
-		stateLimit:            1234567,
-		stateUsed:             1234567,
-		extra:                 []byte("SGVsbG8gd29ybGQ="),
+		parentHash:               []common.Hash{common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"), common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0")},
+		uncleHash:                common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1"),
+		evmRoot:                  common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
+		quaiStateSize:            big.NewInt(1000),
+		utxoRoot:                 common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
+		txHash:                   common.HexToHash("0x6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef5"),
+		etxHash:                  common.HexToHash("0x789abcdef0123456789abcdef0123456789abcdef0123456789abcdef6"),
+		etxRollupHash:            common.HexToHash("0x9abcdef0123456789abcdef0123456789abcdef0123456789abcdef8"),
+		manifestHash:             []common.Hash{common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9")},
+		receiptHash:              common.HexToHash("0xbcdef0123456789abcdef0123456789abcdef0123456789abcdefa"),
+		parentEntropy:            []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
+		parentDeltaEntropy:       []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
+		parentUncledDeltaEntropy: []*big.Int{big.NewInt(123456789), big.NewInt(123456789), big.NewInt(123456789)},
+		efficiencyScore:          12345,
+		thresholdCount:           12345,
+		expansionNumber:          123,
+		etxEligibleSlices:        common.HexToHash("0xcdef0123456789abcdef0123456789abcdef0123456789abcdefb"),
+		primeTerminusHash:        common.HexToHash("0xdef0123456789abcdef0123456789abcdef0123456789abcdefc"),
+		interlinkRootHash:        common.HexToHash("0xef0123456789abcdef0123456789abcdef0123456789abcdefd"),
+		uncledEntropy:            big.NewInt(123456789),
+		number:                   []*big.Int{big.NewInt(123456789), big.NewInt(123456789)},
+		gasLimit:                 123456789,
+		gasUsed:                  987654321,
+		baseFee:                  big.NewInt(123456789),
+		extra:                    []byte("SGVsbG8gd29ybGQ="),
+		stateLimit:               1234567,
+		stateUsed:                1234567,
 	}
 
 	return header, header.Hash()
@@ -215,16 +215,16 @@ func FuzzHeaderParentEntropyHash(f *testing.F) {
 		func(h *Header, i int, bi *big.Int) { h.parentEntropy[i] = bi })
 }
 
-func FuzzHeaderParentDeltaSHash(f *testing.F) {
+func FuzzHeaderParentDeltaEntropyHash(f *testing.F) {
 	fuzzHeaderBigIntLoopHash(f,
-		func(h *Header) []*big.Int { return h.parentDeltaS },
-		func(h *Header, i int, bi *big.Int) { h.parentDeltaS[i] = bi })
+		func(h *Header) []*big.Int { return h.parentDeltaEntropy },
+		func(h *Header, i int, bi *big.Int) { h.parentDeltaEntropy[i] = bi })
 }
 
-func FuzzHeaderParentUncledSubDeltaSHash(f *testing.F) {
+func FuzzHeaderParentUncledDeltaEntropyHash(f *testing.F) {
 	fuzzHeaderBigIntLoopHash(f,
-		func(h *Header) []*big.Int { return h.parentUncledSubDeltaS },
-		func(h *Header, i int, bi *big.Int) { h.parentUncledSubDeltaS[i] = bi })
+		func(h *Header) []*big.Int { return h.parentUncledDeltaEntropy },
+		func(h *Header, i int, bi *big.Int) { h.parentUncledDeltaEntropy[i] = bi })
 }
 
 func FuzzHeaderEfficiencyScoreHash(f *testing.F) {
@@ -266,8 +266,8 @@ func FuzzHeaderInterlinkRootHashHash(f *testing.F) {
 
 func FuzzHeaderUncledSHash(f *testing.F) {
 	fuzzHeaderBigIntHash(f,
-		func(h *Header) *big.Int { return h.uncledS },
-		func(h *Header, bi *big.Int) { h.uncledS = bi })
+		func(h *Header) *big.Int { return h.uncledEntropy },
+		func(h *Header, bi *big.Int) { h.uncledEntropy = bi })
 }
 
 func FuzzHeaderNumberHash(f *testing.F) {

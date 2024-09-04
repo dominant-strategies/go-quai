@@ -309,39 +309,39 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 	}
 
 	// Verify that the parent entropy is calculated correctly on the header
-	parentEntropy := blake3pow.TotalLogS(chain, parent)
+	parentEntropy := blake3pow.TotalLogEntropy(chain, parent)
 	if parentEntropy.Cmp(header.ParentEntropy(nodeCtx)) != 0 {
 		return fmt.Errorf("invalid parent entropy: have %v, want %v", header.ParentEntropy(nodeCtx), parentEntropy)
 	}
 
-	// If not prime, verify the parentDeltaS field as well
+	// If not prime, verify the parentDeltaEntropy field as well
 	if nodeCtx > common.PRIME_CTX {
 		_, parentOrder, _ := blake3pow.CalcOrder(chain, parent)
-		// If parent was dom, deltaS is zero and otherwise should be the calc delta s on the parent
+		// If parent was dom, deltaEntropy is zero and otherwise should be the calc delta entropy on the parent
 		if parentOrder < nodeCtx {
-			if common.Big0.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
-				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), common.Big0)
+			if common.Big0.Cmp(header.ParentDeltaEntropy(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent delta entropy: have %v, want %v", header.ParentDeltaEntropy(nodeCtx), common.Big0)
 			}
 		} else {
-			parentDeltaS := blake3pow.DeltaLogS(chain, parent)
-			if parentDeltaS.Cmp(header.ParentDeltaS(nodeCtx)) != 0 {
-				return fmt.Errorf("invalid parent delta s: have %v, want %v", header.ParentDeltaS(nodeCtx), parentDeltaS)
+			parentDeltaEntropy := blake3pow.DeltaLogEntropy(chain, parent)
+			if parentDeltaEntropy.Cmp(header.ParentDeltaEntropy(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent delta entropy: have %v, want %v", header.ParentDeltaEntropy(nodeCtx), parentDeltaEntropy)
 			}
 		}
 	}
 
-	// If not prime, verify the parentUncledSubDeltaS field as well
+	// If not prime, verify the parentUncledDeltaEntropy field as well
 	if nodeCtx > common.PRIME_CTX {
 		_, parentOrder, _ := blake3pow.CalcOrder(chain, parent)
-		// If parent was dom, parent uncled sub deltaS is zero and otherwise should be the calc uncled sub delta s on the parent
+		// If parent was dom, parent uncled sub deltaEntropy is zero and otherwise should be the calc uncled sub delta entropy on the parent
 		if parentOrder < nodeCtx {
-			if common.Big0.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
-				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), common.Big0)
+			if common.Big0.Cmp(header.ParentUncledDeltaEntropy(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent uncled sub delta entropy: have %v, want %v", header.ParentUncledDeltaEntropy(nodeCtx), common.Big0)
 			}
 		} else {
-			expectedParentUncledSubDeltaS := blake3pow.UncledSubDeltaLogS(chain, parent)
-			if expectedParentUncledSubDeltaS.Cmp(header.ParentUncledSubDeltaS(nodeCtx)) != 0 {
-				return fmt.Errorf("invalid parent uncled sub delta s: have %v, want %v", header.ParentUncledSubDeltaS(nodeCtx), expectedParentUncledSubDeltaS)
+			expectedParentUncledDeltaEntropy := blake3pow.UncledDeltaLogEntropy(chain, parent)
+			if expectedParentUncledDeltaEntropy.Cmp(header.ParentUncledDeltaEntropy(nodeCtx)) != 0 {
+				return fmt.Errorf("invalid parent uncled sub delta entropy: have %v, want %v", header.ParentUncledDeltaEntropy(nodeCtx), expectedParentUncledDeltaEntropy)
 			}
 		}
 
@@ -508,12 +508,12 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 			return parent.Difficulty()
 		}
 		genesis := chain.GetHeaderByHash(parent.Hash())
-		genesisTotalLogS := blake3pow.TotalLogS(chain, genesis)
-		if genesisTotalLogS.Cmp(genesis.ParentEntropy(common.PRIME_CTX)) < 0 { // prevent negative difficulty
+		genesisTotalLogEntropy := blake3pow.TotalLogEntropy(chain, genesis)
+		if genesisTotalLogEntropy.Cmp(genesis.ParentEntropy(common.PRIME_CTX)) < 0 { // prevent negative difficulty
 			blake3pow.logger.Errorf("Genesis block has invalid parent entropy: %v", genesis.ParentEntropy(common.PRIME_CTX))
 			return nil
 		}
-		differenceParentEntropy := new(big.Int).Sub(genesisTotalLogS, genesis.ParentEntropy(common.PRIME_CTX))
+		differenceParentEntropy := new(big.Int).Sub(genesisTotalLogEntropy, genesis.ParentEntropy(common.PRIME_CTX))
 		numBlocks := params.PrimeEntropyTarget(expansionNum)
 		differenceParentEntropy.Div(differenceParentEntropy, numBlocks)
 		return common.EntropyBigBitsToDifficultyBits(differenceParentEntropy)

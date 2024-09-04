@@ -876,12 +876,12 @@ func (c *Core) CurrentHeader() *types.WorkObject {
 
 // CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
 func (c *Core) CurrentLogEntropy() *big.Int {
-	return c.engine.TotalLogS(c, c.sl.hc.CurrentHeader())
+	return c.engine.TotalLogEntropy(c, c.sl.hc.CurrentHeader())
 }
 
-// TotalLogS returns the total entropy reduction if the chain since genesis to the given header
-func (c *Core) TotalLogS(header *types.WorkObject) *big.Int {
-	return c.engine.TotalLogS(c, header)
+// TotalLogEntropy returns the total entropy reduction if the chain since genesis to the given header
+func (c *Core) TotalLogEntropy(header *types.WorkObject) *big.Int {
+	return c.engine.TotalLogEntropy(c, header)
 }
 
 // CalcOrder returns the order of the block within the hierarchy of chains

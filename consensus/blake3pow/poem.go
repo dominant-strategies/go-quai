@@ -16,9 +16,9 @@ import (
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types.WorkObject) (*big.Int, int, error) {
 	// check if the order for this block has already been computed
-	intrinsicS, order, exists := chain.CheckInCalcOrderCache(header.Hash())
+	intrinsicEntropy, order, exists := chain.CheckInCalcOrderCache(header.Hash())
 	if exists {
-		return intrinsicS, order, nil
+		return intrinsicEntropy, order, nil
 	}
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
@@ -34,42 +34,42 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 	}
 
 	// Get entropy reduction of this header
-	intrinsicS = blake3pow.IntrinsicLogS(header.Hash())
+	intrinsicEntropy = blake3pow.IntrinsicLogEntropy(header.Hash())
 	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdEntropy := blake3pow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 
 	// PRIME
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
 	// the given header determines the prime block
-	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-	totalDeltaSPrime = new(big.Int).Add(totalDeltaSPrime, intrinsicS)
-	primeDeltaSTarget := new(big.Int).Div(params.PrimeEntropyTarget(expansionNum), big2)
-	primeDeltaSTarget = new(big.Int).Mul(zoneThresholdS, primeDeltaSTarget)
+	totalDeltaEntropyPrime := new(big.Int).Add(header.ParentDeltaEntropy(common.REGION_CTX), header.ParentDeltaEntropy(common.ZONE_CTX))
+	totalDeltaEntropyPrime = new(big.Int).Add(totalDeltaEntropyPrime, intrinsicEntropy)
+	primeDeltaEntropyTarget := new(big.Int).Div(params.PrimeEntropyTarget(expansionNum), big2)
+	primeDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, primeDeltaEntropyTarget)
 
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaSPrime.Cmp(primeDeltaSTarget) > 0 {
-		chain.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicS)
-		return intrinsicS, common.PRIME_CTX, nil
+	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
+	if intrinsicEntropy.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaEntropyPrime.Cmp(primeDeltaEntropyTarget) > 0 {
+		chain.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicEntropy)
+		return intrinsicEntropy, common.PRIME_CTX, nil
 	}
 
 	// REGION
 	// Compute the total accumulated entropy since the last region block
-	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-	regionDeltaSTarget := new(big.Int).Div(params.RegionEntropyTarget(expansionNum), big2)
-	regionDeltaSTarget = new(big.Int).Mul(zoneThresholdS, regionDeltaSTarget)
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
-		chain.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicS)
-		return intrinsicS, common.REGION_CTX, nil
+	totalDeltaEntropyRegion := new(big.Int).Add(header.ParentDeltaEntropy(common.ZONE_CTX), intrinsicEntropy)
+	regionDeltaEntropyTarget := new(big.Int).Div(params.RegionEntropyTarget(expansionNum), big2)
+	regionDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, regionDeltaEntropyTarget)
+	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
+	if intrinsicEntropy.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaEntropyRegion.Cmp(regionDeltaEntropyTarget) > 0 {
+		chain.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicEntropy)
+		return intrinsicEntropy, common.REGION_CTX, nil
 	}
 
 	// Zone case
-	chain.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicS)
-	return intrinsicS, common.ZONE_CTX, nil
+	chain.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicEntropy)
+	return intrinsicEntropy, common.ZONE_CTX, nil
 }
 
-// IntrinsicLogS returns the logarithm of the intrinsic entropy reduction of a PoW hash
-func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
+// IntrinsicLogEntropy returns the logarithm of the intrinsic entropy reduction of a PoW hash
+func (blake3pow *Blake3pow) IntrinsicLogEntropy(powHash common.Hash) *big.Int {
 	x := new(big.Int).SetBytes(powHash.Bytes())
 	d := new(big.Int).Div(big2e256, x)
 	c, m := mathutil.BinaryLog(d, consensus.MantBits)
@@ -78,8 +78,8 @@ func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
 	return bigBits
 }
 
-// TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (blake3pow *Blake3pow) TotalLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
+// TotalLogEntropy returns the total entropy reduction if the chain since genesis to the given header
+func (blake3pow *Blake3pow) TotalLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -89,7 +89,7 @@ func (blake3pow *Blake3pow) TotalLogS(chain consensus.ChainHeaderReader, header 
 		return big.NewInt(0)
 	}
 	if blake3pow.NodeLocation().Context() == common.ZONE_CTX {
-		workShareS, err := blake3pow.WorkShareLogS(chain, header)
+		workShareS, err := blake3pow.WorkShareLogEntropy(chain, header)
 		if err != nil {
 			return big.NewInt(0)
 		}
@@ -97,12 +97,12 @@ func (blake3pow *Blake3pow) TotalLogS(chain consensus.ChainHeaderReader, header 
 	}
 	switch order {
 	case common.PRIME_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaS(common.REGION_CTX))
-		totalS.Add(totalS, header.ParentDeltaS(common.ZONE_CTX))
+		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaEntropy(common.REGION_CTX))
+		totalS.Add(totalS, header.ParentDeltaEntropy(common.ZONE_CTX))
 		totalS.Add(totalS, intrinsicS)
 		return totalS
 	case common.REGION_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
+		totalS := new(big.Int).Add(header.ParentEntropy(common.REGION_CTX), header.ParentDeltaEntropy(common.ZONE_CTX))
 		totalS.Add(totalS, intrinsicS)
 		return totalS
 	case common.ZONE_CTX:
@@ -112,7 +112,7 @@ func (blake3pow *Blake3pow) TotalLogS(chain consensus.ChainHeaderReader, header 
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) DeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
+func (blake3pow *Blake3pow) DeltaLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -122,7 +122,7 @@ func (blake3pow *Blake3pow) DeltaLogS(chain consensus.ChainHeaderReader, header 
 		return big.NewInt(0)
 	}
 	if blake3pow.NodeLocation().Context() == common.ZONE_CTX {
-		workShareS, err := blake3pow.WorkShareLogS(chain, header)
+		workShareS, err := blake3pow.WorkShareLogEntropy(chain, header)
 		if err != nil {
 			return big.NewInt(0)
 		}
@@ -132,17 +132,17 @@ func (blake3pow *Blake3pow) DeltaLogS(chain consensus.ChainHeaderReader, header 
 	case common.PRIME_CTX:
 		return big.NewInt(0)
 	case common.REGION_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-		totalDeltaS = new(big.Int).Add(totalDeltaS, intrinsicS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentDeltaEntropy(common.REGION_CTX), header.ParentDeltaEntropy(common.ZONE_CTX))
+		totalDeltaEntropy = new(big.Int).Add(totalDeltaEntropy, intrinsicS)
+		return totalDeltaEntropy
 	case common.ZONE_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentDeltaEntropy(common.ZONE_CTX), intrinsicS)
+		return totalDeltaEntropy
 	}
 	return big.NewInt(0)
 }
 
-func (blake3pow *Blake3pow) UncledLogS(block *types.WorkObject) *big.Int {
+func (blake3pow *Blake3pow) UncledLogEntropy(block *types.WorkObject) *big.Int {
 	uncles := block.Uncles()
 	totalUncledLogS := big.NewInt(0)
 	for _, uncle := range uncles {
@@ -152,13 +152,13 @@ func (blake3pow *Blake3pow) UncledLogS(block *types.WorkObject) *big.Int {
 			continue
 		}
 		// Get entropy reduction of this header
-		intrinsicS := blake3pow.IntrinsicLogS(uncle.Hash())
-		totalUncledLogS.Add(totalUncledLogS, intrinsicS)
+		intrinsicEntropy := blake3pow.IntrinsicLogEntropy(uncle.Hash())
+		totalUncledLogS.Add(totalUncledLogS, intrinsicEntropy)
 	}
 	return totalUncledLogS
 }
 
-func (blake3pow *Blake3pow) WorkShareLogS(chain consensus.ChainHeaderReader, wo *types.WorkObject) (*big.Int, error) {
+func (blake3pow *Blake3pow) WorkShareLogEntropy(chain consensus.ChainHeaderReader, wo *types.WorkObject) (*big.Int, error) {
 	workShares := wo.Uncles()
 	totalWsEntropy := big.NewInt(0)
 	for _, ws := range workShares {
@@ -191,15 +191,15 @@ func (blake3pow *Blake3pow) WorkShareLogS(chain consensus.ChainHeaderReader, wo 
 			// of Quo and if the difference is less than 0, its within the first
 			// level
 
-			cBigBits := blake3pow.IntrinsicLogS(powHash)
-			thresholdBigBits := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+			cBigBits := blake3pow.IntrinsicLogEntropy(powHash)
+			thresholdBigBits := blake3pow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 			wsEntropy = new(big.Int).Sub(thresholdBigBits, cBigBits)
 			extraBits := new(big.Float).Quo(new(big.Float).SetInt(wsEntropy), new(big.Float).SetInt(common.Big2e64))
 			wsEntropyAdj := new(big.Float).Quo(new(big.Float).SetInt(common.Big2e64), bigMath.TwoToTheX(extraBits))
 			wsEntropy, _ = wsEntropyAdj.Int(wsEntropy)
 		} else {
-			cBigBits := blake3pow.IntrinsicLogS(powHash)
-			thresholdBigBits := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+			cBigBits := blake3pow.IntrinsicLogEntropy(powHash)
+			thresholdBigBits := blake3pow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 			wsEntropy = new(big.Int).Sub(cBigBits, thresholdBigBits)
 		}
 		// Discount 2) applies to all shares regardless of the weight
@@ -219,7 +219,7 @@ func (blake3pow *Blake3pow) WorkShareLogS(chain consensus.ChainHeaderReader, wo 
 	return totalWsEntropy, nil
 }
 
-func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
+func (blake3pow *Blake3pow) UncledDeltaLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -228,17 +228,17 @@ func (blake3pow *Blake3pow) UncledSubDeltaLogS(chain consensus.ChainHeaderReader
 	if err != nil {
 		return big.NewInt(0)
 	}
-	uncledLogS := header.UncledS()
+	uncledLogEntropy := header.UncledEntropy()
 	switch order {
 	case common.PRIME_CTX:
 		return big.NewInt(0)
 	case common.REGION_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.REGION_CTX), header.ParentUncledSubDeltaS(common.ZONE_CTX))
-		totalDeltaS = new(big.Int).Add(totalDeltaS, uncledLogS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentUncledDeltaEntropy(common.REGION_CTX), header.ParentUncledDeltaEntropy(common.ZONE_CTX))
+		totalDeltaEntropy = new(big.Int).Add(totalDeltaEntropy, uncledLogEntropy)
+		return totalDeltaEntropy
 	case common.ZONE_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.ZONE_CTX), uncledLogS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentUncledDeltaEntropy(common.ZONE_CTX), uncledLogEntropy)
+		return totalDeltaEntropy
 	}
 	return big.NewInt(0)
 }
@@ -259,14 +259,14 @@ func (blake3pow *Blake3pow) CalcRank(chain consensus.ChainHeaderReader, header *
 
 	powHash := header.Hash()
 	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdEntropy := blake3pow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 
-	intrinsicS := blake3pow.IntrinsicLogS(powHash)
+	intrinsicEntropy := blake3pow.IntrinsicLogEntropy(powHash)
 	for i := common.InterlinkDepth; i > 0; i-- {
 		extraBits := math.Pow(2, float64(i))
-		primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(big.NewInt(int64(extraBits))))
+		primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(big.NewInt(int64(extraBits))))
 		primeBlockEntropyThreshold = new(big.Int).Add(primeBlockEntropyThreshold, common.BitsToBigBits(params.PrimeEntropyTarget(header.ExpansionNumber())))
-		if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 {
+		if intrinsicEntropy.Cmp(primeBlockEntropyThreshold) > 0 {
 			return i, nil
 		}
 	}

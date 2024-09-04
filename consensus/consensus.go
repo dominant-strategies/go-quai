@@ -132,30 +132,30 @@ type Engine interface {
 	// engine is based on signatures.
 	Author(header *types.WorkObject) (common.Address, error)
 
-	// IntrinsicLogS returns the logarithm of the intrinsic entropy reduction of a PoW hash
-	IntrinsicLogS(powHash common.Hash) *big.Int
+	// IntrinsicLogEntropy returns the logarithm of the intrinsic entropy reduction of a PoW hash
+	IntrinsicLogEntropy(powHash common.Hash) *big.Int
 
 	// CalcOrder returns the order of the block within the hierarchy of chains
 	CalcOrder(chain BlockReader, header *types.WorkObject) (*big.Int, int, error)
 
-	// TotalLogS returns the log of the total entropy reduction if the chain since genesis to the given header
-	TotalLogS(chain ChainHeaderReader, header *types.WorkObject) *big.Int
+	// TotalLogEntropy returns the log of the total entropy reduction if the chain since genesis to the given header
+	TotalLogEntropy(chain ChainHeaderReader, header *types.WorkObject) *big.Int
 
-	// DeltaLogS returns the log of the entropy delta for a chain since its prior coincidence
-	DeltaLogS(chain ChainHeaderReader, header *types.WorkObject) *big.Int
+	// DeltaLogEntropy returns the log of the entropy delta for a chain since its prior coincidence
+	DeltaLogEntropy(chain ChainHeaderReader, header *types.WorkObject) *big.Int
 
-	// UncledLogS returns the log of the entropy reduction by uncles referenced in the block
-	UncledLogS(block *types.WorkObject) *big.Int
+	// UncledLogEntropy returns the log of the entropy reduction by uncles referenced in the block
+	UncledLogEntropy(block *types.WorkObject) *big.Int
 
-	// WorkShareLogS returns the log of the entropy reduction by the workshare referenced in the block
-	WorkShareLogS(chain ChainHeaderReader, block *types.WorkObject) (*big.Int, error)
+	// WorkShareLogEntropy returns the log of the entropy reduction by the workshare referenced in the block
+	WorkShareLogEntropy(chain ChainHeaderReader, block *types.WorkObject) (*big.Int, error)
 
 	// CheckIfValidWorkShare checks if the workshare meets the work share
 	// requirements defined by the protocol
 	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity
 
-	// UncledUncledSubDeltaLogS returns the log of the uncled entropy reduction  since the past coincident
-	UncledSubDeltaLogS(chain ChainHeaderReader, header *types.WorkObject) *big.Int
+	// UncledDeltaLogEntropy returns the log of the uncled entropy reduction  since the past coincident
+	UncledDeltaLogEntropy(chain ChainHeaderReader, header *types.WorkObject) *big.Int
 
 	// CalcRank calculates the rank of the prime block
 	CalcRank(chain ChainHeaderReader, header *types.WorkObject) (int, error)

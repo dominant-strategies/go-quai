@@ -75,9 +75,9 @@ func (b *QuaiAPIBackend) CurrentLogEntropy() *big.Int {
 	return b.quai.core.CurrentLogEntropy()
 }
 
-// TotalLogS returns the total entropy reduction if the chain since genesis to the given header
-func (b *QuaiAPIBackend) TotalLogS(header *types.WorkObject) *big.Int {
-	return b.quai.core.TotalLogS(header)
+// TotalLogEntropy returns the total entropy reduction if the chain since genesis to the given header
+func (b *QuaiAPIBackend) TotalLogEntropy(header *types.WorkObject) *big.Int {
+	return b.quai.core.TotalLogEntropy(header)
 }
 
 // CalcOrder returns the order of the block within the hierarchy of chains

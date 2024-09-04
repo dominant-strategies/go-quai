@@ -381,8 +381,8 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		"t5_3": time5_3,
 	}).Info("Times during sub append")
 
-	intrinsicS := sl.engine.IntrinsicLogS(block.Hash())
-	workShare, err := sl.engine.WorkShareLogS(sl.hc, block)
+	intrinsicS := sl.engine.IntrinsicLogEntropy(block.Hash())
+	workShare, err := sl.engine.WorkShareLogEntropy(sl.hc, block)
 	if err != nil {
 		workShare = big.NewInt(0)
 	}
@@ -880,8 +880,8 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 	combinedPendingHeader.SetNumber(header.Number(index), index)
 	combinedPendingHeader.Header().SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.Header().SetParentEntropy(header.ParentEntropy(index), index)
-	combinedPendingHeader.Header().SetParentDeltaS(header.ParentDeltaS(index), index)
-	combinedPendingHeader.Header().SetParentUncledSubDeltaS(header.ParentUncledSubDeltaS(index), index)
+	combinedPendingHeader.Header().SetParentDeltaEntropy(header.ParentDeltaEntropy(index), index)
+	combinedPendingHeader.Header().SetParentUncledDeltaEntropy(header.ParentUncledDeltaEntropy(index), index)
 
 	if index == common.PRIME_CTX {
 		combinedPendingHeader.Header().SetEfficiencyScore(header.EfficiencyScore())
@@ -898,7 +898,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.WorkObjectHeader().SetCoinbase(header.Coinbase())
 
 		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
-		combinedPendingHeader.Header().SetUncledS(header.Header().UncledS())
+		combinedPendingHeader.Header().SetUncledEntropy(header.Header().UncledEntropy())
 		combinedPendingHeader.Header().SetQuaiStateSize(header.Header().QuaiStateSize())
 		combinedPendingHeader.Header().SetUncleHash(header.UncleHash())
 		combinedPendingHeader.Header().SetTxHash(header.Header().TxHash())

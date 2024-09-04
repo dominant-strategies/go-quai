@@ -410,7 +410,7 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 		select {
 		case head := <-chainEvent:
 			backend := hc.GetBackend(head.Block.Location())
-			entropy := backend.TotalLogS(head.Block)
+			entropy := backend.TotalLogEntropy(head.Block)
 			node := Node{
 				hash:     head.Block.Hash(),
 				number:   head.Block.NumberArray(),

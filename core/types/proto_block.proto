@@ -16,9 +16,9 @@ message ProtoHeader {
   optional common.ProtoHash receipt_hash = 8;
   optional bytes difficulty = 9;
   repeated bytes parent_entropy = 10;
-  repeated bytes parent_delta_s = 11;
-  repeated bytes parent_uncled_sub_delta_s = 12;
-  optional bytes uncled_s = 13;
+  repeated bytes parent_delta_entropy = 11;
+  repeated bytes parent_uncled_delta_entropy = 12;
+  optional bytes uncled_entropy = 13;
   repeated bytes number = 14;
   optional uint64 gas_limit = 15;
   optional uint64 gas_used = 16;

@@ -16,9 +16,9 @@ import (
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (progpow *Progpow) CalcOrder(chain consensus.BlockReader, header *types.WorkObject) (*big.Int, int, error) {
 	// check if the order for this block has already been computed
-	intrinsicS, order, exists := chain.CheckInCalcOrderCache(header.Hash())
+	intrinsicEntropy, order, exists := chain.CheckInCalcOrderCache(header.Hash())
 	if exists {
-		return intrinsicS, order, nil
+		return intrinsicEntropy, order, nil
 	}
 	nodeCtx := progpow.config.NodeLocation.Context()
 	// Except for the slice [0,0] have to check if the header hash is the genesis hash
@@ -34,42 +34,42 @@ func (progpow *Progpow) CalcOrder(chain consensus.BlockReader, header *types.Wor
 	}
 
 	// Get entropy reduction of this header
-	intrinsicS = progpow.IntrinsicLogS(powHash)
+	intrinsicEntropy = progpow.IntrinsicLogEntropy(powHash)
 	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdEntropy := progpow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 
 	// PRIME
 	// PrimeEntropyThreshold number of zone blocks times the intrinsic logs of
 	// the given header determines the prime block
-	totalDeltaSPrime := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-	totalDeltaSPrime = new(big.Int).Add(totalDeltaSPrime, intrinsicS)
-	primeDeltaSTarget := new(big.Int).Div(params.PrimeEntropyTarget(expansionNum), big2)
-	primeDeltaSTarget = new(big.Int).Mul(zoneThresholdS, primeDeltaSTarget)
+	totalDeltaEntropyPrime := new(big.Int).Add(header.ParentDeltaEntropy(common.REGION_CTX), header.ParentDeltaEntropy(common.ZONE_CTX))
+	totalDeltaEntropyPrime = new(big.Int).Add(totalDeltaEntropyPrime, intrinsicEntropy)
+	primeDeltaEntropyTarget := new(big.Int).Div(params.PrimeEntropyTarget(expansionNum), big2)
+	primeDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, primeDeltaEntropyTarget)
 
-	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
-	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaSPrime.Cmp(primeDeltaSTarget) > 0 {
-		chain.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicS)
-		return intrinsicS, common.PRIME_CTX, nil
+	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
+	if intrinsicEntropy.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaEntropyPrime.Cmp(primeDeltaEntropyTarget) > 0 {
+		chain.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicEntropy)
+		return intrinsicEntropy, common.PRIME_CTX, nil
 	}
 
 	// REGION
 	// Compute the total accumulated entropy since the last region block
-	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
+	totalDeltaSRegion := new(big.Int).Add(header.ParentDeltaEntropy(common.ZONE_CTX), intrinsicEntropy)
 	regionDeltaSTarget := new(big.Int).Div(params.RegionEntropyTarget(expansionNum), big2)
-	regionDeltaSTarget = new(big.Int).Mul(zoneThresholdS, regionDeltaSTarget)
-	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
-	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
-		chain.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicS)
-		return intrinsicS, common.REGION_CTX, nil
+	regionDeltaSTarget = new(big.Int).Mul(zoneThresholdEntropy, regionDeltaSTarget)
+	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
+	if intrinsicEntropy.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
+		chain.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicEntropy)
+		return intrinsicEntropy, common.REGION_CTX, nil
 	}
 
 	// Zone case
-	chain.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicS)
-	return intrinsicS, common.ZONE_CTX, nil
+	chain.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicEntropy)
+	return intrinsicEntropy, common.ZONE_CTX, nil
 }
 
-// IntrinsicLogS returns the logarithm of the intrinsic entropy reduction of a PoW hash
-func (progpow *Progpow) IntrinsicLogS(powHash common.Hash) *big.Int {
+// IntrinsicLogEntropy returns the logarithm of the intrinsic entropy reduction of a PoW hash
+func (progpow *Progpow) IntrinsicLogEntropy(powHash common.Hash) *big.Int {
 	x := new(big.Int).SetBytes(powHash.Bytes())
 	d := new(big.Int).Div(big2e256, x)
 	c, m := mathutil.BinaryLog(d, consensus.MantBits)
@@ -78,8 +78,40 @@ func (progpow *Progpow) IntrinsicLogS(powHash common.Hash) *big.Int {
 	return bigBits
 }
 
-// TotalLogS() returns the total entropy reduction if the chain since genesis to the given header
-func (progpow *Progpow) TotalLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
+// TotalLogEntropy returns the total entropy reduction if the chain since genesis to the given header
+func (progpow *Progpow) TotalLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
+	if chain.IsGenesisHash(header.Hash()) {
+		return big.NewInt(0)
+	}
+	intrinsicEntropy, order, err := progpow.CalcOrder(chain, header)
+	if err != nil {
+		return big.NewInt(0)
+	}
+	if progpow.NodeLocation().Context() == common.ZONE_CTX {
+		workShareEntropy, err := progpow.WorkShareLogEntropy(chain, header)
+		if err != nil {
+			return big.NewInt(0)
+		}
+		intrinsicEntropy = new(big.Int).Add(intrinsicEntropy, workShareEntropy)
+	}
+	switch order {
+	case common.PRIME_CTX:
+		totalEntropy := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaEntropy(common.REGION_CTX))
+		totalEntropy.Add(totalEntropy, header.ParentDeltaEntropy(common.ZONE_CTX))
+		totalEntropy.Add(totalEntropy, intrinsicEntropy)
+		return totalEntropy
+	case common.REGION_CTX:
+		totalEntropy := new(big.Int).Add(header.ParentEntropy(common.REGION_CTX), header.ParentDeltaEntropy(common.ZONE_CTX))
+		totalEntropy.Add(totalEntropy, intrinsicEntropy)
+		return totalEntropy
+	case common.ZONE_CTX:
+		totalEntropy := new(big.Int).Add(header.ParentEntropy(common.ZONE_CTX), intrinsicEntropy)
+		return totalEntropy
+	}
+	return big.NewInt(0)
+}
+
+func (progpow *Progpow) DeltaLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
@@ -88,39 +120,7 @@ func (progpow *Progpow) TotalLogS(chain consensus.ChainHeaderReader, header *typ
 		return big.NewInt(0)
 	}
 	if progpow.NodeLocation().Context() == common.ZONE_CTX {
-		workShareS, err := progpow.WorkShareLogS(chain, header)
-		if err != nil {
-			return big.NewInt(0)
-		}
-		intrinsicS = new(big.Int).Add(intrinsicS, workShareS)
-	}
-	switch order {
-	case common.PRIME_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.PRIME_CTX), header.ParentDeltaS(common.REGION_CTX))
-		totalS.Add(totalS, header.ParentDeltaS(common.ZONE_CTX))
-		totalS.Add(totalS, intrinsicS)
-		return totalS
-	case common.REGION_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-		totalS.Add(totalS, intrinsicS)
-		return totalS
-	case common.ZONE_CTX:
-		totalS := new(big.Int).Add(header.ParentEntropy(common.ZONE_CTX), intrinsicS)
-		return totalS
-	}
-	return big.NewInt(0)
-}
-
-func (progpow *Progpow) DeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
-	if chain.IsGenesisHash(header.Hash()) {
-		return big.NewInt(0)
-	}
-	intrinsicS, order, err := progpow.CalcOrder(chain, header)
-	if err != nil {
-		return big.NewInt(0)
-	}
-	if progpow.NodeLocation().Context() == common.ZONE_CTX {
-		workShareS, err := progpow.WorkShareLogS(chain, header)
+		workShareS, err := progpow.WorkShareLogEntropy(chain, header)
 		if err != nil {
 			return big.NewInt(0)
 		}
@@ -130,17 +130,17 @@ func (progpow *Progpow) DeltaLogS(chain consensus.ChainHeaderReader, header *typ
 	case common.PRIME_CTX:
 		return big.NewInt(0)
 	case common.REGION_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentDeltaS(common.REGION_CTX), header.ParentDeltaS(common.ZONE_CTX))
-		totalDeltaS = new(big.Int).Add(totalDeltaS, intrinsicS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentDeltaEntropy(common.REGION_CTX), header.ParentDeltaEntropy(common.ZONE_CTX))
+		totalDeltaEntropy = new(big.Int).Add(totalDeltaEntropy, intrinsicS)
+		return totalDeltaEntropy
 	case common.ZONE_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentDeltaS(common.ZONE_CTX), intrinsicS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentDeltaEntropy(common.ZONE_CTX), intrinsicS)
+		return totalDeltaEntropy
 	}
 	return big.NewInt(0)
 }
 
-func (progpow *Progpow) UncledLogS(block *types.WorkObject) *big.Int {
+func (progpow *Progpow) UncledLogEntropy(block *types.WorkObject) *big.Int {
 	uncles := block.Uncles()
 	totalUncledLogS := big.NewInt(0)
 	for _, uncle := range uncles {
@@ -150,13 +150,13 @@ func (progpow *Progpow) UncledLogS(block *types.WorkObject) *big.Int {
 			continue
 		}
 		// Get entropy reduction of this header
-		intrinsicS := progpow.IntrinsicLogS(powHash)
-		totalUncledLogS.Add(totalUncledLogS, intrinsicS)
+		intrinsicEntropy := progpow.IntrinsicLogEntropy(powHash)
+		totalUncledLogS.Add(totalUncledLogS, intrinsicEntropy)
 	}
 	return totalUncledLogS
 }
 
-func (progpow *Progpow) WorkShareLogS(chain consensus.ChainHeaderReader, wo *types.WorkObject) (*big.Int, error) {
+func (progpow *Progpow) WorkShareLogEntropy(chain consensus.ChainHeaderReader, wo *types.WorkObject) (*big.Int, error) {
 	workShares := wo.Uncles()
 	totalWsEntropy := big.NewInt(0)
 	for _, ws := range workShares {
@@ -188,15 +188,15 @@ func (progpow *Progpow) WorkShareLogS(chain consensus.ChainHeaderReader, wo *typ
 			// actual work share weight here +1 is done to the extraBits because
 			// of Quo and if the difference is less than 0, its within the first
 			// level
-			cBigBits := progpow.IntrinsicLogS(powHash)
-			thresholdBigBits := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+			cBigBits := progpow.IntrinsicLogEntropy(powHash)
+			thresholdBigBits := progpow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 			wsEntropy = new(big.Int).Sub(thresholdBigBits, cBigBits)
 			extraBits := new(big.Float).Quo(new(big.Float).SetInt(wsEntropy), new(big.Float).SetInt(common.Big2e64))
 			wsEntropyAdj := new(big.Float).Quo(new(big.Float).SetInt(common.Big2e64), bigMath.TwoToTheX(extraBits))
 			wsEntropy, _ = wsEntropyAdj.Int(wsEntropy)
 		} else {
-			cBigBits := progpow.IntrinsicLogS(powHash)
-			thresholdBigBits := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+			cBigBits := progpow.IntrinsicLogEntropy(powHash)
+			thresholdBigBits := progpow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 			wsEntropy = new(big.Int).Sub(cBigBits, thresholdBigBits)
 		}
 		// Discount 2) applies to all shares regardless of the weight
@@ -215,7 +215,7 @@ func (progpow *Progpow) WorkShareLogS(chain consensus.ChainHeaderReader, wo *typ
 	return totalWsEntropy, nil
 }
 
-func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
+func (progpow *Progpow) UncledDeltaLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
 	// Treating the genesis block differntly
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
@@ -224,17 +224,17 @@ func (progpow *Progpow) UncledSubDeltaLogS(chain consensus.ChainHeaderReader, he
 	if err != nil {
 		return big.NewInt(0)
 	}
-	uncledLogS := header.UncledS()
+	uncledLogS := header.UncledEntropy()
 	switch order {
 	case common.PRIME_CTX:
 		return big.NewInt(0)
 	case common.REGION_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.REGION_CTX), header.ParentUncledSubDeltaS(common.ZONE_CTX))
-		totalDeltaS = new(big.Int).Add(totalDeltaS, uncledLogS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentUncledDeltaEntropy(common.REGION_CTX), header.ParentUncledDeltaEntropy(common.ZONE_CTX))
+		totalDeltaEntropy = new(big.Int).Add(totalDeltaEntropy, uncledLogS)
+		return totalDeltaEntropy
 	case common.ZONE_CTX:
-		totalDeltaS := new(big.Int).Add(header.ParentUncledSubDeltaS(common.ZONE_CTX), uncledLogS)
-		return totalDeltaS
+		totalDeltaEntropy := new(big.Int).Add(header.ParentUncledDeltaEntropy(common.ZONE_CTX), uncledLogS)
+		return totalDeltaEntropy
 	}
 	return big.NewInt(0)
 }
@@ -260,9 +260,9 @@ func (progpow *Progpow) CalcRank(chain consensus.ChainHeaderReader, header *type
 	}
 
 	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
-	zoneThresholdS := progpow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+	zoneThresholdS := progpow.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 
-	intrinsicS := progpow.IntrinsicLogS(powHash)
+	intrinsicS := progpow.IntrinsicLogEntropy(powHash)
 	for i := common.InterlinkDepth; i > 0; i-- {
 		extraBits := math.Pow(2, float64(i))
 		primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(big.NewInt(int64(extraBits))))
