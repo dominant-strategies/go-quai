@@ -1,5 +1,5 @@
 # First stage: build the Go binary
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install make and other build dependencies
 RUN apk --no-cache add make gcc musl-dev
