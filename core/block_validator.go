@@ -296,10 +296,10 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
 	}
 
-	// Check that the UncledS in the header matches the S from the block
-	expectedUncledS := v.engine.UncledLogS(block)
-	if expectedUncledS.Cmp(header.UncledS()) != 0 {
-		return fmt.Errorf("invalid uncledS (remote: %x local: %x)", header.UncledS(), expectedUncledS)
+	// Check that the UncledEntropy in the header matches the S from the block
+	expectedUncledEntropy := v.engine.UncledLogEntropy(block)
+	if expectedUncledEntropy.Cmp(header.UncledEntropy()) != 0 {
+		return fmt.Errorf("invalid uncledEntropy (remote: %x local: %x)", header.UncledEntropy(), expectedUncledEntropy)
 	}
 	v.hc.logger.WithFields(log.Fields{
 		"t1": time1,

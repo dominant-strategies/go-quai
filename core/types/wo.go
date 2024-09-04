@@ -215,8 +215,8 @@ func (wo *WorkObject) NonceU64() uint64 {
 	return wo.WorkObjectHeader().Nonce().Uint64()
 }
 
-func (wo *WorkObject) UncledS() *big.Int {
-	return wo.Header().UncledS()
+func (wo *WorkObject) UncledEntropy() *big.Int {
+	return wo.Header().UncledEntropy()
 }
 
 func (wo *WorkObject) EVMRoot() common.Hash {
@@ -251,12 +251,12 @@ func (wo *WorkObject) ManifestHash(nodeCtx int) common.Hash {
 	return wo.Header().ManifestHash(nodeCtx)
 }
 
-func (wo *WorkObject) ParentDeltaS(nodeCtx int) *big.Int {
-	return wo.Header().ParentDeltaS(nodeCtx)
+func (wo *WorkObject) ParentDeltaEntropy(nodeCtx int) *big.Int {
+	return wo.Header().ParentDeltaEntropy(nodeCtx)
 }
 
-func (wo *WorkObject) ParentUncledSubDeltaS(nodeCtx int) *big.Int {
-	return wo.Header().ParentUncledSubDeltaS(nodeCtx)
+func (wo *WorkObject) ParentUncledDeltaEntropy(nodeCtx int) *big.Int {
+	return wo.Header().ParentUncledDeltaEntropy(nodeCtx)
 }
 
 func (wo *WorkObject) UncleHash() common.Hash {

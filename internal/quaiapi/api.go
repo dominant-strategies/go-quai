@@ -1014,7 +1014,7 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.WorkObject) map[string]interface{} {
 	fields := RPCMarshalETHHeader(header.Header())
-	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogS(header))
+	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogEntropy(header))
 	return fields
 }
 
@@ -1025,7 +1025,7 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Work
 	if err != nil {
 		return nil, err
 	}
-	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogS(b))
+	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogEntropy(b))
 	return fields, err
 }
 

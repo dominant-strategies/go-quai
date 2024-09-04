@@ -58,7 +58,7 @@ type Backend interface {
 	CurrentHeader() *types.WorkObject
 	CurrentBlock() *types.WorkObject
 	CurrentLogEntropy() *big.Int
-	TotalLogS(header *types.WorkObject) *big.Int
+	TotalLogEntropy(header *types.WorkObject) *big.Int
 	CalcOrder(header *types.WorkObject) (*big.Int, int, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error)

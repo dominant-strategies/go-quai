@@ -351,7 +351,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 
 		time8 = common.PrettyDuration(time.Since(start))
 
-		setHead = sl.poem(sl.engine.TotalLogS(sl.hc, block), sl.engine.TotalLogS(sl.hc, sl.hc.CurrentHeader()))
+		setHead = sl.poem(sl.engine.TotalLogEntropy(sl.hc, block), sl.engine.TotalLogEntropy(sl.hc, sl.hc.CurrentHeader()))
 
 		err = sl.hc.SetCurrentState(block)
 		if err != nil {
@@ -459,8 +459,8 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"t6_3": time6_3,
 	}).Info("Times during sub append")
 
-	intrinsicS := sl.engine.IntrinsicLogS(block.Hash())
-	workShare, err := sl.engine.WorkShareLogS(sl.hc, block)
+	intrinsicS := sl.engine.IntrinsicLogEntropy(block.Hash())
+	workShare, err := sl.engine.WorkShareLogEntropy(sl.hc, block)
 	if err != nil {
 		workShare = big.NewInt(0)
 	}
@@ -722,12 +722,12 @@ func (sl *Slice) generateSlicePendingHeader(block *types.WorkObject, newTermini 
 		localPendingHeader = types.EmptyWorkObject(sl.NodeCtx())
 		localPendingHeader.SetParentHash(block.Hash(), nodeCtx)
 		localPendingHeader.SetNumber(big.NewInt(int64(block.NumberU64(nodeCtx))+1), nodeCtx)
-		localPendingHeader.Header().SetParentEntropy(sl.engine.TotalLogS(sl.hc, block), nodeCtx)
+		localPendingHeader.Header().SetParentEntropy(sl.engine.TotalLogEntropy(sl.hc, block), nodeCtx)
 		if nodeCtx != common.PRIME_CTX {
 			if domOrigin {
-				localPendingHeader.Header().SetParentDeltaS(big.NewInt(0), nodeCtx)
+				localPendingHeader.Header().SetParentDeltaEntropy(big.NewInt(0), nodeCtx)
 			} else {
-				localPendingHeader.Header().SetParentDeltaS(sl.engine.DeltaLogS(sl.hc, block), nodeCtx)
+				localPendingHeader.Header().SetParentDeltaEntropy(sl.engine.DeltaLogEntropy(sl.hc, block), nodeCtx)
 			}
 		}
 
@@ -1386,8 +1386,8 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 	combinedPendingHeader.SetNumber(header.Number(index), index)
 	combinedPendingHeader.Header().SetManifestHash(header.ManifestHash(index), index)
 	combinedPendingHeader.Header().SetParentEntropy(header.ParentEntropy(index), index)
-	combinedPendingHeader.Header().SetParentDeltaS(header.ParentDeltaS(index), index)
-	combinedPendingHeader.Header().SetParentUncledSubDeltaS(header.ParentUncledSubDeltaS(index), index)
+	combinedPendingHeader.Header().SetParentDeltaEntropy(header.ParentDeltaEntropy(index), index)
+	combinedPendingHeader.Header().SetParentUncledDeltaEntropy(header.ParentUncledDeltaEntropy(index), index)
 
 	if index == common.PRIME_CTX {
 		combinedPendingHeader.Header().SetEfficiencyScore(header.EfficiencyScore())
@@ -1404,7 +1404,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.WorkObjectHeader().SetCoinbase(header.Coinbase())
 
 		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
-		combinedPendingHeader.Header().SetUncledS(header.Header().UncledS())
+		combinedPendingHeader.Header().SetUncledEntropy(header.Header().UncledEntropy())
 		combinedPendingHeader.Header().SetUncleHash(header.UncleHash())
 		combinedPendingHeader.Header().SetTxHash(header.Header().TxHash())
 		combinedPendingHeader.Header().SetEtxHash(header.EtxHash())

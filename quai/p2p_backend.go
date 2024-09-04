@@ -280,11 +280,11 @@ func ApplyPoWFilter(backend quaiapi.Backend, wo *types.WorkObject) pubsub.Valida
 	// Check if the Block is atleast half the current difficulty in Zone Context,
 	// this makes sure that the nodes don't listen to the forks with the PowHash
 	//	with less than 50% of current difficulty
-	if backend.NodeCtx() == common.ZONE_CTX && new(big.Int).SetBytes(powhash.Bytes()).Cmp(new(big.Int).Div(backend.Engine().IntrinsicLogS(backend.CurrentHeader().Hash()), big.NewInt(2))) < 0 {
+	if backend.NodeCtx() == common.ZONE_CTX && new(big.Int).SetBytes(powhash.Bytes()).Cmp(new(big.Int).Div(backend.Engine().IntrinsicLogEntropy(backend.CurrentHeader().Hash()), big.NewInt(2))) < 0 {
 		return pubsub.ValidationIgnore
 	}
 
-	currentIntrinsicS := backend.Engine().IntrinsicLogS(backend.CurrentHeader().Hash())
+	currentIntrinsicS := backend.Engine().IntrinsicLogEntropy(backend.CurrentHeader().Hash())
 	currentS := backend.CurrentHeader().ParentEntropy(backend.NodeCtx())
 	MaxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(c_maxAllowableEntropyDist))
 

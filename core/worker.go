@@ -1107,32 +1107,32 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		return nil, err
 	}
 	if !w.hc.IsGenesisHash(parent.Hash()) {
-		// Set the parent delta S prior to sending to sub
+		// Set the parent delta entropy prior to sending to sub
 		if nodeCtx != common.PRIME_CTX {
 			if order < nodeCtx {
-				newWo.Header().SetParentDeltaS(big.NewInt(0), nodeCtx)
+				newWo.Header().SetParentDeltaEntropy(big.NewInt(0), nodeCtx)
 			} else {
-				newWo.Header().SetParentDeltaS(w.engine.DeltaLogS(w.hc, parent), nodeCtx)
+				newWo.Header().SetParentDeltaEntropy(w.engine.DeltaLogEntropy(w.hc, parent), nodeCtx)
 			}
 		}
-		newWo.Header().SetParentEntropy(w.engine.TotalLogS(w.hc, parent), nodeCtx)
+		newWo.Header().SetParentEntropy(w.engine.TotalLogEntropy(w.hc, parent), nodeCtx)
 	} else {
 		newWo.Header().SetParentEntropy(big.NewInt(0), nodeCtx)
-		newWo.Header().SetParentDeltaS(big.NewInt(0), nodeCtx)
+		newWo.Header().SetParentDeltaEntropy(big.NewInt(0), nodeCtx)
 	}
 
 	// Only calculate entropy if the parent is not the genesis block
 	if !w.hc.IsGenesisHash(parent.Hash()) {
-		// Set the parent delta S prior to sending to sub
+		// Set the parent delta entropy prior to sending to sub
 		if nodeCtx != common.PRIME_CTX {
 			if order < nodeCtx {
-				newWo.Header().SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
+				newWo.Header().SetParentUncledDeltaEntropy(big.NewInt(0), nodeCtx)
 			} else {
-				newWo.Header().SetParentUncledSubDeltaS(w.engine.UncledSubDeltaLogS(w.hc, parent), nodeCtx)
+				newWo.Header().SetParentUncledDeltaEntropy(w.engine.UncledDeltaLogEntropy(w.hc, parent), nodeCtx)
 			}
 		}
 	} else {
-		newWo.Header().SetParentUncledSubDeltaS(big.NewInt(0), nodeCtx)
+		newWo.Header().SetParentUncledDeltaEntropy(big.NewInt(0), nodeCtx)
 	}
 
 	// calculate the expansion values - except for the etxEligibleSlices, the
@@ -1428,7 +1428,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 
 	// Once the uncles list is assembled in the block
 	if nodeCtx == common.ZONE_CTX {
-		wo.Header().SetUncledS(w.engine.UncledLogS(wo))
+		wo.Header().SetUncledEntropy(w.engine.UncledLogEntropy(wo))
 	}
 
 	manifestHash := w.ComputeManifestHash(parent)

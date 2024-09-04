@@ -92,7 +92,7 @@ var (
 type backend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	CurrentHeader() *types.WorkObject
-	TotalLogS(header *types.WorkObject) *big.Int
+	TotalLogEntropy(header *types.WorkObject) *big.Int
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
 	Stats() (pending int, queued int, qi int)
 	ChainConfig() *params.ChainConfig
@@ -1276,7 +1276,7 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		RegionHeight: block.NumberU64(1),
 		PrimeHeight:  block.NumberU64(0),
 		Chain:        s.backend.NodeLocation().Name(),
-		Entropy:      common.BigBitsToBits(s.backend.TotalLogS(block)).String(),
+		Entropy:      common.BigBitsToBits(s.backend.TotalLogEntropy(block)).String(),
 		Difficulty:   difficulty,
 		QuaiPerQi:    quaiPerQi,
 		QuaiReward:   quaiReward.String(),

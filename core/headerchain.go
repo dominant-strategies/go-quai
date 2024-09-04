@@ -1021,12 +1021,12 @@ func (hc *HeaderChain) SlicesRunning() []common.Location {
 
 // ComputeEfficiencyScore calculates the efficiency score for the given header
 func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) uint16 {
-	deltaS := new(big.Int).Add(parent.ParentDeltaS(common.REGION_CTX), parent.ParentDeltaS(common.ZONE_CTX))
-	uncledDeltaS := new(big.Int).Add(parent.ParentUncledSubDeltaS(common.REGION_CTX), parent.ParentUncledSubDeltaS(common.ZONE_CTX))
+	deltaEntropy := new(big.Int).Add(parent.ParentDeltaEntropy(common.REGION_CTX), parent.ParentDeltaEntropy(common.ZONE_CTX))
+	uncledDeltaEntropy := new(big.Int).Add(parent.ParentUncledDeltaEntropy(common.REGION_CTX), parent.ParentUncledDeltaEntropy(common.ZONE_CTX))
 
-	// Take the ratio of deltaS to the uncledDeltaS in percentage
-	efficiencyScore := uncledDeltaS.Mul(uncledDeltaS, big.NewInt(100))
-	efficiencyScore.Div(efficiencyScore, deltaS)
+	// Take the ratio of deltaEntropy to the uncledDeltaEntropy in percentage
+	efficiencyScore := uncledDeltaEntropy.Mul(uncledDeltaEntropy, big.NewInt(100))
+	efficiencyScore.Div(efficiencyScore, deltaEntropy)
 
 	// Calculate the exponential moving average
 	ewma := (uint16(efficiencyScore.Uint64()) + parent.EfficiencyScore()*params.TREE_EXPANSION_FILTER_ALPHA) / 10

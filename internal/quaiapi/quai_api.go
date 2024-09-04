@@ -632,7 +632,7 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.
 	if err != nil {
 		return nil, err
 	}
-	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogS(b))
+	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogEntropy(b))
 	return fields, err
 }
 

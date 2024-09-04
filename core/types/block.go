@@ -87,31 +87,31 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 
 // Header represents a block header in the Quai blockchain.
 type Header struct {
-	parentHash            []common.Hash `json:"parentHash"            gencodec:"required"`
-	uncleHash             common.Hash   `json:"sha3Uncles"            gencodec:"required"`
-	evmRoot               common.Hash   `json:"evmRoot"               gencodec:"required"`
-	utxoRoot              common.Hash   `json:"utxoRoot"              gencodec:"required"`
-	txHash                common.Hash   `json:"transactionsRoot"      gencodec:"required"`
-	etxHash               common.Hash   `json:"extTransactionsRoot"   gencodec:"required"`
-	etxSetRoot            common.Hash   `json:"etxSetRoot"            gencodec:"required"`
-	etxRollupHash         common.Hash   `json:"extRollupRoot"         gencodec:"required"`
-	manifestHash          []common.Hash `json:"manifestHash"          gencodec:"required"`
-	receiptHash           common.Hash   `json:"receiptsRoot"          gencodec:"required"`
-	parentEntropy         []*big.Int    `json:"parentEntropy"         gencodec:"required"`
-	parentDeltaS          []*big.Int    `json:"parentDeltaS"          gencodec:"required"`
-	parentUncledSubDeltaS []*big.Int    `json:"parentUncledSubDeltaS" gencodec:"required"`
-	efficiencyScore       uint16        `json:"efficiencyScore"       gencodec:"required"`
-	thresholdCount        uint16        `json:"thresholdCount"        gencodec:"required"`
-	expansionNumber       uint8         `json:"expansionNumber"       gencodec:"required"`
-	etxEligibleSlices     common.Hash   `json:"etxEligibleSlices"     gencodec:"required"`
-	primeTerminusHash     common.Hash   `json:"primeTerminusHash"     gencodec:"required"`
-	interlinkRootHash     common.Hash   `json:"interlinkRootHash"     gencodec:"required"`
-	uncledS               *big.Int      `json:"uncledLogS"            gencodec:"required"`
-	number                []*big.Int    `json:"number"                gencodec:"required"`
-	gasLimit              uint64        `json:"gasLimit"              gencodec:"required"`
-	gasUsed               uint64        `json:"gasUsed"               gencodec:"required"`
-	baseFee               *big.Int      `json:"baseFeePerGas"         gencodec:"required"`
-	extra                 []byte        `json:"extraData"             gencodec:"required"`
+	parentHash               []common.Hash `json:"parentHash"            gencodec:"required"`
+	uncleHash                common.Hash   `json:"sha3Uncles"            gencodec:"required"`
+	evmRoot                  common.Hash   `json:"evmRoot"               gencodec:"required"`
+	utxoRoot                 common.Hash   `json:"utxoRoot"              gencodec:"required"`
+	txHash                   common.Hash   `json:"transactionsRoot"      gencodec:"required"`
+	etxHash                  common.Hash   `json:"extTransactionsRoot"   gencodec:"required"`
+	etxSetRoot               common.Hash   `json:"etxSetRoot"            gencodec:"required"`
+	etxRollupHash            common.Hash   `json:"extRollupRoot"         gencodec:"required"`
+	manifestHash             []common.Hash `json:"manifestHash"          gencodec:"required"`
+	receiptHash              common.Hash   `json:"receiptsRoot"          gencodec:"required"`
+	parentEntropy            []*big.Int    `json:"parentEntropy"         gencodec:"required"`
+	parentDeltaEntropy       []*big.Int    `json:"parentDeltaEntropy"          gencodec:"required"`
+	parentUncledDeltaEntropy []*big.Int    `json:"parentUncledDeltaEntropy" gencodec:"required"`
+	efficiencyScore          uint16        `json:"efficiencyScore"       gencodec:"required"`
+	thresholdCount           uint16        `json:"thresholdCount"        gencodec:"required"`
+	expansionNumber          uint8         `json:"expansionNumber"       gencodec:"required"`
+	etxEligibleSlices        common.Hash   `json:"etxEligibleSlices"     gencodec:"required"`
+	primeTerminusHash        common.Hash   `json:"primeTerminusHash"     gencodec:"required"`
+	interlinkRootHash        common.Hash   `json:"interlinkRootHash"     gencodec:"required"`
+	uncledEntropy            *big.Int      `json:"uncledLogS"            gencodec:"required"`
+	number                   []*big.Int    `json:"number"                gencodec:"required"`
+	gasLimit                 uint64        `json:"gasLimit"              gencodec:"required"`
+	gasUsed                  uint64        `json:"gasUsed"               gencodec:"required"`
+	baseFee                  *big.Int      `json:"baseFeePerGas"         gencodec:"required"`
+	extra                    []byte        `json:"extraData"             gencodec:"required"`
 
 	// caches
 	hash     atomic.Value
@@ -120,18 +120,17 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Number                []*hexutil.Big
-	GasLimit              hexutil.Uint64
-	GasUsed               hexutil.Uint64
-	BaseFee               *hexutil.Big
-	ParentEntropy         []*hexutil.Big
-	ParentDeltaS          []*hexutil.Big
-	ParentUncledS         []*hexutil.Big
-	ParentUncledSubDeltaS []*hexutil.Big
-	UncledS               *hexutil.Big
-	Time                  hexutil.Uint64
-	Extr                  hexutil.Bytes
-	Hash                  common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Number                   []*hexutil.Big
+	GasLimit                 hexutil.Uint64
+	GasUsed                  hexutil.Uint64
+	BaseFee                  *hexutil.Big
+	ParentEntropy            []*hexutil.Big
+	ParentDeltaEntropy       []*hexutil.Big
+	ParentUncledDeltaEntropy []*hexutil.Big
+	UncledEntropy            *hexutil.Big
+	Time                     hexutil.Uint64
+	Extr                     hexutil.Bytes
+	Hash                     common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 func EmptyHeader() *Header {
@@ -140,10 +139,10 @@ func EmptyHeader() *Header {
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
-	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
-	h.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
+	h.parentDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
+	h.parentUncledDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth-1)
-	h.uncledS = big.NewInt(0)
+	h.uncledEntropy = big.NewInt(0)
 	h.evmRoot = EmptyRootHash
 	h.utxoRoot = EmptyRootHash
 	h.txHash = EmptyRootHash
@@ -163,8 +162,8 @@ func EmptyHeader() *Header {
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
 		h.parentEntropy[i] = big.NewInt(0)
-		h.parentDeltaS[i] = big.NewInt(0)
-		h.parentUncledSubDeltaS[i] = big.NewInt(0)
+		h.parentDeltaEntropy[i] = big.NewInt(0)
+		h.parentUncledDeltaEntropy[i] = big.NewInt(0)
 	}
 	for i := 0; i < common.HierarchyDepth-1; i++ {
 		h.parentHash[i] = EmptyRootHash
@@ -230,7 +229,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		PrimeTerminusHash: &primeTerminusHash,
 		InterlinkRootHash: &interlinkRootHash,
 		EtxEligibleSlices: &etxEligibleSlices,
-		UncledS:           h.UncledS().Bytes(),
+		UncledEntropy:     h.UncledEntropy().Bytes(),
 		GasLimit:          &gasLimit,
 		GasUsed:           &gasUsed,
 		EfficiencyScore:   &efficiencyScore,
@@ -245,11 +244,11 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		if h.ParentEntropy(i) != nil {
 			protoHeader.ParentEntropy = append(protoHeader.ParentEntropy, h.ParentEntropy(i).Bytes())
 		}
-		if h.ParentDeltaS(i) != nil {
-			protoHeader.ParentDeltaS = append(protoHeader.ParentDeltaS, h.ParentDeltaS(i).Bytes())
+		if h.ParentDeltaEntropy(i) != nil {
+			protoHeader.ParentDeltaEntropy = append(protoHeader.ParentDeltaEntropy, h.ParentDeltaEntropy(i).Bytes())
 		}
-		if h.ParentUncledSubDeltaS(i) != nil {
-			protoHeader.ParentUncledSubDeltaS = append(protoHeader.ParentUncledSubDeltaS, h.ParentUncledSubDeltaS(i).Bytes())
+		if h.ParentUncledDeltaEntropy(i) != nil {
+			protoHeader.ParentUncledDeltaEntropy = append(protoHeader.ParentUncledDeltaEntropy, h.ParentUncledDeltaEntropy(i).Bytes())
 		}
 	}
 	for i := 0; i < common.HierarchyDepth-1; i++ {
@@ -306,14 +305,14 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.ParentEntropy == nil {
 		return errors.New("missing required field 'ParentEntropy' in Header")
 	}
-	if protoHeader.ParentDeltaS == nil {
-		return errors.New("missing required field 'ParentDeltaS' in Header")
+	if protoHeader.ParentDeltaEntropy == nil {
+		return errors.New("missing required field 'ParentDeltaEntropy' in Header")
 	}
-	if protoHeader.ParentUncledSubDeltaS == nil {
-		return errors.New("missing required field 'ParentUncledSubDeltaS' in Header")
+	if protoHeader.ParentUncledDeltaEntropy == nil {
+		return errors.New("missing required field 'ParentUncledDeltaEntropy' in Header")
 	}
-	if protoHeader.UncledS == nil {
-		return errors.New("missing required field 'UncledS' in Header")
+	if protoHeader.UncledEntropy == nil {
+		return errors.New("missing required field 'UncledEntropy' in Header")
 	}
 	if protoHeader.Number == nil {
 		return errors.New("missing required field 'Number' in Header")
@@ -335,15 +334,15 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
-	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
-	h.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
+	h.parentDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
+	h.parentUncledDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth-1)
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.SetManifestHash(common.BytesToHash(protoHeader.GetManifestHash()[i].GetValue()), i)
 		h.SetParentEntropy(new(big.Int).SetBytes(protoHeader.GetParentEntropy()[i]), i)
-		h.SetParentDeltaS(new(big.Int).SetBytes(protoHeader.GetParentDeltaS()[i]), i)
-		h.SetParentUncledSubDeltaS(new(big.Int).SetBytes(protoHeader.GetParentUncledSubDeltaS()[i]), i)
+		h.SetParentDeltaEntropy(new(big.Int).SetBytes(protoHeader.GetParentDeltaEntropy()[i]), i)
+		h.SetParentUncledDeltaEntropy(new(big.Int).SetBytes(protoHeader.GetParentUncledDeltaEntropy()[i]), i)
 	}
 	for i := 0; i < common.HierarchyDepth-1; i++ {
 		h.SetNumber(new(big.Int).SetBytes(protoHeader.GetNumber()[i]), i)
@@ -360,7 +359,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.SetEtxRollupHash(common.BytesToHash(protoHeader.GetEtxRollupHash().GetValue()))
 	h.SetPrimeTerminusHash(common.BytesToHash(protoHeader.GetPrimeTerminusHash().GetValue()))
 	h.SetInterlinkRootHash(common.BytesToHash(protoHeader.GetInterlinkRootHash().GetValue()))
-	h.SetUncledS(new(big.Int).SetBytes(protoHeader.GetUncledS()))
+	h.SetUncledEntropy(new(big.Int).SetBytes(protoHeader.GetUncledEntropy()))
 	h.SetGasLimit(protoHeader.GetGasLimit())
 	h.SetGasUsed(protoHeader.GetGasUsed())
 	h.SetBaseFee(new(big.Int).SetBytes(protoHeader.GetBaseFee()))
@@ -384,7 +383,7 @@ func uint64ToByteArr(val uint64) [8]byte {
 func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result := map[string]interface{}{
 		"parentHash":          h.ParentHashArray(),
-		"uncledS":             (*hexutil.Big)(h.UncledS()),
+		"uncledEntropy":       (*hexutil.Big)(h.UncledEntropy()),
 		"sha3Uncles":          h.UncleHash(),
 		"evmRoot":             h.EVMRoot(),
 		"utxoRoot":            h.UTXORoot(),
@@ -408,13 +407,12 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
 	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
-	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
-	parentUncledS := make([]*hexutil.Big, common.HierarchyDepth)
-	parentUncledSubDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
+	parentDeltaEntropy := make([]*hexutil.Big, common.HierarchyDepth)
+	parentUncledDeltaEntropy := make([]*hexutil.Big, common.HierarchyDepth)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		parentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
-		parentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
-		parentUncledSubDeltaS[i] = (*hexutil.Big)(h.ParentUncledSubDeltaS(i))
+		parentDeltaEntropy[i] = (*hexutil.Big)(h.ParentDeltaEntropy(i))
+		parentUncledDeltaEntropy[i] = (*hexutil.Big)(h.ParentUncledDeltaEntropy(i))
 	}
 	for i := 0; i < common.HierarchyDepth-1; i++ {
 		number[i] = (*hexutil.Big)(h.Number(i))
@@ -422,9 +420,8 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 
 	result["number"] = number
 	result["parentEntropy"] = parentEntropy
-	result["parentDeltaS"] = parentDeltaS
-	result["parentUncledS"] = parentUncledS
-	result["parentUncledSubDeltaS"] = parentUncledSubDeltaS
+	result["parentDeltaEntropy"] = parentDeltaEntropy
+	result["parentUncledDeltaEntropy"] = parentUncledDeltaEntropy
 
 	if h.BaseFee() != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(h.BaseFee())
@@ -461,14 +458,14 @@ func (h *Header) EtxRollupHash() common.Hash {
 func (h *Header) ParentEntropy(nodeCtx int) *big.Int {
 	return h.parentEntropy[nodeCtx]
 }
-func (h *Header) ParentDeltaS(nodeCtx int) *big.Int {
-	return h.parentDeltaS[nodeCtx]
+func (h *Header) ParentDeltaEntropy(nodeCtx int) *big.Int {
+	return h.parentDeltaEntropy[nodeCtx]
 }
-func (h *Header) ParentUncledSubDeltaS(nodeCtx int) *big.Int {
-	return h.parentUncledSubDeltaS[nodeCtx]
+func (h *Header) ParentUncledDeltaEntropy(nodeCtx int) *big.Int {
+	return h.parentUncledDeltaEntropy[nodeCtx]
 }
-func (h *Header) UncledS() *big.Int {
-	return h.uncledS
+func (h *Header) UncledEntropy() *big.Int {
+	return h.uncledEntropy
 }
 func (h *Header) ManifestHash(nodeCtx int) common.Hash {
 	return h.manifestHash[nodeCtx]
@@ -552,10 +549,10 @@ func (h *Header) SetPrimeTerminusHash(val common.Hash) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.primeTerminusHash = val
 }
-func (h *Header) SetUncledS(val *big.Int) {
+func (h *Header) SetUncledEntropy(val *big.Int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.uncledS = val
+	h.uncledEntropy = val
 }
 func (h *Header) SetInterlinkRootHash(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -569,16 +566,16 @@ func (h *Header) SetParentEntropy(val *big.Int, nodeCtx int) {
 	h.parentEntropy[nodeCtx] = val
 }
 
-func (h *Header) SetParentDeltaS(val *big.Int, nodeCtx int) {
+func (h *Header) SetParentDeltaEntropy(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.parentDeltaS[nodeCtx] = val
+	h.parentDeltaEntropy[nodeCtx] = val
 }
 
-func (h *Header) SetParentUncledSubDeltaS(val *big.Int, nodeCtx int) {
+func (h *Header) SetParentUncledDeltaEntropy(val *big.Int, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.parentUncledSubDeltaS[nodeCtx] = val
+	h.parentUncledDeltaEntropy[nodeCtx] = val
 }
 
 func (h *Header) SetManifestHash(val common.Hash, nodeCtx int) {
@@ -642,8 +639,8 @@ func (h *Header) SetExtra(val []byte) {
 func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
 func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
 func (h *Header) NumberArray() []*big.Int          { return h.number }
-func (h *Header) ParentUncledSubDeltaSArray() []*big.Int {
-	return h.parentUncledSubDeltaS
+func (h *Header) ParentUncledDeltaEntropyArray() []*big.Int {
+	return h.parentUncledDeltaEntropy
 }
 
 // ProtoEncode serializes s into the Quai Proto sealData format
@@ -677,7 +674,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		GasLimit:          &gasLimit,
 		GasUsed:           &gasUsed,
 		BaseFee:           h.BaseFee().Bytes(),
-		UncledS:           h.UncledS().Bytes(),
+		UncledEntropy:     h.UncledEntropy().Bytes(),
 		PrimeTerminusHash: &primeTerminusHash,
 		InterlinkRootHash: &interlinkRootHash,
 		EtxEligibleSlices: &etxEligibleSlices,
@@ -692,11 +689,11 @@ func (h *Header) SealEncode() *ProtoHeader {
 		if h.ParentEntropy(i) != nil {
 			protoSealData.ParentEntropy = append(protoSealData.ParentEntropy, h.ParentEntropy(i).Bytes())
 		}
-		if h.ParentDeltaS(i) != nil {
-			protoSealData.ParentDeltaS = append(protoSealData.ParentDeltaS, h.ParentDeltaS(i).Bytes())
+		if h.ParentDeltaEntropy(i) != nil {
+			protoSealData.ParentDeltaEntropy = append(protoSealData.ParentDeltaEntropy, h.ParentDeltaEntropy(i).Bytes())
 		}
-		if h.ParentUncledSubDeltaS(i) != nil {
-			protoSealData.ParentUncledSubDeltaS = append(protoSealData.ParentUncledSubDeltaS, h.ParentUncledSubDeltaS(i).Bytes())
+		if h.ParentUncledDeltaEntropy(i) != nil {
+			protoSealData.ParentUncledDeltaEntropy = append(protoSealData.ParentUncledDeltaEntropy, h.ParentUncledDeltaEntropy(i).Bytes())
 		}
 
 	}
@@ -762,8 +759,8 @@ func (h *Header) SanityCheck() error {
 	if h.parentEntropy == nil || len(h.parentEntropy) != common.HierarchyDepth {
 		return fmt.Errorf("field cannot be `nil`: parentEntropy")
 	}
-	if h.parentDeltaS == nil || len(h.parentDeltaS) != common.HierarchyDepth {
-		return fmt.Errorf("field cannot be `nil`: parentDeltaS")
+	if h.parentDeltaEntropy == nil || len(h.parentDeltaEntropy) != common.HierarchyDepth {
+		return fmt.Errorf("field cannot be `nil`: parentDeltaEntropy")
 	}
 	if h.baseFee == nil {
 		return fmt.Errorf("field cannot be `nil`: baseFee")
@@ -831,21 +828,21 @@ func CopyHeader(h *Header) *Header {
 	cpy.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	cpy.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	cpy.parentEntropy = make([]*big.Int, common.HierarchyDepth)
-	cpy.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
-	cpy.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
+	cpy.parentDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
+	cpy.parentUncledDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth)
 	cpy.number = make([]*big.Int, common.HierarchyDepth-1)
 	for i := 0; i < common.HierarchyDepth; i++ {
 		cpy.SetManifestHash(h.ManifestHash(i), i)
 		cpy.SetParentEntropy(h.ParentEntropy(i), i)
-		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
-		cpy.SetParentUncledSubDeltaS(h.ParentUncledSubDeltaS(i), i)
+		cpy.SetParentDeltaEntropy(h.ParentDeltaEntropy(i), i)
+		cpy.SetParentUncledDeltaEntropy(h.ParentUncledDeltaEntropy(i), i)
 	}
 	for i := 0; i < common.HierarchyDepth-1; i++ {
 		cpy.SetParentHash(h.ParentHash(i), i)
 		cpy.SetNumber(h.Number(i), i)
 	}
-	cpy.SetUncledS(h.UncledS())
+	cpy.SetUncledEntropy(h.UncledEntropy())
 	cpy.SetUncleHash(h.UncleHash())
 	cpy.SetEVMRoot(h.EVMRoot())
 	cpy.SetUTXORoot(h.UTXORoot())

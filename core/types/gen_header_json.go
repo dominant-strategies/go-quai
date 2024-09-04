@@ -29,13 +29,13 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		PrimeTerminusHash         		common.Hash         	`json:"primeTerminusHash"         	gencodec:"required"`
 		InterlinkRootHash     			common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
 		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
-		ParentDeltaS 					[]*hexutil.Big 			`json:"parentDeltaS"       			gencodec:"required"`
-		ParentUncledSubDeltaS  		 	[]*hexutil.Big 			`json:"parentUncledSubDeltaS"    	gencodec:"required"`
+		ParentDeltaEntropy 					[]*hexutil.Big 			`json:"parentDeltaEntropy"       			gencodec:"required"`
+		ParentUncledDeltaEntropy  		 	[]*hexutil.Big 			`json:"parentUncledDeltaEntropy"    	gencodec:"required"`
 		EfficiencyScore 			 	hexutil.Uint64  		`json:"efficiencyScore"    			gencodec:"required"`
 		ThresholdCount				 	hexutil.Uint64  		`json:"thresholdCount"    			gencodec:"required"`
 		ExpansionNumber				 	hexutil.Uint64  		`json:"expansionNumber"    			gencodec:"required"`
 		EtxEligibleSlices			 	common.Hash  		  	`json:"etxEligibleSlices" 			gencodec:"required"`
-		UncledS							*hexutil.Big   			`json:"uncledS"            			gencodec:"required"`
+		UncledEntropy							*hexutil.Big   			`json:"uncledEntropy"            			gencodec:"required"`
 		Number      					[]*hexutil.Big 			`json:"number"             			gencodec:"required"`
 		GasLimit    					hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
@@ -44,16 +44,16 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
-	enc.ParentDeltaS = make([]*hexutil.Big, common.HierarchyDepth)
-	enc.ParentUncledSubDeltaS = make([]*hexutil.Big, common.HierarchyDepth)
+	enc.ParentDeltaEntropy = make([]*hexutil.Big, common.HierarchyDepth)
+	enc.ParentUncledDeltaEntropy = make([]*hexutil.Big, common.HierarchyDepth)
 	enc.ParentHash = make([]common.Hash, common.HierarchyDepth-1)
 	enc.Number = make([]*hexutil.Big, common.HierarchyDepth-1)
 
 	copy(enc.ManifestHash, h.ManifestHashArray())
 	for i := 0; i < common.HierarchyDepth; i++ {
 		enc.ParentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
-		enc.ParentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
-		enc.ParentUncledSubDeltaS[i] = (*hexutil.Big)(h.ParentUncledSubDeltaS(i))
+		enc.ParentDeltaEntropy[i] = (*hexutil.Big)(h.ParentDeltaEntropy(i))
+		enc.ParentUncledDeltaEntropy[i] = (*hexutil.Big)(h.ParentUncledDeltaEntropy(i))
 	}
 	for i :=0 ; i< common.HierarchyDepth-1; i++ {
 		enc.ParentHash[i] = h.ParentHash(i)
@@ -69,7 +69,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.ReceiptHash = h.ReceiptHash()
 	enc.PrimeTerminusHash = h.PrimeTerminusHash()
 	enc.InterlinkRootHash = h.InterlinkRootHash()
-	enc.UncledS = (*hexutil.Big)(h.UncledS())
+	enc.UncledEntropy = (*hexutil.Big)(h.UncledEntropy())
 	enc.GasLimit = hexutil.Uint64(h.GasLimit())
 	enc.GasUsed = hexutil.Uint64(h.GasUsed())
 	enc.EfficiencyScore = hexutil.Uint64(h.EfficiencyScore())
@@ -98,13 +98,13 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		PrimeTerminusHash         		*common.Hash          	`json:"primeTerminusHash"           gencodec:"required"`
 		InterlinkRootHash     			*common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
 		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
-		ParentDeltaS 					[]*hexutil.Big 			`json:"parentDeltaS"       			gencodec:"required"`
-		ParentUncledSubDeltaS  		 	[]*hexutil.Big 			`json:"parentUncledSubDeltaS"    	gencodec:"required"`
+		ParentDeltaEntropy 					[]*hexutil.Big 			`json:"parentDeltaEntropy"       			gencodec:"required"`
+		ParentUncledDeltaEntropy  		 	[]*hexutil.Big 			`json:"parentUncledDeltaEntropy"    	gencodec:"required"`
 		EfficiencyScore 			 	*hexutil.Uint64  		`json:"efficiencyScore"    			gencodec:"required"`
 		ThresholdCount				 	*hexutil.Uint64  		`json:"thresholdCount"    			gencodec:"required"`
 		ExpansionNumber				 	*hexutil.Uint64  		`json:"expansionNumber"    			gencodec:"required"`
 		EtxEligibleSlices			 	*common.Hash  		  	`json:"etxEligibleSlices" 			gencodec:"required"`
-		UncledS							*hexutil.Big   			`json:"uncledS"            			gencodec:"required"`
+		UncledEntropy							*hexutil.Big   			`json:"uncledEntropy"            			gencodec:"required"`
 		Number      					[]*hexutil.Big 			`json:"number"             			gencodec:"required"`
 		GasLimit    					*hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					*hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
@@ -153,14 +153,14 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.ParentEntropy == nil {
 		return errors.New("missing required field 'parentEntropy' for Header")
 	}
-	if dec.ParentDeltaS == nil {
-		return errors.New("missing required field 'parentDeltaS' for Header")
+	if dec.ParentDeltaEntropy == nil {
+		return errors.New("missing required field 'parentDeltaEntropy' for Header")
 	}
-	if dec.ParentUncledSubDeltaS == nil {
-		return errors.New("missing required field 'parentUncledSubDeltaS' for Header")
+	if dec.ParentUncledDeltaEntropy == nil {
+		return errors.New("missing required field 'parentUncledDeltaEntropy' for Header")
 	}
-	if dec.UncledS == nil {
-		return errors.New("missing required field 'uncledS' for Header")
+	if dec.UncledEntropy == nil {
+		return errors.New("missing required field 'uncledEntropy' for Header")
 	}
 	if dec.Number == nil {
 		return errors.New("missing required field 'number' for Header")
@@ -190,8 +190,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
 	h.parentEntropy = make([]*big.Int, common.HierarchyDepth)
-	h.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
-	h.parentUncledSubDeltaS = make([]*big.Int, common.HierarchyDepth)
+	h.parentDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
+	h.parentUncledDeltaEntropy = make([]*big.Int, common.HierarchyDepth)
 	h.number = make([]*big.Int, common.HierarchyDepth-1)
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -200,14 +200,14 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'parentEntropy' for Header")
 		}
 		h.SetParentEntropy((*big.Int)(dec.ParentEntropy[i]), i)
-		if dec.ParentDeltaS[i] == nil {
-			return errors.New("missing required field 'parentDeltaS' for Header")
+		if dec.ParentDeltaEntropy[i] == nil {
+			return errors.New("missing required field 'parentDeltaEntropy' for Header")
 		}
-		h.SetParentDeltaS((*big.Int)(dec.ParentDeltaS[i]), i)
-		if  dec.ParentUncledSubDeltaS[i] == nil {
-			return errors.New("missing required field 'parentUncledDeltaS' for Header")
+		h.SetParentDeltaEntropy((*big.Int)(dec.ParentDeltaEntropy[i]), i)
+		if  dec.ParentUncledDeltaEntropy[i] == nil {
+			return errors.New("missing required field 'parentUncledDeltaEntropy' for Header")
 		}
-		h.SetParentUncledSubDeltaS((*big.Int)(dec.ParentUncledSubDeltaS[i]), i)
+		h.SetParentUncledDeltaEntropy((*big.Int)(dec.ParentUncledDeltaEntropy[i]), i)
 	}
 
 	for i := 0; i < common.HierarchyDepth-1; i++ {
@@ -228,7 +228,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
 	h.SetPrimeTerminusHash(*dec.PrimeTerminusHash)
 	h.SetInterlinkRootHash(*dec.InterlinkRootHash)
-	h.SetUncledS((*big.Int)(dec.UncledS))
+	h.SetUncledEntropy((*big.Int)(dec.UncledEntropy))
 	h.SetGasLimit(uint64(*dec.GasLimit))
 	h.SetGasUsed(uint64(*dec.GasUsed))
 	h.SetEfficiencyScore(uint16(*dec.EfficiencyScore))
