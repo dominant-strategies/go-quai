@@ -86,7 +86,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 	}
 
 	// Prime terminus determines which location is eligible to accept the etx
-	primeTerminus := header.PrimeTerminus()
+	primeTerminusHash := header.PrimeTerminusHash()
 	_, parentOrder, err := chain.Engine().CalcOrder(chain, parent)
 	if err != nil {
 		return vm.BlockContext{}, fmt.Errorf("parent order cannot be calculated")
@@ -95,9 +95,9 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 	if parentOrder == common.PRIME_CTX {
 		primeTerminusHeader = parent
 	} else {
-		primeTerminusHeader = chain.GetHeaderByHash(primeTerminus)
+		primeTerminusHeader = chain.GetHeaderByHash(primeTerminusHash)
 		if primeTerminusHeader == nil {
-			log.Global.Error("Prime terminus header not found", "headerHash", header.Hash(), "primeTerminus", primeTerminus)
+			log.Global.Error("Prime terminus header not found", "headerHash", header.Hash(), "primeTerminusHash", primeTerminusHash)
 			return vm.BlockContext{}, ErrSubNotSyncedToDom
 		}
 	}

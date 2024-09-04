@@ -452,23 +452,23 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		if header.StateLimit() != expectedStateLimit {
 			return fmt.Errorf("invalid StateLimit: have %d, want %d, parentStateLimit %d", expectedStateLimit, header.StateLimit(), parent.StateLimit())
 		}
-		var expectedPrimeTerminus common.Hash
+		var expectedPrimeTerminusHash common.Hash
 		var expectedPrimeTerminusNumber *big.Int
 		_, parentOrder, _ := progpow.CalcOrder(chain, parent)
 		if parentOrder == common.PRIME_CTX {
-			expectedPrimeTerminus = parent.Hash()
+			expectedPrimeTerminusHash = parent.Hash()
 			expectedPrimeTerminusNumber = parent.Number(common.PRIME_CTX)
 		} else {
 			if chain.IsGenesisHash(parent.Hash()) {
-				expectedPrimeTerminus = parent.Hash()
+				expectedPrimeTerminusHash = parent.Hash()
 				expectedPrimeTerminusNumber = parent.Number(common.PRIME_CTX)
 			} else {
-				expectedPrimeTerminus = parent.PrimeTerminus()
+				expectedPrimeTerminusHash = parent.PrimeTerminusHash()
 				expectedPrimeTerminusNumber = parent.PrimeTerminusNumber()
 			}
 		}
-		if header.PrimeTerminus() != expectedPrimeTerminus {
-			return fmt.Errorf("invalid primeTerminus: have %v, want %v", header.PrimeTerminus(), expectedPrimeTerminus)
+		if header.PrimeTerminusHash() != expectedPrimeTerminusHash {
+			return fmt.Errorf("invalid primeTerminusHash: have %v, want %v", header.PrimeTerminusHash(), expectedPrimeTerminusHash)
 		}
 		if header.PrimeTerminusNumber().Cmp(expectedPrimeTerminusNumber) != 0 {
 			return fmt.Errorf("invalid primeTerminusNumber: have %v, want %v", header.PrimeTerminusNumber(), expectedPrimeTerminusNumber)

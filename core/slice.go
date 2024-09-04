@@ -914,7 +914,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetGasLimit(header.GasLimit())
 		combinedPendingHeader.Header().SetGasUsed(header.GasUsed())
 		combinedPendingHeader.Header().SetExtra(header.Extra())
-		combinedPendingHeader.Header().SetPrimeTerminus(header.PrimeTerminus())
+		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
 		combinedPendingHeader.Body().SetTransactions(header.Transactions())
 		combinedPendingHeader.Body().SetExtTransactions(header.ExtTransactions())
 		combinedPendingHeader.Body().SetUncles(header.Uncles())

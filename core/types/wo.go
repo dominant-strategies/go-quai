@@ -351,8 +351,8 @@ func (wo *WorkObject) InterlinkRootHash() common.Hash {
 	return wo.Header().InterlinkRootHash()
 }
 
-func (wo *WorkObject) PrimeTerminus() common.Hash {
-	return wo.Header().PrimeTerminus()
+func (wo *WorkObject) PrimeTerminusHash() common.Hash {
+	return wo.Header().PrimeTerminusHash()
 }
 func (wo *WorkObject) Transactions() Transactions {
 	return wo.Body().Transactions()

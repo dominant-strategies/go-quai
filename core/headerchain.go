@@ -1222,7 +1222,7 @@ func (hc *HeaderChain) GetExpansionNumber() uint8 {
 }
 
 func (hc *HeaderChain) GetPrimeTerminus(header *types.WorkObject) *types.WorkObject {
-	return hc.GetHeaderByHash(header.PrimeTerminus())
+	return hc.GetHeaderByHash(header.PrimeTerminusHash())
 }
 
 func (hc *HeaderChain) WriteAddressOutpoints(outpoints map[string]map[string]*types.OutpointAndDenomination) error {

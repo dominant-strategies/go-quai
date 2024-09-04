@@ -527,7 +527,7 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*he
 		return (*hexutil.Big)(misc.CalcBaseFee(chainCfg, header)), nil
 	} else {
 		// Use the prime terminus if we have it
-		lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminus())
+		lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminusHash())
 		if lastPrime == nil || err != nil {
 			lastPrime = header
 		}
@@ -563,7 +563,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	quaiBaseFee := misc.CalcBaseFee(chainCfg, header)
 	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), quaiBaseFee)
 	// Use the prime terminus if we have it
-	lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminus())
+	lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminusHash())
 	if lastPrime == nil || err != nil {
 		lastPrime = header
 	}
