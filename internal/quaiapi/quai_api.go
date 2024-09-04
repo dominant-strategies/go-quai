@@ -637,25 +637,6 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 	return fields, nil
 }
 
-// rpcMarshalReOrgData converts the reOrgData obtained to the right header format
-func RPCMarshalReOrgData(header *types.Header, newHeaders []*types.Header, oldHeaders []*types.Header) (map[string]interface{}, error) {
-	fields := map[string]interface{}{"header": header.RPCMarshalHeader()}
-
-	fieldNewHeaders := make([]interface{}, len(newHeaders))
-	for i, newHeader := range newHeaders {
-		fieldNewHeaders[i] = newHeader.RPCMarshalHeader()
-	}
-
-	fieldOldHeaders := make([]interface{}, len(oldHeaders))
-	for i, oldHeader := range oldHeaders {
-		fieldOldHeaders[i] = oldHeader.RPCMarshalHeader()
-	}
-
-	fields["newHeaders"] = fieldNewHeaders
-	fields["oldHeaders"] = fieldOldHeaders
-	return fields, nil
-}
-
 // RPCMarshalHash convert the hash into a the correct interface.
 func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
 	fields := map[string]interface{}{"Hash": hash}
