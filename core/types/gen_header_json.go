@@ -280,7 +280,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 		TxHash     common.Hash    `json:"txHash" gencoden:"required"`
 		Location   hexutil.Bytes  `json:"location" gencoden:"required"`
 		MixHash    common.Hash    `json:"mixHash" gencoden:"required"`
-		Time       hexutil.Uint64 `json:"time" gencoden:"required"`
+		Time       hexutil.Uint64 `json:"timestamp" gencoden:"required"`
 		Nonce      BlockNonce     `json:"nonce" gencoden:"required"`
 		Coinbase   common.Address `json:"coinbase" gencoden:"required"`
 	}
@@ -310,7 +310,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 		TxHash     common.Hash     `json:"txHash" gencoden:"required"`
 		Location   hexutil.Bytes   `json:"location" gencoden:"required"`
 		MixHash	   common.Hash     `json:"mixHash" gencoden:"required"`
-		Time       hexutil.Uint64  `json:"time" gencoden:"required"`
+		Time       hexutil.Uint64  `json:"timestamp" gencoden:"required"`
 		Nonce      BlockNonce      `json:"nonce" gencoden:"required"`
 		Coinbase   common.Address  `json:"coinbase" gencoden:"required"`
 	}

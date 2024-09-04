@@ -386,7 +386,6 @@ func uint64ToByteArr(val uint64) [8]byte {
 // RPCMarshalHeader converts the given header to the RPC output .
 func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result := map[string]interface{}{
-		"hash":                h.Hash(),
 		"parentHash":          h.ParentHashArray(),
 		"uncledS":             (*hexutil.Big)(h.UncledS()),
 		"sha3Uncles":          h.UncleHash(),

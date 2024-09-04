@@ -925,7 +925,7 @@ func (wh *WorkObjectHeader) RPCMarshalWorkObjectHeader() map[string]interface{} 
 		"nonce":               wh.Nonce(),
 		"location":            hexutil.Bytes(wh.Location()),
 		"txHash":              wh.TxHash(),
-		"time":                hexutil.Uint64(wh.Time()),
+		"timestamp":           hexutil.Uint64(wh.Time()),
 		"mixHash":             wh.MixHash(),
 		"coinbase":            wh.Coinbase(),
 	}
