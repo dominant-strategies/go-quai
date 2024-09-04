@@ -26,7 +26,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		EtxSetRoot    					common.Hash    			`json:"etxSetRoot"          		gencodec:"required"`
 		EtxRollupHash					common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
-		PrimeTerminus         			common.Hash           	`json:"primeTerminus"            	gencodec:"required"`
+		PrimeTerminusHash         		common.Hash         	`json:"primeTerminusHash"         	gencodec:"required"`
 		InterlinkRootHash     			common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
 		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
 		ParentDeltaS 					[]*hexutil.Big 			`json:"parentDeltaS"       			gencodec:"required"`
@@ -67,7 +67,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.EtxSetRoot = h.EtxSetRoot()
 	enc.EtxRollupHash = h.EtxRollupHash()
 	enc.ReceiptHash = h.ReceiptHash()
-	enc.PrimeTerminus = h.PrimeTerminus()
+	enc.PrimeTerminusHash = h.PrimeTerminusHash()
 	enc.InterlinkRootHash = h.InterlinkRootHash()
 	enc.UncledS = (*hexutil.Big)(h.UncledS())
 	enc.GasLimit = hexutil.Uint64(h.GasLimit())
@@ -95,7 +95,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		EtxSetRoot    					*common.Hash    		`json:"etxSetRoot"          		gencodec:"required"`
 		EtxRollupHash					*common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
-		PrimeTerminus         			*common.Hash           	`json:"primeTerminus"            	gencodec:"required"`
+		PrimeTerminusHash         		*common.Hash          	`json:"primeTerminusHash"           gencodec:"required"`
 		InterlinkRootHash     			*common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
 		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
 		ParentDeltaS 					[]*hexutil.Big 			`json:"parentDeltaS"       			gencodec:"required"`
@@ -144,8 +144,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.ReceiptHash == nil {
 		return errors.New("missing required field 'receiptsRoot' for Header")
 	}
-	if dec.PrimeTerminus == nil {
-		return errors.New("missing required field 'primeTerminus' for Header")
+	if dec.PrimeTerminusHash == nil {
+		return errors.New("missing required field 'primeTerminusHash' for Header")
 	}
 	if dec.InterlinkRootHash == nil {
 		return errors.New("missing required field 'interlinkRootHash' for Header")
@@ -226,7 +226,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetEtxHash(*dec.EtxHash)
 	h.SetEtxSetRoot(*dec.EtxSetRoot)
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
-	h.SetPrimeTerminus(*dec.PrimeTerminus)
+	h.SetPrimeTerminusHash(*dec.PrimeTerminusHash)
 	h.SetInterlinkRootHash(*dec.InterlinkRootHash)
 	h.SetUncledS((*big.Int)(dec.UncledS))
 	h.SetGasLimit(uint64(*dec.GasLimit))

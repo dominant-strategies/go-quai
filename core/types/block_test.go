@@ -49,7 +49,7 @@ func headerTestData() (*Header, common.Hash) {
 		thresholdCount:        12345,
 		expansionNumber:       123,
 		etxEligibleSlices:     common.HexToHash("0xcdef0123456789abcdef0123456789abcdef0123456789abcdefb"),
-		primeTerminus:         common.HexToHash("0xdef0123456789abcdef0123456789abcdef0123456789abcdefc"),
+		primeTerminusHash:     common.HexToHash("0xdef0123456789abcdef0123456789abcdef0123456789abcdefc"),
 		interlinkRootHash:     common.HexToHash("0xef0123456789abcdef0123456789abcdef0123456789abcdefd"),
 		uncledS:               big.NewInt(123456789),
 		number:                []*big.Int{big.NewInt(123456789), big.NewInt(123456789)},
@@ -254,7 +254,7 @@ func FuzzHeaderEtxEligibleSlicesHash(f *testing.F) {
 }
 
 func FuzzHeaderPrimeTerminusHash(f *testing.F) {
-	fuzzHeaderHash(f, func(h *Header) common.Hash { return h.primeTerminus }, func(h *Header, hash common.Hash) { h.primeTerminus = hash })
+	fuzzHeaderHash(f, func(h *Header) common.Hash { return h.primeTerminusHash }, func(h *Header, hash common.Hash) { h.primeTerminusHash = hash })
 }
 
 func FuzzHeaderInterlinkRootHashHash(f *testing.F) {

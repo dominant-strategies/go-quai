@@ -20,11 +20,11 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 		return big0, common.PRIME_CTX, nil
 	}
 	// Need to use the prime terminus expansion number
-	primeTerminus := chain.GetBlockByHash(header.PrimeTerminus())
-	if primeTerminus == nil {
+	primeTerminusBlock := chain.GetBlockByHash(header.PrimeTerminusHash())
+	if primeTerminusBlock == nil {
 		return big0, -1, errors.New("prime terminus cannot be found during the calc order")
 	}
-	expansionNum := primeTerminus.ExpansionNumber()
+	expansionNum := primeTerminusBlock.ExpansionNumber()
 
 	// Verify the seal and get the powHash for the given header
 	err := blake3pow.verifySeal(header.WorkObjectHeader())

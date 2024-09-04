@@ -570,9 +570,9 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			primeTerminus = block
 		} else {
 			// convert the Quai reward into Qi and add it to the utxoFees
-			primeTerminus = w.hc.GetHeaderByHash(work.wo.PrimeTerminus())
+			primeTerminus = w.hc.GetHeaderByHash(work.wo.PrimeTerminusHash())
 			if primeTerminus == nil {
-				return nil, fmt.Errorf("could not find prime terminus header %032x", work.wo.PrimeTerminus())
+				return nil, fmt.Errorf("could not find prime terminus header %032x", work.wo.PrimeTerminusHash())
 			}
 		}
 		if coinbase.IsInQiLedgerScope() {
@@ -1186,14 +1186,14 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	if nodeCtx == common.ZONE_CTX {
 		if order == common.PRIME_CTX {
 			// Set the prime terminus
-			newWo.Header().SetPrimeTerminus(parent.Hash())
+			newWo.Header().SetPrimeTerminusHash(parent.Hash())
 			newWo.WorkObjectHeader().SetPrimeTerminusNumber(parent.Number(common.PRIME_CTX))
 		} else {
 			if w.hc.IsGenesisHash(parent.Hash()) {
-				newWo.Header().SetPrimeTerminus(parent.Hash())
+				newWo.Header().SetPrimeTerminusHash(parent.Hash())
 			} else {
 				// carry the prime terminus from the parent block
-				newWo.Header().SetPrimeTerminus(parent.Header().PrimeTerminus())
+				newWo.Header().SetPrimeTerminusHash(parent.Header().PrimeTerminusHash())
 			}
 			newWo.WorkObjectHeader().SetPrimeTerminusNumber(parent.WorkObjectHeader().PrimeTerminusNumber())
 		}

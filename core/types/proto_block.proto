@@ -33,7 +33,7 @@ message ProtoHeader {
   optional uint64 threshold_count = 25;
   optional uint64 expansion_number = 26;
   optional common.ProtoHash etx_eligible_slices = 27;
-  optional common.ProtoHash prime_terminus = 28;
+  optional common.ProtoHash prime_terminus_hash = 28;
   optional common.ProtoHash interlink_root_hash = 29;
 }
 

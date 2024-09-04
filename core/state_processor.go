@@ -348,9 +348,9 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			if block.Coinbase().IsInQiLedgerScope() {
 				totalFees.Add(totalFees, fees)
 			} else {
-				primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminus())
+				primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 				if primeTerminus == nil {
-					return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+					return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 				}
 				totalFees.Add(totalFees, misc.QiToQuai(primeTerminus.WorkObjectHeader(), fees))
 			}
@@ -438,9 +438,9 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			if etx.To().IsInQiLedgerScope() {
 				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Quai->Qi Conversion
 					lock := new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod))
-					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminus())
+					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 					if primeTerminus == nil {
-						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 					}
 					value := misc.QuaiToQi(primeTerminus.WorkObjectHeader(), etx.Value()) // convert Quai to Qi
 					txGas := etx.Gas()
@@ -498,9 +498,9 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			} else {
 				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Qi->Quai Conversion
 					msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), big.NewInt(params.ConversionLockPeriod)))
-					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminus())
+					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 					if primeTerminus == nil {
-						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 					}
 					// Convert Qi to Quai
 					msg.SetValue(misc.QiToQuai(primeTerminus.WorkObjectHeader(), etx.Value()))
@@ -517,9 +517,9 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 				if block.Coinbase().IsInQuaiLedgerScope() {
 					totalFees.Add(totalFees, quaiFees)
 				} else {
-					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminus())
+					primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 					if primeTerminus == nil {
-						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+						return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 					}
 					totalFees.Add(totalFees, misc.QuaiToQi(primeTerminus.WorkObjectHeader(), quaiFees))
 				}
@@ -540,9 +540,9 @@ func (p *StateProcessor) Process(block *types.WorkObject) (types.Receipts, []*ty
 			if block.Coinbase().IsInQuaiLedgerScope() {
 				totalFees.Add(totalFees, quaiFees)
 			} else {
-				primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminus())
+				primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 				if primeTerminus == nil {
-					return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+					return nil, nil, nil, nil, 0, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 				}
 				totalFees.Add(totalFees, misc.QuaiToQi(primeTerminus.WorkObjectHeader(), quaiFees))
 			}
@@ -826,10 +826,10 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 			if ETXPCount > etxPLimit {
 				return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
 			}
-			primeTerminus := currentHeader.PrimeTerminus()
-			primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
+			primeTerminusHash := currentHeader.PrimeTerminusHash()
+			primeTerminusHeader := chain.GetHeaderByHash(primeTerminusHash)
 			if primeTerminusHeader == nil {
-				return nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminus)
+				return nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminusHash)
 			}
 			if !toAddr.IsInQiLedgerScope() {
 				return nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
@@ -1042,10 +1042,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, updateState bool, ch
 			if ETXPCount > *etxPLimit {
 				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
 			}
-			primeTerminus := currentHeader.PrimeTerminus()
-			primeTerminusHeader := chain.GetHeaderByHash(primeTerminus)
+			primeTerminusHash := currentHeader.PrimeTerminusHash()
+			primeTerminusHeader := chain.GetHeaderByHash(primeTerminusHash)
 			if primeTerminusHeader == nil {
-				return nil, nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminus), nil
+				return nil, nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminusHash), nil
 			}
 			if !toAddr.IsInQiLedgerScope() {
 				return nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
@@ -1276,9 +1276,9 @@ func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, pare
 		if parentOrder == common.PRIME_CTX {
 			primeTerminus = parent
 		} else {
-			primeTerminus = bc.GetHeaderByHash(header.PrimeTerminus())
+			primeTerminus = bc.GetHeaderByHash(header.PrimeTerminusHash())
 			if primeTerminus == nil {
-				return nil, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminus())
+				return nil, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 			}
 		}
 		// Convert Qi to Quai

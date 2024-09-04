@@ -102,9 +102,9 @@ type Header struct {
 	parentUncledSubDeltaS []*big.Int    `json:"parentUncledSubDeltaS" gencodec:"required"`
 	efficiencyScore       uint16        `json:"efficiencyScore"       gencodec:"required"`
 	thresholdCount        uint16        `json:"thresholdCount"        gencodec:"required"`
-	expansionNumber       uint8         `json:"expansionNumber"     	gencodec:"required"`
+	expansionNumber       uint8         `json:"expansionNumber"       gencodec:"required"`
 	etxEligibleSlices     common.Hash   `json:"etxEligibleSlices"     gencodec:"required"`
-	primeTerminus         common.Hash   `json:"primeTerminus"         gencodec:"required"`
+	primeTerminusHash     common.Hash   `json:"primeTerminusHash"     gencodec:"required"`
 	interlinkRootHash     common.Hash   `json:"interlinkRootHash"     gencodec:"required"`
 	uncledS               *big.Int      `json:"uncledLogS"            gencodec:"required"`
 	number                []*big.Int    `json:"number"                gencodec:"required"`
@@ -157,7 +157,7 @@ func EmptyHeader() *Header {
 	h.thresholdCount = 0
 	h.expansionNumber = 0
 	h.etxEligibleSlices = EmptyHash
-	h.primeTerminus = EmptyRootHash
+	h.primeTerminusHash = EmptyRootHash
 	h.interlinkRootHash = EmptyRootHash
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -210,7 +210,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
 	etxEligibleSlices := common.ProtoHash{Value: h.EtxEligibleSlices().Bytes()}
-	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
+	primeTerminusHash := common.ProtoHash{Value: h.PrimeTerminusHash().Bytes()}
 	interlinkRootHash := common.ProtoHash{Value: h.InterlinkRootHash().Bytes()}
 	gasLimit := h.GasLimit()
 	gasUsed := h.GasUsed()
@@ -227,7 +227,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		EtxSetRoot:        &etxSetRoot,
 		EtxRollupHash:     &etxRollupHash,
 		ReceiptHash:       &receiptHash,
-		PrimeTerminus:     &primeTerminus,
+		PrimeTerminusHash: &primeTerminusHash,
 		InterlinkRootHash: &interlinkRootHash,
 		EtxEligibleSlices: &etxEligibleSlices,
 		UncledS:           h.UncledS().Bytes(),
@@ -294,7 +294,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.ReceiptHash == nil {
 		return errors.New("missing required field 'ReceiptHash' in Header")
 	}
-	if protoHeader.PrimeTerminus == nil {
+	if protoHeader.PrimeTerminusHash == nil {
 		return errors.New("missing required field 'PrimeTerminus' in Header")
 	}
 	if protoHeader.InterlinkRootHash == nil {
@@ -330,9 +330,6 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.EtxEligibleSlices == nil {
 		return errors.New("missing required field 'EtxEligibleSlices' in Header")
 	}
-	if protoHeader.PrimeTerminus == nil {
-		return errors.New("missing required field 'PrimeTerminus' in Header")
-	}
 
 	// Initialize the array fields before setting
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
@@ -361,7 +358,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.SetEtxHash(common.BytesToHash(protoHeader.GetEtxHash().GetValue()))
 	h.SetEtxSetRoot(common.BytesToHash(protoHeader.GetEtxSetRoot().GetValue()))
 	h.SetEtxRollupHash(common.BytesToHash(protoHeader.GetEtxRollupHash().GetValue()))
-	h.SetPrimeTerminus(common.BytesToHash(protoHeader.GetPrimeTerminus().GetValue()))
+	h.SetPrimeTerminusHash(common.BytesToHash(protoHeader.GetPrimeTerminusHash().GetValue()))
 	h.SetInterlinkRootHash(common.BytesToHash(protoHeader.GetInterlinkRootHash().GetValue()))
 	h.SetUncledS(new(big.Int).SetBytes(protoHeader.GetUncledS()))
 	h.SetGasLimit(protoHeader.GetGasLimit())
@@ -398,7 +395,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"extTransactionsRoot": h.EtxHash(),
 		"etxSetRoot":          h.EtxSetRoot(),
 		"extRollupRoot":       h.EtxRollupHash(),
-		"primeTerminus":       h.PrimeTerminus(),
+		"primeTerminusHash":   h.PrimeTerminusHash(),
 		"interlinkRootHash":   h.InterlinkRootHash(),
 		"manifestHash":        h.ManifestHashArray(),
 		"gasLimit":            hexutil.Uint(h.GasLimit()),
@@ -507,7 +504,7 @@ func (h *Header) BaseFee() *big.Int {
 	return h.baseFee
 }
 func (h *Header) Extra() []byte                  { return common.CopyBytes(h.extra) }
-func (h *Header) PrimeTerminus() common.Hash     { return h.primeTerminus }
+func (h *Header) PrimeTerminusHash() common.Hash { return h.primeTerminusHash }
 func (h *Header) InterlinkRootHash() common.Hash { return h.interlinkRootHash }
 
 func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
@@ -550,10 +547,10 @@ func (h *Header) SetEtxRollupHash(val common.Hash) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.etxRollupHash = val
 }
-func (h *Header) SetPrimeTerminus(val common.Hash) {
+func (h *Header) SetPrimeTerminusHash(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.primeTerminus = val
+	h.primeTerminusHash = val
 }
 func (h *Header) SetUncledS(val *big.Int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -660,7 +657,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
 	etxEligibleSlices := common.ProtoHash{Value: h.EtxEligibleSlices().Bytes()}
-	primeTerminus := common.ProtoHash{Value: h.PrimeTerminus().Bytes()}
+	primeTerminusHash := common.ProtoHash{Value: h.PrimeTerminusHash().Bytes()}
 	interlinkRootHash := common.ProtoHash{Value: h.InterlinkRootHash().Bytes()}
 	efficiencyScore := uint64(h.EfficiencyScore())
 	thresholdCount := uint64(h.ThresholdCount())
@@ -681,7 +678,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		GasUsed:           &gasUsed,
 		BaseFee:           h.BaseFee().Bytes(),
 		UncledS:           h.UncledS().Bytes(),
-		PrimeTerminus:     &primeTerminus,
+		PrimeTerminusHash: &primeTerminusHash,
 		InterlinkRootHash: &interlinkRootHash,
 		EtxEligibleSlices: &etxEligibleSlices,
 		EfficiencyScore:   &efficiencyScore,
@@ -857,7 +854,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetEtxSetRoot(h.EtxSetRoot())
 	cpy.SetEtxRollupHash(h.EtxRollupHash())
 	cpy.SetReceiptHash(h.ReceiptHash())
-	cpy.SetPrimeTerminus(h.PrimeTerminus())
+	cpy.SetPrimeTerminusHash(h.PrimeTerminusHash())
 	if len(h.extra) > 0 {
 		cpy.extra = make([]byte, len(h.extra))
 		copy(cpy.extra, h.extra)

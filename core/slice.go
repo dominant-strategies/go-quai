@@ -1108,7 +1108,7 @@ func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, termini
 		if nodeCtx == common.ZONE_CTX && exists && sl.bestPhKey != hash && !sl.poem(newEntropy, bestPh.WorkObject().ParentEntropy(common.ZONE_CTX)) {
 			if !sl.hc.IsGenesisHash(sl.bestPhKey) &&
 				!sl.hc.IsGenesisHash(localPendingHeader.Termini().DomTerminus(nodeLocation)) &&
-				!sl.hc.IsGenesisHash(localPendingHeader.WorkObject().PrimeTerminus()) {
+				!sl.hc.IsGenesisHash(localPendingHeader.WorkObject().PrimeTerminusHash()) {
 				sl.logger.WithFields(log.Fields{
 					"local dom terminus": localPendingHeader.Termini().DomTerminus(nodeLocation),
 					"Number":             combinedPendingHeader.NumberArray(),
@@ -1417,7 +1417,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetGasLimit(header.GasLimit())
 		combinedPendingHeader.Header().SetGasUsed(header.GasUsed())
 		combinedPendingHeader.Header().SetExtra(header.Extra())
-		combinedPendingHeader.Header().SetPrimeTerminus(header.PrimeTerminus())
+		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
 		combinedPendingHeader.Body().SetTransactions(header.Transactions())
 		combinedPendingHeader.Body().SetExtTransactions(header.ExtTransactions())
 		combinedPendingHeader.Body().SetUncles(header.Uncles())
