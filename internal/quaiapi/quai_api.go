@@ -619,18 +619,19 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 		fields["extTransactions"] = extTransactions
 	}
 
-	var marshalUncles []map[string]interface{}
+	marshalUncles := make([]map[string]interface{}, 0)
+	marshalWorkShares := make([]map[string]interface{}, 0)
 	for _, uncle := range block.Uncles() {
 		rpcMarshalUncle := uncle.RPCMarshalWorkObjectHeader()
 		_, err := backend.Engine().VerifySeal(uncle)
 		if err != nil {
-			rpcMarshalUncle["workShare"] = true
+			marshalWorkShares = append(marshalWorkShares, rpcMarshalUncle)
 		} else {
-			rpcMarshalUncle["workShare"] = false
+			marshalUncles = append(marshalUncles, rpcMarshalUncle)
 		}
-		marshalUncles = append(marshalUncles, rpcMarshalUncle)
 	}
 	fields["uncles"] = marshalUncles
+	fields["workshares"] = marshalWorkShares
 	fields["subManifest"] = block.Manifest()
 	fields["interlinkHashes"] = block.InterlinkHashes()
 
@@ -643,14 +644,6 @@ func RPCMarshalHash(hash common.Hash) (map[string]interface{}, error) {
 	return fields, nil
 }
 
-// rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
-// a `PublicBlockchainQuaiAPI`.
-func (s *PublicBlockChainQuaiAPI) rpcMarshalHeader(ctx context.Context, header *types.WorkObject) map[string]interface{} {
-	fields := header.RPCMarshalWorkObject()
-	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogS(header))
-	return fields
-}
-
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
 // a `PublicBlockchainAPI`.
 func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.WorkObject, inclTx bool, fullTx bool) (map[string]interface{}, error) {
@@ -658,11 +651,6 @@ func (s *PublicBlockChainQuaiAPI) rpcMarshalBlock(ctx context.Context, b *types.
 	if err != nil {
 		return nil, err
 	}
-	_, order, err := s.b.CalcOrder(b)
-	if err != nil {
-		return nil, err
-	}
-	fields["order"] = order
 	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogS(b))
 	return fields, err
 }
