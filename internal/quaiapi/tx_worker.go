@@ -87,3 +87,46 @@ func dialClientsAsync(endpoints []string, clientCh chan *quaiclient.Client) {
 		close(clientCh)
 	}()
 }
+
+func (worker *TxWorker) processTxs(ctx context.Context, resultCh chan *types.WorkObject) {
+	for {
+		select {
+		case tx, ok := <-worker.txChan:
+			if !ok {
+				log.Global.Error("Tx miner channel was somehow closed")
+			}
+			worker.engine.MineToThreshold(tx, worker.threshold, ctx.Done(), resultCh)
+		case <-ctx.Done():
+			return
+		case workedTx := <-resultCh:
+			worker.clients[0].SubmitSubWorkshare(ctx, workedTx)
+		}
+	}
+}
+
+func (worker *TxWorker) AddTransaction(tx *types.Transaction) error {
+	threshold, err := worker.clients[0].GetWorkShareThreshold(context.Background())
+	if err != nil {
+		return err
+	}
+	worker.threshold = threshold
+
+	pendingWo, err := worker.clients[0].GetPendingHeader(context.Background())
+	if err != nil {
+		return err
+	}
+	worker.workTemplate = pendingWo
+	pendingWo = types.CopyWorkObject(pendingWo)
+
+	pendingWo.SetTx(tx)
+	select {
+	case worker.txChan <- pendingWo:
+		return nil
+	default:
+		return errChanFull
+	}
+}
+
+func (worker *TxWorker) StopWorkers() {
+	worker.cancelFunc()
+}
