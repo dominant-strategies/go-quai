@@ -15,7 +15,7 @@ import (
 func (h Header) MarshalJSON() ([]byte, error) {
 	var enc struct {
 		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
-		UncleHash    					common.Hash    			`json:"sha3Uncles"         			gencodec:"required"`
+		UncleHash    					common.Hash    			`json:"uncleHash"         			gencodec:"required"`
 		EVMRoot      					common.Hash   			`json:"evmRoot"            			gencodec:"required"`
 		UTXORoot		 				common.Hash	 			`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
@@ -84,7 +84,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 func (h *Header) UnmarshalJSON(input []byte) error {
 	var dec struct {
 		ParentHash   					[]common.Hash   		`json:"parentHash"         			gencodec:"required"`
-		UncleHash    					*common.Hash    		`json:"sha3Uncles"         			gencodec:"required"`
+		UncleHash    					*common.Hash    		`json:"uncleHash"         			gencodec:"required"`
 		EVMRoot      					*common.Hash   			`json:"evmRoot"            			gencodec:"required"`
 		UTXORoot		 				*common.Hash	 		`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					*common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
@@ -116,7 +116,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'parentHash' for Header")
 	}
 	if dec.UncleHash == nil {
-		return errors.New("missing required field 'sha3Uncles' for Header")
+		return errors.New("missing required field 'uncleHash' for Header")
 	}
 	if dec.EVMRoot == nil {
 		return errors.New("missing required field 'evmRoot' for Header")

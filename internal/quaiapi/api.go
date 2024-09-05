@@ -960,7 +960,7 @@ func RPCMarshalETHHeader(head *types.Header) map[string]interface{} {
 		"number":           (*hexutil.Big)(head.Number(common.ZONE_CTX)),
 		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash,
-		"sha3Uncles":       head.UncleHash,
+		"uncleHash":        head.UncleHash,
 		"evmRoot":          head.EVMRoot,
 		"extraData":        hexutil.Bytes(head.Extra()),
 		"size":             hexutil.Uint64(head.Size()),

@@ -74,14 +74,6 @@ func (wo *WorkObject) SealHash() common.Hash {
 	return wo.WorkObjectHeader().SealHash()
 }
 
-func (wo *WorkObject) IsUncle() bool {
-	if wo.WorkObjectHeader() != nil &&
-		wo.Body() == nil {
-		return true
-	}
-	return false
-}
-
 ////////////////////////////////////////////////////////////
 /////////////////// Work Object Getters ///////////////
 ////////////////////////////////////////////////////////////
@@ -612,11 +604,26 @@ func (wb *WorkObjectBody) ExternalTransactions() []*Transaction {
 	return etxs
 }
 
-func CalcUncleHash(uncles []*WorkObjectHeader) common.Hash {
+func CalcUncleHash(uncles []*WorkObjectHeader) (hash common.Hash) {
 	if len(uncles) == 0 {
 		return EmptyUncleHash
 	}
-	return RlpHash(uncles)
+	protoUncles := &ProtoWorkObjectHeaders{}
+	for _, unc := range uncles {
+		protoUncle, err := unc.ProtoEncode()
+		if err != nil {
+			return common.Hash{}
+		}
+		protoUncles.WoHeaders = append(protoUncles.WoHeaders, protoUncle)
+	}
+
+	data, err := proto.Marshal(protoUncles)
+	if err != nil {
+		return common.Hash{}
+	}
+	sum := blake3.Sum256(data[:])
+	hash.SetBytes(sum[:])
+	return hash
 }
 
 ////////////////////////////////////////////////////////////
