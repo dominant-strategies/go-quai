@@ -147,7 +147,7 @@ type Engine interface {
 
 	// CheckIfValidWorkShare checks if the workshare meets the work share
 	// requirements defined by the protocol
-	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool
+	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity
 
 	// UncledUncledSubDeltaLogS returns the log of the uncled entropy reduction  since the past coincident
 	UncledSubDeltaLogS(chain ChainHeaderReader, header *types.WorkObject) *big.Int
@@ -215,6 +215,9 @@ type Engine interface {
 	// VerifySeal computes the PowHash and checks if work meets the difficulty
 	// requirement specified in header
 	VerifySeal(header *types.WorkObjectHeader) (common.Hash, error)
+
+	// VerifyWorkThreshold checks if the work meets the difficulty requirement
+	CheckWorkThreshold(workObjectHeader *types.WorkObjectHeader, workShareThreshold int) bool
 
 	SetThreads(threads int)
 

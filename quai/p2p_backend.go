@@ -252,7 +252,7 @@ func (qbe *QuaiBackend) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				backend.Logger().WithField("err", err).Warn("Sanity check of work object share view failed")
 				return pubsub.ValidationReject
 			}
-			if ok := backend.CheckIfValidWorkShare(data.WorkObject.WorkObjectHeader()); !ok {
+			if validity := backend.CheckIfValidWorkShare(data.WorkObject.WorkObjectHeader()); validity != types.Valid {
 				backend.Logger().Error("work share received from peer is not valid")
 				return pubsub.ValidationReject
 			}

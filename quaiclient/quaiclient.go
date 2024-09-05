@@ -134,6 +134,20 @@ func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, erro
 	return wo, nil
 }
 
+func (ec *Client) GetWorkShareThreshold(ctx context.Context) (int, error) {
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "workshare_getWorkShareThreshold")
+	if err != nil {
+		return -1, err
+	}
+
+	var threshold int
+	if err := json.Unmarshal(raw, &threshold); err != nil {
+		return -1, err
+	}
+	return threshold, nil
+}
+
 // ReceiveMinedHeader sends a mined block back to the node
 func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObject) error {
 	protoWo, err := header.ProtoEncode(types.PEtxObject)

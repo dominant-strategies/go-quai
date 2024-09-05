@@ -68,6 +68,14 @@ const (
 	WorkShareTxObject
 )
 
+type WorkShareValidity int
+
+const (
+	Valid WorkShareValidity = iota
+	Sub
+	Invalid
+)
+
 func (wo *WorkObject) Hash() common.Hash {
 	return wo.WorkObjectHeader().Hash()
 }

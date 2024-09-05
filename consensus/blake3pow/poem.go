@@ -268,12 +268,27 @@ func (blake3pow *Blake3pow) CalcRank(chain consensus.ChainHeaderReader, header *
 	return 0, nil
 }
 
-func (blake3pow *Blake3pow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool {
-	workShareMinTarget, err := consensus.CalcWorkShareThreshold(workShare)
-	if err != nil {
-		blake3pow.logger.Error(err)
+func (blake3pow *Blake3pow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
+	if blake3pow.CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff) {
+		return types.Valid
+	} else if blake3pow.CheckWorkThreshold(workShare, blake3pow.config.WorkShareThreshold) {
+		return types.Sub
+	} else {
+		return types.Invalid
+	}
+}
+
+func (blake3pow *Blake3pow) CheckWorkThreshold(workShare *types.WorkObjectHeader, workShareThresholdDiff int) bool {
+	diff := new(big.Int).Set(workShare.Difficulty())
+	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
+	// Ensure that the threshold is less than the header difficulty. Otherwise the math will be messed up.
+	if c <= workShareThresholdDiff {
 		return false
 	}
+
+	// Verify that the actual work of this WorkShare is acceptable according to the provided threshold.
+	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(c-workShareThresholdDiff)), nil)
+	workShareMinTarget := new(big.Int).Div(big2e256, workShareDiff)
 	powHash, err := blake3pow.ComputePowHash(workShare)
 	if err != nil {
 		return false

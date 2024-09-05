@@ -269,12 +269,27 @@ func (progpow *Progpow) CalcRank(chain consensus.ChainHeaderReader, header *type
 	return 0, nil
 }
 
-func (progpow *Progpow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool {
-	workShareMinTarget, err := consensus.CalcWorkShareThreshold(workShare)
-	if err != nil {
-		progpow.logger.Error(err)
+func (progpow *Progpow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
+	if progpow.CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff) {
+		return types.Valid
+	} else if progpow.CheckWorkThreshold(workShare, progpow.config.WorkShareThreshold) {
+		return types.Sub
+	} else {
+		return types.Invalid
+	}
+}
+
+func (progpow *Progpow) CheckWorkThreshold(workShare *types.WorkObjectHeader, workShareThresholdDiff int) bool {
+	diff := new(big.Int).Set(workShare.Difficulty())
+	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
+	// Ensure that the threshold is less than the header difficulty. Otherwise the math will be messed up.
+	if c <= workShareThresholdDiff {
 		return false
 	}
+
+	// Verify that the actual work of this WorkShare is acceptable according to the provided threshold.
+	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(c-workShareThresholdDiff)), nil)
+	workShareMinTarget := new(big.Int).Div(big2e256, workShareDiff)
 	powHash, err := progpow.ComputePowHash(workShare)
 	if err != nil {
 		return false

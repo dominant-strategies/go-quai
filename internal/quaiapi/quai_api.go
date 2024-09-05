@@ -794,7 +794,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw he
 	return nil
 }
 
-func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexutil.Bytes) error {
+func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw hexutil.Bytes) error {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return errors.New("work shares cannot be broadcasted in non-zone chain")
@@ -811,9 +811,14 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, raw hexu
 		return err
 	}
 
+	return s.ReceiveWorkShare(ctx, workShare)
+}
+
+func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShare *types.WorkObjectHeader) error {
 	if workShare != nil {
 		// check if the workshare is valid before broadcasting as a sanity
-		if !s.b.CheckIfValidWorkShare(workShare) {
+		workShareValidity := s.b.CheckIfValidWorkShare(workShare)
+		if workShareValidity != types.Valid {
 			return errors.New("work share is invalid")
 		}
 

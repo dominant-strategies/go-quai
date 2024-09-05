@@ -598,7 +598,7 @@ func (b *QuaiAPIBackend) SendWorkShare(workShare *types.WorkObjectHeader) error 
 	return b.quai.core.SendWorkShare(workShare)
 }
 
-func (b *QuaiAPIBackend) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool {
+func (b *QuaiAPIBackend) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
 	return b.quai.core.CheckIfValidWorkShare(workShare)
 }
 

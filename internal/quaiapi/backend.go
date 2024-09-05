@@ -100,7 +100,7 @@ type Backend interface {
 	SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription
 	WriteGenesisBlock(block *types.WorkObject, location common.Location)
 	SendWorkShare(workShare *types.WorkObjectHeader) error
-	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool
+	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity
 	SetDomInterface(domInterface core.CoreBackend)
 	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 	GetMaxTxInWorkShare() uint64
