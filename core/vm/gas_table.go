@@ -332,8 +332,8 @@ func gasMidStep(evm *EVM, contract *Contract) (uint64, uint64, error) {
 func gasSlowStep(evm *EVM, contract *Contract) (uint64, uint64, error) {
 	return GasSlowStep, 0, nil
 }
-func gasExtStep(evm *EVM, contract *Contract) (uint64, uint64, error) {
-	return GasExtStep, 0, nil
+func gasEtxStep(evm *EVM, contract *Contract) (uint64, uint64, error) {
+	return GasEtxStep, 0, nil
 }
 
 func gasCreateConstant(evm *EVM, contract *Contract) (uint64, uint64, error) {

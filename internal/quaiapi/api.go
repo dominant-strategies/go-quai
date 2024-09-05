@@ -1184,7 +1184,7 @@ func newRPCTransactionFromBlockIndex(b *types.WorkObject, index uint64, etxs boo
 	nodeCtx := nodeLocation.Context()
 	var txs types.Transactions
 	if etxs {
-		txs = b.ExtTransactions()
+		txs = b.Etxs()
 	} else {
 		txs = b.Transactions()
 	}
@@ -1207,7 +1207,7 @@ func newRPCRawTransactionFromBlockIndex(b *types.WorkObject, index uint64) hexut
 // newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
 func newRPCTransactionFromBlockHash(b *types.WorkObject, hash common.Hash, etxs bool, nodeLocation common.Location) *RPCTransaction {
 	if etxs {
-		for idx, tx := range b.ExtTransactions() {
+		for idx, tx := range b.Etxs() {
 			if tx.Hash() == hash {
 				return newRPCTransactionFromBlockIndex(b, uint64(idx), true, nodeLocation)
 			}

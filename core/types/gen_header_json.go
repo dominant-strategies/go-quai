@@ -11,8 +11,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 )
 
-var _ = (*headerMarshaling)(nil)
-
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	var enc struct {
@@ -23,20 +21,20 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		UTXORoot		 				common.Hash	 			`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
-		EtxHash      					common.Hash   			`json:"extTransactionsRoot"			gencodec:"required"`
+		EtxHash      					common.Hash   			`json:"etxsRoot"			gencodec:"required"`
 		EtxSetRoot    					common.Hash    			`json:"etxSetRoot"          		gencodec:"required"`
-		EtxRollupHash					common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
+		EtxRollupHash					common.Hash   			`json:"etxRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
 		PrimeTerminusHash         		common.Hash         	`json:"primeTerminusHash"         	gencodec:"required"`
 		InterlinkRootHash     			common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
 		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
-		ParentDeltaEntropy 					[]*hexutil.Big 			`json:"parentDeltaEntropy"       			gencodec:"required"`
-		ParentUncledDeltaEntropy  		 	[]*hexutil.Big 			`json:"parentUncledDeltaEntropy"    	gencodec:"required"`
+		ParentDeltaEntropy 				[]*hexutil.Big 			`json:"parentDeltaEntropy"       	gencodec:"required"`
+		ParentUncledDeltaEntropy  		[]*hexutil.Big 			`json:"parentUncledDeltaEntropy"    gencodec:"required"`
 		EfficiencyScore 			 	hexutil.Uint64  		`json:"efficiencyScore"    			gencodec:"required"`
 		ThresholdCount				 	hexutil.Uint64  		`json:"thresholdCount"    			gencodec:"required"`
 		ExpansionNumber				 	hexutil.Uint64  		`json:"expansionNumber"    			gencodec:"required"`
 		EtxEligibleSlices			 	common.Hash  		  	`json:"etxEligibleSlices" 			gencodec:"required"`
-		UncledEntropy							*hexutil.Big   			`json:"uncledEntropy"            			gencodec:"required"`
+		UncledEntropy					*hexutil.Big   			`json:"uncledEntropy"            	gencodec:"required"`
 		Number      					[]*hexutil.Big 			`json:"number"             			gencodec:"required"`
 		GasLimit    					hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
@@ -98,20 +96,20 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		UTXORoot		 				*common.Hash	 		`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					*common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					*common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
-		EtxHash      					*common.Hash   			`json:"extTransactionsRoot"			gencodec:"required"`
+		EtxHash      					*common.Hash   			`json:"etxsRoot"			gencodec:"required"`
 		EtxSetRoot    					*common.Hash    		`json:"etxSetRoot"          		gencodec:"required"`
-		EtxRollupHash					*common.Hash   			`json:"extRollupRoot"      			gencodec:"required"`
+		EtxRollupHash					*common.Hash   			`json:"etxRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
 		PrimeTerminusHash         		*common.Hash          	`json:"primeTerminusHash"           gencodec:"required"`
 		InterlinkRootHash     			*common.Hash           	`json:"interlinkRootHash"        	gencodec:"required"`
 		ParentEntropy					[]*hexutil.Big 			`json:"parentEntropy"      			gencodec:"required"`
-		ParentDeltaEntropy 					[]*hexutil.Big 			`json:"parentDeltaEntropy"       			gencodec:"required"`
-		ParentUncledDeltaEntropy  		 	[]*hexutil.Big 			`json:"parentUncledDeltaEntropy"    	gencodec:"required"`
+		ParentDeltaEntropy 					[]*hexutil.Big 		`json:"parentDeltaEntropy"       	gencodec:"required"`
+		ParentUncledDeltaEntropy  		 	[]*hexutil.Big 		`json:"parentUncledDeltaEntropy"    gencodec:"required"`
 		EfficiencyScore 			 	*hexutil.Uint64  		`json:"efficiencyScore"    			gencodec:"required"`
 		ThresholdCount				 	*hexutil.Uint64  		`json:"thresholdCount"    			gencodec:"required"`
 		ExpansionNumber				 	*hexutil.Uint64  		`json:"expansionNumber"    			gencodec:"required"`
 		EtxEligibleSlices			 	*common.Hash  		  	`json:"etxEligibleSlices" 			gencodec:"required"`
-		UncledEntropy							*hexutil.Big   			`json:"uncledEntropy"            			gencodec:"required"`
+		UncledEntropy							*hexutil.Big   	`json:"uncledEntropy"            	gencodec:"required"`
 		Number      					[]*hexutil.Big 			`json:"number"             			gencodec:"required"`
 		GasLimit    					*hexutil.Uint64		 	`json:"gasLimit"           			gencodec:"required"`
 		GasUsed     					*hexutil.Uint64		 	`json:"gasUsed"            			gencodec:"required"`
@@ -139,13 +137,13 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'transactionsRoot' for Header")
 	}
 	if dec.EtxHash == nil {
-		return errors.New("missing required field 'extTransactionsRoot' for Header")
+		return errors.New("missing required field 'etxsRoot' for Header")
 	}
 	if dec.EtxSetRoot == nil {
 		return errors.New("missing required field 'etxSetRoot' for Header")
 	}
 	if dec.EtxRollupHash == nil {
-		return errors.New("missing required field 'extRollupRoot' for Header")
+		return errors.New("missing required field 'etxRollupRoot' for Header")
 	}
 	if dec.ManifestHash == nil {
 		return errors.New("missing required field 'manifestHash' for Header")
@@ -362,7 +360,7 @@ func (wb *WorkObjectBody) MarshalJSON() ([]byte, error) {
 	var enc struct {
 		Header 				*Header 			`json:"header" gencoden:"required"`
 		Transactions 		Transactions 		`json:"transactions" gencoden:"required"`
-		ExtTransactions 	Transactions 		`json:"extTransactions" gencoden:"required"`
+		Etxs 				Transactions 		`json:"etxs" gencoden:"required"`
 		Uncles 				[]*WorkObjectHeader	`json:"uncles" gencoden:"required"`
 		Manifest 			BlockManifest 		`json:"manifest" gencoden:"required"`
 		InterlinkHashes 	common.Hashes 		`json:"interlinkHashes" gencoden:"required"`
@@ -370,7 +368,7 @@ func (wb *WorkObjectBody) MarshalJSON() ([]byte, error) {
 
 	enc.Header = wb.Header()
 	enc.Transactions = wb.Transactions()
-	enc.ExtTransactions = wb.ExtTransactions()
+	enc.Etxs = wb.Etxs()
 	enc.Uncles = wb.Uncles()
 	enc.Manifest = wb.Manifest()
 	enc.InterlinkHashes = wb.InterlinkHashes()
@@ -383,7 +381,7 @@ func (wb *WorkObjectBody) UnmarshalJSON(input []byte) error {
 	var dec struct {
 		Header 				*Header 				`json:"header" gencoden:"required"`
 		Transactions 		Transactions 			`json:"transactions" gencoden:"required"`
-		ExtTransactions 	Transactions 			`json:"extTransactions" gencoden:"required"`
+		Etxs 	Transactions 			`json:"etxs" gencoden:"required"`
 		Uncles 				[]*WorkObjectHeader 	`json:"uncles" gencoden:"required"`
 		Manifest 			BlockManifest 			`json:"manifest" gencoden:"required"`
 		InterlinkHashes 	common.Hashes 			`json:"interlinkHashes" gencoden:"required"`
@@ -396,7 +394,7 @@ func (wb *WorkObjectBody) UnmarshalJSON(input []byte) error {
 
 	wb.SetHeader(dec.Header)
 	wb.SetTransactions(dec.Transactions)
-	wb.SetExtTransactions(dec.ExtTransactions)
+	wb.SetEtxs(dec.Etxs)
 	wb.SetUncles(dec.Uncles)
 	wb.SetManifest(dec.Manifest)
 	wb.SetInterlinkHashes(dec.InterlinkHashes)

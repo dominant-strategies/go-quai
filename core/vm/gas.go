@@ -27,7 +27,7 @@ const (
 	GasFastStep    uint64 = 5
 	GasMidStep     uint64 = 8
 	GasSlowStep    uint64 = 10
-	GasExtStep     uint64 = 20
+	GasEtxStep     uint64 = 20
 )
 
 // callGas returns the actual gas cost of the call.

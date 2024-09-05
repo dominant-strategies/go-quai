@@ -358,8 +358,8 @@ func (wo *WorkObject) Transactions() Transactions {
 	return wo.Body().Transactions()
 }
 
-func (wo *WorkObject) ExtTransactions() Transactions {
-	return wo.Body().ExtTransactions()
+func (wo *WorkObject) Etxs() Transactions {
+	return wo.Body().Etxs()
 }
 
 func (wo *WorkObject) Uncles() []*WorkObjectHeader {
@@ -432,7 +432,7 @@ func (wo *WorkObject) TransactionsInfo() map[string]interface{} {
 			}
 		}
 	}
-	for _, etx := range wo.ExtTransactions() {
+	for _, etx := range wo.Etxs() {
 		etxOutBound++
 		if IsCoinBaseTx(etx) {
 			coinbaseOutboundEtx++
@@ -600,7 +600,7 @@ func (wh *WorkObjectHeader) SetTime(val uint64) {
 type WorkObjectBody struct {
 	header          *Header
 	transactions    Transactions
-	extTransactions Transactions
+	etxs            Transactions
 	uncles          []*WorkObjectHeader
 	manifest        BlockManifest
 	interlinkHashes common.Hashes
@@ -618,8 +618,8 @@ func (wb *WorkObjectBody) SetTransactions(transactions []*Transaction) {
 	wb.transactions = transactions
 }
 
-func (wb *WorkObjectBody) SetExtTransactions(transactions []*Transaction) {
-	wb.extTransactions = transactions
+func (wb *WorkObjectBody) SetEtxs(transactions []*Transaction) {
+	wb.etxs = transactions
 }
 
 func (wb *WorkObjectBody) SetUncles(uncles []*WorkObjectHeader) {
@@ -646,8 +646,8 @@ func (wb *WorkObjectBody) Transactions() []*Transaction {
 	return wb.transactions
 }
 
-func (wb *WorkObjectBody) ExtTransactions() []*Transaction {
-	return wb.extTransactions
+func (wb *WorkObjectBody) Etxs() []*Transaction {
+	return wb.etxs
 }
 
 func (wb *WorkObjectBody) Uncles() []*WorkObjectHeader {
@@ -700,13 +700,13 @@ func (wo *WorkObject) WithBody(header *Header, txs []*Transaction, etxs []*Trans
 		header:          CopyHeader(header),
 		transactions:    make([]*Transaction, len(txs)),
 		uncles:          make([]*WorkObjectHeader, len(uncles)),
-		extTransactions: make([]*Transaction, len(etxs)),
+		etxs:            make([]*Transaction, len(etxs)),
 		manifest:        make(BlockManifest, len(manifest)),
 		interlinkHashes: make(common.Hashes, len(interlinkHashes)),
 	}
 	copy(woBody.transactions, txs)
 	copy(woBody.uncles, uncles)
-	copy(woBody.extTransactions, etxs)
+	copy(woBody.etxs, etxs)
 	copy(woBody.manifest, manifest)
 	copy(woBody.interlinkHashes, interlinkHashes)
 	for i := range uncles {
@@ -724,7 +724,7 @@ func (wo *WorkObject) WithBody(header *Header, txs []*Transaction, etxs []*Trans
 func EmptyWorkObjectBody() *WorkObjectBody {
 	woBody := &WorkObjectBody{}
 	woBody.SetTransactions([]*Transaction{})
-	woBody.SetExtTransactions([]*Transaction{})
+	woBody.SetEtxs([]*Transaction{})
 	return woBody
 }
 
@@ -760,8 +760,8 @@ func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, 
 		b.Header().SetEtxHash(EmptyRootHash)
 	} else {
 		b.Header().SetEtxHash(DeriveSha(Transactions(etxs), hasher))
-		b.extTransactions = make(Transactions, len(etxs))
-		copy(b.extTransactions, etxs)
+		b.etxs = make(Transactions, len(etxs))
+		copy(b.etxs, etxs)
 	}
 
 	// Since the subordinate's manifest lives in our body, we still need to check
@@ -1096,13 +1096,13 @@ func NewWoBody(header *Header, txs []*Transaction, etxs []*Transaction, uncles [
 		header:          CopyHeader(header),
 		transactions:    make([]*Transaction, len(txs)),
 		uncles:          make([]*WorkObjectHeader, len(uncles)),
-		extTransactions: make([]*Transaction, len(etxs)),
+		etxs:            make([]*Transaction, len(etxs)),
 		manifest:        make(BlockManifest, len(manifest)),
 		interlinkHashes: make(common.Hashes, len(interlinkHashes)),
 	}
 	copy(woBody.transactions, txs)
 	copy(woBody.uncles, uncles)
-	copy(woBody.extTransactions, etxs)
+	copy(woBody.etxs, etxs)
 	copy(woBody.manifest, manifest)
 	copy(woBody.interlinkHashes, interlinkHashes)
 	for i := range uncles {
@@ -1115,8 +1115,8 @@ func CopyWorkObjectBody(wb *WorkObjectBody) *WorkObjectBody {
 	cpy := &WorkObjectBody{header: CopyHeader(wb.header)}
 	cpy.transactions = make(Transactions, len(wb.Transactions()))
 	copy(cpy.transactions, wb.Transactions())
-	cpy.extTransactions = make(Transactions, len(wb.ExtTransactions()))
-	copy(cpy.extTransactions, wb.ExtTransactions())
+	cpy.etxs = make(Transactions, len(wb.Etxs()))
+	copy(cpy.etxs, wb.Etxs())
 	cpy.uncles = make([]*WorkObjectHeader, len(wb.uncles))
 	copy(cpy.uncles, wb.Uncles())
 	cpy.manifest = make(BlockManifest, len(wb.Manifest()))
@@ -1155,7 +1155,7 @@ func (wb *WorkObjectBody) ProtoEncode(woType WorkObjectView) (*ProtoWorkObjectBo
 			return nil, err
 		}
 
-		protoExtTransactions, err := wb.extTransactions.ProtoEncode()
+		protoEtxs, err := wb.etxs.ProtoEncode()
 		if err != nil {
 			return nil, err
 		}
@@ -1179,7 +1179,7 @@ func (wb *WorkObjectBody) ProtoEncode(woType WorkObjectView) (*ProtoWorkObjectBo
 		return &ProtoWorkObjectBody{
 			Header:          header,
 			Transactions:    protoTransactions,
-			ExtTransactions: protoExtTransactions,
+			Etxs:            protoEtxs,
 			Uncles:          protoUncles,
 			Manifest:        protoManifest,
 			InterlinkHashes: protoInterlinkHashes,
@@ -1230,8 +1230,8 @@ func (wb *WorkObjectBody) ProtoDecode(data *ProtoWorkObjectBody, location common
 		if err != nil {
 			return err
 		}
-		wb.extTransactions = Transactions{}
-		err = wb.extTransactions.ProtoDecode(data.GetExtTransactions(), location)
+		wb.etxs = Transactions{}
+		err = wb.etxs.ProtoDecode(data.GetEtxs(), location)
 		if err != nil {
 			return err
 		}
@@ -1265,7 +1265,7 @@ func (wb *WorkObjectBody) RPCMarshalWorkObjectBody() map[string]interface{} {
 	result := map[string]interface{}{
 		"header":          wb.header.RPCMarshalHeader(),
 		"transactions":    wb.Transactions(),
-		"extTransactions": wb.ExtTransactions(),
+		"etxs":            wb.Etxs(),
 		"manifest":        wb.Manifest(),
 		"interlinkHashes": wb.InterlinkHashes(),
 	}

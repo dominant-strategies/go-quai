@@ -386,7 +386,7 @@ func newInstructionSet() JumpTable {
 		},
 		BLOCKHASH: {
 			execute:     opBlockhash,
-			constantGas: gasExtStep,
+			constantGas: gasEtxStep,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
