@@ -46,7 +46,8 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	cfg.Dlo = 6
 	cfg.Dhi = 45
 	cfg.Dout = 20
-	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg))
+	MaxSize := 3 << 20
+	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg), pubsub.WithMaxMessageSize(MaxSize))
 	if err != nil {
 		return nil, err
 	}
