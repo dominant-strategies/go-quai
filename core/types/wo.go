@@ -754,6 +754,16 @@ func (wo *WorkObject) RPCMarshalWorkObject() map[string]interface{} {
 	return result
 }
 
+func (wo *WorkObject) RPCMarshalHeader() map[string]interface{} {
+	result := map[string]interface{}{
+		"woHeader": wo.woHeader.RPCMarshalWorkObjectHeader(),
+	}
+	if wo.woBody != nil && wo.woBody.header != nil {
+		result["header"] = wo.woBody.Header().RPCMarshalHeader()
+	}
+	return result
+}
+
 func (wo *WorkObject) ProtoEncode(woType WorkObjectView) (*ProtoWorkObject, error) {
 	switch woType {
 	case PEtxObject:
