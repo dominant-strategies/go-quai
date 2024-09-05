@@ -259,10 +259,10 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 func (s *PublicBlockChainQuaiAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := s.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
-		response := header.RPCMarshalWorkObject()
+		response := header.RPCMarshalHeader()
 		if number == rpc.PendingBlockNumber {
 			// Pending header need to nil out a few fields
-			for _, field := range []string{"hash", "nonce", "miner"} {
+			for _, field := range []string{"hash", "nonce", "coinbase"} {
 				response[field] = nil
 			}
 		}
@@ -284,7 +284,7 @@ func (s *PublicBlockChainQuaiAPI) GetHeaderHashByNumber(ctx context.Context, num
 func (s *PublicBlockChainQuaiAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
 	header, _ := s.b.HeaderByHash(ctx, hash)
 	if header != nil {
-		return header.RPCMarshalWorkObject()
+		return header.RPCMarshalHeader()
 	}
 	return nil
 }
@@ -300,7 +300,7 @@ func (s *PublicBlockChainQuaiAPI) GetBlockByNumber(ctx context.Context, number r
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
 		if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
-			for _, field := range []string{"hash", "nonce", "miner"} {
+			for _, field := range []string{"hash", "nonce", "coinbase"} {
 				response[field] = nil
 			}
 		}

@@ -409,7 +409,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"stateUsed":         hexutil.Uint64(h.StateUsed()),
 	}
 
-	number := make([]*hexutil.Big, common.HierarchyDepth)
+	number := make([]*hexutil.Big, common.HierarchyDepth-1)
 	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
 	parentDeltaEntropy := make([]*hexutil.Big, common.HierarchyDepth)
 	parentUncledDeltaEntropy := make([]*hexutil.Big, common.HierarchyDepth)

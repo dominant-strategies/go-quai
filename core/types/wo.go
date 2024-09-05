@@ -814,6 +814,17 @@ func (wo *WorkObject) RPCMarshalWorkObject() map[string]interface{} {
 	return result
 }
 
+// RPCMarshalHeader returns a flattened header and woHeader as part of the
+// header response
+func (wo *WorkObject) RPCMarshalHeader() map[string]interface{} {
+	result := make(map[string]interface{})
+	if wo.woBody != nil && wo.woBody.header != nil {
+		result = wo.woBody.Header().RPCMarshalHeader()
+	}
+	result["woHeader"] = wo.woHeader.RPCMarshalWorkObjectHeader()
+	return result
+}
+
 func (wo *WorkObject) ProtoEncode(woType WorkObjectView) (*ProtoWorkObject, error) {
 	switch woType {
 	case PEtxObject:
