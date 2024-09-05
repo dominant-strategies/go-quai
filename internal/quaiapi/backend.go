@@ -111,6 +111,9 @@ type Backend interface {
 	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
 
 	consensus.ChainHeaderReader
+	TxMiningEnabled() bool
+	GetWorkShareThreshold() int
+	GetMinerEndpoints() []string
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool

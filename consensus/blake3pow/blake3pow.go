@@ -38,6 +38,8 @@ type Config struct {
 
 	MinDifficulty *big.Int
 
+	WorkShareThreshold int
+
 	// When set, notifications sent by the remote sealer will
 	// be block header JSON objects instead of work package arrays.
 	NotifyFull bool

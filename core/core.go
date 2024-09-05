@@ -70,7 +70,10 @@ type Core struct {
 
 	procCounter int
 
-	normalListBackoff uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
+	normalListBackoff  uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
+	workShareMining    bool   // whether to mine workshare transactions
+	workShareThreshold int    // workShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction
+	endpoints          []string
 
 	quit chan struct{} // core quit channel
 
@@ -84,12 +87,15 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 	}
 
 	c := &Core{
-		sl:                slice,
-		engine:            engine,
-		quit:              make(chan struct{}),
-		procCounter:       0,
-		normalListBackoff: 1,
-		logger:            logger,
+		sl:                 slice,
+		engine:             engine,
+		quit:               make(chan struct{}),
+		procCounter:        0,
+		normalListBackoff:  1,
+		workShareMining:    config.WorkShareMining,
+		workShareThreshold: config.WorkShareThreshold,
+		endpoints:          config.Endpoints,
+		logger:             logger,
 	}
 
 	// Initialize the sync target to current header parent entropy
@@ -981,6 +987,18 @@ func (c *Core) WriteAddressOutpoints(outpoints map[string]map[string]*types.Outp
 
 func (c *Core) GetMaxTxInWorkShare() uint64 {
 	return c.sl.hc.GetMaxTxInWorkShare()
+}
+
+func (c *Core) TxMiningEnabled() bool {
+	return c.workShareMining
+}
+
+func (c *Core) GetWorkShareThreshold() int {
+	return c.workShareThreshold
+}
+
+func (c *Core) GetMinerEndpoints() []string {
+	return c.endpoints
 }
 
 //--------------------//

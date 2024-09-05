@@ -198,19 +198,20 @@ func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location
 		logger.Warn("Progpow used in shared mode")
 	}
 	engine := progpow.New(progpow.Config{
-		PowMode:       config.PowMode,
-		NotifyFull:    config.NotifyFull,
-		DurationLimit: config.DurationLimit,
-		NodeLocation:  nodeLocation,
-		GasCeil:       config.GasCeil,
-		MinDifficulty: config.MinDifficulty,
+		PowMode:            config.PowMode,
+		NotifyFull:         config.NotifyFull,
+		DurationLimit:      config.DurationLimit,
+		NodeLocation:       nodeLocation,
+		GasCeil:            config.GasCeil,
+		MinDifficulty:      config.MinDifficulty,
+		WorkShareThreshold: config.WorkShareThreshold,
 	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
 }
 
 // CreateBlake3ConsensusEngine creates a progpow consensus engine for the given chain configuration.
-func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *blake3pow.Config, notify []string, noverify bool, db ethdb.Database, logger *log.Logger) consensus.Engine {
+func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *blake3pow.Config, notify []string, noverify bool, workShareThreshold int, db ethdb.Database, logger *log.Logger) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case blake3pow.ModeFake:
@@ -221,12 +222,13 @@ func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location,
 		logger.Warn("Progpow used in shared mode")
 	}
 	engine := blake3pow.New(blake3pow.Config{
-		PowMode:       config.PowMode,
-		NotifyFull:    config.NotifyFull,
-		DurationLimit: config.DurationLimit,
-		NodeLocation:  nodeLocation,
-		GasCeil:       config.GasCeil,
-		MinDifficulty: config.MinDifficulty,
+		PowMode:            config.PowMode,
+		NotifyFull:         config.NotifyFull,
+		DurationLimit:      config.DurationLimit,
+		NodeLocation:       nodeLocation,
+		GasCeil:            config.GasCeil,
+		MinDifficulty:      config.MinDifficulty,
+		WorkShareThreshold: workShareThreshold,
 	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine

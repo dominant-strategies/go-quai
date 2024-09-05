@@ -39,12 +39,13 @@ import (
 )
 
 const (
-	c_GlobalFlagPrefix  = "global."
-	c_NodeFlagPrefix    = "node."
-	c_TXPoolPrefix      = "txpool."
-	c_RPCFlagPrefix     = "rpc."
-	c_PeersFlagPrefix   = "peers."
-	c_MetricsFlagPrefix = "metrics."
+	c_GlobalFlagPrefix    = "global."
+	c_NodeFlagPrefix      = "node."
+	c_TXPoolPrefix        = "txpool."
+	c_RPCFlagPrefix       = "rpc."
+	c_WorkShareFlagPrefix = "workshare."
+	c_PeersFlagPrefix     = "peers."
+	c_MetricsFlagPrefix   = "metrics."
 
 	c_regionPortOffset = 1
 	c_zonePortOffset   = 199
@@ -54,6 +55,7 @@ var Flags = [][]Flag{
 	GlobalFlags,
 	NodeFlags,
 	TXPoolFlags,
+	WorkShareFlags,
 	RPCFlags,
 	PeersFlags,
 	MetricsFlags,
@@ -129,6 +131,12 @@ var TXPoolFlags = []Flag{
 	TxPoolAccountQueueFlag,
 	TxPoolGlobalQueueFlag,
 	TxPoolLifetimeFlag,
+}
+
+var WorkShareFlags = []Flag{
+	WorkShareMiningFlag,
+	WorkShareThresholdFlag,
+	WorkShareMinerEndpoints,
 }
 
 var RPCFlags = []Flag{
@@ -667,6 +675,31 @@ var (
 		Name:  c_RPCFlagPrefix + "gascap",
 		Value: quaiconfig.Defaults.RPCGasCap,
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)" + generateEnvDoc(c_RPCFlagPrefix+"gascap"),
+	}
+)
+
+var (
+	// ****************************************
+	// **                                    **
+	// **         WORKSHARE FLAGS            **
+	// **                                    **
+	// ****************************************
+	WorkShareMiningFlag = Flag{
+		Name:  c_WorkShareFlagPrefix + "mining",
+		Value: false,
+		Usage: "Enable workshare mining" + generateEnvDoc(c_WorkShareFlagPrefix+"mining"),
+	}
+
+	WorkShareThresholdFlag = Flag{
+		Name:  c_WorkShareFlagPrefix + "threshold",
+		Value: 10,
+		Usage: "Threshold for workshare" + generateEnvDoc(c_WorkShareFlagPrefix+"threshold"),
+	}
+
+	WorkShareMinerEndpoints = Flag{
+		Name:  c_WorkShareFlagPrefix + "miners",
+		Value: "",
+		Usage: "RPC endpoint to send minimally mined transactions for further working" + generateEnvDoc(c_WorkShareFlagPrefix+"miners"),
 	}
 )
 
@@ -1364,6 +1397,13 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if viper.IsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = viper.GetFloat64(RPCGlobalTxFeeCapFlag.Name)
 	}
+
+	cfg.Miner.WorkShareMining = viper.GetBool(WorkShareMiningFlag.Name)
+	cfg.Miner.WorkShareThreshold = params.WorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
+	if viper.IsSet(WorkShareMinerEndpoints.Name) {
+		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
+	}
+
 	// Override any default configs for hard coded networks.
 	switch viper.GetString(EnvironmentFlag.Name) {
 	case params.ColosseumName:
