@@ -842,11 +842,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShar
 			s.b.Logger().WithField("err", err).Error("Error broadcasting work share")
 		}
 		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
-		powHash, err := s.b.Engine().ComputePowHash(workShare)
-		if err != nil {
-			s.b.Logger().Error("Error computing the powhash of the workshare")
-		}
-		s.b.Logger().WithFields(log.Fields{"powHash": powHash, "tx count": len(txs)}).Info("Broadcasted workshares with txs")
+		s.b.Logger().WithFields(log.Fields{"tx count": len(txs)}).Info("Broadcasted workshares with txs")
 	}
 	return nil
 }

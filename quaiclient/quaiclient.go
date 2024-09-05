@@ -292,10 +292,27 @@ func (ec *Client) QuaiRateAtBlock(ctx context.Context, block interface{}) (*big.
 	return (*big.Int)(&hex), nil
 }
 
+/// TxPool
+
 func (ec *Client) TxPoolStatus(ctx context.Context) (map[string]hexutil.Uint, error) {
 	var result map[string]hexutil.Uint
 	err := ec.c.CallContext(ctx, &result, "txpool_status")
 	return result, err
+}
+
+// Submits a minimally worked workshare to the client node
+func (ec *Client) SubmitSubWorkshare(ctx context.Context, wo *types.WorkObject) error {
+	protoWo, err := wo.ProtoEncode(types.WorkShareTxObject)
+	if err != nil {
+		log.Global.WithField("err", err).Error("Unable to encode worked transaction")
+		return err
+	}
+	bytesWo, err := proto.Marshal(protoWo)
+	if err != nil {
+		log.Global.WithField("err", err).Error("Unable to marshal worked transaction")
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "workshare_receiveSubWorkshare", hexutil.Bytes(bytesWo))
 }
 
 func (ec *Client) CalcOrder(ctx context.Context, header *types.WorkObject) (int, error) {
