@@ -87,7 +87,7 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 // Header represents a block header in the Quai blockchain.
 type Header struct {
 	parentHash               []common.Hash `json:"parentHash"            gencodec:"required"`
-	uncleHash                common.Hash   `json:"sha3Uncles"            gencodec:"required"`
+	uncleHash                common.Hash   `json:"uncleHash"            gencodec:"required"`
 	evmRoot                  common.Hash   `json:"evmRoot"               gencodec:"required"`
 	utxoRoot                 common.Hash   `json:"utxoRoot"              gencodec:"required"`
 	txHash                   common.Hash   `json:"transactionsRoot"      gencodec:"required"`
@@ -385,7 +385,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result := map[string]interface{}{
 		"parentHash":        h.ParentHashArray(),
 		"uncledEntropy":     (*hexutil.Big)(h.UncledEntropy()),
-		"sha3Uncles":        h.UncleHash(),
+		"uncleHash":         h.UncleHash(),
 		"quaiStateSize":     (*hexutil.Big)(h.QuaiStateSize()),
 		"evmRoot":           h.EVMRoot(),
 		"utxoRoot":          h.UTXORoot(),
