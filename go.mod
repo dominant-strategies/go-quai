@@ -13,7 +13,6 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dominant-strategies/bn256 v0.0.0-20220930122411-fbf930a7493d
 	github.com/edsrzf/mmap-go v1.1.0
-	github.com/golang/mock v1.6.0
 	github.com/golang/snappy v0.0.4
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/websocket v1.5.0

@@ -217,6 +217,13 @@ type Engine interface {
 	VerifySeal(header *types.WorkObjectHeader) (common.Hash, error)
 
 	SetThreads(threads int)
+
+	// Mine is the actual proof-of-work miner that searches for a nonce starting from
+	// seed that results in correct final block difficulty.
+	Mine(workObject *types.WorkObject, abort <-chan struct{}, found chan *types.WorkObject)
+
+	// MineToThreshold allows for customization of the difficulty threshold.
+	MineToThreshold(workObject *types.WorkObject, threshold int, abort <-chan struct{}, found chan *types.WorkObject)
 }
 
 type BlockReader interface {

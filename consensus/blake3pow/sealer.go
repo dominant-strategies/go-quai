@@ -68,7 +68,7 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 	)
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
-		go func(id int, nonce uint64) {
+		go func() {
 			defer func() {
 				if r := recover(); r != nil {
 					blake3pow.logger.WithFields(log.Fields{
@@ -78,8 +78,8 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 				}
 			}()
 			defer pend.Done()
-			blake3pow.mine(header, id, nonce, abort, locals)
-		}(i, uint64(blake3pow.rand.Int63()))
+			blake3pow.Mine(header, abort, locals)
+		}()
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
@@ -120,22 +120,26 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 	return nil
 }
 
-// mine is the actual proof-of-work miner that searches for a nonce starting from
-// seed that results in correct final header difficulty.
-func (blake3pow *Blake3pow) mine(header *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
+func (blake3pow *Blake3pow) Mine(header *types.WorkObject, abort <-chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
 	diff := new(big.Int).Set(header.Difficulty())
 	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
-	if c <= params.WorkSharesThresholdDiff {
+	workShareThreshold := c - params.WorkSharesThresholdDiff
+
+	blake3pow.MineToThreshold(header, workShareThreshold, abort, found)
+}
+
+func (blake3pow *Blake3pow) MineToThreshold(workObject *types.WorkObject, workShareThreshold int, abort <-chan struct{}, found chan *types.WorkObject) {
+	if workShareThreshold <= 0 {
+		log.Global.WithField("WorkshareThreshold", workShareThreshold).Error("WorkshareThreshold must be positive")
 		return
 	}
-	workShareThreshold := c - params.WorkSharesThresholdDiff
+
 	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
-	var (
-		target = new(big.Int).Div(big2e256, workShareDiff)
-	)
+	target := new(big.Int).Div(big2e256, workShareDiff)
 
 	// Start generating random nonces until we abort or find a good one
+	seed := blake3pow.rand.Uint64()
 	var (
 		attempts  = int64(0)
 		nonce     = seed
@@ -157,15 +161,15 @@ search:
 				attempts = 0
 			}
 			// Compute the PoW value of this nonce
-			header = types.CopyWorkObject(header)
-			header.WorkObjectHeader().SetNonce(types.EncodeNonce(nonce))
-			hash := header.Hash().Bytes()
+			workObject = types.CopyWorkObject(workObject)
+			workObject.WorkObjectHeader().SetNonce(types.EncodeNonce(nonce))
+			hash := workObject.Hash().Bytes()
 			if powBuffer.SetBytes(hash).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
 
 				// Seal and return a block (if still needed)
 				select {
-				case found <- header:
+				case found <- workObject:
 					blake3pow.logger.WithFields(log.Fields{
 						"attempts": nonce - seed,
 						"nonce":    nonce,

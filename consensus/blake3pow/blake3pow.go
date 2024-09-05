@@ -75,6 +75,7 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Bla
 		config:  config,
 		update:  make(chan struct{}),
 		logger:  logger,
+		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 		threads: config.NumThreads,
 	}
 	if config.PowMode == ModeShared {

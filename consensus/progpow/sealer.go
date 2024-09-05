@@ -69,7 +69,7 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 	)
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
-		go func(id int, nonce uint64) {
+		go func() {
 			defer func() {
 				if r := recover(); r != nil {
 					progpow.logger.WithFields(log.Fields{
@@ -79,8 +79,8 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 				}
 			}()
 			defer pend.Done()
-			progpow.mine(header, id, nonce, abort, locals)
-		}(i, uint64(progpow.rand.Int63()))
+			progpow.Mine(header, abort, locals)
+		}()
 	}
 	// Wait until sealing is terminated or a nonce is found
 	go func() {
@@ -121,22 +121,27 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 	return nil
 }
 
-// mine is the actual proof-of-work miner that searches for a nonce starting from
-// seed that results in correct final block difficulty.
-func (progpow *Progpow) mine(workObject *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
+func (progpow *Progpow) Mine(workObject *types.WorkObject, abort <-chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
 	diff := new(big.Int).Set(workObject.Difficulty())
 	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
-	if c <= params.WorkSharesThresholdDiff {
+	workShareThreshold := c - params.WorkSharesThresholdDiff
+
+	progpow.MineToThreshold(workObject, workShareThreshold, abort, found)
+}
+
+func (progpow *Progpow) MineToThreshold(workObject *types.WorkObject, workShareThreshold int, abort <-chan struct{}, found chan *types.WorkObject) {
+	if workShareThreshold <= 0 {
+		log.Global.WithField("WorkshareThreshold", workShareThreshold).Error("WorkshareThreshold must be positive")
 		return
 	}
-	workShareThreshold := c - params.WorkSharesThresholdDiff
+
 	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
-	var (
-		target  = new(big.Int).Div(big2e256, workShareDiff)
-		nodeCtx = progpow.config.NodeLocation.Context()
-	)
+	target := new(big.Int).Div(big2e256, workShareDiff)
+	nodeCtx := progpow.config.NodeLocation.Context()
+
 	// Start generating random nonces until we abort or find a good one
+	seed := progpow.rand.Uint64()
 	var (
 		attempts = int64(0)
 		nonce    = seed
