@@ -499,7 +499,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				go sl.domInterface.UpdateDom(bestPh.WorkObject().ParentHash(common.REGION_CTX), pendingHeaderWithTermini.WorkObject(), sl.NodeLocation())
 			}
 		}
-		return block.ExtTransactions(), setHead, nil
+		return block.Etxs(), setHead, nil
 	} else {
 		return subPendingEtxs, setHead, nil
 	}
@@ -989,7 +989,7 @@ func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Locatio
 	}
 	block := sl.hc.GetBlockByHash(hash)
 	if block != nil {
-		return types.PendingEtxs{Header: block.ConvertToPEtxView(), Etxs: block.ExtTransactions()}, nil
+		return types.PendingEtxs{Header: block.ConvertToPEtxView(), Etxs: block.Etxs()}, nil
 	}
 	return types.PendingEtxs{}, ErrPendingEtxNotFound
 }
@@ -1318,7 +1318,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 			}).Error("Pending Block Body not found")
 			return nil, ErrBodyNotFound
 		}
-		if len(pendingBlockBody.ExtTransactions()) == 0 {
+		if len(pendingBlockBody.Etxs()) == 0 {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
@@ -1335,7 +1335,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 		}
 		wo.Body().SetUncles(nil)
 		wo.Body().SetTransactions(nil)
-		wo.Body().SetExtTransactions(nil)
+		wo.Body().SetEtxs(nil)
 		wo.Body().SetInterlinkHashes(interlinkHashes)
 		pendingBlockBody = types.NewWorkObject(wo.WorkObjectHeader(), wo.Body(), nil)
 	}
@@ -1349,8 +1349,8 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 		uncles[i] = uncle
 		sl.logger.WithField("hash", uncle.Hash()).Debug("Pending Block uncle")
 	}
-	etxs := make(types.Transactions, len(pendingBlockBody.ExtTransactions()))
-	for i, etx := range pendingBlockBody.ExtTransactions() {
+	etxs := make(types.Transactions, len(pendingBlockBody.Etxs()))
+	for i, etx := range pendingBlockBody.Etxs() {
 		etxs[i] = etx
 	}
 	subManifest := make(types.BlockManifest, len(pendingBlockBody.Manifest()))
@@ -1363,7 +1363,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	}
 	pendingBlockBody.Body().SetTransactions(txs)
 	pendingBlockBody.Body().SetUncles(uncles)
-	pendingBlockBody.Body().SetExtTransactions(etxs)
+	pendingBlockBody.Body().SetEtxs(etxs)
 	pendingBlockBody.Body().SetManifest(subManifest)
 	pendingBlockBody.Body().SetInterlinkHashes(interlinkHashes)
 	block := types.NewWorkObject(wo.WorkObjectHeader(), pendingBlockBody.Body(), nil)
@@ -1419,7 +1419,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetExtra(header.Extra())
 		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
 		combinedPendingHeader.Body().SetTransactions(header.Transactions())
-		combinedPendingHeader.Body().SetExtTransactions(header.ExtTransactions())
+		combinedPendingHeader.Body().SetEtxs(header.Etxs())
 		combinedPendingHeader.Body().SetUncles(header.Uncles())
 		combinedPendingHeader.Body().SetManifest(header.Manifest())
 	}

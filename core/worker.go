@@ -613,7 +613,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.WorkObje
 			"sealhash":   block.SealHash(),
 			"uncles":     len(work.uncles),
 			"txs":        len(work.txs),
-			"etxs":       len(block.ExtTransactions()),
+			"etxs":       len(block.Etxs()),
 			"gas":        block.GasUsed(),
 			"fees":       totalFees(block, work.receipts),
 			"elapsed":    common.PrettyDuration(time.Since(start)),
@@ -627,7 +627,7 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.WorkObje
 			"sealhash":   block.SealHash(),
 			"uncles":     len(work.uncles),
 			"txs":        len(work.txs),
-			"etxs":       len(block.ExtTransactions()),
+			"etxs":       len(block.Etxs()),
 			"gas":        block.GasUsed(),
 			"fees":       totalFees(block, work.receipts),
 			"elapsed":    common.PrettyDuration(time.Since(start)),
@@ -1439,13 +1439,13 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 			// Compute and set etx rollup hash
 			var etxRollup types.Transactions
 			if w.engine.IsDomCoincident(w.hc, parent) {
-				etxRollup = parent.ExtTransactions()
+				etxRollup = parent.Etxs()
 			} else {
 				etxRollup, err = w.hc.CollectEtxRollup(parent)
 				if err != nil {
 					return nil, err
 				}
-				etxRollup = append(etxRollup, parent.ExtTransactions()...)
+				etxRollup = append(etxRollup, parent.Etxs()...)
 			}
 			// Only include the etxs that are going cross Prime in the rollup and the
 			// conversion  and the coinbase tx

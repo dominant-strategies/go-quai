@@ -232,7 +232,7 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 // those emitted in this block
 func (hc *HeaderChain) CollectEtxRollup(b *types.WorkObject) (types.Transactions, error) {
 	if hc.IsGenesisHash(b.Hash()) {
-		return b.ExtTransactions(), nil
+		return b.Etxs(), nil
 	}
 	parent := hc.GetBlock(b.ParentHash(hc.NodeCtx()), b.NumberU64(hc.NodeCtx())-1)
 	if parent == nil {
@@ -243,7 +243,7 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.WorkObject) (types.Transactions
 
 func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.WorkObject) (types.Transactions, error) {
 	// Initialize the rollup with ETXs emitted by this block
-	newEtxs := b.ExtTransactions()
+	newEtxs := b.Etxs()
 	// Terminate the search if we reached genesis
 	if hc.IsGenesisHash(b.Hash()) {
 		return newEtxs, nil

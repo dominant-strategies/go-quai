@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"reflect"
 	"sync"
@@ -92,13 +91,13 @@ type Header struct {
 	evmRoot                  common.Hash   `json:"evmRoot"               gencodec:"required"`
 	utxoRoot                 common.Hash   `json:"utxoRoot"              gencodec:"required"`
 	txHash                   common.Hash   `json:"transactionsRoot"      gencodec:"required"`
-	etxHash                  common.Hash   `json:"extTransactionsRoot"   gencodec:"required"`
+	etxHash                  common.Hash   `json:"etxsRoot"              gencodec:"required"`
 	etxSetRoot               common.Hash   `json:"etxSetRoot"            gencodec:"required"`
-	etxRollupHash            common.Hash   `json:"extRollupRoot"         gencodec:"required"`
+	etxRollupHash            common.Hash   `json:"etxRollupRoot"         gencodec:"required"`
 	manifestHash             []common.Hash `json:"manifestHash"          gencodec:"required"`
 	receiptHash              common.Hash   `json:"receiptsRoot"          gencodec:"required"`
 	parentEntropy            []*big.Int    `json:"parentEntropy"         gencodec:"required"`
-	parentDeltaEntropy       []*big.Int    `json:"parentDeltaEntropy"          gencodec:"required"`
+	parentDeltaEntropy       []*big.Int    `json:"parentDeltaEntropy"    gencodec:"required"`
 	parentUncledDeltaEntropy []*big.Int    `json:"parentUncledDeltaEntropy" gencodec:"required"`
 	efficiencyScore          uint16        `json:"efficiencyScore"       gencodec:"required"`
 	thresholdCount           uint16        `json:"thresholdCount"        gencodec:"required"`
@@ -116,21 +115,6 @@ type Header struct {
 	// caches
 	hash     atomic.Value
 	sealHash atomic.Value
-}
-
-// field type overrides for gencodec
-type headerMarshaling struct {
-	Number                   []*hexutil.Big
-	GasLimit                 hexutil.Uint64
-	GasUsed                  hexutil.Uint64
-	BaseFee                  *hexutil.Big
-	ParentEntropy            []*hexutil.Big
-	ParentDeltaEntropy       []*hexutil.Big
-	ParentUncledDeltaEntropy []*hexutil.Big
-	UncledEntropy            *hexutil.Big
-	Time                     hexutil.Uint64
-	Extr                     hexutil.Bytes
-	Hash                     common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 func EmptyHeader() *Header {
@@ -189,7 +173,7 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woBody.SetHeader(h)
 	wo.woBody.SetUncles([]*WorkObjectHeader{})
 	wo.woBody.SetTransactions([]*Transaction{})
-	wo.woBody.SetExtTransactions([]*Transaction{})
+	wo.woBody.SetEtxs([]*Transaction{})
 	wo.woBody.SetManifest(BlockManifest{})
 	return NewWorkObjectWithHeader(wo, &Transaction{}, nodeCtx, BlockObject)
 }
@@ -382,27 +366,27 @@ func uint64ToByteArr(val uint64) [8]byte {
 // RPCMarshalHeader converts the given header to the RPC output .
 func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result := map[string]interface{}{
-		"parentHash":          h.ParentHashArray(),
-		"uncledEntropy":       (*hexutil.Big)(h.UncledEntropy()),
-		"sha3Uncles":          h.UncleHash(),
-		"evmRoot":             h.EVMRoot(),
-		"utxoRoot":            h.UTXORoot(),
-		"extraData":           hexutil.Bytes(h.Extra()),
-		"size":                hexutil.Uint64(h.Size()),
-		"transactionsRoot":    h.TxHash(),
-		"receiptsRoot":        h.ReceiptHash(),
-		"extTransactionsRoot": h.EtxHash(),
-		"etxSetRoot":          h.EtxSetRoot(),
-		"extRollupRoot":       h.EtxRollupHash(),
-		"primeTerminusHash":   h.PrimeTerminusHash(),
-		"interlinkRootHash":   h.InterlinkRootHash(),
-		"manifestHash":        h.ManifestHashArray(),
-		"gasLimit":            hexutil.Uint(h.GasLimit()),
-		"gasUsed":             hexutil.Uint(h.GasUsed()),
-		"efficiencyScore":     hexutil.Uint64(h.EfficiencyScore()),
-		"thresholdCount":      hexutil.Uint64(h.ThresholdCount()),
-		"expansionNumber":     hexutil.Uint64(h.ExpansionNumber()),
-		"etxEligibleSlices":   h.EtxEligibleSlices(),
+		"parentHash":        h.ParentHashArray(),
+		"uncledEntropy":     (*hexutil.Big)(h.UncledEntropy()),
+		"sha3Uncles":        h.UncleHash(),
+		"evmRoot":           h.EVMRoot(),
+		"utxoRoot":          h.UTXORoot(),
+		"extraData":         hexutil.Bytes(h.Extra()),
+		"size":              hexutil.Uint64(h.Size()),
+		"transactionsRoot":  h.TxHash(),
+		"receiptsRoot":      h.ReceiptHash(),
+		"etxsRoot":          h.EtxHash(),
+		"etxSetRoot":        h.EtxSetRoot(),
+		"etxRollupRoot":     h.EtxRollupHash(),
+		"primeTerminusHash": h.PrimeTerminusHash(),
+		"interlinkRootHash": h.InterlinkRootHash(),
+		"manifestHash":      h.ManifestHashArray(),
+		"gasLimit":          hexutil.Uint(h.GasLimit()),
+		"gasUsed":           hexutil.Uint(h.GasUsed()),
+		"efficiencyScore":   hexutil.Uint64(h.EfficiencyScore()),
+		"thresholdCount":    hexutil.Uint64(h.ThresholdCount()),
+		"expansionNumber":   hexutil.Uint64(h.ExpansionNumber()),
+		"etxEligibleSlices": h.EtxEligibleSlices(),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth)
@@ -1042,30 +1026,6 @@ func (t *Termini) IsValid() bool {
 	}
 
 	return true
-}
-
-// "external termini" pending header encoding. used for rlp
-type extTermini struct {
-	DomTermini []common.Hash
-	SubTermini []common.Hash
-}
-
-// DecodeRLP decodes the Quai RLP encoding into pending header format.
-func (t *Termini) DecodeRLP(s *rlp.Stream) error {
-	var et extTermini
-	if err := s.Decode(&et); err != nil {
-		return err
-	}
-	t.domTermini, t.subTermini = et.DomTermini, et.SubTermini
-	return nil
-}
-
-// EncodeRLP serializes b into the Quai RLP format.
-func (t Termini) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, extTermini{
-		DomTermini: t.domTermini,
-		SubTermini: t.subTermini,
-	})
 }
 
 // ProtoEncode serializes t into the Quai Proto Termini format

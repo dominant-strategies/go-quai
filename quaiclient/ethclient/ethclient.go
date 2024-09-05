@@ -104,7 +104,7 @@ type rpcBlock struct {
 	Header          *types.Header             `json:"header"`
 	Transactions    []rpcTransaction          `json:"transactions"`
 	UncleHashes     []*types.WorkObjectHeader `json:"uncles"`
-	ExtTransactions []rpcTransaction          `json:"extTransactions"`
+	Etxs            []rpcTransaction          `json:"etxs"`
 	SubManifest     types.BlockManifest       `json:"manifest"`
 	InterlinkHashes common.Hashes             `json:"interlinkHashes"`
 }
@@ -134,8 +134,8 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	etxs := make([]*types.Transaction, len(body.ExtTransactions))
-	for i, etx := range body.ExtTransactions {
+	etxs := make([]*types.Transaction, len(body.Etxs))
+	for i, etx := range body.Etxs {
 		etxs[i] = etx.tx
 	}
 	// Fill the sender cache of subordinate block hashes in the block manifest.

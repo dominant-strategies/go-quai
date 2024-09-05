@@ -590,14 +590,14 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 			}
 		}
 		fields["transactions"] = transactions
-		etxs := block.ExtTransactions()
-		extTransactions := make([]interface{}, len(etxs))
+		etxs := block.Etxs()
+		formatEtxs := make([]interface{}, len(etxs))
 		for i, etx := range etxs {
-			if extTransactions[i], err = formatEtx(etx); err != nil {
+			if formatEtxs[i], err = formatEtx(etx); err != nil {
 				return nil, err
 			}
 		}
-		fields["extTransactions"] = extTransactions
+		fields["etxs"] = formatEtxs
 	}
 
 	var marshalUncles []map[string]interface{}
@@ -690,7 +690,7 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.WorkObject) (
 		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
 			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
 		}
-		return types.NewWorkObjectWithHeaderAndTx(b.WorkObjectHeader(), b.Tx()).WithBody(b.Header(), b.Transactions(), b.ExtTransactions(), b.Uncles(), subManifest, b.InterlinkHashes()), nil
+		return types.NewWorkObjectWithHeaderAndTx(b.WorkObjectHeader(), b.Tx()).WithBody(b.Header(), b.Transactions(), b.Etxs(), b.Uncles(), subManifest, b.InterlinkHashes()), nil
 	}
 }
 

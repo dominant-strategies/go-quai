@@ -93,7 +93,7 @@ message ProtoWorkObjectBody {
   optional ProtoHeader header = 1;
   optional ProtoTransactions transactions = 2;
   optional ProtoWorkObjectHeaders uncles = 3;
-  optional ProtoTransactions ext_transactions = 4;
+  optional ProtoTransactions etxs = 4;
   optional ProtoManifest manifest = 5;
   optional common.ProtoHashes interlink_hashes = 6;
 }

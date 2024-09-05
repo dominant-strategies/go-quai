@@ -68,7 +68,7 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 		if len(block.Transactions()) != 0 {
 			return fmt.Errorf("region body has non zero transactions")
 		}
-		if len(block.ExtTransactions()) != 0 {
+		if len(block.Etxs()) != 0 {
 			return fmt.Errorf("region body has non zero etx transactions")
 		}
 		if len(block.Uncles()) != 0 {
@@ -102,7 +102,7 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 			}
 		}
 		// The header view should have the etxs populated
-		if hash := types.DeriveSha(block.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+		if hash := types.DeriveSha(block.Etxs(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
 			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
 		}
 	}
@@ -127,7 +127,7 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 		if len(wo.Transactions()) != 0 {
 			return fmt.Errorf("region body has non zero transactions")
 		}
-		if len(wo.ExtTransactions()) != 0 {
+		if len(wo.Etxs()) != 0 {
 			return fmt.Errorf("region body has non zero etx transactions")
 		}
 		if len(wo.Uncles()) != 0 {
@@ -158,7 +158,7 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 			return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
 		}
 		// The header view should have the etxs populated
-		if hash := types.DeriveSha(wo.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+		if hash := types.DeriveSha(wo.Etxs(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
 			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
 		}
 	}
@@ -183,7 +183,7 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 		if len(wo.Transactions()) != 0 {
 			return fmt.Errorf("region body has non zero transactions")
 		}
-		if len(wo.ExtTransactions()) != 0 {
+		if len(wo.Etxs()) != 0 {
 			return fmt.Errorf("region body has non zero etx transactions")
 		}
 		if len(wo.Uncles()) != 0 {
@@ -212,7 +212,7 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 			return fmt.Errorf("zone body has non zero interlink hashes")
 		}
 		// The header view should have the etxs populated
-		if hash := types.DeriveSha(wo.ExtTransactions(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
+		if hash := types.DeriveSha(wo.Etxs(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
 			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
 		}
 	}
@@ -237,7 +237,7 @@ func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 		return fmt.Errorf("wo header is nil")
 	}
 	// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
-	if len(wo.ExtTransactions()) != 0 {
+	if len(wo.Etxs()) != 0 {
 		return fmt.Errorf("zone body has non zero transactions")
 	}
 	if len(wo.Manifest()) != 0 {
