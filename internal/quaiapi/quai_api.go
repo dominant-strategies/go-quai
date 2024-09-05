@@ -565,9 +565,10 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 
 	fields["hash"] = block.Hash()
 	fields["woHeader"] = block.WorkObjectHeader().RPCMarshalWorkObjectHeader()
-	fields["header"] = block.Body().Header().RPCMarshalHeader()
 	fields["size"] = hexutil.Uint64(block.Size())
 
+	body := make(map[string]interface{})
+	body["header"] = block.Body().Header().RPCMarshalHeader()
 	if inclTx {
 		formatTx := func(tx *types.Transaction) (interface{}, error) {
 			return tx.Hash(), nil
@@ -589,7 +590,7 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 				return nil, err
 			}
 		}
-		fields["transactions"] = transactions
+		body["transactions"] = transactions
 		etxs := block.Etxs()
 		formatEtxs := make([]interface{}, len(etxs))
 		for i, etx := range etxs {
@@ -597,7 +598,7 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 				return nil, err
 			}
 		}
-		fields["etxs"] = formatEtxs
+		body["etxs"] = formatEtxs
 	}
 
 	var marshalUncles []map[string]interface{}
@@ -611,11 +612,12 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 			marshalUncles = append(marshalUncles, rpcMarshalUncle)
 		}
 	}
-	fields["uncles"] = marshalUncles
-	fields["workshares"] = marshalWorkShares
-	fields["subManifest"] = block.Manifest()
-	fields["interlinkHashes"] = block.InterlinkHashes()
+	body["uncles"] = marshalUncles
+	body["workshares"] = marshalWorkShares
+	body["subManifest"] = block.Manifest()
+	body["interlinkHashes"] = block.InterlinkHashes()
 
+	fields["woBody"] = body
 	return fields, nil
 }
 
