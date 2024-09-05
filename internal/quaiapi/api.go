@@ -1721,3 +1721,24 @@ func toHexSlice(b [][]byte) []string {
 	}
 	return r
 }
+
+type PublicWorkSharesAPI struct {
+	b        Backend
+	txPool   *PublicTransactionPoolAPI
+	txWorker *TxWorker
+}
+
+// NewPublicWorkSharesAPI creates a new RPC service with methods specific for the transaction pool.
+func NewPublicWorkSharesAPI(txpoolAPi *PublicTransactionPoolAPI, b Backend) *PublicWorkSharesAPI {
+	api := &PublicWorkSharesAPI{
+		b,
+		txpoolAPi,
+		nil,
+	}
+	// Start WorkShare workers
+	worker := StartTxWorker(b.Engine(), b.GetMinerEndpoints(), b.NodeLocation(), api, b.GetWorkShareThreshold())
+	api.txWorker = worker
+
+	return api
+}
+
