@@ -243,6 +243,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			}
 			return nil, gas, stateGas, nil
 		}
+		newAccountCreationGas := params.CallNewAccountGas(evm.Context.QuaiStateSize)
+		if gas > newAccountCreationGas {
+			gas = gas - newAccountCreationGas
+		} else {
+			return nil, gas, stateGas, ErrInsufficientBalance
+		}
 		stateGas += params.CallNewAccountGas(evm.Context.QuaiStateSize)
 		evm.StateDB.CreateAccount(internalAddr)
 	}
@@ -456,6 +462,13 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, common.Zero, gas, 0, ErrDepth
 	}
+	newAccountCreationGas := params.CallNewAccountGas(evm.Context.QuaiStateSize)
+	if gas > newAccountCreationGas {
+		gas = gas - newAccountCreationGas
+	} else {
+		return nil, common.Zero, gas, 0, ErrInsufficientBalance
+	}
+	stateUsed := newAccountCreationGas
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Zero, gas, 0, ErrInsufficientBalance
 	}
@@ -476,7 +489,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
-	stateUsed := params.CallNewAccountGas(evm.Context.QuaiStateSize)
 	evm.StateDB.CreateAccount(internalContractAddr)
 
 	evm.StateDB.SetNonce(internalContractAddr, 1)
