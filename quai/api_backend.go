@@ -482,8 +482,8 @@ func (b *QuaiAPIBackend) StateAtTransaction(ctx context.Context, block *types.Wo
 	return b.quai.core.StateAtTransaction(block, txIndex, reexec)
 }
 
-func (b *QuaiAPIBackend) Append(header *types.WorkObject, manifest types.BlockManifest, domPendingHeader *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
-	return b.quai.core.Append(header, manifest, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
+func (b *QuaiAPIBackend) Append(header *types.WorkObject, manifest types.BlockManifest, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
+	return b.quai.core.Append(header, manifest, domTerminus, domOrigin, newInboundEtxs)
 }
 
 func (b *QuaiAPIBackend) DownloadBlocksInManifest(hash common.Hash, manifest types.BlockManifest, entropy *big.Int) {
@@ -512,14 +512,6 @@ func (b *QuaiAPIBackend) WriteBlock(block *types.WorkObject) {
 
 func (b *QuaiAPIBackend) PendingBlock() *types.WorkObject {
 	return b.quai.core.PendingBlock()
-}
-
-func (b *QuaiAPIBackend) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int, updateDomLocation common.Location) {
-	b.quai.core.SubRelayPendingHeader(pendingHeader, newEntropy, location, subReorg, order, updateDomLocation)
-}
-
-func (b *QuaiAPIBackend) UpdateDom(oldDomReference common.Hash, pendingHeader *types.WorkObject, location common.Location) {
-	b.quai.core.UpdateDom(oldDomReference, pendingHeader, location)
 }
 
 func (b *QuaiAPIBackend) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int) {

@@ -143,7 +143,7 @@ func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
 				}).Info("Already processing block")
 				return idx, errors.New("Already in process of appending this block")
 			}
-			newPendingEtxs, _, err := c.sl.Append(block, types.EmptyWorkObject(c.NodeCtx()), common.Hash{}, false, nil)
+			newPendingEtxs, err := c.sl.Append(block, common.Hash{}, false, nil)
 			c.processingCache.Remove(block.Hash())
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
@@ -612,11 +612,11 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 
 }
 
-func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, domPendingHeader *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
 	nodeCtx := c.NodeCtx()
 	// Set the coinbase into the right interface before calling append in the sub
 	header.WorkObjectHeader().SetCoinbase(common.BytesToAddress(header.Coinbase().Bytes(), c.NodeLocation()))
-	newPendingEtxs, setHead, err := c.sl.Append(header, domPendingHeader, domTerminus, domOrigin, newInboundEtxs)
+	newPendingEtxs, err := c.sl.Append(header, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
 			// Fetch the blocks for each hash in the manifest
@@ -642,7 +642,7 @@ func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, do
 			}
 		}
 	}
-	return newPendingEtxs, setHead, err
+	return newPendingEtxs, err
 }
 
 func (c *Core) DownloadBlocksInManifest(blockHash common.Hash, manifest types.BlockManifest, entropy *big.Int) {
@@ -673,14 +673,6 @@ func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.Work
 
 func (c *Core) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
 	return c.sl.GetPendingBlockBody(woHeader)
-}
-
-func (c *Core) SubRelayPendingHeader(slPendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int, updateDomLocation common.Location) {
-	c.sl.SubRelayPendingHeader(slPendingHeader, newEntropy, location, subReorg, order, updateDomLocation)
-}
-
-func (c *Core) UpdateDom(oldDomReference common.Hash, pendingHeader *types.WorkObject, location common.Location) {
-	c.sl.UpdateDom(oldDomReference, pendingHeader, location)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {

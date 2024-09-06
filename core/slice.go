@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -48,10 +47,8 @@ const (
 type CoreBackend interface {
 	AddPendingEtxs(pEtxs types.PendingEtxs) error
 	AddPendingEtxsRollup(pEtxRollup types.PendingEtxsRollup) error
-	UpdateDom(oldDomReference common.Hash, pendingHeader *types.WorkObject, location common.Location)
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
-	SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int, updateDomLocation common.Location)
-	Append(header *types.WorkObject, manifest types.BlockManifest, domPendingHeader *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error)
+	Append(header *types.WorkObject, manifest types.BlockManifest, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error)
 	DownloadBlocksInManifest(hash common.Hash, manifest types.BlockManifest, entropy *big.Int)
 	GenerateRecoveryPendingHeader(pendingHeader *types.WorkObject, checkpointHashes types.Termini) error
 	GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error)
@@ -89,8 +86,6 @@ type Slice struct {
 	asyncPhCh      chan *types.WorkObject
 	asyncPhSub     event.Subscription
 
-	bestPhKey        common.Hash
-	phCache          *lru.Cache[common.Hash, types.PendingHeader]
 	inboundEtxsCache *lru.Cache[common.Hash, types.Transactions]
 
 	validator Validator // Block and state validator interface
@@ -99,6 +94,9 @@ type Slice struct {
 
 	badHashesCache map[common.Hash]bool
 	logger         *log.Logger
+
+	bestPh   *types.WorkObject
+	bestPhMu sync.RWMutex
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.WorkObject) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
@@ -130,8 +128,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.hc.pool = sl.txPool
 	}
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState(), sl.logger)
-
-	sl.phCache, _ = lru.New[common.Hash, types.PendingHeader](c_phCacheSize)
 
 	sl.pEtxRetryCache, _ = lru.New[common.Hash, pEtxRetry](c_pEtxRetryThreshold)
 
@@ -165,12 +161,12 @@ func (sl *Slice) SetDomInterface(domInterface CoreBackend) {
 // Append takes a proposed header and constructs a local block and attempts to hierarchically append it to the block graph.
 // If this is called from a dominant context a domTerminus must be provided else a common.Hash{} should be used and domOrigin should be set to true.
 // Return of this function is the Etxs generated in the Zone Block, subReorg bool that tells dom if should be mined on, setHead bool that determines if we should set the block as the current head and the error
-func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, bool, error) {
+func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
 	start := time.Now()
 	nodeCtx := sl.NodeCtx()
 
 	if sl.hc.IsGenesisHash(header.Hash()) {
-		return nil, false, nil
+		return nil, nil
 	}
 
 	// Only print in Info level if block is c_startingPrintLimit behind or less
@@ -193,20 +189,20 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	time0_1 := common.PrettyDuration(time.Since(start))
 	// Check if the header hash exists in the BadHashes list
 	if sl.IsBlockHashABadHash(header.Hash()) {
-		return nil, false, ErrBadBlockHash
+		return nil, ErrBadBlockHash
 	}
 	time0_2 := common.PrettyDuration(time.Since(start))
 
 	location := header.Location()
 	_, order, err := sl.CalcOrder(header)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64(nodeCtx)) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) {
 		sl.logger.WithField("hash", header.Hash()).Debug("Block has already been appended")
-		return nil, false, ErrKnownBlock
+		return nil, ErrKnownBlock
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 
@@ -215,7 +211,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	// Run Previous Coincident Reference Check (PCRC)
 	domTerminus, newTermini, err := sl.pcrc(batch, header, domTerminus, domOrigin)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	sl.logger.WithFields(log.Fields{
 		"hash":    header.Hash(),
@@ -227,24 +223,15 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	// Append the new block
 	err = sl.hc.AppendHeader(header)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	time3 := common.PrettyDuration(time.Since(start))
 	// Construct the block locally
 	block, err := sl.ConstructLocalBlock(header)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	time4 := common.PrettyDuration(time.Since(start))
-
-	var pendingHeaderWithTermini types.PendingHeader
-	if nodeCtx != common.ZONE_CTX {
-		// Upate the local pending header
-		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, true, false)
-		if err != nil {
-			return nil, false, err
-		}
-	}
 
 	if order < nodeCtx {
 		// Store the inbound etxs for all dom blocks and use
@@ -281,7 +268,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				}
 				pEtxNew := pEtxRetry{hash: block.Hash(), retries: retry}
 				sl.pEtxRetryCache.Add(block.Hash(), pEtxNew)
-				return nil, false, ErrSubNotSyncedToDom
+				return nil, ErrSubNotSyncedToDom
 			}
 			sl.inboundEtxsCache.Add(block.Hash(), newInboundEtxs)
 		}
@@ -290,7 +277,6 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 
 	time6 := common.PrettyDuration(time.Since(start))
 	var subPendingEtxs types.Transactions
-	var setHead bool
 	var time6_1 common.PrettyDuration
 	var time6_2 common.PrettyDuration
 	var time6_3 common.PrettyDuration
@@ -298,9 +284,9 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	if nodeCtx != common.ZONE_CTX {
 		// How to get the sub pending etxs if not running the full node?.
 		if sl.subInterface[location.SubIndex(sl.NodeCtx())] != nil {
-			subPendingEtxs, setHead, err = sl.subInterface[location.SubIndex(sl.NodeCtx())].Append(header, block.Manifest(), pendingHeaderWithTermini.WorkObject(), domTerminus, true, newInboundEtxs)
+			subPendingEtxs, err = sl.subInterface[location.SubIndex(sl.NodeCtx())].Append(header, block.Manifest(), domTerminus, true, newInboundEtxs)
 			if err != nil {
-				return nil, false, err
+				return nil, err
 			}
 			time6_1 = common.PrettyDuration(time.Since(start))
 			// Cache the subordinate's pending ETXs
@@ -313,7 +299,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				crossPrimeRollup := types.Transactions{}
 				subRollup, err := sl.hc.CollectSubRollup(block)
 				if err != nil {
-					return nil, false, err
+					return nil, err
 				}
 				for _, etx := range subRollup {
 					to := etx.To().Location()
@@ -324,7 +310,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 				// Rolluphash is specifically for zone rollup, which can only be validated by region
 				if nodeCtx == common.REGION_CTX {
 					if etxRollupHash := types.DeriveSha(crossPrimeRollup, trie.NewStackTrie(nil)); etxRollupHash != block.EtxRollupHash() {
-						return nil, false, errors.New("sub rollup does not match sub rollup hash")
+						return nil, errors.New("sub rollup does not match sub rollup hash")
 					}
 				}
 				// We also need to store the pendingEtxRollup to the dom
@@ -340,84 +326,15 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	sl.phCacheMu.Lock()
 	defer sl.phCacheMu.Unlock()
 
-	var time8, time9 common.PrettyDuration
-	var bestPh types.PendingHeader
-	var exist bool
-	if nodeCtx == common.ZONE_CTX {
-		bestPh, exist = sl.readPhCache(sl.bestPhKey)
-		if !exist {
-			return nil, false, ErrSubNotSyncedToDom
-		}
-
-		time8 = common.PrettyDuration(time.Since(start))
-
-		setHead = sl.poem(sl.engine.TotalLogS(sl.hc, block), sl.engine.TotalLogS(sl.hc, sl.hc.CurrentHeader()))
-
-		err = sl.hc.SetCurrentState(block)
-		if err != nil {
-			sl.logger.WithFields(log.Fields{
-				"err":  err,
-				"Hash": block.Hash(),
-			}).Error("Error setting current state")
-			return nil, false, err
-		}
-
-		// Upate the local pending header
-		pendingHeaderWithTermini, err = sl.generateSlicePendingHeader(block, newTermini, domPendingHeader, domOrigin, setHead, false)
-		if err != nil {
-			return nil, false, err
-		}
-
-	}
-	time9 = common.PrettyDuration(time.Since(start))
-	sl.updatePhCache(pendingHeaderWithTermini, true, nil, setHead, sl.NodeLocation())
-
-	time10 := common.PrettyDuration(time.Since(start))
-	var updateDom bool
-	if setHead {
-		if order == common.ZONE_CTX && pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()) != bestPh.Termini().DomTerminus(sl.NodeLocation()) {
-			// TODO: This check has to be rethought
-			if !sl.hc.IsGenesisHash(pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation())) &&
-				!sl.hc.IsGenesisHash(bestPh.Termini().DomTerminus(sl.NodeLocation())) {
-				updateDom = true
-			}
-		}
-		sl.logger.WithFields(log.Fields{
-			"NumberArray": pendingHeaderWithTermini.WorkObject().NumberArray(),
-			"Number":      pendingHeaderWithTermini.WorkObject().Number(nodeCtx),
-			"ParentHash":  pendingHeaderWithTermini.WorkObject().ParentHash(nodeCtx),
-			"Terminus":    pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()),
-		}).Info("Choosing phHeader Append")
-		sl.WriteBestPhKey(pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()))
-		block.SetAppendTime(time.Duration(time9))
-	}
-	time11 := common.PrettyDuration(time.Since(start))
+	time8 := common.PrettyDuration(time.Since(start))
 
 	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	time12 := common.PrettyDuration(time.Since(start))
+	time10 := common.PrettyDuration(time.Since(start))
 
-	if setHead {
-		sl.hc.SetCurrentHeader(block)
-	} else if !setHead && nodeCtx == common.ZONE_CTX && sl.hc.ProcessingState() {
-		sl.logger.WithFields(log.Fields{
-			"hash":       block.Hash(),
-			"number":     block.NumberU64(nodeCtx),
-			"location":   block.Location(),
-			"parentHash": block.ParentHash(nodeCtx),
-		}).Debug("Found uncle")
-		sl.hc.chainSideFeed.Send(ChainSideEvent{Blocks: []*types.WorkObject{block}})
-	}
-	time13 := common.PrettyDuration(time.Since(start))
-	// Chain head feed is only used by the Zone chains
-	if setHead && nodeCtx == common.ZONE_CTX {
-		sl.hc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
-	}
-
-	time14 := common.PrettyDuration(time.Since(start))
 	// If efficiency score changed on this block compared to the parent block
 	// we trigger the expansion using the expansion feed
 	if nodeCtx == common.PRIME_CTX {
@@ -427,11 +344,7 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		}
 	}
 
-	time15 := common.PrettyDuration(time.Since(start))
-	// Relay the new pendingHeader
-	sl.relayPh(block, pendingHeaderWithTermini, domOrigin, block.Location(), setHead)
-
-	time16 := common.PrettyDuration(time.Since(start))
+	time9 := common.PrettyDuration(time.Since(start))
 	sl.logger.WithFields(log.Fields{
 		"t0_1": time0_1,
 		"t0_2": time0_2,
@@ -445,12 +358,6 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 		"t8":   time8,
 		"t9":   time9,
 		"t10":  time10,
-		"t11":  time11,
-		"t12":  time12,
-		"t13":  time13,
-		"t14":  time14,
-		"t15":  time15,
-		"t16":  time16,
 	}).Info("Times during append")
 
 	sl.logger.WithFields(log.Fields{
@@ -489,136 +396,14 @@ func (sl *Slice) Append(header *types.WorkObject, domPendingHeader *types.WorkOb
 	}).Info("Appended new block")
 
 	if nodeCtx == common.ZONE_CTX {
-		if updateDom {
-			sl.logger.WithFields(log.Fields{
-				"oldTermini()": bestPh.Termini().DomTerminus(sl.NodeLocation()),
-				"newTermini()": pendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation()),
-				"location":     sl.NodeLocation(),
-			}).Info("Append updateDom")
-			if sl.domInterface != nil {
-				go sl.domInterface.UpdateDom(bestPh.WorkObject().ParentHash(common.REGION_CTX), pendingHeaderWithTermini.WorkObject(), sl.NodeLocation())
-			}
-		}
-		return block.ExtTransactions(), setHead, nil
+		return block.ExtTransactions(), nil
 	} else {
-		return subPendingEtxs, setHead, nil
+		return subPendingEtxs, nil
 	}
 }
 
 func (sl *Slice) ProcessingState() bool {
 	return sl.hc.ProcessingState()
-}
-
-// relayPh sends pendingHeaderWithTermini to subordinates
-func (sl *Slice) relayPh(block *types.WorkObject, pendingHeaderWithTermini types.PendingHeader, domOrigin bool, location common.Location, subReorg bool) {
-	nodeCtx := sl.NodeCtx()
-
-	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
-		// Send an empty header to miner
-		bestPh, exists := sl.readPhCache(sl.bestPhKey)
-		if exists {
-			bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-			sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
-			return
-		} else {
-			sl.logger.WithField("bestPhKey", sl.bestPhKey).Warn("Pending Header for Best ph key does not exist")
-		}
-	} else if !domOrigin && subReorg {
-		for _, i := range sl.randomRelayArray() {
-			if sl.subInterface[i] != nil {
-				go sl.subInterface[i].SubRelayPendingHeader(pendingHeaderWithTermini, pendingHeaderWithTermini.WorkObject().ParentEntropy(nodeCtx), location, subReorg, nodeCtx, location)
-			}
-		}
-	}
-}
-
-// If a zone changes its best ph key on a dom block, it sends a signal to the
-// dom and we can relay that information to the coords, to build on the right dom header
-func (sl *Slice) UpdateDom(oldDomReference common.Hash, pendingHeader *types.WorkObject, location common.Location) {
-	defer func() {
-		if r := recover(); r != nil {
-			sl.logger.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Error("Go-Quai Panicked")
-		}
-	}()
-	nodeLocation := sl.NodeLocation()
-	nodeCtx := sl.NodeLocation().Context()
-
-	// If we are in the region case, that means one of the zones in this region
-	// disagrees about the terminus it choses to mine to its previous terminus
-	if nodeCtx == common.REGION_CTX {
-		var oldDomTerminus, newDomTerminus common.Hash
-		oldTermini := sl.hc.GetTerminiByHash(oldDomReference)
-		if oldTermini == nil {
-			sl.logger.Warn("old prime terminus not found in the database in the region")
-			return
-		}
-		oldDomTerminus = oldTermini.DomTerminus(nodeLocation)
-		newTermini := sl.hc.GetTerminiByHash(pendingHeader.ParentHash(common.REGION_CTX))
-		if newTermini == nil {
-			sl.logger.Warn("new prime terminus not found in the database in the region")
-			return
-		}
-		newDomTerminus = newTermini.DomTerminus(nodeLocation)
-		// If the old Prime terminus and the new prime terminus is the same,
-		// then the conflict is intra region and using the subrelay we can
-		// resolve this
-		if oldDomTerminus == newDomTerminus {
-			// Can update
-			parent := sl.hc.GetBlockByHash(pendingHeader.ParentHash(nodeCtx))
-			if parent != nil {
-				sl.hc.SetCurrentHeader(parent)
-			} else {
-				sl.logger.WithFields(log.Fields{
-					"hash": pendingHeader.ParentHash(nodeCtx),
-				}).Warn("Parent not found in UpdateDom")
-				return
-			}
-			sl.WriteBestPhKey(newDomTerminus)
-			for _, i := range sl.randomRelayArray() {
-				if sl.subInterface[i] != nil {
-					sl.logger.WithFields(log.Fields{
-						"parentHash": pendingHeader.ParentHash(nodeCtx),
-						"number":     pendingHeader.NumberArray(),
-					}).Info("SubRelay in UpdateDom")
-					sl.subInterface[i].SubRelayPendingHeader(types.NewPendingHeader(pendingHeader, *newTermini), pendingHeader.ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx, location)
-				}
-			}
-			return
-		} else {
-			go sl.domInterface.UpdateDom(common.Hash{}, pendingHeader, location)
-		}
-	} else { // PRIME case
-		// In the prime case, the newDomReference is the key to use for the ph
-		// cache, because the termini for any block in prime chain is the parent
-		// block itself
-		parent := sl.hc.GetBlockByHash(pendingHeader.ParentHash(nodeCtx))
-		if parent != nil {
-			sl.hc.SetCurrentHeader(parent)
-		} else {
-			sl.logger.WithFields(log.Fields{
-				"hash": pendingHeader.ParentHash(nodeCtx),
-			}).Warn("Parent not found in UpdateDom")
-			return
-		}
-		sl.WriteBestPhKey(pendingHeader.ParentHash(common.PRIME_CTX))
-		newTermini := sl.hc.GetTerminiByHash(pendingHeader.ParentHash(common.PRIME_CTX))
-		if newTermini == nil {
-			sl.logger.Warn("new prime terminus not found in the database in the region")
-			return
-		}
-		for _, i := range sl.randomRelayArray() {
-			if sl.subInterface[i] != nil {
-				sl.logger.WithFields(log.Fields{
-					"parentHash": pendingHeader.ParentHash(nodeCtx),
-					"number":     pendingHeader.NumberArray(),
-				}).Info("SubRelay in UpdateDom")
-				sl.subInterface[i].SubRelayPendingHeader(types.NewPendingHeader(pendingHeader, *newTermini), pendingHeader.ParentEntropy(common.ZONE_CTX), common.Location{}, true, nodeCtx, location)
-			}
-		}
-	}
 }
 
 func (sl *Slice) randomRelayArray() []int {
@@ -651,16 +436,8 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 
 	for {
 		select {
-		case asyncPh := <-sl.asyncPhCh:
-			sl.phCacheMu.Lock()
-			sl.updatePhCache(types.PendingHeader{}, true, asyncPh, true, sl.NodeLocation())
-			sl.phCacheMu.Unlock()
-			bestPh, exists := sl.readPhCache(sl.bestPhKey)
-			if exists {
-				bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-				sl.writePhCache(sl.bestPhKey, bestPh)
-				sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
-			}
+		case _ = <-sl.asyncPhCh:
+
 		case <-sl.asyncPhSub.Err():
 			return
 
@@ -668,78 +445,6 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 			return
 		}
 	}
-}
-
-// Read the phCache
-func (sl *Slice) readPhCache(hash common.Hash) (types.PendingHeader, bool) {
-	if ph, exists := sl.phCache.Get(hash); exists {
-		if ph.WorkObject() != nil {
-			return *types.CopyPendingHeader(&ph), exists
-		} else {
-			return types.PendingHeader{}, false
-		}
-	} else {
-		ph := rawdb.ReadPendingHeader(sl.sliceDb, hash)
-		if ph != nil {
-			sl.phCache.Add(hash, *types.CopyPendingHeader(ph))
-			return *types.CopyPendingHeader(ph), true
-		} else {
-			return types.PendingHeader{}, false
-		}
-	}
-}
-
-// Write the phCache
-func (sl *Slice) writePhCache(hash common.Hash, pendingHeader types.PendingHeader) {
-	// update the header hash everytime we add a object body
-	pendingHeader.WorkObject().WorkObjectHeader().SetHeaderHash(pendingHeader.WorkObject().Header().Hash())
-	sl.miner.worker.AddPendingWorkObjectBody(pendingHeader.WorkObject())
-	sl.phCache.Add(hash, pendingHeader)
-	rawdb.WritePendingHeader(sl.sliceDb, hash, pendingHeader)
-}
-
-// WriteBestPhKey writes the sl.bestPhKey
-func (sl *Slice) WriteBestPhKey(hash common.Hash) {
-	sl.bestPhKey = hash
-	// write the ph head hash to the db.
-	rawdb.WriteBestPhKey(sl.sliceDb, hash)
-}
-
-// Generate a slice pending header
-func (sl *Slice) generateSlicePendingHeader(block *types.WorkObject, newTermini types.Termini, domPendingHeader *types.WorkObject, domOrigin bool, subReorg bool, fill bool) (types.PendingHeader, error) {
-	nodeCtx := sl.NodeLocation().Context()
-	var localPendingHeader *types.WorkObject
-	var err error
-	if subReorg {
-		// Upate the local pending header
-		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(block, fill)
-		if err != nil {
-			return types.PendingHeader{}, err
-		}
-	} else {
-		// Just compute the necessary information for the pending Header
-		// i.e ParentHash field, Number and writing manifest to the disk
-		localPendingHeader = types.EmptyWorkObject(sl.NodeCtx())
-		localPendingHeader.SetParentHash(block.Hash(), nodeCtx)
-		localPendingHeader.SetNumber(big.NewInt(int64(block.NumberU64(nodeCtx))+1), nodeCtx)
-		localPendingHeader.Header().SetParentEntropy(sl.engine.TotalLogS(sl.hc, block), nodeCtx)
-		if nodeCtx != common.PRIME_CTX {
-			if domOrigin {
-				localPendingHeader.Header().SetParentDeltaS(big.NewInt(0), nodeCtx)
-			} else {
-				localPendingHeader.Header().SetParentDeltaS(sl.engine.DeltaLogS(sl.hc, block), nodeCtx)
-			}
-		}
-
-		manifestHash := sl.miner.worker.ComputeManifestHash(block)
-		localPendingHeader.Header().SetManifestHash(manifestHash, nodeCtx)
-	}
-
-	// Combine subordinates pending header with local pending header
-	pendingHeaderWithTermini := sl.computePendingHeader(types.NewPendingHeader(localPendingHeader, newTermini), domPendingHeader, domOrigin)
-	pendingHeaderWithTermini.WorkObject().WorkObjectHeader().SetLocation(block.Location())
-	pendingHeaderWithTermini.WorkObject().Body().SetHeader(pendingHeaderWithTermini.WorkObject().Header())
-	return pendingHeaderWithTermini, nil
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
@@ -899,11 +604,7 @@ func (sl *Slice) poem(externS *big.Int, currentS *big.Int) bool {
 
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.WorkObject, error) {
-	if ph, exists := sl.readPhCache(sl.bestPhKey); exists {
-		return ph.WorkObject(), nil
-	} else {
-		return nil, errors.New("empty pending header")
-	}
+	return nil, nil
 }
 
 // GetManifest gathers the manifest of ancestor block hashes since the last
@@ -994,242 +695,6 @@ func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Locatio
 	return types.PendingEtxs{}, ErrPendingEtxNotFound
 }
 
-// SubRelayPendingHeader takes a pending header from the sender (ie dominant), updates the phCache with a composited header and relays result to subordinates
-func (sl *Slice) SubRelayPendingHeader(pendingHeader types.PendingHeader, newEntropy *big.Int, location common.Location, subReorg bool, order int, updateDomLocation common.Location) {
-	defer func() {
-		if r := recover(); r != nil {
-			sl.logger.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Error("Go-Quai Panicked")
-		}
-	}()
-	nodeCtx := sl.NodeLocation().Context()
-	var err error
-
-	if nodeCtx == common.REGION_CTX {
-		// Adding a guard on the region that was already updated in the synchronous path.
-		if location.Region() != sl.NodeLocation().Region() {
-			err = sl.updatePhCacheFromDom(pendingHeader, sl.NodeLocation().Region(), []int{common.PRIME_CTX}, newEntropy, subReorg, location)
-			if err != nil {
-				return
-			}
-		}
-
-		for _, i := range sl.randomRelayArray() {
-			if sl.subInterface[i] != nil {
-				if ph, exists := sl.readPhCache(pendingHeader.Termini().SubTerminiAtIndex(sl.NodeLocation().Region())); exists {
-					sl.subInterface[i].SubRelayPendingHeader(ph, newEntropy, location, subReorg, order, updateDomLocation)
-				}
-			}
-		}
-	} else {
-		// This check prevents a double send to the miner.
-		// If the previous block on which the given pendingHeader was built is the same as the NodeLocation
-		// the pendingHeader update has already been sent to the miner for the given location in relayPh.
-		if !bytes.Equal(location, sl.NodeLocation()) && !bytes.Equal(updateDomLocation, sl.NodeLocation()) {
-			updateCtx := []int{common.REGION_CTX}
-			if order == common.PRIME_CTX {
-				updateCtx = append(updateCtx, common.PRIME_CTX)
-			}
-			err = sl.updatePhCacheFromDom(pendingHeader, sl.NodeLocation().Zone(), updateCtx, newEntropy, subReorg, location)
-			if err != nil {
-				return
-			}
-		}
-
-		if !bytes.Equal(location, sl.NodeLocation()) {
-			bestPh, exists := sl.readPhCache(sl.bestPhKey)
-			if exists {
-				bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-				sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
-			}
-		}
-	}
-}
-
-// computePendingHeader takes in an localPendingHeaderWithTermini and updates the pending header on the same terminus if the number is greater
-func (sl *Slice) computePendingHeader(localPendingHeaderWithTermini types.PendingHeader, domPendingHeader *types.WorkObject, domOrigin bool) types.PendingHeader {
-	nodeCtx := sl.NodeCtx()
-
-	var cachedPendingHeaderWithTermini types.PendingHeader
-	hash := localPendingHeaderWithTermini.Termini().DomTerminus(sl.NodeLocation())
-	cachedPendingHeaderWithTermini, exists := sl.readPhCache(hash)
-	var newPh *types.WorkObject
-
-	if exists {
-		sl.logger.WithFields(log.Fields{
-			"hash":          hash,
-			"pendingHeader": cachedPendingHeaderWithTermini,
-			"termini":       cachedPendingHeaderWithTermini.Termini(),
-		}).Debug("computePendingHeader")
-		if domOrigin {
-			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.WorkObject(), domPendingHeader, nodeCtx, true)
-			return types.NewPendingHeader(types.CopyWorkObject(newPh), localPendingHeaderWithTermini.Termini())
-		}
-		newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.WorkObject(), cachedPendingHeaderWithTermini.WorkObject(), nodeCtx, true)
-		return types.NewPendingHeader(types.CopyWorkObject(newPh), localPendingHeaderWithTermini.Termini())
-	} else {
-		if domOrigin {
-			newPh = sl.combinePendingHeader(localPendingHeaderWithTermini.WorkObject(), domPendingHeader, nodeCtx, true)
-			return types.NewPendingHeader(types.CopyWorkObject(newPh), localPendingHeaderWithTermini.Termini())
-		}
-		return localPendingHeaderWithTermini
-	}
-}
-
-// updatePhCacheFromDom combines the recieved pending header with the pending header stored locally at a given terminus for specified context
-func (sl *Slice) updatePhCacheFromDom(pendingHeader types.PendingHeader, terminiIndex int, indices []int, newEntropy *big.Int, subReorg bool, location common.Location) error {
-	sl.phCacheMu.Lock()
-	defer sl.phCacheMu.Unlock()
-	nodeCtx := sl.NodeLocation().Context()
-	nodeLocation := sl.NodeLocation()
-
-	hash := pendingHeader.Termini().SubTerminiAtIndex(terminiIndex)
-	localPendingHeader, exists := sl.readPhCache(hash)
-
-	if exists {
-		combinedPendingHeader := types.CopyWorkObject(localPendingHeader.WorkObject())
-		for _, i := range indices {
-			combinedPendingHeader = sl.combinePendingHeader(pendingHeader.WorkObject(), combinedPendingHeader, i, false)
-		}
-
-		localTermini := localPendingHeader.Termini()
-		if location.Equal(common.Location{}) {
-			for i := 0; i < len(localTermini.DomTermini()); i++ {
-				localTermini.SetDomTerminiAtIndex(pendingHeader.Termini().SubTerminiAtIndex(i), i)
-			}
-		} else {
-			domIndex := location.DomIndex(nodeLocation)
-			localTermini.SetDomTerminiAtIndex(pendingHeader.Termini().SubTerminiAtIndex(domIndex), domIndex)
-		}
-
-		bestPh, exists := sl.readPhCache(sl.bestPhKey)
-		if nodeCtx == common.ZONE_CTX && exists && sl.bestPhKey != hash && !sl.poem(newEntropy, bestPh.WorkObject().ParentEntropy(common.ZONE_CTX)) {
-			if !sl.hc.IsGenesisHash(sl.bestPhKey) &&
-				!sl.hc.IsGenesisHash(localPendingHeader.Termini().DomTerminus(nodeLocation)) &&
-				!sl.hc.IsGenesisHash(localPendingHeader.WorkObject().PrimeTerminus()) {
-				sl.logger.WithFields(log.Fields{
-					"local dom terminus": localPendingHeader.Termini().DomTerminus(nodeLocation),
-					"Number":             combinedPendingHeader.NumberArray(),
-					"best ph key":        sl.bestPhKey,
-					"number":             bestPh.WorkObject().NumberArray(),
-					"newentropy":         newEntropy,
-				}).Warn("Subrelay Rejected")
-				sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localTermini), false, nil, false, location)
-				go sl.domInterface.UpdateDom(pendingHeader.WorkObject().ParentHash(common.REGION_CTX), bestPh.WorkObject(), sl.NodeLocation())
-				return nil
-			}
-		}
-		// Pick the head
-		if subReorg {
-			sl.logger.WithFields(log.Fields{
-				"NumberArray": combinedPendingHeader.NumberArray(),
-				"Number":      combinedPendingHeader.Number(nodeCtx),
-				"ParentHash":  combinedPendingHeader.ParentHash(nodeCtx),
-				"Terminus":    localPendingHeader.Termini().DomTerminus(nodeLocation),
-			}).Info("Choosing phHeader pickPhHead")
-			parent := sl.hc.GetBlockByHash(localPendingHeader.WorkObject().ParentHash(nodeCtx))
-			if parent != nil {
-				sl.hc.SetCurrentHeader(parent)
-			} else {
-				sl.logger.WithFields(log.Fields{
-					"hash": localPendingHeader.WorkObject().ParentHash(nodeCtx),
-				}).Warn("Parent not found")
-			}
-			sl.WriteBestPhKey(localPendingHeader.Termini().DomTerminus(nodeLocation))
-		}
-
-		sl.updatePhCache(types.NewPendingHeader(combinedPendingHeader, localTermini), false, nil, subReorg, location)
-
-		return nil
-	}
-	sl.logger.WithFields(log.Fields{
-		"hash":                hash,
-		"pendingHeaderNumber": pendingHeader.WorkObject().NumberArray(),
-		"parentHash":          pendingHeader.WorkObject().ParentHash(nodeCtx),
-		"terminiIndex":        terminiIndex,
-		"indices":             indices,
-	}).Warn("Pending header not found in cache")
-	return errors.New("pending header not found in cache")
-}
-
-// updatePhCache updates cache given a pendingHeaderWithTermini with the terminus used as the key.
-func (sl *Slice) updatePhCache(pendingHeaderWithTermini types.PendingHeader, inSlice bool, localHeader *types.WorkObject, subReorg bool, location common.Location) {
-	nodeLocation := sl.NodeLocation()
-	nodeCtx := sl.NodeCtx()
-
-	var exists bool
-	if localHeader != nil {
-		termini := sl.hc.GetTerminiByHash(localHeader.ParentHash(nodeCtx))
-		if termini == nil {
-			return
-		}
-
-		pendingHeaderWithTermini, exists = sl.readPhCache(termini.DomTerminus(nodeLocation))
-		if exists {
-			pendingHeaderWithTermini.SetHeader(sl.combinePendingHeader(localHeader, pendingHeaderWithTermini.WorkObject(), common.ZONE_CTX, true))
-		}
-
-		bestPh, exists := sl.readPhCache(sl.bestPhKey)
-		if !exists {
-			return
-		}
-		if !sl.poem(bestPh.WorkObject().ParentEntropy(common.ZONE_CTX), pendingHeaderWithTermini.WorkObject().ParentEntropy(common.ZONE_CTX)) {
-			return
-		}
-	}
-
-	termini := pendingHeaderWithTermini.Termini()
-
-	// This logic implements the Termini Carry
-	// * If a terminus exists in the cache, we can just copy the current value and make updates to it
-	// * If a terminus doesn't exist in the cache, that means that this is invoked
-	// 		on a dom block and we have to carry the parents Termini and make an update
-	var cachedTermini types.Termini
-	ph, exists := sl.readPhCache(pendingHeaderWithTermini.Termini().DomTerminus(nodeLocation))
-	if exists {
-		cachedTermini = types.CopyTermini(ph.Termini())
-	} else {
-		parentHeader := sl.hc.GetHeaderOrCandidateByHash(pendingHeaderWithTermini.WorkObject().ParentHash(nodeCtx))
-		if sl.hc.IsGenesisHash(parentHeader.Hash()) {
-			ph, _ = sl.readPhCache(parentHeader.Hash())
-			cachedTermini = types.CopyTermini(ph.Termini())
-		} else {
-			localTermini := sl.hc.GetTerminiByHash(parentHeader.ParentHash(nodeCtx))
-			ph, _ = sl.readPhCache(localTermini.DomTerminus(nodeLocation))
-			cachedTermini = types.CopyTermini(ph.Termini())
-		}
-	}
-
-	// During the UpdateDom cycle we have to just copy what the Dom gives us
-	// otherwise update only the value that is being changed during inslice
-	// update and coord update
-	if !location.Equal(common.Location{}) {
-		cachedTermini.SetDomTerminiAtIndex(termini.DomTerminiAtIndex(location.DomIndex(nodeLocation)), location.DomIndex(nodeLocation))
-	} else {
-		for i := 0; i < len(termini.DomTermini()); i++ {
-			cachedTermini.SetDomTerminiAtIndex(termini.DomTerminiAtIndex(i), i)
-		}
-	}
-	cachedTermini.SetSubTermini(termini.SubTermini())
-
-	// Update the pendingHeader Cache
-	deepCopyPendingHeaderWithTermini := types.NewPendingHeader(pendingHeaderWithTermini.WorkObject(), cachedTermini)
-	deepCopyPendingHeaderWithTermini.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-	deepCopyPendingHeaderWithTermini.WorkObject().WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
-
-	if subReorg || !exists {
-		sl.writePhCache(deepCopyPendingHeaderWithTermini.Termini().DomTerminus(nodeLocation), deepCopyPendingHeaderWithTermini)
-		sl.logger.WithFields(log.Fields{
-			"newterminus?": !exists,
-			"inSlice":      inSlice,
-			"Ph Number":    deepCopyPendingHeaderWithTermini.WorkObject().NumberArray(),
-			"Termini":      deepCopyPendingHeaderWithTermini.Termini(),
-		}).Info("PhCache update")
-	}
-}
-
 // init checks if the headerchain is empty and if it's empty appends the Knot
 // otherwise loads the last stored state of the chain.
 func (sl *Slice) init() error {
@@ -1262,8 +727,6 @@ func (sl *Slice) init() error {
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 		rawdb.WriteManifest(sl.sliceDb, genesisHash, types.BlockManifest{genesisHash})
 
-		// Append each of the knot blocks
-		sl.WriteBestPhKey(genesisHash)
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}
 		rawdb.WritePendingEtxs(sl.sliceDb, types.PendingEtxs{Header: genesisHeader, Etxs: emptyPendingEtxs})
@@ -1463,7 +926,6 @@ func (sl *Slice) ActiveSlices() []common.Location {
 
 func (sl *Slice) WriteGenesisBlock(block *types.WorkObject, location common.Location) {
 	rawdb.WriteManifest(sl.sliceDb, block.Hash(), types.BlockManifest{block.Hash()})
-	sl.WriteBestPhKey(block.Hash())
 	// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 	emptyPendingEtxs := types.Transactions{}
 	sl.hc.AddPendingEtxs(types.PendingEtxs{block, emptyPendingEtxs})
@@ -1520,47 +982,35 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 			return nil
 		}
 		termini = genesisTermini
-	} else {
-		localPendingHeaderWithTermini, exists := sl.readPhCache(domTerminus)
-		if !exists {
-			sl.logger.Errorf("Genesis pending header not found in node location %v cache %v", sl.NodeLocation(), domTerminus)
+
+		if nodeCtx != common.ZONE_CTX {
+			localPendingHeader.WorkObjectHeader().SetCoinbase(common.Zero)
 		}
-		localPendingHeader = localPendingHeaderWithTermini.WorkObject()
-		termini = localPendingHeaderWithTermini.Termini()
-	}
 
-	if sl.hc.IsGenesisHash(genesisHash) {
-		// This only happens during the expansion
-		sl.WriteBestPhKey(genesisHash)
-	}
+		localPendingHeader.WorkObjectHeader().SetLocation(common.Location{0, 0})
 
-	if nodeCtx != common.ZONE_CTX {
-		localPendingHeader.WorkObjectHeader().SetCoinbase(common.Zero)
-	}
+		if nodeCtx == common.PRIME_CTX {
+			domPendingHeader = types.CopyWorkObject(localPendingHeader)
+		} else {
+			domPendingHeader = sl.combinePendingHeader(localPendingHeader, domPendingHeader, nodeCtx, true)
+			domPendingHeader.WorkObjectHeader().SetLocation(sl.NodeLocation())
+		}
 
-	localPendingHeader.WorkObjectHeader().SetLocation(common.Location{0, 0})
-
-	if nodeCtx == common.PRIME_CTX {
-		domPendingHeader = types.CopyWorkObject(localPendingHeader)
-	} else {
-		domPendingHeader = sl.combinePendingHeader(localPendingHeader, domPendingHeader, nodeCtx, true)
-		domPendingHeader.WorkObjectHeader().SetLocation(sl.NodeLocation())
-	}
-
-	if nodeCtx != common.ZONE_CTX {
-		for i, client := range sl.subInterface {
-			if client != nil {
-				err = client.NewGenesisPendingHeader(domPendingHeader, termini.SubTerminiAtIndex(i), genesisHash)
-				if err != nil {
-					return err
+		if nodeCtx != common.ZONE_CTX {
+			for i, client := range sl.subInterface {
+				if client != nil {
+					err = client.NewGenesisPendingHeader(domPendingHeader, termini.SubTerminiAtIndex(i), genesisHash)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
-	}
 
-	if sl.hc.Empty() {
-		domPendingHeader.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
-		sl.writePhCache(genesisHash, types.NewPendingHeader(domPendingHeader, genesisTermini))
+		if sl.hc.Empty() {
+			domPendingHeader.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
+		}
+		return nil
 	}
 	return nil
 }
@@ -1588,16 +1038,6 @@ func (sl *Slice) SetSubInterface(subInterface CoreBackend, location common.Locat
 
 // loadLastState loads the phCache and the slice pending header hash from the db.
 func (sl *Slice) loadLastState() error {
-	sl.bestPhKey = rawdb.ReadBestPhKey(sl.sliceDb)
-	bestPh := rawdb.ReadPendingHeader(sl.sliceDb, sl.bestPhKey)
-	if bestPh != nil {
-		sl.writePhCache(sl.bestPhKey, *bestPh)
-		parent := sl.hc.GetHeaderOrCandidateByHash(bestPh.WorkObject().ParentHash(sl.NodeCtx()))
-		if parent == nil {
-			return errors.New("failed to get pending header's parent header")
-		}
-	}
-
 	if sl.ProcessingState() {
 		sl.miner.worker.LoadPendingBlockBody()
 	}
@@ -1705,13 +1145,13 @@ func (sl *Slice) SetHeadBackToRecoveryState(pendingHeader *types.WorkObject, has
 	nodeCtx := sl.NodeLocation().Context()
 	if nodeCtx == common.PRIME_CTX {
 		localPendingHeaderWithTermini := sl.ComputeRecoveryPendingHeader(hash)
-		sl.phCache.Add(hash, localPendingHeaderWithTermini)
 		sl.GenerateRecoveryPendingHeader(localPendingHeaderWithTermini.WorkObject(), localPendingHeaderWithTermini.Termini())
+		sl.bestPh = localPendingHeaderWithTermini.WorkObject()
 	} else {
 		localPendingHeaderWithTermini := sl.ComputeRecoveryPendingHeader(hash)
 		localPendingHeaderWithTermini.SetHeader(sl.combinePendingHeader(localPendingHeaderWithTermini.WorkObject(), pendingHeader, nodeCtx, true))
 		localPendingHeaderWithTermini.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-		sl.phCache.Add(hash, localPendingHeaderWithTermini)
+		sl.bestPh = localPendingHeaderWithTermini.WorkObject()
 		return localPendingHeaderWithTermini
 	}
 	return types.PendingHeader{}
@@ -1727,7 +1167,6 @@ func (sl *Slice) cleanCacheAndDatabaseTillBlock(hash common.Hash) {
 	}
 	nodeCtx := sl.NodeCtx()
 	// slice caches
-	sl.phCache.Purge()
 	sl.miner.worker.pendingBlockBody.Purge()
 	rawdb.DeleteBestPhKey(sl.sliceDb)
 	// headerchain caches
@@ -1807,7 +1246,6 @@ func (sl *Slice) ComputeRecoveryPendingHeader(hash common.Hash) types.PendingHea
 		return types.PendingHeader{}
 	}
 	termini := sl.hc.GetTerminiByHash(hash)
-	sl.WriteBestPhKey(hash)
 	return types.NewPendingHeader(pendingHeader, *termini)
 }
 
@@ -1890,13 +1328,13 @@ func (sl *Slice) asyncWorkShareUpdateLoop() {
 					}
 				}
 				hash := types.DeriveSha(txs, trie.NewStackTrie(nil))
-				bestPh, exists := sl.readPhCache(sl.bestPhKey)
-				if exists {
-					bestPh.WorkObject().WorkObjectHeader().SetLocation(sl.NodeLocation())
-					bestPh.WorkObject().WorkObjectHeader().SetTxHash(hash)
-					sl.writePhCache(sl.bestPhKey, bestPh)
-					sl.miner.worker.pendingHeaderFeed.Send(bestPh.WorkObject())
-				}
+				sl.bestPhMu.Lock()
+				bestPh := types.CopyWorkObject(sl.bestPh)
+				sl.bestPhMu.Unlock()
+				bestPh.WorkObjectHeader().SetLocation(sl.NodeLocation())
+				bestPh.WorkObjectHeader().SetTxHash(hash)
+				// write to bestph
+				sl.miner.worker.pendingHeaderFeed.Send(bestPh)
 				sl.txPool.broadcastSetCache.Add(hash, txs)
 			}
 		case <-sl.quit:
