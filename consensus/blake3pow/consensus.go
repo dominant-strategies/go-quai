@@ -1,7 +1,6 @@
 package blake3pow
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"runtime"
@@ -45,22 +44,6 @@ var (
 	big32         = big.NewInt(32)
 	bigMinus99    = big.NewInt(-99)
 	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
-)
-
-// Various error messages to mark blocks invalid. These should be private to
-// prevent engine specific errors from being referenced in the remainder of the
-// codebase, inherently breaking if the engine is swapped out. Please put common
-// error types into the consensus package.
-var (
-	errOlderBlockTime      = errors.New("timestamp older than parent")
-	errTooManyUncles       = errors.New("too many uncles")
-	errDuplicateUncle      = errors.New("duplicate uncle")
-	errUncleIsAncestor     = errors.New("uncle is ancestor")
-	errDanglingUncle       = errors.New("uncle's parent is not ancestor")
-	errInvalidDifficulty   = errors.New("non-positive difficulty")
-	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
-	errInvalidPoW          = errors.New("invalid proof-of-work")
-	errInvalidOrder        = errors.New("invalid order")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -194,7 +177,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 	}
 	// Verify that there are at most params.MaxWorkShareCount uncles included in this block
 	if len(block.Uncles()) > params.MaxWorkShareCount {
-		return errTooManyUncles
+		return consensus.ErrTooManyUncles
 	}
 	if len(block.Uncles()) == 0 {
 		return nil
@@ -230,13 +213,13 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		// Make sure every uncle is rewarded only once
 		hash := uncle.Hash()
 		if uncles.Contains(hash) {
-			return errDuplicateUncle
+			return consensus.ErrDuplicateUncle
 		}
 		uncles.Add(hash)
 
 		// Make sure the uncle has a valid ancestry
 		if ancestors[hash] != nil {
-			return errUncleIsAncestor
+			return consensus.ErrUncleIsAncestor
 		}
 		// Siblings are not allowed to be included in the workshares list if its an
 		// uncle but can be if its a workshare
@@ -246,7 +229,7 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 			workShare = true
 		}
 		if ancestors[uncle.ParentHash()] == nil || (!workShare && (uncle.ParentHash() == block.ParentHash(nodeCtx))) {
-			return errDanglingUncle
+			return consensus.ErrDanglingUncle
 		}
 
 		// make sure that the work can be computed
@@ -300,7 +283,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		}
 	}
 	if header.Time() < parent.Time() {
-		return errOlderBlockTime
+		return consensus.ErrOlderBlockTime
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	// difficulty adjustment can only be checked in zone
@@ -583,18 +566,18 @@ func (blake3pow *Blake3pow) verifySeal(header *types.WorkObjectHeader) error {
 	if blake3pow.config.PowMode == ModeFake || blake3pow.config.PowMode == ModeFullFake {
 		time.Sleep(blake3pow.fakeDelay)
 		if blake3pow.fakeFail == header.NumberU64() {
-			return errInvalidPoW
+			return consensus.ErrInvalidPoW
 		}
 		return nil
 	}
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty().Sign() <= 0 {
-		return errInvalidDifficulty
+		return consensus.ErrInvalidDifficulty
 	}
 
 	target := new(big.Int).Div(big2e256, header.Difficulty())
 	if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(target) > 0 {
-		return errInvalidPoW
+		return consensus.ErrInvalidPoW
 	}
 	return nil
 }

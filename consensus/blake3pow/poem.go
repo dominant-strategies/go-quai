@@ -68,8 +68,8 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 func (blake3pow *Blake3pow) IntrinsicLogS(powHash common.Hash) *big.Int {
 	x := new(big.Int).SetBytes(powHash.Bytes())
 	d := new(big.Int).Div(big2e256, x)
-	c, m := mathutil.BinaryLog(d, mantBits)
-	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(mantBits), nil))
+	c, m := mathutil.BinaryLog(d, consensus.MantBits)
+	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(consensus.MantBits), nil))
 	bigBits = new(big.Int).Add(bigBits, m)
 	return bigBits
 }

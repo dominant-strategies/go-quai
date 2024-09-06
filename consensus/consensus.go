@@ -18,12 +18,52 @@
 package consensus
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
+	"modernc.org/mathutil"
+)
+
+const (
+	// staleThreshold is the maximum depth of the acceptable stale but valid solution.
+	StaleThreshold = 7
+	MantBits       = 64
+)
+
+// Some useful constants to avoid constant memory allocs for them.
+var (
+	ExpDiffPeriod = big.NewInt(100000)
+	Big0          = big.NewInt(0)
+	Big1          = big.NewInt(1)
+	Big2          = big.NewInt(2)
+	Big3          = big.NewInt(3)
+	Big8          = big.NewInt(8)
+	Big9          = big.NewInt(9)
+	Big10         = big.NewInt(10)
+	Big32         = big.NewInt(32)
+	BigMinus99    = big.NewInt(-99)
+	Big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
+)
+
+// Various error messages to mark blocks invalid. These should be private to
+// prevent engine specific errors from being referenced in the remainder of the
+// codebase, inherently breaking if the engine is swapped out. Please put common
+// error types into the consensus package.
+var (
+	ErrOlderBlockTime      = errors.New("timestamp older than parent")
+	ErrTooManyUncles       = errors.New("too many uncles")
+	ErrDuplicateUncle      = errors.New("duplicate uncle")
+	ErrUncleIsAncestor     = errors.New("uncle is ancestor")
+	ErrDanglingUncle       = errors.New("uncle's parent is not ancestor")
+	ErrInvalidDifficulty   = errors.New("difficulty too low")
+	ErrDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
+	ErrInvalidMixHash      = errors.New("invalid mixHash")
+	ErrInvalidPoW          = errors.New("invalid proof-of-work")
+	ErrInvalidOrder        = errors.New("invalid order")
 )
 
 // ChainHeaderReader defines a small collection of methods needed to access the local

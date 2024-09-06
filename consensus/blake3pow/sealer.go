@@ -10,16 +10,11 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"modernc.org/mathutil"
-)
-
-const (
-	// staleThreshold is the maximum depth of the acceptable stale but valid blake3pow solution.
-	staleThreshold = 7
-	mantBits       = 64
 )
 
 var (
@@ -130,7 +125,7 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 func (blake3pow *Blake3pow) mine(header *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
 	diff := new(big.Int).Set(header.Difficulty())
-	c, _ := mathutil.BinaryLog(diff, mantBits)
+	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
 	if c <= params.WorkSharesThresholdDiff {
 		return
 	}

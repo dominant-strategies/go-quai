@@ -43,9 +43,6 @@ const (
 	// any newly arrived transactions.
 	minRecommitInterval = 1 * time.Second
 
-	// staleThreshold is the maximum depth of the acceptable stale block.
-	staleThreshold = 7
-
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
 	pendingBlockBodyLimit = 100
 

@@ -11,16 +11,11 @@ import (
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"modernc.org/mathutil"
-)
-
-const (
-	// staleThreshold is the maximum depth of the acceptable stale but valid progpow solution.
-	staleThreshold = 7
-	mantBits       = 64
 )
 
 var (
@@ -131,7 +126,7 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 func (progpow *Progpow) mine(workObject *types.WorkObject, id int, seed uint64, abort chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
 	diff := new(big.Int).Set(workObject.Difficulty())
-	c, _ := mathutil.BinaryLog(diff, mantBits)
+	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
 	if c <= params.WorkSharesThresholdDiff {
 		return
 	}

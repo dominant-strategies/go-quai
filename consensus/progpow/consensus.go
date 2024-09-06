@@ -2,7 +2,6 @@ package progpow
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math/big"
 	"runtime"
@@ -46,23 +45,6 @@ var (
 	big32         = big.NewInt(32)
 	bigMinus99    = big.NewInt(-99)
 	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
-)
-
-// Various error messages to mark blocks invalid. These should be private to
-// prevent engine specific errors from being referenced in the remainder of the
-// codebase, inherently breaking if the engine is swapped out. Please put common
-// error types into the consensus package.
-var (
-	errOlderBlockTime      = errors.New("timestamp older than parent")
-	errTooManyUncles       = errors.New("too many uncles")
-	errDuplicateUncle      = errors.New("duplicate uncle")
-	errUncleIsAncestor     = errors.New("uncle is ancestor")
-	errDanglingUncle       = errors.New("uncle's parent is not ancestor")
-	errInvalidDifficulty   = errors.New("non-positive difficulty")
-	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
-	errInvalidMixHash      = errors.New("invalid mixHash")
-	errInvalidPoW          = errors.New("invalid proof-of-work")
-	errInvalidOrder        = errors.New("invalid order")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -197,7 +179,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 	}
 	// Verify that there are at most params.MaxWorkShareCount uncles included in this block
 	if len(block.Uncles()) > params.MaxWorkShareCount {
-		return errTooManyUncles
+		return consensus.ErrTooManyUncles
 	}
 	if len(block.Uncles()) == 0 {
 		return nil
@@ -233,13 +215,13 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 		// Make sure every uncle is rewarded only once
 		hash := uncle.Hash()
 		if uncles.Contains(hash) {
-			return errDuplicateUncle
+			return consensus.ErrDuplicateUncle
 		}
 		uncles.Add(hash)
 
 		// Make sure the uncle has a valid ancestry
 		if ancestors[hash] != nil {
-			return errUncleIsAncestor
+			return consensus.ErrUncleIsAncestor
 		}
 		// Siblings are not allowed to be included in the workshares list if its an
 		// uncle but can be if its a workshare
@@ -249,7 +231,7 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 			workShare = true
 		}
 		if ancestors[uncle.ParentHash()] == nil || (!workShare && (uncle.ParentHash() == block.ParentHash(nodeCtx))) {
-			return errDanglingUncle
+			return consensus.ErrDanglingUncle
 		}
 		_, err = progpow.ComputePowHash(uncle)
 		if err != nil {
@@ -302,7 +284,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 	}
 	if header.Time() < parent.Time() {
-		return errOlderBlockTime
+		return consensus.ErrOlderBlockTime
 	}
 	// Verify the block's difficulty based on its timestamp and parent's difficulty
 	// difficulty adjustment can only be checked in zone
@@ -613,7 +595,7 @@ func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (common.Hash,
 	if progpow.config.PowMode == ModeFake || progpow.config.PowMode == ModeFullFake {
 		time.Sleep(progpow.fakeDelay)
 		if progpow.fakeFail == header.NumberU64() {
-			return common.Hash{}, errInvalidPoW
+			return common.Hash{}, consensus.ErrInvalidPoW
 		}
 		return common.Hash{}, nil
 	}
@@ -623,7 +605,7 @@ func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (common.Hash,
 	}
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty().Sign() <= 0 {
-		return common.Hash{}, errInvalidDifficulty
+		return common.Hash{}, consensus.ErrInvalidDifficulty
 	}
 	// Check progpow
 	mixHash := header.PowDigest.Load()
@@ -633,11 +615,11 @@ func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (common.Hash,
 	}
 	// Verify the calculated values against the ones provided in the header
 	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
-		return common.Hash{}, errInvalidMixHash
+		return common.Hash{}, consensus.ErrInvalidMixHash
 	}
 	target := new(big.Int).Div(big2e256, header.Difficulty())
 	if new(big.Int).SetBytes(powHash.(common.Hash).Bytes()).Cmp(target) > 0 {
-		return powHash.(common.Hash), errInvalidPoW
+		return powHash.(common.Hash), consensus.ErrInvalidPoW
 	}
 	return powHash.(common.Hash), nil
 }
@@ -651,7 +633,7 @@ func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.H
 	}
 	// Verify the calculated values against the ones provided in the header
 	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
-		return common.Hash{}, errInvalidMixHash
+		return common.Hash{}, consensus.ErrInvalidMixHash
 	}
 	return powHash.(common.Hash), nil
 }
