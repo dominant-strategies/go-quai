@@ -270,18 +270,14 @@ func (progpow *Progpow) CalcRank(chain consensus.ChainHeaderReader, header *type
 }
 
 func (progpow *Progpow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) bool {
-	// Extract some data from the header
-	diff := new(big.Int).Set(workShare.Difficulty())
-	c, _ := mathutil.BinaryLog(diff, mantBits)
-	if c <= params.WorkSharesThresholdDiff {
+	workShareMinTarget, err := consensus.CalcWorkShareThreshold(workShare)
+	if err != nil {
+		progpow.logger.Error(err)
 		return false
 	}
-	workShareThreshold := c - params.WorkSharesThresholdDiff
-	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
-	workShareMintarget := new(big.Int).Div(big2e256, workShareDiff)
 	powHash, err := progpow.ComputePowHash(workShare)
 	if err != nil {
 		return false
 	}
-	return new(big.Int).SetBytes(powHash.Bytes()).Cmp(workShareMintarget) <= 0
+	return new(big.Int).SetBytes(powHash.Bytes()).Cmp(workShareMinTarget) <= 0
 }
