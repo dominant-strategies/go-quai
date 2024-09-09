@@ -40,7 +40,7 @@ const (
 	c_pEtxRetryThreshold              = 10 // Number of pEtxNotFound return on a dom block before asking for pEtx/Rollup from sub
 	c_currentStateComputeWindow       = 20 // Number of blocks around the current header the state generation is always done
 	c_inboundEtxCacheSize             = 10 // Number of inboundEtxs to keep in cache so that, we don't recompute it every time dom is processed
-
+	c_appendTimeCacheSize             = 1000
 )
 
 // Core will implement the following interface to enable dom-sub communication
@@ -96,6 +96,8 @@ type Slice struct {
 
 	bestPh   *types.WorkObject
 	bestPhMu sync.RWMutex
+
+	appendTimeCache *lru.Cache[common.Hash, time.Duration]
 }
 
 func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.WorkObject) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
@@ -131,6 +133,8 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	sl.pEtxRetryCache, _ = lru.New[common.Hash, pEtxRetry](c_pEtxRetryThreshold)
 
 	sl.inboundEtxsCache, _ = lru.New[common.Hash, types.Transactions](c_inboundEtxCacheSize)
+
+	sl.appendTimeCache, _ = lru.New[common.Hash, time.Duration](c_appendTimeCacheSize)
 
 	sl.subInterface = make([]CoreBackend, common.MaxWidth)
 
@@ -370,6 +374,10 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		"t9":   time9,
 		"t10":  time10,
 	}).Info("Times during append")
+
+	// store the append time for the block
+	appendTime := time.Since(start)
+	sl.appendTimeCache.Add(block.Hash(), appendTime)
 
 	sl.logger.WithFields(log.Fields{
 		"t5_1": time5_1,
@@ -1045,6 +1053,7 @@ func (sl *Slice) MakeFullPendingHeader(primePendingHeader, regionPendingHeader, 
 }
 
 func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool, stopChan chan struct{}) (*types.WorkObject, error) {
+	start := time.Now()
 	// set the current header to this block
 	switch sl.NodeCtx() {
 	case common.PRIME_CTX:
@@ -1066,6 +1075,7 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool, stopC
 			return nil, err
 		}
 	}
+	stateProcessTime := time.Since(start)
 	if sl.bestPh == nil {
 		return nil, errors.New("best ph is nil")
 	}
@@ -1077,11 +1087,24 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool, stopC
 	if bestPhCopy != nil && bestPhCopy.ParentHash(sl.NodeCtx()) == block.Hash() {
 		return bestPhCopy, nil
 	}
+
+	phStart := time.Now()
 	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, fill, stopChan)
 	if err != nil {
 		return nil, err
 	}
+	pendingHeaderCreationTime := time.Since(phStart)
+
 	if sl.NodeCtx() == common.ZONE_CTX {
+		// Set the block processing times before sending the block in chain head
+		// feed
+		appendTime, exists := sl.appendTimeCache.Peek(block.Hash())
+		if exists {
+			block.SetAppendTime(appendTime)
+		}
+		block.SetStateProcessTime(stateProcessTime)
+		block.SetPendingHeaderCreationTime(pendingHeaderCreationTime)
+
 		sl.hc.chainHeadFeed.Send(ChainHeadEvent{block})
 	}
 	return pendingHeader, nil

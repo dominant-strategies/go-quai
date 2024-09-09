@@ -27,7 +27,9 @@ type WorkObject struct {
 	tx       *Transaction
 
 	// caches
-	appendTime atomic.Value
+	appendTime                atomic.Value
+	stateProcessTime          atomic.Value
+	pendingHeaderCreationTime atomic.Value
 
 	// These fields are used to track
 	// inter-peer block relay.
@@ -118,6 +120,14 @@ func (wo *WorkObject) SetAppendTime(appendTime time.Duration) {
 	wo.appendTime.Store(appendTime)
 }
 
+func (wo *WorkObject) SetStateProcessTime(stateProcessTimes time.Duration) {
+	wo.stateProcessTime.Store(stateProcessTimes)
+}
+
+func (wo *WorkObject) SetPendingHeaderCreationTime(pendingHeaderCreationTime time.Duration) {
+	wo.pendingHeaderCreationTime.Store(pendingHeaderCreationTime)
+}
+
 ////////////////////////////////////////////////////////////
 /////////////////// Work Object Generic Getters ///////////////
 ////////////////////////////////////////////////////////////
@@ -127,6 +137,28 @@ func (wo *WorkObject) SetAppendTime(appendTime time.Duration) {
 func (wo *WorkObject) GetAppendTime() time.Duration {
 	if appendTime := wo.appendTime.Load(); appendTime != nil {
 		if val, ok := appendTime.(time.Duration); ok {
+			return val
+		}
+	}
+	return -1
+}
+
+// GetStateProcessTime returns the stateProcessTIme of the block
+// The stateProcessTime is computed on the first call and cached thereafter.
+func (wo *WorkObject) GetStateProcessTime() time.Duration {
+	if stateProcessTime := wo.stateProcessTime.Load(); stateProcessTime != nil {
+		if val, ok := stateProcessTime.(time.Duration); ok {
+			return val
+		}
+	}
+	return -1
+}
+
+// GetPendingHeaderCreationTime returns the pendingHeaderTime of the block
+// The pendingHeaderTime is computed on the first call and cached thereafter.
+func (wo *WorkObject) GetPendingHeaderCreationTime() time.Duration {
+	if pendingHeaderCreationTime := wo.appendTime.Load(); pendingHeaderCreationTime != nil {
+		if val, ok := pendingHeaderCreationTime.(time.Duration); ok {
 			return val
 		}
 	}

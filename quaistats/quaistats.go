@@ -1023,9 +1023,11 @@ type blockDetailStats struct {
 
 // Everyone sends every block
 type blockAppendTime struct {
-	AppendTime  time.Duration `json:"appendTime"`
-	BlockNumber *big.Int      `json:"number"`
-	Chain       string        `json:"chain"`
+	AppendTime                time.Duration `json:"appendTime"`
+	StateProcessTime          time.Duration `json:"stateProcessTime"`
+	PendingHeaderCreationTime time.Duration `json:"pendingHeaderCreationTime"`
+	BlockNumber               *big.Int      `json:"number"`
+	Chain                     string        `json:"chain"`
 }
 
 type nodeStats struct {
@@ -1292,14 +1294,16 @@ func (s *Service) assembleBlockAppendTimeStats(block *types.WorkObject) *blockAp
 		return nil
 	}
 	appendTime := block.GetAppendTime()
-
-	s.backend.Logger().WithField("appendTime", appendTime.Microseconds()).Info("Raw Block Append Time")
+	stateProcessTime := block.GetStateProcessTime()
+	pendingHeaderCreationTime := block.GetPendingHeaderCreationTime()
 
 	// Assemble and return the block stats
 	return &blockAppendTime{
-		AppendTime:  appendTime,
-		BlockNumber: block.Number(s.backend.NodeCtx()),
-		Chain:       s.backend.NodeLocation().Name(),
+		AppendTime:                appendTime,
+		StateProcessTime:          stateProcessTime,
+		PendingHeaderCreationTime: pendingHeaderCreationTime,
+		BlockNumber:               block.Number(s.backend.NodeCtx()),
+		Chain:                     s.backend.NodeLocation().Name(),
 	}
 }
 
