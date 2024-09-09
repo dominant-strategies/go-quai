@@ -823,7 +823,7 @@ func (wo *WorkObject) ProtoEncode(woType WorkObjectView) (*ProtoWorkObject, erro
 		if err != nil {
 			return nil, err
 		}
-		if wo.tx == nil {
+		if wo.tx == nil || wo.tx.inner == nil {
 			return &ProtoWorkObject{
 				WoHeader: header,
 				WoBody:   body,
