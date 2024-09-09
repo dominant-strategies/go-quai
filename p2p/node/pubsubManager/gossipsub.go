@@ -22,6 +22,8 @@ const numWorkers = 20   // Number of workers per stream
 const msgChanSize = 500 // 500 requests per subscription
 
 var (
+	ErrConsensusNotSet = errors.New("consensus backend not set")
+	ErrNoTopic         = errors.New("no topic for requested data")
 	ErrUnsupportedType = errors.New("data type not supported")
 )
 
@@ -108,6 +110,9 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 		return err
 	}
 	g.topics.Store(topicSub.String(), topic)
+	if g.consensus == nil {
+		return ErrConsensusNotSet
+	}
 	g.PubSub.RegisterTopicValidator(topic.String(), g.consensus.ValidatorFunc())
 
 	// subscribe to the topic
@@ -115,7 +120,7 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	if err != nil {
 		return err
 	}
-	g.subscriptions.Store(topic, subscription)
+	g.subscriptions.Store(topic.String(), subscription)
 
 	go func(location common.Location, sub *pubsub.Subscription) {
 		defer func() {
@@ -168,8 +173,8 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 		for {
 			msg, err := sub.Next(g.ctx)
 			if err != nil || msg == nil {
-				// if context was cancelled, then we are shutting down
-				if g.ctx.Err() != nil {
+				// if context or subscription was cancelled, then we are shutting down
+				if g.ctx.Err() != nil || err == pubsub.ErrSubscriptionCancelled {
 					return
 				}
 				log.Global.Errorf("error getting next message from subscription: %s", err)
@@ -194,14 +199,14 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 
 // unsubscribe from broadcasts of the given type of data
 func (g *PubsubManager) Unsubscribe(location common.Location, datatype interface{}) error {
-	if topic, err := NewTopic(g.genesis, location, datatype); err != nil {
-		if value, ok := g.subscriptions.Load(topic); ok {
+	if topic, err := NewTopic(g.genesis, location, datatype); err == nil {
+		if value, ok := g.subscriptions.Load(topic.String()); ok {
 			value.(*pubsub.Subscription).Cancel()
-			g.subscriptions.Delete(topic)
+			g.subscriptions.Delete(topic.String())
 		}
-		if value, ok := g.topics.Load(topic); ok {
+		if value, ok := g.topics.Load(topic.String()); ok {
 			value.(*pubsub.Topic).Close()
-			g.topics.Delete(topic)
+			g.topics.Delete(topic.String())
 		}
 		return nil
 	} else {
@@ -222,5 +227,5 @@ func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}
 	if value, ok := g.topics.Load(topicName.String()); ok {
 		return value.(*pubsub.Topic).Publish(g.ctx, protoData)
 	}
-	return errors.New("no topic for requested data")
+	return ErrNoTopic
 }
