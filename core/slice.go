@@ -1048,11 +1048,23 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool, stopC
 	// set the current header to this block
 	switch sl.NodeCtx() {
 	case common.PRIME_CTX:
-		sl.hc.SetCurrentHeader(block)
+		err := sl.hc.SetCurrentHeader(block)
+		if err != nil {
+			sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
+			return nil, err
+		}
 	case common.REGION_CTX:
-		sl.hc.SetCurrentHeader(block)
+		err := sl.hc.SetCurrentHeader(block)
+		if err != nil {
+			sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
+			return nil, err
+		}
 	case common.ZONE_CTX:
-		sl.hc.SetCurrentHeader(block)
+		err := sl.hc.SetCurrentHeader(block)
+		if err != nil {
+			sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
+			return nil, err
+		}
 	}
 	if sl.bestPh == nil {
 		return nil, errors.New("best ph is nil")

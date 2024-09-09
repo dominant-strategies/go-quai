@@ -412,14 +412,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		return nil
 	}
 
-	// write the head block hash to the db
-	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
-	hc.logger.WithFields(log.Fields{
-		"Hash":   head.Hash(),
-		"Number": head.NumberArray(),
-	}).Info("Setting the current header")
-	hc.currentHeader.Store(head)
-
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash(hc.NodeCtx()) {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64(hc.NodeCtx()))
@@ -427,6 +419,13 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		if err != nil {
 			return err
 		}
+		// write the head block hash to the db
+		rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+		hc.logger.WithFields(log.Fields{
+			"Hash":   head.Hash(),
+			"Number": head.NumberArray(),
+		}).Info("Setting the current header")
+		hc.currentHeader.Store(head)
 		return nil
 	}
 
@@ -482,6 +481,13 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			}
 		}
 	}
+	// write the head block hash to the db
+	rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
+	hc.logger.WithFields(log.Fields{
+		"Hash":   head.Hash(),
+		"Number": head.NumberArray(),
+	}).Info("Setting the current header")
+	hc.currentHeader.Store(head)
 
 	if hc.NodeCtx() == common.ZONE_CTX && hc.ProcessingState() {
 		// Every Block that got removed from the canonical hash db is sent in the side feed to be
