@@ -1304,7 +1304,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 				pool.logger.Error("feesCh is full, skipping until there is room")
 			}
 		}
-		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(pool.chain.CurrentBlock().WorkObjectHeader(), fee))
 		if err != nil {
 			pool.logger.Error("Error creating txWithMinerFee: " + err.Error())
 			continue
