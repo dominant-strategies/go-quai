@@ -1217,7 +1217,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
-		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, fee)
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(currentBlock.WorkObjectHeader(), fee))
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -1288,6 +1288,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 				}).Debug("Invalid Qi transaction, skipping re-inject")
 				continue
 			}
+			fee = misc.QiToQuai(currentBlock.WorkObjectHeader(), fee)
 			select {
 			case pool.feesCh <- newFee{hash16, fee}:
 			default:
