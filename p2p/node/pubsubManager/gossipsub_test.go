@@ -129,7 +129,7 @@ func TestPubsubManager(t *testing.T) {
 
 func TestMultipleRequests(t *testing.T) {
 	// Number of requests to test
-	n := 10
+	n := 100
 
 	ctx := context.Background()
 
@@ -183,7 +183,7 @@ func TestMultipleRequests(t *testing.T) {
 	}
 
 	//BROADCAST
-	testCh := make(chan interface{}, n)
+	testCh := make(chan interface{}, n*len(topics))
 	ps.SetReceiveHandler(func(receivedFrom peer.ID, msgId string, msgTopic string, data interface{}, location common.Location) {
 		testCh <- data
 	})
@@ -217,13 +217,17 @@ func TestMultipleRequests(t *testing.T) {
 	}
 
 	// VERIFY
-	receivedMessages := make([]interface{}, 0, n)
+	receivedMessages := make([]interface{}, 0, n*len(topics))
+	var mu sync.Mutex
+
 	for i := 0; i < (n * len(topics)); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			receivedMessage := <-testCh
+			mu.Lock()
 			receivedMessages = append(receivedMessages, receivedMessage)
+			mu.Unlock()
 		}()
 	}
 
@@ -232,7 +236,6 @@ func TestMultipleRequests(t *testing.T) {
 	// Ensure all broadcasted messages were received
 	require.Len(t, receivedMessages, len(messages), "The number of received messages does not match the number of broadcasted messages")
 
-	// UNSUBSCRIBE All
 	ps.UnsubscribeAll()
 	if len(ps.GetTopics()) != 0 {
 		t.Fatal("Topic should be empty after unsubscribe")
