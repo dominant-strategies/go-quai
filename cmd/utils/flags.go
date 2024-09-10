@@ -34,7 +34,6 @@ import (
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 )
 
@@ -105,10 +104,6 @@ var NodeFlags = []Flag{
 	VMEnableDebugFlag,
 	PprofFlag,
 	InsecureUnlockAllowedFlag,
-	GpoBlocksFlag,
-	GpoPercentileFlag,
-	GpoMaxGasPriceFlag,
-	GpoIgnoreGasPriceFlag,
 	CoinbaseAddressFlag,
 	EnvironmentFlag,
 	QuaiStatsURLFlag,
@@ -499,30 +494,6 @@ var (
 		Name:  c_NodeFlagPrefix + "allow-insecure-unlock",
 		Value: false,
 		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http" + generateEnvDoc(c_NodeFlagPrefix+"allow-insecure-unlock"),
-	}
-
-	GpoBlocksFlag = Flag{
-		Name:  c_NodeFlagPrefix + "gpo-blocks",
-		Value: quaiconfig.Defaults.GPO.Blocks,
-		Usage: "Number of recent blocks to check for gas prices" + generateEnvDoc(c_NodeFlagPrefix+"gpo-blocks"),
-	}
-
-	GpoPercentileFlag = Flag{
-		Name:  c_NodeFlagPrefix + "gpo-percentile",
-		Value: quaiconfig.Defaults.GPO.Percentile,
-		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices" + generateEnvDoc(c_NodeFlagPrefix+"gpo-percentile"),
-	}
-
-	GpoMaxGasPriceFlag = Flag{
-		Name:  c_NodeFlagPrefix + "gpo-maxprice",
-		Value: quaiconfig.Defaults.GPO.MaxPrice.Int64(),
-		Usage: "Maximum gas price will be recommended by gpo" + generateEnvDoc(c_NodeFlagPrefix+"gpo-maxprice"),
-	}
-
-	GpoIgnoreGasPriceFlag = Flag{
-		Name:  c_NodeFlagPrefix + "gpo-ignoreprice",
-		Value: quaiconfig.Defaults.GPO.IgnorePrice.Int64(),
-		Usage: "Gas price below which gpo will ignore transactions" + generateEnvDoc(c_NodeFlagPrefix+"gpo-ignoreprice"),
 	}
 
 	CoinbaseAddressFlag = Flag{
@@ -1090,21 +1061,6 @@ func setDataDir(cfg *node.Config) {
 	}
 }
 
-func setGPO(cfg *gasprice.Config) {
-	if viper.IsSet(GpoBlocksFlag.Name) {
-		cfg.Blocks = viper.GetInt(GpoBlocksFlag.Name)
-	}
-	if viper.IsSet(GpoPercentileFlag.Name) {
-		cfg.Percentile = viper.GetInt(GpoPercentileFlag.Name)
-	}
-	if viper.IsSet(GpoMaxGasPriceFlag.Name) {
-		cfg.MaxPrice = big.NewInt(viper.GetInt64(GpoMaxGasPriceFlag.Name))
-	}
-	if viper.IsSet(GpoIgnoreGasPriceFlag.Name) {
-		cfg.IgnorePrice = big.NewInt(viper.GetInt64(GpoIgnoreGasPriceFlag.Name))
-	}
-}
-
 func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
 	if viper.IsSet(TxPoolLocalsFlag.Name) && viper.GetString(TxPoolLocalsFlag.Name) != "" {
 		locals := strings.Split(viper.GetString(TxPoolLocalsFlag.Name), ",")
@@ -1311,7 +1267,6 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if len(nodeLocation) == 2 {
 		setCoinbase(cfg)
 	}
-	setGPO(&cfg.GPO)
 	setTxPool(&cfg.TxPool, nodeLocation)
 
 	// If blake3 consensus engine is specifically asked use the blake3 engine

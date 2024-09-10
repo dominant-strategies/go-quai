@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/quai/gasprice"
 )
 
 type QuaistatsConfig struct {
@@ -43,26 +42,6 @@ type QuaiConfig struct {
 	Node      node.Config
 	Quaistats QuaistatsConfig
 	Metrics   metrics_config.Config
-}
-
-// FullNodeGPO contains default gasprice oracle settings for full node.
-var FullNodeGPO = gasprice.Config{
-	Blocks:           20,
-	Percentile:       60,
-	MaxHeaderHistory: 0,
-	MaxBlockHistory:  0,
-	MaxPrice:         gasprice.DefaultMaxPrice,
-	IgnorePrice:      gasprice.DefaultIgnorePrice,
-}
-
-// LightClientGPO contains default gasprice oracle settings for light client.
-var LightClientGPO = gasprice.Config{
-	Blocks:           2,
-	Percentile:       60,
-	MaxHeaderHistory: 300,
-	MaxBlockHistory:  5,
-	MaxPrice:         gasprice.DefaultMaxPrice,
-	IgnorePrice:      gasprice.DefaultIgnorePrice,
 }
 
 // Defaults contains default settings for use on the Quai main net.
@@ -85,7 +64,6 @@ var Defaults = Config{
 	},
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   params.GasCeil,
-	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
 }
 
@@ -142,9 +120,6 @@ type Config struct {
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
-
-	// Gas Price Oracle options
-	GPO gasprice.Config
 
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool

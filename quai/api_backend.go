@@ -33,7 +33,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/rpc"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
@@ -42,7 +41,6 @@ import (
 type QuaiAPIBackend struct {
 	extRPCEnabled bool
 	quai          *Quai
-	gpo           *gasprice.Oracle
 }
 
 // ChainConfig returns the active chain configuration.
@@ -408,24 +406,12 @@ func (b *QuaiAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transacti
 	return b.quai.core.ContentFrom(addr)
 }
 
-func (b *QuaiAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	nodeCtx := b.quai.core.NodeCtx()
-	if nodeCtx != common.ZONE_CTX {
-		return nil, errors.New("suggestTipCap can only be called in zone chain")
-	}
-	return b.gpo.SuggestTipCap(ctx)
-}
-
 func (b *QuaiAPIBackend) SuggestFinalityDepth(ctx context.Context, qiValue *big.Int, correlatedRisk *big.Int) (*big.Int, error) {
 	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return common.Big0, errors.New("suggestFinalityDepth can only be called in zone chain")
 	}
 	return b.quai.core.SuggestFinalityDepth(qiValue, correlatedRisk), nil
-}
-
-func (b *QuaiAPIBackend) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, err error) {
-	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 }
 
 func (b *QuaiAPIBackend) ChainDb() ethdb.Database {

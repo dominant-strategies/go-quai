@@ -39,7 +39,6 @@ import (
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/filters"
-	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -260,15 +259,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	// Start the handler
 	quai.handler.Start()
 
-	quai.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), quai, nil}
-	// Gasprice oracle is only initiated in zone chains
-	if nodeCtx == common.ZONE_CTX && quai.core.ProcessingState() {
-		gpoParams := config.GPO
-		if gpoParams.Default == nil {
-			gpoParams.Default = config.Miner.GasPrice
-		}
-		quai.APIBackend.gpo = gasprice.NewOracle(quai.APIBackend, gpoParams, logger)
-	}
+	quai.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), quai}
 
 	// Register the backend on the node
 	stack.RegisterAPIs(quai.APIs())

@@ -89,10 +89,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		// In this clause, user left some fields unspecified.
 		if args.GasPrice == nil {
 			if args.MaxPriorityFeePerGas == nil {
-				tip, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
+				tip := big.NewInt(0)
 				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 			}
 			if args.MaxFeePerGas == nil {
@@ -110,11 +107,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 				return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but GasPrice is nil")
 			}
 			if args.GasPrice == nil {
-				price, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
-
+				price := big.NewInt(0)
 				// The legacy tx gas price suggestion should not add 2x base fee
 				// because all fees are consumed, so it would result in a spiral
 				// upwards.
