@@ -26,8 +26,8 @@ import (
 type QuaiTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
-	GasTipCap  *big.Int
-	GasFeeCap  *big.Int
+	MinerTip   *big.Int
+	GasPrice   *big.Int
 	Gas        uint64
 	To         *common.Address `rlp:"nilString"` // nil means contract creation
 	Value      *big.Int
@@ -56,8 +56,8 @@ func (tx *QuaiTx) copy() TxData {
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
 		ChainID:    new(big.Int),
-		GasTipCap:  new(big.Int),
-		GasFeeCap:  new(big.Int),
+		MinerTip:   new(big.Int),
+		GasPrice:   new(big.Int),
 		V:          new(big.Int),
 		R:          new(big.Int),
 		S:          new(big.Int),
@@ -72,11 +72,11 @@ func (tx *QuaiTx) copy() TxData {
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
-	if tx.GasTipCap != nil {
-		cpy.GasTipCap.Set(tx.GasTipCap)
+	if tx.GasPrice != nil {
+		cpy.GasPrice.Set(tx.GasPrice)
 	}
-	if tx.GasFeeCap != nil {
-		cpy.GasFeeCap.Set(tx.GasFeeCap)
+	if tx.MinerTip != nil {
+		cpy.MinerTip.Set(tx.MinerTip)
 	}
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
@@ -96,9 +96,8 @@ func (tx *QuaiTx) chainID() *big.Int         { return tx.ChainID }
 func (tx *QuaiTx) accessList() AccessList    { return tx.AccessList }
 func (tx *QuaiTx) data() []byte              { return tx.Data }
 func (tx *QuaiTx) gas() uint64               { return tx.Gas }
-func (tx *QuaiTx) gasFeeCap() *big.Int       { return tx.GasFeeCap }
-func (tx *QuaiTx) gasTipCap() *big.Int       { return tx.GasTipCap }
-func (tx *QuaiTx) gasPrice() *big.Int        { return tx.GasFeeCap }
+func (tx *QuaiTx) minerTip() *big.Int        { return tx.MinerTip }
+func (tx *QuaiTx) gasPrice() *big.Int        { return tx.GasPrice }
 func (tx *QuaiTx) value() *big.Int           { return tx.Value }
 func (tx *QuaiTx) nonce() uint64             { return tx.Nonce }
 func (tx *QuaiTx) to() *common.Address       { return tx.To }

@@ -485,14 +485,14 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*he
 	}
 
 	if txType {
-		return (*hexutil.Big)(misc.CalcBaseFee(chainCfg, header)), nil
+		return (*hexutil.Big)(s.b.CurrentBlock().BaseFee()), nil
 	} else {
 		// Use the prime terminus if we have it
 		lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminusHash())
 		if lastPrime == nil || err != nil {
 			lastPrime = header
 		}
-		quaiBaseFee := misc.CalcBaseFee(chainCfg, header)
+		quaiBaseFee := s.b.CurrentBlock().BaseFee()
 		qiBaseFee := misc.QuaiToQi(lastPrime.WorkObjectHeader(), quaiBaseFee)
 		if qiBaseFee.Cmp(big.NewInt(0)) == 0 {
 			// Minimum base fee is 1 qit or smallest unit
@@ -521,7 +521,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 		return nil, errors.New("no chain config available")
 	}
 	// Calculate the base fee
-	quaiBaseFee := misc.CalcBaseFee(chainCfg, header)
+	quaiBaseFee := header.BaseFee()
 	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), quaiBaseFee)
 	// Use the prime terminus if we have it
 	lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminusHash())

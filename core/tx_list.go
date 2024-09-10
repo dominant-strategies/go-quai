@@ -279,23 +279,21 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
+		if types.CompareFeeBetweenTx(old, tx) >= 0 {
 			return false, nil
 		}
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
 		a := big.NewInt(100 + int64(priceBump))
-		aFeeCap := new(big.Int).Mul(a, old.GasFeeCap())
-		aTip := a.Mul(a, old.GasTipCap())
+		aFeeCap := new(big.Int).Mul(a, old.GasPrice())
 
 		// thresholdTip    = oldTip * (100 + priceBump) / 100
 		b := big.NewInt(100)
 		thresholdFeeCap := aFeeCap.Div(aFeeCap, b)
-		thresholdTip := aTip.Div(aTip, b)
 
 		// Have to ensure that either the new fee cap or tip is higher than the
 		// old ones as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
-		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
+		if tx.CompareFee(thresholdFeeCap) < 0 {
 			return false, nil
 		}
 	}
@@ -432,23 +430,16 @@ func (h *priceHeap) Less(i, j int) bool {
 	case 1:
 		return false
 	default:
-		return h.list[i].Nonce() > h.list[j].Nonce()
+		return true
 	}
 }
 
 func (h *priceHeap) cmp(a, b *types.Transaction) int {
-	if h.baseFee != nil {
-		// Compare effective tips if baseFee is specified
-		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
-			return c
-		}
-	}
-	// Compare fee caps if baseFee is not specified or effective tips are equal
-	if c := a.GasFeeCapCmp(b); c != 0 {
+	// Compare gas price, if equal compare the baseFee
+	if c := a.GasPrice().Cmp(b.GasPrice()); c != 0 {
 		return c
 	}
-	// Compare tips if effective tips and fee caps are equal
-	return a.GasTipCapCmp(b)
+	return -1
 }
 
 func (h *priceHeap) Push(x interface{}) {

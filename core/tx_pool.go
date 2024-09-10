@@ -30,7 +30,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -706,10 +705,10 @@ func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.AddressBytes]typ
 		// If the miner requests tip enforcement, cap the lists now
 		if enforceTips && !pool.locals.contains(addr) {
 			for i, tx := range txs {
-				if tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
+				if pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 					pool.logger.WithFields(log.Fields{
 						"tx":           tx.Hash().String(),
-						"gasTipCap":    tx.GasTipCap().String(),
+						"gasPrice":     tx.GasPrice().String(),
 						"poolGasPrice": pool.gasPrice.String(),
 						"baseFee":      pool.priced.urgent.baseFee.String(),
 					}).Debug("TX has incorrect or low miner tip")
@@ -766,15 +765,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrGasLimit(tx.Gas(), pool.currentMaxGas)
 	}
 	// Sanity check for extremely large numbers
-	if tx.GasFeeCap().BitLen() > 256 {
+	if tx.GasPrice().BitLen() > 256 {
 		return ErrFeeCapVeryHigh
 	}
-	if tx.GasTipCap().BitLen() > 256 {
+	if tx.MinerTip().BitLen() > 256 {
 		return ErrTipVeryHigh
-	}
-	// Ensure gasFeeCap is greater than or equal to gasTipCap.
-	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
-		return ErrTipAboveFeeCap
 	}
 	var internal common.InternalAddress
 	addToCache := true
@@ -800,7 +795,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	}
 
 	// Drop non-local transactions under our own minimal accepted gas price or tip
-	if tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
+	if tx.CompareFee(pool.gasPrice) < 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
@@ -869,9 +864,9 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		// If the new transaction is underpriced, don't accept it
 		if pool.priced.Underpriced(tx) {
 			pool.logger.WithFields(log.Fields{
-				"hash":      hash,
-				"gasTipCap": tx.GasTipCap(),
-				"gasFeeCap": tx.GasFeeCap(),
+				"hash":     hash,
+				"gasPrice": tx.GasPrice(),
+				"minerTip": tx.MinerTip(),
 			}).Trace("Discarding underpriced transaction")
 			underpricedTxMeter.Add(1)
 			return false, ErrUnderpriced
@@ -890,9 +885,9 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
 			pool.logger.WithFields(log.Fields{
-				"hash":      tx.Hash(),
-				"gasTipCap": tx.GasTipCap(),
-				"gasFeeCap": tx.GasFeeCap(),
+				"hash":     tx.Hash(),
+				"gasPrice": tx.GasPrice(),
+				"minerTip": tx.MinerTip(),
 			}).Trace("Discarding freshly underpriced transaction")
 			pendingDiscardMeter.Add(1)
 			pool.removeTx(tx.Hash(), false)
@@ -1231,7 +1226,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
-		fee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
+		txFee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, etxRLimit, etxPLimit)
 		if err != nil {
 			pool.logger.WithFields(logrus.Fields{
 				"tx":  tx.Hash().String(),
@@ -1240,7 +1235,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
-		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(currentBlock.WorkObjectHeader(), fee), time.Now())
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, txFee, time.Now())
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -1277,6 +1272,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 		if _, exists := pool.qiPool.Get(hash); exists {
 			continue
 		}
+		currentBlock := pool.chain.CurrentBlock()
 		hash16 := [16]byte(hash[:])
 		fee, exists := pool.qiTxFees.Get(hash16)
 		if fee == nil || !exists { // this should almost never happen
@@ -1286,7 +1282,6 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 			} else {
 				pool.logger.Debugf("Fee is nil or doesn't exist in cache for tx %s", tx.Hash().String())
 			}
-			currentBlock := pool.chain.CurrentBlock()
 			etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
 			if etxRLimit < params.ETXRLimitMin {
 				etxRLimit = params.ETXRLimitMin
@@ -1311,14 +1306,13 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 				}).Debug("Invalid Qi transaction, skipping re-inject")
 				continue
 			}
-			fee = misc.QiToQuai(currentBlock.WorkObjectHeader(), fee)
 			select {
 			case pool.feesCh <- newFee{hash16, fee}:
 			default:
 				pool.logger.Error("feesCh is full, skipping until there is room")
 			}
 		}
-		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(pool.chain.CurrentBlock().WorkObjectHeader(), fee), time.Now())
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, fee, time.Now())
 		if err != nil {
 			pool.logger.Error("Error creating txWithMinerFee: " + err.Error())
 			continue
@@ -1674,7 +1668,7 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 			if reset != nil {
 				pool.demoteUnexecutables()
 				if reset.newHead != nil {
-					pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
+					pendingBaseFee := pool.chain.CurrentBlock().BaseFee()
 					pool.priced.SetBaseFee(pendingBaseFee)
 				}
 			}
@@ -2655,7 +2649,7 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 func (t *txLookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
 	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
-		if tx.GasTipCapIntCmp(threshold) < 0 {
+		if tx.CompareFee(threshold) < 0 {
 			found = append(found, tx)
 		}
 		return true

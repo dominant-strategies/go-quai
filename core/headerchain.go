@@ -14,7 +14,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -1038,7 +1037,7 @@ func (hc *HeaderChain) GetGasUsedInChain(block *types.WorkObject, length int) in
 // GetGasUsedInChain retrieves all the gas used from a given block backwards until
 // a specific distance is reached.
 func (hc *HeaderChain) CalculateBaseFee(header *types.WorkObject) *big.Int {
-	return misc.CalcBaseFee(hc.Config(), header)
+	return header.BaseFee()
 }
 
 // Export writes the active chain to the given writer.

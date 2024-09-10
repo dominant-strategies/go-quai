@@ -451,16 +451,6 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 			return fmt.Errorf("invalid gasLimit: have %d, want %d",
 				header.GasLimit(), expectedGasLimit)
 		}
-		// Verify the header is not malformed
-		if header.BaseFee() == nil {
-			return fmt.Errorf("header is missing baseFee")
-		}
-		// Verify the baseFee is correct based on the parent header.
-		expectedBaseFee := misc.CalcBaseFee(chain.Config(), parent)
-		if header.BaseFee().Cmp(expectedBaseFee) != 0 {
-			return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
-				expectedBaseFee, header.BaseFee(), parent.BaseFee(), parent.GasUsed())
-		}
 		// Verify that the stateUsed is <= stateLimit
 		if header.StateUsed() > header.StateLimit() {
 			return fmt.Errorf("invalid stateUsed: have %d, stateLimit %d", header.StateUsed(), header.StateLimit())

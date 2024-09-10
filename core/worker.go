@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -554,22 +555,15 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		// First etx is always the coinbase etx
 		// If workshares are included that are not uncles(?)
 		// create a placeholder for the coinbase and create etx for the rest of the workshares
-		if primaryCoinbase.IsInQiLedgerScope() {
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
-		} else if primaryCoinbase.IsInQuaiLedgerScope() {
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
-		}
 
-		// Encode the parent hash with the correct origin location and use it in the OriginatingTxHash field for coinbase
-		origin := block.Hash()
-		origin[0] = byte(w.hc.NodeLocation().Region())
-		origin[1] = byte(w.hc.NodeLocation().Zone())
-
-		// Add an etx for each workshare for it to be rewarded
-		for i, uncle := range uncles {
-			reward := misc.CalculateReward(uncle)
-			uncleCoinbase := uncle.PrimaryCoinbase()
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(i) + 1, Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
+		var primeTerminus *types.WorkObject
+		if *work.parentOrder == common.PRIME_CTX {
+			primeTerminus = block
+		} else {
+			primeTerminus = w.hc.GetPrimeTerminus(work.wo)
+			if primeTerminus == nil {
+				return nil, errors.New("prime terminus not found")
+			}
 		}
 
 		// Fill pending transactions from the txpool
@@ -577,7 +571,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		work.utxoFees = big.NewInt(0)
 		work.quaiFees = big.NewInt(0)
 		start := time.Now()
-		if err := w.fillTransactions(interrupt, work, block, fill); err != nil {
+		if err := w.fillTransactions(interrupt, work, primeTerminus.WorkObjectHeader(), block, fill); err != nil {
 			return nil, fmt.Errorf("error generating pending header: %v", err)
 		}
 		if fill {
@@ -592,30 +586,55 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		if work.parentOrder == nil {
 			return nil, fmt.Errorf("parent order not set")
 		}
-		var primeTerminus *types.WorkObject
-		if *work.parentOrder == common.PRIME_CTX {
-			primeTerminus = block
-		} else {
-			// convert the Quai reward into Qi and add it to the utxoFees
-			primeTerminus = w.hc.GetHeaderByHash(work.wo.PrimeTerminusHash())
-			if primeTerminus == nil {
-				return nil, fmt.Errorf("could not find prime terminus header %032x", work.wo.PrimeTerminusHash())
+
+		quaiCoinbase, err := work.wo.QuaiCoinbase()
+		if err != nil {
+			return nil, err
+		}
+		qiCoinbase, err := work.wo.QiCoinbase()
+		if err != nil {
+			return nil, err
+		}
+
+		// Encode the parent hash with the correct origin location and use it in the OriginatingTxHash field for coinbase
+		origin := block.Hash()
+		origin[0] = byte(w.hc.NodeLocation().Region())
+		origin[1] = byte(w.hc.NodeLocation().Zone())
+
+		// If the primary coinbase belongs to a ledger and there is no fees
+		// for other ledger, there is no etxs emitted for the other ledger
+		if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
+			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
+			blockReward := new(big.Int).Add(coinbaseReward, work.quaiFees)
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			work.etxs = append(work.etxs, coinbaseEtx)
+			if work.utxoFees.Cmp(big.NewInt(0)) != 0 {
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				work.etxs = append(work.etxs, coinbaseEtx)
+			}
+		} else if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
+			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
+			blockReward := new(big.Int).Add(coinbaseReward, work.utxoFees)
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			work.etxs = append(work.etxs, coinbaseEtx)
+			if work.quaiFees.Cmp(big.NewInt(0)) != 0 {
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		}
-		// TODO: fee from Quai tx goes to Quai coinbase and fee from Qi tx goes to Qi coinbase
-		if primaryCoinbase.IsInQiLedgerScope() {
-			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
-			blockFees := new(big.Int).Add(work.utxoFees, misc.QuaiToQi(primeTerminus.WorkObjectHeader(), work.quaiFees))
-			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: primaryCoinbase, Data: []byte{work.wo.Lock()}})
-			work.etxs[0] = coinbaseEtx
-		} else if primaryCoinbase.IsInQuaiLedgerScope() {
-			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
-			blockFees := new(big.Int).Add(work.quaiFees, misc.QiToQuai(primeTerminus.WorkObjectHeader(), work.utxoFees))
-			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: primaryCoinbase, Data: []byte{work.wo.Lock()}})
-			work.etxs[0] = coinbaseEtx
+
+		// Add an etx for each workshare for it to be rewarded
+		for _, uncle := range uncles {
+			reward := misc.CalculateReward(uncle)
+			uncleCoinbase := uncle.PrimaryCoinbase()
+			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
 		}
+
+	}
+
+	// If there are no transcations in the env, reset the BaseFee to zero
+	if len(work.txs) == 0 {
+		work.wo.Header().SetBaseFee(big.NewInt(0))
 	}
 
 	// Create a local environment copy, avoid the data race with snapshot state.
@@ -766,6 +785,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	if tx == nil {
 		return nil, false, errors.New("nil transaction")
 	}
+
+	// If the transaction is not an external transaction, gas price cannot be less than the base fee
+	if tx.Type() != types.ExternalTxType && tx.GasPrice().Cmp(env.wo.BaseFee()) < 0 {
+		return nil, false, errors.New("gas price fee less than base fee")
+	}
 	// coinbase tx
 	// 1) is a external tx type
 	// 2) do not consume any gas
@@ -782,6 +806,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			return nil, false, fmt.Errorf("invalid coinbase address %v: %v", tx.To(), err)
 		}
 		lockupByte := tx.Data()[0]
+		if err := env.gasPool.SubGas(params.TxGas); err != nil {
+			// etxs are taking more gas
+			w.logger.Info("Stopped the etx processing because we crossed the block gas limit processing coinbase etxs")
+			return nil, false, nil
+		}
 		if tx.To().IsInQiLedgerScope() {
 			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 			if lockup.Uint64() < params.ConversionLockPeriod {
@@ -819,6 +848,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				env.quaiCoinbaseEtxs[coinbaseAddrWithLockup] = tx.Value() // this creates a new *big.Int
 			}
 		}
+		gasUsed := env.wo.GasUsed()
+		gasUsed += params.TxGas
+		env.wo.Header().SetGasUsed(gasUsed)
 		env.txs = append(env.txs, tx)
 		return []*types.Log{}, false, nil
 	}
@@ -918,7 +950,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 
 var qiTxErrs uint64
 
-func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
+func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkObjectHeader, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32, excludeEtx bool) error {
 	qiTxsToRemove := make([]*common.Hash, 0)
 	gasLimit := env.wo.GasLimit
 	if env.gasPool == nil {
@@ -927,8 +959,12 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 	var coalescedLogs []*types.Log
 	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
 	for {
+		if excludeEtx {
+			break
+		}
 		// Add ETXs until minimum gas is used
 		if env.wo.GasUsed() >= minEtxGas {
+			// included etxs more than min etx gas
 			break
 		}
 		if env.wo.GasUsed() > minEtxGas*params.MaximumEtxGasMultiplier { // sanity check, this should never happen
@@ -944,6 +980,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			break
 		}
 		env.state.Prepare(etx.Hash(), env.tcount)
+
 		logs, receipt, err := w.commitTransaction(env, parent, etx)
 		if err == nil && receipt {
 			coalescedLogs = append(coalescedLogs, logs...)
@@ -985,7 +1022,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				}).Trace("Not enough gas for further transactions")
 				break
 			}
-			if err := w.processQiTx(tx, env, parent, firstQiTx); err != nil {
+			if err := w.processQiTx(tx, env, primeTerminus, parent, firstQiTx); err != nil {
 				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") {
 					// This is not an invalid tx, our block is just full of ETXs
 					// Alternatively, a tx double spends a cached deleted UTXO, likely replaced-by-fee
@@ -1083,23 +1120,26 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				"hash":   tx.Hash(),
 				"sender": from,
 				"err":    err,
-			}).Error("Transaction failed, account skipped")
+			}).Trace("Transaction failed, account skipped")
 			txs.Shift(from.Bytes20(), false)
 		}
 	}
-	// Process Quai coinbase lockups (push all of the same coinbases to a singe lockup for state storage efficiency)
-	lockupContractAddress := vm.LockupContractAddresses[[2]byte{w.chainConfig.Location[0], w.chainConfig.Location[1]}]
-	for addressWithLockup, value := range env.quaiCoinbaseEtxs {
-		addr := common.BytesToAddress(addressWithLockup[:20], w.chainConfig.Location)
-		lockupByte := addressWithLockup[20]
-		lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-		if lockup.Uint64() < params.ConversionLockPeriod {
-			return fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
-		}
-		value := params.CalculateCoinbaseValueWithLockup(value, lockupByte)
-		_, _, err := vm.AddNewLock(env.parentStateSize, env.state, addr, new(types.GasPool).AddGas(math.MaxUint64), lockup, value, lockupContractAddress)
-		if err != nil {
-			return err
+
+	if !excludeEtx {
+		// Process Quai coinbase lockups (push all of the same coinbases to a singe lockup for state storage efficiency)
+		lockupContractAddress := vm.LockupContractAddresses[[2]byte{w.chainConfig.Location[0], w.chainConfig.Location[1]}]
+		for addressWithLockup, value := range env.quaiCoinbaseEtxs {
+			addr := common.BytesToAddress(addressWithLockup[:20], w.chainConfig.Location)
+			lockupByte := addressWithLockup[20]
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+			if lockup.Uint64() < params.ConversionLockPeriod {
+				return fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+			}
+			value := params.CalculateCoinbaseValueWithLockup(value, lockupByte)
+			_, _, err := vm.AddNewLock(env.parentStateSize, env.state, addr, new(types.GasPool).AddGas(math.MaxUint64), lockup, value, lockupContractAddress)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if len(qiTxsToRemove) > 0 {
@@ -1287,7 +1327,6 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		newWo.Header().SetExtra(w.extra)
-		newWo.Header().SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent))
 		newWo.Header().SetStateLimit(misc.CalcStateLimit(parent, w.config.GasCeil))
 		if w.isRunning() {
 			if w.primaryCoinbase.Equal(common.Zero) {
@@ -1383,7 +1422,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment, block *types.WorkObject, fill bool) error {
+func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTerminus *types.WorkObjectHeader, block *types.WorkObject, fill bool) error {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	etxs := false
@@ -1412,10 +1451,9 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		"fill":         fill,
 		"newInbounds":  len(newInboundEtxs),
 	}).Info("ETXs and fill")
-
 	if !fill {
 		if etxs {
-			return w.commitTransactions(env, block, &types.TransactionsByPriceAndNonce{}, interrupt)
+			return w.commitTransactions(env, primeTerminus, block, &types.TransactionsByPriceAndNonce{}, interrupt, false)
 		}
 		return nil
 	}
@@ -1428,9 +1466,54 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 
 	pendingQiTxs := w.txPool.QiPoolPending()
 
-	if len(pending) > 0 || len(pendingQiTxs) > 0 || etxs {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxs, pending, env.wo.BaseFee(), true)
-		return w.commitTransactions(env, block, txs, interrupt)
+	// Convert these pendingQiTxs fees into Quai fees
+	pendingQiTxsWithQuaiFee := make([]*types.TxWithMinerFee, 0)
+	for _, tx := range pendingQiTxs {
+		// update the fee
+		qiFeeInQuai := misc.QiToQuai(primeTerminus, tx.MinerFee())
+		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), w.hc.NodeLocation()))))
+		qiTx, err := types.NewTxWithMinerFee(tx.Tx(), minerFeeInQuai, time.Now())
+		if err != nil {
+			continue
+		}
+		pendingQiTxsWithQuaiFee = append(pendingQiTxsWithQuaiFee, qiTx)
+	}
+
+	if len(pending) > 0 || len(pendingQiTxsWithQuaiFee) > 0 || etxs {
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxsWithQuaiFee, pending, true)
+		var lowestFeeTxIncluded bool
+		var etxIncluded bool
+		var baseFee *big.Int
+		var count int = 1
+		// take the lowest fee transaction and until the tx is included into the env.wo
+		for {
+			lowestFeeTx := txs.Last(count)
+			if lowestFeeTx == nil {
+				// No more valid transactions in the txs
+				break
+			}
+			// read the gas price of the lowest fee transaction and set the base
+			// fee for the pending header on each iteration
+			baseFee = lowestFeeTx.PeekAndGetFee().MinerFee()
+			env.wo.Header().SetBaseFee(baseFee)
+			w.commitTransactions(env, primeTerminus, block, lowestFeeTx, interrupt, etxIncluded)
+			// After the first run the etxs are included
+			etxIncluded = true
+			// If we have included a transaction that is not an external type, the lowestFee
+			// transaction is successfully inserted
+			for _, tx := range env.wo.Transactions() {
+				if tx.Type() != types.ExternalTxType {
+					lowestFeeTxIncluded = true
+					break
+				}
+			}
+			if lowestFeeTxIncluded {
+				break
+			}
+			count++
+		}
+
+		return w.commitTransactions(env, primeTerminus, block, txs, interrupt, etxIncluded)
 	}
 	return nil
 }
@@ -1537,7 +1620,7 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
 	for i, tx := range block.TransactionsWithReceipts() {
-		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
+		minerFee := new(big.Int).Add(block.BaseFee(), tx.MinerTip())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
@@ -1562,7 +1645,7 @@ func (w *worker) CurrentInfo(header *types.WorkObject) bool {
 	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }
 
-func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *types.WorkObject, firstQiTx bool) error {
+func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTerminus *types.WorkObjectHeader, parent *types.WorkObject, firstQiTx bool) error {
 	location := w.hc.NodeLocation()
 	if tx.Type() != types.QiTxType {
 		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
@@ -1727,13 +1810,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 		return fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
 	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), env.wo.BaseFee())
-	minimumFee := misc.QuaiToQi(env.wo.WorkObjectHeader(), minimumFeeInQuai)
-	if txFeeInQit.Cmp(minimumFee) < 0 {
-		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFee.Uint64())
+	txFeeInQuai := misc.QiToQuai(primeTerminus, txFeeInQit)
+	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
+		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 	}
-	// Miner gets remainder of fee after base fee, except in the convert case
-	txFeeInQit.Sub(txFeeInQit, minimumFee)
-
 	if conversion {
 		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
 		remainingTxFeeInQuai := misc.QiToQuai(env.wo.WorkObjectHeader(), txFeeInQit)

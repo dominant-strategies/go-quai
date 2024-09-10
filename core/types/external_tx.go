@@ -154,8 +154,7 @@ func (tx *ExternalTx) chainID() *big.Int              { panic("external TX does 
 func (tx *ExternalTx) accessList() AccessList         { return tx.AccessList }
 func (tx *ExternalTx) data() []byte                   { return tx.Data }
 func (tx *ExternalTx) gas() uint64                    { return tx.Gas }
-func (tx *ExternalTx) gasFeeCap() *big.Int            { return new(big.Int) } // placeholder
-func (tx *ExternalTx) gasTipCap() *big.Int            { return new(big.Int) } // placeholder
+func (tx *ExternalTx) minerTip() *big.Int             { return new(big.Int) } // placeholder
 func (tx *ExternalTx) gasPrice() *big.Int             { return new(big.Int) } // placeholder
 func (tx *ExternalTx) value() *big.Int                { return tx.Value }
 func (tx *ExternalTx) to() *common.Address            { return tx.To }

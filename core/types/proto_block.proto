@@ -49,8 +49,8 @@ message ProtoTransaction {
   optional uint64 gas = 5;
   optional bytes data = 6;
   optional bytes chain_id = 7;
-  optional bytes gas_fee_cap = 8;
-  optional bytes gas_tip_cap = 9;
+  optional bytes miner_tip = 8;
+  optional bytes gas_price = 9;
   optional ProtoAccessList access_list = 10;
   optional bytes v = 11;
   optional bytes r = 12;

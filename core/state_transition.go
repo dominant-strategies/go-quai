@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
-	cmath "github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
@@ -58,13 +57,16 @@ type StateTransition struct {
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
+	minerTip   *big.Int
 	initialGas uint64
 	value      *big.Int
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
+}
+
+func (st *StateTransition) fee() *big.Int {
+	return new(big.Int).Add(st.gasPrice, st.minerTip)
 }
 
 // Message represents a message sent to a contract.
@@ -73,8 +75,7 @@ type Message interface {
 	To() *common.Address
 
 	GasPrice() *big.Int
-	GasFeeCap() *big.Int
-	GasTipCap() *big.Int
+	MinerTip() *big.Int
 	Gas() uint64
 	Value() *big.Int
 
@@ -168,15 +169,14 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *types.GasPool) *StateTransition {
 	return &StateTransition{
-		gp:        gp,
-		evm:       evm,
-		msg:       msg,
-		gasPrice:  msg.GasPrice(),
-		gasFeeCap: msg.GasFeeCap(),
-		gasTipCap: msg.GasTipCap(),
-		value:     msg.Value(),
-		data:      msg.Data(),
-		state:     evm.StateDB,
+		gp:       gp,
+		evm:      evm,
+		msg:      msg,
+		gasPrice: msg.GasPrice(),
+		minerTip: msg.MinerTip(),
+		value:    msg.Value(),
+		data:     msg.Data(),
+		state:    evm.StateDB,
 	}
 }
 
@@ -203,11 +203,9 @@ func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.Gas())
 	mgval = mgval.Mul(mgval, st.gasPrice)
 	balanceCheck := mgval
-	if st.gasFeeCap != nil {
-		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
-		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
-		balanceCheck.Add(balanceCheck, st.value)
-	}
+	balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
+	balanceCheck = balanceCheck.Mul(balanceCheck, new(big.Int).Add(st.minerTip, st.gasPrice))
+	balanceCheck.Add(balanceCheck, st.value)
 	from, err := st.msg.From().InternalAndQuaiAddress()
 	if err != nil {
 		return err
@@ -262,26 +260,22 @@ func (st *StateTransition) preCheck() error {
 		return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 			st.msg.From().Hex(), codeHash)
 	}
-	// Make sure that transaction gasFeeCap is greater than the baseFee
+	// Make sure that transaction gasPrice is greater than the baseFee
 	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-	if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
-		if l := st.gasFeeCap.BitLen(); l > 256 {
-			return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
+	if !st.evm.Config.NoBaseFee || st.gasPrice.BitLen() > 0 || st.gasPrice.BitLen() > 0 {
+		if l := st.gasPrice.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, gasPrice bit length: %d", ErrFeeCapVeryHigh,
 				st.msg.From().Hex(), l)
 		}
-		if l := st.gasTipCap.BitLen(); l > 256 {
-			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
+		if l := st.minerTip.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, minerTip bit length: %d", ErrTipVeryHigh,
 				st.msg.From().Hex(), l)
-		}
-		if st.gasFeeCap.Cmp(st.gasTipCap) < 0 {
-			return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
-				st.msg.From().Hex(), st.gasTipCap, st.gasFeeCap)
 		}
 		// This will panic if baseFee is nil, but basefee presence is verified
 		// as part of header validation.
-		if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
-			return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
-				st.msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
+		if st.gasPrice.Cmp(st.evm.Context.BaseFee) < 0 {
+			return fmt.Errorf("%w: address %v, gasPrice: %s baseFee: %s", ErrFeeCapTooLow,
+				st.msg.From().Hex(), st.gasPrice, st.evm.Context.BaseFee)
 		}
 	}
 	return st.buyGas()
@@ -375,7 +369,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		balance.Add(balance, refund)
 		st.evm.StateDB.AddBalance(beneficiary, balance)
 
-		effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+		effectiveTip := st.fee()
 		return &ExecutionResult{
 			UsedGas:      st.gasUsed(),
 			UsedState:    0,
@@ -420,7 +414,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// refunds are capped to gasUsed / 5
 	st.refundGas(params.RefundQuotient)
 
-	effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+	effectiveTip := st.fee()
 
 	_, err = st.evm.Context.PrimaryCoinbase.InternalAddress()
 	if err != nil {

@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/state"
@@ -726,12 +725,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+	if args.GasPrice != nil && args.MinerTip != nil {
 		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	} else if args.GasPrice != nil {
 		feeCap = args.GasPrice.ToInt()
-	} else if args.MaxFeePerGas != nil {
-		feeCap = args.MaxFeePerGas.ToInt()
+	} else if args.MinerTip != nil {
+		feeCap = args.MinerTip.ToInt()
 	} else {
 		feeCap = common.Big0
 	}
@@ -990,8 +989,8 @@ type RPCTransaction struct {
 	BlockNumber       *hexutil.Big             `json:"blockNumber"`
 	From              *common.MixedcaseAddress `json:"from,omitempty"`
 	Gas               hexutil.Uint64           `json:"gas"`
-	GasFeeCap         *hexutil.Big             `json:"maxFeePerGas,omitempty"`
-	GasTipCap         *hexutil.Big             `json:"maxPriorityFeePerGas,omitempty"`
+	MinerTip          *hexutil.Big             `json:"minerTip,omitempty"`
+	GasPrice          *hexutil.Big             `json:"gasPrice,omitempty"`
 	Hash              common.Hash              `json:"hash"`
 	Input             hexutil.Bytes            `json:"input"`
 	Nonce             hexutil.Uint64           `json:"nonce"`
@@ -1061,17 +1060,17 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		signer := types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
 		from, _ := types.Sender(signer, tx)
 		result = &RPCTransaction{
-			Type:      hexutil.Uint64(tx.Type()),
-			From:      from.MixedcaseAddressPtr(),
-			Gas:       hexutil.Uint64(tx.Gas()),
-			Hash:      tx.Hash(),
-			Input:     hexutil.Bytes(tx.Data()),
-			Nonce:     hexutil.Uint64(tx.Nonce()),
-			To:        tx.To().MixedcaseAddressPtr(),
-			Value:     (*hexutil.Big)(tx.Value()),
-			ChainID:   (*hexutil.Big)(tx.ChainId()),
-			GasFeeCap: (*hexutil.Big)(tx.GasFeeCap()),
-			GasTipCap: (*hexutil.Big)(tx.GasTipCap()),
+			Type:     hexutil.Uint64(tx.Type()),
+			From:     from.MixedcaseAddressPtr(),
+			Gas:      hexutil.Uint64(tx.Gas()),
+			Hash:     tx.Hash(),
+			Input:    hexutil.Bytes(tx.Data()),
+			Nonce:    hexutil.Uint64(tx.Nonce()),
+			To:       tx.To().MixedcaseAddressPtr(),
+			Value:    (*hexutil.Big)(tx.Value()),
+			ChainID:  (*hexutil.Big)(tx.ChainId()),
+			GasPrice: (*hexutil.Big)(tx.GasPrice()),
+			MinerTip: (*hexutil.Big)(tx.MinerTip()),
 		}
 	case types.ExternalTxType:
 		result = &RPCTransaction{
@@ -1128,7 +1127,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 func newRPCPendingTransaction(tx *types.Transaction, current *types.WorkObject, config *params.ChainConfig) *RPCTransaction {
 	var baseFee *big.Int
 	if current != nil {
-		baseFee = misc.CalcBaseFee(config, current)
+		baseFee = current.BaseFee()
 	}
 	return newRPCTransaction(tx, common.Hash{}, 0, 0, baseFee, config.Location)
 }
@@ -1476,7 +1475,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	if err != nil {
 		return nil, err
 	}
-	gasPrice := new(big.Int).Add(header.BaseFee(), tx.EffectiveGasTipValue(header.BaseFee()))
+	gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
 	fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
 
 	// Assign receipt status or post state.

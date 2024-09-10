@@ -99,7 +99,6 @@ type TxContext struct {
 	GasPrice   *big.Int       // Provides information for GASPRICE
 	TxType     byte
 	Hash       common.Hash
-	TXGasTip   *big.Int
 	AccessList types.AccessList
 	ETXSender  common.Address // Original sender of the ETX
 }

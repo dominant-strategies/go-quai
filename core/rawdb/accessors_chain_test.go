@@ -519,8 +519,8 @@ func TestInboundEtxsStorage(t *testing.T) {
 	inner := &types.QuaiTx{
 		ChainID:    new(big.Int).SetUint64(1),
 		Nonce:      uint64(0),
-		GasTipCap:  new(big.Int).SetUint64(0),
-		GasFeeCap:  new(big.Int).SetUint64(0),
+		MinerTip:   new(big.Int).SetUint64(0),
+		GasPrice:   new(big.Int).SetUint64(0),
 		Gas:        uint64(0),
 		To:         &to,
 		Value:      new(big.Int).SetUint64(0),
@@ -629,8 +629,8 @@ func createTransaction(nonce uint64) *types.Transaction {
 	inner := &types.QuaiTx{
 		ChainID:    new(big.Int).SetUint64(1),
 		Nonce:      nonce,
-		GasTipCap:  new(big.Int).SetUint64(0),
-		GasFeeCap:  new(big.Int).SetUint64(0),
+		MinerTip:   new(big.Int).SetUint64(0),
+		GasPrice:   new(big.Int).SetUint64(0),
 		Gas:        uint64(0),
 		To:         &to,
 		Value:      new(big.Int).SetUint64(0),

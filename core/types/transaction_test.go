@@ -19,8 +19,8 @@ func TestTransactionProtoEncodeDecode(t *testing.T) {
 	inner := &QuaiTx{
 		ChainID:    new(big.Int).SetUint64(1),
 		Nonce:      uint64(0),
-		GasTipCap:  new(big.Int).SetUint64(0),
-		GasFeeCap:  new(big.Int).SetUint64(0),
+		MinerTip:   new(big.Int).SetUint64(0),
+		GasPrice:   new(big.Int).SetUint64(0),
 		Gas:        uint64(0),
 		To:         &to,
 		Value:      new(big.Int).SetUint64(0),
@@ -115,14 +115,14 @@ func quaiTxData() (*Transaction, common.Hash) {
 	mixHash := common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4")
 	workNonce := EncodeNonce(1)
 	inner := &QuaiTx{
-		ChainID:   new(big.Int).SetUint64(1),
-		Nonce:     uint64(1),
-		GasTipCap: new(big.Int).SetUint64(1),
-		GasFeeCap: new(big.Int).SetUint64(1),
-		Gas:       uint64(1),
-		To:        &to,
-		Value:     new(big.Int).SetUint64(1),
-		Data:      []byte{0x04},
+		ChainID:  new(big.Int).SetUint64(1),
+		Nonce:    uint64(1),
+		MinerTip: new(big.Int).SetUint64(1),
+		GasPrice: new(big.Int).SetUint64(1),
+		Gas:      uint64(1),
+		To:       &to,
+		Value:    new(big.Int).SetUint64(1),
+		Data:     []byte{0x04},
 		AccessList: AccessList{AccessTuple{
 			Address:     address,
 			StorageKeys: []common.Hash{common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1")},
@@ -285,11 +285,11 @@ func FuzzQuaiTxHashingNonce(f *testing.F) {
 	})
 }
 
-func FuzzQuaiTxHashingGasTipCap(f *testing.F) {
+func FuzzQuaiTxHashingMinerTip(f *testing.F) {
 	// Create a new transaction
 	tx, hash := quaiTxData()
 	f.Add(testUInt64)
-	f.Add(tx.inner.gasTipCap().Uint64())
+	f.Add(tx.inner.minerTip().Uint64())
 	// Verify the hash of the transaction
 	if hash == (common.Hash{}) {
 		f.Errorf("Transaction hash is empty")
@@ -297,23 +297,23 @@ func FuzzQuaiTxHashingGasTipCap(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, i uint64) {
 		bi := new(big.Int).SetUint64(i)
-		if bi.Cmp(tx.inner.gasTipCap()) != 0 {
+		if bi.Cmp(tx.inner.minerTip()) != 0 {
 			// change something in the transaction
 			newInner := *tx.inner.(*QuaiTx)
-			newInner.GasTipCap = bi
+			newInner.MinerTip = bi
 			// Create a new transaction with the modified inner transaction
 			newTx := NewTx(&newInner)
 
-			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.gasTipCap(), bi)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.minerTip(), bi)
 		}
 	})
 }
 
-func FuzzQuaiTxHashingGasFeeCap(f *testing.F) {
+func FuzzQuaiTxHashingGasPrice(f *testing.F) {
 	// Create a new transaction
 	tx, hash := quaiTxData()
 	f.Add(testUInt64)
-	f.Add(tx.inner.gasFeeCap().Uint64())
+	f.Add(tx.inner.gasPrice().Uint64())
 	// Verify the hash of the transaction
 	if hash == (common.Hash{}) {
 		f.Errorf("Transaction hash is empty")
@@ -321,14 +321,14 @@ func FuzzQuaiTxHashingGasFeeCap(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, i uint64) {
 		bi := new(big.Int).SetUint64(i)
-		if bi.Cmp(tx.inner.gasFeeCap()) != 0 {
+		if bi.Cmp(tx.inner.gasPrice()) != 0 {
 			// change something in the transaction
 			newInner := *tx.inner.(*QuaiTx)
-			newInner.GasFeeCap = bi
+			newInner.GasPrice = bi
 			// Create a new transaction with the modified inner transaction
 			newTx := NewTx(&newInner)
 
-			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.gasFeeCap(), bi)
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.gasPrice(), bi)
 		}
 	})
 }

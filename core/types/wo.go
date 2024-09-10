@@ -199,6 +199,36 @@ func (wo *WorkObject) PrimaryCoinbase() common.Address {
 	return wo.WorkObjectHeader().PrimaryCoinbase()
 }
 
+func (wo *WorkObject) QuaiCoinbase() (common.Address, error) {
+	// check if the primary coinbase is in Quai ledger
+	quai := wo.PrimaryCoinbase().IsInQuaiLedgerScope()
+	if quai {
+		return wo.PrimaryCoinbase(), nil
+	} else {
+		quai = wo.SecondaryCoinbase().IsInQuaiLedgerScope()
+		if quai {
+			return wo.SecondaryCoinbase(), nil
+		} else {
+			return common.Address{}, errors.New("block doesnt have a quai coinbase")
+		}
+	}
+}
+
+func (wo *WorkObject) QiCoinbase() (common.Address, error) {
+	// check if the primary coinbase is in Qi ledger
+	qi := wo.PrimaryCoinbase().IsInQiLedgerScope()
+	if qi {
+		return wo.PrimaryCoinbase(), nil
+	} else {
+		qi = wo.SecondaryCoinbase().IsInQiLedgerScope()
+		if qi {
+			return wo.SecondaryCoinbase(), nil
+		} else {
+			return common.Address{}, errors.New("block doesnt have a qi coinbase")
+		}
+	}
+}
+
 func (wo *WorkObject) SecondaryCoinbase() common.Address {
 	return wo.Body().Header().SecondaryCoinbase()
 }

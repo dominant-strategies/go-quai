@@ -28,7 +28,7 @@ func QuaiToQi(currentHeader *types.WorkObjectHeader, quaiAmt *big.Int) *big.Int 
 
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
 func CalculateQuaiReward(header *types.WorkObjectHeader) *big.Int {
-	return big.NewInt(1000000000000000000)
+	return big.NewInt(1000000)
 }
 
 // CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
