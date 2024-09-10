@@ -62,6 +62,7 @@ type StreamManager interface {
 
 type basicStreamManager struct {
 	ctx         context.Context
+	cancel      context.CancelFunc
 	streamCache *expireLru.LRU[p2p.PeerID, streamWrapper]
 	p2pBackend  quaiprotocol.QuaiP2PNode
 
@@ -84,8 +85,11 @@ func NewStreamManager(node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStre
 		0,
 	)
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	sm := &basicStreamManager{
-		ctx:                  context.Background(),
+		ctx:                  ctx,
+		cancel:               cancel,
 		streamCache:          lruCache,
 		p2pBackend:           node,
 		host:                 host,
@@ -110,6 +114,10 @@ func severStream(key p2p.PeerID, wrappedStream streamWrapper) {
 
 func (sm *basicStreamManager) Start() {
 	go sm.listenForNewStreamRequest()
+}
+
+func (sm *basicStreamManager) Stop() {
+	sm.cancel()
 }
 
 func (sm *basicStreamManager) listenForNewStreamRequest() {

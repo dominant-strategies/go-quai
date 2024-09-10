@@ -29,6 +29,7 @@ func setup(t *testing.T) (*gomock.Controller, *mock_protocol.MockQuaiP2PNode, *m
 func TestStreamManager(t *testing.T) {
 	ctrl, mockNode, mockHost, sm := setup(t)
 	defer ctrl.Finish()
+	defer sm.Stop()
 
 	peerID := peer.ID("mockPeerID")
 	mockHost.EXPECT().ID().Return(peerID).Times(2)
@@ -94,6 +95,7 @@ func TestStreamManager(t *testing.T) {
 func TestWriteMessageToStream(t *testing.T) {
 	ctrl, mockNode, mockHost, sm := setup(t)
 	defer ctrl.Finish()
+	defer sm.Stop()
 
 	peerID := peer.ID("mockPeerID")
 	mockHost.EXPECT().ID().Return(peerID).Times(2)
