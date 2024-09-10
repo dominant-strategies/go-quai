@@ -28,6 +28,7 @@ const (
 	c_expansionChSize      = 10
 	c_recentBlockCacheSize = 100
 	c_ancestorCheckDist    = 100
+	c_chainEventChSize     = 10
 )
 
 var (
@@ -125,7 +126,7 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
 
 	backend := *hc.consensus.GetBackend(common.Location{})
-	chainEventCh := make(chan core.ChainEvent)
+	chainEventCh := make(chan core.ChainEvent, c_chainEventChSize)
 	chainSub := backend.SubscribeChainEvent(chainEventCh)
 	hc.wg.Add(1)
 	hc.chainSubs = append(hc.chainSubs, chainSub)
@@ -133,7 +134,7 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 
 	for i := 0; i < int(numRegions); i++ {
 		backend := *hc.consensus.GetBackend(common.Location{byte(i)})
-		chainEventCh := make(chan core.ChainEvent)
+		chainEventCh := make(chan core.ChainEvent, c_chainEventChSize)
 		chainSub := backend.SubscribeChainEvent(chainEventCh)
 		hc.wg.Add(1)
 		hc.chainSubs = append(hc.chainSubs, chainSub)
@@ -141,7 +142,7 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 
 		for j := 0; j < int(numZones); j++ {
 			backend := *hc.consensus.GetBackend(common.Location{byte(i), byte(j)})
-			chainEventCh := make(chan core.ChainEvent)
+			chainEventCh := make(chan core.ChainEvent, c_chainEventChSize)
 			chainSub := backend.SubscribeChainEvent(chainEventCh)
 			hc.wg.Add(1)
 			hc.chainSubs = append(hc.chainSubs, chainSub)
