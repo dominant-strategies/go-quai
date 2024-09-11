@@ -1401,7 +1401,9 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	cfg.Miner.WorkShareMining = viper.GetBool(WorkShareMiningFlag.Name)
 	cfg.Miner.WorkShareThreshold = params.WorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
 	if viper.IsSet(WorkShareMinerEndpoints.Name) {
-		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
+		if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
+			cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
+		}
 	}
 
 	// Override any default configs for hard coded networks.

@@ -59,6 +59,10 @@ func (b *testBackend) ChainDb() ethdb.Database {
 	return b.db
 }
 
+func (b *testBackend) GetBlock(hash common.Hash, number uint64) (*types.WorkObject, error) {
+	return rawdb.ReadWorkObject(b.db, number, hash, types.WorkObjectView(0)), nil
+}
+
 func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.WorkObject, error) {
 	var (
 		hash common.Hash
