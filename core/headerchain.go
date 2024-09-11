@@ -129,10 +129,13 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	pendingEtxsRollup, _ := lru.New[common.Hash, types.PendingEtxsRollup](c_maxPendingEtxsRollup)
 	hc.pendingEtxsRollup = pendingEtxsRollup
 
+	var pendingEtxs *lru.Cache[common.Hash, types.PendingEtxs]
 	if nodeCtx == common.PRIME_CTX {
-		hc.pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesPrime)
+		pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesPrime)
+		hc.pendingEtxs = pendingEtxs
 	} else {
-		hc.pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesRegion)
+		pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesRegion)
+		hc.pendingEtxs = pendingEtxs
 	}
 
 	headerCache, _ := lru.New[common.Hash, types.WorkObject](headerCacheLimit)
