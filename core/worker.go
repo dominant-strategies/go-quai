@@ -53,7 +53,7 @@ const (
 	// c_chainSideChanSize is the size of the channel listening to uncle events
 	chainSideChanSize = 10
 
-	c_uncleCacheSize = 32
+	c_uncleCacheSize = 100
 )
 
 // environment is the worker's current environment and holds all
@@ -263,7 +263,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		logger:                         logger,
 	}
 	// initialize a uncle cache
-	worker.uncles, _ = lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
+	uncles, _ := lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
+	worker.uncles = uncles
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit
 
