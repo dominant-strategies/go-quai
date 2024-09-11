@@ -60,26 +60,14 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 		logger:        hc.logger,
 	}
 
-	// Limiting the number of blocks to be stored in the cache in the case of
-	// slices that are not being processed by the node. This helps lower the RAM
-	// requirement on the slice nodes
-	if bc.ProcessingState() {
-		blockCache, _ := lru.New[common.Hash, types.WorkObject](blockCacheLimit)
-		bodyCache, _ := lru.New[common.Hash, types.WorkObject](bodyCacheLimit)
-		bodyRLPCache, _ := lru.New[common.Hash, rlp.RawValue](bodyCacheLimit)
-		bc.blockCache = blockCache
-		bc.bodyCache = bodyCache
-		bc.bodyProtoCache = bodyRLPCache
-		bc.woCache, _ = lru.New[common.Hash, types.WorkObject](bodyCacheLimit)
-	} else {
-		blockCache, _ := lru.New[common.Hash, types.WorkObject](10)
-		bodyCache, _ := lru.New[common.Hash, types.WorkObject](10)
-		bodyRLPCache, _ := lru.New[common.Hash, rlp.RawValue](10)
-		bc.blockCache = blockCache
-		bc.bodyCache = bodyCache
-		bc.bodyProtoCache = bodyRLPCache
-		bc.woCache, _ = lru.New[common.Hash, types.WorkObject](10)
-	}
+	blockCache, _ := lru.New[common.Hash, types.WorkObject](blockCacheLimit)
+	bodyCache, _ := lru.New[common.Hash, types.WorkObject](bodyCacheLimit)
+	bodyRLPCache, _ := lru.New[common.Hash, rlp.RawValue](bodyCacheLimit)
+	woCache, _ := lru.New[common.Hash, types.WorkObject](bodyCacheLimit)
+	bc.blockCache = blockCache
+	bc.bodyCache = bodyCache
+	bc.bodyProtoCache = bodyRLPCache
+	bc.woCache = woCache
 
 	// only start the state processor in zone
 	if nodeCtx == common.ZONE_CTX && bc.ProcessingState() {
