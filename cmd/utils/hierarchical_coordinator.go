@@ -665,7 +665,7 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 	// trace back from the leader and stop after finding a prime block from each region or reach genesis
 	_, leaderOrder, err := leaderBackend.CalcOrder(leader)
 	if err != nil {
-		return nil, err
+		return startingConstraintMap, err
 	}
 
 	constraintMap[leader.Location().Name()] = leader.Hash()
@@ -685,17 +685,17 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 				primeBackend := hc.GetBackend(common.Location{})
 				primeTermini := primeBackend.GetTerminiByHash(parent.Hash())
 				if primeTermini == nil {
-					return nil, errors.New("prime termini shouldnt be nil")
+					return startingConstraintMap, errors.New("prime termini shouldnt be nil")
 				}
 				regionBackend := hc.GetBackend(hc.GetContextLocation(parent.Location(), common.REGION_CTX))
 				regionTermini := regionBackend.GetTerminiByHash(parent.Hash())
 				if regionTermini == nil {
-					return nil, errors.New("region termini shouldnt be nil")
+					return startingConstraintMap, errors.New("region termini shouldnt be nil")
 				}
 				if exists {
 					parentHeader := primeBackend.GetHeaderByHash(parent.Hash())
 					if parentHeader == nil {
-						return nil, err
+						return startingConstraintMap, err
 					}
 					isAncestor := hc.IsAncestor(t, parent.Hash(), parentHeader.Location(), common.PRIME_CTX)
 					isProgeny := hc.IsAncestor(parent.Hash(), t, hc.GetContextLocation(parent.Location(), common.PRIME_CTX), common.PRIME_CTX)
@@ -740,12 +740,12 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 				regionBackend := hc.GetBackend(hc.GetContextLocation(parent.Location(), common.REGION_CTX))
 				regionTermini := regionBackend.GetTerminiByHash(parent.Hash())
 				if regionTermini == nil {
-					return nil, errors.New("termini shouldnt be nil in region")
+					return startingConstraintMap, errors.New("termini shouldnt be nil in region")
 				}
 				if exists {
 					parentHeader := regionBackend.GetHeaderByHash(parent.Hash())
 					if parentHeader == nil {
-						return nil, errors.New("prime parent header shouldnt be nil")
+						return startingConstraintMap, errors.New("prime parent header shouldnt be nil")
 					}
 					isAncestor := hc.IsAncestor(t, parent.Hash(), parentHeader.Location(), common.REGION_CTX)
 					isProgeny := hc.IsAncestor(parent.Hash(), t, hc.GetContextLocation(parent.Location(), common.REGION_CTX), common.REGION_CTX)
@@ -785,7 +785,7 @@ func (hc *HierarchicalCoordinator) calculateFrontierPoints(constraintMap map[str
 
 		_, parentOrder, err = backend.CalcOrder(parent)
 		if err != nil {
-			return nil, err
+			return startingConstraintMap, err
 		}
 		iteration++
 
