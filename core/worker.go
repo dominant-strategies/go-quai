@@ -919,6 +919,8 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			w.logger.WithField("err", err).Error("Failed to commit an etx")
 		}
 	}
+	w.hc.headermu.Lock()
+	defer w.hc.headermu.Unlock()
 	for {
 		// In the following two cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
