@@ -170,7 +170,7 @@ func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObject
 	if err != nil {
 		return err
 	}
-	return ec.c.CallContext(ctx, nil, "quai_receiveWorkShare", hexutil.Bytes(data))
+	return ec.c.CallContext(ctx, nil, "quai_receiveRawWorkShare", hexutil.Bytes(data))
 }
 
 // Filters

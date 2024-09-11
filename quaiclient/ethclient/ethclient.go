@@ -141,12 +141,6 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	// Fill the sender cache of subordinate block hashes in the block manifest.
 	var manifest types.BlockManifest
 	copy(manifest, body.SubManifest)
-	for i, tx := range body.Transactions {
-		if tx.From != nil {
-			setSenderFromServer(tx.tx, *tx.From, body.Hash)
-		}
-		txs[i] = tx.tx
-	}
 	var interlinkHashes common.Hashes
 	copy(interlinkHashes, body.InterlinkHashes)
 	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(body.Header, txs, etxs, body.UncleHashes, manifest, interlinkHashes), nil

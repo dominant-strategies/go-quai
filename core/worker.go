@@ -769,7 +769,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				if denominations[uint8(denomination)] == 0 {
 					continue
 				}
-				for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 					if outputIndex >= types.MaxOutputIndex {
 						// No more gas, the rest of the denominations are lost but the tx is still valid
 						break
@@ -823,7 +823,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				if denominations[uint8(denomination)] == 0 {
 					continue
 				}
-				for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
 						// No more gas, the rest of the denominations are lost but the tx is still valid
 						break

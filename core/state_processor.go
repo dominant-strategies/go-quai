@@ -237,12 +237,14 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	parentEvmRoot := parent.Header().EVMRoot()
 	parentEtxSetRoot := parent.Header().EtxSetRoot()
+	parentQuaiStateSize := parent.QuaiStateSize()
 	if p.hc.IsGenesisHash(parent.Hash()) {
 		parentEvmRoot = types.EmptyRootHash
 		parentEtxSetRoot = types.EmptyRootHash
+		parentQuaiStateSize = big.NewInt(0)
 	}
 	// Initialize a statedb
-	statedb, err := state.New(parentEvmRoot, parentEtxSetRoot, parent.QuaiStateSize(), p.stateCache, p.etxCache, p.snaps, nodeLocation, p.logger)
+	statedb, err := state.New(parentEvmRoot, parentEtxSetRoot, parentQuaiStateSize, p.stateCache, p.etxCache, p.snaps, nodeLocation, p.logger)
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, nil, err
 	}
@@ -413,7 +415,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if denominations[uint8(denomination)] == 0 {
 							continue
 						}
-						for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
+						for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 							if outputIndex >= types.MaxOutputIndex {
 								// No more gas, the rest of the denominations are lost but the tx is still valid
 								break
@@ -463,7 +465,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if denominations[uint8(denomination)] == 0 {
 							continue
 						}
-						for j := uint8(0); j < denominations[uint8(denomination)]; j++ {
+						for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 							if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
 								// No more gas, the rest of the denominations are lost but the tx is still valid
 								break

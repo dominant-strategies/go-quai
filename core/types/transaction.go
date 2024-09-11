@@ -595,6 +595,10 @@ func (tx *Transaction) From(nodeLocation common.Location) *common.Address {
 	}
 }
 
+func (tx *Transaction) SetFrom(from common.Address, signer Signer) {
+	tx.from.Store(sigCache{signer, from.Bytes20()})
+}
+
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
