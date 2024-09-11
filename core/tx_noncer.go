@@ -17,15 +17,16 @@
 package core
 
 import (
-	lru "github.com/hashicorp/golang-lru/v2"
 	"sync"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"
 )
 
 const (
-	c_maxNonceCache = 600 //Maximum number of entries that we can hold in the nonces cahce
+	c_maxNonceCache = 50000 //Maximum number of entries that we can hold in the nonces cahce
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of
