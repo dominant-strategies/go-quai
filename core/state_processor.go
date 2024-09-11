@@ -138,12 +138,10 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	}
 
 	sp := &StateProcessor{
-		config:        config,
-		hc:            hc,
-		receiptsCache: receiptsCache,
-		txLookupCache: txLookupCache,
-		vmConfig:      vmConfig,
-		cacheConfig:   cacheConfig,
+		config:      config,
+		hc:          hc,
+		vmConfig:    vmConfig,
+		cacheConfig: cacheConfig,
 		stateCache: state.NewDatabaseWithConfig(hc.headerDb, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,

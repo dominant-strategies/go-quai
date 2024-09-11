@@ -174,7 +174,7 @@ type worker struct {
 
 	wg sync.WaitGroup
 
-	Uncles  *lru.Cache[common.Hash, types.WorkObjectHeader]
+	uncles  *lru.Cache[common.Hash, types.WorkObjectHeader]
 	uncleMu sync.RWMutex
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
@@ -263,7 +263,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		logger:                         logger,
 	}
 	// initialize a uncle cache
-	worker.Uncles, _ = lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
+	worker.uncles, _ = lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit
 
@@ -472,10 +472,10 @@ func (w *worker) asyncStateLoop() {
 				}()
 				for _, wo := range side.Blocks {
 					// Short circuit for duplicate side blocks
-					if exists := w.Uncles.Contains(wo.Hash()); exists {
+					if exists := w.uncles.Contains(wo.Hash()); exists {
 						continue
 					}
-					w.Uncles.Add(wo.Hash(), *wo.WorkObjectHeader())
+					w.uncles.Add(wo.Hash(), *wo.WorkObjectHeader())
 				}
 			}()
 		case <-w.exitCh:
@@ -1309,7 +1309,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 			w.uncleMu.RLock()
 			// Prefer to locally generated uncle
-			commitUncles(w.Uncles)
+			commitUncles(w.uncles)
 			w.uncleMu.RUnlock()
 		}
 		return env, nil
@@ -1485,7 +1485,7 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 		return nil
 	}
 
-	w.Uncles.ContainsOrAdd(workShare.Hash(), *workShare)
+	w.uncles.ContainsOrAdd(workShare.Hash(), *workShare)
 	return nil
 }
 

@@ -413,10 +413,19 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		logger:          logger,
 		db:              db,
 	}
-	pool.qiPool, _ = lru.New[common.Hash, *types.TxWithMinerFee](int(config.QiPoolSize))
-	pool.senders, _ = lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
-	pool.qiTxFees, _ = lru.New[[16]byte, *big.Int](int(config.MaxFeesCached))
-	pool.broadcastSetCache, _ = lru.New[common.Hash, types.Transactions](c_broadcastSetCacheSize)
+
+	qiPool, _ := lru.New[common.Hash, *types.TxWithMinerFee](int(config.QiPoolSize))
+	pool.qiPool = qiPool
+
+	senders, _ := lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
+	pool.senders = senders
+
+	qiTxFees, _ := lru.New[[16]byte, *big.Int](int(config.MaxFeesCached))
+	pool.qiTxFees = qiTxFees
+
+	broadcastSetCache, _ := lru.New[common.Hash, types.Transactions](c_broadcastSetCacheSize)
+	pool.broadcastSetCache = broadcastSetCache
+
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
 		logger.WithField("address", addr).Debug("Setting new local account")
