@@ -83,15 +83,12 @@ type HeaderChain struct {
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
 func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
-	headerCache, _ := lru.New[common.Hash, types.WorkObject](headerCacheLimit)
-	numberCache, _ := lru.New[common.Hash, uint64](numberCacheLimit)
+
 	nodeCtx := chainConfig.Location.Context()
 
 	hc := &HeaderChain{
 		config:                 chainConfig,
 		headerDb:               db,
-		headerCache:            headerCache,
-		numberCache:            numberCache,
 		engine:                 engine,
 		slicesRunning:          slicesRunning,
 		fetchPEtxRollup:        pEtxsRollupFetcher,
@@ -137,6 +134,12 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	} else {
 		hc.pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesRegion)
 	}
+
+	headerCache, _ := lru.New[common.Hash, types.WorkObject](headerCacheLimit)
+	hc.headerCache = headerCache
+
+	numberCache, _ := lru.New[common.Hash, uint64](numberCacheLimit)
+	hc.numberCache = numberCache
 
 	blooms, _ := lru.New[common.Hash, types.Bloom](c_maxBloomFilters)
 	hc.blooms = blooms
