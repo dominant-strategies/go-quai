@@ -97,6 +97,12 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		currentExpansionNumber: currentExpansionNumber,
 	}
 
+	headerCache, _ := lru.New[common.Hash, types.WorkObject](headerCacheLimit)
+	hc.headerCache = headerCache
+
+	numberCache, _ := lru.New[common.Hash, uint64](numberCacheLimit)
+	hc.numberCache = numberCache
+
 	genesisHash := hc.GetGenesisHashes()[0]
 	genesisNumber := rawdb.ReadHeaderNumber(db, genesisHash)
 	if genesisNumber == nil {
@@ -137,12 +143,6 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		pendingEtxs, _ = lru.New[common.Hash, types.PendingEtxs](c_maxPendingEtxBatchesRegion)
 		hc.pendingEtxs = pendingEtxs
 	}
-
-	headerCache, _ := lru.New[common.Hash, types.WorkObject](headerCacheLimit)
-	hc.headerCache = headerCache
-
-	numberCache, _ := lru.New[common.Hash, uint64](numberCacheLimit)
-	hc.numberCache = numberCache
 
 	blooms, _ := lru.New[common.Hash, types.Bloom](c_maxBloomFilters)
 	hc.blooms = blooms
