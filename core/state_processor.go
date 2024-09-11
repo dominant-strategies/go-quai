@@ -132,8 +132,6 @@ type StateProcessor struct {
 
 // NewStateProcessor initialises a new StateProcessor.
 func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig, txLookupLimit *uint64) *StateProcessor {
-	receiptsCache, _ := lru.New[common.Hash, types.Receipts](receiptsCacheLimit)
-	txLookupCache, _ := lru.New[common.Hash, rawdb.LegacyTxLookupEntry](txLookupCacheLimit)
 
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
@@ -162,6 +160,12 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		logger: hc.logger,
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
+
+	receiptsCache, _ := lru.New[common.Hash, types.Receipts](receiptsCacheLimit)
+	sp.receiptsCache = receiptsCache
+
+	txLookupCache, _ := lru.New[common.Hash, rawdb.LegacyTxLookupEntry](txLookupCacheLimit)
+	sp.txLookupCache = txLookupCache
 
 	// Load any existing snapshot, regenerating it if loading failed
 	if sp.cacheConfig.SnapshotLimit > 0 {

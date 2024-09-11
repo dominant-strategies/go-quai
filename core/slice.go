@@ -130,11 +130,14 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	}
 	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState(), sl.logger)
 
-	sl.pEtxRetryCache, _ = lru.New[common.Hash, pEtxRetry](c_pEtxRetryThreshold)
+	pEtxRetryCache, _ := lru.New[common.Hash, pEtxRetry](c_pEtxRetryThreshold)
+	sl.pEtxRetryCache = pEtxRetryCache
 
-	sl.inboundEtxsCache, _ = lru.New[common.Hash, types.Transactions](c_inboundEtxCacheSize)
+	inboundEtxsCache, _ := lru.New[common.Hash, types.Transactions](c_inboundEtxCacheSize)
+	sl.inboundEtxsCache = inboundEtxsCache
 
-	sl.appendTimeCache, _ = lru.New[common.Hash, time.Duration](c_appendTimeCacheSize)
+	appendTimeCache, _ := lru.New[common.Hash, time.Duration](c_appendTimeCacheSize)
+	sl.appendTimeCache = appendTimeCache
 
 	sl.subInterface = make([]CoreBackend, common.MaxWidth)
 
