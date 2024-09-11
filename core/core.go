@@ -102,7 +102,8 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 	appendQueue, _ := lru.New[common.Hash, blockNumberAndRetryCounter](c_maxAppendQueue)
 	c.appendQueue = appendQueue
 
-	c.processingCache = expireLru.NewLRU[common.Hash, interface{}](c_processingCache, nil, time.Second*60)
+	processingCache := expireLru.NewLRU[common.Hash, interface{}](c_processingCache, nil, time.Second*60)
+	c.processingCache = processingCache
 
 	remoteTxQueue, _ := lru.New[common.Hash, types.Transaction](c_maxRemoteTxQueue)
 	c.remoteTxQueue = remoteTxQueue
