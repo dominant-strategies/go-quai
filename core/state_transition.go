@@ -422,7 +422,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	effectiveTip := cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 
-	_, err = st.evm.Context.Coinbase.InternalAddress()
+	_, err = st.evm.Context.PrimaryCoinbase.InternalAddress()
 	if err != nil {
 		return nil, err
 	}

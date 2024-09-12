@@ -107,7 +107,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 		CanTransfer:        CanTransfer,
 		Transfer:           Transfer,
 		GetHash:            GetHashFn(header, chain),
-		Coinbase:           beneficiary,
+		PrimaryCoinbase:    beneficiary,
 		BlockNumber:        new(big.Int).Set(header.Number(chain.NodeCtx())),
 		Time:               new(big.Int).SetUint64(timestamp),
 		Difficulty:         new(big.Int).Set(header.Difficulty()),

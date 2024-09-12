@@ -38,6 +38,7 @@ message ProtoHeader {
   optional uint64 state_limit = 30;
   optional uint64 state_used = 31;
   optional bytes quai_state_size = 32;
+  optional bytes secondary_coinbase = 33;
 }
 
 message ProtoTransaction {
@@ -85,8 +86,8 @@ message ProtoWorkObjectHeader {
   optional common.ProtoHash mix_hash = 8;
   optional uint64 time = 9;
   optional bytes prime_terminus_number = 10;
-  optional common.ProtoAddress coinbase = 11;
-  optional uint32 lock = 12;
+  optional uint32 lock = 11;
+  optional common.ProtoAddress primary_coinbase = 12;
 }
 
 message ProtoWorkObjectHeaders {

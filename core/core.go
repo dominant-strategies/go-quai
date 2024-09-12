@@ -623,7 +623,8 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
 	nodeCtx := c.NodeCtx()
 	// Set the coinbase into the right interface before calling append in the sub
-	header.WorkObjectHeader().SetCoinbase(common.BytesToAddress(header.Coinbase().Bytes(), c.NodeLocation()))
+	header.WorkObjectHeader().SetPrimaryCoinbase(common.BytesToAddress(header.PrimaryCoinbase().Bytes(), c.NodeLocation()))
+	header.Body().Header().SetSecondaryCoinbase(common.BytesToAddress(header.SecondaryCoinbase().Bytes(), c.NodeLocation()))
 	newPendingEtxs, err := c.sl.Append(header, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
@@ -1125,8 +1126,12 @@ func (c *Core) PendingBlockAndReceipts() (*types.WorkObject, types.Receipts) {
 	return c.sl.miner.PendingBlockAndReceipts()
 }
 
-func (c *Core) SetEtherbase(addr common.Address) {
-	c.sl.miner.SetEtherbase(addr)
+func (c *Core) SetPrimaryCoinbase(addr common.Address) {
+	c.sl.miner.SetPrimaryCoinbase(addr)
+}
+
+func (c *Core) SetSecondaryCoinbase(addr common.Address) {
+	c.sl.miner.SetSecondaryCoinbase(addr)
 }
 
 // SubscribePendingLogs starts delivering logs from pending transactions

@@ -194,7 +194,7 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 			continue
 		}
 		sender, err := types.Sender(signer, tx)
-		if err == nil && sender != block.Coinbase() {
+		if err == nil && sender != block.PrimaryCoinbase() {
 			prices = append(prices, tip)
 			if len(prices) >= limit {
 				break

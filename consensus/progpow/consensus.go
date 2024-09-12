@@ -52,7 +52,7 @@ var (
 // Author implements consensus.Engine, returning the header's coinbase as the
 // proof-of-work verified author of the block.
 func (progpow *Progpow) Author(header *types.WorkObject) (common.Address, error) {
-	return header.Coinbase(), nil
+	return header.PrimaryCoinbase(), nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
@@ -413,9 +413,25 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 
 	if nodeCtx == common.ZONE_CTX {
 		// check if the header coinbase is in scope
-		_, err := header.Coinbase().InternalAddress()
+		_, err := header.PrimaryCoinbase().InternalAddress()
 		if err != nil {
-			return fmt.Errorf("out-of-scope coinbase in the header")
+			return fmt.Errorf("out-of-scope primary coinbase in the header: %v location: %v nodeLocation: %v", header.PrimaryCoinbase(), header.Location(), progpow.config.NodeLocation)
+		}
+		_, err = header.SecondaryCoinbase().InternalAddress()
+		if err != nil {
+			return fmt.Errorf("out-of-scope secondary coinbase in the header: %v location: %v nodeLocation: %v", header.SecondaryCoinbase(), header.Location(), progpow.config.NodeLocation)
+		}
+
+		// One of the coinbases has to be Quai and the other one has to be Qi
+		quaiAddress := header.PrimaryCoinbase().IsInQuaiLedgerScope()
+		if quaiAddress {
+			if !header.SecondaryCoinbase().IsInQiLedgerScope() {
+				return fmt.Errorf("primary coinbase: %v is in quai ledger but secondary coinbase: %v is not in Qi ledger", header.PrimaryCoinbase(), header.SecondaryCoinbase())
+			}
+		} else {
+			if !header.SecondaryCoinbase().IsInQuaiLedgerScope() {
+				return fmt.Errorf("primary coinbase: %v is in qi ledger but secondary coinbase: %v is not in Quai ledger", header.PrimaryCoinbase(), header.SecondaryCoinbase())
+			}
 		}
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)

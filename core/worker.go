@@ -65,29 +65,30 @@ const (
 type environment struct {
 	signer types.Signer
 
-	state            *state.StateDB // apply state changes here
-	ancestors        mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family           mapset.Set     // family set (used for checking uncle invalidity)
-	tcount           int            // tx count in cycle
-	gasPool          *types.GasPool // available gas used to pack transactions
-	coinbase         common.Address
-	etxRLimit        int // Remaining number of cross-region ETXs that can be included
-	etxPLimit        int // Remaining number of cross-prime ETXs that can be included
-	parentOrder      *int
-	wo               *types.WorkObject
-	txs              []*types.Transaction
-	etxs             []*types.Transaction
-	utxoFees         *big.Int
-	quaiFees         *big.Int
-	subManifest      types.BlockManifest
-	receipts         []*types.Receipt
-	uncleMu          sync.RWMutex
-	uncles           map[common.Hash]*types.WorkObjectHeader
-	utxosCreate      []common.Hash
-	utxosDelete      []common.Hash
-	parentStateSize  *big.Int
-	quaiCoinbaseEtxs map[[21]byte]*big.Int
-	deletedUtxos     map[common.Hash]struct{}
+	state             *state.StateDB // apply state changes here
+	ancestors         mapset.Set     // ancestor set (used for checking uncle parent validity)
+	family            mapset.Set     // family set (used for checking uncle invalidity)
+	tcount            int            // tx count in cycle
+	gasPool           *types.GasPool // available gas used to pack transactions
+	primaryCoinbase   common.Address
+	secondaryCoinbase common.Address
+	etxRLimit         int // Remaining number of cross-region ETXs that can be included
+	etxPLimit         int // Remaining number of cross-prime ETXs that can be included
+	parentOrder       *int
+	wo                *types.WorkObject
+	txs               []*types.Transaction
+	etxs              []*types.Transaction
+	utxoFees          *big.Int
+	quaiFees          *big.Int
+	subManifest       types.BlockManifest
+	receipts          []*types.Receipt
+	uncleMu           sync.RWMutex
+	uncles            map[common.Hash]*types.WorkObjectHeader
+	utxosCreate       []common.Hash
+	utxosDelete       []common.Hash
+	parentStateSize   *big.Int
+	quaiCoinbaseEtxs  map[[21]byte]*big.Int
+	deletedUtxos      map[common.Hash]struct{}
 }
 
 // unclelist returns the contained uncles as the list format.
@@ -133,7 +134,8 @@ type intervalAdjust struct {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase          common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
+	PrimaryCoinbase    common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
+	SecondaryCoinbase  common.Address `toml:",omitempty"` // Public address for block mining rewards (second account)
 	Notify             []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
 	NotifyFull         bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
 	ExtraData          hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
@@ -180,9 +182,10 @@ type worker struct {
 	uncles  *lru.Cache[common.Hash, types.WorkObjectHeader]
 	uncleMu sync.RWMutex
 
-	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
-	coinbase common.Address
-	extra    []byte
+	mu                sync.RWMutex // The lock used to protect the coinbase and extra fields
+	primaryCoinbase   common.Address
+	secondaryCoinbase common.Address
+	extra             []byte
 
 	workerDb ethdb.Database
 
@@ -251,7 +254,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		engine:                         engine,
 		hc:                             headerchain,
 		txPool:                         txPool,
-		coinbase:                       config.Etherbase,
+		primaryCoinbase:                config.PrimaryCoinbase,
+		secondaryCoinbase:              config.SecondaryCoinbase,
 		isLocalBlock:                   isLocalBlock,
 		workerDb:                       db,
 		chainSideCh:                    make(chan ChainSideEvent, chainSideChanSize),
@@ -297,11 +301,18 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	return worker
 }
 
-// setEtherbase sets the etherbase used to initialize the block coinbase field.
-func (w *worker) setEtherbase(addr common.Address) {
+// setPrimaryCoinbase sets the coinbase used to initialize the block primary coinbase field.
+func (w *worker) setPrimaryCoinbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.coinbase = addr
+	w.primaryCoinbase = addr
+}
+
+// setSecondaryCoinbase sets the coinbase used to initialize the block secondary coinbase field.
+func (w *worker) setSecondaryCoinbase(addr common.Address) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.secondaryCoinbase = addr
 }
 
 func (w *worker) setGasCeil(ceil uint64) {
@@ -509,21 +520,30 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	atomic.StoreInt32(&w.newTxs, 0)
 
 	start := time.Now()
-	// Set the coinbase if the worker is running or it's required
-	var coinbase common.Address
-	if w.hc.NodeCtx() == common.ZONE_CTX && w.coinbase.Equal(common.Address{}) && w.hc.ProcessingState() {
-		w.logger.Error("Refusing to mine without etherbase")
+	// Set the primary coinbase if the worker is running or it's required
+	var primaryCoinbase common.Address
+	if w.hc.NodeCtx() == common.ZONE_CTX && w.primaryCoinbase.Equal(common.Address{}) && w.hc.ProcessingState() {
+		w.logger.Warn("Refusing to mine without primaryCoinbase")
 		return nil, errors.New("etherbase not found")
-	} else if w.coinbase.Equal(common.Address{}) {
-		w.coinbase = common.Zero
+	} else if w.primaryCoinbase.Equal(common.Address{}) {
+		w.primaryCoinbase = common.Zero
 	}
-	coinbase = w.coinbase // Use the preset address as the fee recipient
-	if _, err := coinbase.InternalAddress(); nodeCtx == common.ZONE_CTX && err != nil {
-		return nil, fmt.Errorf("invalid coinbase address %v: %v", coinbase, err)
+	primaryCoinbase = w.primaryCoinbase // Use the preset address as the fee recipient
+
+	// Set the secondary coinbase if the worker is running or it's required
+	var secondaryCoinbase common.Address
+	if w.hc.NodeCtx() == common.ZONE_CTX && w.primaryCoinbase.Equal(common.Address{}) && w.hc.ProcessingState() {
+		w.logger.Warn("Refusing to mine without primaryCoinbase")
+		return nil, errors.New("etherbase not found")
+	} else if w.primaryCoinbase.Equal(common.Address{}) {
+		w.primaryCoinbase = common.Zero
 	}
+	secondaryCoinbase = w.secondaryCoinbase // Use the preset address as the fee recipient
+
 	work, err := w.prepareWork(&generateParams{
-		timestamp: uint64(timestamp),
-		coinbase:  coinbase,
+		timestamp:         uint64(timestamp),
+		primaryCoinbase:   primaryCoinbase,
+		secondaryCoinbase: secondaryCoinbase,
 	}, block)
 	if err != nil {
 		return nil, err
@@ -534,9 +554,9 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		// First etx is always the coinbase etx
 		// If workshares are included that are not uncles(?)
 		// create a placeholder for the coinbase and create etx for the rest of the workshares
-		if coinbase.IsInQiLedgerScope() {
+		if primaryCoinbase.IsInQiLedgerScope() {
 			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
-		} else if coinbase.IsInQuaiLedgerScope() {
+		} else if primaryCoinbase.IsInQuaiLedgerScope() {
 			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{}))
 		}
 
@@ -548,10 +568,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		// Add an etx for each workshare for it to be rewarded
 		for i, uncle := range uncles {
 			reward := misc.CalculateReward(uncle)
-			uncleCoinbase := uncle.Coinbase()
-			if _, err := uncleCoinbase.InternalAddress(); err != nil {
-				return nil, fmt.Errorf("invalid workshare coinbase address %v: %v", uncleCoinbase, err)
-			}
+			uncleCoinbase := uncle.PrimaryCoinbase()
 			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(i) + 1, Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
 		}
 
@@ -585,17 +602,18 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 				return nil, fmt.Errorf("could not find prime terminus header %032x", work.wo.PrimeTerminusHash())
 			}
 		}
-		if coinbase.IsInQiLedgerScope() {
+		// TODO: fee from Quai tx goes to Quai coinbase and fee from Qi tx goes to Qi coinbase
+		if primaryCoinbase.IsInQiLedgerScope() {
 			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
 			blockFees := new(big.Int).Add(work.utxoFees, misc.QuaiToQi(primeTerminus.WorkObjectHeader(), work.quaiFees))
 			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase, Data: []byte{work.wo.Lock()}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: primaryCoinbase, Data: []byte{work.wo.Lock()}})
 			work.etxs[0] = coinbaseEtx
-		} else if coinbase.IsInQuaiLedgerScope() {
+		} else if primaryCoinbase.IsInQuaiLedgerScope() {
 			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
 			blockFees := new(big.Int).Add(work.quaiFees, misc.QiToQuai(primeTerminus.WorkObjectHeader(), work.utxoFees))
 			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase, Data: []byte{work.wo.Lock()}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: primaryCoinbase, Data: []byte{work.wo.Lock()}})
 			work.etxs[0] = coinbaseEtx
 		}
 	}
@@ -659,7 +677,7 @@ func (w *worker) eventExitLoop() {
 }
 
 // makeEnv creates a new environment for the sealing block.
-func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject, coinbase common.Address) (*environment, error) {
+func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject, primaryCoinbase, secondaryCoinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
 	evmRoot := parent.EVMRoot()
@@ -685,18 +703,19 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:           types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
-		state:            state,
-		coinbase:         coinbase,
-		ancestors:        mapset.NewSet(),
-		family:           mapset.NewSet(),
-		wo:               proposedWo,
-		uncles:           make(map[common.Hash]*types.WorkObjectHeader),
-		etxRLimit:        etxRLimit,
-		etxPLimit:        etxPLimit,
-		parentStateSize:  quaiStateSize,
-		quaiCoinbaseEtxs: make(map[[21]byte]*big.Int),
-		deletedUtxos:     make(map[common.Hash]struct{}),
+		signer:            types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
+		state:             state,
+		primaryCoinbase:   primaryCoinbase,
+		secondaryCoinbase: secondaryCoinbase,
+		ancestors:         mapset.NewSet(),
+		family:            mapset.NewSet(),
+		wo:                proposedWo,
+		uncles:            make(map[common.Hash]*types.WorkObjectHeader),
+		etxRLimit:         etxRLimit,
+		etxPLimit:         etxPLimit,
+		parentStateSize:   quaiStateSize,
+		quaiCoinbaseEtxs:  make(map[[21]byte]*big.Int),
+		deletedUtxos:      make(map[common.Hash]struct{}),
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -872,7 +891,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	// retrieve the gas used int and pass in the reference to the ApplyTransaction
 	gasUsed := env.wo.GasUsed()
 	stateUsed := env.wo.StateUsed()
-	receipt, quaiFees, err := ApplyTransaction(w.chainConfig, parent, *env.parentOrder, w.hc, &env.coinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, &stateUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
+	receipt, quaiFees, err := ApplyTransaction(w.chainConfig, parent, *env.parentOrder, w.hc, &env.primaryCoinbase, env.gasPool, env.state, env.wo, tx, &gasUsed, &stateUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, w.logger)
 	if err != nil {
 		w.logger.WithFields(log.Fields{
 			"err":     err,
@@ -1106,9 +1125,10 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp uint64         // The timstamp for sealing task
-	forceTime bool           // Flag whether the given timestamp is immutable or not
-	coinbase  common.Address // The fee recipient address for including transaction
+	timestamp         uint64         // The timstamp for sealing task
+	forceTime         bool           // Flag whether the given timestamp is immutable or not
+	primaryCoinbase   common.Address // The fee recipient address for including transaction
+	secondaryCoinbase common.Address
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -1270,11 +1290,16 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		newWo.Header().SetBaseFee(misc.CalcBaseFee(w.chainConfig, parent))
 		newWo.Header().SetStateLimit(misc.CalcStateLimit(parent, w.config.GasCeil))
 		if w.isRunning() {
-			if w.coinbase.Equal(common.Zero) {
-				w.logger.Error("Refusing to mine without etherbase")
-				return nil, errors.New("refusing to mine without etherbase")
+			if w.primaryCoinbase.Equal(common.Zero) {
+				w.logger.Error("Refusing to mine without primary coinbase")
+				return nil, errors.New("refusing to mine without primary coinbase")
 			}
-			newWo.WorkObjectHeader().SetCoinbase(w.coinbase)
+			if w.secondaryCoinbase.Equal(common.Zero) {
+				w.logger.Error("Refusing to mine without secondary coinbase")
+				return nil, errors.New("refusing to mine without secondary coinbase")
+			}
+			newWo.WorkObjectHeader().SetPrimaryCoinbase(w.primaryCoinbase)
+			newWo.Header().SetSecondaryCoinbase(w.secondaryCoinbase)
 		}
 
 		// Get the latest transactions to be broadcasted from the pool
@@ -1297,10 +1322,10 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			w.logger.WithField("err", err).Error("Failed to prepare header for sealing")
 			return nil, err
 		}
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.Coinbase())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
-		env, err := w.makeEnv(parent, proposedWo, w.coinbase)
+		env, err := w.makeEnv(parent, proposedWo, w.primaryCoinbase, w.secondaryCoinbase)
 		if err != nil {
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
 			return nil, err
@@ -1347,7 +1372,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 		return env, nil
 	} else {
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.Coinbase())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		return &environment{wo: proposedWo}, nil

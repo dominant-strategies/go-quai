@@ -169,7 +169,7 @@ func TestHeadBlockStorage(t *testing.T) {
 	WriteHeaderNumber(db, hash, blockNumber)
 
 	wo := types.EmptyWorkObject(common.ZONE_CTX)
-	wo.WorkObjectHeader().SetCoinbase(common.BytesToAddress([]byte{1}, common.Location{0, 0}))
+	wo.WorkObjectHeader().SetPrimaryCoinbase(common.BytesToAddress([]byte{1}, common.Location{0, 0}))
 
 	WriteWorkObject(db, hash, wo, types.BlockObject, common.ZONE_CTX)
 

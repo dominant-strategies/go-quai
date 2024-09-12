@@ -19,7 +19,7 @@ func woTestData() (*WorkObject, common.Hash) {
 			txHash:              common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
 			location:            common.Location{0, 0},
 			mixHash:             common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
-			coinbase:            common.HexToAddress("0x123456789abcdef0123456789abcdef0123456789", common.Location{0, 0}),
+			primaryCoinbase:     common.HexToAddress("0x123456789abcdef0123456789abcdef0123456789", common.Location{0, 0}),
 			time:                uint64(1),
 			nonce:               EncodeNonce(uint64(1)),
 			lock:                0,

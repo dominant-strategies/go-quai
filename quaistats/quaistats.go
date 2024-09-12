@@ -1258,7 +1258,7 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 			woCount += 1
 		}
 	}
-	qiType := block.Coinbase().IsInQiLedgerScope()
+	qiType := block.PrimaryCoinbase().IsInQiLedgerScope()
 	difficulty := block.Difficulty().String()
 	quaiPerQi := misc.QiToQuai(block.WorkObjectHeader(), big.NewInt(1)).String()
 	var quaiReward *big.Int

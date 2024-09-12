@@ -7,7 +7,7 @@ import (
 )
 
 func CalculateReward(header *types.WorkObjectHeader) *big.Int {
-	if header.Coinbase().IsInQiLedgerScope() {
+	if header.PrimaryCoinbase().IsInQiLedgerScope() {
 		return CalculateQiReward(header)
 	} else {
 		return CalculateQuaiReward(header)

@@ -49,14 +49,9 @@ func NewPublicQuaiAPI(e *Quai) *PublicQuaiAPI {
 	return &PublicQuaiAPI{e}
 }
 
-// Etherbase is the address that mining rewards will be send to
-func (api *PublicQuaiAPI) Etherbase() (common.Address, error) {
-	return api.e.Etherbase()
-}
-
-// Coinbase is the address that mining rewards will be send to (alias for Etherbase)
-func (api *PublicQuaiAPI) Coinbase() (common.Address, error) {
-	return api.Etherbase()
+// PrimaryCoinbase is the address that mining rewards will be send to
+func (api *PublicQuaiAPI) PrimaryCoinbase() (common.Address, error) {
+	return api.e.PrimaryCoinbase()
 }
 
 // PublicMinerAPI provides an API to control the miner.
@@ -110,9 +105,15 @@ func (api *PrivateMinerAPI) SetGasLimit(gasLimit hexutil.Uint64) bool {
 	return true
 }
 
-// SetEtherbase sets the etherbase of the miner
-func (api *PrivateMinerAPI) SetEtherbase(etherbase common.Address) bool {
-	api.e.Core().SetEtherbase(etherbase)
+// SetPrimaryCoinbase sets the primary coinbase of the miner
+func (api *PrivateMinerAPI) SetPrimaryCoinbase(primaryCoinbase common.Address) bool {
+	api.e.Core().SetPrimaryCoinbase(primaryCoinbase)
+	return true
+}
+
+// SetSecondaryCoinbase sets the secondary coinbase of the miner
+func (api *PrivateMinerAPI) SetSecondaryCoinbase(secondaryCoinbase common.Address) bool {
+	api.e.Core().SetSecondaryCoinbase(secondaryCoinbase)
 	return true
 }
 

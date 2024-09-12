@@ -71,8 +71,8 @@ type Quai struct {
 
 	APIBackend *QuaiAPIBackend
 
-	gasPrice  *big.Int
-	etherbase common.Address
+	gasPrice        *big.Int
+	primaryCoinbase common.Address
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
@@ -158,7 +158,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		eventMux:          stack.EventMux(),
 		closeBloomHandler: make(chan struct{}),
 		gasPrice:          config.Miner.GasPrice,
-		etherbase:         config.Miner.Etherbase,
+		primaryCoinbase:   config.Miner.PrimaryCoinbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		logger:            logger,
 	}
@@ -326,13 +326,13 @@ func (s *Quai) APIs() []rpc.API {
 	}...)
 }
 
-func (s *Quai) Etherbase() (eb common.Address, err error) {
+func (s *Quai) PrimaryCoinbase() (eb common.Address, err error) {
 	s.lock.RLock()
-	etherbase := s.etherbase
+	primaryCoinbase := s.primaryCoinbase
 	s.lock.RUnlock()
 
-	if !etherbase.Equal(common.Zero) {
-		return etherbase, nil
+	if !primaryCoinbase.Equal(common.Zero) {
+		return primaryCoinbase, nil
 	}
 
 	return common.Zero, fmt.Errorf("etherbase must be explicitly specified")
@@ -355,7 +355,7 @@ func (s *Quai) isLocalBlock(header *types.WorkObject) bool {
 	}
 	// Check whether the given address is etherbase.
 	s.lock.RLock()
-	etherbase := s.etherbase
+	etherbase := s.primaryCoinbase
 	s.lock.RUnlock()
 	if author.Equal(etherbase) {
 		return true
