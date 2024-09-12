@@ -479,13 +479,19 @@ func (hc *HierarchicalCoordinator) CalculateLeaders(badHashes map[common.Hash]bo
 }
 
 func (hc *HierarchicalCoordinator) GetNodeListForLocation(location common.Location, badHashesList map[common.Hash]bool) []Node {
-	keys := hc.recentBlocks[location.Name()].Keys()
+	recentBlocksCache, exists := hc.recentBlocks[location.Name()]
+	if !exists || recentBlocksCache == nil {
+		return []Node{}
+	}
 	nodeList := []Node{}
-	for _, key := range keys {
+	for _, key := range recentBlocksCache.Keys() {
 		if _, exists := badHashesList[key]; exists {
 			continue
 		}
-		node, _ := hc.recentBlocks[location.Name()].Peek(key)
+		node, _ := recentBlocksCache.Peek(key)
+		if node.Empty() {
+			continue
+		}
 		nodeList = append(nodeList, node)
 	}
 	sort.Slice(nodeList, func(i, j int) bool {
@@ -508,8 +514,12 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 		return
 	default:
 		badHashes := make(map[common.Hash]bool)
-
+		count := 0
 	search:
+		if count > 10 {
+			log.Global.Error("Too many iterations in the build pending headers, skipping generate")
+			return
+		}
 		// Pick the leader among all the slices
 		backend := *hc.consensus.GetBackend(common.Location{0, 0})
 		defaultGenesisHash := backend.Config().DefaultGenesisHash
@@ -579,6 +589,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 			if !hc.pcrc(bestRegion, primeTermini.SubTerminiAtIndex(i), common.Location{byte(i)}, common.REGION_CTX) {
 				badHashes[bestRegion] = true
 				log.Global.WithFields(log.Fields{"hash": bestRegion, "location": regionLocation}).Debug("Best Region doesnt satisfy pcrc")
+				count++
 				goto search
 			}
 			regionTermini := hc.GetBackend(common.Location{byte(i)}).GetTerminiByHash(bestRegion)
@@ -595,6 +606,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 				if !hc.pcrc(bestZone, regionTermini.SubTerminiAtIndex(j), common.Location{byte(i), byte(j)}, common.ZONE_CTX) {
 					badHashes[bestZone] = true
 					log.Global.WithFields(log.Fields{"hash": bestZone, "location": zoneLocation}).Debug("Best Zone doesnt satisfy pcrc")
+					count++
 					goto search
 				}
 				wg.Add(1)
