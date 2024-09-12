@@ -15,7 +15,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
-	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/quai"
 
@@ -168,10 +167,6 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 
 		var requestWg sync.WaitGroup
 		for peerID := range peers {
-			// if we have exceeded the outbound rate limit for this peer, skip them for now
-			if err := protocol.ProcRequestRate(peerID, false); err != nil {
-				continue
-			}
 			requestWg.Add(1)
 			go func(peerID peer.ID) {
 				defer func() {
