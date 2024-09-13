@@ -23,13 +23,13 @@ const (
 	msgChanSize                = 100 // 100 requests per stream
 	protocolName               = "quai"
 	rateFilterAlphaPct         = 10 // alpha (in percent) for rate tracker filter
-	requestRateLimitRPS        = 50 // Maximum sustained requests per second a peer is allowed
+	requestRateLimitPeriod_ms  = 20 // 20ms avg delay between requests = 50 requests/sec
 	C_NumPrimeBlocksToDownload = 10
 )
 
 type rateTracker struct {
-	rate int64     // avg time (ms) between requests
-	last time.Time // last time a request was fed to the tracker
+	avg_period int64     // avg time (ms) between requests
+	last       time.Time // last time a request was fed to the tracker
 }
 
 var inRateTrackers map[peer.ID]rateTracker
@@ -52,23 +52,28 @@ func ProcRequestRate(peerId peer.ID, inbound bool) error {
 	if tracker, exists := (*rateTrackers)[peerId]; exists {
 		t_now := time.Now()
 		dt_ms := t_now.UnixMilli() - tracker.last.UnixMilli()
-		rate := ((100-rateFilterAlphaPct)*tracker.rate + (rateFilterAlphaPct*dt_ms)/100)
+		avg_period := ((100-rateFilterAlphaPct)*tracker.avg_period + (rateFilterAlphaPct*dt_ms)/100)
 		if inbound {
 			// inbound rate always updates, because request has already arrived
-			tracker.rate = rate
+			tracker.avg_period = avg_period
 			tracker.last = t_now
 		}
-		if rate > 1/(1000*requestRateLimitRPS) {
+		minPeriod := requestRateLimitPeriod_ms
+		if !inbound {
+			// Conservatively rate limit ourselves, to avoid tripping our peers rate limit
+			minPeriod /= 2
+		}
+		if avg_period < requestRateLimitPeriod_ms {
 			return errors.New("peer exceeded request rate limit")
 		} else {
 			// since outbound requests wont be sent if the limit is exceeded, only update the outbound rate if there is no error
-			tracker.rate = rate
+			tracker.avg_period = avg_period
 			tracker.last = t_now
 		}
 	} else {
 		(*rateTrackers)[peerId] = rateTracker{
-			rate: ^int64(0), // max i64 time since last request ~= 0 request rate
-			last: time.Now(),
+			avg_period: 1000000, // initially start at very low rate
+			last:       time.Now(),
 		}
 	}
 	return nil

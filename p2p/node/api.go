@@ -170,6 +170,7 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		for peerID := range peers {
 			// if we have exceeded the outbound rate limit for this peer, skip them for now
 			if err := protocol.ProcRequestRate(peerID, false); err != nil {
+				log.Global.Warnf("Exceeded request rate to peer %s", peerID)
 				continue
 			}
 			requestWg.Add(1)
