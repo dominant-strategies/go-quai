@@ -214,9 +214,6 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 		if err != nil {
 			return pubsub.ValidationReject
 		}
-		if topic.location == nil {
-			return pubsub.ValidationReject
-		}
 		// get the proto encoded data
 		protoData := msg.GetData()
 
