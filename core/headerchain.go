@@ -315,7 +315,8 @@ func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 	return nil
 }
 
-func (hc *HeaderChain) CalculateInterlink(header *types.WorkObject) (common.Hashes, error) {
+func (hc *HeaderChain) CalculateInterlink(block *types.WorkObject) (common.Hashes, error) {
+	header := types.CopyWorkObject(block)
 	var interlinkHashes common.Hashes
 	if hc.IsGenesisHash(header.Hash()) {
 		// On genesis, the interlink hashes are all the same and should start with genesis hash
@@ -326,10 +327,14 @@ func (hc *HeaderChain) CalculateInterlink(header *types.WorkObject) (common.Hash
 		if err != nil {
 			return nil, err
 		}
+		parentInterlinkHashes := rawdb.ReadInterlinkHashes(hc.headerDb, header.ParentHash(common.PRIME_CTX))
+		if parentInterlinkHashes == nil {
+			return nil, ErrSubNotSyncedToDom
+		}
 		if rank == 0 { // No change in the interlink hashes, so carry
-			interlinkHashes = header.InterlinkHashes()
+			interlinkHashes = parentInterlinkHashes
 		} else if rank > 0 && rank <= common.InterlinkDepth {
-			interlinkHashes = header.InterlinkHashes()
+			interlinkHashes = parentInterlinkHashes
 			// update the interlink hashes for each level below the rank
 			for i := 0; i < rank; i++ {
 				interlinkHashes[i] = header.Hash()
