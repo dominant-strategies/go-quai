@@ -273,6 +273,7 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	wo.WorkObjectHeader().SetPrimeTerminusNumber(big.NewInt(0))
 	wo.WorkObjectHeader().SetTime(g.Timestamp)
 	wo.WorkObjectHeader().SetCoinbase(common.Zero)
+	wo.WorkObjectHeader().SetLock(0)
 	wo.Header().SetExtra(g.ExtraData)
 	wo.Header().SetGasLimit(g.GasLimit)
 	wo.Header().SetGasUsed(0)

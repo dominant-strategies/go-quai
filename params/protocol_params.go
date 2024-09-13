@@ -150,9 +150,9 @@ const (
 	// infrastructure, if needed, to account for the upcoming network change.
 	TREE_EXPANSION_WAIT_COUNT = 1024
 
-	ConversionLockPeriod          int64 = 10 // The number of zone blocks that a conversion output is locked for
-	MinQiConversionDenomination         = 1
-	ConversionConfirmationContext       = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
+	ConversionLockPeriod          uint64 = 10 // The number of zone blocks that a conversion output is locked for
+	MinQiConversionDenomination          = 1
+	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 )
 
 var (
@@ -179,7 +179,22 @@ var (
 	MaxWorkShareCount                 = 16
 	WorkSharesThresholdDiff           = 3 // Number of bits lower than the target that the default consensus engine uses
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
+	LockupByteToBlockDepth            = make(map[uint8]uint64)
+	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
 )
+
+func init() {
+	LockupByteToBlockDepth[0] = ConversionLockPeriod // minimum lockup period
+	LockupByteToBlockDepth[1] = 720                  // 2 hours
+	LockupByteToBlockDepth[2] = 1440                 // 4 hours
+	LockupByteToBlockDepth[3] = 2880                 // 8 hours
+	LockupByteToBlockDepth[4] = 4320                 // 12 hours
+
+	LockupByteToRewardsRatio[1] = big.NewInt(7) // additional 14%
+	LockupByteToRewardsRatio[2] = big.NewInt(6) // additional 16%
+	LockupByteToRewardsRatio[3] = big.NewInt(5) // additional 20%
+	LockupByteToRewardsRatio[4] = big.NewInt(4) // additional 25%
+}
 
 // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
 func PrimeEntropyTarget(expansionNum uint8) *big.Int {
@@ -245,4 +260,11 @@ func CalculateGasWithStateScaling(stateSize, contractSize *big.Int, baseRate uin
 	}
 	// If we can assume that the gas price constants is correct for level 7 trie
 	return (uint64(scalingFactor) * baseRate) / 7
+}
+
+func CalculateCoinbaseValueWithLockup(value *big.Int, lockupByte uint8) *big.Int {
+	if lockupByte == 0 {
+		return value
+	}
+	return new(big.Int).Add(value, new(big.Int).Div(value, LockupByteToRewardsRatio[lockupByte]))
 }

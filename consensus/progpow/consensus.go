@@ -661,6 +661,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 			return nil, err
 		}
 		state.CreateAccount(lockupContract)
+		state.SetNonce(lockupContract, 1) // so it's not considered "empty"
 
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_quai_"+nodeLocation.Name()+".json", progpow.logger)
 		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")

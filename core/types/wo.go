@@ -49,9 +49,9 @@ type WorkObjectHeader struct {
 	mixHash             common.Hash
 	time                uint64
 	nonce               BlockNonce
-
-	PowHash   atomic.Value
-	PowDigest atomic.Value
+	lock                uint8
+	PowHash             atomic.Value
+	PowDigest           atomic.Value
 }
 
 type WorkObjects []*WorkObject
@@ -205,6 +205,10 @@ func (wo *WorkObject) MixHash() common.Hash {
 
 func (wo *WorkObject) Nonce() BlockNonce {
 	return wo.WorkObjectHeader().Nonce()
+}
+
+func (wo *WorkObject) Lock() uint8 {
+	return wo.WorkObjectHeader().Lock()
 }
 
 func (wo *WorkObject) Location() common.Location {
@@ -533,6 +537,10 @@ func (wh *WorkObjectHeader) Nonce() BlockNonce {
 	return wh.nonce
 }
 
+func (wh *WorkObjectHeader) Lock() uint8 {
+	return wh.lock
+}
+
 func (wh *WorkObjectHeader) NonceU64() uint64 {
 	return wh.nonce.Uint64()
 }
@@ -583,6 +591,10 @@ func (wh *WorkObjectHeader) SetMixHash(mixHash common.Hash) {
 
 func (wh *WorkObjectHeader) SetNonce(nonce BlockNonce) {
 	wh.nonce = nonce
+}
+
+func (wh *WorkObjectHeader) SetLock(lock uint8) {
+	wh.lock = lock
 }
 
 func (wh *WorkObjectHeader) SetTime(val uint64) {
@@ -788,7 +800,7 @@ func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, 
 }
 
 func NewWorkObjectWithHeader(header *WorkObject, tx *Transaction, nodeCtx int, woType WorkObjectView) *WorkObject {
-	woHeader := NewWorkObjectHeader(header.Hash(), header.ParentHash(common.ZONE_CTX), header.WorkObjectHeader().number, header.WorkObjectHeader().difficulty, header.WorkObjectHeader().PrimeTerminusNumber(), header.WorkObjectHeader().txHash, header.WorkObjectHeader().nonce, header.WorkObjectHeader().time, header.Location(), header.Coinbase())
+	woHeader := NewWorkObjectHeader(header.Hash(), header.ParentHash(common.ZONE_CTX), header.WorkObjectHeader().number, header.WorkObjectHeader().difficulty, header.WorkObjectHeader().PrimeTerminusNumber(), header.WorkObjectHeader().txHash, header.WorkObjectHeader().nonce, header.WorkObjectHeader().lock, header.WorkObjectHeader().time, header.Location(), header.Coinbase())
 	woBody, _ := NewWorkObjectBody(header.Body().Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
 	return NewWorkObject(woHeader, woBody, tx)
 }
@@ -962,7 +974,7 @@ func (wo *WorkObject) ProtoDecode(data *ProtoWorkObject, location common.Locatio
 	return nil
 }
 
-func NewWorkObjectHeader(headerHash common.Hash, parentHash common.Hash, number *big.Int, difficulty *big.Int, primeTerminusNumber *big.Int, txHash common.Hash, nonce BlockNonce, time uint64, location common.Location, coinbase common.Address) *WorkObjectHeader {
+func NewWorkObjectHeader(headerHash common.Hash, parentHash common.Hash, number *big.Int, difficulty *big.Int, primeTerminusNumber *big.Int, txHash common.Hash, nonce BlockNonce, lock uint8, time uint64, location common.Location, coinbase common.Address) *WorkObjectHeader {
 	return &WorkObjectHeader{
 		headerHash:          headerHash,
 		parentHash:          parentHash,
@@ -971,6 +983,7 @@ func NewWorkObjectHeader(headerHash common.Hash, parentHash common.Hash, number 
 		primeTerminusNumber: primeTerminusNumber,
 		txHash:              txHash,
 		nonce:               nonce,
+		lock:                lock,
 		time:                time,
 		location:            location,
 		coinbase:            coinbase,
@@ -990,6 +1003,7 @@ func CopyWorkObjectHeader(wh *WorkObjectHeader) *WorkObjectHeader {
 	cpy.SetTime(wh.Time())
 	cpy.SetPrimeTerminusNumber(wh.primeTerminusNumber)
 	cpy.SetCoinbase(wh.Coinbase())
+	cpy.SetLock(wh.Lock())
 	return &cpy
 }
 
@@ -1006,6 +1020,7 @@ func (wh *WorkObjectHeader) RPCMarshalWorkObjectHeader() map[string]interface{} 
 		"timestamp":           hexutil.Uint64(wh.Time()),
 		"mixHash":             wh.MixHash(),
 		"coinbase":            wh.Coinbase(),
+		"lock":                hexutil.Uint64(wh.Lock()),
 	}
 	return result
 }
@@ -1048,6 +1063,7 @@ func (wh *WorkObjectHeader) SealEncode() *ProtoWorkObjectHeader {
 	location := wh.Location().ProtoEncode()
 	time := wh.Time()
 	coinbase := common.ProtoAddress{Value: wh.Coinbase().Bytes()}
+	lock := uint32(wh.Lock())
 
 	return &ProtoWorkObjectHeader{
 		HeaderHash:          &hash,
@@ -1057,6 +1073,7 @@ func (wh *WorkObjectHeader) SealEncode() *ProtoWorkObjectHeader {
 		TxHash:              &txHash,
 		PrimeTerminusNumber: primeTerminusNumber,
 		Location:            location,
+		Lock:                &lock,
 		Coinbase:            &coinbase,
 		Time:                &time,
 	}
@@ -1073,6 +1090,7 @@ func (wh *WorkObjectHeader) ProtoEncode() (*ProtoWorkObjectHeader, error) {
 	nonce := wh.Nonce().Uint64()
 	mixHash := common.ProtoHash{Value: wh.MixHash().Bytes()}
 	coinbase := common.ProtoAddress{Value: wh.Coinbase().Bytes()}
+	lock := uint32(wh.Lock())
 
 	return &ProtoWorkObjectHeader{
 		HeaderHash:          &hash,
@@ -1083,6 +1101,7 @@ func (wh *WorkObjectHeader) ProtoEncode() (*ProtoWorkObjectHeader, error) {
 		TxHash:              &txHash,
 		Location:            location,
 		Nonce:               &nonce,
+		Lock:                &lock,
 		MixHash:             &mixHash,
 		Time:                &wh.time,
 		Coinbase:            &coinbase,
@@ -1101,6 +1120,7 @@ func (wh *WorkObjectHeader) ProtoDecode(data *ProtoWorkObjectHeader, location co
 	wh.SetPrimeTerminusNumber(new(big.Int).SetBytes(data.GetPrimeTerminusNumber()))
 	wh.SetTxHash(common.BytesToHash(data.GetTxHash().Value))
 	wh.SetNonce(uint64ToByteArr(data.GetNonce()))
+	wh.SetLock(uint8(data.GetLock()))
 	wh.SetLocation(data.GetLocation().GetValue())
 	wh.SetMixHash(common.BytesToHash(data.GetMixHash().Value))
 	wh.SetTime(data.GetTime())

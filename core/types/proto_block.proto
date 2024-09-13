@@ -86,6 +86,7 @@ message ProtoWorkObjectHeader {
   optional uint64 time = 9;
   optional bytes prime_terminus_number = 10;
   optional common.ProtoAddress coinbase = 11;
+  optional uint32 lock = 12;
 }
 
 message ProtoWorkObjectHeaders {

@@ -905,6 +905,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.WorkObjectHeader().SetTxHash(header.TxHash())
 		combinedPendingHeader.WorkObjectHeader().SetPrimeTerminusNumber(header.PrimeTerminusNumber())
 		combinedPendingHeader.WorkObjectHeader().SetCoinbase(header.Coinbase())
+		combinedPendingHeader.WorkObjectHeader().SetLock(header.Lock())
 
 		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.Header().SetUncledEntropy(header.Header().UncledEntropy())
@@ -1026,8 +1027,6 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 		if nodeCtx != common.ZONE_CTX {
 			localPendingHeader.WorkObjectHeader().SetCoinbase(common.Zero)
 		}
-
-		localPendingHeader.WorkObjectHeader().SetLocation(common.Location{0, 0})
 
 		if nodeCtx == common.PRIME_CTX {
 			domPendingHeader = types.CopyWorkObject(localPendingHeader)

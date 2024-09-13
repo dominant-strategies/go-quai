@@ -141,3 +141,8 @@ func (a InternalAddress) IsInQuaiLedgerScope() bool {
 	// The first bit of the second byte is not set if the address is in the Quai ledger
 	return a.Bytes()[1] <= 127
 }
+
+func (a InternalAddress) IsInQiLedgerScope() bool {
+	// The first bit of the second byte is set if the address is in the Qi ledger
+	return a.Bytes()[1] > 127
+}
