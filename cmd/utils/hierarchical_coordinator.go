@@ -418,7 +418,6 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 			}
 			close(stopChan)
 			stopChan = make(chan struct{})
-			hc.recentBlockMu.Lock()
 			locationCache, exists := hc.recentBlocks[head.Block.Location().Name()]
 			if !exists {
 				// create a new lru and add this block
@@ -441,7 +440,6 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 					}
 				}
 			}
-			hc.recentBlockMu.Unlock()
 		case <-sub.Err():
 			return
 		}
@@ -526,7 +524,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 
 		constraintMap := make(map[string]common.Hash)
 		numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
-
+		hc.recentBlockMu.Lock()
 		for i := 0; i < int(numRegions); i++ {
 			for j := 0; j < int(numZones); j++ {
 				if _, exists := hc.recentBlocks[common.Location{byte(i), byte(j)}.Name()]; !exists {
@@ -560,7 +558,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 				}
 			}
 		}
-
+		hc.recentBlockMu.Unlock()
 		PrintConstraintMap(modifiedConstraintMap)
 
 		var bestPrime common.Hash
