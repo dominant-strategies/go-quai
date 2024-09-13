@@ -1443,12 +1443,18 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 // AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
 // maps it to body.
 func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
-	w.pendingBlockBody.Add(wo.SealHash(), *wo)
+	// do not include the tx hash while storing the body
+	woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
+	woHeaderCopy.SetTxHash(common.Hash{})
+	w.pendingBlockBody.Add(woHeaderCopy.SealHash(), *wo)
 }
 
 // GetPendingBlockBody gets the block body associated with the given header.
 func (w *worker) GetPendingBlockBody(woHeader *types.WorkObjectHeader) (*types.WorkObject, error) {
-	body, ok := w.pendingBlockBody.Get(woHeader.SealHash())
+	// do not include the tx hash while storing the body
+	woHeaderCopy := types.CopyWorkObjectHeader(woHeader)
+	woHeaderCopy.SetTxHash(common.Hash{})
+	body, ok := w.pendingBlockBody.Peek(woHeaderCopy.SealHash())
 	if ok {
 		return &body, nil
 	}

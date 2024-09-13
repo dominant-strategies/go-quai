@@ -813,6 +813,8 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
 			}).Error("Pending Block Body not found")
+			// we need to recompute another body at the current state
+			sl.hc.chainHeadFeed.Send(ChainHeadEvent{sl.hc.CurrentHeader()})
 			return nil, ErrBodyNotFound
 		}
 		if len(pendingBlockBody.ExtTransactions()) == 0 {
