@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -28,6 +29,11 @@ import (
 	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+)
+
+const (
+	c_maxAllowableEntropyDist = 3500 // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -161,6 +167,46 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 		}
 	}
 	return nil
+}
+
+func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
+	powhash, err := v.engine.VerifySeal(wo.WorkObjectHeader())
+	if err != nil {
+		return pubsub.ValidationReject
+	}
+	// Check if the Block is atleast half the current difficulty in Zone Context,
+	// this makes sure that the nodes don't listen to the forks with the PowHash
+	//	with less than 50% of current difficulty
+	if v.hc.NodeCtx() == common.ZONE_CTX && new(big.Int).SetBytes(powhash.Bytes()).Cmp(new(big.Int).Div(v.engine.IntrinsicLogS(v.hc.CurrentHeader().Hash()), big.NewInt(2))) < 0 {
+		return pubsub.ValidationIgnore
+	}
+
+	currentIntrinsicS := v.engine.IntrinsicLogS(v.hc.CurrentHeader().Hash())
+	currentS := v.hc.CurrentHeader().ParentEntropy(v.hc.NodeCtx())
+	MaxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(c_maxAllowableEntropyDist))
+
+	broadCastEntropy := wo.ParentEntropy(common.ZONE_CTX)
+
+	// If someone is mining not within MaxAllowableEntropyDist*currentIntrinsicS dont broadcast
+	if currentS.Cmp(new(big.Int).Add(broadCastEntropy, MaxAllowableEntropyDist)) > 0 {
+		return pubsub.ValidationIgnore
+	}
+
+	// Quickly validate the header and propagate the block if it passes
+	err = v.engine.VerifyHeader(v.hc, wo)
+
+	// Including the ErrUnknownAncestor as well because a filter has already
+	// been applied for all the blocks that come until here. Since there
+	// exists a timedCache where the blocks expire, it is okay to let this
+	// block through and broadcast the block.
+	if err == nil || err.Error() == consensus.ErrUnknownAncestor.Error() {
+		return pubsub.ValidationAccept
+	} else if err.Error() == consensus.ErrFutureBlock.Error() {
+		// Weird future block, don't fail, but neither propagate
+		return pubsub.ValidationIgnore
+	} else {
+		return pubsub.ValidationReject
+	}
 }
 
 // SanityCheckWorkObjectHeaderViewBody is used in the case of gossipsub validation, it quickly checks if any of the fields

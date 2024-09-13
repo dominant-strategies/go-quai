@@ -1,7 +1,6 @@
 package quai
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -10,9 +9,7 @@ import (
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 
 	"github.com/dominant-strategies/go-quai/trie"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // The consensus backend will implement the following interface to provide information to the networking backend.
@@ -24,9 +21,6 @@ type ConsensusAPI interface {
 	// Specify the peer which propagated the data to us, as well as the data itself.
 	// Return true if this data should be relayed to peers. False if it should be ignored.
 	OnNewBroadcast(core.PeerID, string, string, interface{}, common.Location) bool
-
-	// Creates the function that will be used to determine if a message should be propagated.
-	ValidatorFunc() func(ctx context.Context, id peer.ID, msg *pubsub.Message, location common.Location) pubsub.ValidationResult
 
 	// Asks the consensus backend to lookup a block by hash and location.
 	// If the block is found, it should be returned. Otherwise, nil should be returned.

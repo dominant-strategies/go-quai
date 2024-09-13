@@ -33,6 +33,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
 // Backend interface provides the common API services (that are provided by
@@ -122,6 +123,7 @@ type Backend interface {
 	SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error
 	SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObject) error
 	SanityCheckWorkObjectShareViewBody(wo *types.WorkObject) error
+	ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

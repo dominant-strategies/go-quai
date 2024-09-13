@@ -35,6 +35,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai/gasprice"
 	"github.com/dominant-strategies/go-quai/rpc"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
@@ -681,6 +682,10 @@ func (b *QuaiAPIBackend) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 
 func (b *QuaiAPIBackend) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject) error {
 	return b.quai.core.SanityCheckWorkObjectShareViewBody(wo)
+}
+
+func (b *QuaiAPIBackend) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
+	return b.quai.core.ApplyPoWFilter(wo)
 }
 
 func (b *QuaiAPIBackend) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error) {

@@ -13,6 +13,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
@@ -788,6 +789,10 @@ func (c *Core) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObject) error {
 
 func (c *Core) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject) error {
 	return c.sl.validator.SanityCheckWorkObjectShareViewBody(wo)
+}
+
+func (c *Core) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
+	return c.sl.validator.ApplyPoWFilter(wo)
 }
 
 func (c *Core) Database() ethdb.Database {
