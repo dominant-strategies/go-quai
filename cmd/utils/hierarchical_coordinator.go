@@ -28,7 +28,7 @@ const (
 	c_expansionChSize      = 10
 	c_recentBlockCacheSize = 100
 	c_ancestorCheckDist    = 100
-	c_chainEventChSize     = 10
+	c_chainEventChSize     = 1000
 )
 
 var (
