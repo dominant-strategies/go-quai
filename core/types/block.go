@@ -175,6 +175,7 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woHeader.SetTxHash(EmptyRootHash)
 	wo.woHeader.SetNonce(EncodeNonce(0))
 	wo.woHeader.SetLocation(common.Location{})
+	wo.woHeader.SetLock(0)
 	wo.woHeader.SetTime(0)
 	wo.woBody.SetHeader(h)
 	wo.woBody.SetUncles([]*WorkObjectHeader{})

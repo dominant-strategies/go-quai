@@ -605,6 +605,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 			return nil, err
 		}
 		state.CreateAccount(lockupContract)
+		state.SetNonce(lockupContract, 1) // so it's not considered "empty"
 
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_quai_"+nodeLocation.Name()+".json", blake3pow.logger)
 		blake3pow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")

@@ -22,6 +22,7 @@ func woTestData() (*WorkObject, common.Hash) {
 			coinbase:            common.HexToAddress("0x123456789abcdef0123456789abcdef0123456789", common.Location{0, 0}),
 			time:                uint64(1),
 			nonce:               EncodeNonce(uint64(1)),
+			lock:                1,
 		},
 	}
 	return wo, wo.Hash()

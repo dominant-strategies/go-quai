@@ -30,6 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/crypto/blake2b"
 	"github.com/dominant-strategies/go-quai/crypto/bn256"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 
 	//lint:ignore SA1019 Needed for precompile
@@ -528,7 +529,7 @@ func RedeemQuai(blockContext BlockContext, statedb StateDB, sender common.Addres
 		return gasUsed, stateGas, errors.New("account has locked too many times, overflows uint64")
 	}
 
-	for i := int64(0); i < math.MaxInt64; i++ { // TODO: We should decide on a reasonable limit
+	for i := int64(0); i < math.MaxInt64; i++ {
 		// Ensure we have enough gas to complete this step entirely
 		requiredGas := coldSloadCost + sstoreResetGas + coldSloadCost + sstoreResetGas + sstoreResetGas + params.CallValueTransferGas
 		if gas.Gas() < requiredGas {
@@ -556,6 +557,7 @@ func RedeemQuai(blockContext BlockContext, statedb StateDB, sender common.Addres
 		lock := new(big.Int).SetBytes(lockHash[:])
 		if lock.Cmp(blockHeight) > 0 {
 			// lock not ready yet. Lockups are stored in FIFO order, so we don't have to go through the rest
+			// TODO: It's possible that coinbase lockups are stored with differing lock heights, so we may need to check all locks
 			return gasUsed, stateGas, fmt.Errorf("lockup not ready yet, lock height: %d, current block height: %d", lock, blockHeight)
 		}
 		// Set the lock to zero
@@ -574,7 +576,7 @@ func RedeemQuai(blockContext BlockContext, statedb StateDB, sender common.Addres
 			return gasUsed, stateGas, ErrOutOfGas
 		}
 		if (balanceHash == common.Hash{}) {
-			// If locked balance after covnert is zero, either it doesn't exist or something is broken
+			// If locked balance after convert is zero, either it doesn't exist or something is broken
 			return gasUsed, stateGas, errors.New("balance not found")
 		}
 		// Set the locked balance to zero
@@ -586,7 +588,7 @@ func RedeemQuai(blockContext BlockContext, statedb StateDB, sender common.Addres
 		}
 		// Increment the current lock counter
 		currentLockNumber.Add(currentLockNumber, big1)
-		currentLockHash = common.BytesToHash(binary.BigEndian.AppendUint64([]byte{}, currentLockNumber.Uint64()))
+		currentLockHash = common.BytesToHash(currentLockNumber.Bytes())
 		statedb.SetState(internalContractAddress, sender.Hash(), currentLockHash)
 		gasUsed += sstoreResetGas
 		stateGas += sstoreResetGas
@@ -611,7 +613,7 @@ func RedeemQuai(blockContext BlockContext, statedb StateDB, sender common.Addres
 }
 
 // AddNewLock adds a new locked balance to the lockup contract
-func AddNewLock(blockContext BlockContext, statedb StateDB, toAddr common.Address, gas *types.GasPool, lock *big.Int, balance *big.Int, lockupContractAddress common.Address) (uint64, uint64, error) {
+func AddNewLock(stateSize *big.Int, statedb StateDB, toAddr common.Address, gas *types.GasPool, lock *big.Int, balance *big.Int, lockupContractAddress common.Address) (uint64, uint64, error) {
 	internalContractAddress, err := lockupContractAddress.InternalAndQuaiAddress()
 	if err != nil {
 		return 0, 0, err
@@ -619,9 +621,11 @@ func AddNewLock(blockContext BlockContext, statedb StateDB, toAddr common.Addres
 	if len(lock.Bytes()) > common.HashLength || len(balance.Bytes()) > common.HashLength {
 		return 0, 0, errors.New("lock or balance is too large")
 	}
-	stateSize := blockContext.QuaiStateSize
 	contractSize := statedb.GetSize(internalContractAddress)
-	currentLockHash := statedb.GetState(internalContractAddress, common.BytesToHash(toAddr.Bytes()))
+	senderHash := toAddr.Hash()
+	senderHash[0] = 1 // Set the first byte to 1 for the latest lock pointer
+	// The latest lock hash points to the latest lock stored for the sender
+	latestLockHash := statedb.GetState(internalContractAddress, senderHash)
 	coldSloadCost := params.ColdSloadCost(stateSize, contractSize)
 	sstoreSetGas := params.SstoreSetGas(stateSize, contractSize)
 	gasUsed := coldSloadCost
@@ -630,27 +634,75 @@ func AddNewLock(blockContext BlockContext, statedb StateDB, toAddr common.Addres
 		// This contract does not revert. If the caller runs out of gas, we just stop
 		return gasUsed, stateGas, ErrOutOfGas
 	}
-	if (currentLockHash == common.Hash{}) {
-		// No lock found, create a new one
-		statedb.SetState(internalContractAddress, common.BytesToHash(toAddr.Bytes()), common.BytesToHash([]byte{1}))
+	// Ensure we have enough gas to complete this step entirely
+	requiredGas := coldSloadCost + sstoreSetGas + sstoreSetGas + sstoreSetGas + sstoreSetGas
+	if gas.Gas() < requiredGas {
+		return gasUsed, stateGas, fmt.Errorf("insufficient gas to add new lock, required %d, got %d", requiredGas, gas.Gas())
+	}
+	if (latestLockHash == common.Hash{}) {
+		// No lock found, create a new current lock pointer
+		statedb.SetState(internalContractAddress, toAddr.Hash(), common.BytesToHash([]byte{1}))
 		gasUsed += sstoreSetGas
 		stateGas += sstoreSetGas
-		currentLockHash = common.BytesToHash([]byte{1})
+		if gas.SubGas(sstoreSetGas) != nil {
+			return gasUsed, stateGas, ErrOutOfGas
+		}
+		// Set latest lock pointer also to 1
+		latestLockHash = common.BytesToHash([]byte{1})
 	}
-	currentLockNumber := new(big.Int).SetBytes(currentLockHash[:])
-	if !currentLockNumber.IsUint64() {
+	latestLockNumber := new(big.Int).SetBytes(latestLockHash[:])
+	if !latestLockNumber.IsUint64() {
 		return gasUsed, stateGas, errors.New("account has locked too many times, overflows uint64")
 	}
 
-	for i := int64(0); i < math.MaxInt64; i++ { // TODO: We should decide on a reasonable limit
-		// Ensure we have enough gas to complete this step entirely
-		requiredGas := coldSloadCost + sstoreSetGas + sstoreSetGas
+	key := toAddr.Bytes()
+	// Append latest lock to the key
+	key = binary.BigEndian.AppendUint64(key, latestLockNumber.Uint64())
+	key = append(key, byte(1)) // Set the 29th byte of the key to 1 for lockup
+	if len(key) > common.HashLength {
+		return gasUsed, stateGas, errors.New("lockup key is too long, math is broken")
+	}
+	lockHash := statedb.GetState(internalContractAddress, common.BytesToHash(key))
+	gasUsed += coldSloadCost
+	stateGas += coldSloadCost
+	if gas.SubGas(coldSloadCost) != nil {
+		// This contract does not revert. If the caller runs out of gas, we just stop
+		return gasUsed, stateGas, ErrOutOfGas
+	}
+	if (lockHash == common.Hash{}) {
+		// Lock doesn't exist, so add the new one here
+		statedb.SetState(internalContractAddress, common.BytesToHash(key), common.BytesToHash(lock.Bytes()))
+		gasUsed += sstoreSetGas
+		stateGas += sstoreSetGas
+		if gas.SubGas(sstoreSetGas) != nil {
+			return gasUsed, stateGas, ErrOutOfGas
+		}
+		key[28] = 0 // Set the 29th byte of the key to 0 for balance
+		statedb.SetState(internalContractAddress, common.BytesToHash(key), common.BytesToHash(balance.Bytes()))
+		gasUsed += sstoreSetGas
+		stateGas += sstoreSetGas
+		if gas.SubGas(sstoreSetGas) != nil {
+			return gasUsed, stateGas, ErrOutOfGas
+		}
+		// Increment the latest lock counter
+		latestLockNumber.Add(latestLockNumber, big1)
+		statedb.SetState(internalContractAddress, senderHash, common.BytesToHash(latestLockNumber.Bytes()))
+		gasUsed += sstoreSetGas
+		stateGas += sstoreSetGas
+		if gas.SubGas(sstoreSetGas) != nil {
+			return gasUsed, stateGas, ErrOutOfGas
+		}
+		// Addition of new lock successful
+		return gasUsed, stateGas, nil
+	} else { // This can only in the event of a bug (the latest lock number is wrong)
 		if gas.Gas() < requiredGas {
 			return gasUsed, stateGas, fmt.Errorf("insufficient gas to add new lock, required %d, got %d", requiredGas, gas.Gas())
 		}
+		log.Global.Errorf("latest lock number is wrong for address %s: %s %s", toAddr.String(), senderHash, latestLockHash.String())
+		latestLockNumber.Add(latestLockNumber, big1)
 		key := toAddr.Bytes()
 		// Append current lock to the key
-		key = binary.BigEndian.AppendUint64(key, currentLockNumber.Uint64())
+		key = binary.BigEndian.AppendUint64(key, latestLockNumber.Uint64())
 		key = append(key, byte(1)) // Set the 29th byte of the key to 1 for lockup
 		if len(key) > common.HashLength {
 			return gasUsed, stateGas, errors.New("lockup key is too long, math is broken")
@@ -677,11 +729,13 @@ func AddNewLock(blockContext BlockContext, statedb StateDB, toAddr common.Addres
 			if gas.SubGas(sstoreSetGas) != nil {
 				return gasUsed, stateGas, ErrOutOfGas
 			}
+			// Increment the latest lock counter
+			latestLockNumber.Add(latestLockNumber, big1)
+			statedb.SetState(internalContractAddress, senderHash, common.BytesToHash(latestLockNumber.Bytes()))
 			// Addition of new lock successful
 			return gasUsed, stateGas, nil
+		} else {
+			return gasUsed, stateGas, errors.New("latest lock number is wrong, math is broken")
 		}
-		// Lock exists, increment the current lock counter (but don't store it)
-		currentLockNumber.Add(currentLockNumber, big1)
 	}
-	return gasUsed, stateGas, errors.New("account has locked too many times, overflows int64")
 }

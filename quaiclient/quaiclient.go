@@ -70,6 +70,7 @@ func DialContext(ctx context.Context, rawurl string, logger *log.Logger) (*Clien
 			"attempts": attempts,
 			"delay":    delaySecs,
 			"url":      rawurl,
+			"err":      err,
 		}).Warn("Attempting to connect to go-quai node. Waiting and retrying...")
 
 		time.Sleep(time.Duration(delaySecs) * time.Second)

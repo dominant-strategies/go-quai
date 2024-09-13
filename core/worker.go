@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"runtime/debug"
 	"sort"
@@ -20,6 +21,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -54,6 +56,8 @@ const (
 	chainSideChanSize = 10
 
 	c_uncleCacheSize = 100
+
+	defaultCoinbaseLockup = 1
 )
 
 // environment is the worker's current environment and holds all
@@ -61,27 +65,29 @@ const (
 type environment struct {
 	signer types.Signer
 
-	state        *state.StateDB // apply state changes here
-	ancestors    mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family       mapset.Set     // family set (used for checking uncle invalidity)
-	tcount       int            // tx count in cycle
-	gasPool      *types.GasPool // available gas used to pack transactions
-	coinbase     common.Address
-	etxRLimit    int // Remaining number of cross-region ETXs that can be included
-	etxPLimit    int // Remaining number of cross-prime ETXs that can be included
-	parentOrder  *int
-	wo           *types.WorkObject
-	txs          []*types.Transaction
-	etxs         []*types.Transaction
-	utxoFees     *big.Int
-	quaiFees     *big.Int
-	subManifest  types.BlockManifest
-	receipts     []*types.Receipt
-	uncleMu      sync.RWMutex
-	uncles       map[common.Hash]*types.WorkObjectHeader
-	utxosCreate  []common.Hash
-	utxosDelete  []common.Hash
-	deletedUtxos map[common.Hash]struct{}
+	state            *state.StateDB // apply state changes here
+	ancestors        mapset.Set     // ancestor set (used for checking uncle parent validity)
+	family           mapset.Set     // family set (used for checking uncle invalidity)
+	tcount           int            // tx count in cycle
+	gasPool          *types.GasPool // available gas used to pack transactions
+	coinbase         common.Address
+	etxRLimit        int // Remaining number of cross-region ETXs that can be included
+	etxPLimit        int // Remaining number of cross-prime ETXs that can be included
+	parentOrder      *int
+	wo               *types.WorkObject
+	txs              []*types.Transaction
+	etxs             []*types.Transaction
+	utxoFees         *big.Int
+	quaiFees         *big.Int
+	subManifest      types.BlockManifest
+	receipts         []*types.Receipt
+	uncleMu          sync.RWMutex
+	uncles           map[common.Hash]*types.WorkObjectHeader
+	utxosCreate      []common.Hash
+	utxosDelete      []common.Hash
+	parentStateSize  *big.Int
+	quaiCoinbaseEtxs map[[21]byte]*big.Int
+	deletedUtxos     map[common.Hash]struct{}
 }
 
 // unclelist returns the contained uncles as the list format.
@@ -512,7 +518,9 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		w.coinbase = common.Zero
 	}
 	coinbase = w.coinbase // Use the preset address as the fee recipient
-
+	if _, err := coinbase.InternalAddress(); nodeCtx == common.ZONE_CTX && err != nil {
+		return nil, fmt.Errorf("invalid coinbase address %v: %v", coinbase, err)
+	}
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
@@ -541,7 +549,10 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		for i, uncle := range uncles {
 			reward := misc.CalculateReward(uncle)
 			uncleCoinbase := uncle.Coinbase()
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(i) + 1, Sender: uncleCoinbase}))
+			if _, err := uncleCoinbase.InternalAddress(); err != nil {
+				return nil, fmt.Errorf("invalid workshare coinbase address %v: %v", uncleCoinbase, err)
+			}
+			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(i) + 1, Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
 		}
 
 		// Fill pending transactions from the txpool
@@ -578,13 +589,13 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
 			blockFees := new(big.Int).Add(work.utxoFees, misc.QuaiToQi(primeTerminus.WorkObjectHeader(), work.quaiFees))
 			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase, Data: []byte{work.wo.Lock()}})
 			work.etxs[0] = coinbaseEtx
 		} else if coinbase.IsInQuaiLedgerScope() {
 			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
 			blockFees := new(big.Int).Add(work.quaiFees, misc.QiToQuai(primeTerminus.WorkObjectHeader(), work.utxoFees))
 			blockReward := new(big.Int).Add(coinbaseReward, blockFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &coinbase, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: 0, Sender: coinbase, Data: []byte{work.wo.Lock()}})
 			work.etxs[0] = coinbaseEtx
 		}
 	}
@@ -674,16 +685,18 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:       types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
-		state:        state,
-		coinbase:     coinbase,
-		ancestors:    mapset.NewSet(),
-		family:       mapset.NewSet(),
-		wo:           proposedWo,
-		uncles:       make(map[common.Hash]*types.WorkObjectHeader),
-		etxRLimit:    etxRLimit,
-		etxPLimit:    etxPLimit,
-		deletedUtxos: make(map[common.Hash]struct{}),
+		signer:           types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
+		state:            state,
+		coinbase:         coinbase,
+		ancestors:        mapset.NewSet(),
+		family:           mapset.NewSet(),
+		wo:               proposedWo,
+		uncles:           make(map[common.Hash]*types.WorkObjectHeader),
+		etxRLimit:        etxRLimit,
+		etxPLimit:        etxPLimit,
+		parentStateSize:  quaiStateSize,
+		quaiCoinbaseEtxs: make(map[[21]byte]*big.Int),
+		deletedUtxos:     make(map[common.Hash]struct{}),
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -740,12 +753,22 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	// 3) do not produce any receipts/logs
 	// 4) etx emit threshold numbers
 	if types.IsCoinBaseTx(tx) {
-		iAddr, err := tx.To().InternalAddress()
-		if err != nil {
-			return nil, false, errors.New("coinbase address is not in the chain scope")
+		if tx.To() == nil {
+			return nil, false, fmt.Errorf("coinbase tx %x has no recipient", tx.Hash())
 		}
+		if len(tx.Data()) == 0 {
+			return nil, false, fmt.Errorf("coinbase tx %x has no lockup data", tx.Hash())
+		}
+		if _, err := tx.To().InternalAddress(); err != nil {
+			return nil, false, fmt.Errorf("invalid coinbase address %v: %v", tx.To(), err)
+		}
+		lockupByte := tx.Data()[0]
 		if tx.To().IsInQiLedgerScope() {
-			value := tx.Value()
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+			if lockup.Uint64() < params.ConversionLockPeriod {
+				return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+			}
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
 			denominations := misc.FindMinDenominations(value)
 			outputIndex := uint16(0)
 			// Iterate over the denominations in descending order
@@ -760,14 +783,22 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 						break
 					}
 					// the ETX hash is guaranteed to be unique
-					utxoHash := types.UTXOHash(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), env.wo.Number(w.hc.NodeCtx()))))
+					utxoHash := types.UTXOHash(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lockup)))
 					env.utxosCreate = append(env.utxosCreate, utxoHash)
 					outputIndex++
 				}
 			}
 		} else if tx.To().IsInQuaiLedgerScope() {
-			// This includes the value and the fees
-			env.state.AddBalance(iAddr, tx.Value())
+			// Combine similar lockups (to address and lockup period) into a single lockup entry
+			coinbaseAddrWithLockup := [21]byte(append(tx.To().Bytes(), lockupByte))
+			if val, ok := env.quaiCoinbaseEtxs[coinbaseAddrWithLockup]; ok {
+				// Combine the values of the coinbase transactions
+				val.Add(val, tx.Value())
+				env.quaiCoinbaseEtxs[coinbaseAddrWithLockup] = val
+			} else {
+				// Add the new coinbase transaction to the map
+				env.quaiCoinbaseEtxs[coinbaseAddrWithLockup] = tx.Value() // this creates a new *big.Int
+			}
 		}
 		env.txs = append(env.txs, tx)
 		return []*types.Log{}, false, nil
@@ -776,7 +807,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		gasUsed := env.wo.GasUsed()
 		if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
 			txGas := tx.Gas()
-			lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(params.ConversionLockPeriod))
+			lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), new(big.Int).SetUint64(params.ConversionLockPeriod))
 			if env.parentOrder == nil {
 				return nil, false, errors.New("parent order not set")
 			}
@@ -1035,6 +1066,21 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			txs.Shift(from.Bytes20(), false)
 		}
 	}
+	// Process Quai coinbase lockups (push all of the same coinbases to a singe lockup for state storage efficiency)
+	lockupContractAddress := vm.LockupContractAddresses[[2]byte{w.chainConfig.Location[0], w.chainConfig.Location[1]}]
+	for addressWithLockup, value := range env.quaiCoinbaseEtxs {
+		addr := common.BytesToAddress(addressWithLockup[:20], w.chainConfig.Location)
+		lockupByte := addressWithLockup[20]
+		lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+		if lockup.Uint64() < params.ConversionLockPeriod {
+			return fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+		}
+		value := params.CalculateCoinbaseValueWithLockup(value, lockupByte)
+		_, _, err := vm.AddNewLock(env.parentStateSize, env.state, addr, new(types.GasPool).AddGas(math.MaxUint64), lockup, value, lockupContractAddress)
+		if err != nil {
+			return err
+		}
+	}
 	if len(qiTxsToRemove) > 0 {
 		w.txPool.AsyncRemoveQiTxs(qiTxsToRemove) // non-blocking
 	}
@@ -1085,6 +1131,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number(nodeCtx)
 	newWo := types.EmptyWorkObject(nodeCtx)
+	newWo.WorkObjectHeader().SetLock(defaultCoinbaseLockup)
 	newWo.SetParentHash(wo.Hash(), nodeCtx)
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		newWo.SetNumber(big.NewInt(1), nodeCtx)
@@ -1248,7 +1295,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			w.logger.WithField("err", err).Error("Failed to prepare header for sealing")
 			return nil, err
 		}
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Time(), newWo.Location(), newWo.Coinbase())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.Coinbase())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		env, err := w.makeEnv(parent, proposedWo, w.coinbase)
@@ -1298,7 +1345,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 		return env, nil
 	} else {
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Time(), newWo.Location(), newWo.Coinbase())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.Coinbase())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		return &environment{wo: proposedWo}, nil

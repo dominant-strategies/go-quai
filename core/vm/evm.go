@@ -216,7 +216,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if err := evm.Context.Transfer(evm.StateDB, caller.Address(), lockupContractAddress, value); err != nil {
 			return nil, gas, stateGas, err
 		}
-		gasUsed, stateGasUsed, err := AddNewLock(evm.Context, evm.StateDB, addr, new(types.GasPool).AddGas(gas), lock, evm.Context.BlockNumber, lockupContractAddress)
+		gasUsed, stateGasUsed, err := AddNewLock(evm.Context.QuaiStateSize, evm.StateDB, addr, new(types.GasPool).AddGas(gas), lock, evm.Context.BlockNumber, lockupContractAddress)
 		if gas > gasUsed {
 			gas = gas - gasUsed
 		} else {

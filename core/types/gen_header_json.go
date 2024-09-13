@@ -301,6 +301,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 		MixHash    common.Hash    `json:"mixHash" gencoden:"required"`
 		Time       hexutil.Uint64 `json:"timestamp" gencoden:"required"`
 		Nonce      BlockNonce     `json:"nonce" gencoden:"required"`
+		Lock 	   hexutil.Uint64 `json:"lock" gencoden:"required"`
 		Coinbase   common.Address `json:"coinbase" gencoden:"required"`
 	}
 
@@ -314,6 +315,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 	enc.Time = hexutil.Uint64(wh.Time())
 	enc.Nonce = wh.Nonce()
 	enc.Coinbase = wh.Coinbase()
+	enc.Lock = hexutil.Uint64(wh.Lock())
 
 	raw, err := json.Marshal(&enc)
 	return raw, err
@@ -331,6 +333,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 		MixHash	   common.Hash     `json:"mixHash" gencoden:"required"`
 		Time       hexutil.Uint64  `json:"timestamp" gencoden:"required"`
 		Nonce      BlockNonce      `json:"nonce" gencoden:"required"`
+		Lock 	   hexutil.Uint64  `json:"lock" gencoden:"required"`
 		Coinbase   common.Address  `json:"coinbase" gencoden:"required"`
 	}
 
@@ -352,6 +355,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 	wh.SetMixHash(dec.MixHash)
 	wh.SetTime(uint64(dec.Time))
 	wh.SetNonce(dec.Nonce)
+	wh.SetLock(uint8(dec.Lock))
 	wh.SetCoinbase(dec.Coinbase)
 	return nil
 }
