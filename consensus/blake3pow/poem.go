@@ -190,7 +190,9 @@ func (blake3pow *Blake3pow) WorkShareLogS(chain consensus.ChainHeaderReader, wo 
 			wsEntropyAdj := new(big.Float).Quo(new(big.Float).SetInt(common.Big2e64), bigMath.TwoToTheX(extraBits))
 			wsEntropy, _ = wsEntropyAdj.Int(wsEntropy)
 		} else {
-			wsEntropy = new(big.Int).Set(blake3pow.IntrinsicLogS(powHash))
+			cBigBits := blake3pow.IntrinsicLogS(powHash)
+			thresholdBigBits := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
+			wsEntropy = new(big.Int).Sub(cBigBits, thresholdBigBits)
 		}
 		// Discount 2) applies to all shares regardless of the weight
 		// a workshare cannot reference another workshare, it has to be either a block or an uncle
