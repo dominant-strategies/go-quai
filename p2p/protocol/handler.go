@@ -134,7 +134,7 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 
 			log.Global.Errorf("error reading message from stream: %s", err)
 			// TODO: handle error
-			return
+			continue
 		}
 
 		// Send to worker goroutines
