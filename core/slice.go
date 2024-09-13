@@ -634,6 +634,7 @@ func (sl *Slice) SetBestPh(pendingHeader *types.WorkObject) {
 	pendingHeader.WorkObjectHeader().SetHeaderHash(pendingHeader.Header().Hash())
 	sl.miner.worker.AddPendingWorkObjectBody(pendingHeader)
 	sl.bestPhMu.Lock()
+	rawdb.WriteBestPendingHeader(sl.sliceDb, pendingHeader)
 	sl.bestPh = pendingHeader
 	sl.bestPhMu.Unlock()
 	sl.logger.WithFields(log.Fields{"Number": pendingHeader.NumberArray(), "ParentHash": pendingHeader.ParentHashArray()}).Info("Best PH pick")
