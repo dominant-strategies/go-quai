@@ -179,16 +179,32 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 		}
 		v.hc.powHashCache.Add(wo.Hash(), powhash)
 	}
+	newBlockIntrinsic := v.engine.IntrinsicLogS(powhash)
+
+	// cannot have a pow filter when the current header is genesis
+	if v.hc.IsGenesisHash(v.hc.CurrentHeader().Hash()) {
+		return pubsub.ValidationAccept
+	}
+
+	currentHeaderPowHash, exists := v.hc.powHashCache.Peek(v.hc.CurrentHeader().Hash())
+	if !exists {
+		currentHeaderPowHash, err = v.engine.VerifySeal(v.hc.CurrentHeader().WorkObjectHeader())
+		if err != nil {
+			return pubsub.ValidationReject
+		}
+		v.hc.powHashCache.Add(v.hc.CurrentHeader().Hash(), currentHeaderPowHash)
+	}
+	currentHeaderIntrinsic := v.engine.IntrinsicLogS(currentHeaderPowHash)
+
 	// Check if the Block is atleast half the current difficulty in Zone Context,
 	// this makes sure that the nodes don't listen to the forks with the PowHash
 	//	with less than 50% of current difficulty
-	if v.hc.NodeCtx() == common.ZONE_CTX && new(big.Int).SetBytes(powhash.Bytes()).Cmp(new(big.Int).Div(v.engine.IntrinsicLogS(v.hc.CurrentHeader().Hash()), big.NewInt(2))) < 0 {
+	if v.hc.NodeCtx() == common.ZONE_CTX && newBlockIntrinsic.Cmp(new(big.Int).Div(currentHeaderIntrinsic, big.NewInt(2))) < 0 {
 		return pubsub.ValidationIgnore
 	}
 
-	currentIntrinsicS := v.engine.IntrinsicLogS(v.hc.CurrentHeader().Hash())
 	currentS := v.hc.CurrentHeader().ParentEntropy(v.hc.NodeCtx())
-	MaxAllowableEntropyDist := new(big.Int).Mul(currentIntrinsicS, big.NewInt(c_maxAllowableEntropyDist))
+	MaxAllowableEntropyDist := new(big.Int).Mul(currentHeaderIntrinsic, big.NewInt(c_maxAllowableEntropyDist))
 
 	broadCastEntropy := wo.ParentEntropy(common.ZONE_CTX)
 
