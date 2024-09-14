@@ -684,6 +684,14 @@ func (b *QuaiAPIBackend) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 	return b.quai.core.SanityCheckWorkObjectShareViewBody(wo)
 }
 
+func (b *QuaiAPIBackend) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool) {
+	return b.quai.core.CheckInCalcOrderCache(hash)
+}
+
+func (b *QuaiAPIBackend) AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int) {
+	b.quai.core.AddToCalcOrderCache(hash, order, intrinsicS)
+}
+
 func (b *QuaiAPIBackend) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
 	return b.quai.core.ApplyPoWFilter(wo)
 }

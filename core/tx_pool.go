@@ -165,6 +165,8 @@ type blockChain interface {
 	GetHeaderByHash(common.Hash) *types.WorkObject
 	GetBlockByHash(common.Hash) *types.WorkObject
 	GetMaxTxInWorkShare() uint64
+	CheckInCalcOrderCache(common.Hash) (*big.Int, int, bool)
+	AddToCalcOrderCache(common.Hash, int, *big.Int)
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.

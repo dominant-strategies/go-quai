@@ -15,6 +15,11 @@ import (
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types.WorkObject) (*big.Int, int, error) {
+	// check if the order for this block has already been computed
+	intrinsicS, order, exists := chain.CheckInCalcOrderCache(header.Hash())
+	if exists {
+		return intrinsicS, order, nil
+	}
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if header.NumberU64(nodeCtx) == 0 {
 		return big0, common.PRIME_CTX, nil
@@ -29,7 +34,7 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 	}
 
 	// Get entropy reduction of this header
-	intrinsicS := blake3pow.IntrinsicLogS(header.Hash())
+	intrinsicS = blake3pow.IntrinsicLogS(header.Hash())
 	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
 	zoneThresholdS := blake3pow.IntrinsicLogS(common.BytesToHash(target.Bytes()))
 
@@ -43,6 +48,7 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 
 	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
 	if intrinsicS.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaSPrime.Cmp(primeDeltaSTarget) > 0 {
+		chain.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicS)
 		return intrinsicS, common.PRIME_CTX, nil
 	}
 
@@ -53,10 +59,12 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 	regionDeltaSTarget = new(big.Int).Mul(zoneThresholdS, regionDeltaSTarget)
 	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdS, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
 	if intrinsicS.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
+		chain.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicS)
 		return intrinsicS, common.REGION_CTX, nil
 	}
 
 	// Zone case
+	chain.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicS)
 	return intrinsicS, common.ZONE_CTX, nil
 }
 

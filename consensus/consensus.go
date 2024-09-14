@@ -108,6 +108,8 @@ type ChainHeaderReader interface {
 	// workshare and the workobject in which that workshare is included.
 	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
 	Database() ethdb.Database
+
+	BlockReader
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -234,6 +236,8 @@ type Engine interface {
 
 type BlockReader interface {
 	GetBlockByHash(hash common.Hash) *types.WorkObject
+	CheckInCalcOrderCache(common.Hash) (*big.Int, int, bool)
+	AddToCalcOrderCache(common.Hash, int, *big.Int)
 }
 
 func TargetToDifficulty(target *big.Int) *big.Int {

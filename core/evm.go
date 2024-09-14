@@ -52,6 +52,9 @@ type ChainContext interface {
 	// CheckIfEtxIsEligible checks if the given slice is eligible to accept the
 	// etx based on the EtxEligibleSlices
 	CheckIfEtxIsEligible(common.Hash, common.Location) bool
+
+	CheckInCalcOrderCache(common.Hash) (*big.Int, int, bool)
+	AddToCalcOrderCache(common.Hash, int, *big.Int)
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.

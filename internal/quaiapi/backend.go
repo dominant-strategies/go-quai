@@ -110,6 +110,8 @@ type Backend interface {
 	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
 	GeneratePendingHeader(block *types.WorkObject, fill bool, stopChan chan struct{}) (*types.WorkObject, error)
 	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
+	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
+	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)
 
 	consensus.ChainHeaderReader
 	TxMiningEnabled() bool

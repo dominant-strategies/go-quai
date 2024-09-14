@@ -895,6 +895,14 @@ func (c *Core) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 	return c.sl.hc.GetHeaderByHash(hash)
 }
 
+func (c *Core) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool) {
+	return c.sl.hc.CheckInCalcOrderCache(hash)
+}
+
+func (c *Core) AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int) {
+	c.sl.hc.AddToCalcOrderCache(hash, order, intrinsicS)
+}
+
 // GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (c *Core) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkObject {

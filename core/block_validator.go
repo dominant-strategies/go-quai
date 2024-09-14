@@ -170,9 +170,14 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 }
 
 func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
-	powhash, err := v.engine.VerifySeal(wo.WorkObjectHeader())
-	if err != nil {
-		return pubsub.ValidationReject
+	var err error
+	powhash, exists := v.hc.powHashCache.Peek(wo.Hash())
+	if !exists {
+		powhash, err = v.engine.VerifySeal(wo.WorkObjectHeader())
+		if err != nil {
+			return pubsub.ValidationReject
+		}
+		v.hc.powHashCache.Add(wo.Hash(), powhash)
 	}
 	// Check if the Block is atleast half the current difficulty in Zone Context,
 	// this makes sure that the nodes don't listen to the forks with the PowHash

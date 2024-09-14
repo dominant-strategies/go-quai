@@ -32,7 +32,14 @@ const (
 	numberCacheLimit      = 2048
 	c_subRollupCacheSize  = 50
 	primeHorizonThreshold = 20
+	c_powCacheLimit       = 1000
+	c_calcOrderCacheLimit = 10000
 )
+
+type calcOrderResponse struct {
+	intrinsicS *big.Int
+	order      int
+}
 
 // getPendingEtxsRollup gets the pendingEtxsRollup rollup from appropriate Region
 type getPendingEtxsRollup func(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxsRollup, error)
@@ -77,6 +84,10 @@ type HeaderChain struct {
 	slicesRunning   []common.Location
 	processingState bool
 
+	powHashCache *lru.Cache[common.Hash, common.Hash]
+
+	calcOrderCache *lru.Cache[common.Hash, calcOrderResponse]
+
 	logger *log.Logger
 }
 
@@ -102,6 +113,12 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 
 	numberCache, _ := lru.New[common.Hash, uint64](numberCacheLimit)
 	hc.numberCache = numberCache
+
+	powHashCache, _ := lru.New[common.Hash, common.Hash](c_powCacheLimit)
+	hc.powHashCache = powHashCache
+
+	calcOrderCache, _ := lru.New[common.Hash, calcOrderResponse](c_calcOrderCacheLimit)
+	hc.calcOrderCache = calcOrderCache
 
 	genesisHash := hc.GetGenesisHashes()[0]
 	genesisNumber := rawdb.ReadHeaderNumber(db, genesisHash)
@@ -730,6 +747,22 @@ func (hc *HeaderChain) Stop() {
 		hc.bc.processor.Stop()
 	}
 	hc.logger.Info("headerchain stopped")
+}
+
+// CheckInCalcOrderCache checks if the hash exists in the calc order cache
+// and if if the hash exists it returns the order value
+func (hc *HeaderChain) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool) {
+	calcOrderResponse, exists := hc.calcOrderCache.Peek(hash)
+	if !exists {
+		return common.Big0, -1, false
+	} else {
+		return calcOrderResponse.intrinsicS, calcOrderResponse.order, true
+	}
+}
+
+// AddToCalcOrderCache adds the hash and the order pair to the calcorder cache
+func (hc *HeaderChain) AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int) {
+	hc.calcOrderCache.Add(hash, calcOrderResponse{intrinsicS: intrinsicS, order: order})
 }
 
 // Empty checks if the headerchain is empty.
