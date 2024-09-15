@@ -38,7 +38,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 )
 
-var PruneDepth = uint64(10000) // Number of blocks behind in which we begin pruning old block data
+var PruneDepth = uint64(1000000) // Number of blocks behind in which we begin pruning old block data
 
 // ChainIndexerBackend defines the methods needed to process chain segments in
 // the background and write the segment results into the database. These can be
@@ -204,7 +204,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 
 	// Fire the initial new head event to start any outstanding processing
 	c.newHead(currentHeader.NumberU64(nodeCtx), false)
-	qiIndexerCh := make(chan *types.WorkObject, 10000)
+	qiIndexerCh := make(chan *types.WorkObject, 100)
 	go c.indexerLoop(currentHeader, qiIndexerCh, nodeCtx, config)
 	for {
 		select {
@@ -249,6 +249,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			errc <- nil
 			return
 		case block := <-qiIndexerCh:
+			start := time.Now()
 			if block.NumberU64(nodeCtx) > PruneDepth {
 				// Ensure block is canonical before pruning
 				if rawdb.ReadCanonicalHash(c.chainDb, block.NumberU64(nodeCtx)) != block.Hash() {
@@ -259,13 +260,16 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 				}
 				c.PruneOldBlockData(block.NumberU64(nodeCtx) - PruneDepth)
 			}
+			time1 := time.Since(start)
 			var validUtxoIndex bool
 			var addressOutpoints map[string]map[string]*types.OutpointAndDenomination
 			if c.indexAddressUtxos {
 				validUtxoIndex = true
 				addressOutpoints = make(map[string]map[string]*types.OutpointAndDenomination)
 			}
+			time2 := time.Since(start)
 
+			var time3, time4, time5 time.Duration
 			if block.ParentHash(nodeCtx) != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO: This seems a bit brittle, can we detect this case explicitly?
@@ -286,12 +290,18 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 								reorgHeaders = append(reorgHeaders, h)
 							}
 
+							c.logger.Warn("ChainIndexer: Reorging the utxo indexer of len", len(reorgHeaders))
+
+							time3 = time.Since(start)
+
 							// Reorg out all outpoints of the reorg headers
 							err := c.reorgUtxoIndexer(reorgHeaders, addressOutpoints, nodeCtx, config)
 							if err != nil {
 								c.logger.Error("Failed to reorg utxo indexer", "err", err)
 								validUtxoIndex = false
 							}
+
+							time4 = time.Since(start)
 
 							// Add new blocks from current hash back to common ancestor
 							for curr := block; curr.Hash() != h.Hash(); {
@@ -305,16 +315,24 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 							}
 						}
 
+						time5 = time.Since(start)
+
 						c.newHead(h.NumberU64(nodeCtx), true)
 					}
 				}
 			}
 
+			time6 := time.Since(start)
+
 			if c.indexAddressUtxos {
 				c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, block)
 			}
 
+			time7 := time.Since(start)
+
 			c.newHead(block.NumberU64(nodeCtx), false)
+
+			time8 := time.Since(start)
 
 			if c.indexAddressUtxos && validUtxoIndex {
 				err := rawdb.WriteAddressOutpoints(c.chainDb, addressOutpoints)
@@ -323,13 +341,31 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 				}
 			}
 
+			time9 := time.Since(start)
+
 			for key, _ := range addressOutpoints {
 				addressOutpoints[key] = nil
 			}
 			addressOutpoints = nil
 
+			time10 := time.Since(start)
 			prevHeader, prevHash = block, block.Hash()
+
+			c.logger.Info("ChainIndexer: setting the prevHeader and prevHash", prevHeader.NumberArray(), prevHash)
+			c.logger.WithFields(log.Fields{
+				"time1":  common.PrettyDuration(time1),
+				"time2":  common.PrettyDuration(time2),
+				"time3":  common.PrettyDuration(time3),
+				"time4":  common.PrettyDuration(time4),
+				"time5":  common.PrettyDuration(time5),
+				"time6":  common.PrettyDuration(time6),
+				"time7":  common.PrettyDuration(time7),
+				"time8":  common.PrettyDuration(time8),
+				"time9":  common.PrettyDuration(time9),
+				"time10": common.PrettyDuration(time10),
+			}).Info("Times in indexerLoop")
 		}
+
 	}
 }
 
