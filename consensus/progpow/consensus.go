@@ -560,6 +560,10 @@ func (progpow *Progpow) IsDomCoincident(chain consensus.ChainHeaderReader, heade
 }
 
 func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
+	hashes, ok := progpow.hashCache.Peek(header.Hash())
+	if ok {
+		return common.Hash(hashes.mixHash), common.Hash(hashes.workHash)
+	}
 	powLight := func(size uint64, cache []uint32, hash common.Hash, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 		ethashCache := progpow.cache(blockNumber)
 		if ethashCache.cDag == nil {
@@ -577,6 +581,8 @@ func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash
 	header.PowDigest.Store(mixHash)
 	header.PowHash.Store(powHash)
 
+	// Cache the hash
+	progpow.hashCache.Add(header.Hash(), mixHashWorkHash{mixHash: mixHash.Bytes(), workHash: powHash.Bytes()})
 	// Caches are unmapped in a finalizer. Ensure that the cache stays alive
 	// until after the call to hashimotoLight so it's not unmapped while being used.
 	runtime.KeepAlive(cache)
