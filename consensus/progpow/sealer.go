@@ -141,7 +141,9 @@ func (progpow *Progpow) MineToThreshold(workObject *types.WorkObject, workShareT
 	nodeCtx := progpow.config.NodeLocation.Context()
 
 	// Start generating random nonces until we abort or find a good one
+	progpow.lock.Lock()
 	seed := progpow.rand.Uint64()
+	progpow.lock.Unlock()
 	var (
 		attempts = int64(0)
 		nonce    = seed

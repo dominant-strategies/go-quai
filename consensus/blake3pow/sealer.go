@@ -125,7 +125,6 @@ func (blake3pow *Blake3pow) Mine(header *types.WorkObject, abort <-chan struct{}
 	diff := new(big.Int).Set(header.Difficulty())
 	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
 	workShareThreshold := c - params.WorkSharesThresholdDiff
-
 	blake3pow.MineToThreshold(header, workShareThreshold, abort, found)
 }
 
@@ -139,7 +138,9 @@ func (blake3pow *Blake3pow) MineToThreshold(workObject *types.WorkObject, workSh
 	target := new(big.Int).Div(big2e256, workShareDiff)
 
 	// Start generating random nonces until we abort or find a good one
+	blake3pow.lock.Lock()
 	seed := blake3pow.rand.Uint64()
+	blake3pow.lock.Unlock()
 	var (
 		attempts  = int64(0)
 		nonce     = seed
