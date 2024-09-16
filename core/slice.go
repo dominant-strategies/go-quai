@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -93,8 +94,7 @@ type Slice struct {
 	badHashesCache map[common.Hash]bool
 	logger         *log.Logger
 
-	bestPh   *types.WorkObject
-	bestPhMu sync.RWMutex
+	bestPh atomic.Value
 
 	appendTimeCache *lru.Cache[common.Hash, time.Duration]
 }
@@ -452,13 +452,10 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 	for {
 		select {
 		case asyncPh := <-sl.asyncPhCh:
-			sl.bestPhMu.Lock()
-			if sl.bestPh.ParentHash(common.ZONE_CTX) == asyncPh.ParentHash(common.ZONE_CTX) {
-				combinedPendingHeader := sl.combinePendingHeader(asyncPh, sl.bestPh, common.ZONE_CTX, true)
-				sl.bestPhMu.Unlock()
+			bestPh := sl.ReadBestPh()
+			if bestPh.ParentHash(common.ZONE_CTX) == asyncPh.ParentHash(common.ZONE_CTX) {
+				combinedPendingHeader := sl.combinePendingHeader(asyncPh, bestPh, common.ZONE_CTX, true)
 				sl.SetBestPh(combinedPendingHeader)
-			} else {
-				sl.bestPhMu.Unlock()
 			}
 		case <-sl.asyncPhSub.Err():
 			return
@@ -466,6 +463,15 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 			return
 		}
 	}
+}
+
+func (sl *Slice) WriteBestPh(bestPh *types.WorkObject) {
+	bestPhCopy := types.CopyWorkObject(bestPh)
+	sl.bestPh.Store(bestPhCopy)
+}
+
+func (sl *Slice) ReadBestPh() *types.WorkObject {
+	return sl.bestPh.Load().(*types.WorkObject)
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
@@ -615,9 +621,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.WorkObject, domTerminus c
 
 // GetPendingHeader is used by the miner to request the current pending header
 func (sl *Slice) GetPendingHeader() (*types.WorkObject, error) {
-	sl.bestPhMu.Lock()
-	defer sl.bestPhMu.Unlock()
-	phCopy := types.CopyWorkObject(sl.bestPh)
+	phCopy := types.CopyWorkObject(sl.ReadBestPh())
 	return phCopy, nil
 }
 
@@ -626,10 +630,8 @@ func (sl *Slice) SetBestPh(pendingHeader *types.WorkObject) {
 	pendingHeader.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
 	pendingHeader.WorkObjectHeader().SetHeaderHash(pendingHeader.Header().Hash())
 	sl.miner.worker.AddPendingWorkObjectBody(pendingHeader)
-	sl.bestPhMu.Lock()
 	rawdb.WriteBestPendingHeader(sl.sliceDb, pendingHeader)
-	sl.bestPh = pendingHeader
-	sl.bestPhMu.Unlock()
+	sl.WriteBestPh(pendingHeader)
 	sl.logger.WithFields(log.Fields{"Number": pendingHeader.NumberArray(), "ParentHash": pendingHeader.ParentHashArray()}).Info("Best PH pick")
 	sl.miner.worker.pendingHeaderFeed.Send(pendingHeader)
 }
@@ -1075,12 +1077,10 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool, stopC
 		}
 	}
 	stateProcessTime := time.Since(start)
-	if sl.bestPh == nil {
+	if sl.ReadBestPh() == nil {
 		return nil, errors.New("best ph is nil")
 	}
-	sl.bestPhMu.Lock()
-	bestPhCopy := types.CopyWorkObject(sl.bestPh)
-	sl.bestPhMu.Unlock()
+	bestPhCopy := types.CopyWorkObject(sl.ReadBestPh())
 	// If we are trying to recompute the pending header on the same parent block
 	// we can return what we already have
 	if bestPhCopy != nil && bestPhCopy.ParentHash(sl.NodeCtx()) == block.Hash() {
@@ -1135,7 +1135,7 @@ func (sl *Slice) loadLastState() error {
 	if sl.ProcessingState() {
 		sl.miner.worker.LoadPendingBlockBody()
 	}
-	sl.bestPh = rawdb.ReadBestPendingHeader(sl.sliceDb)
+	sl.WriteBestPh(rawdb.ReadBestPendingHeader(sl.sliceDb))
 	return nil
 }
 
@@ -1150,7 +1150,7 @@ func (sl *Slice) Stop() {
 	rawdb.WriteBadHashesList(sl.sliceDb, badHashes)
 	sl.miner.worker.StorePendingBlockBody()
 
-	rawdb.WriteBestPendingHeader(sl.sliceDb, sl.bestPh)
+	rawdb.WriteBestPendingHeader(sl.sliceDb, sl.ReadBestPh())
 
 	sl.scope.Close()
 	close(sl.quit)
@@ -1425,11 +1425,9 @@ func (sl *Slice) asyncWorkShareUpdateLoop() {
 					}
 				}
 				hash := types.DeriveSha(txs, trie.NewStackTrie(nil))
-				sl.bestPhMu.Lock()
-				bestPh := types.CopyWorkObject(sl.bestPh)
+				bestPh := types.CopyWorkObject(sl.ReadBestPh())
 				// Update the tx hash
 				bestPh.WorkObjectHeader().SetTxHash(hash)
-				sl.bestPhMu.Unlock()
 				sl.SetBestPh(bestPh)
 				sl.txPool.broadcastSetCache.Add(hash, txs)
 			}
