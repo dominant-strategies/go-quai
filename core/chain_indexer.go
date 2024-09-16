@@ -204,7 +204,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.WorkObject, events chan Ch
 
 	// Fire the initial new head event to start any outstanding processing
 	c.newHead(currentHeader.NumberU64(nodeCtx), false)
-	qiIndexerCh := make(chan *types.WorkObject, 100)
+	qiIndexerCh := make(chan *types.WorkObject, 10000)
 	go c.indexerLoop(currentHeader, qiIndexerCh, nodeCtx, config)
 	for {
 		select {
