@@ -25,10 +25,11 @@ import (
 const (
 	// c_expansionChSize is the size of the chain head channel listening to new
 	// expansion events
-	c_expansionChSize      = 10
-	c_recentBlockCacheSize = 100
-	c_ancestorCheckDist    = 10000
-	c_chainEventChSize     = 1000
+	c_expansionChSize            = 10
+	c_recentBlockCacheSize       = 100
+	c_ancestorCheckDist          = 10000
+	c_chainEventChSize           = 1000
+	c_buildPendingHeadersTimeout = 5 * time.Second
 )
 
 var (
@@ -506,9 +507,13 @@ func PrintConstraintMap(constraintMap map[string]common.Hash) {
 }
 
 func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
-
+	timer := time.NewTimer(c_buildPendingHeadersTimeout)
+	defer timer.Stop()
 	select {
 	case <-stopChan:
+		return
+	case <-timer.C:
+		log.Global.Warn("Build pending headers exited after timeout")
 		return
 	default:
 		badHashes := make(map[common.Hash]bool)
