@@ -181,6 +181,11 @@ var (
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	LockupByteToBlockDepth            = make(map[uint8]uint64)
 	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
+
+	ExchangeRate = big.NewInt(1000000000000000) // This is the initial exchange rate in Qi per Quai in Its/Qit
+	// These numbers should be "equivalent" to the initial conversion rate
+	QuaiToQiConversionBase = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
+	QiToQuaiConversionBase = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
 )
 
 func init() {

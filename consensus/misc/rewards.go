@@ -36,6 +36,11 @@ func CalculateQiReward(header *types.WorkObjectHeader) *big.Int {
 	return big.NewInt(1000)
 }
 
+// CalculateExchangeRate based on the quai to qi and qi to quai exchange rates
+func CalculateExchangeRate(quaiToQi *big.Int, qiToQuai *big.Int) *big.Int {
+	return new(big.Int).Div(quaiToQi, qiToQuai)
+}
+
 // FindMinDenominations finds the minimum number of denominations to make up the reward
 func FindMinDenominations(reward *big.Int) map[uint8]uint64 {
 	// Store the count of each denomination used (map denomination to count)

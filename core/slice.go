@@ -457,7 +457,7 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 		case asyncPh := <-sl.asyncPhCh:
 			sl.hc.headermu.Lock()
 			bestPh := sl.ReadBestPh()
-			if bestPh.ParentHash(common.ZONE_CTX) == asyncPh.ParentHash(common.ZONE_CTX) {
+			if asyncPh != nil && bestPh != nil && bestPh.ParentHash(common.ZONE_CTX) == asyncPh.ParentHash(common.ZONE_CTX) {
 				combinedPendingHeader := sl.combinePendingHeader(asyncPh, bestPh, common.ZONE_CTX, true)
 				sl.SetBestPh(combinedPendingHeader)
 			}
@@ -898,6 +898,9 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetExpansionNumber(header.ExpansionNumber())
 		combinedPendingHeader.Header().SetEtxEligibleSlices(header.EtxEligibleSlices())
 		combinedPendingHeader.Header().SetInterlinkRootHash(header.InterlinkRootHash())
+		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
+		combinedPendingHeader.Header().SetQiToQuai(header.QiToQuai())
+		combinedPendingHeader.Header().SetQuaiToQi(header.QuaiToQi())
 	}
 
 	if inSlice {

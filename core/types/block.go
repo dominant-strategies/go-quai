@@ -115,6 +115,9 @@ type Header struct {
 	stateLimit               uint64         `json:"stateLimit" 			  gencodec:"required"`
 	stateUsed                uint64         `json:"stateUsed"             gencodec:"required"`
 	secondaryCoinbase        common.Address `json:secondaryCoinbase       gencodec:"required"`
+	exchangeRate             *big.Int       `json:"exchangeRate"		  gencodec:"required"`
+	quaiToQi                 *big.Int       `json:"quaiToQi"			  gencodec:"required"`
+	qiToQuai                 *big.Int       `json:"qiToQuai"			  gencodec:"required"`
 
 	// caches
 	hash     atomic.Value
@@ -150,6 +153,9 @@ func EmptyHeader() *Header {
 	h.primeTerminusHash = EmptyRootHash
 	h.interlinkRootHash = EmptyRootHash
 	h.secondaryCoinbase = common.Address{}
+	h.exchangeRate = big.NewInt(0)
+	h.quaiToQi = big.NewInt(0)
+	h.qiToQuai = big.NewInt(0)
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
@@ -219,6 +225,9 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	efficiencyScore := uint64(h.EfficiencyScore())
 	thresholdCount := uint64(h.ThresholdCount())
 	expansionNumber := uint64(h.ExpansionNumber())
+	exchangeRate := h.exchangeRate.Bytes()
+	quaiToQi := h.quaiToQi.Bytes()
+	qiToQuai := h.qiToQuai.Bytes()
 
 	protoHeader := &ProtoHeader{
 		UncleHash:         &uncleHash,
@@ -244,6 +253,9 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		StateLimit:        &stateLimit,
 		StateUsed:         &stateUsed,
 		Extra:             h.Extra(),
+		ExchangeRate:      exchangeRate,
+		QuaiToQi:          quaiToQi,
+		QiToQuai:          qiToQuai,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -342,6 +354,15 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.SecondaryCoinbase == nil {
 		return errors.New("missing required field 'secondaryCoinbase' in Header")
 	}
+	if protoHeader.ExchangeRate == nil {
+		return errors.New("missing required field 'ExchangeRate' in Header")
+	}
+	if protoHeader.QuaiToQi == nil {
+		return errors.New("missing required field 'QuaiToQi' in Header")
+	}
+	if protoHeader.QiToQuai == nil {
+		return errors.New("missing required field 'QiToQuai' in Header")
+	}
 
 	// Initialize the array fields before setting
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
@@ -385,6 +406,9 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.SetExpansionNumber(uint8(protoHeader.GetExpansionNumber()))
 	h.SetEtxEligibleSlices(common.BytesToHash(protoHeader.GetEtxEligibleSlices().GetValue()))
 	h.SetSecondaryCoinbase(common.BytesToAddress(protoHeader.GetSecondaryCoinbase(), location))
+	h.SetExchangeRate(new(big.Int).SetBytes(protoHeader.GetExchangeRate()))
+	h.SetQuaiToQi(new(big.Int).SetBytes(protoHeader.GetQuaiToQi()))
+	h.SetQiToQuai(new(big.Int).SetBytes(protoHeader.GetQiToQuai()))
 
 	return nil
 }
@@ -424,6 +448,9 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"stateLimit":        hexutil.Uint64(h.StateLimit()),
 		"stateUsed":         hexutil.Uint64(h.StateUsed()),
 		"secondaryCoinbase": h.SecondaryCoinbase().Hex(),
+		"exchangeRate":      (*hexutil.Big)(h.ExchangeRate()),
+		"quaiToQi":          (*hexutil.Big)(h.QuaiToQi()),
+		"qiToQuai":          (*hexutil.Big)(h.QiToQuai()),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth-1)
@@ -536,6 +563,9 @@ func (h *Header) InterlinkRootHash() common.Hash { return h.interlinkRootHash }
 func (h *Header) SecondaryCoinbase() common.Address {
 	return h.secondaryCoinbase
 }
+func (h *Header) ExchangeRate() *big.Int { return h.exchangeRate }
+func (h *Header) QuaiToQi() *big.Int     { return h.quaiToQi }
+func (h *Header) QiToQuai() *big.Int     { return h.qiToQuai }
 
 func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -688,6 +718,24 @@ func (h *Header) SetSecondaryCoinbase(val common.Address) {
 	h.secondaryCoinbase = val
 }
 
+func (h *Header) SetExchangeRate(val *big.Int) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.exchangeRate = new(big.Int).Set(val)
+}
+
+func (h *Header) SetQuaiToQi(val *big.Int) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.quaiToQi = new(big.Int).Set(val)
+}
+
+func (h *Header) SetQiToQuai(val *big.Int) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.qiToQuai = new(big.Int).Set(val)
+}
+
 // Array accessors
 func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
 func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
@@ -716,6 +764,9 @@ func (h *Header) SealEncode() *ProtoHeader {
 	gasUsed := h.GasUsed()
 	stateLimit := h.StateLimit()
 	stateUsed := h.StateUsed()
+	exchangeRate := h.exchangeRate.Bytes()
+	quaiToQi := h.quaiToQi.Bytes()
+	qiToQuai := h.qiToQuai.Bytes()
 
 	protoSealData := &ProtoHeader{
 		UncleHash:         &uncleHash,
@@ -741,6 +792,9 @@ func (h *Header) SealEncode() *ProtoHeader {
 		ExpansionNumber:   &expansionNumber,
 		Extra:             h.Extra(),
 		SecondaryCoinbase: h.SecondaryCoinbase().Bytes(),
+		ExchangeRate:      exchangeRate,
+		QuaiToQi:          quaiToQi,
+		QiToQuai:          qiToQuai,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -925,6 +979,9 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetBaseFee(h.BaseFee())
 	cpy.SetStateLimit(h.StateLimit())
 	cpy.SetStateUsed(h.StateUsed())
+	cpy.SetExchangeRate(h.ExchangeRate())
+	cpy.SetQuaiToQi(h.QuaiToQi())
+	cpy.SetQiToQuai(h.QiToQuai())
 	return &cpy
 }
 

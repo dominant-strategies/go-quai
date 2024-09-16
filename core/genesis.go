@@ -293,6 +293,10 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	wo.Header().SetStateUsed(0)
 	wo.Header().SetEtxSetRoot(types.EmptyRootHash)
 	wo.Header().SetSecondaryCoinbase(common.Zero)
+	wo.Header().SetExchangeRate(params.ExchangeRate)
+	wo.Header().SetQuaiToQi(params.QuaiToQiConversionBase)
+	wo.Header().SetQiToQuai(params.QiToQuaiConversionBase)
+
 	if g.GasLimit == 0 {
 		wo.Header().SetGasLimit(params.GenesisGasLimit)
 	}

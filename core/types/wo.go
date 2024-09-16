@@ -404,6 +404,18 @@ func (wo *WorkObject) InterlinkHashes() common.Hashes {
 	return wo.Body().InterlinkHashes()
 }
 
+func (wo *WorkObject) ExchangeRate() *big.Int {
+	return wo.Header().ExchangeRate()
+}
+
+func (wo *WorkObject) QuaiToQi() *big.Int {
+	return wo.Header().QuaiToQi()
+}
+
+func (wo *WorkObject) QiToQuai() *big.Int {
+	return wo.Header().QiToQuai()
+}
+
 func (wo *WorkObject) QiTransactions() []*Transaction {
 	qiTxs := make([]*Transaction, 0)
 	for _, t := range wo.Transactions() {

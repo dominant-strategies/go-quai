@@ -39,6 +39,9 @@ message ProtoHeader {
   optional uint64 state_used = 31;
   optional bytes quai_state_size = 32;
   optional bytes secondary_coinbase = 33;
+  optional bytes exchange_rate = 34;
+  optional bytes quai_to_qi = 35;
+  optional bytes qi_to_quai = 36;
 }
 
 message ProtoTransaction {
