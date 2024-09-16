@@ -38,6 +38,9 @@ message ProtoHeader {
   optional uint64 state_limit = 30;
   optional uint64 state_used = 31;
   optional bytes quai_state_size = 32;
+  optional bytes exchange_rate = 33;
+  optional bytes quai_to_qi = 34;
+  optional bytes qi_to_quai = 35;
 }
 
 message ProtoTransaction {

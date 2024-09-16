@@ -42,6 +42,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		StateLimit     					hexutil.Uint64   		`json:"stateLimit"      			gencodec:"required"`
 		StateUsed                       hexutil.Uint64          `json:"stateUsed"                   gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
+		ExchangeRate					*hexutil.Big			`json:"exchangeRate"				gencodec:"required"`
+		QuaiToQi 						*hexutil.Big 			`json:"quaiToQi" 					gencodec:"required"`
+		QiToQuai 						*hexutil.Big 			`json:"qiToQuai" 					gencodec:"required"`
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
@@ -82,6 +85,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.StateLimit = hexutil.Uint64(h.StateLimit())
 	enc.StateUsed = hexutil.Uint64(h.StateUsed())
 	enc.Extra = hexutil.Bytes(h.Extra())
+	enc.ExchangeRate = (*hexutil.Big)(h.ExchangeRate())
+	enc.QuaiToQi = (*hexutil.Big)(h.QuaiToQi())
+	enc.QiToQuai = (*hexutil.Big)(h.QiToQuai())
 	raw, err := json.Marshal(&enc)
 	return raw, err
 }
@@ -117,6 +123,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		StateLimit                      *hexutil.Uint64         `json:"stateLimit"                  gencodec:"required"`
 		StateUsed                       *hexutil.Uint64         `json:"stateUsed"                   gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
+		ExchangeRate					*hexutil.Big			`json:"exchangeRate"				gencodec:"required"`
+		QuaiToQi 						*hexutil.Big 			`json:"quaiToQi" 					gencodec:"required"`
+		QiToQuai 						*hexutil.Big 			`json:"qiToQuai" 					gencodec:"required"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -202,6 +211,15 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.QuaiStateSize == nil {
 		return errors.New("missing required field 'quaiStateSize' for Header")
 	}
+	if dec.ExchangeRate == nil {
+		return errors.New("missing required field 'exchangeRate' for Header")
+	}
+	if dec.QuaiToQi == nil {
+		return errors.New("missing required field 'quaiToQi' for Header")
+	}
+	if dec.QiToQuai == nil {
+		return errors.New("missing required field 'qiToQuai' for Header")
+	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
@@ -256,6 +274,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetStateLimit(uint64(*dec.StateLimit))
 	h.SetStateUsed(uint64(*dec.StateUsed))
 	h.SetExtra(dec.Extra)
+	h.SetExchangeRate((*big.Int)(dec.ExchangeRate))
+	h.SetQuaiToQi((*big.Int)(dec.QuaiToQi))
+	h.SetQiToQuai((*big.Int)(dec.QiToQuai))
 	return nil
 }
 

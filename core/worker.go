@@ -1264,6 +1264,44 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		newWo.Header().SetInterlinkRootHash(interlinkRootHash)
 	}
 
+	// Calculate the new Qi/Quai exchange rate
+	if nodeCtx == common.PRIME_CTX {
+		var subRollup types.Transactions
+		rollup, exists := w.hc.subRollupCache.Peek(parent.Hash())
+		if exists && rollup != nil {
+			subRollup = rollup
+			w.logger.WithFields(log.Fields{
+				"Hash": parent.Hash(),
+				"len":  len(subRollup),
+			}).Debug("Found the rollup in cache")
+		} else {
+			subRollup, err = w.hc.CollectSubRollup(parent)
+			if err != nil {
+				return nil, err
+			}
+			w.hc.subRollupCache.Add(parent.Hash(), subRollup)
+		}
+		qiToQuai := new(big.Int).Set(common.Big0)
+		quaiToQi := new(big.Int).Set(common.Big0)
+		for _, tx := range subRollup {
+			if types.IsCoinBaseTx(tx) {
+				if tx.ETXSender().IsInQiLedgerScope() {
+					qiToQuai = new(big.Int).Add(qiToQuai, tx.Value())
+				} else if tx.ETXSender().IsInQuaiLedgerScope() {
+					quaiToQi = new(big.Int).Add(quaiToQi, tx.Value())
+				}
+			} else if types.IsConversionTx(tx) {
+				if tx.To().IsInQiLedgerScope() {
+					quaiToQi = new(big.Int).Add(quaiToQi, tx.Value())
+				} else if tx.To().IsInQuaiLedgerScope() {
+					qiToQuai = new(big.Int).Add(qiToQuai, tx.Value())
+				}
+			}
+		}
+		newWo.Header().SetQiToQuai(qiToQuai)
+		newWo.Header().SetQuaiToQi(quaiToQi)
+	}
+
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		newWo.Header().SetExtra(w.extra)
