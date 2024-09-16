@@ -289,6 +289,63 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
+// Accesses send a notification each time the specified address is accessed
+func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
+		headers := make(chan *types.WorkObject)
+		headersSub := api.events.SubscribeNewHeads(headers)
+
+		for {
+			select {
+			case h := <-headers:
+				// Marshal the header data
+				hash := h.Hash()
+				nodeLocation := api.backend.NodeLocation()
+				nodeCtx := nodeLocation.Context()
+				if block, err := api.backend.GetBlock(h.Hash(), h.NumberU64(nodeCtx)); err != nil {
+					for _, tx := range block.Transactions() {
+						// Check for external accesses
+						if tx.To() == &addr || tx.From(nodeLocation) == &addr {
+							notifier.Notify(rpcSub.ID, hash)
+							break
+						}
+						// Check for EVM accesses
+						for _, access := range tx.AccessList() {
+							if access.Address == addr {
+								notifier.Notify(rpcSub.ID, hash)
+								break
+							}
+						}
+					}
+				}
+			case <-rpcSub.Err():
+				headersSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headersSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)

@@ -240,6 +240,11 @@ func (b *QuaiAPIBackend) GetBloom(hash common.Hash) (*types.Bloom, error) {
 	return b.quai.core.Slice().HeaderChain().GetBloom(hash)
 }
 
+// GetBlock returns the Block for the given block hash
+func (b *QuaiAPIBackend) GetBlock(hash common.Hash, number uint64) (*types.WorkObject, error) {
+	return b.quai.core.Slice().HeaderChain().GetBlock(hash, number), nil
+}
+
 func (b *QuaiAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
 	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
