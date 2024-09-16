@@ -21,11 +21,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"runtime/debug"
 
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 var (
@@ -539,6 +541,14 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		h.leafCh = make(chan *leaf, leafChanSize)
 		wg.Add(1)
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.db.Logger().WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Fatal("Go-Quai Panicked")
+				}
+			}()
 			defer wg.Done()
 			h.commitLoop(t.db)
 		}()

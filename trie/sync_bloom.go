@@ -19,6 +19,7 @@ package trie
 import (
 	"encoding/binary"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,6 +62,14 @@ func NewSyncBloom(memory uint64, database ethdb.Iteratee) *SyncBloom {
 	}
 	b.pend.Add(2)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Fatal("Go-Quai Panicked")
+			}
+		}()
 		defer b.pend.Done()
 		b.init(database)
 	}()

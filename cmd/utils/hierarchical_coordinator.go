@@ -217,7 +217,6 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 	StartNode(stack)
 
 	go func() {
-		defer hc.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				logger.WithFields(log.Fields{
@@ -226,6 +225,7 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 				}).Fatal("Go-Quai Panicked")
 			}
 		}()
+		defer hc.wg.Done()
 		<-hc.quitCh
 		logger.Info("Context cancelled, shutting down node")
 		stack.Close()
@@ -248,7 +248,6 @@ func (hc *HierarchicalCoordinator) ConsensusBackend() quai.ConsensusAPI {
 }
 
 func (hc *HierarchicalCoordinator) expansionEventLoop() {
-	defer hc.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -257,6 +256,7 @@ func (hc *HierarchicalCoordinator) expansionEventLoop() {
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	defer hc.wg.Done()
 
 	for {
 		select {
@@ -395,7 +395,6 @@ func (hc *HierarchicalCoordinator) writeCurrentExpansionNumber(number uint8) err
 ///////// QUAI Mining Pick Logic
 
 func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEvent, sub event.Subscription) {
-	defer hc.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -404,6 +403,7 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	defer hc.wg.Done()
 	stopChan := make(chan struct{})
 	for {
 		select {

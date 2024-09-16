@@ -17,9 +17,11 @@
 package trie
 
 import (
+	"runtime/debug"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -125,6 +127,14 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 		wg.Add(16)
 		for i := 0; i < 16; i++ {
 			go func(i int) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Global.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Fatal("Go-Quai Panicked")
+					}
+				}()
 				hasher := newHasher(false)
 				if child := n.Children[i]; child != nil {
 					collapsed.Children[i], cached.Children[i] = hasher.hash(child, false)

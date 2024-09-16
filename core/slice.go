@@ -965,7 +965,6 @@ func (sl *Slice) WriteGenesisBlock(block *types.WorkObject, location common.Loca
 
 // NewGenesisPendingHeader creates a pending header on the genesis block
 func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {
-	nodeCtx := sl.NodeLocation().Context()
 	defer func() {
 		if r := recover(); r != nil {
 			sl.logger.WithFields(log.Fields{
@@ -974,6 +973,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 			}).Error("Go-Quai Panicked")
 		}
 	}()
+	nodeCtx := sl.NodeLocation().Context()
 
 	if nodeCtx == common.ZONE_CTX && !sl.hc.Empty() {
 		return nil

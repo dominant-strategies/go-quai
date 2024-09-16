@@ -468,8 +468,6 @@ func (c *Core) startRemoteTxQueue() {
 }
 
 func (c *Core) startStatsTimer() {
-	futureTimer := time.NewTicker(c_statsPrintPeriod * time.Second)
-	defer futureTimer.Stop()
 	defer func() {
 		if r := recover(); r != nil {
 			c.logger.WithFields(log.Fields{
@@ -478,6 +476,8 @@ func (c *Core) startStatsTimer() {
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	futureTimer := time.NewTicker(c_statsPrintPeriod * time.Second)
+	defer futureTimer.Stop()
 	for {
 		select {
 		case <-futureTimer.C:

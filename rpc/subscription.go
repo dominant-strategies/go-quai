@@ -26,9 +26,12 @@ import (
 	"errors"
 	"math/rand"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 var (
@@ -289,6 +292,14 @@ func (sub *ClientSubscription) close(err error) {
 // run is the forwarding loop of the subscription. It runs in its own goroutine and
 // is launched by the client's handler after the subscription has been created.
 func (sub *ClientSubscription) run() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Fatal("Go-Quai Panicked")
+		}
+	}()
 	defer close(sub.unsubDone)
 
 	unsubscribe, err := sub.forward()

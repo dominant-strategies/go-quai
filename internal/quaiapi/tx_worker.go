@@ -3,6 +3,7 @@ package quaiapi
 import (
 	"context"
 	"errors"
+	"runtime/debug"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -52,6 +53,14 @@ func StartTxWorker(engine consensus.Engine, endpoints []string, location common.
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		for client := range clientCh {
 			worker.clients = append(worker.clients, client)
 		}
@@ -67,11 +76,27 @@ func StartTxWorker(engine consensus.Engine, endpoints []string, location common.
 }
 
 func dialClientsAsync(endpoints []string, clientCh chan *quaiclient.Client) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	var wg sync.WaitGroup
 	wg.Add(len(endpoints))
 
 	for _, endpoint := range endpoints {
 		go func(endpoint string) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Global.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
 			defer wg.Done()
 			client, err := quaiclient.Dial(endpoint, log.Global)
 			if err != nil {
@@ -83,12 +108,28 @@ func dialClientsAsync(endpoints []string, clientCh chan *quaiclient.Client) {
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
 		wg.Wait()
 		close(clientCh)
 	}()
 }
 
 func (worker *TxWorker) processTxs(ctx context.Context, resultCh chan *types.WorkObject) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
 	for {
 		select {
 		case tx, ok := <-worker.txChan:
