@@ -89,7 +89,6 @@ type Slice struct {
 	inboundEtxsCache *lru.Cache[common.Hash, types.Transactions]
 
 	validator Validator // Block and state validator interface
-	phCacheMu sync.RWMutex
 
 	badHashesCache map[common.Hash]bool
 	logger         *log.Logger
@@ -336,23 +335,18 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 
 	time6 := common.PrettyDuration(time.Since(start))
 
-	sl.phCacheMu.Lock()
-	defer sl.phCacheMu.Unlock()
-
-	time7 := common.PrettyDuration(time.Since(start))
-
 	// Append has succeeded write the batch
 	if err := batch.Write(); err != nil {
 		return nil, err
 	}
 
-	time8 := common.PrettyDuration(time.Since(start))
+	time7 := common.PrettyDuration(time.Since(start))
 
 	if order == sl.NodeCtx() {
 		sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash()})
 	}
 
-	time9 := common.PrettyDuration(time.Since(start))
+	time8 := common.PrettyDuration(time.Since(start))
 	// If efficiency score changed on this block compared to the parent block
 	// we trigger the expansion using the expansion feed
 	if nodeCtx == common.PRIME_CTX {
@@ -362,7 +356,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		}
 	}
 
-	time10 := common.PrettyDuration(time.Since(start))
+	time9 := common.PrettyDuration(time.Since(start))
 	sl.logger.WithFields(log.Fields{
 		"t0_1": time0_1,
 		"t0_2": time0_2,
@@ -375,7 +369,6 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		"t7":   time7,
 		"t8":   time8,
 		"t9":   time9,
-		"t10":  time10,
 	}).Info("Times during append")
 
 	// store the append time for the block
