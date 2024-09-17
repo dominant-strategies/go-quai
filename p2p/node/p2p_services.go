@@ -80,15 +80,15 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 			"requestID": id,
 			"peerId":    peerID,
 		}).Warn("Peer did not respond in time")
-		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnTimeout)
+		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
 		return nil, errors.New("peer did not respond in time")
 	}
 
 	if recvdType == nil {
-		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnNack)
+		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnNack)
 		return nil, nil
 	} else {
-		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnResponse)
+		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnResponse)
 	}
 
 	// Check the received data type & hash matches the request

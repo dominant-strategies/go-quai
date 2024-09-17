@@ -83,7 +83,7 @@ type NetworkingAPI interface {
 	Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{}
 
 	// Adjust a peer's quality score
-	AdjustPeerQuality(core.PeerID, func(int) int)
+	AdjustPeerQuality(core.PeerID, string, func(int) int)
 
 	// Protects the peer's connection from being pruned
 	ProtectPeer(core.PeerID)

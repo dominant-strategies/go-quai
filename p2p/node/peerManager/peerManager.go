@@ -110,7 +110,7 @@ type PeerManager interface {
 	RefreshBootpeers() []peer.AddrInfo
 
 	// Adjust the quality score of a peer by applying the given adjustment function
-	AdjustPeerQuality(p2p.PeerID, func(int) int)
+	AdjustPeerQuality(p2p.PeerID, string, func(int) int)
 
 	// Protects the peer's connection from being disconnected
 	ProtectPeer(p2p.PeerID)
@@ -398,14 +398,14 @@ func (pm *BasicPeerManager) removePeerFromTopic(peerID p2p.PeerID, topicStr stri
 }
 
 // Looks up which topics a peer participates in
-func (pm *BasicPeerManager) getPeerTopics(peerID p2p.PeerID) []string {
+func (pm *BasicPeerManager) getPeerTopics(peerID p2p.PeerID) map[string]struct{} {
 	key := datastore.NewKey(peerID.String())
 	qualities := []PeerQuality{Best, Responsive, LastResort}
-	topics := []string{}
+	topics := map[string]struct{}{}
 	for topic, dbs := range pm.peerDBs {
 		for quality := range qualities {
 			if exists, _ := dbs[quality].Has(pm.ctx, key); exists {
-				topics = append(topics, topic)
+				topics[topic] = struct{}{}
 			}
 		}
 	}
@@ -513,12 +513,12 @@ func (pm *BasicPeerManager) getLastResortPeers(topic *pubsubManager.Topic) map[p
 	return pm.getPeersHelper(pm.peerDBs[topic.String()][LastResort], c_minLastResortPeersFromDb)
 }
 
-func (pm *BasicPeerManager) AdjustPeerQuality(peer p2p.PeerID, adjFn func(int) int) {
+func (pm *BasicPeerManager) AdjustPeerQuality(peer p2p.PeerID, topic string, adjFn func(int) int) {
 	if peer == pm.selfID {
 		return
 	}
 	pm.UpsertTag(peer, "quality", adjFn)
-	pm.recategorizePeer(peer)
+	pm.recategorizePeer(peer, topic)
 }
 
 func (pm *BasicPeerManager) calculatePeerLiveness(peer p2p.PeerID) float64 {
@@ -543,12 +543,13 @@ func (pm *BasicPeerManager) calculatePeerResponsiveness(peer p2p.PeerID) float64
 }
 
 // Peers will be divided into three buckets (good, bad, ugly) based on their quality score
-func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID) error {
+func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID, topic string) error {
 	peerQuality := pm.GetTagInfo(peerID).Tags["quality"]
 	topics := pm.getPeerTopics(peerID)
+	topics[topic] = struct{}{}
 
 	// remove peer from DBs first
-	for _, topic := range topics {
+	for topic := range topics {
 		err := pm.removePeerFromTopic(peerID, topic)
 		if err != nil {
 			return err

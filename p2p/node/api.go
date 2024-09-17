@@ -236,7 +236,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			"err":    err,
 		}).Error("Error requesting the data from peer")
 		// Mark this peer as not responding
-		p.peerManager.AdjustPeerQuality(peerID, p2p.QualityAdjOnTimeout)
+		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
 	}
 }
 
@@ -270,8 +270,8 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 	return resultChan
 }
 
-func (p *P2PNode) AdjustPeerQuality(peer p2p.PeerID, adjFn func(int) int) {
-	p.peerManager.AdjustPeerQuality(peer, adjFn)
+func (p *P2PNode) AdjustPeerQuality(peer p2p.PeerID, topic string, adjFn func(int) int) {
+	p.peerManager.AdjustPeerQuality(peer, topic, adjFn)
 }
 
 func (p *P2PNode) ProtectPeer(peer p2p.PeerID) {

@@ -102,7 +102,7 @@ func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
 // Handle consensus data propagated to us from our peers
 func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic string, data interface{}, nodeLocation common.Location) bool {
 	defer types.ObjectPool.Put(data)
-	qbe.p2pBackend.AdjustPeerQuality(sourcePeer, p2p.QualityAdjOnBroadcast)
+	qbe.p2pBackend.AdjustPeerQuality(sourcePeer, topic, p2p.QualityAdjOnBroadcast)
 	switch data := data.(type) {
 	case types.WorkObjectBlockView:
 		backend := *qbe.GetBackend(nodeLocation)
