@@ -368,6 +368,8 @@ func (g *PubsubManager) Unsubscribe(location common.Location, datatype interface
 	}
 }
 
+var mu sync.Mutex
+
 // broadcasts data to subscribing peers
 func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}) error {
 	topicName, err := NewTopic(g.genesis, location, datatype)
@@ -379,6 +381,8 @@ func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}
 		return err
 	}
 	if value, ok := g.topics.Load(topicName.String()); ok {
+		mu.Lock()
+		defer mu.Unlock()
 		return value.(*pubsub.Topic).Publish(g.ctx, protoData)
 	}
 	return ErrNoTopic

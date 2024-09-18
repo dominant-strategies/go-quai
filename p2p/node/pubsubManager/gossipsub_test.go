@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
 	"go.uber.org/mock/gomock"
 
@@ -131,7 +132,9 @@ func TestMultipleRequests(t *testing.T) {
 	// Number of requests to test
 	n := 100
 
-	ctx := context.Background()
+	// Use a context with timeout to avoid hanging indefinitely
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
 
 	mockHost, mockPeerStore, privKey, peerID := setup(t)
 
@@ -182,10 +185,14 @@ func TestMultipleRequests(t *testing.T) {
 		}
 	}
 
-	//BROADCAST
+	// BROADCAST
 	testCh := make(chan interface{}, n*len(topics))
 	ps.SetReceiveHandler(func(receivedFrom peer.ID, msgId string, msgTopic string, data interface{}, location common.Location) {
-		testCh <- data
+		select {
+		case testCh <- data:
+		case <-ctx.Done():
+			t.Error("context done before send messageId: ", msgId)
+		}
 	})
 
 	var messages []interface{}
@@ -218,25 +225,27 @@ func TestMultipleRequests(t *testing.T) {
 
 	// VERIFY
 	receivedMessages := make([]interface{}, 0, n*len(topics))
-	var mu sync.Mutex
-
 	for i := 0; i < (n * len(topics)); i++ {
 		wg.Add(1)
-		go func() {
+		go func(j int) {
 			defer wg.Done()
-			receivedMessage := <-testCh
-			mu.Lock()
-			receivedMessages = append(receivedMessages, receivedMessage)
-			mu.Unlock()
-		}()
+			select {
+			case receivedMessage := <-testCh:
+				mu.Lock()
+				receivedMessages = append(receivedMessages, receivedMessage)
+				mu.Unlock()
+			case <-ctx.Done():
+				t.Error("context done before receive message at index: ", j)
+			}
+		}(i)
 	}
 
 	wg.Wait()
 
 	// Ensure all broadcasted messages were received
-	require.Len(t, receivedMessages, len(messages), "The number of received messages does not match the number of broadcasted messages")
+	require.Len(t, receivedMessages, len(messages), "The number of received messages does not match the number of broadcasted messages. expected: %d, got: %d", len(messages), len(receivedMessages))
 
-	ps.UnsubscribeAll()
+	ps.Stop()
 	if len(ps.GetTopics()) != 0 {
 		t.Fatal("Topic should be empty after unsubscribe")
 	}
