@@ -1284,6 +1284,12 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		to = *args.To
 	} else {
 		to = crypto.CreateAddress(args.from(nodeLocation), uint64(*args.Nonce), *args.Data, nodeLocation)
+		if _, err := to.InternalAndQuaiAddress(); err != nil {
+			to, _, err = vm.GrindContract(args.from(nodeLocation), uint64(*args.Nonce), math.MaxUint64, 0, crypto.Keccak256Hash(*args.Data), nodeLocation)
+			if err != nil {
+				return nil, 0, nil, err
+			}
+		}
 	}
 	// Retrieve the precompiles since they don't need to be added to the access list
 	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number(nodeCtx)), nodeLocation)
@@ -1297,7 +1303,8 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Retrieve the current access list to expand
 		accessList := prevTracer.AccessList(nodeLocation)
 		b.Logger().WithField("accessList", accessList).Debug("Creating access list")
-
+		// Set the accesslist to the last al
+		args.AccessList = &accessList
 		// If no gas amount was specified, each unique access list needs it's own
 		// gas calculation. This is quite expensive, but we need to be accurate
 		// and it's convered by the sender only anyway.
@@ -1309,8 +1316,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
-		// Set the accesslist to the last al
-		args.AccessList = &accessList
+
 		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee(), nodeLocation)
 		if err != nil {
 			return nil, 0, nil, err

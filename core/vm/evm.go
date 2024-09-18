@@ -596,18 +596,19 @@ func calculateKeccakGas(data []byte) (int64, error) {
 // attemptContractCreation tries to create a contract address by iterating through possible nonce values.
 // It returns the modified data for contract creation and any error encountered.
 func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, gas uint64, gasCost int64, code []byte) (common.Address, uint64, error) {
-	senderAddress := caller.Address()
-
 	codeAndHash := &codeAndHash{code: code}
+	return GrindContract(caller.Address(), nonce, gas, gasCost, codeAndHash.Hash(), evm.chainConfig.Location)
+}
+
+func GrindContract(senderAddress common.Address, nonce uint64, gas uint64, gasCost int64, codeHash common.Hash, nodeLocation common.Location) (common.Address, uint64, error) {
 	var salt [32]byte
 	binary.BigEndian.PutUint64(salt[24:], nonce)
-
 	// Iterate through possible nonce values to find a suitable contract address.
 	for i := 0; i < params.MaxAddressGrindAttempts; i++ {
 
 		// Check if there is enough gas left to continue.
 		if gas < uint64(gasCost) {
-			return common.Zero, 0, fmt.Errorf("out of gas grinding contract address for %v", caller.Address().Hex())
+			return common.Zero, 0, fmt.Errorf("out of gas grinding contract address for %v", senderAddress.String())
 		}
 
 		// Subtract the gas cost for each attempt.
@@ -617,7 +618,7 @@ func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, g
 		binary.BigEndian.PutUint64(salt[16:24], uint64(i))
 
 		// Generate a potential contract address.
-		contractAddr := crypto.CreateAddress2(senderAddress, salt, codeAndHash.Hash().Bytes(), evm.chainConfig.Location)
+		contractAddr := crypto.CreateAddress2(senderAddress, salt, codeHash.Bytes(), nodeLocation)
 
 		// Check if the generated address is valid.
 		if _, err := contractAddr.InternalAndQuaiAddress(); err == nil {
@@ -625,7 +626,7 @@ func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, g
 		}
 	}
 	// Return an error if a valid address could not be found after the maximum number of attempts.
-	return common.Zero, 0, fmt.Errorf("exceeded number of attempts grinding address %v", caller.Address().Hex())
+	return common.Zero, 0, fmt.Errorf("exceeded number of attempts grinding address %v", senderAddress.String())
 }
 
 // Create2 creates a new contract using code as deployment code.
