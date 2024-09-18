@@ -58,15 +58,15 @@ type StateDB interface {
 	// is defined according to (balance = nonce = code = 0).
 	Empty(common.InternalAddress) bool
 
-	PrepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
-	AddressInAccessList(addr common.Address) bool
-	SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool)
+	PrepareAccessList(sender common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList, debug bool)
+	AddressInAccessList(addr common.AddressBytes) bool
+	SlotInAccessList(addr common.AddressBytes, slot common.Hash) (addressOk bool, slotOk bool)
 	// AddAddressToAccessList adds the given address to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
-	AddAddressToAccessList(addr common.Address)
+	AddAddressToAccessList(addr common.AddressBytes)
 	// AddSlotToAccessList adds the given (address,slot) to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
-	AddSlotToAccessList(addr common.Address, slot common.Hash)
+	AddSlotToAccessList(addr common.AddressBytes, slot common.Hash)
 
 	RevertToSnapshot(int)
 	Snapshot() int
