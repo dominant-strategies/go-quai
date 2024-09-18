@@ -268,6 +268,9 @@ func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *st
 	if nodeCtx != common.ZONE_CTX {
 		return nil, vmError, errors.New("getEvm can only be called in zone chain")
 	}
+	if parent == nil {
+		return nil, nil, errors.New("parent block not found, parenthash: " + header.ParentHash(b.NodeCtx()).String())
+	}
 	if vmConfig == nil {
 		vmConfig = b.quai.core.GetVMConfig()
 	}
