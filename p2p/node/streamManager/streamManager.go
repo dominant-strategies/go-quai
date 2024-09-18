@@ -150,7 +150,7 @@ func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 	// Create a new stream to the peer and register it in the cache
 	stream, err := sm.host.NewStream(sm.ctx, peerID, quaiprotocol.ProtocolVersion)
 	if err != nil {
-		return fmt.Errorf("error opening new stream with peer %s", peerID)
+		return fmt.Errorf("error opening new stream with peer %s err: %s", peerID, err)
 	}
 	wrappedStream := streamWrapper{
 		stream:    stream,
