@@ -419,12 +419,14 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 			}
 			close(stopChan)
 			stopChan = make(chan struct{})
+			hc.recentBlockMu.Lock()
 			locationCache, exists := hc.recentBlocks[head.Block.Location().Name()]
 			if !exists {
 				// create a new lru and add this block
 				lru, _ := lru.New[common.Hash, Node](c_recentBlockCacheSize)
 				lru.Add(head.Block.Hash(), node)
 				hc.recentBlocks[head.Block.Location().Name()] = lru
+				hc.recentBlockMu.Unlock()
 				log.Global.WithFields(log.Fields{"Hash": head.Block.Hash(), "Number": head.Block.NumberArray()}).Debug("Received a chain event and calling build pending headers")
 				hc.BuildPendingHeaders(stopChan)
 			} else {
@@ -436,9 +438,14 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 					if exists && oldestBlock.entropy.Cmp(node.entropy) < 0 {
 						locationCache.Add(head.Block.Hash(), node)
 						hc.recentBlocks[head.Block.Location().Name()] = locationCache
+						hc.recentBlockMu.Unlock()
 						log.Global.WithFields(log.Fields{"Hash": head.Block.Hash(), "Number": head.Block.NumberArray()}).Debug("Received a chain event and calling build pending headers")
 						hc.BuildPendingHeaders(stopChan)
+					} else {
+						hc.recentBlockMu.Unlock()
 					}
+				} else {
+					hc.recentBlockMu.Unlock()
 				}
 			}
 		case <-sub.Err():
