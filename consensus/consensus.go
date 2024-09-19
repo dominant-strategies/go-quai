@@ -27,7 +27,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
-	"modernc.org/mathutil"
 )
 
 const (
@@ -56,16 +55,17 @@ var (
 // codebase, inherently breaking if the engine is swapped out. Please put common
 // error types into the consensus package.
 var (
-	ErrOlderBlockTime      = errors.New("timestamp older than parent")
-	ErrTooManyUncles       = errors.New("too many uncles")
-	ErrDuplicateUncle      = errors.New("duplicate uncle")
-	ErrUncleIsAncestor     = errors.New("uncle is ancestor")
-	ErrDanglingUncle       = errors.New("uncle's parent is not ancestor")
-	ErrInvalidDifficulty   = errors.New("difficulty too low")
-	ErrDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
-	ErrInvalidMixHash      = errors.New("invalid mixHash")
-	ErrInvalidPoW          = errors.New("invalid proof-of-work")
-	ErrInvalidOrder        = errors.New("invalid order")
+	ErrOlderBlockTime       = errors.New("timestamp older than parent")
+	ErrTooManyUncles        = errors.New("too many uncles")
+	ErrDuplicateUncle       = errors.New("duplicate uncle")
+	ErrUncleIsAncestor      = errors.New("uncle is ancestor")
+	ErrDanglingUncle        = errors.New("uncle's parent is not ancestor")
+	ErrInvalidDifficulty    = errors.New("difficulty too low")
+	ErrInvalidThresholdDiff = errors.New("threshold provided is below base difficulty")
+	ErrDifficultyCrossover  = errors.New("sub's difficulty exceeds dom's")
+	ErrInvalidMixHash       = errors.New("invalid mixHash")
+	ErrInvalidPoW           = errors.New("invalid proof-of-work")
+	ErrInvalidOrder         = errors.New("invalid order")
 )
 
 // ChainHeaderReader defines a small collection of methods needed to access the local
@@ -248,17 +248,18 @@ func DifficultyToTarget(difficulty *big.Int) *big.Int {
 	return TargetToDifficulty(difficulty)
 }
 
-func CalcWorkShareThreshold(workShare *types.WorkObjectHeader) (*big.Int, error) {
-	// Extract some data from the header
-	diff := new(big.Int).Set(workShare.Difficulty())
-	c, _ := mathutil.BinaryLog(diff, MantBits)
-	if c <= params.WorkSharesThresholdDiff {
-		return nil, ErrInvalidDifficulty
+// CalcWorkShareThreshold lowers the difficulty of the workShare header by thresholdDiff bits.
+// workShareTarget := 2^256 / workShare.Difficulty() * 2^workShareThresholdDiff
+func CalcWorkShareThreshold(workShare *types.WorkObjectHeader, workShareThresholdDiff int) (*big.Int, error) {
+	if workShareThresholdDiff <= 0 {
+		// If workShareThresholdDiff = 0, you should use the difficulty directly from the header.
+		return nil, ErrInvalidThresholdDiff
 	}
-	workShareThreshold := c - params.WorkSharesThresholdDiff
-	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
-	workShareMinTarget := new(big.Int).Div(Big2e256, workShareDiff)
-	return workShareMinTarget, nil
+	diff := workShare.Difficulty()
+	diffTarget := new(big.Int).Div(Big2e256, diff)
+	workShareTarget := new(big.Int).Exp(Big2, big.NewInt(int64(workShareThresholdDiff)), nil)
+
+	return workShareTarget.Mul(diffTarget, workShareTarget), nil
 }
 
 // PoW is a consensus engine based on proof-of-work.

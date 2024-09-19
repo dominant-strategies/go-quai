@@ -121,12 +121,7 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 }
 
 func (progpow *Progpow) Mine(workObject *types.WorkObject, abort <-chan struct{}, found chan *types.WorkObject) {
-	// Extract some data from the header
-	diff := new(big.Int).Set(workObject.Difficulty())
-	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
-	workShareThreshold := c - params.WorkSharesThresholdDiff
-
-	progpow.MineToThreshold(workObject, workShareThreshold, abort, found)
+	progpow.MineToThreshold(workObject, params.WorkSharesThresholdDiff, abort, found)
 }
 
 func (progpow *Progpow) MineToThreshold(workObject *types.WorkObject, workShareThreshold int, abort <-chan struct{}, found chan *types.WorkObject) {
@@ -135,9 +130,11 @@ func (progpow *Progpow) MineToThreshold(workObject *types.WorkObject, workShareT
 		return
 	}
 
-	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
-	target := new(big.Int).Div(big2e256, workShareDiff)
-	nodeCtx := progpow.config.NodeLocation.Context()
+	target, err := consensus.CalcWorkShareThreshold(workObject.WorkObjectHeader(), workShareThreshold)
+	if err != nil {
+		log.Global.WithField("err", err).Error("Issue mining")
+		return
+	}
 
 	// Start generating random nonces until we abort or find a good one
 	progpow.lock.Lock()
