@@ -691,7 +691,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	time4 := common.PrettyDuration(time.Since(start))
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	multiSet, utxoSetSize, err := p.engine.Finalize(p.hc, batch, block, statedb, false, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes)
+	multiSet, utxoSetSize, err := p.engine.Finalize(p.hc, batch, block, statedb, false, parentUtxoSetSize, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes)
 	if err != nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
