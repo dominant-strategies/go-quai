@@ -29,7 +29,7 @@ import (
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
 
-	"github.com/libp2p/go-libp2p-kad-dht/dual"
+	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/host"
 	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
@@ -91,7 +91,7 @@ type PeerManager interface {
 	GetSelfID() p2p.PeerID
 
 	// Sets the DHT provided from the Host interface
-	SetDHT(*dual.DHT)
+	SetDHT(*kaddht.IpfsDHT)
 
 	// Sets the streamManager interface
 	SetStreamManager(streamManager.StreamManager)
@@ -137,7 +137,7 @@ type BasicPeerManager struct {
 	bootpeers []peer.AddrInfo
 
 	// DHT instance
-	dht *dual.DHT
+	dht *kaddht.IpfsDHT
 
 	// This peer's ID to distinguish self-broadcasts
 	selfID p2p.PeerID
@@ -354,7 +354,7 @@ func (pm *BasicPeerManager) RefreshBootpeers() []peer.AddrInfo {
 	return bootpeers
 }
 
-func (pm *BasicPeerManager) SetDHT(dht *dual.DHT) {
+func (pm *BasicPeerManager) SetDHT(dht *kaddht.IpfsDHT) {
 	pm.dht = dht
 }
 
