@@ -15,7 +15,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"modernc.org/mathutil"
 )
 
 var (
@@ -170,8 +169,8 @@ search:
 				}
 				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)
 			}
-			cache := progpow.cache(workObject.NumberU64(nodeCtx))
-			size := datasetSize(workObject.NumberU64(nodeCtx))
+			cache := progpow.cache(workObject.PrimeTerminusNumber().Uint64())
+			size := datasetSize(workObject.PrimeTerminusNumber().Uint64())
 			// Compute the PoW value of this nonce
 			digest, result := powLight(size, cache.cache, workObject.SealHash().Bytes(), nonce, workObject.PrimeTerminusNumber().Uint64())
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
