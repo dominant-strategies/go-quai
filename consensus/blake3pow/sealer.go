@@ -14,7 +14,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"modernc.org/mathutil"
 )
 
 var (
@@ -122,10 +121,7 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 
 func (blake3pow *Blake3pow) Mine(header *types.WorkObject, abort <-chan struct{}, found chan *types.WorkObject) {
 	// Extract some data from the header
-	diff := new(big.Int).Set(header.Difficulty())
-	c, _ := mathutil.BinaryLog(diff, consensus.MantBits)
-	workShareThreshold := c - params.WorkSharesThresholdDiff
-	blake3pow.MineToThreshold(header, workShareThreshold, abort, found)
+	blake3pow.MineToThreshold(header, params.WorkSharesThresholdDiff, abort, found)
 }
 
 func (blake3pow *Blake3pow) MineToThreshold(workObject *types.WorkObject, workShareThreshold int, abort <-chan struct{}, found chan *types.WorkObject) {
@@ -134,8 +130,11 @@ func (blake3pow *Blake3pow) MineToThreshold(workObject *types.WorkObject, workSh
 		return
 	}
 
-	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
-	target := new(big.Int).Div(big2e256, workShareDiff)
+	target, err := consensus.CalcWorkShareThreshold(workObject.WorkObjectHeader(), workShareThreshold)
+	if err != nil {
+		log.Global.WithField("err", err).Error("Issue mining")
+		return
+	}
 
 	// Start generating random nonces until we abort or find a good one
 	blake3pow.lock.Lock()
