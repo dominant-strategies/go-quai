@@ -608,11 +608,10 @@ func (blake3pow *Blake3pow) Prepare(chain consensus.ChainHeaderReader, header *t
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
 // Finalize returns the new MuHash of the UTXO set, the new size of the UTXO set and an error if any
-func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.Batch, header *types.WorkObject, state *state.StateDB, setRoots bool, utxosCreate, utxosDelete []common.Hash) (*multiset.MultiSet, uint64, error) {
+func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.Batch, header *types.WorkObject, state *state.StateDB, setRoots bool, utxoSetSize uint64, utxosCreate, utxosDelete []common.Hash) (*multiset.MultiSet, uint64, error) {
 	nodeLocation := blake3pow.config.NodeLocation
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	var multiSet *multiset.MultiSet
-	var utxoSetSize uint64
 	if chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		multiSet = multiset.New()
 		// Create the lockup contract account
@@ -653,14 +652,17 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 		}
 	} else {
 		multiSet = rawdb.ReadMultiSet(chain.Database(), header.ParentHash(nodeCtx))
-		utxoSetSize = rawdb.ReadUTXOSetSize(chain.Database(), header.ParentHash(nodeCtx))
 	}
 	if multiSet == nil {
 		return nil, 0, fmt.Errorf("Multiset is nil for block %s", header.ParentHash(nodeCtx).String())
 	}
 
 	utxoSetSize += uint64(len(utxosCreate))
+	if utxoSetSize < uint64(len(utxosDelete)) {
+		return nil, 0, fmt.Errorf("UTXO set size is less than the number of utxos to delete. This is a bug. UTXO set size: %d, UTXOs to delete: %d", utxoSetSize, len(utxosDelete))
+	}
 	utxoSetSize -= uint64(len(utxosDelete))
+
 	trimDepths := types.TrimDepths
 	if utxoSetSize > params.SoftMaxUTXOSetSize/2 {
 		var err error
@@ -747,10 +749,6 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 		multiSet.Remove(hash.Bytes())
 	}
 	blake3pow.logger.Infof("Parent hash: %s, header hash: %s, muhash: %s, block height: %d, setroots: %t, UtxosCreated: %d, UtxosDeleted: %d, UTXOs Trimmed from DB: %d, UTXO Set Size: %d", header.ParentHash(nodeCtx).String(), header.Hash().String(), multiSet.Hash().String(), header.NumberU64(nodeCtx), setRoots, len(utxosCreate), len(utxosDelete), len(trimmedUtxos), utxoSetSize)
-
-	if utxoSetSize < uint64(len(utxosDelete)) {
-		return nil, 0, fmt.Errorf("UTXO set size is less than the number of utxos to delete. This is a bug. UTXO set size: %d, UTXOs to delete: %d", utxoSetSize, len(utxosDelete))
-	}
 
 	if setRoots {
 		header.Header().SetUTXORoot(multiSet.Hash())
@@ -938,7 +936,7 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 	nodeCtx := blake3pow.config.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX && chain.ProcessingState() {
 		// Finalize block
-		if _, _, err := blake3pow.Finalize(chain, nil, header, state, true, utxosCreate, utxosDelete); err != nil {
+		if _, _, err := blake3pow.Finalize(chain, nil, header, state, true, parentUtxoSetSize, utxosCreate, utxosDelete); err != nil {
 			return nil, err
 		}
 	}
