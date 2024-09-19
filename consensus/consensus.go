@@ -27,7 +27,6 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
-	"modernc.org/mathutil"
 )
 
 const (
@@ -248,17 +247,14 @@ func DifficultyToTarget(difficulty *big.Int) *big.Int {
 	return TargetToDifficulty(difficulty)
 }
 
-func CalcWorkShareThreshold(workShare *types.WorkObjectHeader) (*big.Int, error) {
-	// Extract some data from the header
-	diff := new(big.Int).Set(workShare.Difficulty())
-	c, _ := mathutil.BinaryLog(diff, MantBits)
-	if c <= params.WorkSharesThresholdDiff {
-		return nil, ErrInvalidDifficulty
-	}
-	workShareThreshold := c - params.WorkSharesThresholdDiff
-	workShareDiff := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(workShareThreshold)), nil)
-	workShareMinTarget := new(big.Int).Div(Big2e256, workShareDiff)
-	return workShareMinTarget, nil
+// CalcWorkShareThreshold lowers the difficulty of the workShare header by thresholdDiff bits.
+// workShareTarget := 2^256 / workShare.Difficulty() * 2^workShareThresholdDiff
+func CalcWorkShareThreshold(workShare *types.WorkObjectHeader, workShareThresholdDiff int) (*big.Int, error) {
+	diff := workShare.Difficulty()
+	diffTarget := new(big.Int).Div(Big2e256, diff)
+	workShareTarget := new(big.Int).Exp(Big2, big.NewInt(int64(workShareThresholdDiff)), nil)
+
+	return workShareTarget.Mul(diffTarget, workShareTarget), nil
 }
 
 // PoW is a consensus engine based on proof-of-work.

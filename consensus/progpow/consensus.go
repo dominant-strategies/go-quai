@@ -615,21 +615,15 @@ func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (common.Hash,
 	if header.Difficulty().Sign() <= 0 {
 		return common.Hash{}, consensus.ErrInvalidDifficulty
 	}
-	// Check progpow
-	mixHash := header.PowDigest.Load()
-	powHash := header.PowHash.Load()
-	if powHash == nil || mixHash == nil {
-		mixHash, powHash = progpow.ComputePowLight(header)
-	}
-	// Verify the calculated values against the ones provided in the header
-	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
-		return common.Hash{}, consensus.ErrInvalidMixHash
+	powHash, err := progpow.ComputePowHash(header)
+	if err != nil {
+		return common.Hash{}, err
 	}
 	target := new(big.Int).Div(big2e256, header.Difficulty())
-	if new(big.Int).SetBytes(powHash.(common.Hash).Bytes()).Cmp(target) > 0 {
-		return powHash.(common.Hash), consensus.ErrInvalidPoW
+	if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) > 0 {
+		return powHash, consensus.ErrInvalidPoW
 	}
-	return powHash.(common.Hash), nil
+	return powHash, nil
 }
 
 func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
