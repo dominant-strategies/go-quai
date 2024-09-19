@@ -7,7 +7,7 @@ var (
 		},
 		"garden": {
 			"/dns4/bootnode.garden0.quai.network/tcp/4001/p2p/12D3KooWRQrLVEeJtfyKoJDYWYjryBKR8qxkDooMMzyf2ZpLaZRR",
-			"/dns4/bootnode.garden1.quai.network/tcp/4001/p2p/12D3KooWSb49ccXFWPCsvi7rzCbqBUK2xfuRC2xbo6KnUZk3YaVg",
+			"/dns4/bootnode.garden1.quai.network/tcp/4001/p2p/12D3KooWLzhZXUdqhwbGpezddPkpGtZ6v7obzPkWVkfY1s6ZsX6S",
 			"/dns4/bootnode.garden2.quai.network/tcp/4001/p2p/12D3KooWR3xMB6sCpsowQcvtdMKmKbTaiDcDFAXuWABdZVPWaVuo",
 			"/dns4/bootnode.garden3.quai.network/tcp/4001/p2p/12D3KooWJnWmBukEbZtGPPJvT1r4tQ97CRSGmnjHewcrjNB8oRxU",
 		},
