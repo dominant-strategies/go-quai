@@ -98,14 +98,34 @@ func (g *PubsubManager) UnsubscribeAll() {
 	})
 }
 
-// subscribe to broadcasts of the given type of data
-func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}) error {
+func (g *PubsubManager) SubscribeAndRegisterValidator(location common.Location, datatype interface{}, validatorFunc pubsub.ValidatorEx) error {
 	// build topic name
 	topicSub, err := NewTopic(g.genesis, location, datatype)
 	if err != nil {
 		return err
 	}
+	err = g.Subscribe(topicSub, location, datatype)
+	if err != nil {
+		return err
+	}
 
+	var validator pubsub.ValidatorEx
+	if validatorFunc == nil {
+		validator = g.ValidatorFunc()
+	} else {
+		validator = validatorFunc
+	}
+
+	err = g.PubSub.RegisterTopicValidator(topicSub.String(), validator)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// subscribe to broadcasts of the given type of data
+func (g *PubsubManager) Subscribe(topicSub *Topic, location common.Location, datatype interface{}) error {
 	// join the topic
 	topic, err := g.Join(topicSub.String())
 	if err != nil {
@@ -114,10 +134,6 @@ func (g *PubsubManager) Subscribe(location common.Location, datatype interface{}
 	g.topics.Store(topicSub.String(), topic)
 	if g.consensus == nil {
 		return ErrConsensusNotSet
-	}
-	err = g.PubSub.RegisterTopicValidator(topicSub.String(), g.ValidatorFunc())
-	if err != nil {
-		return ErrValidatorFuncNotSet
 	}
 
 	// subscribe to the topic

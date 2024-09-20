@@ -54,7 +54,7 @@ func (p *P2PNode) Start() error {
 }
 
 func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) error {
-	err := p.pubsub.Subscribe(location, datatype)
+	err := p.pubsub.SubscribeAndRegisterValidator(location, datatype, nil)
 	if err != nil {
 		return err
 	}

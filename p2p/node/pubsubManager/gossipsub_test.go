@@ -14,6 +14,7 @@ import (
 	mock_p2p "github.com/dominant-strategies/go-quai/p2p/mocks"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/viper"
@@ -68,13 +69,17 @@ func TestPubsubManager(t *testing.T) {
 	ps, err := NewGossipSubManager(ctx, mockHost)
 	require.NoError(t, err, "Failed to create gossipsub manager")
 
+	validatorFunc := func(context.Context, peer.ID, *pubsub.Message) pubsub.ValidationResult {
+		return pubsub.ValidationAccept
+	}
+
 	t.Run("Subscribe - New topic error", func(t *testing.T) {
-		err = ps.Subscribe(common.Location{0, 0}, "Wrong data type")
+		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, "Wrong data type", validatorFunc)
 		require.Error(t, err, "Expected error on wrong data type")
 	})
 
 	t.Run("Subscribe - QuaiBackend not set error", func(t *testing.T) {
-		err = ps.Subscribe(common.Location{0, 0}, common.Hash{1})
+		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, common.Hash{1}, validatorFunc)
 		require.ErrorIs(t, err, ErrConsensusNotSet)
 	})
 
@@ -84,13 +89,13 @@ func TestPubsubManager(t *testing.T) {
 		if len(ps.GetTopics()) != 0 {
 			t.Fatal("Topic should be empty before subscription")
 		}
-		err = ps.Subscribe(common.Location{0, 0}, common.Hash{1})
+		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, common.Hash{1}, validatorFunc)
 		require.NoError(t, err, "Failed to subscribe to topic")
 		if entry := len(ps.GetTopics()); entry != 1 {
 			t.Fatalf("Expected 1 topic, got %d", entry)
 		}
 		// Can't Subscribe to same topic
-		err = ps.Subscribe(common.Location{0, 0}, common.Hash{1})
+		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, common.Hash{1}, validatorFunc)
 		require.Error(t, err, "Expected error on subscribe to same topic")
 	})
 
@@ -173,9 +178,13 @@ func TestMultipleRequests(t *testing.T) {
 	topics = append(topics, blockView)
 	topics = append(topics, workShareView)
 
+	validatorFunc := func(context.Context, peer.ID, *pubsub.Message) pubsub.ValidationResult {
+		return pubsub.ValidationAccept
+	}
+
 	// SUBSCRIBE
 	for i, topic := range topics {
-		err := ps.Subscribe(common.Location{0, 0}, topic)
+		err := ps.SubscribeAndRegisterValidator(common.Location{0, 0}, topic, validatorFunc)
 		require.NoError(t, err, "Failed to subscribe to topic %d", topic)
 		if entry := len(ps.GetTopics()); entry != i+1 {
 			t.Fatalf("Expected %d topic, got %d", (i + 1), entry)
