@@ -481,6 +481,10 @@ func (hc *HierarchicalCoordinator) CalculateLeaders(badHashes map[common.Hash]bo
 		}
 	}
 
+	sort.Slice(nodeList, func(i, j int) bool {
+		return nodeList[i].entropy.Cmp(nodeList[j].entropy) > 0
+	})
+
 	return nodeList
 }
 
@@ -523,11 +527,20 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 		log.Global.Warn("Build pending headers exited after timeout")
 		return
 	default:
-		badHashes := make(map[common.Hash]bool)
+		var badHashes map[common.Hash]bool
+		badHashes = make(map[common.Hash]bool)
 		count := 0
+		var leaders []Node
+		hc.recentBlockMu.Lock()
 	search:
-		if count > 10 {
+		if len(leaders) > 0 {
+			circularShift(leaders)
+			badHashes = make(map[common.Hash]bool)
+		}
+
+		if count > 8*len(leaders) {
 			log.Global.Error("Too many iterations in the build pending headers, skipping generate")
+			hc.recentBlockMu.Unlock()
 			return
 		}
 		// Pick the leader among all the slices
@@ -536,7 +549,6 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 
 		constraintMap := make(map[string]common.Hash)
 		numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
-		hc.recentBlockMu.Lock()
 		for i := 0; i < int(numRegions); i++ {
 			for j := 0; j < int(numZones); j++ {
 				if _, exists := hc.recentBlocks[common.Location{byte(i), byte(j)}.Name()]; !exists {
@@ -549,7 +561,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 			}
 		}
 
-		leaders := hc.CalculateLeaders(badHashes)
+		leaders = hc.CalculateLeaders(badHashes)
 		// Go through all the zones to update the constraint map
 		modifiedConstraintMap := constraintMap
 		first := true
@@ -570,7 +582,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 				}
 			}
 		}
-		hc.recentBlockMu.Unlock()
+
 		PrintConstraintMap(modifiedConstraintMap)
 
 		var bestPrime common.Hash
@@ -619,6 +631,30 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 					count++
 					goto search
 				}
+			}
+		}
+
+		// Headers have been successfully computed, compute state.
+		hc.recentBlockMu.Unlock()
+
+		for i := 0; i < int(numRegions); i++ {
+			regionLocation := common.Location{byte(i)}.Name()
+			var bestRegion common.Hash
+			t, exists := modifiedConstraintMap[regionLocation]
+			if !exists {
+				bestRegion = defaultGenesisHash
+			} else {
+				bestRegion = t
+			}
+			for j := 0; j < int(numZones); j++ {
+				var bestZone common.Hash
+				zoneLocation := common.Location{byte(i), byte(j)}.Name()
+				t, exists := modifiedConstraintMap[zoneLocation]
+				if !exists {
+					bestZone = defaultGenesisHash
+				} else {
+					bestZone = t
+				}
 				wg.Add(1)
 				go hc.ComputePendingHeader(&wg, bestPrime, bestRegion, bestZone, common.Location{byte(i), byte(j)}, stopChan)
 			}
@@ -626,6 +662,16 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(stopChan chan struct{}) {
 
 		wg.Wait()
 	}
+}
+
+func circularShift(arr []Node) []Node {
+	if len(arr) <= 1 {
+		return arr // No need to shift if array has 0 or 1 elements
+	}
+
+	shifted := arr[1:]
+
+	return append(shifted, arr[0])
 }
 
 // PCRC previous coincidence reference check makes sure there are not any cyclic references in the graph and calculates new termini and the block terminus
