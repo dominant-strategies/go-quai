@@ -132,10 +132,13 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 	for {
 		select {
 		case peerID := <-sm.newStreamRequestChan:
-			err := sm.OpenStream(peerID)
-			if err != nil {
-				log.Global.WithFields(log.Fields{"peerId": peerID, "err": err}).Warn("Error opening new strean into peer")
-			}
+			go func(peerID peer.ID) {
+				err := sm.OpenStream(peerID)
+				if err != nil {
+					log.Global.WithFields(log.Fields{"peerId": peerID, "err": err}).Warn("Error opening new strean into peer")
+				}
+			}(peerID)
+
 		case <-sm.ctx.Done():
 			return
 		}
@@ -147,23 +150,30 @@ func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 	if _, ok := sm.streamCache.Get(peerID); ok {
 		return nil
 	}
-	// Create a new stream to the peer and register it in the cache
-	stream, err := sm.host.NewStream(sm.ctx, peerID, quaiprotocol.ProtocolVersion)
-	if err != nil {
-		return fmt.Errorf("error opening new stream with peer %s err: %s", peerID, err)
+	timer := time.NewTimer(c_stream_timeout)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return errors.New("stream creation timeout")
+	default:
+		// Create a new stream to the peer and register it in the cache
+		stream, err := sm.host.NewStream(sm.ctx, peerID, quaiprotocol.ProtocolVersion)
+		if err != nil {
+			return fmt.Errorf("error opening new stream with peer %s err: %s", peerID, err)
+		}
+		wrappedStream := streamWrapper{
+			stream:    stream,
+			semaphore: make(chan struct{}, c_maxPendingRequests),
+			errCount:  0,
+		}
+		sm.streamCache.Add(peerID, wrappedStream)
+		go quaiprotocol.QuaiProtocolHandler(stream, sm.p2pBackend)
+		log.Global.WithField("PeerID", peerID).Info("Had to create new stream")
+		if streamMetrics != nil {
+			streamMetrics.WithLabelValues("NumStreams").Inc()
+		}
+		return nil
 	}
-	wrappedStream := streamWrapper{
-		stream:    stream,
-		semaphore: make(chan struct{}, c_maxPendingRequests),
-		errCount:  0,
-	}
-	sm.streamCache.Add(peerID, wrappedStream)
-	go quaiprotocol.QuaiProtocolHandler(stream, sm.p2pBackend)
-	log.Global.WithField("PeerID", peerID).Info("Had to create new stream")
-	if streamMetrics != nil {
-		streamMetrics.WithLabelValues("NumStreams").Inc()
-	}
-	return nil
 }
 
 func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
