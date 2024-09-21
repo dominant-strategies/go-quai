@@ -108,7 +108,7 @@ type Backend interface {
 	GetExpansionNumber() uint8
 	SuggestFinalityDepth(ctx context.Context, qiValue *big.Int, correlatedRisk *big.Int) (*big.Int, error)
 	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
-	GeneratePendingHeader(block *types.WorkObject, fill bool, stopChan chan struct{}) (*types.WorkObject, error)
+	GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error)
 	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
 	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)

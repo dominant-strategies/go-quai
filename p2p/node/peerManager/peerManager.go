@@ -267,6 +267,10 @@ func loadPeerDBs() (map[string][]*peerdb.PeerDB, error) {
 		for _, domLoc := range domLocations {
 			for _, dataType := range dataTypes {
 				topic, err := pubsubManager.NewTopic(utils.MakeGenesis().ToBlock(0).Hash(), domLoc, dataType)
+				log.Global.WithFields(log.Fields{
+					"topic": topic.String(),
+					"cid":   pubsubManager.TopicToCid(topic),
+				}).Info("Creating topic")
 				if err != nil {
 					return nil, err
 				}

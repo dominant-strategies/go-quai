@@ -117,6 +117,7 @@ var NodeFlags = []Flag{
 	IndexAddressUtxos,
 	StartingExpansionNumberFlag,
 	NodeLogLevelFlag,
+	GenesisNonce,
 }
 
 var TXPoolFlags = []Flag{
@@ -572,6 +573,12 @@ var (
 		Name:  c_NodeFlagPrefix + "log-level",
 		Value: "info",
 		Usage: "log level (trace, debug, info, warn, error, fatal, panic)" + generateEnvDoc(c_GlobalFlagPrefix+"log-level"),
+	}
+
+	GenesisNonce = Flag{
+		Name:  c_NodeFlagPrefix + "genesis-nonce",
+		Value: 0,
+		Usage: "Nonce to use for the genesis block" + generateEnvDoc(c_NodeFlagPrefix+"genesis-nonce"),
 	}
 )
 
@@ -1516,12 +1523,15 @@ func MakeChainDatabase(stack *node.Node, readonly bool) ethdb.Database {
 }
 
 func MakeGenesis() *core.Genesis {
+	genesisNonce := viper.GetUint64(GenesisNonce.Name)
 	var genesis *core.Genesis
 	switch viper.GetString(EnvironmentFlag.Name) {
 	case params.ColosseumName:
 		genesis = core.DefaultColosseumGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
+		genesis.Nonce = genesisNonce
 	case params.GardenName:
 		genesis = core.DefaultGardenGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
+		genesis.Nonce = genesisNonce
 	case params.OrchardName:
 		genesis = core.DefaultOrchardGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
 	case params.LighthouseName:

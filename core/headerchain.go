@@ -429,9 +429,6 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 
 // SetCurrentHeader sets the current header based on the POEM choice
 func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
-	hc.headermu.Lock()
-	defer hc.headermu.Unlock()
-
 	nodeCtx := hc.NodeCtx()
 
 	prevHeader := hc.CurrentHeader()
@@ -513,8 +510,22 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		}
 	}
 
+	hc.logger.WithFields(log.Fields{
+		"number":    newHeader.NumberArray(),
+		"newHeader": newHeader.Hash(),
+	}).Info("New Header")
+	hc.logger.WithFields(log.Fields{
+		"number":     prevHeader.NumberArray(),
+		"prevHeader": prevHeader.Hash(),
+	}).Info("Prev Header")
+	hc.logger.WithFields(log.Fields{
+		"number": commonHeader.NumberArray(),
+		"hash":   commonHeader.Hash(),
+	}).Info("Common Header")
+
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
+		hc.logger.Info("Reverting header: ", " Number Array: ", hashStack[i].NumberArray(), " Hash: ", hashStack[i].Hash())
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64(hc.NodeCtx()))
 		if nodeCtx == common.ZONE_CTX {
 			block := hc.GetBlockOrCandidate(hashStack[i].Hash(), hashStack[i].NumberU64(nodeCtx))
@@ -530,6 +541,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 				rawdb.DeleteCanonicalHash(hc.headerDb, hashStack[i].NumberU64(hc.NodeCtx()))
 				// Append failed, rollback the UTXO set to the common header
 				for j := i + 1; j < len(hashStack); j++ {
+					hc.logger.Info("Append failed reverting header: ", " Number Array: ", hashStack[j].NumberArray(), " Hash: ", hashStack[j].Hash())
 					rawdb.DeleteCanonicalHash(hc.headerDb, hashStack[j].NumberU64(hc.NodeCtx()))
 					if nodeCtx == common.ZONE_CTX && hc.ProcessingState() {
 						sutxos, err := rawdb.ReadSpentUTXOs(hc.headerDb, hashStack[j].Hash())
@@ -549,6 +561,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 					}
 				}
 				for k := len(prevHashStack) - 1; k >= 0; k-- {
+					hc.logger.Info("Append failed reapplying header: ", " Number Array: ", prevHashStack[k].NumberArray(), " Hash: ", prevHashStack[k].Hash())
 					rawdb.WriteCanonicalHash(hc.headerDb, prevHashStack[k].Hash(), prevHashStack[k].NumberU64(hc.NodeCtx()))
 					if nodeCtx == common.ZONE_CTX {
 						block := hc.GetBlockOrCandidate(prevHashStack[k].Hash(), prevHashStack[k].NumberU64(nodeCtx))

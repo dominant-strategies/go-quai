@@ -1,7 +1,6 @@
 package core
 
 import (
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -36,7 +35,6 @@ type BodyDb struct {
 	scope         event.SubscriptionScope
 
 	engine         consensus.Engine
-	chainmu        sync.RWMutex
 	blockCache     *lru.Cache[common.Hash, types.WorkObject]
 	bodyCache      *lru.Cache[common.Hash, types.WorkObject]
 	bodyProtoCache *lru.Cache[common.Hash, rlp.RawValue]
@@ -81,8 +79,6 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 // Append
 func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, error) {
 	startLock := time.Now()
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
 
 	batch := bc.db.NewBatch()
 	stateApply := time.Now()

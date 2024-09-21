@@ -464,6 +464,33 @@ func (loc Location) InSameSliceAs(cmp Location) bool {
 	// Compare bytes up to the shorter depth
 	return shorter.Equal(longer[:len(shorter)])
 }
+func (loc Location) NameAtOrder(order int) string {
+	regionName := ""
+	switch loc.Region() {
+	case 0:
+		regionName = "cyprus"
+	case 1:
+		regionName = "paxos"
+	case 2:
+		regionName = "hydra"
+	default:
+		regionName = "unknownregion"
+	}
+
+	zoneNum := strconv.Itoa(loc.Zone() + 1)
+	switch order {
+	case PRIME_CTX:
+		return "prime"
+	case REGION_CTX:
+		return regionName
+	case ZONE_CTX:
+		return regionName + zoneNum
+	default:
+		log.Global.Info("cannot name invalid location")
+		return "invalid-location"
+	}
+
+}
 
 func (loc Location) Name() string {
 	regionName := ""
@@ -477,6 +504,7 @@ func (loc Location) Name() string {
 	default:
 		regionName = "unknownregion"
 	}
+
 	zoneNum := strconv.Itoa(loc.Zone() + 1)
 	switch loc.Context() {
 	case PRIME_CTX:

@@ -707,8 +707,8 @@ func (b *QuaiAPIBackend) Database() ethdb.Database {
 	return b.quai.ChainDb()
 }
 
-func (b *QuaiAPIBackend) GeneratePendingHeader(block *types.WorkObject, fill bool, stopChan chan struct{}) (*types.WorkObject, error) {
-	return b.quai.core.GeneratePendingHeader(block, fill, stopChan)
+func (b *QuaiAPIBackend) GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error) {
+	return b.quai.core.GeneratePendingHeader(block, fill)
 }
 
 func (b *QuaiAPIBackend) MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject {

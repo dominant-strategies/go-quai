@@ -1,6 +1,8 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
@@ -15,9 +17,11 @@ type NewMinedBlockEvent struct{ Block *types.WorkObject }
 type RemovedLogsEvent struct{ Logs []*types.Log }
 
 type ChainEvent struct {
-	Block *types.WorkObject
-	Hash  common.Hash
-	Logs  []*types.Log
+	Block   *types.WorkObject
+	Hash    common.Hash
+	Logs    []*types.Log
+	Order   int
+	Entropy *big.Int
 }
 
 type ChainSideEvent struct {
