@@ -662,7 +662,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 		}
 		state.CreateAccount(lockupContract)
 
-		alloc := core.ReadGenesisAlloc("genallocs/gen_quai_alloc_"+nodeLocation.Name()+".json", progpow.logger)
+		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_quai_"+nodeLocation.Name()+".json", progpow.logger)
 		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 
 		for addressString, account := range alloc {
