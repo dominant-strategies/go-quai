@@ -247,7 +247,6 @@ func loadPeerDBs() (map[string][]*peerdb.PeerDB, error) {
 		&types.WorkObjectHeaderView{},
 		&types.WorkObjectBlockView{},
 		&types.WorkObjectShareView{},
-		common.Hash{},
 	}
 
 	generateLocations := func() []common.Location {

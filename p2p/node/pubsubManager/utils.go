@@ -2,7 +2,6 @@ package pubsubManager
 
 import (
 	"errors"
-	"math/big"
 	"strconv"
 	"strings"
 
@@ -42,7 +41,7 @@ func (t *Topic) buildTopicString() string {
 	encodedLocation := strings.Join(parts, ",")
 	baseTopic := strings.Join([]string{t.genesis.String(), encodedLocation}, "/")
 	switch t.data.(type) {
-	case *types.WorkObjectHeaderView, *big.Int, common.Hash:
+	case *types.WorkObjectHeaderView:
 		return strings.Join([]string{baseTopic, C_headerType}, "/")
 	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView:
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/")
@@ -73,7 +72,7 @@ func (t *Topic) GetRequestDegree() int {
 func NewTopic(genesis common.Hash, location common.Location, data interface{}) (*Topic, error) {
 	var requestDegree int
 	switch data.(type) {
-	case *types.WorkObjectShareView, common.Hash:
+	case *types.WorkObjectShareView:
 		requestDegree = C_defaultRequestDegree
 	case *types.WorkObjectHeaderView:
 		requestDegree = C_workObjectHeaderTypeRequestDegree
