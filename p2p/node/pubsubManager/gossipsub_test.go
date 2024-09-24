@@ -79,7 +79,7 @@ func TestPubsubManager(t *testing.T) {
 	})
 
 	t.Run("Subscribe - QuaiBackend not set error", func(t *testing.T) {
-		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, common.Hash{1}, validatorFunc)
+		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, &types.WorkObjectBlockView{}, validatorFunc)
 		require.ErrorIs(t, err, ErrConsensusNotSet)
 	})
 
@@ -89,13 +89,13 @@ func TestPubsubManager(t *testing.T) {
 		if len(ps.GetTopics()) != 0 {
 			t.Fatal("Topic should be empty before subscription")
 		}
-		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, common.Hash{1}, validatorFunc)
+		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, &types.WorkObjectBlockView{}, validatorFunc)
 		require.NoError(t, err, "Failed to subscribe to topic")
 		if entry := len(ps.GetTopics()); entry != 1 {
 			t.Fatalf("Expected 1 topic, got %d", entry)
 		}
 		// Can't Subscribe to same topic
-		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, common.Hash{1}, validatorFunc)
+		err = ps.SubscribeAndRegisterValidator(common.Location{0, 0}, &types.WorkObjectBlockView{}, validatorFunc)
 		require.Error(t, err, "Expected error on subscribe to same topic")
 	})
 
@@ -106,7 +106,10 @@ func TestPubsubManager(t *testing.T) {
 			testCh <- data
 		})
 		// Success case
-		broadcastedMessage := common.Hash{2}
+		newWoHeader := types.NewWorkObjectHeader(common.Hash{1}, common.Hash{1}, big.NewInt(1), big.NewInt(1), big.NewInt(1),
+			common.Hash{1}, types.BlockNonce{}, 0, common.Location{}, common.ZeroAddress(common.Location{0, 0}))
+		newWo := types.NewWorkObjectWithHeaderAndTx(newWoHeader, types.NewEmptyTx())
+		broadcastedMessage := newWo.ConvertToHeaderView()
 		err = ps.Broadcast(common.Location{0, 0}, broadcastedMessage)
 		require.NoError(t, err, "Failed to broadcast message")
 
@@ -119,7 +122,7 @@ func TestPubsubManager(t *testing.T) {
 		err = ps.Unsubscribe(common.Location{0, 0}, "Wrong data type")
 		require.Error(t, err, "Shouldn't unsubscribe from wrong data type")
 
-		err = ps.Unsubscribe(common.Location{0, 0}, common.Hash{2})
+		err = ps.Unsubscribe(common.Location{0, 0}, &types.WorkObjectBlockView{})
 		require.NoError(t, err, "Failed to unsubscribe from topic")
 
 		if len(ps.GetTopics()) != 0 {
@@ -151,22 +154,7 @@ func TestMultipleRequests(t *testing.T) {
 	wo := types.EmptyWorkObject(common.ZONE_CTX)
 	wo.WorkObjectHeader().SetCoinbase(common.BytesToAddress([]byte{1}, common.Location{0, 0}))
 
-	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
-	inner := &types.QuaiTx{
-		ChainID:    new(big.Int).SetUint64(1),
-		Nonce:      1,
-		GasTipCap:  new(big.Int).SetUint64(0),
-		GasFeeCap:  new(big.Int).SetUint64(0),
-		Gas:        uint64(0),
-		To:         &to,
-		Value:      new(big.Int).SetUint64(0),
-		Data:       []byte{},
-		AccessList: types.AccessList{},
-		V:          new(big.Int).SetUint64(0),
-		R:          new(big.Int).SetUint64(0),
-		S:          new(big.Int).SetUint64(0),
-	}
-	tx := types.NewTx(inner)
+	tx := types.NewEmptyTx()
 	txs := types.Transactions{tx}
 
 	headerView := wo.ConvertToHeaderView()

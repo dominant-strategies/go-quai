@@ -181,7 +181,7 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woBody.SetTransactions([]*Transaction{})
 	wo.woBody.SetOutboundEtxs([]*Transaction{})
 	wo.woBody.SetManifest(BlockManifest{})
-	return NewWorkObjectWithHeader(wo, &Transaction{}, nodeCtx, BlockObject)
+	return NewWorkObjectWithHeader(wo, NewEmptyTx(), nodeCtx, BlockObject)
 }
 
 // ProtoEncode serializes h into the Quai Proto Header format

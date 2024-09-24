@@ -72,6 +72,25 @@ func NewTx(inner TxData) *Transaction {
 	return tx
 }
 
+func NewEmptyTx() *Transaction {
+	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
+	inner := &QuaiTx{
+		ChainID:    new(big.Int).SetUint64(1),
+		Nonce:      1,
+		GasTipCap:  new(big.Int).SetUint64(0),
+		GasFeeCap:  new(big.Int).SetUint64(0),
+		Gas:        uint64(0),
+		To:         &to,
+		Value:      new(big.Int).SetUint64(0),
+		Data:       []byte{},
+		AccessList: AccessList{},
+		V:          new(big.Int).SetUint64(0),
+		R:          new(big.Int).SetUint64(0),
+		S:          new(big.Int).SetUint64(0),
+	}
+	return NewTx(inner)
+}
+
 func (tx *Transaction) SetInner(inner TxData) {
 	tx.setDecoded(inner, 0)
 }
