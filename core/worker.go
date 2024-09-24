@@ -935,6 +935,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 			w.logger.WithField("err", err).Error("Failed to commit an etx")
 		}
 	}
+	firstQiTx := true
 	for {
 		// In the following two cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -965,7 +966,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				}).Trace("Not enough gas for further transactions")
 				break
 			}
-			if err := w.processQiTx(tx, env, parent); err != nil {
+			if err := w.processQiTx(tx, env, parent, firstQiTx); err != nil {
 				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") {
 					// This is not an invalid tx, our block is just full of ETXs
 					// Alternatively, a tx double spends a cached deleted UTXO, likely replaced-by-fee
@@ -989,6 +990,7 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				// It's unlikely that this transaction will be valid in the future so remove it asynchronously
 				qiTxsToRemove = append(qiTxsToRemove, &hash)
 			}
+			firstQiTx = false
 			txs.PopNoSort()
 			continue
 		}
@@ -1535,7 +1537,7 @@ func (w *worker) CurrentInfo(header *types.WorkObject) bool {
 	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }
 
-func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *types.WorkObject) error {
+func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *types.WorkObject, firstQiTx bool) error {
 	location := w.hc.NodeLocation()
 	if tx.Type() != types.QiTxType {
 		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
@@ -1740,12 +1742,31 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 	}
 	env.txs = append(env.txs, tx)
 	env.utxoFees.Add(env.utxoFees, txFeeInQit)
+<<<<<<< HEAD
 
 	env.utxosDelete = append(env.utxosDelete, utxosDeleteHashes...)
 	env.utxosCreate = append(env.utxosCreate, utxosCreateHashes...)
 
 	if err := CheckDenominations(inputs, outputs); err != nil {
 		return err
+=======
+	for outpoint, utxo := range utxosDelete {
+		utxoHash := types.UTXOHash(outpoint.TxHash, outpoint.Index, utxo)
+		if _, exists := env.deletedUtxos[utxoHash]; exists {
+			return fmt.Errorf("tx %032x double spends UTXO %032x:%d", tx.Hash(), outpoint.TxHash, outpoint.Index)
+		}
+		env.deletedUtxos[utxoHash] = struct{}{}
+		env.utxosDelete = append(env.utxosDelete, utxoHash)
+	}
+	for outPoint, utxo := range utxosCreate {
+		utxoHash := types.UTXOHash(outPoint.TxHash, outPoint.Index, utxo)
+		env.utxosCreate = append(env.utxosCreate, utxoHash)
+	}
+	if !firstQiTx { // The first transaction in the block can skip denominations check
+		if err := CheckDenominations(inputs, outputs); err != nil {
+			return err
+		}
+>>>>>>> 7568d74b (First Qi transaction in a block can aggregate denominations)
 	}
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil
