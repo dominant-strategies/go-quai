@@ -81,15 +81,15 @@ func (p *PendingEtxsRollup) ProtoDecode(protoPendingEtxsRollup *ProtoPendingEtxs
 // itself, so the Etxs list will just contain the ETXs emitted directly in that
 // zone block (a.k.a. a singleton).
 type PendingEtxs struct {
-	Header *WorkObject  `json:"header" gencodec:"required"`
-	Etxs   Transactions `json:"etxs"   gencodec:"required"`
+	Header       *WorkObject  `json:"header" gencodec:"required"`
+	OutboundEtxs Transactions `json:"outboundEtxs"   gencodec:"required"`
 }
 
 func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
-	if p == nil || p.Header == nil || p.Etxs == nil {
+	if p == nil || p.Header == nil || p.OutboundEtxs == nil {
 		return false
 	}
-	return DeriveSha(p.Etxs, hasher) == p.Header.EtxHash()
+	return DeriveSha(p.OutboundEtxs, hasher) == p.Header.OutboundEtxHash()
 }
 
 // ProtoEncode encodes the PendingEtxs to protobuf format.
@@ -98,13 +98,13 @@ func (p *PendingEtxs) ProtoEncode() (*ProtoPendingEtxs, error) {
 	if err != nil {
 		return nil, err
 	}
-	etxs, err := p.Etxs.ProtoEncode()
+	etxs, err := p.OutboundEtxs.ProtoEncode()
 	if err != nil {
 		return nil, err
 	}
 	return &ProtoPendingEtxs{
-		Header: header,
-		Etxs:   etxs,
+		Header:       header,
+		OutboundEtxs: etxs,
 	}, nil
 }
 
@@ -118,8 +118,8 @@ func (p *PendingEtxs) ProtoDecode(protoPendingEtxs *ProtoPendingEtxs, location c
 	if err != nil {
 		return err
 	}
-	p.Etxs = Transactions{}
-	err = p.Etxs.ProtoDecode(protoPendingEtxs.GetEtxs(), location)
+	p.OutboundEtxs = Transactions{}
+	err = p.OutboundEtxs.ProtoDecode(protoPendingEtxs.GetOutboundEtxs(), location)
 	if err != nil {
 		return err
 	}

@@ -72,7 +72,7 @@ type Receipt struct {
 	BlockHash        common.Hash  `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int     `json:"blockNumber,omitempty"`
 	TransactionIndex uint         `json:"transactionIndex"`
-	Etxs             Transactions `json:"etxs"`
+	OutboundEtxs     Transactions `json:"outboundEtxs"`
 }
 
 type receiptMarshaling struct {
@@ -91,7 +91,7 @@ type receiptRLP struct {
 	CumulativeGasUsed uint64
 	Bloom             Bloom
 	Logs              []*Log
-	Etxs              []*Transaction
+	OutboundEtxs      []*Transaction
 }
 
 // storedReceiptRLP is the storage encoding of a receipt used in database version 4.
@@ -101,7 +101,7 @@ type storedReceiptRLP struct {
 	TxHash            common.Hash
 	ContractAddress   common.Address
 	Logs              []*LogForStorage
-	Etxs              []*Transaction
+	OutboundEtxs      []*Transaction
 	GasUsed           uint64
 }
 
@@ -124,7 +124,7 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
-	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs, r.Etxs}
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs, r.OutboundEtxs}
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
@@ -245,11 +245,11 @@ func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
 		ContractAddress:   r.ContractAddress.ProtoEncode(),
 		GasUsed:           r.GasUsed,
 	}
-	protoEtxs, err := r.Etxs.ProtoEncode()
+	protoEtxs, err := r.OutboundEtxs.ProtoEncode()
 	if err != nil {
 		return nil, err
 	}
-	ProtoReceiptForStorage.Etxs = protoEtxs
+	ProtoReceiptForStorage.OutboundEtxs = protoEtxs
 
 	protoLogs := &ProtoLogsForStorage{}
 	protoLogs.Logs = make([]*ProtoLogForStorage, len(r.Logs))
@@ -286,13 +286,13 @@ func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, lo
 		}
 		r.Logs = append(r.Logs, (*Log)(log))
 	}
-	for _, protoEtx := range protoReceipt.Etxs.GetTransactions() {
+	for _, protoEtx := range protoReceipt.OutboundEtxs.GetTransactions() {
 		etx := new(Transaction)
 		err := etx.ProtoDecode(protoEtx, location)
 		if err != nil {
 			return err
 		}
-		r.Etxs = append(r.Etxs, etx)
+		r.OutboundEtxs = append(r.OutboundEtxs, etx)
 	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 	return nil
@@ -305,13 +305,13 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
 		Logs:              make([]*LogForStorage, len(r.Logs)),
-		Etxs:              make([]*Transaction, len(r.Etxs)),
+		OutboundEtxs:      make([]*Transaction, len(r.OutboundEtxs)),
 	}
 	for i, log := range r.Logs {
 		enc.Logs[i] = (*LogForStorage)(log)
 	}
-	for i, etx := range r.Etxs {
-		enc.Etxs[i] = (*Transaction)(etx)
+	for i, etx := range r.OutboundEtxs {
+		enc.OutboundEtxs[i] = (*Transaction)(etx)
 	}
 	return rlp.Encode(w, enc)
 }
@@ -343,9 +343,9 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)
 	}
-	r.Etxs = make([]*Transaction, len(stored.Etxs))
-	for i, etx := range stored.Etxs {
-		r.Etxs[i] = (*Transaction)(etx)
+	r.OutboundEtxs = make([]*Transaction, len(stored.OutboundEtxs))
+	for i, etx := range stored.OutboundEtxs {
+		r.OutboundEtxs[i] = (*Transaction)(etx)
 	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 
@@ -366,7 +366,7 @@ func (r Receipt) Supported() bool {
 // EncodeIndex encodes the i'th receipt to w.
 func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	if r := rs[i]; r.Supported() {
-		data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs, r.Etxs}
+		data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs, r.OutboundEtxs}
 		w.WriteByte(r.Type)
 		rlp.Encode(w, data)
 	}

@@ -401,13 +401,13 @@ func TestPendingEtxStorage(t *testing.T) {
 	}
 
 	etx := types.PendingEtxs{
-		Header: wo,
-		Etxs:   types.Transactions{transaction},
+		Header:       wo,
+		OutboundEtxs: types.Transactions{transaction},
 	}
 
 	WritePendingEtxs(db, etx)
 
-	if entry := ReadPendingEtxs(db, wo.Hash()); entry.Etxs[0].Hash() != transaction.Hash() {
+	if entry := ReadPendingEtxs(db, wo.Hash()); entry.OutboundEtxs[0].Hash() != transaction.Hash() {
 		t.Fatalf("Stored pending etx not found: %v", entry)
 	}
 

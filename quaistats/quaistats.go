@@ -1081,7 +1081,7 @@ func (s *Service) cacheBlock(block *types.WorkObject) cachedBlock {
 		quaiTxCount: quaiTxCount,
 		qiTxCount:   qiTxCount,
 		etxInCount:  etxInCount,
-		etxOutCount: float64(len(block.Etxs())),
+		etxOutCount: float64(len(block.OutboundEtxs())),
 		time:        block.Time(),
 	}
 	s.blockLookupCache.Add(block.Hash(), currentBlock)

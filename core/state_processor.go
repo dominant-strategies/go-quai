@@ -561,7 +561,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		} else {
 			return nil, nil, nil, nil, 0, 0, nil, ErrTxTypeNotSupported
 		}
-		for _, etx := range receipt.Etxs {
+		for _, etx := range receipt.OutboundEtxs {
 			if receipt.Status == types.ReceiptStatusSuccessful {
 				emittedEtxs = append(emittedEtxs, etx)
 			}
@@ -694,7 +694,7 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, Etxs: result.Etxs}
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, OutboundEtxs: result.Etxs}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 		logger.WithField("err", result.Err).Debug("Transaction failed")
@@ -1244,7 +1244,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 	if err != nil {
 		return nil, err
 	}
-	etxRoot, err := statedb.CommitETXs()
+	etxRoot, err := statedb.CommitEtxs()
 	if err != nil {
 		return nil, err
 	}
@@ -1525,7 +1525,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)
 		}
-		etxRoot, err := statedb.CommitETXs()
+		etxRoot, err := statedb.CommitEtxs()
 		if err != nil {
 			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(nodeCtx), current.EVMRoot().Hex(), err)

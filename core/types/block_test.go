@@ -39,7 +39,7 @@ func headerTestData() (*Header, common.Hash) {
 		quaiStateSize:            big.NewInt(1000),
 		utxoRoot:                 common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
 		txHash:                   common.HexToHash("0x6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef5"),
-		etxHash:                  common.HexToHash("0x789abcdef0123456789abcdef0123456789abcdef0123456789abcdef6"),
+		outboundEtxHash:          common.HexToHash("0x789abcdef0123456789abcdef0123456789abcdef0123456789abcdef6"),
 		etxRollupHash:            common.HexToHash("0x9abcdef0123456789abcdef0123456789abcdef0123456789abcdef8"),
 		manifestHash:             []common.Hash{common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9"), common.HexToHash("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef9")},
 		receiptHash:              common.HexToHash("0xbcdef0123456789abcdef0123456789abcdef0123456789abcdefa"),
@@ -191,8 +191,8 @@ func FuzzHeaderTxHash(f *testing.F) {
 	fuzzHeaderHash(f, func(h *Header) common.Hash { return h.txHash }, func(h *Header, hash common.Hash) { h.txHash = hash })
 }
 
-func FuzzHeaderEtxHash(f *testing.F) {
-	fuzzHeaderHash(f, func(h *Header) common.Hash { return h.etxHash }, func(h *Header, hash common.Hash) { h.etxHash = hash })
+func FuzzHeaderOutboundEtxHash(f *testing.F) {
+	fuzzHeaderHash(f, func(h *Header) common.Hash { return h.outboundEtxHash }, func(h *Header, hash common.Hash) { h.outboundEtxHash = hash })
 }
 
 func FuzzHeaderEtxRollupHash(f *testing.F) {

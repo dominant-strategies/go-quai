@@ -411,7 +411,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	}).Info("Appended new block")
 
 	if nodeCtx == common.ZONE_CTX {
-		return block.Etxs(), nil
+		return block.OutboundEtxs(), nil
 	} else {
 		return subPendingEtxs, nil
 	}
@@ -719,7 +719,7 @@ func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Locatio
 	}
 	block := sl.hc.GetBlockByHash(hash)
 	if block != nil {
-		return types.PendingEtxs{Header: block.ConvertToPEtxView(), Etxs: block.Etxs()}, nil
+		return types.PendingEtxs{Header: block.ConvertToPEtxView(), OutboundEtxs: block.OutboundEtxs()}, nil
 	}
 	return types.PendingEtxs{}, ErrPendingEtxNotFound
 }
@@ -758,7 +758,7 @@ func (sl *Slice) init() error {
 
 		// Create empty pending ETX entry for genesis block -- genesis may not emit ETXs
 		emptyPendingEtxs := types.Transactions{}
-		rawdb.WritePendingEtxs(sl.sliceDb, types.PendingEtxs{Header: genesisHeader, Etxs: emptyPendingEtxs})
+		rawdb.WritePendingEtxs(sl.sliceDb, types.PendingEtxs{Header: genesisHeader, OutboundEtxs: emptyPendingEtxs})
 		rawdb.WritePendingEtxsRollup(sl.sliceDb, types.PendingEtxsRollup{Header: genesisHeader, EtxsRollup: emptyPendingEtxs})
 		err := sl.hc.AddBloom(types.Bloom{}, genesisHeader.Hash())
 		if err != nil {
@@ -812,7 +812,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 			sl.hc.chainHeadFeed.Send(ChainHeadEvent{sl.hc.CurrentHeader()})
 			return nil, ErrBodyNotFound
 		}
-		if len(pendingBlockBody.Etxs()) == 0 {
+		if len(pendingBlockBody.OutboundEtxs()) == 0 {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
@@ -829,7 +829,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 		}
 		wo.Body().SetUncles(nil)
 		wo.Body().SetTransactions(nil)
-		wo.Body().SetEtxs(nil)
+		wo.Body().SetOutboundEtxs(nil)
 		wo.Body().SetInterlinkHashes(interlinkHashes)
 		pendingBlockBody = types.NewWorkObject(wo.WorkObjectHeader(), wo.Body(), nil)
 	}
@@ -843,8 +843,8 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 		uncles[i] = uncle
 		sl.logger.WithField("hash", uncle.Hash()).Debug("Pending Block uncle")
 	}
-	etxs := make(types.Transactions, len(pendingBlockBody.Etxs()))
-	for i, etx := range pendingBlockBody.Etxs() {
+	etxs := make(types.Transactions, len(pendingBlockBody.OutboundEtxs()))
+	for i, etx := range pendingBlockBody.OutboundEtxs() {
 		etxs[i] = etx
 	}
 	subManifest := make(types.BlockManifest, len(pendingBlockBody.Manifest()))
@@ -857,7 +857,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	}
 	pendingBlockBody.Body().SetTransactions(txs)
 	pendingBlockBody.Body().SetUncles(uncles)
-	pendingBlockBody.Body().SetEtxs(etxs)
+	pendingBlockBody.Body().SetOutboundEtxs(etxs)
 	pendingBlockBody.Body().SetManifest(subManifest)
 	pendingBlockBody.Body().SetInterlinkHashes(interlinkHashes)
 	block := types.NewWorkObject(wo.WorkObjectHeader(), pendingBlockBody.Body(), nil)
@@ -902,7 +902,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetQuaiStateSize(header.Header().QuaiStateSize())
 		combinedPendingHeader.Header().SetUncleHash(header.UncleHash())
 		combinedPendingHeader.Header().SetTxHash(header.Header().TxHash())
-		combinedPendingHeader.Header().SetEtxHash(header.EtxHash())
+		combinedPendingHeader.Header().SetOutboundEtxHash(header.OutboundEtxHash())
 		combinedPendingHeader.Header().SetEtxSetRoot(header.EtxSetRoot())
 		combinedPendingHeader.Header().SetReceiptHash(header.ReceiptHash())
 		combinedPendingHeader.Header().SetEVMRoot(header.EVMRoot())
@@ -916,7 +916,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetExtra(header.Extra())
 		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
 		combinedPendingHeader.Body().SetTransactions(header.Transactions())
-		combinedPendingHeader.Body().SetEtxs(header.Etxs())
+		combinedPendingHeader.Body().SetOutboundEtxs(header.OutboundEtxs())
 		combinedPendingHeader.Body().SetUncles(header.Uncles())
 		combinedPendingHeader.Body().SetManifest(header.Manifest())
 	}

@@ -200,7 +200,7 @@ func (hc *HeaderChain) CollectSubRollup(b *types.WorkObject) (types.Transactions
 					hc.fetchPEtx(b.Hash(), hash, b.Location())
 					return nil, ErrPendingEtxNotFound
 				}
-				subRollup = append(subRollup, pendingEtxs.Etxs...)
+				subRollup = append(subRollup, pendingEtxs.OutboundEtxs...)
 			}
 		}
 	}
@@ -255,7 +255,7 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 // those emitted in this block
 func (hc *HeaderChain) CollectEtxRollup(b *types.WorkObject) (types.Transactions, error) {
 	if hc.IsGenesisHash(b.Hash()) {
-		return b.Etxs(), nil
+		return b.OutboundEtxs(), nil
 	}
 	parent := hc.GetBlock(b.ParentHash(hc.NodeCtx()), b.NumberU64(hc.NodeCtx())-1)
 	if parent == nil {
@@ -266,7 +266,7 @@ func (hc *HeaderChain) CollectEtxRollup(b *types.WorkObject) (types.Transactions
 
 func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.WorkObject) (types.Transactions, error) {
 	// Initialize the rollup with ETXs emitted by this block
-	newEtxs := b.Etxs()
+	newEtxs := b.OutboundEtxs()
 	// Terminate the search if we reached genesis
 	if hc.IsGenesisHash(b.Hash()) {
 		return newEtxs, nil

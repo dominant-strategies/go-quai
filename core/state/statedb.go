@@ -688,7 +688,7 @@ func (s *StateDB) ETXRoot() common.Hash {
 	return s.etxTrie.Hash()
 }
 
-func (s *StateDB) CommitETXs() (common.Hash, error) {
+func (s *StateDB) CommitEtxs() (common.Hash, error) {
 	if metrics_config.MetricsEnabled() {
 		defer func(start time.Time) { stateMetrics.WithLabelValues("CommitETXs").Add(float64(time.Since(start))) }(time.Now())
 	}

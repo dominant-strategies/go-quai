@@ -87,11 +87,11 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 // Header represents a block header in the Quai blockchain.
 type Header struct {
 	parentHash               []common.Hash `json:"parentHash"            gencodec:"required"`
-	uncleHash                common.Hash   `json:"uncleHash"            gencodec:"required"`
+	uncleHash                common.Hash   `json:"uncleHash"             gencodec:"required"`
 	evmRoot                  common.Hash   `json:"evmRoot"               gencodec:"required"`
 	utxoRoot                 common.Hash   `json:"utxoRoot"              gencodec:"required"`
 	txHash                   common.Hash   `json:"transactionsRoot"      gencodec:"required"`
-	etxHash                  common.Hash   `json:"etxsRoot"              gencodec:"required"`
+	outboundEtxHash          common.Hash   `json:"outboundEtxsRoot"      gencodec:"required"`
 	etxSetRoot               common.Hash   `json:"etxSetRoot"            gencodec:"required"`
 	etxRollupHash            common.Hash   `json:"extRollupRoot"         gencodec:"required"`
 	quaiStateSize            *big.Int      `json:"quaiStateSize"         gencodec:"required"`
@@ -134,7 +134,7 @@ func EmptyHeader() *Header {
 	h.utxoRoot = EmptyRootHash
 	h.quaiStateSize = big.NewInt(0)
 	h.txHash = EmptyRootHash
-	h.etxHash = EmptyRootHash
+	h.outboundEtxHash = EmptyRootHash
 	h.etxSetRoot = EmptyRootHash
 	h.etxRollupHash = EmptyRootHash
 	h.uncleHash = EmptyUncleHash
@@ -179,7 +179,7 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woBody.SetHeader(h)
 	wo.woBody.SetUncles([]*WorkObjectHeader{})
 	wo.woBody.SetTransactions([]*Transaction{})
-	wo.woBody.SetEtxs([]*Transaction{})
+	wo.woBody.SetOutboundEtxs([]*Transaction{})
 	wo.woBody.SetManifest(BlockManifest{})
 	return NewWorkObjectWithHeader(wo, &Transaction{}, nodeCtx, BlockObject)
 }
@@ -194,7 +194,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	evmRoot := common.ProtoHash{Value: h.EVMRoot().Bytes()}
 	utxoRoot := common.ProtoHash{Value: h.UTXORoot().Bytes()}
 	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
-	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
+	outboundEtxhash := common.ProtoHash{Value: h.OutboundEtxHash().Bytes()}
 	etxSetRoot := common.ProtoHash{Value: h.EtxSetRoot().Bytes()}
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
@@ -214,7 +214,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		EvmRoot:           &evmRoot,
 		UtxoRoot:          &utxoRoot,
 		TxHash:            &txHash,
-		EtxHash:           &etxhash,
+		OutboundEtxHash:   &outboundEtxhash,
 		EtxSetRoot:        &etxSetRoot,
 		QuaiStateSize:     h.QuaiStateSize().Bytes(),
 		EtxRollupHash:     &etxRollupHash,
@@ -273,8 +273,8 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.TxHash == nil {
 		return errors.New("missing required field 'TxHash' in Header")
 	}
-	if protoHeader.EtxHash == nil {
-		return errors.New("missing required field 'EtxHash' in Header")
+	if protoHeader.OutboundEtxHash == nil {
+		return errors.New("missing required field 'OutboundEtxHash' in Header")
 	}
 	if protoHeader.EtxSetRoot == nil {
 		return errors.New("missing required field 'EtxSetRoot' in Header")
@@ -353,7 +353,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.SetUTXORoot(common.BytesToHash(protoHeader.GetUtxoRoot().GetValue()))
 	h.SetTxHash(common.BytesToHash(protoHeader.GetTxHash().GetValue()))
 	h.SetReceiptHash(common.BytesToHash(protoHeader.GetReceiptHash().GetValue()))
-	h.SetEtxHash(common.BytesToHash(protoHeader.GetEtxHash().GetValue()))
+	h.SetOutboundEtxHash(common.BytesToHash(protoHeader.GetOutboundEtxHash().GetValue()))
 	h.SetEtxSetRoot(common.BytesToHash(protoHeader.GetEtxSetRoot().GetValue()))
 	h.SetEtxRollupHash(common.BytesToHash(protoHeader.GetEtxRollupHash().GetValue()))
 	h.SetPrimeTerminusHash(common.BytesToHash(protoHeader.GetPrimeTerminusHash().GetValue()))
@@ -393,7 +393,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"size":              hexutil.Uint64(h.Size()),
 		"transactionsRoot":  h.TxHash(),
 		"receiptsRoot":      h.ReceiptHash(),
-		"etxsRoot":          h.EtxHash(),
+		"outboundEtxsRoot":  h.OutboundEtxHash(),
 		"etxSetRoot":        h.EtxSetRoot(),
 		"etxRollupRoot":     h.EtxRollupHash(),
 		"primeTerminusHash": h.PrimeTerminusHash(),
@@ -453,8 +453,8 @@ func (h *Header) QuaiStateSize() *big.Int {
 func (h *Header) TxHash() common.Hash {
 	return h.txHash
 }
-func (h *Header) EtxHash() common.Hash {
-	return h.etxHash
+func (h *Header) OutboundEtxHash() common.Hash {
+	return h.outboundEtxHash
 }
 func (h *Header) EtxSetRoot() common.Hash {
 	return h.etxSetRoot
@@ -547,10 +547,10 @@ func (h *Header) SetTxHash(val common.Hash) {
 	h.sealHash = atomic.Value{} // clear sealHash cache
 	h.txHash = val
 }
-func (h *Header) SetEtxHash(val common.Hash) {
+func (h *Header) SetOutboundEtxHash(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
 	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.etxHash = val
+	h.outboundEtxHash = val
 }
 func (h *Header) SetEtxSetRoot(val common.Hash) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -677,7 +677,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 	evmRoot := common.ProtoHash{Value: h.EVMRoot().Bytes()}
 	utxoRoot := common.ProtoHash{Value: h.UTXORoot().Bytes()}
 	txHash := common.ProtoHash{Value: h.TxHash().Bytes()}
-	etxhash := common.ProtoHash{Value: h.EtxHash().Bytes()}
+	outboundEtxhash := common.ProtoHash{Value: h.OutboundEtxHash().Bytes()}
 	etxSetRoot := common.ProtoHash{Value: h.EtxSetRoot().Bytes()}
 	etxRollupHash := common.ProtoHash{Value: h.EtxRollupHash().Bytes()}
 	receiptHash := common.ProtoHash{Value: h.ReceiptHash().Bytes()}
@@ -697,7 +697,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		EvmRoot:           &evmRoot,
 		UtxoRoot:          &utxoRoot,
 		TxHash:            &txHash,
-		EtxHash:           &etxhash,
+		OutboundEtxHash:   &outboundEtxhash,
 		EtxSetRoot:        &etxSetRoot,
 		EtxRollupHash:     &etxRollupHash,
 		ReceiptHash:       &receiptHash,
@@ -818,7 +818,7 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody(nodeCtx int) bool {
-	return h.EmptyTxs() && h.EmptyUncles() && h.EmptyEtxs() && h.EmptyManifest(nodeCtx)
+	return h.EmptyTxs() && h.EmptyUncles() && h.EmptyOutboundEtxs() && h.EmptyManifest(nodeCtx)
 }
 
 // EmptyTxs returns true if there are no txs for this header/block.
@@ -827,8 +827,8 @@ func (h *Header) EmptyTxs() bool {
 }
 
 // EmptyEtxs returns true if there are no etxs for this header/block.
-func (h *Header) EmptyEtxs() bool {
-	return h.EtxHash() == EmptyRootHash
+func (h *Header) EmptyOutboundEtxs() bool {
+	return h.OutboundEtxHash() == EmptyRootHash
 }
 
 // EmptyEtxs returns true if there are no etxs for this header/block.
@@ -881,7 +881,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetEVMRoot(h.EVMRoot())
 	cpy.SetUTXORoot(h.UTXORoot())
 	cpy.SetTxHash(h.TxHash())
-	cpy.SetEtxHash(h.EtxHash())
+	cpy.SetOutboundEtxHash(h.OutboundEtxHash())
 	cpy.SetEtxSetRoot(h.EtxSetRoot())
 	cpy.SetEtxRollupHash(h.EtxRollupHash())
 	cpy.SetReceiptHash(h.ReceiptHash())

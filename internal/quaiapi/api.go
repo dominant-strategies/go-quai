@@ -1184,7 +1184,7 @@ func newRPCTransactionFromBlockIndex(b *types.WorkObject, index uint64, etxs boo
 	nodeCtx := nodeLocation.Context()
 	var txs types.Transactions
 	if etxs {
-		txs = b.Etxs()
+		txs = b.OutboundEtxs()
 	} else {
 		txs = b.Transactions()
 	}
@@ -1207,7 +1207,7 @@ func newRPCRawTransactionFromBlockIndex(b *types.WorkObject, index uint64) hexut
 // newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
 func newRPCTransactionFromBlockHash(b *types.WorkObject, hash common.Hash, etxs bool, nodeLocation common.Location) *RPCTransaction {
 	if etxs {
-		for idx, tx := range b.Etxs() {
+		for idx, tx := range b.OutboundEtxs() {
 			if tx.Hash() == hash {
 				return newRPCTransactionFromBlockIndex(b, uint64(idx), true, nodeLocation)
 			}
@@ -1513,7 +1513,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
 		"logs":              receipt.Logs,
-		"etxs":              receipt.Etxs,
+		"outboundEtxs":      receipt.OutboundEtxs,
 		"logsBloom":         receipt.Bloom,
 		"type":              hexutil.Uint(tx.Type()),
 	}

@@ -21,7 +21,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		UTXORoot		 				common.Hash	 			`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
-		EtxHash      					common.Hash   			`json:"etxsRoot"			gencodec:"required"`
+		OutboundEtxHash      			common.Hash   			`json:"outboundEtxsRoot"			gencodec:"required"`
 		EtxSetRoot    					common.Hash    			`json:"etxSetRoot"          		gencodec:"required"`
 		EtxRollupHash					common.Hash   			`json:"etxRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
@@ -65,7 +65,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.QuaiStateSize = (*hexutil.Big)(h.QuaiStateSize())
 	enc.UTXORoot = h.UTXORoot()
 	enc.TxHash = h.TxHash()
-	enc.EtxHash = h.EtxHash()
+	enc.OutboundEtxHash = h.OutboundEtxHash()
 	enc.EtxSetRoot = h.EtxSetRoot()
 	enc.EtxRollupHash = h.EtxRollupHash()
 	enc.ReceiptHash = h.ReceiptHash()
@@ -96,7 +96,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		UTXORoot		 				*common.Hash	 		`json:"utxoRoot"           			gencodec:"required"`
 		TxHash       					*common.Hash   			`json:"transactionsRoot"   			gencodec:"required"`
 		ReceiptHash  					*common.Hash   			`json:"receiptsRoot"       			gencodec:"required"`
-		EtxHash      					*common.Hash   			`json:"etxsRoot"			gencodec:"required"`
+		OutboundEtxHash      			*common.Hash   			`json:"outboundEtxsRoot"			gencodec:"required"`
 		EtxSetRoot    					*common.Hash    		`json:"etxSetRoot"          		gencodec:"required"`
 		EtxRollupHash					*common.Hash   			`json:"etxRollupRoot"      			gencodec:"required"`
 		ManifestHash 					[]common.Hash  			`json:"manifestHash"       			gencodec:"required"`
@@ -136,8 +136,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.TxHash == nil {
 		return errors.New("missing required field 'transactionsRoot' for Header")
 	}
-	if dec.EtxHash == nil {
-		return errors.New("missing required field 'etxsRoot' for Header")
+	if dec.OutboundEtxHash == nil {
+		return errors.New("missing required field 'outboundEtxsRoot' for Header")
 	}
 	if dec.EtxSetRoot == nil {
 		return errors.New("missing required field 'etxSetRoot' for Header")
@@ -240,7 +240,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetUTXORoot(*dec.UTXORoot)
 	h.SetTxHash(*dec.TxHash)
 	h.SetReceiptHash(*dec.ReceiptHash)
-	h.SetEtxHash(*dec.EtxHash)
+	h.SetOutboundEtxHash(*dec.OutboundEtxHash)
 	h.SetEtxSetRoot(*dec.EtxSetRoot)
 	h.SetEtxRollupHash(*dec.EtxRollupHash)
 	h.SetPrimeTerminusHash(*dec.PrimeTerminusHash)
@@ -360,7 +360,7 @@ func (wb *WorkObjectBody) MarshalJSON() ([]byte, error) {
 	var enc struct {
 		Header 				*Header 			`json:"header" gencoden:"required"`
 		Transactions 		Transactions 		`json:"transactions" gencoden:"required"`
-		Etxs 				Transactions 		`json:"etxs" gencoden:"required"`
+		OutboundEtxs 		Transactions 		`json:"outboundEtxs" gencoden:"required"`
 		Uncles 				[]*WorkObjectHeader	`json:"uncles" gencoden:"required"`
 		Manifest 			BlockManifest 		`json:"manifest" gencoden:"required"`
 		InterlinkHashes 	common.Hashes 		`json:"interlinkHashes" gencoden:"required"`
@@ -368,7 +368,7 @@ func (wb *WorkObjectBody) MarshalJSON() ([]byte, error) {
 
 	enc.Header = wb.Header()
 	enc.Transactions = wb.Transactions()
-	enc.Etxs = wb.Etxs()
+	enc.OutboundEtxs = wb.OutboundEtxs()
 	enc.Uncles = wb.Uncles()
 	enc.Manifest = wb.Manifest()
 	enc.InterlinkHashes = wb.InterlinkHashes()
@@ -381,7 +381,7 @@ func (wb *WorkObjectBody) UnmarshalJSON(input []byte) error {
 	var dec struct {
 		Header 				*Header 				`json:"header" gencoden:"required"`
 		Transactions 		Transactions 			`json:"transactions" gencoden:"required"`
-		Etxs 	Transactions 			`json:"etxs" gencoden:"required"`
+		OutboundEtxs 		Transactions 			`json:"outboundEtxs" gencoden:"required"`
 		Uncles 				[]*WorkObjectHeader 	`json:"uncles" gencoden:"required"`
 		Manifest 			BlockManifest 			`json:"manifest" gencoden:"required"`
 		InterlinkHashes 	common.Hashes 			`json:"interlinkHashes" gencoden:"required"`
@@ -394,7 +394,7 @@ func (wb *WorkObjectBody) UnmarshalJSON(input []byte) error {
 
 	wb.SetHeader(dec.Header)
 	wb.SetTransactions(dec.Transactions)
-	wb.SetEtxs(dec.Etxs)
+	wb.SetOutboundEtxs(dec.OutboundEtxs)
 	wb.SetUncles(dec.Uncles)
 	wb.SetManifest(dec.Manifest)
 	wb.SetInterlinkHashes(dec.InterlinkHashes)

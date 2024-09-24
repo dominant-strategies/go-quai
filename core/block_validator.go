@@ -75,7 +75,7 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 		if len(block.Transactions()) != 0 {
 			return fmt.Errorf("region body has non zero transactions")
 		}
-		if len(block.Etxs()) != 0 {
+		if len(block.OutboundEtxs()) != 0 {
 			return fmt.Errorf("region body has non zero etx transactions")
 		}
 		if len(block.Uncles()) != 0 {
@@ -106,8 +106,8 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 			}
 		}
 		// The header view should have the etxs populated
-		if hash := types.DeriveSha(block.Etxs(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
-			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+		if hash := types.DeriveSha(block.OutboundEtxs(), trie.NewStackTrie(nil)); hash != header.OutboundEtxHash() {
+			return fmt.Errorf("outbound etx hash mismatch: have %x, want %x", hash, header.OutboundEtxHash())
 		}
 	}
 	return nil
@@ -131,7 +131,7 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 		if len(wo.Transactions()) != 0 {
 			return fmt.Errorf("region body has non zero transactions")
 		}
-		if len(wo.Etxs()) != 0 {
+		if len(wo.OutboundEtxs()) != 0 {
 			return fmt.Errorf("region body has non zero etx transactions")
 		}
 		if len(wo.Uncles()) != 0 {
@@ -162,8 +162,8 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 			return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
 		}
 		// The header view should have the etxs populated
-		if hash := types.DeriveSha(wo.Etxs(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
-			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+		if hash := types.DeriveSha(wo.OutboundEtxs(), trie.NewStackTrie(nil)); hash != header.OutboundEtxHash() {
+			return fmt.Errorf("outbound transaction hash mismatch: have %x, want %x", hash, header.OutboundEtxHash())
 		}
 	}
 	return nil
@@ -248,7 +248,7 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 		if len(wo.Transactions()) != 0 {
 			return fmt.Errorf("region body has non zero transactions")
 		}
-		if len(wo.Etxs()) != 0 {
+		if len(wo.OutboundEtxs()) != 0 {
 			return fmt.Errorf("region body has non zero etx transactions")
 		}
 		if len(wo.Uncles()) != 0 {
@@ -277,8 +277,8 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 			return fmt.Errorf("zone body has non zero interlink hashes")
 		}
 		// The header view should have the etxs populated
-		if hash := types.DeriveSha(wo.Etxs(), trie.NewStackTrie(nil)); hash != header.EtxHash() {
-			return fmt.Errorf("external transaction root hash mismatch: have %x, want %x", hash, header.EtxHash())
+		if hash := types.DeriveSha(wo.OutboundEtxs(), trie.NewStackTrie(nil)); hash != header.OutboundEtxHash() {
+			return fmt.Errorf("outbound transaction hash mismatch: have %x, want %x", hash, header.OutboundEtxHash())
 		}
 	}
 
@@ -302,7 +302,7 @@ func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 		return fmt.Errorf("wo header is nil")
 	}
 	// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
-	if len(wo.Etxs()) != 0 {
+	if len(wo.OutboundEtxs()) != 0 {
 		return fmt.Errorf("zone body has non zero transactions")
 	}
 	if len(wo.Manifest()) != 0 {
@@ -363,8 +363,8 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 
 	// Confirm the ETXs emitted by the transactions in this block exactly match the
 	// ETXs given in the block body
-	if etxHash := types.DeriveSha(etxs, trie.NewStackTrie(nil)); etxHash != header.EtxHash() {
-		return fmt.Errorf("invalid etx hash (remote: %x local: %x)", header.EtxHash(), etxHash)
+	if etxHash := types.DeriveSha(etxs, trie.NewStackTrie(nil)); etxHash != header.OutboundEtxHash() {
+		return fmt.Errorf("invalid outbound etx hash (remote: %x local: %x)", header.OutboundEtxHash(), etxHash)
 	}
 
 	// Check that the UncledEntropy in the header matches the S from the block

@@ -617,31 +617,31 @@ func (w *worker) printPendingHeaderInfo(work *environment, block *types.WorkObje
 	work.uncleMu.RLock()
 	if w.CurrentInfo(block) {
 		w.logger.WithFields(log.Fields{
-			"number":     block.Number(w.hc.NodeCtx()),
-			"parent":     block.ParentHash(w.hc.NodeCtx()),
-			"sealhash":   block.SealHash(),
-			"uncles":     len(work.uncles),
-			"txs":        len(work.txs),
-			"etxs":       len(block.Etxs()),
-			"gas":        block.GasUsed(),
-			"fees":       totalFees(block, work.receipts),
-			"elapsed":    common.PrettyDuration(time.Since(start)),
-			"utxoRoot":   block.UTXORoot(),
-			"etxSetRoot": block.EtxSetRoot(),
+			"number":       block.Number(w.hc.NodeCtx()),
+			"parent":       block.ParentHash(w.hc.NodeCtx()),
+			"sealhash":     block.SealHash(),
+			"uncles":       len(work.uncles),
+			"txs":          len(work.txs),
+			"outboundEtxs": len(block.OutboundEtxs()),
+			"gas":          block.GasUsed(),
+			"fees":         totalFees(block, work.receipts),
+			"elapsed":      common.PrettyDuration(time.Since(start)),
+			"utxoRoot":     block.UTXORoot(),
+			"etxSetRoot":   block.EtxSetRoot(),
 		}).Info("Commit new sealing work")
 	} else {
 		w.logger.WithFields(log.Fields{
-			"number":     block.Number(w.hc.NodeCtx()),
-			"parent":     block.ParentHash(w.hc.NodeCtx()),
-			"sealhash":   block.SealHash(),
-			"uncles":     len(work.uncles),
-			"txs":        len(work.txs),
-			"etxs":       len(block.Etxs()),
-			"gas":        block.GasUsed(),
-			"fees":       totalFees(block, work.receipts),
-			"elapsed":    common.PrettyDuration(time.Since(start)),
-			"utxoRoot":   block.UTXORoot(),
-			"etxSetRoot": block.EtxSetRoot(),
+			"number":       block.Number(w.hc.NodeCtx()),
+			"parent":       block.ParentHash(w.hc.NodeCtx()),
+			"sealhash":     block.SealHash(),
+			"uncles":       len(work.uncles),
+			"txs":          len(work.txs),
+			"outboundEtxs": len(block.OutboundEtxs()),
+			"gas":          block.GasUsed(),
+			"fees":         totalFees(block, work.receipts),
+			"elapsed":      common.PrettyDuration(time.Since(start)),
+			"utxoRoot":     block.UTXORoot(),
+			"etxSetRoot":   block.EtxSetRoot(),
 		}).Debug("Commit new sealing work")
 	}
 	work.uncleMu.RUnlock()
@@ -869,7 +869,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		return nil, false, err
 	}
 	if receipt.Status == types.ReceiptStatusSuccessful {
-		env.etxs = append(env.etxs, receipt.Etxs...)
+		env.etxs = append(env.etxs, receipt.OutboundEtxs...)
 	}
 	// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
 	// This extra step is needed because previously the GasUsed was a public method and direct update of the value
@@ -1351,9 +1351,9 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, block *typ
 		}
 	}
 	w.logger.WithFields(log.Fields{
-		"etxs":        etxs,
-		"fill":        fill,
-		"newInbounds": len(newInboundEtxs),
+		"outboundEtxs": etxs,
+		"fill":         fill,
+		"newInbounds":  len(newInboundEtxs),
 	}).Info("ETXs and fill")
 
 	if !fill {
@@ -1413,13 +1413,13 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 			// Compute and set etx rollup hash
 			var etxRollup types.Transactions
 			if w.engine.IsDomCoincident(w.hc, parent) {
-				etxRollup = parent.Etxs()
+				etxRollup = parent.OutboundEtxs()
 			} else {
 				etxRollup, err = w.hc.CollectEtxRollup(parent)
 				if err != nil {
 					return nil, err
 				}
-				etxRollup = append(etxRollup, parent.Etxs()...)
+				etxRollup = append(etxRollup, parent.OutboundEtxs()...)
 			}
 			// Only include the etxs that are going cross Prime in the rollup and the
 			// conversion  and the coinbase tx

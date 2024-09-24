@@ -10,7 +10,7 @@ message ProtoHeader {
   optional common.ProtoHash uncle_hash = 2;
   optional common.ProtoHash evm_root = 3;
   optional common.ProtoHash tx_hash = 4;
-  optional common.ProtoHash etx_hash = 5;
+  optional common.ProtoHash outbound_etx_hash = 5;
   optional common.ProtoHash etx_rollup_hash = 6;
   repeated common.ProtoHash manifest_hash = 7;
   optional common.ProtoHash receipt_hash = 8;
@@ -96,7 +96,7 @@ message ProtoWorkObjectBody {
   optional ProtoHeader header = 1;
   optional ProtoTransactions transactions = 2;
   optional ProtoWorkObjectHeaders uncles = 3;
-  optional ProtoTransactions etxs = 4;
+  optional ProtoTransactions outbound_etxs = 4;
   optional ProtoManifest manifest = 5;
   optional common.ProtoHashes interlink_hashes = 6;
 }
@@ -137,7 +137,7 @@ message ProtoReceiptForStorage {
   common.ProtoHash tx_hash = 4;
   common.ProtoAddress contract_address = 5;
   uint64 gas_used = 6;
-  ProtoTransactions etxs = 7;
+  ProtoTransactions outbound_etxs = 7;
 }
 
 message ProtoReceiptsForStorage {
@@ -166,7 +166,7 @@ message ProtoEtxSet { optional bytes etx_hashes = 1; }
 
 message ProtoPendingEtxs {
   optional ProtoWorkObject header = 1;
-  optional ProtoTransactions etxs = 2;
+  optional ProtoTransactions outbound_etxs = 2;
 }
 
 message ProtoPendingEtxsRollup {
