@@ -1,9 +1,12 @@
 package types
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +17,211 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
 )
+
+type KeyAggVectors struct {
+	Pubkeys        []string `json:"pubkeys"`
+	Tweaks         []string `json:"tweaks"`
+	ValidTestCases []struct {
+		KeyIndices []int  `json:"key_indices"`
+		Expected   string `json:"expected"`
+	} `json:"valid_test_cases"`
+	ErrorTestCases []struct {
+		KeyIndices   []int  `json:"key_indices"`
+		TweakIndices []int  `json:"tweak_indices"`
+		IsXonly      []bool `json:"is_xonly"`
+		Error        struct {
+			Type    string `json:"type"`
+			Signer  int    `json:"signer"`
+			Contrib string `json:"contrib"`
+			Message string `json:"message"`
+		} `json:"error"`
+		Comment string `json:"comment"`
+	} `json:"error_test_cases"`
+}
+
+type SigAggVectors struct {
+	Pubkeys        []string `json:"pubkeys"`
+	PNonces        []string `json:"pnonces"`
+	Tweaks         []string `json:"tweaks"`
+	PSigs          []string `json:"psigs"`
+	Msg            string   `json:"msg"`
+	ValidTestCases []struct {
+		AggNonce     string `json:"aggnonce"`
+		NonceIndices []int  `json:"nonce_indices"`
+		KeyIndices   []int  `json:"key_indices"`
+		TweakIndices []int  `json:"tweak_indices"`
+		IsXonly      []bool `json:"is_xonly"`
+		PSigIndices  []int  `json:"psig_indices"`
+		Expected     string `json:"expected"`
+	} `json:"valid_test_cases"`
+	ErrorTestCases []struct {
+		AggNonce     string `json:"aggnonce"`
+		NonceIndices []int  `json:"nonce_indices"`
+		KeyIndices   []int  `json:"key_indices"`
+		TweakIndices []int  `json:"tweak_indices"`
+		IsXonly      []bool `json:"is_xonly"`
+		PSigIndices  []int  `json:"psig_indices"`
+		Error        struct {
+			Type    string `json:"type"`
+			Signer  int    `json:"signer"`
+			Contrib string `json:"contrib"`
+			Message string `json:"message"`
+		} `json:"error"`
+		Comment string `json:"comment"`
+	} `json:"error_test_cases"`
+}
+
+func TestKeyAggregation(t *testing.T) {
+	vectors, err := loadKeyAggVectors("key_agg_vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, testCase := range vectors.ValidTestCases {
+		t.Run(fmt.Sprintf("KeyIndices_%v", testCase.KeyIndices), func(t *testing.T) {
+			// Collect the public keys
+			var pubKeys []*btcec.PublicKey
+			for _, idx := range testCase.KeyIndices {
+				pubKeyBytes, err := hex.DecodeString(vectors.Pubkeys[idx])
+				if err != nil {
+					t.Fatalf("Failed to decode pubkey: %v", err)
+				}
+				pubKey, err := btcec.ParsePubKey(pubKeyBytes)
+				if err != nil {
+					t.Fatalf("Failed to parse pubkey: %v", err)
+				}
+				pubKeys = append(pubKeys, pubKey)
+			}
+
+			// Perform key aggregation
+			aggKey, _, _, err := musig2.AggregateKeys(pubKeys, false)
+			if err != nil {
+				t.Fatalf("Key aggregation failed: %v", err)
+			}
+
+			// Compare the aggregated key with the expected value
+			expectedAggKeyBytes, err := hex.DecodeString(testCase.Expected)
+			if err != nil {
+				t.Fatalf("Failed to decode expected aggregated key: %v", err)
+			}
+
+			// The expected aggregated key is an x-only public key.
+			// Convert the aggregated key to x-only format.
+			aggKeyBytes := aggKey.FinalKey.SerializeCompressed()[1:] // Remove the prefix byte
+
+			if !bytes.Equal(aggKeyBytes, expectedAggKeyBytes) {
+				t.Errorf("Aggregated key mismatch.\nExpected: %x\nGot:      %x",
+					expectedAggKeyBytes, aggKeyBytes)
+			} else {
+				t.Logf("Success: Aggregated key matches expected value.")
+			}
+		})
+	}
+}
+
+func TestSignatureAggregation(t *testing.T) {
+	vectors, err := loadSigAggVectors("sig_agg_vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, testCase := range vectors.ValidTestCases {
+		t.Run(fmt.Sprintf("KeyIndices_%v_NonceIndices_%v", testCase.KeyIndices, testCase.NonceIndices), func(t *testing.T) {
+			// Collect the public keys
+			var pubKeys []*btcec.PublicKey
+			for _, idx := range testCase.KeyIndices {
+				pubKeyBytes, err := hex.DecodeString(vectors.Pubkeys[idx])
+				if err != nil {
+					t.Fatalf("Failed to decode pubkey: %v", err)
+				}
+				pubKey, err := btcec.ParsePubKey(pubKeyBytes)
+				if err != nil {
+					t.Fatalf("Failed to parse pubkey: %v", err)
+				}
+				pubKeys = append(pubKeys, pubKey)
+			}
+
+			// Compare the aggregated signature with the expected value
+			expectedSigBytes, err := hex.DecodeString(testCase.Expected)
+			if err != nil {
+				t.Fatalf("Failed to decode expected signature: %v", err)
+			}
+
+			// For Musig2, the final signature is a 64-byte Schnorr signature.
+
+			// Verify the aggregated signature
+			msgBytes, err := hex.DecodeString(vectors.Msg)
+			if err != nil {
+				t.Fatalf("Failed to decode message: %v", err)
+			}
+
+			tweaks := make([]musig2.KeyTweakDesc, 0)
+			for _, idx := range testCase.TweakIndices {
+				tweakHex, err := hex.DecodeString(vectors.Tweaks[testCase.TweakIndices[idx]])
+				if err != nil {
+					t.Fatalf("Failed to decode tweak at index %d, %v", idx, err)
+				}
+				tweak := musig2.KeyTweakDesc{
+					Tweak:   [32]byte(tweakHex),
+					IsXOnly: testCase.IsXonly[idx],
+				}
+				tweaks = append(tweaks, tweak)
+			}
+
+			// Use the aggregated key from the key aggregation step
+			aggKey, _, _, err := musig2.AggregateKeys(pubKeys, false, musig2.WithKeyTweaks(tweaks...))
+			if err != nil {
+				t.Fatalf("Key aggregation failed: %v", err)
+			}
+
+			// Verify the signature
+			// Parse r (first 32 bytes) into a btcec.FieldVal
+			var r btcec.FieldVal
+			r.SetByteSlice(expectedSigBytes[:32])
+
+			// Parse s (next 32 bytes) into a btcec.ModNScalar
+			var s btcec.ModNScalar
+			if s.SetByteSlice(expectedSigBytes[32:]) {
+				t.Fatalf("Invalid s value in signature: overflow occurred")
+			}
+
+			// Create the signature using NewSignature
+			finalSig := schnorr.NewSignature(&r, &s)
+
+			if !finalSig.Verify(msgBytes, aggKey.FinalKey) {
+				t.Errorf("Signature verification failed.")
+			} else {
+				t.Logf("Success: Signature verification passed.")
+			}
+		})
+	}
+}
+
+func loadKeyAggVectors(filename string) (*KeyAggVectors, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	var vectors KeyAggVectors
+	err = json.Unmarshal(data, &vectors)
+	if err != nil {
+		return nil, err
+	}
+	return &vectors, nil
+}
+
+func loadSigAggVectors(filename string) (*SigAggVectors, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	var vectors SigAggVectors
+	err = json.Unmarshal(data, &vectors)
+	if err != nil {
+		return nil, err
+	}
+	return &vectors, nil
+}
 
 func TestSingleSigner(t *testing.T) {
 
