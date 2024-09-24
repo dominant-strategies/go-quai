@@ -953,19 +953,22 @@ func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 type TxWithMinerFee struct {
 	tx       *Transaction
 	minerFee *big.Int
+	received time.Time
 }
 
-func (tx *TxWithMinerFee) Tx() *Transaction   { return tx.tx }
-func (tx *TxWithMinerFee) MinerFee() *big.Int { return tx.minerFee }
+func (tx *TxWithMinerFee) Tx() *Transaction    { return tx.tx }
+func (tx *TxWithMinerFee) MinerFee() *big.Int  { return tx.minerFee }
+func (tx *TxWithMinerFee) Received() time.Time { return tx.received }
 
 // NewTxWithMinerFee creates a wrapped transaction, calculating the effective
 // miner gasTipCap if a base fee is provided.
 // Returns error in case of a negative effective miner gasTipCap.
-func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int, qiTxFee *big.Int) (*TxWithMinerFee, error) {
+func NewTxWithMinerFee(tx *Transaction, baseFee *big.Int, qiTxFee *big.Int, received time.Time) (*TxWithMinerFee, error) {
 	if tx.Type() == QiTxType {
 		return &TxWithMinerFee{
 			tx:       tx,
 			minerFee: qiTxFee,
+			received: received,
 		}, nil
 	}
 	minerFee, err := tx.EffectiveGasTip(baseFee)
@@ -1030,7 +1033,7 @@ func NewTransactionsByPriceAndNonce(signer Signer, qiTxs []*TxWithMinerFee, txs 
 		if err != nil {
 			continue
 		}
-		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee, nil)
+		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee, nil, time.Time{})
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
 		if acc.Bytes20() != from || err != nil {
 			delete(txs, from)
@@ -1073,7 +1076,7 @@ func (t *TransactionsByPriceAndNonce) GetFee() *big.Int {
 // Shift replaces the current best head with the next one from the same account.
 func (t *TransactionsByPriceAndNonce) Shift(acc common.AddressBytes, sort bool) {
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
-		if wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee, nil); err == nil {
+		if wrapped, err := NewTxWithMinerFee(txs[0], t.baseFee, nil, time.Time{}); err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
 			if sort {
 				heap.Fix(&t.heads, 0)

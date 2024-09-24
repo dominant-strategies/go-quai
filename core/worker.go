@@ -1742,31 +1742,14 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 	}
 	env.txs = append(env.txs, tx)
 	env.utxoFees.Add(env.utxoFees, txFeeInQit)
-<<<<<<< HEAD
 
 	env.utxosDelete = append(env.utxosDelete, utxosDeleteHashes...)
 	env.utxosCreate = append(env.utxosCreate, utxosCreateHashes...)
 
-	if err := CheckDenominations(inputs, outputs); err != nil {
-		return err
-=======
-	for outpoint, utxo := range utxosDelete {
-		utxoHash := types.UTXOHash(outpoint.TxHash, outpoint.Index, utxo)
-		if _, exists := env.deletedUtxos[utxoHash]; exists {
-			return fmt.Errorf("tx %032x double spends UTXO %032x:%d", tx.Hash(), outpoint.TxHash, outpoint.Index)
-		}
-		env.deletedUtxos[utxoHash] = struct{}{}
-		env.utxosDelete = append(env.utxosDelete, utxoHash)
-	}
-	for outPoint, utxo := range utxosCreate {
-		utxoHash := types.UTXOHash(outPoint.TxHash, outPoint.Index, utxo)
-		env.utxosCreate = append(env.utxosCreate, utxoHash)
-	}
 	if !firstQiTx { // The first transaction in the block can skip denominations check
 		if err := CheckDenominations(inputs, outputs); err != nil {
 			return err
 		}
->>>>>>> 7568d74b (First Qi transaction in a block can aggregate denominations)
 	}
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil

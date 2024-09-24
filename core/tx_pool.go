@@ -102,8 +102,10 @@ var (
 )
 
 var (
-	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
-	statsReportInterval = 1 * time.Minute // Time interval to report transaction pool stats
+	evictionInterval          = time.Minute      // Time interval to check for evictable transactions
+	statsReportInterval       = 1 * time.Minute  // Time interval to report transaction pool stats
+	qiExpirationCheckInterval = 10 * time.Minute // Time interval to check for expired Qi transactions
+	qiExpirationCheckDivisor  = 5                // Check 1/nth of the pool for expired Qi transactions every interval
 )
 
 var (
@@ -187,6 +189,7 @@ type TxPoolConfig struct {
 	AccountQueue    uint64        // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue     uint64        // Maximum number of non-executable transaction slots for all accounts
 	QiPoolSize      uint64        // Maximum number of Qi transactions to store
+	QiTxLifetime    time.Duration // Maximum amount of time Qi transactions are queued
 	Lifetime        time.Duration // Maximum amount of time non-executable transaction are queued
 	ReorgFrequency  time.Duration // Frequency of reorgs outside of new head events
 }
@@ -208,6 +211,7 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	AccountQueue:    3,
 	GlobalQueue:     20048,
 	QiPoolSize:      10024,
+	QiTxLifetime:    30 * time.Minute,
 	Lifetime:        3 * time.Hour,
 	ReorgFrequency:  1 * time.Second,
 }
@@ -271,6 +275,13 @@ func (config *TxPoolConfig) sanitize(logger *log.Logger) TxPoolConfig {
 			"updated":  DefaultTxPoolConfig.QiPoolSize,
 		}).Warn("Sanitizing invalid txpool Qi pool size")
 		conf.QiPoolSize = DefaultTxPoolConfig.QiPoolSize
+	}
+	if conf.QiTxLifetime < time.Second {
+		logger.WithFields(log.Fields{
+			"provided": conf.QiTxLifetime,
+			"updated":  DefaultTxPoolConfig.QiTxLifetime,
+		}).Warn("Sanitizing invalid txpool Qi transaction lifetime")
+		conf.QiTxLifetime = DefaultTxPoolConfig.QiTxLifetime
 	}
 	if conf.Lifetime < 1 {
 		logger.WithFields(log.Fields{
@@ -462,6 +473,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	go pool.poolLimiterGoroutine()
 	go pool.feesGoroutine()
 	go pool.invalidQiTxGoroutine()
+	go pool.qiTxExpirationGoroutine()
 	return pool
 }
 
@@ -1228,7 +1240,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
-		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(currentBlock.WorkObjectHeader(), fee))
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(currentBlock.WorkObjectHeader(), fee), time.Now())
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -1306,7 +1318,7 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 				pool.logger.Error("feesCh is full, skipping until there is room")
 			}
 		}
-		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(pool.chain.CurrentBlock().WorkObjectHeader(), fee))
+		txWithMinerFee, err := types.NewTxWithMinerFee(tx, nil, misc.QiToQuai(pool.chain.CurrentBlock().WorkObjectHeader(), fee), time.Now())
 		if err != nil {
 			pool.logger.Error("Error creating txWithMinerFee: " + err.Error())
 			continue
@@ -2352,6 +2364,33 @@ func (pool *TxPool) invalidQiTxGoroutine() {
 			return
 		case invalidTxHashes := <-pool.invalidQiTxsCh:
 			pool.RemoveQiTxs(invalidTxHashes)
+		}
+	}
+}
+
+func (pool *TxPool) qiTxExpirationGoroutine() {
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	ticker := time.NewTicker(qiExpirationCheckInterval)
+	for {
+		select {
+		case <-pool.reorgShutdownCh:
+			return
+		case <-ticker.C:
+			// Remove expired QiTxs
+			// Grabbing lock is not necessary as LRU already has lock internally
+			for i := 0; i < pool.qiPool.Len()/qiExpirationCheckDivisor; i++ {
+				_, oldestTx, _ := pool.qiPool.GetOldest()
+				if time.Since(oldestTx.Received()) > pool.config.QiTxLifetime {
+					pool.qiPool.Remove(oldestTx.Tx().Hash())
+				}
+			}
 		}
 	}
 }
