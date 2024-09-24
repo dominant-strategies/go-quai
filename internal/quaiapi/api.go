@@ -1742,9 +1742,11 @@ func NewPublicWorkSharesAPI(txpoolAPi *PublicTransactionPoolAPI, b Backend) *Pub
 		txpoolAPi,
 		nil,
 	}
-	// Start WorkShare workers
-	worker := StartTxWorker(b.Engine(), b.GetMinerEndpoints(), b.NodeLocation(), api, b.GetWorkShareThreshold())
-	api.txWorker = worker
+	if b.TxMiningEnabled() {
+		// Start WorkShare workers
+		worker := StartTxWorker(b.Engine(), b.GetMinerEndpoints(), b.NodeLocation(), api, b.GetWorkShareThreshold())
+		api.txWorker = worker
+	}
 
 	return api
 }
