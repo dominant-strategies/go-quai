@@ -337,6 +337,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	var totalEtxAppendTime time.Duration
 	var totalEtxCoinbaseTime time.Duration
 	totalQiProcessTimes := make(map[string]time.Duration)
+	firstQiTx := true
 	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
 
@@ -346,10 +347,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if _, ok := senders[tx.Hash()]; ok {
 				checkSig = false
 			}
-			fees, etxs, err, timing := ProcessQiTx(tx, p.hc, checkSig, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit, utxosCreatedDeleted)
+			fees, etxs, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit, utxosCreatedDeleted)
 			if err != nil {
 				return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
+			firstQiTx = false
 			startEtxAppend := time.Now()
 			for _, etx := range etxs {
 				emittedEtxs = append(emittedEtxs, types.NewTx(etx))
@@ -813,9 +815,6 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 			outputs[uint(txOut.Denomination)] -= 1 // This output no longer exists because it has been aggregated
 		}
 	}
-	if err := CheckDenominations(inputs, outputs); err != nil {
-		return nil, err
-	}
 	return totalQitIn, nil
 
 }
@@ -966,7 +965,7 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 	return txFeeInQit, nil
 }
 
-func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, []*types.ExternalTx, error, map[string]time.Duration) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, []*types.ExternalTx, error, map[string]time.Duration) {
 	var elapsedTime time.Duration
 	stepTimings := make(map[string]time.Duration)
 
@@ -1191,8 +1190,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, curre
 
 	// Start timing for signature check
 	stepStart = time.Now()
-	if err := CheckDenominations(inputs, outputs); err != nil {
-		return nil, nil, err, nil
+	if !isFirstQiTx {
+		if err := CheckDenominations(inputs, outputs); err != nil {
+			return nil, nil, err, nil
+		}
 	}
 	// Ensure the transaction signature is valid
 	if checkSig {
