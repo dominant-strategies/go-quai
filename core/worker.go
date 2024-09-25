@@ -66,30 +66,31 @@ const (
 type environment struct {
 	signer types.Signer
 
-	state             *state.StateDB // apply state changes here
-	ancestors         mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family            mapset.Set     // family set (used for checking uncle invalidity)
-	tcount            int            // tx count in cycle
-	gasPool           *types.GasPool // available gas used to pack transactions
-	primaryCoinbase   common.Address
-	secondaryCoinbase common.Address
-	etxRLimit         int // Remaining number of cross-region ETXs that can be included
-	etxPLimit         int // Remaining number of cross-prime ETXs that can be included
-	parentOrder       *int
-	wo                *types.WorkObject
-	txs               []*types.Transaction
-	etxs              []*types.Transaction
-	utxoFees          *big.Int
-	quaiFees          *big.Int
-	subManifest       types.BlockManifest
-	receipts          []*types.Receipt
-	uncleMu           sync.RWMutex
-	uncles            map[common.Hash]*types.WorkObjectHeader
-	utxosCreate       []common.Hash
-	utxosDelete       []common.Hash
-	parentStateSize   *big.Int
-	quaiCoinbaseEtxs  map[[21]byte]*big.Int
-	deletedUtxos      map[common.Hash]struct{}
+	state                   *state.StateDB // apply state changes here
+	ancestors               mapset.Set     // ancestor set (used for checking uncle parent validity)
+	family                  mapset.Set     // family set (used for checking uncle invalidity)
+	tcount                  int            // tx count in cycle
+	gasPool                 *types.GasPool // available gas used to pack transactions
+	primaryCoinbase         common.Address
+	secondaryCoinbase       common.Address
+	etxRLimit               int // Remaining number of cross-region ETXs that can be included
+	etxPLimit               int // Remaining number of cross-prime ETXs that can be included
+	parentOrder             *int
+	wo                      *types.WorkObject
+	gasUsedAfterTransaction []uint64
+	txs                     []*types.Transaction
+	etxs                    []*types.Transaction
+	utxoFees                *big.Int
+	quaiFees                *big.Int
+	subManifest             types.BlockManifest
+	receipts                []*types.Receipt
+	uncleMu                 sync.RWMutex
+	uncles                  map[common.Hash]*types.WorkObjectHeader
+	utxosCreate             []common.Hash
+	utxosDelete             []common.Hash
+	parentStateSize         *big.Int
+	quaiCoinbaseEtxs        map[[21]byte]*big.Int
+	deletedUtxos            map[common.Hash]struct{}
 }
 
 // unclelist returns the contained uncles as the list format.
@@ -150,6 +151,12 @@ type Config struct {
 	Endpoints          []string       // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
 }
 
+type transactionOrderingInfo struct {
+	txs                     []*types.Transaction
+	gasUsedAfterTransaction []uint64
+	block                   *types.WorkObject
+}
+
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
@@ -174,6 +181,7 @@ type worker struct {
 	resubmitIntervalCh             chan time.Duration
 	resubmitAdjustCh               chan *intervalAdjust
 	fillTransactionsRollingAverage *RollingAverage
+	orderTransactionCh             chan transactionOrderingInfo
 
 	asyncPhFeed event.Feed // asyncPhFeed sends an event after each state root update
 	scope       event.SubscriptionScope
@@ -265,6 +273,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		exitCh:                         make(chan struct{}),
 		resubmitIntervalCh:             make(chan time.Duration),
 		resubmitAdjustCh:               make(chan *intervalAdjust, resubmitAdjustChanSize),
+		orderTransactionCh:             make(chan transactionOrderingInfo),
 		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 		logger:                         logger,
 	}
@@ -295,6 +304,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		worker.chainSideSub = worker.hc.SubscribeChainSideEvent(worker.chainSideCh)
 		worker.wg.Add(1)
 		go worker.asyncStateLoop()
+
+		worker.wg.Add(1)
+		go worker.transactionOrderingLoop()
 	}
 
 	worker.ephemeralKey, _ = secp256k1.GeneratePrivateKey()
@@ -467,7 +479,7 @@ func (w *worker) asyncStateLoop() {
 				wo := w.hc.CurrentHeader()
 				w.hc.headermu.Lock()
 				defer w.hc.headermu.Unlock()
-				header, err := w.GeneratePendingHeader(wo, true)
+				header, err := w.GeneratePendingHeader(wo, true, nil, false)
 				if err != nil {
 					w.logger.WithField("err", err).Error("Error generating pending header")
 					return
@@ -502,7 +514,7 @@ func (w *worker) asyncStateLoop() {
 }
 
 // GeneratePendingBlock generates pending block given a commited block.
-func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error) {
+func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs types.TxByPriceAndTime, fromOrderedTransactionSet bool) (*types.WorkObject, error) {
 	nodeCtx := w.hc.NodeCtx()
 
 	if block.Hash() != w.hc.CurrentHeader().Hash() && nodeCtx == common.ZONE_CTX {
@@ -571,7 +583,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		work.utxoFees = big.NewInt(0)
 		work.quaiFees = big.NewInt(0)
 		start := time.Now()
-		if err := w.fillTransactions(interrupt, work, primeTerminus.WorkObjectHeader(), block, fill); err != nil {
+		if err := w.fillTransactions(interrupt, work, primeTerminus.WorkObjectHeader(), block, fill, txs); err != nil {
 			return nil, fmt.Errorf("error generating pending header: %v", err)
 		}
 		if fill {
@@ -637,6 +649,14 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		work.wo.Header().SetBaseFee(big.NewInt(0))
 	}
 
+	if !fromOrderedTransactionSet {
+		select {
+		case w.orderTransactionCh <- transactionOrderingInfo{work.txs, work.gasUsedAfterTransaction, block}:
+		default:
+			w.logger.Info("w.orderTranscationCh is full")
+		}
+	}
+
 	// Create a local environment copy, avoid the data race with snapshot state.
 	newWo, err := w.FinalizeAssemble(w.hc, work.wo, block, work.state, work.txs, uncles, work.etxs, work.subManifest, work.receipts, work.utxosCreate, work.utxosDelete)
 	if err != nil {
@@ -649,6 +669,193 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	work.utxosCreate = nil
 	work.utxosDelete = nil
 	return newWo, nil
+
+}
+
+// transactionOrderingLoop listens to the transaction ordering events and calls the order transaction set function
+func (w *worker) transactionOrderingLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			w.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	defer w.wg.Done()
+
+	for {
+		select {
+		case orderInfo := <-w.orderTransactionCh:
+			w.OrderTransactionSet(orderInfo.txs, orderInfo.gasUsedAfterTransaction, orderInfo.block)
+		case <-w.exitCh:
+			return
+		}
+	}
+}
+
+// OrderTransactionSet takes in the set of transactions and
+// gasUsedAfterTransaction, picks subset of the transactions or change the order
+// of transactions as to increase the revenue of the miner
+// 1) First filtering out the non etx transactions
+// 2) Create a separate unique gas price list
+// 3) Iterate through the gas price list and for each iteration, add all the
+// transactions that are above the gas price and calculate the revenue, it the
+// revenue if greater than the previous best revenue, overwrite the best
+// transaction set, once the whole gas price list is exhausted, there will be a
+// set which maximizes the revenue
+// 4) Call the GeneratePendingHeader from inside and supply the best transaction
+// set
+
+func (w *worker) OrderTransactionSet(txs []*types.Transaction, gasUsedAfterTransaction []uint64, block *types.WorkObject) {
+	defer func() {
+		if r := recover(); r != nil {
+			w.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	type TransactionInfo struct {
+		Tx       *types.Transaction
+		GasPrice *big.Int
+		GasUsed  uint64
+	}
+
+	if len(txs) != len(gasUsedAfterTransaction) {
+		w.logger.Warnf("len of txs %d is not equal to the len of the gas used transactions %d", len(txs), len(gasUsedAfterTransaction))
+		return
+	}
+
+	// Extract the non external transactions from the txs list
+	nonExternalTxs := make([]*types.Transaction, 0)
+	nonExternalGasUsed := make([]uint64, 0)
+	for i, tx := range txs {
+		if tx.Type() != types.ExternalTxType {
+			nonExternalTxs = append(nonExternalTxs, tx)
+			var gasUsed uint64
+			if i == 0 {
+				gasUsed = gasUsedAfterTransaction[i]
+			} else {
+				gasUsed = gasUsedAfterTransaction[i] - gasUsedAfterTransaction[i-1]
+			}
+			nonExternalGasUsed = append(nonExternalGasUsed, gasUsed)
+		}
+	}
+	if len(nonExternalTxs) == 0 {
+		return
+	}
+
+	_, parentOrder, err := w.engine.CalcOrder(w.hc, block)
+	if err != nil {
+		log.Global.Error("error calculating parent order")
+		return
+	}
+	var primeTerminus *types.WorkObject
+	if parentOrder == common.PRIME_CTX {
+		primeTerminus = block
+	} else {
+		primeTerminus = w.hc.GetPrimeTerminus(block)
+		if primeTerminus == nil {
+			log.Global.Error("prime terminus not found")
+			return
+		}
+	}
+	// gas price and the gas used is extracted from each of these non external
+	// transactions for the sorting
+	txInfos := make([]TransactionInfo, 0)
+	for i, tx := range nonExternalTxs {
+		// If there is a Qi transcation, try to get the fee from the pool
+		// If it doesnt exist in the pool, we will ignore the transaction
+		// because, its expensive to calculate the fee
+		var gasPrice *big.Int
+		if tx.Type() == types.QiTxType {
+			fee, exists := w.txPool.qiTxFees.Peek([16]byte(tx.Hash().Bytes()))
+			if !exists {
+				continue
+			}
+			qiFeeInQuai := misc.QiToQuai(primeTerminus.WorkObjectHeader(), fee)
+			// Divide the fee by the gas used by the Qi Tx
+			gasPrice = new(big.Int).Div(qiFeeInQuai, new(big.Int).SetInt64(int64(types.CalculateBlockQiTxGas(tx, w.hc.NodeLocation()))))
+		} else {
+			gasPrice = new(big.Int).Set(tx.GasPrice())
+		}
+		txInfos = append(txInfos, TransactionInfo{
+			Tx:       tx,
+			GasPrice: gasPrice,
+			GasUsed:  nonExternalGasUsed[i],
+		})
+	}
+
+	gasPriceSet := make(map[string]*big.Int)
+	for _, info := range txInfos {
+		gasPriceSet[info.GasPrice.String()] = info.GasPrice
+	}
+
+	uniqueGasPrices := make([]*big.Int, 0, len(gasPriceSet))
+	for _, gp := range gasPriceSet {
+		uniqueGasPrices = append(uniqueGasPrices, gp)
+	}
+
+	sort.Slice(uniqueGasPrices, func(i, j int) bool {
+		return uniqueGasPrices[i].Cmp(uniqueGasPrices[j]) > 0 // Descending order
+	})
+
+	var maxRevenue *big.Int = big.NewInt(0)
+	var bestTransactionSet types.TxByPriceAndTime
+
+	for _, p := range uniqueGasPrices {
+		// Filtering Transactions with Gas Price ≥ p
+		eligibleTxs := make([]TransactionInfo, 0)
+		for _, info := range txInfos {
+			if info.GasPrice.Cmp(p) >= 0 {
+				eligibleTxs = append(eligibleTxs, info)
+			}
+		}
+
+		// Sort Eligible Transactions by Gas Used in Descending Order
+		sort.Slice(eligibleTxs, func(i, j int) bool {
+			return eligibleTxs[i].GasUsed < eligibleTxs[j].GasUsed
+		})
+
+		// Since we know that all of these transactions will satisfy the gas
+		// limit constraint on the given block, add them to a list and also
+		// compute the total gas used
+		var totalGasUsed uint64 = 0
+		currentTxSet := make(types.TxByPriceAndTime, 0)
+		for _, info := range eligibleTxs {
+			newTx, err := types.NewTxWithMinerFee(info.Tx, info.GasPrice, time.Time{})
+			if err != nil {
+				w.logger.Error("error making new tx with miner fee")
+				continue
+			}
+			currentTxSet = append(currentTxSet, newTx)
+			totalGasUsed += info.GasUsed
+		}
+
+		// Calculate Revenue for the miner, by multiplying the total gas used by
+		// the starting gas used for this round (p)
+		totalGasUsedBig := big.NewInt(int64(totalGasUsed))
+		revenue := new(big.Int).Mul(p, totalGasUsedBig)
+
+		// Update Best Transaction Set if Revenue is Higher
+		if revenue.Cmp(maxRevenue) > 0 {
+			maxRevenue = revenue
+			bestTransactionSet = currentTxSet
+		}
+	}
+
+	finalTxSet := bestTransactionSet
+
+	w.hc.headermu.Lock()
+	head, err := w.GeneratePendingHeader(block, true, finalTxSet, true)
+	if err != nil {
+		log.Global.Error("Error generating pending header", err)
+		w.hc.headermu.Unlock()
+		return
+	}
+	w.hc.headermu.Unlock()
+	w.asyncPhFeed.Send(head)
 }
 
 // printPendingHeaderInfo logs the pending header information
@@ -851,7 +1058,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		gasUsed := env.wo.GasUsed()
 		gasUsed += params.TxGas
 		env.wo.Header().SetGasUsed(gasUsed)
+		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 		env.txs = append(env.txs, tx)
+
 		return []*types.Log{}, false, nil
 	}
 	if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
@@ -917,6 +1126,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		}
 		env.wo.Header().SetGasUsed(gasUsed)
 		env.txs = append(env.txs, tx)
+		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 		return []*types.Log{}, false, nil
 	}
 	snap := env.state.Snapshot()
@@ -941,6 +1151,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	// This extra step is needed because previously the GasUsed was a public method and direct update of the value
 	// was possible.
 	env.wo.Header().SetGasUsed(gasUsed)
+	env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 	env.wo.Header().SetStateUsed(stateUsed)
 	env.txs = append(env.txs, tx)
 	env.quaiFees = new(big.Int).Add(env.quaiFees, quaiFees)
@@ -1422,7 +1633,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTerminus *types.WorkObjectHeader, block *types.WorkObject, fill bool) error {
+func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTerminus *types.WorkObjectHeader, block *types.WorkObject, fill bool, orderedTxs types.TxByPriceAndTime) error {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	etxs := false
@@ -1451,11 +1662,31 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTermi
 		"fill":         fill,
 		"newInbounds":  len(newInboundEtxs),
 	}).Info("ETXs and fill")
-	if !fill {
+	if !fill && len(orderedTxs) == 0 {
 		if etxs {
 			return w.commitTransactions(env, primeTerminus, block, &types.TransactionsByPriceAndNonce{}, interrupt, false)
 		}
 		return nil
+	}
+
+	// If the input txs have the orderedTxs that maximize the revenue of the miner
+	if len(orderedTxs) > 0 {
+		var baseFee *big.Int
+		for _, tx := range orderedTxs {
+			minerFee := tx.MinerFee()
+			if baseFee == nil {
+				baseFee = new(big.Int).Set(minerFee)
+			} else {
+				if baseFee.Cmp(minerFee) > 0 {
+					baseFee = new(big.Int).Set(minerFee)
+				}
+			}
+		}
+		txByPriceAndNonce := types.TransactionsByPriceAndNonce{}
+		txByPriceAndNonce.SetHead(orderedTxs)
+
+		env.wo.Header().SetBaseFee(baseFee)
+		return w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, interrupt, false)
 	}
 
 	pending, err := w.txPool.TxPoolPending(false)
@@ -1474,6 +1705,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTermi
 		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), w.hc.NodeLocation()))))
 		qiTx, err := types.NewTxWithMinerFee(tx.Tx(), minerFeeInQuai, time.Now())
 		if err != nil {
+			w.logger.Error("Error created new tx with miner Fee for Qi TX", tx.Tx().Hash())
 			continue
 		}
 		pendingQiTxsWithQuaiFee = append(pendingQiTxsWithQuaiFee, qiTx)
@@ -1850,6 +2082,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 
 	env.utxosDelete = append(env.utxosDelete, utxosDeleteHashes...)
 	env.utxosCreate = append(env.utxosCreate, utxosCreateHashes...)
+	env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 
 	if !firstQiTx { // The first transaction in the block can skip denominations check
 		if err := CheckDenominations(inputs, outputs); err != nil {

@@ -1017,7 +1017,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 	var termini types.Termini
 	sl.logger.Infof("NewGenesisPendingHeader location: %v, genesis hash %s", sl.NodeLocation(), genesisHash)
 	if sl.hc.IsGenesisHash(genesisHash) {
-		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(genesisBlock, false)
+		localPendingHeader, err = sl.miner.worker.GeneratePendingHeader(genesisBlock, false, nil, false)
 		if err != nil {
 			sl.logger.WithFields(log.Fields{
 				"err": err,
@@ -1115,7 +1115,7 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	sl.recomputeRequired = false
 
 	phStart := time.Now()
-	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, fill)
+	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, fill, nil, false)
 	if err != nil {
 		sl.hc.headermu.Unlock()
 		return nil, err
@@ -1366,7 +1366,7 @@ func (sl *Slice) GenerateRecoveryPendingHeader(pendingHeader *types.WorkObject, 
 // termini
 func (sl *Slice) ComputeRecoveryPendingHeader(hash common.Hash) types.PendingHeader {
 	block := sl.hc.GetBlockByHash(hash)
-	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, false)
+	pendingHeader, err := sl.miner.worker.GeneratePendingHeader(block, false, nil, false)
 	if err != nil {
 		sl.logger.Error("Error generating pending header during the checkpoint recovery process")
 		return types.PendingHeader{}
