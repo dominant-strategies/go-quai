@@ -61,26 +61,27 @@ const (
 type environment struct {
 	signer types.Signer
 
-	state       *state.StateDB // apply state changes here
-	ancestors   mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family      mapset.Set     // family set (used for checking uncle invalidity)
-	tcount      int            // tx count in cycle
-	gasPool     *types.GasPool // available gas used to pack transactions
-	coinbase    common.Address
-	etxRLimit   int // Remaining number of cross-region ETXs that can be included
-	etxPLimit   int // Remaining number of cross-prime ETXs that can be included
-	parentOrder *int
-	wo          *types.WorkObject
-	txs         []*types.Transaction
-	etxs        []*types.Transaction
-	utxoFees    *big.Int
-	quaiFees    *big.Int
-	subManifest types.BlockManifest
-	receipts    []*types.Receipt
-	uncleMu     sync.RWMutex
-	uncles      map[common.Hash]*types.WorkObjectHeader
-	utxosCreate []common.Hash
-	utxosDelete []common.Hash
+	state        *state.StateDB // apply state changes here
+	ancestors    mapset.Set     // ancestor set (used for checking uncle parent validity)
+	family       mapset.Set     // family set (used for checking uncle invalidity)
+	tcount       int            // tx count in cycle
+	gasPool      *types.GasPool // available gas used to pack transactions
+	coinbase     common.Address
+	etxRLimit    int // Remaining number of cross-region ETXs that can be included
+	etxPLimit    int // Remaining number of cross-prime ETXs that can be included
+	parentOrder  *int
+	wo           *types.WorkObject
+	txs          []*types.Transaction
+	etxs         []*types.Transaction
+	utxoFees     *big.Int
+	quaiFees     *big.Int
+	subManifest  types.BlockManifest
+	receipts     []*types.Receipt
+	uncleMu      sync.RWMutex
+	uncles       map[common.Hash]*types.WorkObjectHeader
+	utxosCreate  []common.Hash
+	utxosDelete  []common.Hash
+	deletedUtxos map[common.Hash]struct{}
 }
 
 // unclelist returns the contained uncles as the list format.
@@ -691,15 +692,16 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:    types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
-		state:     state,
-		coinbase:  coinbase,
-		ancestors: mapset.NewSet(),
-		family:    mapset.NewSet(),
-		wo:        proposedWo,
-		uncles:    make(map[common.Hash]*types.WorkObjectHeader),
-		etxRLimit: etxRLimit,
-		etxPLimit: etxPLimit,
+		signer:       types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
+		state:        state,
+		coinbase:     coinbase,
+		ancestors:    mapset.NewSet(),
+		family:       mapset.NewSet(),
+		wo:           proposedWo,
+		uncles:       make(map[common.Hash]*types.WorkObjectHeader),
+		etxRLimit:    etxRLimit,
+		etxPLimit:    etxPLimit,
+		deletedUtxos: make(map[common.Hash]struct{}),
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -953,8 +955,9 @@ func (w *worker) commitTransactions(env *environment, parent *types.WorkObject, 
 				break
 			}
 			if err := w.processQiTx(tx, env, parent); err != nil {
-				if strings.Contains(err.Error(), "emits too many") {
+				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") {
 					// This is not an invalid tx, our block is just full of ETXs
+					// Alternatively, a tx double spends a cached deleted UTXO, likely replaced-by-fee
 					txs.PopNoSort()
 					continue
 				}
@@ -1707,6 +1710,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, parent *ty
 	env.utxoFees.Add(env.utxoFees, txFeeInQit)
 	for outpoint, utxo := range utxosDelete {
 		utxoHash := types.UTXOHash(outpoint.TxHash, outpoint.Index, utxo)
+		if _, exists := env.deletedUtxos[utxoHash]; exists {
+			return fmt.Errorf("tx %032x double spends UTXO %032x:%d", tx.Hash(), outpoint.TxHash, outpoint.Index)
+		}
+		env.deletedUtxos[utxoHash] = struct{}{}
 		env.utxosDelete = append(env.utxosDelete, utxoHash)
 	}
 	for outPoint, utxo := range utxosCreate {
