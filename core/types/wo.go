@@ -1019,8 +1019,8 @@ func (wh *WorkObjectHeader) RPCMarshalWorkObjectHeader() map[string]interface{} 
 		"txHash":              wh.TxHash(),
 		"timestamp":           hexutil.Uint64(wh.Time()),
 		"mixHash":             wh.MixHash(),
-		"coinbase":            wh.Coinbase(),
 		"lock":                hexutil.Uint64(wh.Lock()),
+		"coinbase":            wh.Coinbase().MixedcaseAddress(),
 	}
 	return result
 }

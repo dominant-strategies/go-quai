@@ -297,13 +297,13 @@ func (s *PublicBlockChainAPI) GetOutpointsByAddressAtBlock(ctx context.Context, 
 
 // Result structs for GetProof
 type AccountResult struct {
-	Address      common.Address  `json:"address"`
-	AccountProof []string        `json:"accountProof"`
-	Balance      *hexutil.Big    `json:"balance"`
-	CodeHash     common.Hash     `json:"codeHash"`
-	Nonce        hexutil.Uint64  `json:"nonce"`
-	StorageHash  common.Hash     `json:"storageHash"`
-	StorageProof []StorageResult `json:"storageProof"`
+	Address      common.MixedcaseAddress `json:"address"`
+	AccountProof []string                `json:"accountProof"`
+	Balance      *hexutil.Big            `json:"balance"`
+	CodeHash     common.Hash             `json:"codeHash"`
+	Nonce        hexutil.Uint64          `json:"nonce"`
+	StorageHash  common.Hash             `json:"storageHash"`
+	StorageProof []StorageResult         `json:"storageProof"`
 }
 
 type StorageResult struct {
@@ -362,7 +362,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	}
 
 	return &AccountResult{
-		Address:      address,
+		Address:      address.MixedcaseAddress(),
 		AccountProof: toHexSlice(accountProof),
 		Balance:      (*hexutil.Big)(state.GetBalance(internal)),
 		CodeHash:     codeHash,
@@ -1032,33 +1032,33 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Work
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash         *common.Hash      `json:"blockHash"`
-	BlockNumber       *hexutil.Big      `json:"blockNumber"`
-	From              *common.Address   `json:"from,omitempty"`
-	Gas               hexutil.Uint64    `json:"gas"`
-	GasFeeCap         *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap         *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	Hash              common.Hash       `json:"hash"`
-	Input             hexutil.Bytes     `json:"input"`
-	Nonce             hexutil.Uint64    `json:"nonce"`
-	To                *common.Address   `json:"to,omitempty"`
-	TransactionIndex  *hexutil.Uint64   `json:"transactionIndex"`
-	Value             *hexutil.Big      `json:"value,omitempty"`
-	Type              hexutil.Uint64    `json:"type"`
-	Accesses          *types.AccessList `json:"accessList,omitempty"`
-	ChainID           *hexutil.Big      `json:"chainId,omitempty"`
-	V                 *hexutil.Big      `json:"v,omitempty"`
-	R                 *hexutil.Big      `json:"r,omitempty"`
-	S                 *hexutil.Big      `json:"s,omitempty"`
-	TxIn              []RPCTxIn         `json:"inputs,omitempty"`
-	TxOut             []RPCTxOut        `json:"outputs,omitempty"`
-	UTXOSignature     hexutil.Bytes     `json:"utxoSignature,omitempty"`
-	OriginatingTxHash *common.Hash      `json:"originatingTxHash,omitempty"`
-	ETXIndex          *hexutil.Uint64   `json:"etxIndex,omitempty"`
-	IsCoinbase        *hexutil.Uint64   `json:"isCoinbase,omitempty"`
-	ETxType           string            `json:"etxType"`
+	BlockHash         *common.Hash             `json:"blockHash"`
+	BlockNumber       *hexutil.Big             `json:"blockNumber"`
+	From              *common.MixedcaseAddress `json:"from,omitempty"`
+	Gas               hexutil.Uint64           `json:"gas"`
+	GasFeeCap         *hexutil.Big             `json:"maxFeePerGas,omitempty"`
+	GasTipCap         *hexutil.Big             `json:"maxPriorityFeePerGas,omitempty"`
+	Hash              common.Hash              `json:"hash"`
+	Input             hexutil.Bytes            `json:"input"`
+	Nonce             hexutil.Uint64           `json:"nonce"`
+	To                *common.MixedcaseAddress `json:"to,omitempty"`
+	TransactionIndex  *hexutil.Uint64          `json:"transactionIndex"`
+	Value             *hexutil.Big             `json:"value,omitempty"`
+	Type              hexutil.Uint64           `json:"type"`
+	Accesses          *types.AccessList        `json:"accessList,omitempty"`
+	ChainID           *hexutil.Big             `json:"chainId,omitempty"`
+	V                 *hexutil.Big             `json:"v,omitempty"`
+	R                 *hexutil.Big             `json:"r,omitempty"`
+	S                 *hexutil.Big             `json:"s,omitempty"`
+	TxIn              []RPCTxIn                `json:"inputs,omitempty"`
+	TxOut             []RPCTxOut               `json:"outputs,omitempty"`
+	UTXOSignature     hexutil.Bytes            `json:"utxoSignature,omitempty"`
+	OriginatingTxHash *common.Hash             `json:"originatingTxHash,omitempty"`
+	ETXIndex          *hexutil.Uint64          `json:"etxIndex,omitempty"`
+	IsCoinbase        *hexutil.Uint64          `json:"isCoinbase,omitempty"`
+	ETxType           string                   `json:"etxType"`
 	// Optional fields only present for external transactions
-	Sender *common.Address `json:"sender,omitempty"`
+	ETXSender *common.MixedcaseAddress `json:"sender,omitempty"`
 }
 
 type RPCTxIn struct {
@@ -1108,12 +1108,12 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		from, _ := types.Sender(signer, tx)
 		result = &RPCTransaction{
 			Type:      hexutil.Uint64(tx.Type()),
-			From:      &from,
+			From:      from.MixedcaseAddressPtr(),
 			Gas:       hexutil.Uint64(tx.Gas()),
 			Hash:      tx.Hash(),
 			Input:     hexutil.Bytes(tx.Data()),
 			Nonce:     hexutil.Uint64(tx.Nonce()),
-			To:        tx.To(),
+			To:        tx.To().MixedcaseAddressPtr(),
 			Value:     (*hexutil.Big)(tx.Value()),
 			ChainID:   (*hexutil.Big)(tx.ChainId()),
 			GasFeeCap: (*hexutil.Big)(tx.GasFeeCap()),
@@ -1125,14 +1125,14 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			Gas:   hexutil.Uint64(tx.Gas()),
 			Hash:  tx.Hash(),
 			Input: hexutil.Bytes(tx.Data()),
-			To:    tx.To(),
+			To:    tx.To().MixedcaseAddressPtr(),
 			Value: (*hexutil.Big)(tx.Value()),
 		}
 		originatingTxHash := tx.OriginatingTxHash()
 		etxIndex := uint64(tx.ETXIndex())
 		sender := tx.ETXSender()
 		result.OriginatingTxHash = &originatingTxHash
-		result.Sender = &sender
+		result.ETXSender = sender.MixedcaseAddressPtr()
 		result.ETXIndex = (*hexutil.Uint64)(&etxIndex)
 		if tx.IsCoinbase() {
 			isCoinbase := uint64(1)
@@ -1507,8 +1507,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"blockNumber":       hexutil.Uint64(blockNumber),
 		"transactionHash":   hash,
 		"transactionIndex":  hexutil.Uint64(index),
-		"from":              from,
-		"to":                tx.To(),
+		"from":              from.MixedcaseAddress(),
+		"to":                tx.To().MixedcaseAddress(),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
@@ -1536,7 +1536,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if !receipt.ContractAddress.Equal(common.Zero) && !receipt.ContractAddress.Equal(common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress
+		fields["contractAddress"] = receipt.ContractAddress.MixedcaseAddress()
 	}
 	return fields, nil
 }

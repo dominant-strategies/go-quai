@@ -407,6 +407,11 @@ func MakeErrQuaiAddress(addr string) error {
 	return fmt.Errorf("expected Qi address, but found Quai address: %s", addr)
 }
 
+func (a Address) MixedcaseAddressPtr() *MixedcaseAddress {
+	m := NewMixedcaseAddress(a)
+	return &m
+}
+
 func (a Address) MixedcaseAddress() MixedcaseAddress {
 	return NewMixedcaseAddress(a)
 }
