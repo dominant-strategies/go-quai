@@ -32,19 +32,19 @@ type txJSON struct {
 	Type hexutil.Uint64 `json:"type"`
 
 	// Common transaction fields:
-	Nonce                *hexutil.Uint64 `json:"nonce"`
-	GasPrice             *hexutil.Big    `json:"gasPrice"`
-	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
-	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
-	Gas                  *hexutil.Uint64 `json:"gas"`
-	Value                *hexutil.Big    `json:"value"`
-	Data                 *hexutil.Bytes  `json:"input"`
-	To                   *common.Address `json:"to"`
-	AccessList           *AccessList     `json:"accessList"`
-	TxIn                 []TxInJSON      `json:"inputs,omitempty"`
-	TxOut                []TxOutJSON     `json:"outputs,omitempty"`
-	UTXOSignature        *hexutil.Bytes  `json:"utxoSignature,omitempty"`
-	IsCoinbase           *hexutil.Uint64 `json:"isCoinbase"`
+	Nonce                *hexutil.Uint64          `json:"nonce"`
+	GasPrice             *hexutil.Big             `json:"gasPrice"`
+	MaxPriorityFeePerGas *hexutil.Big             `json:"maxPriorityFeePerGas"`
+	MaxFeePerGas         *hexutil.Big             `json:"maxFeePerGas"`
+	Gas                  *hexutil.Uint64          `json:"gas"`
+	Value                *hexutil.Big             `json:"value"`
+	Data                 *hexutil.Bytes           `json:"input"`
+	To                   *common.MixedcaseAddress `json:"to"`
+	AccessList           *AccessList              `json:"accessList"`
+	TxIn                 []TxInJSON               `json:"inputs,omitempty"`
+	TxOut                []TxOutJSON              `json:"outputs,omitempty"`
+	UTXOSignature        *hexutil.Bytes           `json:"utxoSignature,omitempty"`
+	IsCoinbase           *hexutil.Uint64          `json:"isCoinbase"`
 	// Optional fields only present for internal transactions
 	ChainID *hexutil.Big `json:"chainId,omitempty"`
 	V       *hexutil.Big `json:"v,omitempty"`
@@ -52,9 +52,9 @@ type txJSON struct {
 	S       *hexutil.Big `json:"s,omitempty"`
 
 	// Optional fields only present for external transactions
-	Sender            *common.Address `json:"sender,omitempty"`
-	OriginatingTxHash *common.Hash    `json:"originatingTxHash,omitempty"`
-	ETXIndex          *hexutil.Uint64 `json:"etxIndex,omitempty"`
+	ETXSender         *common.MixedcaseAddress `json:"sender,omitempty"`
+	OriginatingTxHash *common.Hash             `json:"originatingTxHash,omitempty"`
+	ETXIndex          *hexutil.Uint64          `json:"etxIndex,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -92,7 +92,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
+		enc.To = t.To().MixedcaseAddressPtr()
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
@@ -104,8 +104,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.Sender = &tx.Sender
+		enc.To = t.To().MixedcaseAddressPtr()
+		enc.ETXSender = tx.Sender.MixedcaseAddressPtr()
 		isCoinbase := hexutil.Uint64(0)
 		if tx.IsCoinbase {
 			isCoinbase = hexutil.Uint64(1)
@@ -161,7 +161,8 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		itx.ChainID = (*big.Int)(dec.ChainID)
 		if dec.To != nil {
-			itx.To = dec.To
+			addr := dec.To.Address()
+			itx.To = &addr
 		}
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in internal transaction")
@@ -214,7 +215,8 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		etx.AccessList = *dec.AccessList
 		if dec.To != nil {
-			etx.To = dec.To
+			addr := dec.To.Address()
+			etx.To = &addr
 		}
 		if dec.OriginatingTxHash == nil {
 			return errors.New("missing required field 'originatingTxHash' in external transaction")
@@ -236,10 +238,10 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'input' in external transaction")
 		}
 		etx.Data = *dec.Data
-		if dec.Sender == nil {
+		if dec.ETXSender == nil {
 			return errors.New("missing required field 'sender' in external transaction")
 		}
-		etx.Sender = *dec.Sender
+		etx.Sender = dec.ETXSender.Address()
 		if dec.IsCoinbase == nil {
 			return errors.New("missing required field 'isCoinbase' in external transaction")
 		}

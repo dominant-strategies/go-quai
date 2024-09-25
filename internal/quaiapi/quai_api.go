@@ -243,7 +243,7 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 	}
 
 	return &AccountResult{
-		Address:      address,
+		Address:      address.MixedcaseAddress(),
 		AccountProof: toHexSlice(accountProof),
 		Balance:      (*hexutil.Big)(state.GetBalance(internal)),
 		CodeHash:     codeHash,
