@@ -18,6 +18,7 @@ package progpow
 
 import (
 	"encoding/binary"
+	"math"
 	"math/bits"
 
 	goLRU "github.com/hashicorp/golang-lru/v2"
@@ -32,7 +33,7 @@ const (
 	progpowDagLoads     = 4                     // Number of uint32 loads from the DAG per lane
 	progpowCntCache     = 11
 	progpowCntMath      = 18
-	progpowPeriodLength = 10
+	progpowPeriodLength = math.MaxUint64
 	progpowCntDag       = 64
 	progpowMixBytes     = 256
 )
