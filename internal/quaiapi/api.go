@@ -988,16 +988,16 @@ type RPCTransaction struct {
 	BlockHash         *common.Hash             `json:"blockHash"`
 	BlockNumber       *hexutil.Big             `json:"blockNumber"`
 	From              *common.MixedcaseAddress `json:"from,omitempty"`
-	Gas               hexutil.Uint64           `json:"gas"`
+	Gas               hexutil.Uint64           `json:"gas,omitempty"`
 	MinerTip          *hexutil.Big             `json:"minerTip,omitempty"`
 	GasPrice          *hexutil.Big             `json:"gasPrice,omitempty"`
-	Hash              common.Hash              `json:"hash"`
-	Input             hexutil.Bytes            `json:"input"`
-	Nonce             hexutil.Uint64           `json:"nonce"`
+	Hash              common.Hash              `json:"hash,omitempty"`
+	Input             hexutil.Bytes            `json:"input,omitempty"`
+	Nonce             hexutil.Uint64           `json:"nonce,omitempty"`
 	To                *common.MixedcaseAddress `json:"to,omitempty"`
 	TransactionIndex  *hexutil.Uint64          `json:"transactionIndex"`
 	Value             *hexutil.Big             `json:"value,omitempty"`
-	Type              hexutil.Uint64           `json:"type"`
+	Type              hexutil.Uint64           `json:"type,omitempty"`
 	Accesses          *types.AccessList        `json:"accessList,omitempty"`
 	ChainID           *hexutil.Big             `json:"chainId,omitempty"`
 	V                 *hexutil.Big             `json:"v,omitempty"`
@@ -1008,9 +1008,7 @@ type RPCTransaction struct {
 	UTXOSignature     hexutil.Bytes            `json:"utxoSignature,omitempty"`
 	OriginatingTxHash *common.Hash             `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64          `json:"etxIndex,omitempty"`
-	ETxType           *hexutil.Uint64          `json:"etxType"`
-	// Optional fields only present for external transactions
-	ETXSender *common.MixedcaseAddress `json:"sender,omitempty"`
+	ETxType           *hexutil.Uint64          `json:"etxType,omitempty"`
 }
 
 type RPCTxIn struct {
@@ -1084,7 +1082,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		etxIndex := uint64(tx.ETXIndex())
 		sender := tx.ETXSender()
 		result.OriginatingTxHash = &originatingTxHash
-		result.ETXSender = sender.MixedcaseAddressPtr()
+		result.From = sender.MixedcaseAddressPtr()
 		result.ETXIndex = (*hexutil.Uint64)(&etxIndex)
 		etxType := tx.EtxType()
 		result.ETxType = (*hexutil.Uint64)(&etxType)
@@ -1448,9 +1446,21 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
 		"logs":              receipt.Logs,
-		"outboundEtxs":      receipt.OutboundEtxs,
 		"logsBloom":         receipt.Bloom,
 		"type":              hexutil.Uint(tx.Type()),
+	}
+
+	if tx.Type() == types.ExternalTxType {
+		fields["originatingTxHash"] = tx.OriginatingTxHash()
+		fields["etxType"] = tx.EtxType()
+	}
+
+	var outBoundEtxs []*RPCTransaction
+	for _, tx := range receipt.OutboundEtxs {
+		outBoundEtxs = append(outBoundEtxs, newRPCTransaction(tx, blockHash, blockNumber, index, big.NewInt(0), s.b.NodeLocation()))
+	}
+	if len(receipt.OutboundEtxs) > 0 {
+		fields["outboundEtxs"] = outBoundEtxs
 	}
 	// Assign the effective gas price paid
 	header, err := s.b.HeaderByHash(ctx, blockHash)
