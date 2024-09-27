@@ -13,7 +13,7 @@ func IsCoinBaseTx(tx *Transaction) bool {
 		return false
 	}
 	if tx.Type() == ExternalTxType {
-		return tx.IsCoinbase()
+		return tx.EtxType() == CoinbaseType
 	}
 	return false
 }

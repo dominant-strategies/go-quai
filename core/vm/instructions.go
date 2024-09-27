@@ -937,7 +937,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList}
+	etxInner := types.ExternalTx{Value: value.ToBig(), To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, EtxType: types.DefaultType, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64(), Data: data, AccessList: accessList}
 	etx := types.NewTx(&etxInner)
 
 	// check if the etx is eligible to be sent to the to location
@@ -1017,7 +1017,7 @@ func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 
 	// create external transaction
-	etxInner := types.ExternalTx{Value: bigValue, To: &toAddr, Sender: sender, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64()}
+	etxInner := types.ExternalTx{Value: bigValue, To: &toAddr, Sender: sender, EtxType: types.ConversionType, OriginatingTxHash: interpreter.evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit.Uint64()}
 	etx := types.NewTx(&etxInner)
 
 	interpreter.evm.ETXCacheLock.Lock()

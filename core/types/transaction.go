@@ -49,6 +49,13 @@ const (
 	QiTxType
 )
 
+// ETX types
+const (
+	DefaultType = iota
+	CoinbaseType
+	ConversionType
+)
+
 // Transaction is a Quai transaction.
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
@@ -107,6 +114,7 @@ type TxData interface {
 	gas() uint64
 	gasPrice() *big.Int
 	minerTip() *big.Int
+	etxType() uint64
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
@@ -121,7 +129,6 @@ type TxData interface {
 	parentHash() *common.Hash
 	mixHash() *common.Hash
 	workNonce() *BlockNonce
-	isCoinbase() bool
 	// Schnorr segregated sigs
 	getSchnorrSignature() *schnorr.Signature
 }
@@ -185,8 +192,8 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 		etxIndex := uint32(tx.ETXIndex())
 		protoTx.EtxIndex = &etxIndex
 		protoTx.EtxSender = tx.ETXSender().Bytes()
-		isCoinbase := tx.IsCoinbase()
-		protoTx.IsCoinbase = &isCoinbase
+		etxType := tx.EtxType()
+		protoTx.EtxType = &etxType
 	case QiTxType:
 		var err error
 		protoTx.TxIns, err = tx.TxIn().ProtoEncode()
@@ -328,8 +335,8 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.EtxIndex == nil {
 			return errors.New("missing required field 'EtxIndex' in ProtoTransaction")
 		}
-		if protoTx.IsCoinbase == nil {
-			return errors.New("missing required field 'IsCoinbase in ProtoTransaction")
+		if protoTx.EtxType == nil {
+			return errors.New("missing required field 'EtxType' in ProtoTransaction")
 		}
 
 		var etx ExternalTx
@@ -343,7 +350,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		to := common.BytesToAddress(protoTx.GetTo(), location)
 		etx.To = &to
 		etx.Value = new(big.Int).SetBytes(protoTx.GetValue())
-		etx.IsCoinbase = protoTx.GetIsCoinbase()
+		etx.EtxType = protoTx.GetEtxType()
 
 		tx.SetInner(&etx)
 
@@ -574,6 +581,9 @@ func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.ga
 // MinerTip returns the minerTip per gas of the transaction.
 func (tx *Transaction) MinerTip() *big.Int { return new(big.Int).Set(tx.inner.minerTip()) }
 
+// EtxType returns the type of etx
+func (tx *Transaction) EtxType() uint64 { return tx.inner.etxType() }
+
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
@@ -581,8 +591,6 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 func (tx *Transaction) Nonce() uint64                  { return tx.inner.nonce() }
 func (tx *Transaction) ETXSender() common.Address      { return tx.inner.etxSender() }
 func (tx *Transaction) OriginatingTxHash() common.Hash { return tx.inner.originatingTxHash() }
-
-func (tx *Transaction) IsCoinbase() bool { return tx.inner.isCoinbase() }
 
 func (tx *Transaction) ETXIndex() uint16 { return tx.inner.etxIndex() }
 
@@ -1267,9 +1275,5 @@ func IsConversionTx(tx *Transaction) bool {
 	if tx.Type() != ExternalTxType {
 		return false
 	}
-	if !tx.IsCoinbase() {
-		return tx.ETXSender().Location().Equal(*tx.To().Location())
-	} else {
-		return false
-	}
+	return tx.EtxType() == ConversionType
 }

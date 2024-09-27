@@ -117,6 +117,7 @@ func (tx *QiTx) etxIndex() uint16 { panic("Qi TX does not have etxIndex") }
 func (tx *QiTx) etxSender() common.Address {
 	panic("Qi TX does not have etxSender")
 }
+func (tx *QiTx) etxType() uint64 { panic("Qi TX does not have etxType") }
 
 func (tx *QiTx) getEcdsaSignatureValues() (v, r, s *big.Int) {
 	panic("Qi TX does not have ECDSA signature values")

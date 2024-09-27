@@ -684,8 +684,13 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	if index > math.MaxUint16 {
 		return []byte{}, 0, 0, fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
 	}
+
+	etxType := types.DefaultType
+	if conversion {
+		etxType = types.ConversionType
+	}
 	// create external transaction
-	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: gas, Data: data, AccessList: evm.AccessList}
+	etxInner := types.ExternalTx{Value: value, To: &toAddr, Sender: fromAddr, EtxType: uint64(etxType), OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: gas, Data: data, AccessList: evm.AccessList}
 	etx := types.NewTx(&etxInner)
 
 	// check if the etx is eligible to be sent to the to location

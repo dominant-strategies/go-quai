@@ -618,19 +618,19 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
 			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.quaiFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 			work.etxs = append(work.etxs, coinbaseEtx)
 			if work.utxoFees.Cmp(big.NewInt(0)) != 0 {
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		} else if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
 			coinbaseReward := misc.CalculateReward(work.wo.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.utxoFees)
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 			work.etxs = append(work.etxs, coinbaseEtx)
 			if work.quaiFees.Cmp(big.NewInt(0)) != 0 {
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		}
@@ -639,7 +639,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		for _, uncle := range uncles {
 			reward := misc.CalculateReward(uncle)
 			uncleCoinbase := uncle.PrimaryCoinbase()
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, IsCoinbase: true, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
+			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
 		}
 
 	}
@@ -669,7 +669,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 	work.utxosCreate = nil
 	work.utxosDelete = nil
 	return newWo, nil
-
 }
 
 // transactionOrderingLoop listens to the transaction ordering events and calls the order transaction set function
@@ -1999,7 +1998,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			}
 
 			// We should require some kind of extra fee here
-			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
+			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), EtxType: types.DefaultType, OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
 			gasUsed += params.ETXGas
 			if err := env.gasPool.SubGas(params.ETXGas); err != nil {
 				return err
@@ -2063,7 +2062,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		if ETXPCount > env.etxPLimit {
 			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
 		}
-		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
+		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: types.ConversionType, OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
 		gasUsed += params.ETXGas
 		if err := env.gasPool.SubGas(params.ETXGas); err != nil {
 			return err

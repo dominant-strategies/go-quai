@@ -43,7 +43,7 @@ type txJSON struct {
 	TxIn          []TxInJSON               `json:"inputs,omitempty"`
 	TxOut         []TxOutJSON              `json:"outputs,omitempty"`
 	UTXOSignature *hexutil.Bytes           `json:"utxoSignature,omitempty"`
-	IsCoinbase    *hexutil.Uint64          `json:"isCoinbase"`
+	EtxType       *hexutil.Uint64          `json:"etxType,omitempty"`
 	// Optional fields only present for internal transactions
 	ChainID *hexutil.Big `json:"chainId,omitempty"`
 	V       *hexutil.Big `json:"v,omitempty"`
@@ -105,11 +105,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.To = t.To().MixedcaseAddressPtr()
 		enc.ETXSender = tx.Sender.MixedcaseAddressPtr()
-		isCoinbase := hexutil.Uint64(0)
-		if tx.IsCoinbase {
-			isCoinbase = hexutil.Uint64(1)
-		}
-		enc.IsCoinbase = &isCoinbase
+		enc.EtxType = (*hexutil.Uint64)(&tx.EtxType)
 	case *QiTx:
 		sig := tx.Signature.Serialize()
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
@@ -241,14 +237,10 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'sender' in external transaction")
 		}
 		etx.Sender = dec.ETXSender.Address()
-		if dec.IsCoinbase == nil {
+		if dec.EtxType == nil {
 			return errors.New("missing required field 'isCoinbase' in external transaction")
 		}
-		if *dec.IsCoinbase == 1 {
-			etx.IsCoinbase = true
-		} else {
-			etx.IsCoinbase = false
-		}
+		etx.EtxType = uint64(*dec.EtxType)
 
 	case QiTxType:
 		var qiTx QiTx

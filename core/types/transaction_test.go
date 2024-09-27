@@ -523,7 +523,8 @@ func etxData() (*Transaction, common.Hash) {
 				StorageKeys: []common.Hash{common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1")},
 			},
 		},
-		Sender: sender,
+		Sender:  sender,
+		EtxType: 0,
 	}
 	tx := NewTx(inner)
 	return tx, tx.Hash()
@@ -556,6 +557,29 @@ func FuzzEtxOriginatingTxHash(f *testing.F) {
 			newTx := NewTx(&newInner)
 
 			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.originatingTxHash(), bHash)
+		}
+	})
+}
+
+func FuzzEtxType(f *testing.F) {
+	// Create a new transaction
+	tx, hash := etxData()
+	f.Add(testUInt16)
+	f.Add(tx.inner.etxIndex())
+	// Verify the hash of the transaction
+	if hash == (common.Hash{}) {
+		f.Errorf("Transaction hash is empty")
+	}
+
+	f.Fuzz(func(t *testing.T, i uint16) {
+		if tx.inner.etxIndex() != i {
+			// change something in the transaction
+			newInner := *tx.inner.(*ExternalTx)
+			newInner.ETXIndex = i
+			// Create a new transaction with the modified inner transaction
+			newTx := NewTx(&newInner)
+
+			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.etxIndex(), i)
 		}
 	})
 }
@@ -1025,7 +1049,7 @@ func FuzzQiTxHashingWorkNonce(f *testing.F) {
 
 func TestCoinbaseTxEncodeDecode(t *testing.T) {
 	toAddr := common.HexToAddress("0x0013e45aa16163F2663015b6695894D918866d19", common.Location{0, 0})
-	coinbaseTx := NewTx(&ExternalTx{To: &toAddr, Value: big.NewInt(10), Data: []byte{1}, OriginatingTxHash: common.HexToHash("0xa"), Sender: common.HexToAddress("0x0", common.Location{0, 0})})
+	coinbaseTx := NewTx(&ExternalTx{To: &toAddr, Value: big.NewInt(10), Data: []byte{1}, EtxType: DefaultType, OriginatingTxHash: common.HexToHash("0xa"), Sender: common.HexToAddress("0x0", common.Location{0, 0})})
 
 	// Encode transaction
 	protoTx, err := coinbaseTx.ProtoEncode()

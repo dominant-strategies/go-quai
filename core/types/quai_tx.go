@@ -108,6 +108,7 @@ func (tx *QuaiTx) etxSender() common.Address { panic("internal TX does not have 
 func (tx *QuaiTx) originatingTxHash() common.Hash {
 	panic("internal TX does not have originatingTxHash")
 }
+func (tx *QuaiTx) etxType() uint64  { panic("quai TX does not have etxtype") }
 func (tx *QuaiTx) etxIndex() uint16 { panic("internal TX does not have etxIndex") }
 func (tx *QuaiTx) txIn() TxIns      { panic("internal TX does not have txIn") }
 func (tx *QuaiTx) txOut() TxOuts    { panic("internal TX does not have txOut") }
