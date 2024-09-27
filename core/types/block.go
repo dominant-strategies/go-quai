@@ -173,8 +173,8 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woHeader.SetDifficulty(big.NewInt(0))
 	wo.woHeader.SetPrimeTerminusNumber(big.NewInt(0))
 	wo.woHeader.SetTxHash(EmptyRootHash)
-	wo.woHeader.SetLocation(common.Location{})
 	wo.woHeader.SetNonce(EncodeNonce(0))
+	wo.woHeader.SetLocation(common.Location{})
 	wo.woHeader.SetTime(0)
 	wo.woBody.SetHeader(h)
 	wo.woBody.SetUncles([]*WorkObjectHeader{})
@@ -182,6 +182,13 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woBody.SetOutboundEtxs([]*Transaction{})
 	wo.woBody.SetManifest(BlockManifest{})
 	return NewWorkObjectWithHeader(wo, NewEmptyTx(), nodeCtx, BlockObject)
+}
+
+func EmptyZoneWorkObject() *WorkObject {
+	emptyWo := EmptyWorkObject(common.ZONE_CTX)
+	emptyWo.woHeader.SetLocation(common.Location{0, 0})
+	emptyWo.woHeader.SetCoinbase(common.ZeroAddress(emptyWo.woHeader.location))
+	return emptyWo
 }
 
 // ProtoEncode serializes h into the Quai Proto Header format

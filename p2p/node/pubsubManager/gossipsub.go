@@ -385,12 +385,12 @@ func (g *PubsubManager) Unsubscribe(location common.Location, datatype interface
 }
 
 // broadcasts data to subscribing peers
-func (g *PubsubManager) Broadcast(location common.Location, datatype interface{}) error {
-	topicName, err := NewTopic(g.genesis, location, datatype)
+func (g *PubsubManager) Broadcast(location common.Location, data interface{}) error {
+	topicName, err := NewTopic(g.genesis, location, data)
 	if err != nil {
 		return err
 	}
-	protoData, err := pb.ConvertAndMarshal(datatype)
+	protoData, err := pb.ConvertAndMarshal(data)
 	if err != nil {
 		return err
 	}

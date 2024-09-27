@@ -2,7 +2,6 @@ package pubsubManager
 
 import (
 	"context"
-	"math/big"
 	"sync"
 	"testing"
 
@@ -105,17 +104,20 @@ func TestPubsubManager(t *testing.T) {
 		ps.SetReceiveHandler(func(receivedFrom peer.ID, msgId string, msgTopic string, data interface{}, location common.Location) {
 			testCh <- data
 		})
-		// Success case
-		newWoHeader := types.NewWorkObjectHeader(common.Hash{1}, common.Hash{1}, big.NewInt(1), big.NewInt(1), big.NewInt(1),
-			common.Hash{1}, types.BlockNonce{}, 0, common.Location{}, common.ZeroAddress(common.Location{0, 0}))
-		newWo := types.NewWorkObjectWithHeaderAndTx(newWoHeader, types.NewEmptyTx())
-		broadcastedMessage := newWo.ConvertToHeaderView()
+
+		// Create and broadcast a new WorkObjectBlock
+		newWo := types.EmptyZoneWorkObject()
+		broadcastedMessage := newWo.ConvertToBlockView()
 		err = ps.Broadcast(common.Location{0, 0}, broadcastedMessage)
 		require.NoError(t, err, "Failed to broadcast message")
 
-		// Verify if subscription received message
+		// Verify if subscription received correct message type
 		receivedMessage := <-testCh
-		require.Equal(t, broadcastedMessage, receivedMessage, "Received message is not the same as broadcasted message")
+		recvdWorkObject, ok := receivedMessage.(types.WorkObjectBlockView)
+		require.True(t, ok, "Unable to cast workobject")
+
+		// Verify equality of the send and receive
+		require.Equal(t, broadcastedMessage.Hash(), recvdWorkObject.Hash())
 	})
 
 	t.Run("Unsubscribe", func(t *testing.T) {
@@ -151,8 +153,7 @@ func TestMultipleRequests(t *testing.T) {
 	quaiBackend, _ := quai.NewQuaiBackend()
 	ps.SetQuaiBackend(quaiBackend)
 
-	wo := types.EmptyWorkObject(common.ZONE_CTX)
-	wo.WorkObjectHeader().SetCoinbase(common.BytesToAddress([]byte{1}, common.Location{0, 0}))
+	wo := types.EmptyZoneWorkObject()
 
 	tx := types.NewEmptyTx()
 	txs := types.Transactions{tx}
