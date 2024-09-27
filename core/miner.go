@@ -20,7 +20,6 @@ package core
 import (
 	"fmt"
 	"runtime"
-	"runtime/debug"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -56,46 +55,10 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 		primaryCoinbase:   config.PrimaryCoinbase,
 		secondaryCoinbase: config.SecondaryCoinbase,
 	}
-	go miner.update()
 
-	miner.Start(miner.primaryCoinbase, miner.secondaryCoinbase)
 	miner.SetExtra(miner.MakeExtraData(config.ExtraData))
 
 	return miner
-}
-
-// update keeps track of the downloader events. Please be aware that this is a one shot type of update loop.
-// It's entered once and as soon as `Done` or `Failed` has been broadcasted the events are unregistered and
-// the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
-// and halt your mining operation for as long as the DOS continues.
-func (miner *Miner) update() {
-	defer func() {
-		if r := recover(); r != nil {
-			miner.logger.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
-		}
-	}()
-	canStart := true
-	for {
-		select {
-		case addr := <-miner.startCh:
-			miner.SetPrimaryCoinbase(addr[0])
-			miner.SetSecondaryCoinbase(addr[1])
-			if canStart {
-				miner.worker.start()
-			}
-		case <-miner.stopCh:
-			miner.worker.stop()
-			miner.worker.close()
-			return
-		}
-	}
-}
-
-func (miner *Miner) Start(primaryCoinbase, secondaryCoinbase common.Address) {
-	miner.startCh <- []common.Address{primaryCoinbase, secondaryCoinbase}
 }
 
 func (miner *Miner) Stop() {

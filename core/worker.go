@@ -311,6 +311,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 
 	worker.ephemeralKey, _ = secp256k1.GeneratePrivateKey()
 
+	worker.start()
+
 	return worker
 }
 
