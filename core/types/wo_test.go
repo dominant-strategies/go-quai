@@ -22,7 +22,7 @@ func woTestData() (*WorkObject, common.Hash) {
 			coinbase:            common.HexToAddress("0x123456789abcdef0123456789abcdef0123456789", common.Location{0, 0}),
 			time:                uint64(1),
 			nonce:               EncodeNonce(uint64(1)),
-			lock:                1,
+			lock:                0,
 		},
 	}
 	return wo, wo.Hash()
@@ -30,7 +30,7 @@ func woTestData() (*WorkObject, common.Hash) {
 
 func TestWoHash(t *testing.T) {
 	_, actualHash := woTestData()
-	expectedHash := common.HexToHash("0xfa015af438af2a7a4c2af2aa8d982da52fb879288338d4e44464cae3723daf85")
+	expectedHash := common.HexToHash("0x637f1fddf2efea7aef3d42086d75f225c5399f2991254fa27c9930852529210b")
 	require.Equal(t, expectedHash, actualHash, "Hash not equal to expected hash")
 }
 
