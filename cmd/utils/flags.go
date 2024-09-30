@@ -72,7 +72,6 @@ var GlobalFlags = []Flag{
 var NodeFlags = []Flag{
 	IPAddrFlag,
 	P2PPortFlag,
-	BootNodeFlag,
 	BootPeersFlag,
 	PortMapFlag,
 	KeyFileFlag,
@@ -228,13 +227,6 @@ var (
 		Abbreviation: "p",
 		Value:        "4001",
 		Usage:        "p2p port to listen on" + generateEnvDoc(c_NodeFlagPrefix+"port"),
-	}
-
-	BootNodeFlag = Flag{
-		Name:         c_NodeFlagPrefix + "bootnode",
-		Abbreviation: "b",
-		Value:        false,
-		Usage:        "start the node as a boot node (no static peers required)" + generateEnvDoc(c_NodeFlagPrefix+"bootnode"),
 	}
 
 	BootPeersFlag = Flag{
