@@ -1440,7 +1440,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"blockNumber":       hexutil.Uint64(blockNumber),
 		"transactionHash":   hash,
 		"transactionIndex":  hexutil.Uint64(index),
-		"from":              from.MixedcaseAddress(),
+		"from":              from.Hex(),
 		"to":                tx.To().MixedcaseAddress(),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
@@ -1481,7 +1481,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if !receipt.ContractAddress.Equal(common.Zero) && !receipt.ContractAddress.Equal(common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress.MixedcaseAddress()
+		fields["contractAddress"] = receipt.ContractAddress.Hex()
 	}
 	return fields, nil
 }
