@@ -63,6 +63,7 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 
 func (miner *Miner) Stop() {
 	miner.stopCh <- struct{}{}
+	miner.worker.stop()
 }
 
 func (miner *Miner) Mining() bool {

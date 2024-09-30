@@ -36,12 +36,6 @@ const (
 	// resultQueueSize is the size of channel listening to sealing result.
 	resultQueueSize = 10
 
-	// resubmitAdjustChanSize is the size of resubmitting interval adjustment channel.
-	resubmitAdjustChanSize = 10
-
-	// sealingLogAtDepth is the number of confirmations before logging successful sealing.
-	sealingLogAtDepth = 7
-
 	// minRecommitInterval is the minimal time interval to recreate the sealing block with
 	// any newly arrived transactions.
 	minRecommitInterval = 1 * time.Second
@@ -104,36 +98,6 @@ func (env *environment) unclelist() []*types.WorkObjectHeader {
 	return uncles
 }
 
-// discard terminates the background prefetcher go-routine. It should
-// always be called for all created environment instances otherwise
-// the go-routine leak can happen.
-func (env *environment) discard() {
-	if env.state == nil {
-		return
-	}
-	env.state.StopPrefetcher()
-}
-
-// task contains all information for consensus engine sealing and result submitting.
-type task struct {
-	receipts  []*types.Receipt
-	state     *state.StateDB
-	block     *types.WorkObject
-	createdAt time.Time
-}
-
-const (
-	commitInterruptNone int32 = iota
-	commitInterruptNewHead
-	commitInterruptResubmit
-)
-
-// intervalAdjust represents a resubmitting interval adjustment.
-type intervalAdjust struct {
-	ratio float64
-	inc   bool
-}
-
 // Config is the configuration parameters of mining.
 type Config struct {
 	PrimaryCoinbase    common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
@@ -175,11 +139,9 @@ type worker struct {
 	chainSideSub event.Subscription
 
 	// Channels
-	taskCh                         chan *task
 	resultCh                       chan *types.WorkObject
 	exitCh                         chan struct{}
 	resubmitIntervalCh             chan time.Duration
-	resubmitAdjustCh               chan *intervalAdjust
 	fillTransactionsRollingAverage *RollingAverage
 	orderTransactionCh             chan transactionOrderingInfo
 
@@ -207,7 +169,6 @@ type worker struct {
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
-	newTxs  int32 // New arrival transaction count since last sealing work submitting.
 
 	// noempty is the flag used to control whether the feature of pre-seal empty
 	// block is enabled. The default value is false(pre-seal is enabled by default).
@@ -218,10 +179,6 @@ type worker struct {
 
 	// External functions
 	isLocalBlock func(header *types.WorkObject) bool // Function used to determine whether the specified block is mined by local miner.
-
-	// Test hooks
-	newTaskHook  func(*task) // Method to call upon receiving a new sealing task.
-	fullTaskHook func()      // Method to call before pushing the full sealing task.
 
 	logger *log.Logger
 }
@@ -268,11 +225,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		isLocalBlock:                   isLocalBlock,
 		workerDb:                       db,
 		chainSideCh:                    make(chan ChainSideEvent, chainSideChanSize),
-		taskCh:                         make(chan *task),
 		resultCh:                       make(chan *types.WorkObject, resultQueueSize),
 		exitCh:                         make(chan struct{}),
 		resubmitIntervalCh:             make(chan time.Duration),
-		resubmitAdjustCh:               make(chan *intervalAdjust, resubmitAdjustChanSize),
 		orderTransactionCh:             make(chan transactionOrderingInfo),
 		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 		logger:                         logger,
@@ -397,6 +352,7 @@ func (w *worker) stop() {
 		w.chainSideSub.Unsubscribe()
 	}
 	atomic.StoreInt32(&w.running, 0)
+	w.close()
 }
 
 // isRunning returns an indicator whether worker is running or not.
@@ -524,15 +480,8 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 	}
 
 	var (
-		interrupt *int32
 		timestamp int64 // timestamp for each round of sealing.
 	)
-
-	if interrupt != nil {
-		atomic.StoreInt32(interrupt, commitInterruptNewHead)
-	}
-	interrupt = new(int32)
-	atomic.StoreInt32(&w.newTxs, 0)
 
 	start := time.Now()
 	// Set the primary coinbase if the worker is running or it's required
@@ -585,7 +534,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		work.utxoFees = big.NewInt(0)
 		work.quaiFees = big.NewInt(0)
 		start := time.Now()
-		if err := w.fillTransactions(interrupt, work, primeTerminus.WorkObjectHeader(), block, fill, txs); err != nil {
+		if err := w.fillTransactions(work, primeTerminus.WorkObjectHeader(), block, fill, txs); err != nil {
 			return nil, fmt.Errorf("error generating pending header: %v", err)
 		}
 		if fill {
@@ -1162,7 +1111,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 
 var qiTxErrs uint64
 
-func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkObjectHeader, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, interrupt *int32, excludeEtx bool) error {
+func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkObjectHeader, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, excludeEtx bool) error {
 	qiTxsToRemove := make([]*common.Hash, 0)
 	gasLimit := env.wo.GasLimit
 	if env.gasPool == nil {
@@ -1205,13 +1154,6 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 	}
 	firstQiTx := true
 	for {
-		// In the following two cases, we will interrupt the execution of the transaction.
-		// (1) new head block event arrival, the interrupt signal is 1
-		// (2) worker start or restart, the interrupt signal is 1
-		// For these two cases, the semi-finished work will be discarded.
-		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-			return nil
-		}
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
 			w.logger.WithFields(log.Fields{
@@ -1634,7 +1576,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTerminus *types.WorkObjectHeader, block *types.WorkObject, fill bool, orderedTxs types.TxByPriceAndTime) error {
+func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObjectHeader, block *types.WorkObject, fill bool, orderedTxs types.TxByPriceAndTime) error {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	etxs := false
@@ -1665,7 +1607,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTermi
 	}).Info("ETXs and fill")
 	if !fill && len(orderedTxs) == 0 {
 		if etxs {
-			return w.commitTransactions(env, primeTerminus, block, &types.TransactionsByPriceAndNonce{}, interrupt, false)
+			return w.commitTransactions(env, primeTerminus, block, &types.TransactionsByPriceAndNonce{}, false)
 		}
 		return nil
 	}
@@ -1687,7 +1629,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTermi
 		txByPriceAndNonce.SetHead(orderedTxs)
 
 		env.wo.Header().SetBaseFee(baseFee)
-		return w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, interrupt, false)
+		return w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, false)
 	}
 
 	pending, err := w.txPool.TxPoolPending(false)
@@ -1729,7 +1671,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTermi
 			// fee for the pending header on each iteration
 			baseFee = lowestFeeTx.PeekAndGetFee().MinerFee()
 			env.wo.Header().SetBaseFee(baseFee)
-			w.commitTransactions(env, primeTerminus, block, lowestFeeTx, interrupt, etxIncluded)
+			w.commitTransactions(env, primeTerminus, block, lowestFeeTx, etxIncluded)
 			// After the first run the etxs are included
 			etxIncluded = true
 			// If we have included a transaction that is not an external type, the lowestFee
@@ -1746,7 +1688,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, primeTermi
 			count++
 		}
 
-		return w.commitTransactions(env, primeTerminus, block, txs, interrupt, etxIncluded)
+		return w.commitTransactions(env, primeTerminus, block, txs, etxIncluded)
 	}
 	return nil
 }
