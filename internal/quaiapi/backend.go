@@ -135,6 +135,7 @@ type Backend interface {
 	Stats() (pending int, queued int, qi int)
 	TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions)
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
+	GetPoolGasPrice() *big.Int
 
 	// Filter API
 	BloomStatus() (uint64, uint64)

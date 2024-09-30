@@ -1273,6 +1273,10 @@ func (c *Core) Nonce(addr common.Address) uint64 {
 	return c.sl.txPool.Nonce(internal)
 }
 
+func (c *Core) GetPoolGasPrice() *big.Int {
+	return c.sl.txPool.gasPrice
+}
+
 func (c *Core) Stats() (int, int, int) {
 	return c.sl.txPool.Stats()
 }
