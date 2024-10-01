@@ -60,6 +60,9 @@ func headerTestData() (*Header, common.Hash) {
 		extra:                    []byte("SGVsbG8gd29ybGQ="),
 		stateLimit:               1234567,
 		stateUsed:                1234567,
+		exchangeRate:             big.NewInt(123456789),
+		quaiToQi:                 big.NewInt(123456789),
+		qiToQuai:                 big.NewInt(123456789),
 	}
 
 	return header, header.Hash()
@@ -67,8 +70,8 @@ func headerTestData() (*Header, common.Hash) {
 
 func TestHeaderHash(t *testing.T) {
 	_, hash := headerTestData()
-	correctHash := common.HexToHash("0xc8110a0bb8fe2f98081d1202ce0dcf299dc42a14df271a994e1925c78931177b")
-	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+	correctHash := common.HexToHash("0x708a539748c808aa9c7c706c2828ebe802bad88f95980fd7eda2d6c453c78847")
+	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 
 var testInt64 = int64(987654321)
@@ -320,4 +323,22 @@ func FuzzHeaderExtraHash(f *testing.F) {
 			require.NotEqual(t, localHeader.Hash(), hash, "Hash equal for extra \noriginal: %v, modified: %v", header.extra, b)
 		}
 	})
+}
+
+func FuzzHeaderExchangeRate(f *testing.F) {
+	fuzzHeaderBigIntHash(f,
+		func(h *Header) *big.Int { return h.exchangeRate },
+		func(h *Header, bi *big.Int) { h.exchangeRate = bi })
+}
+
+func FuzzHeaderQuaiToQi(f *testing.F) {
+	fuzzHeaderBigIntHash(f,
+		func(h *Header) *big.Int { return h.quaiToQi },
+		func(h *Header, bi *big.Int) { h.quaiToQi = bi })
+}
+
+func FuzzHeaderQiToQuai(f *testing.F) {
+	fuzzHeaderBigIntHash(f,
+		func(h *Header) *big.Int { return h.qiToQuai },
+		func(h *Header, bi *big.Int) { h.qiToQuai = bi })
 }
