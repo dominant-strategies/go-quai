@@ -87,7 +87,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	// Start the  hierarchical co-ordinator
 	var nodeWg sync.WaitGroup
-	hc := utils.NewHierarchicalCoordinator(node, logLevel, &nodeWg, startingExpansionNumber, quitCh)
+	hc := utils.NewHierarchicalCoordinator(node, logLevel, &nodeWg, startingExpansionNumber)
 	err = hc.StartHierarchicalCoordinator()
 	if err != nil {
 		log.Global.WithField("error", err).Fatal("error starting hierarchical coordinator")
@@ -110,6 +110,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	<-ch
 	log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
 	cancel()
+	node.Close()
 	// stop the hierarchical co-ordinator
 	hc.Stop()
 	if err := node.Stop(); err != nil {

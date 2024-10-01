@@ -77,6 +77,8 @@ func (p *P2PNode) Subscribe(location common.Location, datatype interface{}) erro
 					log.Global.Infof("providing topic %s in %s", reflect.TypeOf(datatype), location.Name())
 					return
 				}
+			case <-p.quitCh:
+				return
 			case <-timeout.C:
 				log.Global.Errorf("unable to provide topic %s in %s", reflect.TypeOf(datatype), location.Name())
 				return
@@ -160,34 +162,39 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 			}
 		}()
 		defer close(resultChan)
-		peers := p.peerManager.GetPeers(topic)
-		log.Global.WithFields(log.Fields{
-			"peers": peers,
-			"topic": topic,
-		}).Debug("Requesting data from peers")
+		select {
+		case <-p.ctx.Done():
+			return
+		default:
+			peers := p.peerManager.GetPeers(topic)
+			log.Global.WithFields(log.Fields{
+				"peers": peers,
+				"topic": topic,
+			}).Debug("Requesting data from peers")
 
-		var requestWg sync.WaitGroup
-		for peerID := range peers {
-			// if we have exceeded the outbound rate limit for this peer, skip them for now
-			if err := protocol.ProcRequestRate(peerID, false); err != nil {
-				log.Global.Warnf("Exceeded request rate to peer %s", peerID)
-				continue
+			var requestWg sync.WaitGroup
+			for peerID := range peers {
+				// if we have exceeded the outbound rate limit for this peer, skip them for now
+				if err := protocol.ProcRequestRate(peerID, false); err != nil {
+					log.Global.Warnf("Exceeded request rate to peer %s", peerID)
+					continue
+				}
+				requestWg.Add(1)
+				go func(peerID peer.ID) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Global.WithFields(log.Fields{
+								"error":      r,
+								"stacktrace": string(debug.Stack()),
+							}).Error("Go-Quai Panicked")
+						}
+					}()
+					defer requestWg.Done()
+					p.requestAndWait(peerID, topic, requestData, respDataType, resultChan)
+				}(peerID)
 			}
-			requestWg.Add(1)
-			go func(peerID peer.ID) {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Global.WithFields(log.Fields{
-							"error":      r,
-							"stacktrace": string(debug.Stack()),
-						}).Error("Go-Quai Panicked")
-					}
-				}()
-				defer requestWg.Done()
-				p.requestAndWait(peerID, topic, requestData, respDataType, resultChan)
-			}(peerID)
+			requestWg.Wait()
 		}
-		requestWg.Wait()
 	}()
 }
 

@@ -263,7 +263,7 @@ func (ns *NodeSet) Copy() NodeSet {
 }
 
 // NewHierarchicalCoordinator creates a new instance of the HierarchicalCoordinator
-func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg *sync.WaitGroup, startingExpansionNumber uint64, quitCh chan struct{}) *HierarchicalCoordinator {
+func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg *sync.WaitGroup, startingExpansionNumber uint64) *HierarchicalCoordinator {
 	db, err := OpenBackendDB()
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Error opening the backend db")
@@ -275,7 +275,7 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 		logLevel:                    logLevel,
 		slicesRunning:               GetRunningZones(),
 		treeExpansionTriggerStarted: false,
-		quitCh:                      quitCh,
+		quitCh:                      make(chan struct{}),
 		recentBlocks:                make(map[string]*lru.Cache[common.Hash, Node]),
 		pendingHeaders:              NewPendingHeaders(),
 		bestEntropy:                 new(big.Int).Set(common.Big0),
@@ -434,12 +434,12 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 }
 
 func (hc *HierarchicalCoordinator) Stop() {
+	close(hc.quitCh)
 	for _, chainEventSub := range hc.chainSubs {
 		chainEventSub.Unsubscribe()
 	}
 	hc.expansionSub.Unsubscribe()
 	hc.db.Close()
-	close(hc.quitCh)
 	hc.wg.Wait()
 }
 
@@ -484,7 +484,8 @@ func (hc *HierarchicalCoordinator) expansionEventLoop() {
 					}
 				}
 			}
-
+		case <-hc.quitCh:
+			return
 		case <-hc.expansionSub.Err():
 			return
 		}
@@ -617,6 +618,8 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 				hc.pendingHeaderBackupCh <- struct{}{}
 				lastUpdateTime = time.Now()
 			}
+		case <-hc.quitCh:
+			return
 		case <-sub.Err():
 			return
 		}
@@ -641,7 +644,6 @@ func (hc *HierarchicalCoordinator) MapConstructProc() {
 			hc.PendingHeadersMap()
 		case <-hc.quitCh:
 			return
-		default:
 		}
 	}
 }
@@ -837,44 +839,18 @@ func (hc *HierarchicalCoordinator) ReapplicationLoop(head core.ChainEvent) {
 	sleepTime := 1
 
 	for {
-		hc.BuildPendingHeaders(head.Block, head.Order, head.Entropy)
-		time.Sleep(time.Duration(sleepTime) * time.Second)
-		sleepTime = sleepTime * 2
-		if sleepTime > 65 {
-			break
-		}
-	}
-}
-
-func (hc *HierarchicalCoordinator) GetLock(location common.Location, order int) []*sync.RWMutex {
-	hc.mutexMapMu.Lock()
-	defer hc.mutexMapMu.Unlock()
-	_, exists := hc.pendingHeaderMu[location.Name()]
-	if !exists {
-		hc.pendingHeaderMu[location.Name()] = &sync.RWMutex{}
-	}
-
-	regionNum, zoneNum := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
-	var locks []*sync.RWMutex
-	switch order {
-	case common.PRIME_CTX:
-		locks = append(locks, hc.pendingHeaderMu[common.Location{}.Name()])
-		for i := 0; i < int(regionNum); i++ {
-			locks = append(locks, hc.pendingHeaderMu[common.Location{byte(i)}.Name()])
-			for j := 0; j < int(zoneNum); j++ {
-				locks = append(locks, hc.pendingHeaderMu[common.Location{byte(i), byte(j)}.Name()])
+		select {
+		case <-hc.quitCh:
+			return
+		default:
+			hc.BuildPendingHeaders(head.Block, head.Order, head.Entropy)
+			time.Sleep(time.Duration(sleepTime) * time.Second)
+			sleepTime = sleepTime * 2
+			if sleepTime > 65 {
+				return
 			}
 		}
-	case common.REGION_CTX:
-		locks = append(locks, hc.pendingHeaderMu[common.Location{byte(location.Region())}.Name()])
-		for j := 0; j < int(zoneNum); j++ {
-			locks = append(locks, hc.pendingHeaderMu[common.Location{byte(location.Region()), byte(j)}.Name()])
-		}
-	case common.ZONE_CTX:
-		locks = append(locks, hc.pendingHeaderMu[common.Location{byte(location.Region()), byte(location.Zone())}.Name()])
 	}
-
-	return locks
 }
 
 func (hc *HierarchicalCoordinator) CalculateLeaders(badHashes map[common.Hash]bool) []Node {
