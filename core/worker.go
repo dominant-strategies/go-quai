@@ -1715,7 +1715,7 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 			etxIncluded = true
 			// If we have included a transaction that is not an external type, the lowestFee
 			// transaction is successfully inserted
-			for _, tx := range env.wo.Transactions() {
+			for _, tx := range env.txs {
 				if tx.Type() != types.ExternalTxType {
 					lowestFeeTxIncluded = true
 					break
