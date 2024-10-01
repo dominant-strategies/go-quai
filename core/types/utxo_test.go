@@ -744,3 +744,129 @@ func TestModifySSig(t *testing.T) {
 	modifiedSigHex := hex.EncodeToString(signatureBytes)
 	t.Log("Modified Signature: ", modifiedSigHex)
 }
+
+func TestTxInProtoDecode(t *testing.T) {
+	tests := []struct {
+		name       string
+		pubKeyHex  string
+		wantPubKey string
+		shouldFail bool
+	}{
+		{
+			name:       "Uncompressed public key",
+			pubKeyHex:  "0450495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e65c4c6c44cd3fe809b41dfac9060ad84cb57e2d575fad24d25a7efa3396e73c10",
+			wantPubKey: "0450495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e65c4c6c44cd3fe809b41dfac9060ad84cb57e2d575fad24d25a7efa3396e73c10",
+			shouldFail: false,
+		},
+		{
+			name:       "Compressed public key",
+			pubKeyHex:  "0250495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			wantPubKey: "0450495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e65c4c6c44cd3fe809b41dfac9060ad84cb57e2d575fad24d25a7efa3396e73c10",
+			shouldFail: false,
+		},
+		{
+			name:       "Invalid public key (32 bytes)",
+			pubKeyHex:  "50495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			wantPubKey: "",
+			shouldFail: true,
+		},
+		{
+			name:       "Invalid public key (64 bytes)",
+			pubKeyHex:  "50495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e650495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			wantPubKey: "",
+			shouldFail: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pubKey, _ := hex.DecodeString(tt.pubKeyHex)
+			protoTxIn := &ProtoTxIn{
+				PreviousOutPoint: &ProtoOutPoint{
+					Hash:  &common.ProtoHash{Value: make([]byte, 32)},
+					Index: new(uint32),
+				},
+				PubKey: pubKey,
+			}
+
+			txIn := &TxIn{}
+			err := txIn.ProtoDecode(protoTxIn)
+
+			if tt.shouldFail {
+				if err == nil {
+					t.Errorf("Expected an error for invalid public key, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+
+				gotPubKey := hex.EncodeToString(txIn.PubKey)
+				if gotPubKey != tt.wantPubKey {
+					t.Errorf("Unexpected public key. Got: %s, Want: %s", gotPubKey, tt.wantPubKey)
+				}
+			}
+		})
+	}
+}
+
+func TestTxInProtoEncode(t *testing.T) {
+	tests := []struct {
+		name       string
+		pubKeyHex  string
+		wantPubKey string
+		shouldFail bool
+	}{
+		{
+			name:       "Uncompressed public key",
+			pubKeyHex:  "0450495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e65c4c6c44cd3fe809b41dfac9060ad84cb57e2d575fad24d25a7efa3396e73c10",
+			wantPubKey: "0250495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			shouldFail: false,
+		},
+		{
+			name:       "Compressed public key",
+			pubKeyHex:  "0250495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			wantPubKey: "0250495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			shouldFail: false,
+		},
+		{
+			name:       "Invalid public key (32 bytes)",
+			pubKeyHex:  "50495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			wantPubKey: "",
+			shouldFail: true,
+		},
+		{
+			name:       "Invalid public key (64 bytes)",
+			pubKeyHex:  "50495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e650495cb2f9535c684ebe4687b501c0d41a623d68c118b8dcecd393370f1d90e6",
+			wantPubKey: "",
+			shouldFail: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pubKey, _ := hex.DecodeString(tt.pubKeyHex)
+			txIn := &TxIn{
+				PubKey: pubKey,
+			}
+
+			protoTxIn, err := txIn.ProtoEncode()
+			if tt.shouldFail {
+				if err == nil {
+					t.Errorf("Expected an error for invalid public key, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+				gotPubKey := hex.EncodeToString(protoTxIn.PubKey)
+				if gotPubKey != tt.wantPubKey {
+					t.Errorf("Unexpected public key. Got: %s, Want: %s", gotPubKey, tt.wantPubKey)
+				}
+
+			}
+
+		})
+	}
+
+}

@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
 )
 
@@ -84,7 +85,13 @@ func (txIn TxIn) ProtoEncode() (*ProtoTxIn, error) {
 		return nil, err
 	}
 
-	protoTxIn.PubKey = txIn.PubKey
+	// Compress the public key if it's uncompressed
+	compressedPubKey, err := compressPubKeyIfNeeded(txIn.PubKey)
+	if err != nil {
+		return nil, err
+	}
+	protoTxIn.PubKey = compressedPubKey
+
 	return protoTxIn, nil
 }
 
@@ -93,8 +100,47 @@ func (txIn *TxIn) ProtoDecode(protoTxIn *ProtoTxIn) error {
 	if err != nil {
 		return err
 	}
-	txIn.PubKey = protoTxIn.PubKey
+
+	// Decompress the public key if it's compressed
+	pubKey, err := decompressPubKeyIfNeeded(protoTxIn.PubKey)
+	if err != nil {
+		return err
+	}
+	txIn.PubKey = pubKey
+
 	return nil
+}
+
+// decompressPubKeyIfNeeded decompresses the public key if it's in compressed format
+func decompressPubKeyIfNeeded(pubKey []byte) ([]byte, error) {
+	switch len(pubKey) {
+	case 33: // Compressed public key
+		uncompressedPubKey, err := crypto.DecompressPubkey(pubKey)
+		if err != nil {
+			return nil, err
+		}
+		return crypto.FromECDSAPub(uncompressedPubKey), nil
+	case 65: // Uncompressed public key
+		return pubKey, nil
+	default:
+		return nil, errors.New("invalid public key length")
+	}
+}
+
+// compressPubKeyIfNeeded compresses the public key if it's in uncompressed format
+func compressPubKeyIfNeeded(pubKey []byte) ([]byte, error) {
+	switch len(pubKey) {
+	case 65: // Uncompressed public key
+		uncompressedPubKey, err := crypto.UnmarshalPubkey(pubKey)
+		if err != nil {
+			return nil, err
+		}
+		return crypto.CompressPubkey(uncompressedPubKey), nil
+	case 33: // Already compressed public key
+		return pubKey, nil
+	default:
+		return nil, errors.New("invalid public key length")
+	}
 }
 
 // OutPoint defines a Qi data type that is used to track previous outputs
