@@ -15,7 +15,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "11.1.1"
+      "version": "11.2.0"
     },
     {
       "type": "panel",
@@ -95,6 +95,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -169,7 +170,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(StateTimes{label=~\".*\"}[1m])",
+          "expr": "deriv(StateTimes{label=~\".*\"}[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -234,7 +235,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.1.1",
+      "pluginVersion": "11.2.0",
       "targets": [
         {
           "datasource": {
@@ -307,7 +308,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.1.1",
+      "pluginVersion": "11.2.0",
       "targets": [
         {
           "datasource": {
@@ -346,6 +347,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -418,7 +420,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(TxpoolGauges{label=~\"slots|local\"}[1m])",
+          "expr": "deriv(TxpoolGauges{label=~\"slots|local\"}[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -482,7 +484,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.1.1",
+      "pluginVersion": "11.2.0",
       "targets": [
         {
           "datasource": {
@@ -555,7 +557,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.1.1",
+      "pluginVersion": "11.2.0",
       "targets": [
         {
           "datasource": {
@@ -594,6 +596,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -668,7 +671,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(MessageCounters{label=~\".*\"}[1m])",
+          "expr": "deriv(MessageCounters{label=~\".*\"}[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -698,6 +701,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -775,7 +779,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "rate(TxpoolGauges{label!~\"queued|pending|slots|local\"}[1m])",
+          "expr": "deriv(TxpoolGauges{label!~\"queued|pending|slots|local\"}[1m])",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -807,6 +811,7 @@
             "axisPlacement": "auto",
             "axisSoftMin": 0,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -924,6 +929,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -993,7 +999,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(TxCount{label=~\".*\"}[1m])",
+          "expr": "deriv(TxCount{label=~\".*\"}[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1023,6 +1029,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -1093,7 +1100,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "rate(WorkObjectCounters[1m])",
+          "expr": "deriv(WorkObjectCounters[1m])",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1166,8 +1173,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1283,8 +1289,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1383,8 +1388,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1484,8 +1488,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1619,8 +1622,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1720,8 +1722,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1820,8 +1821,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2217,6 +2217,6 @@
   "timezone": "",
   "title": "Go-quai Metrics Under Development",
   "uid": "adae3653-aaad-4a59-9c93-5827d20896b9-v3",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
