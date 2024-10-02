@@ -550,6 +550,14 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			return nil, fmt.Errorf("parent order not set")
 		}
 
+		if (w.config.PrimaryCoinbase == common.Address{}) {
+			return nil, fmt.Errorf("primary coinbase is not set")
+		}
+
+		if (w.config.SecondaryCoinbase == common.Address{}) {
+			return nil, fmt.Errorf("secondary coinbase is not set")
+		}
+
 		quaiCoinbase, err := work.wo.QuaiCoinbase()
 		if err != nil {
 			return nil, err
