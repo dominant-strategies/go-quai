@@ -73,9 +73,10 @@ type basicStreamManager struct {
 }
 
 type streamWrapper struct {
-	stream    network.Stream
-	semaphore chan struct{}
-	errCount  int
+	stream                network.Stream
+	cancelProtocolHandler context.CancelFunc
+	semaphore             chan struct{}
+	errCount              int
 }
 
 func NewStreamManager(node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStreamManager, error) {
@@ -110,6 +111,8 @@ func severStream(key p2p.PeerID, wrappedStream streamWrapper) {
 	if streamMetrics != nil {
 		streamMetrics.WithLabelValues("NumStreams").Dec()
 	}
+	// Clean up the protocolHandler
+	wrappedStream.cancelProtocolHandler()
 }
 
 func (sm *basicStreamManager) Start() {
@@ -135,7 +138,7 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 			go func(peerID peer.ID) {
 				err := sm.OpenStream(peerID)
 				if err != nil {
-					log.Global.WithFields(log.Fields{"peerId": peerID, "err": err}).Warn("Error opening new strean into peer")
+					log.Global.WithFields(log.Fields{"peerId": peerID, "err": err}).Warn("Error opening new stream into peer")
 				}
 			}(peerID)
 
@@ -146,34 +149,40 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 }
 
 func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
-	// check if there is an existing stream
+	// Check if there is an existing stream
 	if _, ok := sm.streamCache.Get(peerID); ok {
 		return nil
 	}
-	timer := time.NewTimer(c_stream_timeout)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return errors.New("stream creation timeout")
-	default:
-		// Create a new stream to the peer and register it in the cache
-		stream, err := sm.host.NewStream(sm.ctx, peerID, quaiprotocol.ProtocolVersion)
-		if err != nil {
-			return fmt.Errorf("error opening new stream with peer %s err: %s", peerID, err)
+
+	streamCtx, streamCancel := context.WithTimeout(sm.ctx, c_stream_timeout)
+	defer streamCancel()
+
+	// Attempt to create the new stream to the peer
+	stream, err := sm.host.NewStream(streamCtx, peerID, quaiprotocol.ProtocolVersion)
+	if err != nil {
+		if streamCtx.Err() == context.DeadlineExceeded {
+			return errors.New("stream creation timeout")
 		}
-		wrappedStream := streamWrapper{
-			stream:    stream,
-			semaphore: make(chan struct{}, c_maxPendingRequests),
-			errCount:  0,
-		}
-		sm.streamCache.Add(peerID, wrappedStream)
-		go quaiprotocol.QuaiProtocolHandler(stream, sm.p2pBackend)
-		log.Global.WithField("PeerID", peerID).Info("Had to create new stream")
-		if streamMetrics != nil {
-			streamMetrics.WithLabelValues("NumStreams").Inc()
-		}
-		return nil
+		return fmt.Errorf("error opening new stream with peer %s err: %s", peerID, err)
 	}
+
+	handlerCtx, handlerCancel := context.WithCancel(sm.ctx)
+
+	wrappedStream := streamWrapper{
+		stream:                stream,
+		cancelProtocolHandler: handlerCancel,
+		semaphore:             make(chan struct{}, c_maxPendingRequests),
+		errCount:              0,
+	}
+	sm.streamCache.Add(peerID, wrappedStream)
+
+	go quaiprotocol.QuaiProtocolHandler(handlerCtx, stream, sm.p2pBackend)
+	log.Global.WithField("PeerID", peerID).Info("Had to create new stream")
+	if streamMetrics != nil {
+		streamMetrics.WithLabelValues("NumStreams").Inc()
+	}
+
+	return nil
 }
 
 func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {

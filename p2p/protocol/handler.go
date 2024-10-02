@@ -80,7 +80,7 @@ func ProcRequestRate(peerId peer.ID, inbound bool) error {
 }
 
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
-func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
+func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2PNode) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -102,8 +102,6 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 	// Create a channel for messages
 	msgChan := make(chan []byte, msgChanSize)
 	full := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -148,7 +146,6 @@ func QuaiProtocolHandler(stream network.Stream, node QuaiP2PNode) {
 			}
 			full++
 		}
-
 	}
 }
 

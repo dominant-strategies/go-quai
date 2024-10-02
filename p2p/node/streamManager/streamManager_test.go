@@ -1,6 +1,7 @@
 package streamManager
 
 import (
+	"context"
 	"testing"
 
 	gomock "go.uber.org/mock/gomock"
@@ -129,10 +130,12 @@ func TestWriteMessageToStream(t *testing.T) {
 
 	t.Run("Too many pending requests", func(t *testing.T) {
 		// small semaphore to block the stream
+		_, cancelFunc := context.WithCancel(context.Background())
 		wrappedStream := streamWrapper{
-			stream:    mockLibp2pStream,
-			semaphore: make(chan struct{}, 1),
-			errCount:  0,
+			stream:                mockLibp2pStream,
+			cancelProtocolHandler: cancelFunc,
+			semaphore:             make(chan struct{}, 1),
+			errCount:              0,
 		}
 		// block semaphore
 		wrappedStream.semaphore <- struct{}{}

@@ -44,7 +44,7 @@ func (p *P2PNode) Start() error {
 
 	// Register the Quai protocol handler
 	p.peerManager.GetHost().SetStreamHandler(quaiprotocol.ProtocolVersion, func(s network.Stream) {
-		quaiprotocol.QuaiProtocolHandler(s, p)
+		quaiprotocol.QuaiProtocolHandler(p.ctx, s, p)
 	})
 
 	// Start the pubsub manager
