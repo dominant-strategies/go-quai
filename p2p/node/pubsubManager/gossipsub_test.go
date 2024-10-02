@@ -174,7 +174,7 @@ func TestMultipleRequests(t *testing.T) {
 		return pubsub.ValidationAccept
 	}
 
-	// SUBSCRIBE
+	// SUBSCRIBE to all topics
 	for i, topic := range topics {
 		err := ps.SubscribeAndRegisterValidator(common.Location{0, 0}, topic, validatorFunc)
 		require.NoError(t, err, "Failed to subscribe to topic %d", topic)
@@ -183,7 +183,7 @@ func TestMultipleRequests(t *testing.T) {
 		}
 	}
 
-	// BROADCAST
+	// Create a buffered channel large enough to hold all sent messages
 	testCh := make(chan interface{}, n*len(topics))
 	ps.SetReceiveHandler(func(receivedFrom peer.ID, msgId string, msgTopic string, data interface{}, location common.Location) {
 		select {
@@ -196,6 +196,7 @@ func TestMultipleRequests(t *testing.T) {
 	var messages []interface{}
 	var wg sync.WaitGroup
 
+	// BROADCAST messages concurrently
 	for i := 0; i < n; i++ {
 		newWo := types.CopyWorkObject(wo)
 		newWo.WorkObjectHeader().SetNonce(types.EncodeNonce(uint64(i)))
@@ -212,18 +213,22 @@ func TestMultipleRequests(t *testing.T) {
 
 			messages = append(messages, msg)
 			wg.Add(1)
+			// Add a sleep to not overwhelm the gossipSub broadcasts
+			time.Sleep(10 * time.Millisecond)
 
+			// Broadcast each message in its own goroutine
 			go func(msg interface{}) {
 				defer wg.Done()
-				err = ps.Broadcast(common.Location{0, 0}, msg)
+				err := ps.Broadcast(common.Location{0, 0}, msg)
 				require.NoError(t, err, "Failed to broadcast message")
 			}(msg)
 		}
 	}
 
-	// VERIFY
+	// VERIFY receiving concurrently
 	var mu sync.Mutex
 	receivedMessages := make([]interface{}, 0, n*len(topics))
+
 	for i := 0; i < (n * len(topics)); i++ {
 		wg.Add(1)
 		go func(j int) {
@@ -238,11 +243,11 @@ func TestMultipleRequests(t *testing.T) {
 			}
 		}(i)
 	}
-
+	// Wait for all broadcasts to complete
 	wg.Wait()
 
 	// Ensure all broadcasted messages were received
-	require.Len(t, receivedMessages, len(messages), "The number of received messages does not match the number of broadcasted messages. expected: %d, got: %d", len(messages), len(receivedMessages))
+	require.Len(t, receivedMessages, len(messages), "The number of received messages does not match the number of broadcasted messages. sent: %d, received: %d", len(messages), len(receivedMessages))
 
 	ps.Stop()
 	if len(ps.GetTopics()) != 0 {
