@@ -997,7 +997,7 @@ type RPCTransaction struct {
 	To                *common.MixedcaseAddress `json:"to,omitempty"`
 	TransactionIndex  *hexutil.Uint64          `json:"transactionIndex"`
 	Value             *hexutil.Big             `json:"value,omitempty"`
-	Type              hexutil.Uint64           `json:"type,omitempty"`
+	Type              hexutil.Uint64           `json:"type"`
 	Accesses          *types.AccessList        `json:"accessList,omitempty"`
 	ChainID           *hexutil.Big             `json:"chainId,omitempty"`
 	V                 *hexutil.Big             `json:"v,omitempty"`
@@ -1438,7 +1438,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"transactionHash":   hash,
 		"transactionIndex":  hexutil.Uint64(index),
 		"from":              from.Hex(),
-		"to":                tx.To().MixedcaseAddress(),
+		"to":                tx.To().Hex(),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
@@ -1449,7 +1449,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 
 	if tx.Type() == types.ExternalTxType {
 		fields["originatingTxHash"] = tx.OriginatingTxHash()
-		fields["etxType"] = tx.EtxType()
+		fields["etxType"] = hexutil.Uint(tx.EtxType())
 	}
 
 	var outBoundEtxs []*RPCTransaction
