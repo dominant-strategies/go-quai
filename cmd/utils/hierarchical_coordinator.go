@@ -72,10 +72,8 @@ type HierarchicalCoordinator struct {
 
 	chainSubs []event.Subscription
 
-	pendingHeaderMu map[string]*sync.RWMutex
-	mutexMapMu      sync.RWMutex
-	recentBlocks    map[string]*lru.Cache[common.Hash, Node]
-	recentBlockMu   sync.RWMutex
+	recentBlocks  map[string]*lru.Cache[common.Hash, Node]
+	recentBlockMu sync.RWMutex
 
 	expansionCh  chan core.ExpansionEvent
 	expansionSub event.Subscription
@@ -111,7 +109,6 @@ func (hc *HierarchicalCoordinator) InitPendingHeaders() {
 		nodes: make(map[string]Node),
 	}
 
-	pendingHeaderMu := make(map[string]*sync.RWMutex)
 	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
 	//Initialize for prime
 	backend := hc.GetBackend(common.Location{})
@@ -124,7 +121,6 @@ func (hc *HierarchicalCoordinator) InitPendingHeaders() {
 		entropy:  entropy,
 	}
 	nodeSet.nodes[common.Location{}.Name()] = newNode
-	pendingHeaderMu[common.Location{}.Name()] = &sync.RWMutex{}
 
 	for i := 0; i < int(numRegions); i++ {
 		backend := hc.GetBackend(common.Location{byte(i)})
@@ -132,18 +128,15 @@ func (hc *HierarchicalCoordinator) InitPendingHeaders() {
 		newNode.location = common.Location{byte(i)}
 		newNode.entropy = entropy
 		nodeSet.nodes[common.Location{byte(i)}.Name()] = newNode
-		pendingHeaderMu[common.Location{byte(i)}.Name()] = &sync.RWMutex{}
 		for j := 0; j < int(numZones); j++ {
 			backend := hc.GetBackend(common.Location{byte(i), byte(j)})
 			entropy := backend.TotalLogEntropy(genesisBlock)
 			newNode.location = common.Location{byte(i), byte(j)}
 			newNode.entropy = entropy
 			nodeSet.nodes[common.Location{byte(i), byte(j)}.Name()] = newNode
-			pendingHeaderMu[common.Location{byte(i), byte(j)}.Name()] = &sync.RWMutex{}
 		}
 	}
 	hc.Add(new(big.Int).SetUint64(0), nodeSet, hc.pendingHeaders)
-	hc.pendingHeaderMu = pendingHeaderMu
 }
 
 func (hc *HierarchicalCoordinator) Add(entropy *big.Int, node NodeSet, newPendingHeaders *PendingHeaders) {
@@ -154,7 +147,6 @@ func (hc *HierarchicalCoordinator) Add(entropy *big.Int, node NodeSet, newPendin
 	}
 
 	if hc.bestEntropy.Cmp(entropy) < 0 {
-		log.Global.Info("Picking the Extern entropy to build pending headers")
 		hc.bestEntropy = new(big.Int).Set(entropy)
 	}
 
@@ -277,12 +269,12 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 		treeExpansionTriggerStarted: false,
 		quitCh:                      make(chan struct{}),
 		recentBlocks:                make(map[string]*lru.Cache[common.Hash, Node]),
-		pendingHeaders:              NewPendingHeaders(),
 		bestEntropy:                 new(big.Int).Set(common.Big0),
 		oneMu:                       sync.Mutex{},
 		generateHeaderWorkersCount:  0,
 		pendingHeaderBackupCh:       make(chan struct{}),
 	}
+	hc.pendingHeaders = NewPendingHeaders()
 
 	if startingExpansionNumber > common.MaxExpansionNumber {
 		log.Global.Fatal("Starting expansion number is greater than the maximum expansion number")
@@ -927,12 +919,10 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 	startingLen := len(hc.pendingHeaders.order)
 	var entropy *big.Int
 	misses := 0
-	var threshold int
-	threshold = 20
+	threshold := 20
 
 	var start time.Time
-	var newPendingHeaders *PendingHeaders
-	newPendingHeaders = NewPendingHeaders()
+	newPendingHeaders := NewPendingHeaders()
 	start = time.Now()
 	log.Global.Info("PendingHeadersOrderLen:", startingLen)
 	for i := startingLen - 1; i >= 0; i-- {
@@ -965,10 +955,13 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 	}
 
 	for _, entropy := range newPendingHeaders.order {
-		hc.pendingHeaders.order = append(hc.pendingHeaders.order, entropy)
 		newCollection, exists := newPendingHeaders.collection.Peek(entropy.String())
 		if exists {
-			hc.pendingHeaders.collection.Add(entropy.String(), newCollection)
+			_, exists = hc.pendingHeaders.collection.Peek(entropy.String())
+			if !exists {
+				hc.pendingHeaders.order = append(hc.pendingHeaders.order, entropy)
+				hc.pendingHeaders.collection.Add(entropy.String(), newCollection)
+			}
 		}
 	}
 
