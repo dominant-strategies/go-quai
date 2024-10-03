@@ -19,6 +19,7 @@ package quai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -88,10 +89,11 @@ func (b *QuaiAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNum
 	if number == rpc.PendingBlockNumber {
 		block := b.quai.core.PendingBlock()
 		return block, nil
-	}
-	// Otherwise resolve and return the block
-	if number == rpc.LatestBlockNumber {
+	} else if number == rpc.LatestBlockNumber {
+		// Otherwise resolve and return the block
 		return b.quai.core.CurrentBlock(), nil
+	} else if number < 0 {
+		return nil, fmt.Errorf("invalid negative block number: %d", number)
 	}
 	return b.quai.core.GetHeaderByNumber(uint64(number)), nil
 }
