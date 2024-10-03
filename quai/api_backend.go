@@ -127,11 +127,7 @@ func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.LatestBlockNumber {
 		number = rpc.BlockNumber(b.quai.core.CurrentHeader().NumberU64(b.NodeCtx()))
 	}
-	block := b.quai.core.GetBlockByNumber(uint64(number))
-	if block != nil {
-		return block, nil
-	}
-	return nil, errors.New("block is nil api backend")
+	return b.quai.core.GetBlockByNumber(uint64(number)), nil
 }
 
 func (b *QuaiAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
