@@ -239,15 +239,6 @@ func (s *PublicBlockChainQuaiAPI) GetHeaderByNumber(ctx context.Context, number 
 }
 
 // GetHeaderByHash returns the requested header by hash.
-func (s *PublicBlockChainQuaiAPI) GetHeaderHashByNumber(ctx context.Context, number rpc.BlockNumber) common.Hash {
-	header, err := s.b.HeaderByNumber(ctx, number)
-	if err != nil {
-		return common.Hash{}
-	}
-	return header.Hash()
-}
-
-// GetHeaderByHash returns the requested header by hash.
 func (s *PublicBlockChainQuaiAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
 	header, _ := s.b.HeaderByHash(ctx, hash)
 	if header != nil {
