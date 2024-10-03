@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -77,8 +78,21 @@ func (arg *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.GasPrice != nil && args.MinerTip != nil {
-		return errors.New("both gasPrice and minerTip")
+
+	head := b.CurrentHeader()
+	if args.MinerTip == nil {
+		tip := big.NewInt(0)
+		args.MinerTip = (*hexutil.Big)(tip)
+	}
+	if args.GasPrice == nil {
+		gasFeeCap := new(big.Int).Add(
+			(*big.Int)(args.MinerTip),
+			new(big.Int).Mul(head.BaseFee(), big.NewInt(2)),
+		)
+		args.GasPrice = (*hexutil.Big)(gasFeeCap)
+	}
+	if args.GasPrice.ToInt().Cmp(args.MinerTip.ToInt()) < 0 {
+		return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.GasPrice, args.MinerTip)
 	}
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
@@ -131,10 +145,6 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 	if nodeLocation.Context() != common.ZONE_CTX {
 		return types.Message{}, errors.New("toMessage can only called in zone chain")
 	}
-	// Reject invalid combinations of fee styles
-	if args.GasPrice != nil && args.MinerTip != nil {
-		return types.Message{}, errors.New("both gasPrice and minerTip ")
-	}
 	// Set sender address or use zero address if none specified.
 	addr := args.from(nodeLocation)
 
@@ -158,19 +168,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		minerTip *big.Int
 	)
 	// User specified max fee (or none), use those
-	minerTip = new(big.Int)
-	if args.MinerTip != nil {
-		minerTip = args.MinerTip.ToInt()
-	} else {
-		return types.Message{}, errors.New("miner tip cannot be nil for transaction")
-	}
 	gasPrice = new(big.Int)
 	if args.GasPrice != nil {
 		gasPrice = args.GasPrice.ToInt()
-	} else {
-		return types.Message{}, errors.New("gas price cannot be nil for transaction")
 	}
-
+	minerTip = gasPrice
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
