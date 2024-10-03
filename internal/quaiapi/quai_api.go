@@ -281,11 +281,10 @@ func (s *PublicBlockChainQuaiAPI) GetBlockByHash(ctx context.Context, hash commo
 }
 
 func (s *PublicBlockChainQuaiAPI) GetBlockOrCandidateByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
-	block := s.b.BlockOrCandidateByHash(hash)
-	if block != nil {
+	if block := s.b.BlockOrCandidateByHash(hash); block != nil {
 		return s.rpcMarshalBlock(ctx, block, true, fullTx)
 	}
-	return nil, errors.New("block not found")
+	return nil, nil
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
