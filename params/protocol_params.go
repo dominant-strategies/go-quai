@@ -129,7 +129,7 @@ const (
 	// 	chosen high enough to not be easily triggered by minor changes in node
 	// 	operating behavior, but not so high that the security efficiency becomes
 	// 	unacceptably low.
-	TREE_EXPANSION_THRESHOLD uint16 = 15
+	TREE_EXPANSION_THRESHOLD uint16 = math.MaxUint16
 
 	// This is the smoothing factor (range 0-10) used by each zone in its low-pass
 	// filter to gather a long running average of the zone's security efficiency

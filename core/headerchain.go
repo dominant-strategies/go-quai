@@ -46,6 +46,8 @@ type getPendingEtxsRollup func(blockHash common.Hash, hash common.Hash, location
 // getPendingEtxs gets the pendingEtxs from the appropriate Zone
 type getPendingEtxs func(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxs, error)
 
+type getPrimeBlock func(blockHash common.Hash) *types.WorkObject
+
 type HeaderChain struct {
 	config *params.ChainConfig
 
@@ -68,6 +70,8 @@ type HeaderChain struct {
 
 	fetchPEtxRollup getPendingEtxsRollup
 	fetchPEtx       getPendingEtxs
+
+	fetchPrimeBlock getPrimeBlock
 
 	pendingEtxsRollup *lru.Cache[common.Hash, types.PendingEtxsRollup]
 	pendingEtxs       *lru.Cache[common.Hash, types.PendingEtxs]
@@ -92,7 +96,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, primeBlockFetcher getPrimeBlock, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
 
 	nodeCtx := chainConfig.Location.Context()
 
@@ -103,6 +107,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		slicesRunning:          slicesRunning,
 		fetchPEtxRollup:        pEtxsRollupFetcher,
 		fetchPEtx:              pEtxsFetcher,
+		fetchPrimeBlock:        primeBlockFetcher,
 		logger:                 logger,
 		currentExpansionNumber: currentExpansionNumber,
 	}
@@ -1161,6 +1166,45 @@ func (hc *HeaderChain) StateAt(root, etxRoot common.Hash, quaiStateSize *big.Int
 
 func (hc *HeaderChain) SlicesRunning() []common.Location {
 	return hc.slicesRunning
+}
+
+func (hc *HeaderChain) ComputeExpansionNumber(parent *types.WorkObject) (uint8, error) {
+	// If the parent is a prime block, prime terminus is the parent hash
+	_, order, err := hc.engine.CalcOrder(hc, parent)
+	if err != nil {
+		return 0, err
+	}
+	var primeTerminusHash common.Hash
+	if order == common.PRIME_CTX {
+		primeTerminusHash = parent.Hash()
+	} else {
+		primeTerminusHash = parent.PrimeTerminusHash()
+	}
+
+	primeTerminus := hc.GetBlockByHash(primeTerminusHash)
+
+	if primeTerminus == nil {
+		return 0, errors.New("prime terminus is nil in compute expansion number")
+	}
+
+	// If the Prime Terminus is genesis the expansion number is the genesis expansion number
+	if hc.IsGenesisHash(primeTerminusHash) && hc.NodeLocation().Equal(common.Location{0, 0}) {
+		return primeTerminus.ExpansionNumber(), nil
+	} else {
+		// check if the prime terminus is the block where the threshold count
+		// exceeds the trigger and expansion wait window Expansion happens when
+		// the threshold count is greater than the expansion threshold and we
+		// cross the tree expansion trigger window
+		if primeTerminus.ThresholdCount() == params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+			return primeTerminus.ExpansionNumber() + 1, nil
+		}
+		// get the parent of the prime terminus
+		parentOfPrimeTerminus := hc.fetchPrimeBlock(primeTerminus.ParentHash(common.PRIME_CTX))
+		if parentOfPrimeTerminus == nil {
+			return 0, fmt.Errorf("parent of prime terminus is nil %v", primeTerminus.ParentHash(common.PRIME_CTX))
+		}
+		return parentOfPrimeTerminus.ExpansionNumber(), nil
+	}
 }
 
 // ComputeEfficiencyScore calculates the efficiency score for the given header

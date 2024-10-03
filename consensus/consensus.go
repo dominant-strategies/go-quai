@@ -95,6 +95,9 @@ type ChainHeaderReader interface {
 	// ComputeEfficiencyScore returns the efficiency score computed at each prime block
 	ComputeEfficiencyScore(header *types.WorkObject) uint16
 
+	// ComputeExpansionNumber returns the expansion number of the block
+	ComputeExpansionNumber(parent *types.WorkObject) (uint8, error)
+
 	// IsGenesisHash returns true if the given hash is the genesis block hash.
 	IsGenesisHash(hash common.Hash) bool
 

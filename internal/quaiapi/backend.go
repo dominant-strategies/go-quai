@@ -110,6 +110,7 @@ type Backend interface {
 	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
 	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)
+	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 
 	consensus.ChainHeaderReader
 	TxMiningEnabled() bool

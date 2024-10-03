@@ -56,6 +56,7 @@ type CoreBackend interface {
 	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
 	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
+	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 }
 
 type pEtxRetry struct {
@@ -118,7 +119,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.AddGenesisHash(genesisBlock.Hash())
 	}
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger)
+	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, sl.GetPrimeBlock, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +355,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	// we trigger the expansion using the expansion feed
 	if nodeCtx == common.PRIME_CTX {
 		parent := sl.hc.GetHeaderByHash(block.ParentHash(nodeCtx))
-		if header.ExpansionNumber() > parent.ExpansionNumber() {
+		if block.ExpansionNumber() > parent.ExpansionNumber() {
 			sl.expansionFeed.Send(ExpansionEvent{block})
 		}
 	}
@@ -896,7 +897,6 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 	if index == common.PRIME_CTX {
 		combinedPendingHeader.Header().SetEfficiencyScore(header.EfficiencyScore())
 		combinedPendingHeader.Header().SetThresholdCount(header.ThresholdCount())
-		combinedPendingHeader.Header().SetExpansionNumber(header.ExpansionNumber())
 		combinedPendingHeader.Header().SetEtxEligibleSlices(header.EtxEligibleSlices())
 		combinedPendingHeader.Header().SetInterlinkRootHash(header.InterlinkRootHash())
 		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
@@ -930,6 +930,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetExtra(header.Extra())
 		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
 		combinedPendingHeader.Header().SetSecondaryCoinbase(header.SecondaryCoinbase())
+		combinedPendingHeader.Header().SetExpansionNumber(header.ExpansionNumber())
 
 		combinedPendingHeader.Body().SetTransactions(header.Transactions())
 		combinedPendingHeader.Body().SetOutboundEtxs(header.OutboundEtxs())
@@ -1490,6 +1491,18 @@ const (
 
 func (sl *Slice) SetCurrentExpansionNumber(expansionNumber uint8) {
 	sl.hc.SetCurrentExpansionNumber(expansionNumber)
+}
+
+func (sl *Slice) GetPrimeBlock(blockHash common.Hash) *types.WorkObject {
+	switch sl.NodeCtx() {
+	case common.PRIME_CTX:
+		return sl.hc.GetBlockByHash(blockHash)
+	case common.REGION_CTX:
+		return sl.domInterface.GetPrimeBlock(blockHash)
+	case common.ZONE_CTX:
+		return sl.domInterface.GetPrimeBlock(blockHash)
+	}
+	return nil
 }
 
 // AddGenesisHash appends the given hash to the genesis hash list

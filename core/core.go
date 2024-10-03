@@ -812,6 +812,10 @@ func (c *Core) MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject
 	return c.sl.MakeFullPendingHeader(primePh, regionPh, zonePh)
 }
 
+func (c *Core) GetPrimeBlock(blockHash common.Hash) *types.WorkObject {
+	return c.sl.GetPrimeBlock(blockHash)
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//
@@ -877,6 +881,10 @@ func (c *Core) CurrentBlock() *types.WorkObject {
 // header is retrieved from the HeaderChain's internal cache.
 func (c *Core) CurrentHeader() *types.WorkObject {
 	return c.sl.hc.CurrentHeader()
+}
+
+func (c *Core) ComputeExpansionNumber(parent *types.WorkObject) (uint8, error) {
+	return c.sl.hc.ComputeExpansionNumber(parent)
 }
 
 // CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block

@@ -1408,11 +1408,6 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		if parent.NumberU64(common.PRIME_CTX) == 0 {
 			newWo.Header().SetEfficiencyScore(0)
 			newWo.Header().SetThresholdCount(0)
-			// get the genesis expansion number, since in the normal expansion
-			// scenario this is only triggered in the case of [0, 0] we can just read
-			// the genesis block by number 0
-			genesisHeader := w.hc.GetBlockByNumber(0)
-			newWo.Header().SetExpansionNumber(genesisHeader.ExpansionNumber())
 		} else {
 			// compute the efficiency score at each prime block
 			efficiencyScore := w.hc.ComputeEfficiencyScore(parent)
@@ -1432,21 +1427,22 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 				// past the tree expansion trigger window we have to reset the
 				// threshold count
 				if (parent.Header().ThresholdCount() < params.TREE_EXPANSION_TRIGGER_WINDOW && efficiencyScore < params.TREE_EXPANSION_THRESHOLD) ||
-					parent.Header().ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+					parent.Header().ThresholdCount() == params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
 					newWo.Header().SetThresholdCount(0)
 				} else {
 					newWo.Header().SetThresholdCount(parent.Header().ThresholdCount() + 1)
 				}
 			}
 
-			// Expansion happens when the threshold count is greater than the
-			// expansion threshold and we cross the tree expansion trigger window
-			if parent.Header().ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
-				newWo.Header().SetExpansionNumber(parent.Header().ExpansionNumber() + 1)
-			} else {
-				newWo.Header().SetExpansionNumber(parent.Header().ExpansionNumber())
-			}
 		}
+	}
+
+	if nodeCtx == common.ZONE_CTX {
+		expansionNumber, err := w.hc.ComputeExpansionNumber(parent)
+		if err != nil {
+			return nil, err
+		}
+		newWo.Header().SetExpansionNumber(expansionNumber)
 	}
 
 	// Compute the Prime Terminus

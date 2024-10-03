@@ -226,6 +226,10 @@ func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 	return b.quai.core.GetReceiptsByHash(hash), nil
 }
 
+func (b *QuaiAPIBackend) GetPrimeBlock(blockHash common.Hash) *types.WorkObject {
+	return b.quai.core.GetPrimeBlock(blockHash)
+}
+
 // GetBloom returns the bloom for the given block hash
 func (b *QuaiAPIBackend) GetBloom(hash common.Hash) (*types.Bloom, error) {
 	nodeCtx := b.quai.core.NodeCtx()
@@ -627,6 +631,10 @@ func (b *QuaiAPIBackend) IsBlockHashABadHash(hash common.Hash) bool {
 
 func (b *QuaiAPIBackend) ComputeEfficiencyScore(header *types.WorkObject) uint16 {
 	return b.quai.core.ComputeEfficiencyScore(header)
+}
+
+func (b *QuaiAPIBackend) ComputeExpansionNumber(parent *types.WorkObject) (uint8, error) {
+	return b.quai.core.ComputeExpansionNumber(parent)
 }
 
 func (b *QuaiAPIBackend) Config() *params.ChainConfig {

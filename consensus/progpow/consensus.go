@@ -352,10 +352,6 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			if header.ThresholdCount() != 0 {
 				return fmt.Errorf("invalid threshold count: have %v, want %v", header.ThresholdCount(), 0)
 			}
-			genesisHeader := chain.GetHeaderByNumber(0)
-			if header.ExpansionNumber() != genesisHeader.ExpansionNumber() {
-				return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), genesisHeader.ExpansionNumber())
-			}
 		} else {
 			expectedEfficiencyScore := chain.ComputeEfficiencyScore(parent)
 			if header.EfficiencyScore() != expectedEfficiencyScore {
@@ -377,7 +373,7 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 				// past the tree expansion trigger window we have to reset the
 				// threshold count
 				if (parent.ThresholdCount() < params.TREE_EXPANSION_TRIGGER_WINDOW && expectedEfficiencyScore < params.TREE_EXPANSION_THRESHOLD) ||
-					parent.ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
+					parent.ThresholdCount() == params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
 					expectedThresholdCount = 0
 				} else {
 					expectedThresholdCount = parent.ThresholdCount() + 1
@@ -387,15 +383,6 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 				return fmt.Errorf("invalid threshold count: have %v, want %v", header.ThresholdCount(), expectedThresholdCount)
 			}
 
-			var expectedExpansionNumber uint8
-			if parent.ThresholdCount() >= params.TREE_EXPANSION_TRIGGER_WINDOW+params.TREE_EXPANSION_WAIT_COUNT {
-				expectedExpansionNumber = parent.ExpansionNumber() + 1
-			} else {
-				expectedExpansionNumber = parent.ExpansionNumber()
-			}
-			if header.ExpansionNumber() != expectedExpansionNumber {
-				return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), expectedExpansionNumber)
-			}
 		}
 	}
 	// verify the etx eligible slices in zone and prime ctx
@@ -412,6 +399,18 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 	}
 
 	if nodeCtx == common.ZONE_CTX {
+		var expectedExpansionNumber uint8
+		expectedExpansionNumber, err := chain.ComputeExpansionNumber(parent)
+		if err != nil {
+			return err
+		}
+		if header.ExpansionNumber() != expectedExpansionNumber {
+			return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), expectedExpansionNumber)
+		}
+	}
+
+	if nodeCtx == common.ZONE_CTX {
+
 		// check if the header coinbase is in scope
 		_, err := header.PrimaryCoinbase().InternalAddress()
 		if err != nil {
