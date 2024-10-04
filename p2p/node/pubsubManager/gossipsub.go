@@ -17,6 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	p2p "github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai"
 )
 
@@ -51,7 +52,7 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	cfg.Dlo = 6
 	cfg.Dhi = 45
 	cfg.Dout = 20
-	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg))
+	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithGossipSubParams(cfg), pubsub.WithMaxMessageSize(params.MaxGossipsubPacketSize))
 	if err != nil {
 		return nil, err
 	}

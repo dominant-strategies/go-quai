@@ -156,6 +156,7 @@ const (
 )
 
 var (
+	MaxGossipsubPacketSize            = 3 << 20
 	GasCeil                    uint64 = 20000000
 	ColosseumGasCeil           uint64 = 70000000
 	GardenGasCeil              uint64 = 160000000
