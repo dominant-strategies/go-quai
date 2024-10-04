@@ -21,7 +21,7 @@ const (
 	// c_missingBlockChanSize is the size of channel listening to the MissingBlockEvent
 	c_missingBlockChanSize = 60
 	// c_checkNextPrimeBlockInterval is the interval for checking the next Block in Prime
-	c_checkNextPrimeBlockInterval = 30 * time.Second
+	c_checkNextPrimeBlockInterval = 10 * time.Second
 	// c_recentBlockReqCache is the size of the cache for the recent block requests
 	c_recentBlockReqCache = 1000
 	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
