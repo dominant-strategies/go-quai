@@ -167,7 +167,6 @@ func (h *handler) checkNextPrimeBlock() {
 
 			h.wg.Add(1)
 			go func() {
-				defer h.wg.Done()
 				defer func() {
 					if r := recover(); r != nil {
 						h.logger.WithFields(log.Fields{
@@ -176,6 +175,7 @@ func (h *handler) checkNextPrimeBlock() {
 						}).Fatal("Go-Quai Panicked")
 					}
 				}()
+				defer h.wg.Done()
 
 				if h.ctx.Err() != nil {
 					return
