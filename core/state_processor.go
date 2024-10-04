@@ -1641,7 +1641,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 func (p *StateProcessor) StateAtTransaction(block *types.WorkObject, txIndex int, reexec uint64) (Message, vm.BlockContext, *state.StateDB, error) {
 	nodeCtx := p.hc.NodeCtx()
 	// Short circuit if it's genesis block.
-	if block.NumberU64(nodeCtx) == 0 {
+	if p.hc.IsGenesisHash(block.Hash()) {
 		return nil, vm.BlockContext{}, nil, errors.New("no transaction in genesis")
 	}
 	// Create the parent state database

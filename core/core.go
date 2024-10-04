@@ -980,6 +980,10 @@ func (c *Core) IsGenesisHash(hash common.Hash) bool {
 	return c.sl.hc.IsGenesisHash(hash)
 }
 
+func (c *Core) GetGenesisHashes() []common.Hash {
+	return c.sl.hc.GetGenesisHashes()
+}
+
 func (c *Core) GetExpansionNumber() uint8 {
 	return c.sl.hc.GetExpansionNumber()
 }

@@ -740,8 +740,7 @@ func (sl *Slice) init() error {
 	// Even though the genesis block cannot have any ETXs, we still need an empty
 	// pending ETX entry for that block hash, so that the state processor can build
 	// on it
-	genesisHashes := sl.hc.GetGenesisHashes()
-	genesisHash := genesisHashes[0]
+	genesisHash := sl.hc.GetGenesisHashes()[0]
 	genesisHeader := sl.hc.GetHeaderByHash(genesisHash)
 	if genesisHeader == nil {
 		return errors.New("failed to get genesis header")

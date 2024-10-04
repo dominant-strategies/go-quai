@@ -129,8 +129,9 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		if hc.genesisHeader == nil {
 			return nil, ErrNoGenesis
 		}
-		if hc.genesisHeader.Hash() != hc.config.DefaultGenesisHash {
-			return nil, fmt.Errorf("genesis hash mismatch: have %x, want %x", hc.genesisHeader.Hash(), chainConfig.DefaultGenesisHash)
+		expectedGenesisHash := hc.GetGenesisHashes()[0]
+		if hc.genesisHeader.Hash() != expectedGenesisHash {
+			return nil, fmt.Errorf("genesis hash mismatch: have %x, want %x", hc.genesisHeader.Hash(), expectedGenesisHash)
 		}
 	}
 	hc.logger.WithField("Hash", hc.genesisHeader.Hash()).Info("Genesis")
@@ -501,7 +502,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		}
 		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
 		if prevHeader == nil {
-			return errors.New("Could not find previously canonical header during reorg")
+			return errors.New("could not find previously canonical header during reorg")
 		}
 		// genesis check to not delete the genesis block
 		if hc.IsGenesisHash(prevHeader.Hash()) {

@@ -428,15 +428,15 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string, loc
 // extractGenesis loads the genesis state and commits all the state entries
 // into the given bloomfilter.
 func extractGenesis(db ethdb.Database, stateBloom *stateBloom, location common.Location) error {
-	genesisHash := rawdb.ReadGenesisHashes(db)
-	if genesisHash[0] == (common.Hash{}) {
+	genesisHash := rawdb.ReadGenesisHashes(db)[0]
+	if genesisHash == (common.Hash{}) {
 		return errors.New("missing genesis hash")
 	}
-	genesisNumber := rawdb.ReadHeaderNumber(db, genesisHash[0])
+	genesisNumber := rawdb.ReadHeaderNumber(db, genesisHash)
 	if genesisNumber == nil {
 		return nil
 	}
-	genesis := rawdb.ReadWorkObject(db, *genesisNumber, genesisHash[0], types.BlockObject)
+	genesis := rawdb.ReadWorkObject(db, *genesisNumber, genesisHash, types.BlockObject)
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}

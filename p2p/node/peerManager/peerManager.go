@@ -142,7 +142,7 @@ type BasicPeerManager struct {
 	// This peer's ID to distinguish self-broadcasts
 	selfID p2p.PeerID
 
-	// Genesis hash to append to topics
+	// Genesis hash to prepend to topics
 	genesis common.Hash
 
 	ctx    context.Context
