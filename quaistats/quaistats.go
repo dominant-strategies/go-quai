@@ -1019,6 +1019,9 @@ type blockDetailStats struct {
 	QiType       bool     `json:"qiType"`
 	UncleCount   uint64   `json:"uncleCount"`
 	WoCount      uint64   `json:"woCount"`
+	QiToQuai     *big.Int `json:"qiToQuai"`
+	QuaiToQi     *big.Int `json:"quaiToQi"`
+	ExchangeRate *big.Int `json:"exchangeRate"`
 }
 
 // Everyone sends every block
@@ -1286,6 +1289,9 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		QiType:       qiType,
 		UncleCount:   uncleCount,
 		WoCount:      woCount,
+		QiToQuai:     block.QiToQuai(),
+		QuaiToQi:     block.QuaiToQi(),
+		ExchangeRate: block.ExchangeRate(),
 	}
 }
 
