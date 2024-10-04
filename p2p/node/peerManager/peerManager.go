@@ -250,7 +250,7 @@ func loadPeerDBs() (map[string][]*peerdb.PeerDB, error) {
 	}
 
 	generateLocations := func() []common.Location {
-		locations := make([]common.Location, 9)
+		locations := make([]common.Location, 0, 9)
 		for region := byte(0); region <= 2; region++ {
 			for zone := byte(0); zone <= 2; zone++ {
 				locations = append(locations, common.Location{region, zone})
