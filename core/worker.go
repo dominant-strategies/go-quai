@@ -228,7 +228,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		resultCh:                       make(chan *types.WorkObject, resultQueueSize),
 		exitCh:                         make(chan struct{}),
 		resubmitIntervalCh:             make(chan time.Duration),
-		orderTransactionCh:             make(chan transactionOrderingInfo),
 		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 		logger:                         logger,
 	}
@@ -260,6 +259,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		worker.wg.Add(1)
 		go worker.asyncStateLoop()
 
+		worker.orderTransactionCh = make(chan transactionOrderingInfo)
 		worker.wg.Add(1)
 		go worker.transactionOrderingLoop()
 	}
@@ -608,11 +608,13 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		work.wo.Header().SetBaseFee(big.NewInt(0))
 	}
 
-	if !fromOrderedTransactionSet {
-		select {
-		case w.orderTransactionCh <- transactionOrderingInfo{work.txs, work.gasUsedAfterTransaction, block}:
-		default:
-			w.logger.Info("w.orderTranscationCh is full")
+	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
+		if !fromOrderedTransactionSet {
+			select {
+			case w.orderTransactionCh <- transactionOrderingInfo{work.txs, work.gasUsedAfterTransaction, block}:
+			default:
+				w.logger.Debug("w.orderTranscationCh is full")
+			}
 		}
 	}
 
