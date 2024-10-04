@@ -110,7 +110,6 @@ func runStart(cmd *cobra.Command, args []string) error {
 	<-ch
 	log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
 	cancel()
-	node.Close()
 	// stop the hierarchical co-ordinator
 	hc.Stop()
 	if err := node.Stop(); err != nil {

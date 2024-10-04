@@ -41,7 +41,6 @@ type Miner struct {
 	hc                *HeaderChain
 	engine            consensus.Engine
 	startCh           chan []common.Address
-	stopCh            chan struct{}
 	logger            *log.Logger
 }
 
@@ -50,7 +49,6 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 		hc:                hc,
 		engine:            engine,
 		startCh:           make(chan []common.Address, 2),
-		stopCh:            make(chan struct{}),
 		worker:            newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true, processingState, logger),
 		primaryCoinbase:   config.PrimaryCoinbase,
 		secondaryCoinbase: config.SecondaryCoinbase,
@@ -62,7 +60,6 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 }
 
 func (miner *Miner) Stop() {
-	miner.stopCh <- struct{}{}
 	miner.worker.stop()
 }
 

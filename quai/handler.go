@@ -1,6 +1,7 @@
 package quai
 
 import (
+	"context"
 	"errors"
 	"math/big"
 	"runtime/debug"
@@ -47,9 +48,13 @@ type handler struct {
 	txs types.Transactions
 
 	recentBlockReqCache *expireLru.LRU[common.Hash, interface{}] // cache the latest requests on a 1 min timer
+
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 }
 
 func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.Location, logger *log.Logger) *handler {
+	ctx, cancel := context.WithCancel(context.Background())
 	handler := &handler{
 		nodeLocation: nodeLocation,
 		p2pBackend:   p2pBackend,
@@ -57,6 +62,8 @@ func newHandler(p2pBackend NetworkingAPI, core *core.Core, nodeLocation common.L
 		quitCh:       make(chan struct{}),
 		logger:       logger,
 		txs:          make(types.Transactions, 0),
+		ctx:          ctx,
+		cancelFunc:   cancel,
 	}
 	handler.recentBlockReqCache = expireLru.NewLRU[common.Hash, interface{}](c_recentBlockReqCache, nil, c_recentBlockReqTimeout)
 	return handler
@@ -76,9 +83,11 @@ func (h *handler) Start() {
 }
 
 func (h *handler) Stop() {
+	h.cancelFunc()
 	h.missingBlockSub.Unsubscribe() // quits missingBlockLoop
 	close(h.quitCh)
 	h.wg.Wait()
+	h.logger.Info("quai handler stopped")
 }
 
 // missingBlockLoop announces new pendingEtxs to connected peers.
@@ -156,7 +165,9 @@ func (h *handler) checkNextPrimeBlock() {
 		select {
 		case <-checkNextPrimeBlockTimer.C:
 
+			h.wg.Add(1)
 			go func() {
+				defer h.wg.Done()
 				defer func() {
 					if r := recover(); r != nil {
 						h.logger.WithFields(log.Fields{
@@ -166,6 +177,10 @@ func (h *handler) checkNextPrimeBlock() {
 					}
 				}()
 
+				if h.ctx.Err() != nil {
+					return
+				}
+
 				// Start of the downloading process happens from the tip of the
 				// prime chain, Going back 10 blocks at a time and checking
 				// until we reach a point where we already have appended the
@@ -174,6 +189,10 @@ func (h *handler) checkNextPrimeBlock() {
 				syncHeight := new(big.Int).Set(currentHeight)
 				for i := 0; i < c_primeBlockSyncDepth; i += protocol.C_NumPrimeBlocksToDownload {
 					h.logger.Info("Downloading prime blocks from syncHeight ", syncHeight)
+
+					if h.ctx.Err() != nil {
+						return
+					}
 					// the prime block on this try already existed in the database
 					if err := h.GetNextPrimeBlock(syncHeight); err != nil {
 						// If i > 2 * protocol.C_NumPrimeBlocksToDownload that
@@ -191,6 +210,7 @@ func (h *handler) checkNextPrimeBlock() {
 						break
 					}
 				}
+
 			}()
 		case <-h.quitCh:
 			return

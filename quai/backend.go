@@ -401,10 +401,10 @@ func (s *Quai) Stop() error {
 		s.bloomIndexer.Close()
 		close(s.closeBloomHandler)
 	}
+	s.handler.Stop()
 	s.core.Stop()
 	s.chainDb.Close()
 	s.eventMux.Stop()
-	s.handler.Stop()
 
 	return nil
 }
