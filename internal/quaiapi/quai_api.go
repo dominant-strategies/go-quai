@@ -31,7 +31,6 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
-	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 	"google.golang.org/protobuf/proto"
@@ -55,11 +54,7 @@ func NewPublicQuaiAPI(b Backend) *PublicQuaiAPI {
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	gasPrice := big.NewInt(int64(params.TxGas))
-	if head := s.b.CurrentHeader(); head.BaseFee() != nil {
-		gasPrice = new(big.Int).Set(head.BaseFee())
-	}
-	return (*hexutil.Big)(gasPrice), nil
+	return (*hexutil.Big)(s.b.GetPoolGasPrice()), nil
 }
 
 // MinerTip returns the gas price of the pool
