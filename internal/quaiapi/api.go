@@ -725,9 +725,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
-	if args.GasPrice != nil && args.MinerTip != nil {
-		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	} else if args.GasPrice != nil {
+	if args.GasPrice != nil {
 		feeCap = args.GasPrice.ToInt()
 	} else if args.MinerTip != nil {
 		feeCap = args.MinerTip.ToInt()
