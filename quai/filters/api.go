@@ -55,24 +55,28 @@ type filter struct {
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Quai protocol such as blocks, transactions and logs.
 type PublicFilterAPI struct {
-	backend   Backend
-	mux       *event.TypeMux
-	quit      chan struct{}
-	chainDb   ethdb.Database
-	events    *EventSystem
-	filtersMu sync.Mutex
-	filters   map[rpc.ID]*filter
-	timeout   time.Duration
+	backend             Backend
+	mux                 *event.TypeMux
+	quit                chan struct{}
+	chainDb             ethdb.Database
+	events              *EventSystem
+	filtersMu           sync.Mutex
+	filters             map[rpc.ID]*filter
+	timeout             time.Duration
+	subscriptionLimit   int
+	activeSubscriptions int
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, timeout time.Duration) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, timeout time.Duration, subscriptionLimit int) *PublicFilterAPI {
 	api := &PublicFilterAPI{
-		backend: backend,
-		chainDb: backend.ChainDb(),
-		events:  NewEventSystem(backend),
-		filters: make(map[rpc.ID]*filter),
-		timeout: timeout,
+		backend:             backend,
+		chainDb:             backend.ChainDb(),
+		events:              NewEventSystem(backend),
+		filters:             make(map[rpc.ID]*filter),
+		timeout:             timeout,
+		subscriptionLimit:   subscriptionLimit,
+		activeSubscriptions: 0,
 	}
 	go api.timeoutLoop(timeout)
 
@@ -166,6 +170,10 @@ func (api *PublicFilterAPI) NewPendingTransactionFilter() rpc.ID {
 // NewPendingTransactions creates a subscription that is triggered each time a transaction
 // enters the transaction pool and was signed from one of the transactions this nodes manages.
 func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -181,7 +189,9 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 					"stacktrace": string(debug.Stack()),
 				}).Fatal("Go-Quai Panicked")
 			}
+			api.activeSubscriptions -= 1
 		}()
+		api.activeSubscriptions += 1
 		txHashes := make(chan []common.Hash, 128)
 		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
 
@@ -251,6 +261,10 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 
 // NewHeads send a notification each time a new (header) block is appended to the chain.
 func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -266,7 +280,9 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 					"stacktrace": string(debug.Stack()),
 				}).Fatal("Go-Quai Panicked")
 			}
+			api.activeSubscriptions -= 1
 		}()
+		api.activeSubscriptions += 1
 		headers := make(chan *types.WorkObject)
 		headersSub := api.events.SubscribeNewHeads(headers)
 
@@ -291,6 +307,10 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 
 // Accesses send a notification each time the specified address is accessed
 func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -306,7 +326,9 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 					"stacktrace": string(debug.Stack()),
 				}).Fatal("Go-Quai Panicked")
 			}
+			api.activeSubscriptions -= 1
 		}()
+		api.activeSubscriptions += 1
 		headers := make(chan *types.WorkObject)
 		headersSub := api.events.SubscribeNewHeads(headers)
 
@@ -348,6 +370,10 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -371,7 +397,9 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 					"stacktrace": string(debug.Stack()),
 				}).Fatal("Go-Quai Panicked")
 			}
+			api.activeSubscriptions -= 1
 		}()
+		api.activeSubscriptions += 1
 		for {
 			select {
 			case logs := <-matchedLogs:

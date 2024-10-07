@@ -75,12 +75,13 @@ type Quai struct {
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
-	logger *log.Logger
+	logger    *log.Logger
+	maxWsSubs int
 }
 
 // New creates a new Quai object (including the
 // initialisation of the common Quai object)
-func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.WorkObject, logger *log.Logger) (*Quai, error) {
+func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.WorkObject, logger *log.Logger, maxWsSubs int) (*Quai, error) {
 	// Ensure configuration values are compatible and sane
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
 		logger.WithFields(log.Fields{
@@ -160,6 +161,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		primaryCoinbase:   config.Miner.PrimaryCoinbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		logger:            logger,
+		maxWsSubs:         maxWsSubs,
 	}
 
 	// Copy the chainConfig
@@ -293,12 +295,12 @@ func (s *Quai) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute),
+			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs),
 			Public:    true,
 		}, {
 			Namespace: "quai",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute),
+			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs),
 			Public:    true,
 		}, {
 			Namespace: "admin",

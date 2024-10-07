@@ -189,7 +189,7 @@ func TestPendingTxFilter(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase(log.Global)
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, deadline)
+		api     = NewPublicFilterAPI(backend, deadline, 1)
 
 		to = common.HexToAddress("0x0094f5ea0ba39494ce83a213fffba74279579268", common.Location{0, 0})
 
@@ -311,7 +311,7 @@ func TestLogFilterCreation(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase(log.Global)
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, deadline)
+		api     = NewPublicFilterAPI(backend, deadline, 1)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -354,7 +354,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase(log.Global)
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, deadline)
+		api     = NewPublicFilterAPI(backend, deadline, 1)
 	)
 
 	// different situations where log filter creation should fail.
@@ -376,7 +376,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase(log.Global)
 		backend   = &testBackend{db: db}
-		api       = NewPublicFilterAPI(backend, deadline)
+		api       = NewPublicFilterAPI(backend, deadline, 1)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
 
@@ -401,7 +401,7 @@ func TestLogFilter(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase(log.Global)
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, deadline)
+		api     = NewPublicFilterAPI(backend, deadline, 1)
 
 		firstAddr      = common.HexToAddressBytes("0x0011111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddressBytes("0x0022222222222222222222222222222222222222")
@@ -514,7 +514,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase(log.Global)
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, deadline)
+		api     = NewPublicFilterAPI(backend, deadline, 1)
 
 		firstAddr    = common.HexToAddressBytes("0x0011111111111111111111111111111111111111")
 		secondAddr   = common.HexToAddressBytes("0x0022222222222222222222222222222222222222")

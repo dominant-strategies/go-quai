@@ -144,6 +144,7 @@ var RPCFlags = []Flag{
 	HTTPPortStartFlag,
 	WSEnabledFlag,
 	WSListenAddrFlag,
+	WSMaxSubsFlag,
 	WSApiFlag,
 	WSAllowedOriginsFlag,
 	WSPathPrefixFlag,
@@ -603,6 +604,12 @@ var (
 		Name:  c_RPCFlagPrefix + "ws-addr",
 		Value: node.DefaultWSHost,
 		Usage: "WS-RPC server listening interface" + generateEnvDoc(c_RPCFlagPrefix+"ws-addr"),
+	}
+
+	WSMaxSubsFlag = Flag{
+		Name:  c_RPCFlagPrefix + "ws-max-subs",
+		Value: 1000,
+		Usage: "maximum concurrent subscribers to the WS-RPC server",
 	}
 
 	WSApiFlag = Flag{
