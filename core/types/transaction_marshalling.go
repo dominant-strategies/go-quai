@@ -51,7 +51,7 @@ type txJSON struct {
 	S       *hexutil.Big `json:"s,omitempty"`
 
 	// Optional fields only present for external transactions
-	ETXSender         *common.MixedcaseAddress `json:"sender,omitempty"`
+	ETXSender         *common.MixedcaseAddress `json:"from,omitempty"`
 	OriginatingTxHash *common.Hash             `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64          `json:"etxIndex,omitempty"`
 
@@ -233,10 +233,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'input' in external transaction")
 		}
 		etx.Data = *dec.Data
-		if dec.ETXSender == nil {
-			return errors.New("missing required field 'sender' in external transaction")
+		if dec.ETXSender != nil {
+			etx.Sender = dec.ETXSender.Address()
 		}
-		etx.Sender = dec.ETXSender.Address()
 		if dec.EtxType == nil {
 			return errors.New("missing required field 'isCoinbase' in external transaction")
 		}
