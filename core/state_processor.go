@@ -1554,7 +1554,7 @@ func (p *StateProcessor) StateAtBlock(block *types.WorkObject, reexec uint64, ba
 		newHeads = append(newHeads, current)
 		// Database does not have the state for the given block, try to regenerate
 		for i := uint64(0); i < reexec; i++ {
-			if current.NumberU64(nodeCtx) == 0 {
+			if p.hc.IsGenesisHash(current.Hash()) {
 				return nil, errors.New("genesis state is missing")
 			}
 			parent := p.hc.GetHeaderOrCandidateByHash(current.ParentHash(nodeCtx))

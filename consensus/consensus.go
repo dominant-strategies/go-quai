@@ -241,6 +241,7 @@ type BlockReader interface {
 	GetBlockByHash(hash common.Hash) *types.WorkObject
 	CheckInCalcOrderCache(common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(common.Hash, int, *big.Int)
+	IsGenesisHash(hash common.Hash) bool
 }
 
 func TargetToDifficulty(target *big.Int) *big.Int {

@@ -20,9 +20,8 @@ func (progpow *Progpow) CalcOrder(chain consensus.BlockReader, header *types.Wor
 	if exists {
 		return intrinsicEntropy, order, nil
 	}
-	nodeCtx := progpow.config.NodeLocation.Context()
 	// Except for the slice [0,0] have to check if the header hash is the genesis hash
-	if header.NumberU64(nodeCtx) == 0 {
+	if chain.IsGenesisHash(header.Hash()) {
 		return big0, common.PRIME_CTX, nil
 	}
 	expansionNum := header.ExpansionNumber()

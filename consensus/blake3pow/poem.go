@@ -20,8 +20,7 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 	if exists {
 		return intrinsicEntropy, order, nil
 	}
-	nodeCtx := blake3pow.config.NodeLocation.Context()
-	if header.NumberU64(nodeCtx) == 0 {
+	if chain.IsGenesisHash(header.Hash()) {
 		return big0, common.PRIME_CTX, nil
 	}
 
