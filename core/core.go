@@ -32,31 +32,30 @@ import (
 )
 
 const (
-	c_maxAppendQueue                           = 3000 // Maximum number of future headers we can store in cache
-	c_maxFutureTime                            = 30   // Max time into the future (in seconds) we will accept a block
-	c_appendQueueRetryPeriod                   = 1    // Time (in seconds) before retrying to append from AppendQueue
-	c_appendQueueThreshold                     = 200  // Number of blocks to load from the disk to ram on every proc of append queue
-	c_processingCache                          = 10   // Number of block hashes held to prevent multi simultaneous appends on a single block hash
-	c_primeRetryThreshold                      = 1800 // Number of times a block is retry to be appended before eviction from append queue in Prime
-	c_regionRetryThreshold                     = 1200 // Number of times a block is retry to be appended before eviction from append queue in Region
-	c_zoneRetryThreshold                       = 600  // Number of times a block is retry to be appended before eviction from append queue in Zone
-	c_maxFutureBlocksPrime              uint64 = 3    // Number of blocks ahead of the current block to be put in the hashNumberList
-	c_maxFutureBlocksRegion             uint64 = 150
-	c_maxFutureBlocksZone               uint64 = 2000
-	c_appendQueueRetryPriorityThreshold        = 5  // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
-	c_appendQueueRemoveThreshold               = 10 // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
-	c_normalListProcCounter                    = 1  // Ratio of Number of times the PriorityList is serviced over the NormalList
-	c_statsPrintPeriod                         = 60 // Time between stats prints
-	c_appendQueuePrintSize                     = 10
-	c_normalListBackoffThreshold               = 5 // Max multiple on the c_normalListProcCounter
-	c_maxRemoteTxQueue                         = 50000
-	c_remoteTxProcPeriod                       = 2 // Time between remote tx pool processing
-	c_asyncWorkShareTimer                      = 1 * time.Second
+	c_maxAppendQueue                    = 100000 // Maximum number of future headers we can store in cache
+	c_maxFutureTime                     = 30     // Max time into the future (in seconds) we will accept a block
+	c_appendQueueRetryPeriod            = 1      // Time (in seconds) before retrying to append from AppendQueue
+	c_appendQueueThreshold              = 200    // Number of blocks to load from the disk to ram on every proc of append queue
+	c_processingCache                   = 10     // Number of block hashes held to prevent multi simultaneous appends on a single block hash
+	c_primeRetryThreshold               = 1800   // Number of times a block is retry to be appended before eviction from append queue in Prime
+	c_regionRetryThreshold              = 1200   // Number of times a block is retry to be appended before eviction from append queue in Region
+	c_zoneRetryThreshold                = 600    // Number of times a block is retry to be appended before eviction from append queue in Zone
+	c_appendQueueRetryPriorityThreshold = 5      // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
+	c_appendQueueRemoveThreshold        = 10     // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
+	c_normalListProcCounter             = 1      // Ratio of Number of times the PriorityList is serviced over the NormalList
+	c_statsPrintPeriod                  = 60     // Time between stats prints
+	c_appendQueuePrintSize              = 10
+	c_normalListBackoffThreshold        = 5 // Max multiple on the c_normalListProcCounter
+	c_maxRemoteTxQueue                  = 50000
+	c_remoteTxProcPeriod                = 2 // Time between remote tx pool processing
+	c_asyncWorkShareTimer               = 1 * time.Second
+	c_maxFutureEntropyMultiple          = 500
 )
 
 type blockNumberAndRetryCounter struct {
-	number uint64
-	retry  uint64
+	number  uint64
+	entropy *big.Int
+	retry   uint64
 }
 
 type Core struct {
@@ -219,13 +218,11 @@ func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
 
 // procAppendQueue sorts the append queue and attempts to append
 func (c *Core) procAppendQueue() {
-	nodeCtx := c.NodeLocation().Context()
 
-	maxFutureBlocks := c_maxFutureBlocksPrime
-	if nodeCtx == common.REGION_CTX {
-		maxFutureBlocks = c_maxFutureBlocksRegion
-	} else if nodeCtx == common.ZONE_CTX {
-		maxFutureBlocks = c_maxFutureBlocksZone
+	var genesis bool
+	entropyWindow := c.EntropyWindow()
+	if entropyWindow == nil {
+		genesis = true
 	}
 
 	// Sort the blocks by number and retry attempts and try to insert them
@@ -234,8 +231,8 @@ func (c *Core) procAppendQueue() {
 	var hashNumberPriorityList []types.HashAndNumber
 	for _, hash := range c.appendQueue.Keys() {
 		if value, exist := c.appendQueue.Peek(hash); exist {
-			hashNumber := types.HashAndNumber{Hash: hash, Number: value.number}
-			if hashNumber.Number < c.CurrentHeader().NumberU64(nodeCtx)+maxFutureBlocks {
+			hashNumber := types.HashAndNumber{Hash: hash, Number: value.number, Entropy: value.entropy}
+			if genesis || hashNumber.Entropy.Cmp(entropyWindow) < 0 {
 				if value.retry < c_appendQueueRetryPriorityThreshold {
 					hashNumberPriorityList = append(hashNumberPriorityList, hashNumber)
 				} else {
@@ -267,6 +264,24 @@ func (c *Core) procAppendQueue() {
 		}
 	}
 	c.procCounter++
+}
+
+// EntropyWindow calculates the entropy in terms of the current blocks intrinsic, and take a multiple of that value
+func (c *Core) EntropyWindow() *big.Int {
+	var err error
+	currentHeader := c.CurrentHeader()
+	powhash, exists := c.sl.hc.powHashCache.Peek(currentHeader.Hash())
+	if !exists {
+		powhash, err = c.engine.VerifySeal(currentHeader.WorkObjectHeader())
+		if err != nil {
+			return nil
+		}
+		c.sl.hc.powHashCache.Add(currentHeader.Hash(), powhash)
+	}
+	currentBlockIntrinsic := c.engine.IntrinsicLogEntropy(powhash)
+	MaxAllowableEntropyDist := new(big.Int).Mul(currentBlockIntrinsic, big.NewInt(c_maxFutureEntropyMultiple))
+	currentHeaderEntropy := c.CurrentHeader().ParentEntropy(common.ZONE_CTX)
+	return new(big.Int).Add(currentHeaderEntropy, MaxAllowableEntropyDist)
 }
 
 func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
@@ -407,7 +422,7 @@ func (c *Core) addToAppendQueue(block *types.WorkObject) error {
 		return err
 	}
 	if order == nodeCtx {
-		c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(c.NodeCtx()), 0})
+		c.appendQueue.ContainsOrAdd(block.Hash(), blockNumberAndRetryCounter{block.NumberU64(c.NodeCtx()), block.ParentEntropy(c.NodeCtx()), 0})
 	}
 	return nil
 }
