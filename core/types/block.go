@@ -1239,8 +1239,9 @@ func (m *BlockManifest) ProtoDecode(protoManifest *ProtoManifest) error {
 }
 
 type HashAndNumber struct {
-	Hash   common.Hash
-	Number uint64
+	Hash    common.Hash
+	Number  uint64
+	Entropy *big.Int
 }
 
 type HashAndLocation struct {
