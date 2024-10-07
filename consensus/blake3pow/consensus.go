@@ -349,7 +349,7 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 
 	// verify efficiency score, threshold count and the expansion number, on every prime block
 	if nodeCtx == common.PRIME_CTX {
-		if parent.NumberU64(nodeCtx) == 0 {
+		if chain.IsGenesisHash(parent.Hash()) {
 			if header.EfficiencyScore() != 0 {
 				return fmt.Errorf("invalid efficiency score: have %v, want %v", header.EfficiencyScore(), 0)
 			}
