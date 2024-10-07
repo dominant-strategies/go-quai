@@ -259,7 +259,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 	var result subscriptionResult
 	if err := json.Unmarshal(msg.Params, &result); err != nil {
-		h.log.Debug("Dropping invalid subscription message")
+		h.log.WithField("err", err).Debug("Dropping invalid subscription message")
 		return
 	}
 	if h.clientSubs[result.ID] != nil {

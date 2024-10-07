@@ -85,11 +85,13 @@ func (progpow *Progpow) TotalLogEntropy(chain consensus.ChainHeaderReader, heade
 	}
 	intrinsicEntropy, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
+		progpow.logger.WithField("err", err).Error("Error calculating order in TotalLogEntropy")
 		return big.NewInt(0)
 	}
 	if progpow.NodeLocation().Context() == common.ZONE_CTX {
 		workShareEntropy, err := progpow.WorkShareLogEntropy(chain, header)
 		if err != nil {
+			progpow.logger.WithField("err", err).Error("Error calculating WorkShareLogEntropy in TotalLogEntropy")
 			return big.NewInt(0)
 		}
 		intrinsicEntropy = new(big.Int).Add(intrinsicEntropy, workShareEntropy)
@@ -117,11 +119,13 @@ func (progpow *Progpow) DeltaLogEntropy(chain consensus.ChainHeaderReader, heade
 	}
 	intrinsicS, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
+		progpow.logger.WithField("err", err).Error("Error calculating order in DeltaLogEntropy")
 		return big.NewInt(0)
 	}
 	if progpow.NodeLocation().Context() == common.ZONE_CTX {
 		workShareS, err := progpow.WorkShareLogEntropy(chain, header)
 		if err != nil {
+			progpow.logger.WithField("err", err).Error("Error calculating WorkShareLogEntropy in DeltaLogEntropy")
 			return big.NewInt(0)
 		}
 		intrinsicS = new(big.Int).Add(intrinsicS, workShareS)
@@ -222,6 +226,7 @@ func (progpow *Progpow) UncledDeltaLogEntropy(chain consensus.ChainHeaderReader,
 	}
 	_, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
+		progpow.logger.WithField("err", err).Error("Error calculating order in UncledDeltaLogEntropy")
 		return big.NewInt(0)
 	}
 	uncledLogS := header.UncledEntropy()

@@ -418,11 +418,11 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		// check if the header coinbase is in scope
 		_, err := header.PrimaryCoinbase().InternalAddress()
 		if err != nil {
-			return fmt.Errorf("out-of-scope primary coinbase in the header: %v location: %v nodeLocation: %v", header.PrimaryCoinbase(), header.Location(), blake3pow.config.NodeLocation)
+			return fmt.Errorf("out-of-scope primary coinbase in the header: %v location: %v nodeLocation: %v, err %s", header.PrimaryCoinbase(), header.Location(), blake3pow.config.NodeLocation, err)
 		}
 		_, err = header.SecondaryCoinbase().InternalAddress()
 		if err != nil {
-			return fmt.Errorf("out-of-scope secondary coinbase in the header: %v location: %v nodeLocation: %v", header.SecondaryCoinbase(), header.Location(), blake3pow.config.NodeLocation)
+			return fmt.Errorf("out-of-scope secondary coinbase in the header: %v location: %v nodeLocation: %v, err %s", header.SecondaryCoinbase(), header.Location(), blake3pow.config.NodeLocation, err)
 		}
 		// One of the coinbases has to be Quai and the other one has to be Qi
 		quaiAddress := header.PrimaryCoinbase().IsInQuaiLedgerScope()
@@ -555,6 +555,7 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 func (blake3pow *Blake3pow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.WorkObject) bool {
 	_, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
+		blake3pow.logger.Error("Error calculating calc order, err ", err)
 		return false
 	}
 	return order < blake3pow.config.NodeLocation.Context()
@@ -619,7 +620,8 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, header *
 			addr := common.HexToAddress(addressString, nodeLocation)
 			internal, err := addr.InternalAddress()
 			if err != nil {
-				blake3pow.logger.Error("Provided address in genesis block is out of scope")
+				blake3pow.logger.Errorf("Provided address in genesis block is out of scope, err %s", err)
+				continue
 			}
 			if addr.IsInQuaiLedgerScope() {
 				state.AddBalance(internal, account.Balance)

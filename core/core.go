@@ -306,6 +306,7 @@ func (c *Core) serviceBlocks(hashNumberList []types.HashAndNumber) {
 					c.logger.WithFields(log.Fields{
 						"Hash":   parentBlock.Hash(),
 						"Number": parentBlock.NumberArray(),
+						"err":    err,
 					}).Info("Error calculating the parent block order in serviceBlocks")
 					continue
 				}
@@ -597,6 +598,7 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 		// Only add non dom blocks to the append queue
 		_, order, err := c.CalcOrder(block)
 		if err != nil {
+			c.logger.WithField("err", err).Error("Error calculating the order in WriteBlock")
 			return
 		}
 		if order == nodeCtx {
@@ -649,6 +651,8 @@ func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, do
 			} else {
 				c.addToQueueIfNotAppended(block)
 			}
+		} else {
+			c.logger.WithField("err", err).Error("Error in Dom Append in Core")
 		}
 	}
 	return newPendingEtxs, err
@@ -1268,6 +1272,7 @@ func (c *Core) Get(hash common.Hash) *types.Transaction {
 func (c *Core) Nonce(addr common.Address) uint64 {
 	internal, err := addr.InternalAndQuaiAddress()
 	if err != nil {
+		c.logger.WithField("err", err).Error("Error calculating the nonce")
 		return 0
 	}
 	return c.sl.txPool.Nonce(internal)
@@ -1288,6 +1293,7 @@ func (c *Core) Content() (map[common.InternalAddress]types.Transactions, map[com
 func (c *Core) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
 	internal, err := addr.InternalAndQuaiAddress()
 	if err != nil {
+		c.logger.WithField("err", err).Error("Error checking the address in ContentFrom in Core")
 		return nil, nil
 	}
 	return c.sl.txPool.ContentFrom(internal)

@@ -813,6 +813,7 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHa
 		return nil
 	}
 	if err != nil {
+		s.b.Logger().WithField("err", err).Error("Error calculating QiRateAtBlock")
 		return nil
 	}
 
@@ -831,6 +832,7 @@ func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockNrOr
 		return nil
 	}
 	if err != nil {
+		s.b.Logger().WithField("err", err).Error("Error calculating QuaiRateAtBlock")
 		return nil
 	}
 

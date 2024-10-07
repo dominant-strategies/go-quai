@@ -387,6 +387,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	intrinsicS := sl.engine.IntrinsicLogEntropy(block.Hash())
 	workShare, err := sl.engine.WorkShareLogEntropy(sl.hc, block)
 	if err != nil {
+		sl.logger.WithField("err", err).Error("Error calculating the work share log entropy")
 		workShare = big.NewInt(0)
 	}
 

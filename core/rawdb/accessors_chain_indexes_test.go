@@ -78,7 +78,7 @@ func TestTxLookupStorage(t *testing.T) {
 	v3Number := uint64(4)
 	v3entry, err := proto.Marshal(&ProtoLegacyTxLookupEntry{BlockIndex: v3Number, Hash: v3ProtoHash})
 	if err != nil {
-		t.Fatal("Failed to marshal ProtoLegacyTxLookupEntry")
+		t.Fatalf("Failed to marshal ProtoLegacyTxLookupEntry, err %s", err)
 	}
 	writeTxLookupEntry(db, v3Hash, v3entry)
 

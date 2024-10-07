@@ -415,11 +415,11 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		// check if the header coinbase is in scope
 		_, err := header.PrimaryCoinbase().InternalAddress()
 		if err != nil {
-			return fmt.Errorf("out-of-scope primary coinbase in the header: %v location: %v nodeLocation: %v", header.PrimaryCoinbase(), header.Location(), progpow.config.NodeLocation)
+			return fmt.Errorf("out-of-scope primary coinbase in the header: %v location: %v nodeLocation: %v, err %s", header.PrimaryCoinbase(), header.Location(), progpow.config.NodeLocation, err)
 		}
 		_, err = header.SecondaryCoinbase().InternalAddress()
 		if err != nil {
-			return fmt.Errorf("out-of-scope secondary coinbase in the header: %v location: %v nodeLocation: %v", header.SecondaryCoinbase(), header.Location(), progpow.config.NodeLocation)
+			return fmt.Errorf("out-of-scope secondary coinbase in the header: %v location: %v nodeLocation: %v, err %s", header.SecondaryCoinbase(), header.Location(), progpow.config.NodeLocation, err)
 		}
 
 		// One of the coinbases has to be Quai and the other one has to be Qi
@@ -560,6 +560,7 @@ func (progpow *Progpow) CalcDifficulty(chain consensus.ChainHeaderReader, parent
 func (progpow *Progpow) IsDomCoincident(chain consensus.ChainHeaderReader, header *types.WorkObject) bool {
 	_, order, err := progpow.CalcOrder(chain, header)
 	if err != nil {
+		progpow.logger.WithField("err", err).Error("Error calculating order in IsDomCoincident")
 		return false
 	}
 	return order < chain.Config().Location.Context()
@@ -676,7 +677,8 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 			addr := common.HexToAddress(addressString, nodeLocation)
 			internal, err := addr.InternalAddress()
 			if err != nil {
-				progpow.logger.Error("Provided address in genesis block is out of scope")
+				progpow.logger.WithField("err", err).Error("Provided address in genesis block is out of scope")
+				continue
 			}
 			if addr.IsInQuaiLedgerScope() {
 				state.AddBalance(internal, account.Balance)

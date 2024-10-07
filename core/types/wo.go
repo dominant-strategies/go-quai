@@ -892,7 +892,7 @@ func (wo *WorkObject) ProtoEncode(woType WorkObjectView) (*ProtoWorkObject, erro
 		}
 		bodyHeader, err := wo.woBody.header.ProtoEncode()
 		if err != nil {
-			return nil, errors.New("error encoding work object body header")
+			return nil, fmt.Errorf("error encoding work object body header, err %s", err)
 		}
 		return &ProtoWorkObject{
 			WoHeader: header,

@@ -708,7 +708,7 @@ func (w *worker) OrderTransactionSet(txs []*types.Transaction, gasUsedAfterTrans
 
 	_, parentOrder, err := w.engine.CalcOrder(w.hc, block)
 	if err != nil {
-		log.Global.Error("error calculating parent order")
+		log.Global.WithField("err", err).Error("error calculating parent order")
 		return
 	}
 	var primeTerminus *types.WorkObject
@@ -786,7 +786,7 @@ func (w *worker) OrderTransactionSet(txs []*types.Transaction, gasUsedAfterTrans
 		for _, info := range eligibleTxs {
 			newTx, err := types.NewTxWithMinerFee(info.Tx, info.GasPrice, time.Time{})
 			if err != nil {
-				w.logger.Error("error making new tx with miner fee")
+				w.logger.WithField("err", err).Error("error making new tx with miner fee")
 				continue
 			}
 			currentTxSet = append(currentTxSet, newTx)
@@ -1220,6 +1220,7 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 		// We use the signer regardless of the current hf.
 		from, err := types.Sender(env.signer, tx)
 		if err != nil {
+			w.logger.WithField("err", err).Error("Error calculating the Sender in commitTransactions")
 			continue
 		}
 		// Start executing the transaction
@@ -1697,7 +1698,7 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), w.hc.NodeLocation()))))
 		qiTx, err := types.NewTxWithMinerFee(tx.Tx(), minerFeeInQuai, time.Now())
 		if err != nil {
-			w.logger.Error("Error created new tx with miner Fee for Qi TX", tx.Tx().Hash())
+			w.logger.WithField("err", err).Error("Error created new tx with miner Fee for Qi TX", tx.Tx().Hash())
 			continue
 		}
 		pendingQiTxsWithQuaiFee = append(pendingQiTxsWithQuaiFee, qiTx)

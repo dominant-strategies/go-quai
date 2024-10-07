@@ -9,6 +9,7 @@ import (
 	bigMath "github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"modernc.org/mathutil"
 )
@@ -86,11 +87,13 @@ func (blake3pow *Blake3pow) TotalLogEntropy(chain consensus.ChainHeaderReader, h
 	}
 	intrinsicS, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
+		blake3pow.logger.WithFields(log.Fields{"err": err, "hash": header.Hash()}).Error("Error calculating order in TotalLogEntropy")
 		return big.NewInt(0)
 	}
 	if blake3pow.NodeLocation().Context() == common.ZONE_CTX {
 		workShareS, err := blake3pow.WorkShareLogEntropy(chain, header)
 		if err != nil {
+			blake3pow.logger.WithFields(log.Fields{"err": err, "hash": header.Hash()}).Error("Error calculating WorkShareLogEntropy in TotalLogEntropy")
 			return big.NewInt(0)
 		}
 		intrinsicS = new(big.Int).Add(intrinsicS, workShareS)
@@ -119,11 +122,13 @@ func (blake3pow *Blake3pow) DeltaLogEntropy(chain consensus.ChainHeaderReader, h
 	}
 	intrinsicS, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
+		blake3pow.logger.WithFields(log.Fields{"err": err, "hash": header.Hash()}).Error("Error calculating order in DeltaLogEntropy")
 		return big.NewInt(0)
 	}
 	if blake3pow.NodeLocation().Context() == common.ZONE_CTX {
 		workShareS, err := blake3pow.WorkShareLogEntropy(chain, header)
 		if err != nil {
+			blake3pow.logger.WithFields(log.Fields{"err": err, "hash": header.Hash()}).Error("Error calculating WorkShareLogEntropy in DeltaLogEntropy")
 			return big.NewInt(0)
 		}
 		intrinsicS = new(big.Int).Add(intrinsicS, workShareS)
@@ -226,6 +231,7 @@ func (blake3pow *Blake3pow) UncledDeltaLogEntropy(chain consensus.ChainHeaderRea
 	}
 	_, order, err := blake3pow.CalcOrder(chain, header)
 	if err != nil {
+		blake3pow.logger.WithField("err", err).Error("Error calculating order in UncledDeltaLogEntropy")
 		return big.NewInt(0)
 	}
 	uncledLogEntropy := header.UncledEntropy()

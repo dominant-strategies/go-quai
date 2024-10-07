@@ -786,6 +786,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		// Make sure the transaction is signed properly.
 		from, err := types.Sender(pool.signer, tx)
 		if err != nil {
+			pool.logger.WithField("err", err).Error("Error calculating the Sender in validateTx")
 			return ErrInvalidSender
 		}
 		internal, err = from.InternalAndQuaiAddress()
@@ -1394,10 +1395,12 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		}
 		from, err := types.Sender(pool.signer, tx) // already validated
 		if err != nil {
+			pool.logger.WithField("err", err).Error("Error calculating sender in txpool Status")
 			continue
 		}
 		internal, err := from.InternalAndQuaiAddress()
 		if err != nil {
+			pool.logger.WithField("err", err).Error("Error calculating internal address in txpool Status")
 			continue
 		}
 		pool.mu.RLock()
@@ -1434,10 +1437,12 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	}
 	addr, err := types.Sender(pool.signer, tx) // already validated during insertion
 	if err != nil {
+		pool.logger.WithField("err", err).Error("Error calculating Sender in removeTx")
 		return
 	}
 	internal, err := addr.InternalAndQuaiAddress()
 	if err != nil {
+		pool.logger.WithField("err", err).Error("Error calculating InternalAddress in removeTx")
 		return
 	}
 	// Remove it from the list of known transactions
@@ -1584,6 +1589,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			} else {
 				addr, err := types.Sender(pool.signer, tx)
 				if err != nil {
+					pool.logger.WithField("err", err).Error("Error calculating the sender in scheduleReorgLoop")
 					continue
 				}
 				internal, err := addr.InternalAndQuaiAddress()
@@ -1690,6 +1696,7 @@ func (pool *TxPool) runReorg(done chan struct{}, cancel chan struct{}, reset *tx
 				}
 				addr, err := types.Sender(pool.signer, tx)
 				if err != nil {
+					pool.logger.WithField("err", err).Error("Error calculating the sender in runreorg")
 					continue
 				}
 				internal, err := addr.InternalAndQuaiAddress()

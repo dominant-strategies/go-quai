@@ -89,7 +89,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 	primeTerminusHash := header.PrimeTerminusHash()
 	_, parentOrder, err := chain.Engine().CalcOrder(chain, parent)
 	if err != nil {
-		return vm.BlockContext{}, fmt.Errorf("parent order cannot be calculated")
+		return vm.BlockContext{}, fmt.Errorf("parent order cannot be calculated, err %s", err)
 	}
 	var primeTerminusHeader *types.WorkObject
 	if parentOrder == common.PRIME_CTX {

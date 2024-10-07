@@ -209,11 +209,11 @@ func TestMultiSigners(t *testing.T) {
 				nonce := otherCtx.PublicNonce()
 				haveAll, err := signer.RegisterPubNonce(nonce)
 				if err != nil {
-					t.Fatalf("unable to add public nonce")
+					t.Errorf("unable to add public nonce, err %s", err)
 				}
 
 				if j == len(signers)-1 && !haveAll {
-					t.Fatalf("all public nonces should have been detected")
+					t.Error("all public nonces should have been detected")
 				}
 			}
 		}(i, signCtx)

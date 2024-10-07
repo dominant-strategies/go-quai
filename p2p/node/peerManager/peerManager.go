@@ -430,6 +430,7 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 	}
 	results, err := peerDB.Query(pm.ctx, q)
 	if err != nil {
+		pm.logger.WithField("err", err).Error("Error Query the peers from database")
 		return nil
 	}
 
@@ -437,6 +438,7 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 		peerID, err := peer.Decode(strings.TrimPrefix(result.Key, "/"))
 		if err != nil {
 			// If there is an error, move to the next peer
+			pm.logger.WithField("err", err).Error("Error Decoding the peer from database")
 			continue
 		}
 		peerSubset[peerID] = struct{}{}

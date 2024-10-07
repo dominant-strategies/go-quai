@@ -289,7 +289,7 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 	// Start the QuaiBackend and set the consensus backend
 	backend, err := hc.StartQuaiBackend()
 	if err != nil {
-		log.Global.Fatal("Error starting the quai backend")
+		log.Global.WithField("err", err).Fatal("Error starting the quai backend ")
 	}
 	hc.consensus = backend
 
@@ -495,7 +495,7 @@ func (hc *HierarchicalCoordinator) TriggerTreeExpansion(block *types.WorkObject)
 	// update the current expansion number
 	err := hc.writeCurrentExpansionNumber(hc.currentExpansionNumber + 1)
 	if err != nil {
-		log.Global.Error("Error setting the current expansion number, err: ", err)
+		log.Global.WithField("err", err).Error("Error setting the current expansion number")
 		return err
 	}
 
@@ -731,7 +731,7 @@ search:
 			modifiedConstraintMap, err = hc.calculateFrontierPoints(modifiedConstraintMap, leaderBlock, first)
 			first = false
 			if err != nil {
-				log.Global.Errorf("error tracing back from block %s: %+v", leaderBlock.Hash().String(), err)
+				log.Global.WithFields(log.Fields{"hash": leaderBlock.Hash().String(), "err": err}).Error("error tracing back from block")
 			} else {
 				break
 			}
@@ -779,25 +779,28 @@ search:
 	nodeSet := NodeSet{nodes: make(map[string]Node)}
 	primeNode, err := hc.NodeFromHash(modifiedConstraintMap[common.Location{}.Name()], common.Location{})
 	if err != nil {
+		log.Global.WithField("err", err).Error("error reading node from hash in prime")
 		return
 	}
 	nodeSet.nodes[common.Location{}.Name()] = primeNode
 	for i := 0; i < int(numRegions); i++ {
 		regionNode, err := hc.NodeFromHash(modifiedConstraintMap[common.Location{byte(i)}.Name()], common.Location{byte(i)})
 		if err != nil {
+			log.Global.WithFields(log.Fields{"err": err, "region": i}).Error("error reading node from hash in region ", i, "err ", err)
 			return
 		}
 		nodeSet.nodes[common.Location{byte(i)}.Name()] = regionNode
 		for j := 0; j < int(numZones); j++ {
 			zoneNode, err := hc.NodeFromHash(modifiedConstraintMap[common.Location{byte(i), byte(j)}.Name()], common.Location{byte(i), byte(j)})
 			if err != nil {
+				log.Global.WithFields(log.Fields{"err": err, "location": common.Location{byte(i), byte(j)}}).Error("error reading node from hash in zone")
 				return
 			}
 			nodeSet.nodes[common.Location{byte(i), byte(j)}.Name()] = zoneNode
 		}
 	}
 	entropy := nodeSet.Entropy(int(numRegions), int(numZones))
-	log.Global.Info("Map Based New Set Entropy: ", common.BigBitsToBits(entropy), " Best Entropy: ", common.BigBitsToBits(hc.bestEntropy))
+	log.Global.WithFields(log.Fields{"entropy": common.BigBitsToBits(entropy), "best entropy": common.BigBitsToBits(hc.bestEntropy)}).Info("Map Based New Set Entropy")
 	printNodeSet(nodeSet)
 	hc.oneMu.Lock()
 	hc.Add(entropy, nodeSet, hc.pendingHeaders)
@@ -924,13 +927,13 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 	var start time.Time
 	newPendingHeaders := NewPendingHeaders()
 	start = time.Now()
-	log.Global.Info("PendingHeadersOrderLen:", startingLen)
+	log.Global.WithField("len", startingLen).Info("PendingHeadersOrder")
 	for i := startingLen - 1; i >= 0; i-- {
 		entropy = hc.pendingHeaders.order[i]
 		log.Global.Debug("Entropy: ", common.BigBitsToBits(entropy))
 		nodeSet, exists := hc.Get(entropy)
 		if !exists {
-			log.Global.Debug("NodeSet not found for entropy", " entropy: ", common.BigBitsToBits(entropy), " order: ", order, " number: ", wo.NumberArray(), " hash: ", wo.Hash())
+			log.Global.WithFields(log.Fields{"entropy": common.BigBitsToBits(entropy), "order": order, "number": wo.NumberArray(), "hash": wo.Hash()}).Debug("NodeSet not found for entropy")
 		}
 
 		if nodeSet.Extendable(wo, order) {
@@ -941,12 +944,12 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 			// Calculate new set entropy
 			newSetEntropy := newNodeSet.Entropy(int(numRegions), int(numZones))
 			if new(big.Int).Sub(hc.bestEntropy, big.NewInt(30)).Cmp(newSetEntropy) < 0 {
-				log.Global.Info("Pending Headers Cache New Set Entropy: ", common.BigBitsToBits(newSetEntropy), " Best Entropy: ", common.BigBitsToBits(hc.bestEntropy))
+				log.Global.WithFields(log.Fields{"newSetEntropy": common.BigBitsToBits(newSetEntropy), "Best Entropy": common.BigBitsToBits(hc.bestEntropy)}).Info("Pending Headers Cache New Set Entropy")
 				printNodeSet(newNodeSet)
 			}
 			hc.Add(newSetEntropy, newNodeSet, newPendingHeaders)
 		} else {
-			log.Global.Debug("NodeSet not extendable for entropy", " entropy: ", common.BigBitsToBits(entropy), " order: ", order, " number: ", wo.NumberArray(), " hash: ", wo.Hash(), " location: ", wo.Location().Name(), " parentHash: ", wo.ParentHash(order))
+			log.Global.WithFields(log.Fields{"entropy": common.BigBitsToBits(entropy), "order": order, "number": wo.NumberArray(), "hash": wo.Hash()}).Debug("NodeSet not found for entropy")
 		}
 		misses++
 		if misses > threshold {
@@ -976,7 +979,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 		return hc.pendingHeaders.order[i].Cmp(hc.pendingHeaders.order[j]) < 0 // Sort based on big.Int values
 	})
 
-	log.Global.Info("Time taken to compute pending headers: ", time.Since(start))
+	log.Global.WithField("time since start", time.Since(start)).Info("Time taken to compute pending headers")
 }
 
 func (hc *HierarchicalCoordinator) ComputePendingHeaders(nodeSet NodeSet) {
@@ -1237,7 +1240,7 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	zoneBackend := *hc.consensus.GetBackend(location)
 	primeBlock := primeBackend.BlockOrCandidateByHash(primeNode)
 	if primeBlock == nil {
-		log.Global.Errorf("prime block not found for hash %s", primeNode.String())
+		log.Global.WithField("hash", primeNode.String()).Error("prime block not found for hash")
 		return
 	}
 	primePendingHeader, err := primeBackend.GeneratePendingHeader(primeBlock, false)
@@ -1247,7 +1250,7 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	}
 	regionBlock := regionBackend.BlockOrCandidateByHash(regionNode)
 	if regionBlock == nil {
-		log.Global.Errorf("region block not found for hash %s", regionNode.String())
+		log.Global.WithField("hash", regionNode.String()).Error("region block not found for hash")
 		return
 	}
 	regionPendingHeader, err := regionBackend.GeneratePendingHeader(regionBlock, false)
@@ -1257,7 +1260,7 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	}
 	zoneBlock := zoneBackend.GetBlockByHash(zoneNode)
 	if zoneBlock == nil {
-		log.Global.Errorf("zone block not found for hash %s", zoneNode.String())
+		log.Global.WithField("hash", zoneNode.String()).Error("zone block not found for hash")
 		return
 	}
 	zonePendingHeader, err := zoneBackend.GeneratePendingHeader(zoneBlock, false)

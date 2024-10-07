@@ -228,6 +228,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 		}
 		topic, err := TopicFromString(*topicString)
 		if err != nil {
+			log.Global.WithField("err", err).Error("Error calculating TopicFromString")
 			return pubsub.ValidationReject
 		}
 		// get the proto encoded data
@@ -242,6 +243,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			protoWo := new(types.ProtoWorkObjectBlockView)
 			err := proto.Unmarshal(protoData, protoWo)
 			if err != nil {
+				log.Global.WithField("err", err).Error("Error unmarshalling proto wo block view")
 				return pubsub.ValidationReject
 			}
 
@@ -250,6 +252,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			}
 			err = block.ProtoDecode(protoWo, protoWo.GetWorkObject().GetWoHeader().GetLocation().Value)
 			if err != nil {
+				log.Global.WithField("err", err).Error("Error proto decode wo block view")
 				return pubsub.ValidationReject
 			}
 
@@ -273,6 +276,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 
 			// If Block broadcasted by the peer exists in the bad block list drop the peer
 			if backend.IsBlockHashABadHash(block.WorkObjectHeader().Hash()) {
+				log.Global.WithField("err", err).Error("Work object block hash is a bad hash")
 				return pubsub.ValidationReject
 			}
 			return backend.ApplyPoWFilter(block.WorkObject)
@@ -282,6 +286,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			protoWo := new(types.ProtoWorkObjectHeaderView)
 			err := proto.Unmarshal(protoData, protoWo)
 			if err != nil {
+				log.Global.WithField("err", err).Error("Error unmarshalling proto wo header view")
 				return pubsub.ValidationReject
 			}
 
@@ -290,6 +295,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			}
 			err = block.ProtoDecode(protoWo, protoWo.GetWorkObject().GetWoHeader().GetLocation().Value)
 			if err != nil {
+				log.Global.WithField("err", err).Error("Error proto decode wo header view")
 				return pubsub.ValidationReject
 			}
 
@@ -313,6 +319,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 
 			// If Block broadcasted by the peer exists in the bad block list drop the peer
 			if backend.IsBlockHashABadHash(block.WorkObject.WorkObjectHeader().Hash()) {
+				log.Global.WithField("err", err).Error("Work object header hash is a bad hash")
 				return pubsub.ValidationReject
 			}
 			return backend.ApplyPoWFilter(block.WorkObject)
@@ -322,6 +329,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			protoWo := new(types.ProtoWorkObjectShareView)
 			err := proto.Unmarshal(protoData, protoWo)
 			if err != nil {
+				log.Global.WithField("err", err).Error("Error unmarshalling proto wo share view")
 				return pubsub.ValidationReject
 			}
 
@@ -331,6 +339,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 
 			err = block.ProtoDecode(protoWo, protoWo.GetWorkObject().GetWoHeader().GetLocation().Value)
 			if err != nil {
+				log.Global.WithField("err", err).Error("Error proto decode proto wo share view")
 				return pubsub.ValidationReject
 			}
 
@@ -360,7 +369,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			}
 			_, err = backend.Engine().ComputePowHash(block.WorkObject.WorkObjectHeader())
 			if err != nil {
-				backend.Logger().Error("Error computing the powHash of the work object header received from peer")
+				backend.Logger().WithField("err", err).Error("Error computing the powHash of the work object header received from peer")
 				return pubsub.ValidationReject
 			}
 		}

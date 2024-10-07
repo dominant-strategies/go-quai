@@ -165,6 +165,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		addr := common.BytesToAddress(addrBytes, s.nodeLocation)
 		internal, err := addr.InternalAndQuaiAddress()
 		if err != nil {
+			s.logger.WithField("err", err).Error("Error calculating InternalAddress in DumpToCollector")
 			continue
 		}
 		obj := newObject(s, internal, data)

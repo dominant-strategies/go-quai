@@ -266,6 +266,7 @@ func (qbe *QuaiBackend) LookupBlockByNumber(number *big.Int, location common.Loc
 	}
 	block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(number.Int64()))
 	if err != nil {
+		backend.Logger().WithField("err", err).Error("Error getting BlockByNumber")
 		return nil
 	}
 	return block
@@ -279,7 +280,7 @@ func (qbe *QuaiBackend) LookupBlockHashByNumber(number *big.Int, location common
 	}
 	block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(number.Int64()))
 	if err != nil {
-		log.Global.Trace("Error looking up the BlockByNumber", location)
+		log.Global.WithField("err", err).Trace("Error looking up the BlockByNumber", location)
 	}
 	if block != nil {
 		blockHash := block.Hash()
