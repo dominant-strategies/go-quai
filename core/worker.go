@@ -1679,7 +1679,23 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		txByPriceAndNonce.SetHead(orderedTxs)
 
 		env.wo.Header().SetBaseFee(baseFee)
-		return w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, false)
+		err := w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, false)
+		if err != nil {
+			return err
+		}
+		// If the length of txs is not the same as the length of orderedTxs, escape
+		nonEtxsCount := 0
+		for _, tx := range env.txs {
+			if tx.Type() != types.ExternalTxType {
+				nonEtxsCount++
+			}
+		}
+
+		if len(orderedTxs) != nonEtxsCount {
+			return errors.New("length of ordered txs is not the same as the non etxs count")
+		} else {
+			return nil
+		}
 	}
 
 	pending, err := w.txPool.TxPoolPending(false)
