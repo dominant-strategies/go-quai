@@ -1234,10 +1234,18 @@ func (m *Message) SetData(data []byte) {
 // AccessList is an access list.
 type AccessList []AccessTuple
 
+// MixedAccessList is an access list of MixedCaseAddresses
+type MixedAccessList []MixedAccessTuple
+
 // AccessTuple is the element type of an access list.
 type AccessTuple struct {
 	Address     common.Address `json:"address"        gencodec:"required"`
 	StorageKeys []common.Hash  `json:"storageKeys"    gencodec:"required"`
+}
+
+type MixedAccessTuple struct {
+	Address     common.MixedcaseAddress `json:"address"        gencodec:"required"`
+	StorageKeys []common.Hash           `json:"storageKeys"    gencodec:"required"`
 }
 
 // StorageKeys returns the total number of storage keys in the access list.
@@ -1277,6 +1285,14 @@ func (al *AccessList) ProtoDecode(protoAccessList *ProtoAccessList, location com
 		*al = append(*al, AccessTuple{Address: address, StorageKeys: storageKeys})
 	}
 	return nil
+}
+
+func (al *AccessList) ConvertToMixedCase() *MixedAccessList {
+	MixedAccessList := make(MixedAccessList, 0, len(*al))
+	for _, tup := range *al {
+		MixedAccessList = append(MixedAccessList, MixedAccessTuple{tup.Address.MixedcaseAddress(), tup.StorageKeys})
+	}
+	return &MixedAccessList
 }
 
 // This function must only be used by tests

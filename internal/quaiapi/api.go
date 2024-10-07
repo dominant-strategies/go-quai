@@ -1156,9 +1156,9 @@ func newRPCTransactionFromBlockHash(b *types.WorkObject, hash common.Hash, etxs 
 // Its the result of the `debug_createAccessList` RPC call.
 // It contains an error if the transaction itself failed.
 type accessListResult struct {
-	Accesslist *types.AccessList `json:"accessList"`
-	Error      string            `json:"error,omitempty"`
-	GasUsed    hexutil.Uint64    `json:"gasUsed"`
+	Accesslist *types.MixedAccessList `json:"accessList"`
+	Error      string                 `json:"error,omitempty"`
+	GasUsed    hexutil.Uint64         `json:"gasUsed"`
 }
 
 // CreateAccessList creates an AccessList for the given transaction.
@@ -1179,7 +1179,7 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args Transac
 	if err != nil {
 		return nil, err
 	}
-	result := &accessListResult{Accesslist: &acl, GasUsed: hexutil.Uint64(gasUsed)}
+	result := &accessListResult{Accesslist: acl.ConvertToMixedCase(), GasUsed: hexutil.Uint64(gasUsed)}
 	if vmerr != nil {
 		result.Error = vmerr.Error()
 	}
