@@ -56,6 +56,10 @@ const (
 	ConversionType
 )
 
+const (
+	c_MaxTxForSorting = 1500
+)
+
 // Transaction is a Quai transaction.
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
@@ -970,6 +974,7 @@ func NewTransactionsByPriceAndNonce(signer Signer, qiTxs []*TxWithMinerFee, txs 
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByPriceAndTime, 0, len(txs))
 
+	quaiTxCount := 0
 	for from, accTxs := range txs {
 		acc, err := Sender(signer, accTxs[0])
 		if err != nil {
@@ -981,11 +986,20 @@ func NewTransactionsByPriceAndNonce(signer Signer, qiTxs []*TxWithMinerFee, txs 
 			delete(txs, from)
 			continue
 		}
+		quaiTxCount++
 		heads = append(heads, wrapped)
 		txs[from] = accTxs[1:]
+		if quaiTxCount > c_MaxTxForSorting {
+			break
+		}
 	}
+	qiTxCount := 0
 	for _, qiTx := range qiTxs {
+		qiTxCount++
 		heads = append(heads, qiTx)
+		if qiTxCount > c_MaxTxForSorting {
+			break
+		}
 	}
 
 	if sortTx {
