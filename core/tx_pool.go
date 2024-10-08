@@ -711,7 +711,7 @@ func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.AddressBytes]typ
 						"gasPrice":     tx.GasPrice().String(),
 						"poolGasPrice": pool.gasPrice.String(),
 						"baseFee":      pool.priced.urgent.baseFee.String(),
-					}).Debug("TX has incorrect or low miner tip")
+					}).Debug("TX has incorrect or low gas price")
 					txs = txs[:i]
 					break
 				}
