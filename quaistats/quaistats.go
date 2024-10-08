@@ -1022,6 +1022,11 @@ type blockDetailStats struct {
 	QiToQuai     *big.Int `json:"qiToQuai"`
 	QuaiToQi     *big.Int `json:"quaiToQi"`
 	ExchangeRate *big.Int `json:"exchangeRate"`
+	BaseFee      *big.Int `json:"baseFee"`
+	GasLimit     uint64   `json:"gasLimit"`
+	GasUsed      uint64   `json:"gasUsed"`
+	StateLimit   uint64   `json:"stateLimit"`
+	StateUsed    uint64   `json:"stateUsed"`
 }
 
 // Everyone sends every block
@@ -1292,6 +1297,11 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		QiToQuai:     block.QiToQuai(),
 		QuaiToQi:     block.QuaiToQi(),
 		ExchangeRate: block.ExchangeRate(),
+		BaseFee:      block.BaseFee(),
+		GasLimit:     block.GasLimit(),
+		GasUsed:      block.GasUsed(),
+		StateLimit:   block.StateLimit(),
+		StateUsed:    block.StateUsed(),
 	}
 }
 
