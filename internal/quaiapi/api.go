@@ -1061,11 +1061,13 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			Hash:     tx.Hash(),
 			Input:    hexutil.Bytes(tx.Data()),
 			Nonce:    hexutil.Uint64(tx.Nonce()),
-			To:       tx.To().MixedcaseAddressPtr(),
 			Value:    (*hexutil.Big)(tx.Value()),
 			ChainID:  (*hexutil.Big)(tx.ChainId()),
 			GasPrice: (*hexutil.Big)(tx.GasPrice()),
 			MinerTip: (*hexutil.Big)(tx.MinerTip()),
+		}
+		if tx.To() != nil {
+			result.To = tx.To().MixedcaseAddressPtr()
 		}
 	case types.ExternalTxType:
 		result = &RPCTransaction{
