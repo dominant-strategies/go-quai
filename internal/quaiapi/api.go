@@ -990,8 +990,8 @@ type RPCTransaction struct {
 	MinerTip          *hexutil.Big             `json:"minerTip,omitempty"`
 	GasPrice          *hexutil.Big             `json:"gasPrice,omitempty"`
 	Hash              common.Hash              `json:"hash,omitempty"`
-	Input             hexutil.Bytes            `json:"input,omitempty"`
-	Nonce             hexutil.Uint64           `json:"nonce,omitempty"`
+	Input             hexutil.Bytes            `json:"input"`
+	Nonce             hexutil.Uint64           `json:"nonce"`
 	To                *common.MixedcaseAddress `json:"to,omitempty"`
 	TransactionIndex  *hexutil.Uint64          `json:"transactionIndex"`
 	Value             *hexutil.Big             `json:"value,omitempty"`
