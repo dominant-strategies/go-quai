@@ -79,7 +79,10 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 	// These are set for all tx types.
 	enc.Hash = t.Hash()
 	enc.Type = hexutil.Uint64(t.Type())
-
+	var to *common.MixedcaseAddress
+	if t.To() != nil {
+		to = t.To().MixedcaseAddressPtr()
+	}
 	// Other fields are set conditionally depending on tx type.
 	switch tx := t.inner.(type) {
 	case *QuaiTx:
@@ -91,7 +94,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To().MixedcaseAddressPtr()
+		enc.To = to
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)

@@ -991,7 +991,7 @@ type RPCTransaction struct {
 	GasPrice          *hexutil.Big             `json:"gasPrice,omitempty"`
 	Hash              common.Hash              `json:"hash,omitempty"`
 	Input             hexutil.Bytes            `json:"input,omitempty"`
-	Nonce             hexutil.Uint64           `json:"nonce,omitempty"`
+	Nonce             hexutil.Uint64           `json:"nonce"`
 	To                *common.MixedcaseAddress `json:"to,omitempty"`
 	TransactionIndex  *hexutil.Uint64          `json:"transactionIndex"`
 	Value             *hexutil.Big             `json:"value,omitempty"`
@@ -1054,6 +1054,10 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		// because the return value of ChainId is zero for those transactions.
 		signer := types.LatestSignerForChainID(tx.ChainId(), nodeLocation)
 		from, _ := types.Sender(signer, tx)
+		var to *common.MixedcaseAddress
+		if tx.To() != nil {
+			to = tx.To().MixedcaseAddressPtr()
+		}
 		result = &RPCTransaction{
 			Type:     hexutil.Uint64(tx.Type()),
 			From:     from.MixedcaseAddressPtr(),
@@ -1061,7 +1065,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			Hash:     tx.Hash(),
 			Input:    hexutil.Bytes(tx.Data()),
 			Nonce:    hexutil.Uint64(tx.Nonce()),
-			To:       tx.To().MixedcaseAddressPtr(),
+			To:       to,
 			Value:    (*hexutil.Big)(tx.Value()),
 			ChainID:  (*hexutil.Big)(tx.ChainId()),
 			GasPrice: (*hexutil.Big)(tx.GasPrice()),
