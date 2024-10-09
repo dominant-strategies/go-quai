@@ -1043,6 +1043,11 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		for _, txout := range tx.TxOut() {
 			result.TxOut = append(result.TxOut, RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
 		}
+		if blockHash != (common.Hash{}) {
+			result.BlockHash = &blockHash
+			result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+			result.TransactionIndex = (*hexutil.Uint64)(&index)
+		}
 		return result
 	}
 
