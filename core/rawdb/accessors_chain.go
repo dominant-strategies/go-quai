@@ -750,8 +750,8 @@ func IsGenesisHash(db ethdb.Reader, hash common.Hash) bool {
 func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) (*types.WorkObject, error) {
 	for bn := b.NumberU64(nodeCtx); a.NumberU64(nodeCtx) > bn; {
 		a = ReadHeader(db, a.NumberU64(nodeCtx)-1, a.ParentHash(nodeCtx))
-		if IsGenesisHash(db, a.ParentHash(nodeCtx)) {
-			return nil, fmt.Errorf("no common ancestor found")
+		if IsGenesisHash(db, a.Hash()) {
+			return a, nil
 		}
 		if a == nil {
 			return nil, fmt.Errorf("unable to find hash %s", a.ParentHash(nodeCtx).String())
@@ -759,8 +759,8 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) (*
 	}
 	for an := a.NumberU64(nodeCtx); an < b.NumberU64(nodeCtx); {
 		b = ReadHeader(db, b.NumberU64(nodeCtx)-1, b.ParentHash(nodeCtx))
-		if IsGenesisHash(db, b.ParentHash(nodeCtx)) {
-			return nil, fmt.Errorf("no common ancestor found")
+		if IsGenesisHash(db, b.Hash()) {
+			return b, nil
 		}
 		if b == nil {
 			return nil, fmt.Errorf("unable to find hash %s", b.ParentHash(nodeCtx).String())
