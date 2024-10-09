@@ -26,18 +26,18 @@ import (
 // Genesis hashes to enforce below configs on.
 var (
 	// Progpow GenesisHashes
-	ProgpowColosseumGenesisHash  = common.HexToHash("0x0548874d6a6b261f1d423c083cb47c3044e549f9e30e634bc7b299f581cea282")
-	ProgpowGardenGenesisHash     = common.HexToHash("0x7bef576d9d04108137d14e2ea644f580634b35c37682b555bfb50dfb154501d2")
-	ProgpowOrchardGenesisHash    = common.HexToHash("0x0ff7bb95150bcc325ad8578db5698dc296a9f08052cac1b8161ee53c7d3a82dd")
-	ProgpowLighthouseGenesisHash = common.HexToHash("0x46deea7604f0a460369094589c7f39d6822861eeb00014cd55927f19cf01360a")
-	ProgpowLocalGenesisHash      = common.HexToHash("0x175e643b5fe6158daca4742959f33ac2a8e9e6fe06cfd7233582827558f934f9")
+	ProgpowColosseumGenesisHash  = common.HexToHash("0x1ff6d28f14b993b75883c4611e8f9a8d157cd4e872e76f43c27c0bdfa0970069")
+	ProgpowGardenGenesisHash     = common.HexToHash("0xb610af2eef9d854d01510785b0171247cb221912124c74fcef888bbed42448bb")
+	ProgpowOrchardGenesisHash    = common.HexToHash("0x863406b0b535b316d4ae5a4d97336c0a015a36c0e5c055aa2e4461e9048b62c9")
+	ProgpowLighthouseGenesisHash = common.HexToHash("0xf60de17f1ae6cbae820d14599eb95581f5c18799f84904520c264be9cfff64c4")
+	ProgpowLocalGenesisHash      = common.HexToHash("0x1ce7c9f66487bfde753f23eb3e468ccc5b8584c4139d2606096d95ca187b9b76")
 
 	// Blake3GenesisHashes
-	Blake3PowColosseumGenesisHash  = common.HexToHash("0xa12a6bb23adf3bebee3a8719e491cde0847cb126d97abcf082e840d5c720b3d8")
-	Blake3PowGardenGenesisHash     = common.HexToHash("0x518968927b1c2aa2dd4c9809fe3341d47606652bda6ad99e9c65db77d6f56918")
-	Blake3PowOrchardGenesisHash    = common.HexToHash("0x36776a43809ee0e154b85b08ee384bf79b95c3bdb84ba61ddfef66ec8e105b60")
-	Blake3PowLighthouseGenesisHash = common.HexToHash("0x36776a43809ee0e154b85b08ee384bf79b95c3bdb84ba61ddfef66ec8e105b60")
-	Blake3PowLocalGenesisHash      = common.HexToHash("0x518968927b1c2aa2dd4c9809fe3341d47606652bda6ad99e9c65db77d6f56918")
+	Blake3PowColosseumGenesisHash  = common.HexToHash("0xee89c5f775980556c2bf8dc988e477f16005da57f84f2a1000dbe4693ad5f53d")
+	Blake3PowGardenGenesisHash     = common.HexToHash("0x46dfa6724020658b3e03cfdf894bd8e990f46d1e9b1b66b49598788e43eaf50f")
+	Blake3PowOrchardGenesisHash    = common.HexToHash("0xf60de17f1ae6cbae820d14599eb95581f5c18799f84904520c264be9cfff64c4")
+	Blake3PowLighthouseGenesisHash = common.HexToHash("0xf60de17f1ae6cbae820d14599eb95581f5c18799f84904520c264be9cfff64c4")
+	Blake3PowLocalGenesisHash      = common.HexToHash("0x46dfa6724020658b3e03cfdf894bd8e990f46d1e9b1b66b49598788e43eaf50f")
 )
 
 // Different Network names
