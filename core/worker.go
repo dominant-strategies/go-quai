@@ -740,6 +740,10 @@ func (w *worker) OrderTransactionSet(txs []*types.Transaction, gasUsedAfterTrans
 		} else {
 			gasPrice = new(big.Int).Set(tx.GasPrice())
 		}
+		if gasPrice.Cmp(big.NewInt(0)) == 0 {
+			w.logger.Error("found tx with zero gas price in order transaction set")
+			continue
+		}
 		txInfos = append(txInfos, TransactionInfo{
 			Tx:       tx,
 			GasPrice: gasPrice,
@@ -1674,6 +1678,10 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		txByPriceAndNonce := types.TransactionsByPriceAndNonce{}
 		txByPriceAndNonce.SetHead(orderedTxs)
 
+		if baseFee.Cmp(big.NewInt(0)) == 0 {
+			return errors.New("ordered txs had min gas price of zero")
+		}
+
 		env.wo.Header().SetBaseFee(baseFee)
 		err := w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, false)
 		if err != nil {
@@ -1708,6 +1716,10 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		// update the fee
 		qiFeeInQuai := misc.QiToQuai(primeTerminus, tx.MinerFee())
 		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), w.hc.NodeLocation()))))
+		if minerFeeInQuai.Cmp(big.NewInt(0)) == 0 {
+			w.logger.Error("rejecting qi tx that has zero gas price")
+			continue
+		}
 		qiTx, err := types.NewTxWithMinerFee(tx.Tx(), minerFeeInQuai, time.Now())
 		if err != nil {
 			w.logger.WithField("err", err).Error("Error created new tx with miner Fee for Qi TX", tx.Tx().Hash())
@@ -1732,6 +1744,9 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 			// read the gas price of the lowest fee transaction and set the base
 			// fee for the pending header on each iteration
 			baseFee = lowestFeeTx.PeekAndGetFee().MinerFee()
+			if baseFee.Cmp(big.NewInt(0)) == 0 {
+				continue
+			}
 			env.wo.Header().SetBaseFee(baseFee)
 			w.commitTransactions(env, primeTerminus, block, lowestFeeTx, etxIncluded)
 			// After the first run the etxs are included
