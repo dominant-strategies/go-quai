@@ -1129,31 +1129,31 @@ func setConsensusEngineConfig(cfg *quaiconfig.Config) {
 		case params.ColosseumName:
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.ColosseumGasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.GardenName:
 			cfg.Blake3Pow.DurationLimit = params.GardenDurationLimit
 			cfg.Blake3Pow.GasCeil = params.GardenGasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.OrchardName:
 			cfg.Blake3Pow.DurationLimit = params.OrchardDurationLimit
 			cfg.Blake3Pow.GasCeil = params.OrchardGasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.LighthouseName:
 			cfg.Blake3Pow.DurationLimit = params.LighthouseDurationLimit
 			cfg.Blake3Pow.GasCeil = params.LighthouseGasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.LocalName:
 			cfg.Blake3Pow.DurationLimit = params.LocalDurationLimit
 			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.DevName:
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.LocalGasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		default:
 			cfg.Blake3Pow.DurationLimit = params.DurationLimit
 			cfg.Blake3Pow.GasCeil = params.GasCeil
-			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Blake3Pow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 
 		}
 	} else {
@@ -1162,32 +1162,32 @@ func setConsensusEngineConfig(cfg *quaiconfig.Config) {
 		case params.ColosseumName:
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.ColosseumGasCeil
-			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.GardenName:
 			cfg.Progpow.DurationLimit = params.GardenDurationLimit
 			cfg.Progpow.GasCeil = params.GardenGasCeil
-			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultGardenGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.OrchardName:
 			cfg.Progpow.DurationLimit = params.OrchardDurationLimit
 			cfg.Progpow.GasCeil = params.OrchardGasCeil
 			cfg.Progpow.GasCeil = params.ColosseumGasCeil
-			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.LighthouseName:
 			cfg.Progpow.DurationLimit = params.LighthouseDurationLimit
 			cfg.Progpow.GasCeil = params.LighthouseGasCeil
-			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.LocalName:
 			cfg.Progpow.DurationLimit = params.LocalDurationLimit
 			cfg.Progpow.GasCeil = params.LocalGasCeil
-			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.DevName:
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.LocalGasCeil
-			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultLocalGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		default:
 			cfg.Progpow.DurationLimit = params.DurationLimit
 			cfg.Progpow.GasCeil = params.GasCeil
-			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine).Difficulty, common.Big2)
+			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 
 		}
 	}
@@ -1384,6 +1384,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if viper.IsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = viper.GetFloat64(RPCGlobalTxFeeCapFlag.Name)
 	}
+	cfg.GenesisNonce = viper.GetUint64(GenesisNonce.Name)
 
 	cfg.Miner.WorkShareMining = viper.GetBool(WorkShareMiningFlag.Name)
 	cfg.Miner.WorkShareThreshold = params.WorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
@@ -1399,7 +1400,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
 		}
-		cfg.Genesis = core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine)
+		cfg.Genesis = core.DefaultColosseumGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce)
 		if cfg.ConsensusEngine == "progpow" {
 			cfg.DefaultGenesisHash = params.ProgpowColosseumGenesisHash
 		} else {
@@ -1410,7 +1411,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 2
 		}
-		cfg.Genesis = core.DefaultGardenGenesisBlock(cfg.ConsensusEngine)
+		cfg.Genesis = core.DefaultGardenGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce)
 		if cfg.ConsensusEngine == "progpow" {
 			cfg.DefaultGenesisHash = params.ProgpowGardenGenesisHash
 		} else {
@@ -1420,7 +1421,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 3
 		}
-		cfg.Genesis = core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine)
+		cfg.Genesis = core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce)
 		if cfg.ConsensusEngine == "progpow" {
 			cfg.DefaultGenesisHash = params.ProgpowOrchardGenesisHash
 		} else {
@@ -1430,7 +1431,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
-		cfg.Genesis = core.DefaultLocalGenesisBlock(cfg.ConsensusEngine)
+		cfg.Genesis = core.DefaultLocalGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce)
 		if cfg.ConsensusEngine == "progpow" {
 			cfg.DefaultGenesisHash = params.ProgpowLocalGenesisHash
 		} else {
@@ -1440,7 +1441,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		if !viper.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
-		cfg.Genesis = core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine)
+		cfg.Genesis = core.DefaultLighthouseGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce)
 		if cfg.ConsensusEngine == "progpow" {
 			cfg.DefaultGenesisHash = params.ProgpowLighthouseGenesisHash
 		} else {
@@ -1503,21 +1504,24 @@ func MakeChainDatabase(stack *node.Node, readonly bool) ethdb.Database {
 }
 
 func MakeGenesis() *core.Genesis {
+	consensusEngine := viper.GetString(ConsensusEngineFlag.Name)
 	genesisNonce := viper.GetUint64(GenesisNonce.Name)
 	var genesis *core.Genesis
 	switch viper.GetString(EnvironmentFlag.Name) {
 	case params.ColosseumName:
-		genesis = core.DefaultColosseumGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
+		genesis = core.DefaultColosseumGenesisBlock(consensusEngine, genesisNonce)
 		genesis.Nonce = genesisNonce
 	case params.GardenName:
-		genesis = core.DefaultGardenGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
+		genesis = core.DefaultGardenGenesisBlock(consensusEngine, genesisNonce)
 		genesis.Nonce = genesisNonce
 	case params.OrchardName:
-		genesis = core.DefaultOrchardGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
+		genesis = core.DefaultOrchardGenesisBlock(consensusEngine, genesisNonce)
+		genesis.Nonce = genesisNonce
 	case params.LighthouseName:
-		genesis = core.DefaultLighthouseGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
+		genesis = core.DefaultLighthouseGenesisBlock(consensusEngine, genesisNonce)
+		genesis.Nonce = genesisNonce
 	case params.LocalName:
-		genesis = core.DefaultLocalGenesisBlock(viper.GetString(ConsensusEngineFlag.Name))
+		genesis = core.DefaultLocalGenesisBlock(consensusEngine, genesisNonce)
 	case params.DevName:
 		Fatalf("Developer chains are ephemeral")
 	}

@@ -75,6 +75,9 @@ type Config struct {
 	// If nil, the Quai main net block is used.
 	Genesis *core.Genesis `toml:",omitempty"`
 
+	// Genesis nonce used to start the network
+	GenesisNonce uint64 `toml:",omitempty"`
+
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 

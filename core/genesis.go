@@ -160,11 +160,11 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, nodeLocation, 0, logger)
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, genesisNonce uint64, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
+	return SetupGenesisBlockWithOverride(db, genesis, genesisNonce, nodeLocation, 0, logger)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLocation common.Location, startingExpansionNumber uint64, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, genesisNonce uint64, nodeLocation common.Location, startingExpansionNumber uint64, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -173,7 +173,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			logger.Info("Writing default main-net genesis block")
-			genesis = DefaultGenesisBlock()
+			genesis = DefaultGenesisBlock(genesisNonce)
 		} else {
 			logger.Info("Writing custom genesis block")
 		}
@@ -188,7 +188,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nodeLoca
 	header := rawdb.ReadHeader(db, 0, stored)
 	if _, err := state.New(header.EVMRoot(), header.EtxSetRoot(), header.QuaiStateSize(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
 		if genesis == nil {
-			genesis = DefaultGenesisBlock()
+			genesis = DefaultGenesisBlock(genesisNonce)
 		}
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(startingExpansionNumber).Hash()
@@ -350,16 +350,16 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 
 // DefaultGenesisBlock returns the Latest default Genesis block.
 // Currently it returns the DefaultColosseumGenesisBlock.
-func DefaultGenesisBlock() *Genesis {
-	return DefaultColosseumGenesisBlock("progpow")
+func DefaultGenesisBlock(genesisNonce uint64) *Genesis {
+	return DefaultColosseumGenesisBlock("progpow", genesisNonce)
 }
 
 // DefaultColosseumGenesisBlock returns the Quai Colosseum testnet genesis block.
-func DefaultColosseumGenesisBlock(consensusEngine string) *Genesis {
+func DefaultColosseumGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
 	if consensusEngine == "blake3" {
 		return &Genesis{
 			Config:     params.Blake3PowColosseumChainConfig,
-			Nonce:      66,
+			Nonce:      genesisNonce,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 			GasLimit:   5000000,
 			Difficulty: big.NewInt(2000000),
@@ -367,7 +367,7 @@ func DefaultColosseumGenesisBlock(consensusEngine string) *Genesis {
 	}
 	return &Genesis{
 		Config:     params.ProgpowColosseumChainConfig,
-		Nonce:      66,
+		Nonce:      genesisNonce,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 		GasLimit:   5000000,
 		Difficulty: big.NewInt(1000000000),
@@ -375,11 +375,11 @@ func DefaultColosseumGenesisBlock(consensusEngine string) *Genesis {
 }
 
 // DefaultGardenGenesisBlock returns the Garden testnet genesis block.
-func DefaultGardenGenesisBlock(consensusEngine string) *Genesis {
+func DefaultGardenGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
 	if consensusEngine == "blake3" {
 		return &Genesis{
 			Config:     params.Blake3PowGardenChainConfig,
-			Nonce:      66,
+			Nonce:      genesisNonce,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 			GasLimit:   160000000,
 			Difficulty: big.NewInt(500000),
@@ -387,7 +387,7 @@ func DefaultGardenGenesisBlock(consensusEngine string) *Genesis {
 	}
 	return &Genesis{
 		Config:     params.ProgpowGardenChainConfig,
-		Nonce:      0,
+		Nonce:      genesisNonce,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353539"),
 		GasLimit:   5000000,
 		Difficulty: big.NewInt(300000000),
@@ -395,11 +395,11 @@ func DefaultGardenGenesisBlock(consensusEngine string) *Genesis {
 }
 
 // DefaultOrchardGenesisBlock returns the Orchard testnet genesis block.
-func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
+func DefaultOrchardGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
 	if consensusEngine == "blake3" {
 		return &Genesis{
 			Config:     params.Blake3PowOrchardChainConfig,
-			Nonce:      66,
+			Nonce:      genesisNonce,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fc"),
 			GasLimit:   5000000,
 			Difficulty: big.NewInt(200000),
@@ -407,7 +407,7 @@ func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
 	}
 	return &Genesis{
 		Config:     params.ProgpowOrchardChainConfig,
-		Nonce:      0,
+		Nonce:      genesisNonce,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353536"),
 		GasLimit:   5000000,
 		Difficulty: big.NewInt(30000000000),
@@ -415,11 +415,11 @@ func DefaultOrchardGenesisBlock(consensusEngine string) *Genesis {
 }
 
 // DefaultLighthouseGenesisBlock returns the Lighthouse testnet genesis block.
-func DefaultLighthouseGenesisBlock(consensusEngine string) *Genesis {
+func DefaultLighthouseGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
 	if consensusEngine == "blake3" {
 		return &Genesis{
 			Config:     params.Blake3PowLighthouseChainConfig,
-			Nonce:      66,
+			Nonce:      genesisNonce,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 			GasLimit:   40000000,
 			Difficulty: big.NewInt(200000),
@@ -427,7 +427,7 @@ func DefaultLighthouseGenesisBlock(consensusEngine string) *Genesis {
 	}
 	return &Genesis{
 		Config:     params.ProgpowLighthouseChainConfig,
-		Nonce:      0,
+		Nonce:      genesisNonce,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353537"),
 		GasLimit:   5000000,
 		Difficulty: big.NewInt(200000),
@@ -435,11 +435,11 @@ func DefaultLighthouseGenesisBlock(consensusEngine string) *Genesis {
 }
 
 // DefaultLocalGenesisBlock returns the Local testnet genesis block.
-func DefaultLocalGenesisBlock(consensusEngine string) *Genesis {
+func DefaultLocalGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
 	if consensusEngine == "blake3" {
 		return &Genesis{
 			Config:     params.Blake3PowLocalChainConfig,
-			Nonce:      66,
+			Nonce:      genesisNonce,
 			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 			GasLimit:   5000000,
 			Difficulty: big.NewInt(500000),
@@ -447,7 +447,7 @@ func DefaultLocalGenesisBlock(consensusEngine string) *Genesis {
 	}
 	return &Genesis{
 		Config:     params.ProgpowLocalChainConfig,
-		Nonce:      0,
+		Nonce:      genesisNonce,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   5000000,
 		Difficulty: big.NewInt(1000),
