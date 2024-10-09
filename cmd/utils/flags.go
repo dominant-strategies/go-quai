@@ -63,6 +63,7 @@ var Flags = [][]Flag{
 var GlobalFlags = []Flag{
 	ConfigDirFlag,
 	DataDirFlag,
+	InitConfigFlag,
 	AncientDirFlag,
 	LogLevelFlag,
 	LogSizeFlag,
@@ -183,6 +184,12 @@ var (
 		Abbreviation: "d",
 		Value:        filepath.Join(xdg.DataHome, constants.APP_NAME),
 		Usage:        "data directory" + generateEnvDoc(c_GlobalFlagPrefix+"data-dir"),
+	}
+
+	InitConfigFlag = Flag{
+		Name:  c_GlobalFlagPrefix + "init-cfg",
+		Value: false,
+		Usage: "initialize a new config file, if one does not already exist",
 	}
 
 	AncientDirFlag = Flag{

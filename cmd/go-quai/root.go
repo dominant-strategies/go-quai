@@ -65,12 +65,16 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	viper.SetConfigType(constants.CONFIG_FILE_TYPE)
 
 	// Write default config file if it does not exist
-	if _, err := os.Stat(filepath.Join(configDir, constants.CONFIG_FILE_NAME)); os.IsNotExist(err) {
-		err := utils.WriteDefaultConfigFile(configDir, constants.CONFIG_FILE_NAME, constants.CONFIG_FILE_TYPE)
-		if err != nil {
-			return err
+	if viper.GetBool(utils.InitConfigFlag.Name) {
+		if _, err := os.Stat(filepath.Join(configDir, constants.CONFIG_FILE_NAME)); os.IsNotExist(err) {
+			err := utils.WriteDefaultConfigFile(configDir, constants.CONFIG_FILE_NAME, constants.CONFIG_FILE_TYPE)
+			if err != nil {
+				return err
+			}
+			log.Global.WithField("path", filepath.Join(configDir, constants.CONFIG_FILE_NAME)).Info("Initialized new config file.")
+		} else {
+			log.Global.WithField("path", filepath.Join(configDir, constants.CONFIG_FILE_NAME)).Fatal("Cannot init config file. File already exists. Either remove this option to run with the existing config file, or delete the existing config file to re-initialize a new one.")
 		}
-		log.Global.WithField("path", filepath.Join(configDir, constants.CONFIG_FILE_NAME)).Info("Default config file created")
 	}
 
 	// load config from file and environment variables
