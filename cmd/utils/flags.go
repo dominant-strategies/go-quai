@@ -845,29 +845,18 @@ func SplitAndTrim(input string) (ret []string) {
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(cfg *node.Config, nodeLocation common.Location) {
 	if viper.GetBool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
-		cfg.HTTPHost = "127.0.0.1"
-		if viper.IsSet(HTTPListenAddrFlag.Name) {
-			cfg.HTTPHost = viper.GetString(HTTPListenAddrFlag.Name)
-		}
+		cfg.HTTPHost = viper.GetString(HTTPListenAddrFlag.Name)
 	}
 
 	cfg.HTTPPort = GetHttpPort(nodeLocation)
 
-	if viper.IsSet(HTTPCORSDomainFlag.Name) {
-		cfg.HTTPCors = SplitAndTrim(viper.GetString(HTTPCORSDomainFlag.Name))
-	}
+	cfg.HTTPCors = SplitAndTrim(viper.GetString(HTTPCORSDomainFlag.Name))
 
-	if viper.IsSet(HTTPApiFlag.Name) {
-		cfg.HTTPModules = SplitAndTrim(viper.GetString(HTTPApiFlag.Name))
-	}
+	cfg.HTTPModules = SplitAndTrim(viper.GetString(HTTPApiFlag.Name))
 
-	if viper.IsSet(HTTPVirtualHostsFlag.Name) {
-		cfg.HTTPVirtualHosts = SplitAndTrim(viper.GetString(HTTPVirtualHostsFlag.Name))
-	}
+	cfg.HTTPVirtualHosts = SplitAndTrim(viper.GetString(HTTPVirtualHostsFlag.Name))
 
-	if viper.IsSet(HTTPPathPrefixFlag.Name) {
-		cfg.HTTPPathPrefix = viper.GetString(HTTPPathPrefixFlag.Name)
-	}
+	cfg.HTTPPathPrefix = viper.GetString(HTTPPathPrefixFlag.Name)
 }
 
 func GetHttpPort(nodeLocation common.Location) int {
@@ -900,17 +889,11 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 
 	cfg.WSPort = GetWSPort(nodeLocation)
 
-	if viper.IsSet(WSAllowedOriginsFlag.Name) {
-		cfg.WSOrigins = SplitAndTrim(viper.GetString(WSAllowedOriginsFlag.Name))
-	}
+	cfg.WSOrigins = SplitAndTrim(viper.GetString(WSAllowedOriginsFlag.Name))
 
-	if viper.IsSet(WSApiFlag.Name) {
-		cfg.WSModules = SplitAndTrim(viper.GetString(WSApiFlag.Name))
-	}
+	cfg.WSModules = SplitAndTrim(viper.GetString(WSApiFlag.Name))
 
-	if viper.IsSet(WSPathPrefixFlag.Name) {
-		cfg.WSPathPrefix = viper.GetString(WSPathPrefixFlag.Name)
-	}
+	cfg.WSPathPrefix = viper.GetString(WSPathPrefixFlag.Name)
 }
 
 func GetWSPort(nodeLocation common.Location) int {
