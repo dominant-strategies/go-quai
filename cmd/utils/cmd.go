@@ -100,10 +100,7 @@ func makeConfigNode(slicesRunning []common.Location, nodeLocation common.Locatio
 	}
 	SetQuaiConfig(stack, &cfg.Quai, slicesRunning, nodeLocation, currentExpansionNumber, logger)
 
-	// TODO: Apply stats
-	if viper.IsSet(QuaiStatsURLFlag.Name) {
-		cfg.Quaistats.URL = viper.GetString(QuaiStatsURLFlag.Name)
-	}
+	cfg.Quaistats.URL = viper.GetString(QuaiStatsURLFlag.Name)
 
 	return stack, cfg
 }
@@ -112,8 +109,8 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = ""
 	cfg.Version = params.VersionWithCommit("", "")
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
-	cfg.WSModules = append(cfg.WSModules, "eth")
+	cfg.HTTPModules = append(cfg.HTTPModules, "quai")
+	cfg.WSModules = append(cfg.WSModules, "quai")
 	return cfg
 }
 
