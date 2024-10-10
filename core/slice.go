@@ -306,7 +306,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 			}
 			time5_1 = common.PrettyDuration(time.Since(start))
 			// Cache the subordinate's pending ETXs
-			pEtxs := types.PendingEtxs{header.ConvertToPEtxView(), subPendingEtxs}
+			pEtxs := types.PendingEtxs{Header: header.ConvertToPEtxView(), OutboundEtxs: subPendingEtxs}
 			time5_2 = common.PrettyDuration(time.Since(start))
 			// Add the pending etx given by the sub in the rollup
 			sl.AddPendingEtxs(pEtxs)
@@ -330,7 +330,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 					}
 				}
 				// We also need to store the pendingEtxRollup to the dom
-				pEtxRollup := types.PendingEtxsRollup{header.ConvertToPEtxView(), crossPrimeRollup}
+				pEtxRollup := types.PendingEtxsRollup{Header: header.ConvertToPEtxView(), EtxsRollup: crossPrimeRollup}
 				sl.AddPendingEtxsRollup(pEtxRollup)
 			}
 			time5_3 = common.PrettyDuration(time.Since(start))
