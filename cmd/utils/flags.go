@@ -106,6 +106,7 @@ var NodeFlags = []Flag{
 	PprofFlag,
 	InsecureUnlockAllowedFlag,
 	CoinbaseAddressFlag,
+	MinerPreferenceFlag,
 	EnvironmentFlag,
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
@@ -508,6 +509,12 @@ var (
 		Name:  c_NodeFlagPrefix + "coinbases",
 		Value: "",
 		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"coinbases"),
+	}
+
+	MinerPreferenceFlag = Flag{
+		Name:  c_NodeFlagPrefix + "miner-preference",
+		Value: 0.5,
+		Usage: "Indicates preference towards mining Quai or Qi (Neutral: 0.5, Qi only: 0, Quai only: 1)",
 	}
 
 	IndexAddressUtxos = Flag{
