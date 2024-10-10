@@ -67,8 +67,8 @@ type environment struct {
 	gasPool                 *types.GasPool // available gas used to pack transactions
 	primaryCoinbase         common.Address
 	secondaryCoinbase       common.Address
-	etxRLimit               int // Remaining number of cross-region ETXs that can be included
-	etxPLimit               int // Remaining number of cross-prime ETXs that can be included
+	etxRLimit               uint64 // Remaining gas for cross-region ETXs that can be included
+	etxPLimit               uint64 // Remaining gas for cross-prime ETXs that can be included
 	parentOrder             *int
 	wo                      *types.WorkObject
 	gasUsedAfterTransaction []uint64
@@ -883,11 +883,11 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 		return nil, err
 	}
 
-	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
+	etxRLimit := (uint64(len(parent.Transactions())) * params.TxGas) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
 		etxRLimit = params.ETXRLimitMin
 	}
-	etxPLimit := len(parent.Transactions()) / params.ETXPrimeMaxFraction
+	etxPLimit := (uint64(len(parent.Transactions())) * params.TxGas) / params.ETXPrimeMaxFraction
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
@@ -1954,8 +1954,8 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		utxosDeleteHashes = append(utxosDeleteHashes, utxoHash)
 		inputs[uint(denomination)]++
 	}
-	var ETXRCount int
-	var ETXPCount int
+	var ETXRGas uint64
+	var ETXPGas uint64
 	etxs := make([]*types.ExternalTx, 0)
 	totalQitOut := big.NewInt(0)
 	totalConvertQitOut := big.NewInt(0)
@@ -2002,17 +2002,17 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
 			// Cross-region?
 			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
-				ETXRCount++
+				ETXRGas += params.TxGas
 			}
 			// Cross-prime?
 			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
-				ETXPCount++
+				ETXPGas += params.TxGas
 			}
-			if ETXRCount > env.etxRLimit {
-				return fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, env.etxRLimit)
+			if ETXRGas > env.etxRLimit {
+				return fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRGas, env.etxRLimit)
 			}
-			if ETXPCount > env.etxPLimit {
-				return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
+			if ETXPGas > env.etxPLimit {
+				return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPGas, env.etxPLimit)
 			}
 			if !toAddr.IsInQiLedgerScope() {
 				return fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
@@ -2066,11 +2066,11 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 	}
+	txFeeInQuai.Sub(txFeeInQuai, minimumFeeInQuai) // Subtract min fee from tx fee
 	if conversion {
 		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
-		remainingTxFeeInQuai := misc.QiToQuai(env.wo.WorkObjectHeader(), txFeeInQit)
 		// Fee is basefee * gas, so gas remaining is fee remaining / basefee
-		remainingGas := new(big.Int).Div(remainingTxFeeInQuai, env.wo.BaseFee())
+		remainingGas := new(big.Int).Div(txFeeInQuai, env.wo.BaseFee())
 		if remainingGas.Uint64() > (env.wo.GasLimit() / params.MinimumEtxGasDivisor) {
 			// Limit ETX gas to max ETX gas limit (the rest is burned)
 			remainingGas = new(big.Int).SetUint64(env.wo.GasLimit() / params.MinimumEtxGasDivisor)
@@ -2079,9 +2079,13 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			// Minimum gas for ETX is TxGas
 			return fmt.Errorf("tx %032x has insufficient remaining gas for conversion ETX, have %d want %d", tx.Hash(), remainingGas.Uint64(), params.TxGas)
 		}
-		ETXPCount++ // conversion is technically a cross-prime ETX
-		if ETXPCount > env.etxPLimit {
-			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
+		// Special case: full conversion fee is not included in the block ETX gas limit, only the expected gas cost
+		// It is unlikely that a conversion uses much more than the expected cost as it is constrained by the destination precompile
+		// If the destination set grows dramatically and the gas cost increases, we may need to update the expected gas cost
+		// Conversion is technically a cross-prime ETX
+		ETXPGas += params.ExpectedQiConversionGas
+		if ETXPGas > env.etxPLimit {
+			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPGas, env.etxPLimit)
 		}
 		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: types.ConversionType, OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
 		gasUsed += params.ETXGas
@@ -2089,11 +2093,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			return err
 		}
 		etxs = append(etxs, &etxInner)
-		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
 	}
 	env.wo.Header().SetGasUsed(gasUsed)
-	env.etxRLimit -= ETXRCount
-	env.etxPLimit -= ETXPCount
+	env.etxRLimit -= ETXRGas
+	env.etxPLimit -= ETXPGas
 	for _, etx := range etxs {
 		env.etxs = append(env.etxs, types.NewTx(etx))
 	}

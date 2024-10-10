@@ -293,11 +293,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	time3 := common.PrettyDuration(time.Since(start))
 
 	// Iterate over and process the individual transactions.
-	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
+	etxRLimit := (uint64(len(parent.Transactions())) * params.TxGas) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
 		etxRLimit = params.ETXRLimitMin
 	}
-	etxPLimit := len(parent.Transactions()) / params.ETXPrimeMaxFraction
+	etxPLimit := (uint64(len(parent.Transactions())) * params.TxGas) / params.ETXPrimeMaxFraction
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
@@ -334,7 +334,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if _, ok := senders[tx.Hash()]; ok {
 				checkSig = false
 			}
-			qiTxFee, fees, etxs, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit, utxosCreatedDeleted)
+			qiTxFee, etxs, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, &etxRLimit, &etxPLimit, utxosCreatedDeleted)
 			if err != nil {
 				return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -346,7 +346,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			totalEtxAppendTime += time.Since(startEtxAppend)
 			startEtxCoinbase := time.Now()
 
-			qiFees.Add(qiFees, fees)
+			qiFees.Add(qiFees, qiTxFee)
 
 			// convert the fee to quai
 			qiTxFeeInQuai := misc.QiToQuai(primeTerminus.WorkObjectHeader(), qiTxFee)
@@ -739,7 +739,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, multiSet, nil
 }
 
-func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
+func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *uint64, logger *log.Logger) (*types.Receipt, *big.Int, error) {
 	nodeLocation := config.Location
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
@@ -751,26 +751,26 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 		return nil, nil, err
 	}
 
-	var ETXRCount int
-	var ETXPCount int
+	var ETXRGas uint64
+	var ETXPGas uint64
 	for _, tx := range result.Etxs {
 		// Count which ETXs are cross-region
 		if tx.To().Location().CommonDom(nodeLocation).Context() == common.REGION_CTX {
-			ETXRCount++
+			ETXRGas += tx.Gas()
 		}
 		// Count which ETXs are cross-prime
 		if tx.To().Location().CommonDom(nodeLocation).Context() == common.PRIME_CTX {
-			ETXPCount++
+			ETXPGas += tx.Gas()
 		}
 	}
-	if ETXRCount > *etxRLimit {
-		return nil, nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRCount, *etxRLimit)
+	if ETXRGas > *etxRLimit {
+		return nil, nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRGas, *etxRLimit)
 	}
-	if ETXPCount > *etxPLimit {
-		return nil, nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, *etxPLimit)
+	if ETXPGas > *etxPLimit {
+		return nil, nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPGas, *etxPLimit)
 	}
-	*etxRLimit -= ETXRCount
-	*etxPLimit -= ETXPCount
+	*etxRLimit -= ETXRGas
+	*etxPLimit -= ETXPGas
 
 	// Update the state with pending changes.
 	var root []byte
@@ -860,7 +860,7 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 
 }
 
-func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit int) (*big.Int, error) {
+func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit uint64) (*big.Int, error) {
 
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx)
 	usedGas := intrinsicGas
@@ -871,8 +871,8 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		return nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminusHash)
 	}
 
-	var ETXRCount int
-	var ETXPCount int
+	var ETXRGas uint64
+	var ETXPGas uint64
 	numEtxs := uint64(0)
 	totalQitOut := big.NewInt(0)
 	totalConvertQitOut := big.NewInt(0)
@@ -925,17 +925,17 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
 			// Cross-region?
 			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
-				ETXRCount++
+				ETXRGas += params.TxGas
 			}
 			// Cross-prime?
 			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
-				ETXPCount++
+				ETXPGas += params.TxGas
 			}
-			if ETXRCount > etxRLimit {
-				return nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit)
+			if ETXRGas > etxRLimit {
+				return nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRGas, etxRLimit)
 			}
-			if ETXPCount > etxPLimit {
-				return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+			if ETXPGas > etxPLimit {
+				return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit)
 			}
 			primeTerminusHash := currentHeader.PrimeTerminusHash()
 			primeTerminusHeader := chain.GetHeaderByHash(primeTerminusHash)
@@ -964,7 +964,6 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
-	txFee := new(big.Int).Set(txFeeInQit)
 	// Check tx against required base fee and gas
 	requiredGas := intrinsicGas + (numEtxs * (params.TxGas + params.ETXGas)) // Each ETX costs extra gas that is paid in the origin
 	if requiredGas < intrinsicGas {
@@ -977,12 +976,11 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		return nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64())
 	}
 	if conversion {
-		ETXPCount++
-		if ETXPCount > etxPLimit {
-			return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+		ETXPGas += params.ExpectedQiConversionGas
+		if ETXPGas > etxPLimit {
+			return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit)
 		}
 		usedGas += params.ETXGas
-		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
 	}
 
 	if usedGas > currentHeader.GasLimit() {
@@ -1008,33 +1006,32 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		return nil, fmt.Errorf("invalid signature for tx %032x digest hash %032x", tx.Hash(), txDigestHash)
 	}
 
-	return txFee, nil
+	return txFeeInQit, nil
 }
 
-func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *int, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, *big.Int, []*types.ExternalTx, error, map[string]time.Duration) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, etxRLimit, etxPLimit *uint64, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, []*types.ExternalTx, error, map[string]time.Duration) {
 	var elapsedTime time.Duration
 	stepTimings := make(map[string]time.Duration)
 
-	qiTxFee := big.NewInt(0)
 	// Start timing for sanity checks
 	stepStart := time.Now()
 	// Sanity checks
 	if tx == nil || tx.Type() != types.QiTxType {
-		return nil, nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash()), nil
+		return nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash()), nil
 	}
 	if tx.ChainId().Cmp(&chainId) != 0 {
-		return nil, nil, nil, fmt.Errorf("tx %032x has invalid chain ID", tx.Hash()), nil
+		return nil, nil, fmt.Errorf("tx %032x has invalid chain ID", tx.Hash()), nil
 	}
 	if currentHeader == nil || batch == nil || gp == nil || usedGas == nil || signer == nil || etxRLimit == nil || etxPLimit == nil {
-		return nil, nil, nil, errors.New("one of the parameters is nil"), nil
+		return nil, nil, errors.New("one of the parameters is nil"), nil
 	}
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx)
 	*usedGas += intrinsicGas
 	if err := gp.SubGas(intrinsicGas); err != nil {
-		return nil, nil, nil, err, nil
+		return nil, nil, err, nil
 	}
 	if *usedGas > currentHeader.GasLimit() {
-		return nil, nil, nil, fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), *usedGas, currentHeader.GasLimit()), nil
+		return nil, nil, fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), *usedGas, currentHeader.GasLimit()), nil
 	}
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Sanity Checks"] = elapsedTime
@@ -1048,27 +1045,27 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	for _, txIn := range tx.TxIn() {
 		utxo := rawdb.GetUTXO(db, txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
-			return nil, nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index), nil
+			return nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index), nil
 		}
 		if utxo.Lock != nil && utxo.Lock.Cmp(currentHeader.Number(location.Context())) > 0 {
-			return nil, nil, nil, fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String()), nil
+			return nil, nil, fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String()), nil
 		}
 		// Verify the pubkey
 		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
 		entryAddr := common.BytesToAddress(utxo.Address, location)
 		if !address.Equal(entryAddr) {
-			return nil, nil, nil, fmt.Errorf("tx %032x spends UTXO %032x:%d with invalid pubkey, have %s want %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, address.String(), entryAddr.String()), nil
+			return nil, nil, fmt.Errorf("tx %032x spends UTXO %032x:%d with invalid pubkey, have %s want %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, address.String(), entryAddr.String()), nil
 		}
 		if checkSig {
 			pubKey, err := btcec.ParsePubKey(txIn.PubKey)
 			if err != nil {
-				return nil, nil, nil, err, nil
+				return nil, nil, err, nil
 			}
 			pubKeys = append(pubKeys, pubKey)
 		}
 		// Check for duplicate addresses. This also checks for duplicate inputs.
 		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
-			return nil, nil, nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String()), nil
+			return nil, nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String()), nil
 		}
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 
@@ -1079,7 +1076,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 				"higher than max allowed value of %v",
 				denomination,
 				types.MaxDenomination)
-			return nil, nil, nil, errors.New(str), nil
+			return nil, nil, errors.New(str), nil
 		}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
 		inputs[uint(denomination)]++
@@ -1094,13 +1091,13 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	primeTerminusHash := currentHeader.PrimeTerminusHash()
 	primeTerminusHeader := chain.GetHeaderByHash(primeTerminusHash)
 	if primeTerminusHeader == nil {
-		return nil, nil, nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminusHash), nil
+		return nil, nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminusHash), nil
 	}
 
 	// Start timing for output processing
 	stepStart = time.Now()
-	var ETXRCount int
-	var ETXPCount int
+	var ETXRGas uint64
+	var ETXPGas uint64
 	etxs := make([]*types.ExternalTx, 0)
 	outputs := make(map[uint]uint64)
 	totalQitOut := big.NewInt(0)
@@ -1110,7 +1107,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	for txOutIdx, txOut := range tx.TxOut() {
 		// It would be impossible for a tx to have this many outputs based on block gas limit, but cap it here anyways
 		if txOutIdx > types.MaxOutputIndex {
-			return nil, nil, nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex), nil
+			return nil, nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex), nil
 		}
 
 		if txOut.Denomination > types.MaxDenomination {
@@ -1118,7 +1115,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 				"higher than max allowed value of %v",
 				txOut.Denomination,
 				types.MaxDenomination)
-			return nil, nil, nil, errors.New(str), nil
+			return nil, nil, errors.New(str), nil
 		}
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 
@@ -1126,7 +1123,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 
 		// Enforce no address reuse
 		if _, exists := addresses[toAddr.Bytes20()]; exists {
-			return nil, nil, nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String()), nil
+			return nil, nil, errors.New("Duplicate address in QiTx outputs: " + toAddr.String()), nil
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
 		outputs[uint(txOut.Denomination)]++
@@ -1135,50 +1132,50 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 			conversion = true
 			convertAddress = toAddr
 			if txOut.Denomination < params.MinQiConversionDenomination {
-				return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination), nil
+				return nil, nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination), nil
 			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
 			continue
 		} else if toAddr.IsInQuaiLedgerScope() {
-			return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
+			return nil, nil, fmt.Errorf("tx %v emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
 		}
 
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
 			// Cross-region?
 			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
-				ETXRCount++
+				ETXRGas += params.TxGas
 			}
 			// Cross-prime?
 			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
-				ETXPCount++
+				ETXPGas += params.TxGas
 			}
-			if ETXRCount > *etxRLimit {
-				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit), nil
+			if ETXRGas > *etxRLimit {
+				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRGas, etxRLimit), nil
 			}
-			if ETXPCount > *etxPLimit {
-				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
+			if ETXPGas > *etxPLimit {
+				return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit), nil
 			}
 			if !toAddr.IsInQiLedgerScope() {
-				return nil, nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
+				return nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
 			}
 			if !chain.CheckIfEtxIsEligible(primeTerminusHeader.EtxEligibleSlices(), *toAddr.Location()) {
-				return nil, nil, nil, fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location()), nil
+				return nil, nil, fmt.Errorf("etx emitted by tx [%v] going to a slice that is not eligible to receive etx %v", tx.Hash().Hex(), *toAddr.Location()), nil
 			}
 
 			// We should require some kind of extra fee here
 			etxInner := types.ExternalTx{Value: big.NewInt(int64(txOut.Denomination)), To: &toAddr, Sender: common.ZeroAddress(location), EtxType: types.DefaultType, OriginatingTxHash: tx.Hash(), ETXIndex: uint16(txOutIdx), Gas: params.TxGas}
 			*usedGas += params.ETXGas
 			if err := gp.SubGas(params.ETXGas); err != nil {
-				return nil, nil, nil, err, nil
+				return nil, nil, err, nil
 			}
 			etxs = append(etxs, &etxInner)
 		} else {
 			// This output creates a normal UTXO
 			utxo := types.NewUtxoEntry(&txOut)
 			if err := rawdb.CreateUTXO(batch, tx.Hash(), uint16(txOutIdx), utxo); err != nil {
-				return nil, nil, nil, err, nil
+				return nil, nil, err, nil
 			}
 			utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(tx.Hash(), uint16(txOutIdx), utxo))
 			utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKey(tx.Hash(), uint16(txOutIdx)))
@@ -1194,43 +1191,45 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		str := fmt.Sprintf("total value of all transaction inputs for "+
 			"transaction %v is %v which is less than the amount "+
 			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
-		return nil, nil, nil, errors.New(str), nil
+		return nil, nil, errors.New(str), nil
 	}
 
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
-	qiTxFee = new(big.Int).Set(txFeeInQit)
 	// Check tx against required base fee and gas
 	requiredGas := intrinsicGas + (uint64(len(etxs)) * (params.TxGas + params.ETXGas)) // Each ETX costs extra gas that is paid in the origin
 	if requiredGas < intrinsicGas {
 		// Overflow
-		return nil, nil, nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash()), nil
+		return nil, nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash()), nil
 	}
 	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), currentHeader.BaseFee())
 	txFeeInQuai := misc.QiToQuai(primeTerminusHeader.WorkObjectHeader(), txFeeInQit)
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
-		return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64()), nil
+		return nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64()), nil
 	}
+	txFeeInQuai.Sub(txFeeInQuai, minimumFeeInQuai)
 	if conversion {
 		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
-		remainingTxFeeInQuai := misc.QiToQuai(primeTerminusHeader.WorkObjectHeader(), txFeeInQit)
 		// Fee is basefee * gas, so gas remaining is fee remaining / basefee
-		remainingGas := new(big.Int).Div(remainingTxFeeInQuai, currentHeader.BaseFee())
+		remainingGas := new(big.Int).Div(txFeeInQuai, currentHeader.BaseFee())
 		if remainingGas.Uint64() > (currentHeader.GasLimit() / params.MinimumEtxGasDivisor) {
 			// Limit ETX gas to max ETX gas limit (the rest is burned)
 			remainingGas = new(big.Int).SetUint64(currentHeader.GasLimit() / params.MinimumEtxGasDivisor)
 		}
-		ETXPCount++
-		if ETXPCount > *etxPLimit {
-			return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
+		// Special case: full conversion fee is not included in the block ETX gas limit, only the expected gas cost
+		// It is unlikely that a conversion uses much more than the expected cost as it is constrained by the destination precompile
+		// If the destination set grows dramatically and the gas cost increases, we may need to update the expected gas cost
+		ETXPGas += params.ExpectedQiConversionGas
+		if ETXPGas > *etxPLimit {
+			return nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit), nil
 		}
 		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: types.ConversionType, OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
 		*usedGas += params.ETXGas
 		if err := gp.SubGas(params.ETXGas); err != nil {
-			return nil, nil, nil, err, nil
+			return nil, nil, err, nil
 		}
 		etxs = append(etxs, &etxInner)
-		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+		// Fee goes entirely to miner
 	}
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Fee Verification"] = elapsedTime
@@ -1239,7 +1238,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	stepStart = time.Now()
 	if !isFirstQiTx {
 		if err := CheckDenominations(inputs, outputs); err != nil {
-			return nil, nil, nil, err, nil
+			return nil, nil, err, nil
 		}
 	}
 	// Ensure the transaction signature is valid
@@ -1250,7 +1249,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 				pubKeys, false,
 			)
 			if err != nil {
-				return nil, nil, nil, err, nil
+				return nil, nil, err, nil
 			}
 			finalKey = aggKey.FinalKey
 		} else {
@@ -1259,16 +1258,16 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 
 		txDigestHash := signer.Hash(tx)
 		if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
-			return nil, nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String()), nil
+			return nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String()), nil
 		}
 	}
 
-	*etxRLimit -= ETXRCount
-	*etxPLimit -= ETXPCount
+	*etxRLimit -= ETXRGas
+	*etxPLimit -= ETXPGas
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Signature Check"] = elapsedTime
 
-	return qiTxFee, txFeeInQit, etxs, nil, stepTimings
+	return txFeeInQit, etxs, nil, stepTimings
 }
 
 // Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.
@@ -1372,7 +1371,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, parentOrder int, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, usedState *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
+func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, parentOrder int, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, usedState *uint64, cfg vm.Config, etxRLimit, etxPLimit *uint64, logger *log.Logger) (*types.Receipt, *big.Int, error) {
 	nodeCtx := config.Location.Context()
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
