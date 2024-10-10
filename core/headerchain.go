@@ -444,10 +444,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 	// If head is the normal extension of canonical head, we can return by just wiring the canonical hash.
 	if prevHeader.Hash() == head.ParentHash(hc.NodeCtx()) {
 		rawdb.WriteCanonicalHash(hc.headerDb, head.Hash(), head.NumberU64(hc.NodeCtx()))
-		err := hc.AppendBlock(head)
-		if err != nil {
-			rawdb.DeleteCanonicalHash(hc.headerDb, head.NumberU64(hc.NodeCtx()))
-			return err
+		if nodeCtx == common.ZONE_CTX {
+			err := hc.AppendBlock(head)
+			if err != nil {
+				rawdb.DeleteCanonicalHash(hc.headerDb, head.NumberU64(hc.NodeCtx()))
+				return err
+			}
 		}
 		// write the head block hash to the db
 		rawdb.WriteHeadBlockHash(hc.headerDb, head.Hash())
@@ -459,8 +461,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		return nil
 	}
 
-	//Find a common header
-	commonHeader := hc.findCommonAncestor(head)
+	//Find a common header between the current header and the new head
+	commonHeader, err := rawdb.FindCommonAncestor(hc.headerDb, prevHeader, head, nodeCtx)
+	if err != nil {
+		return err
+	}
 	newHeader := types.CopyWorkObject(head)
 
 	// Delete each header and rollback state processor until common header
@@ -493,6 +498,11 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			if err != nil {
 				return err
 			}
+			trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(hc.headerDb, prevHeader.Hash())
+			if err != nil {
+				return err
+			}
+			sutxos = append(sutxos, trimmedUtxos...)
 			for _, sutxo := range sutxos {
 				rawdb.CreateUTXO(hc.headerDb, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
 			}
@@ -501,6 +511,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 				return err
 			}
 			for _, key := range utxoKeys {
+				if len(key) == rawdb.UtxoKeyWithDenominationLength {
+					key = key[:rawdb.UtxoKeyLength] // The last byte of the key is the denomination (but only in CreatedUTXOKeys)
+				}
 				hc.headerDb.Delete(key)
 			}
 		}

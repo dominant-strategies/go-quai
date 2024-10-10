@@ -18,6 +18,8 @@ package rawdb
 
 import (
 	"encoding/binary"
+	"fmt"
+	"sort"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -745,39 +747,44 @@ func IsGenesisHash(db ethdb.Reader, hash common.Hash) bool {
 }
 
 // FindCommonAncestor returns the last common ancestor of two block headers
-func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) *types.WorkObject {
+func FindCommonAncestor(db ethdb.Reader, a, b *types.WorkObject, nodeCtx int) (*types.WorkObject, error) {
 	for bn := b.NumberU64(nodeCtx); a.NumberU64(nodeCtx) > bn; {
 		a = ReadHeader(db, a.NumberU64(nodeCtx)-1, a.ParentHash(nodeCtx))
-		if IsGenesisHash(db, b.ParentHash(nodeCtx)) {
-			return nil
+		if IsGenesisHash(db, a.ParentHash(nodeCtx)) {
+			return a, nil
 		}
 		if a == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", a.ParentHash(nodeCtx).String())
 		}
 	}
 	for an := a.NumberU64(nodeCtx); an < b.NumberU64(nodeCtx); {
 		b = ReadHeader(db, b.NumberU64(nodeCtx)-1, b.ParentHash(nodeCtx))
 		if IsGenesisHash(db, b.ParentHash(nodeCtx)) {
-			return nil
+			return b, nil
 		}
 		if b == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", b.ParentHash(nodeCtx).String())
 		}
 	}
 	for a.Hash() != b.Hash() {
 		a = ReadHeader(db, a.NumberU64(nodeCtx)-1, a.ParentHash(nodeCtx))
 		if a == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", a.ParentHash(nodeCtx).String())
 		}
 		b = ReadHeader(db, b.NumberU64(nodeCtx)-1, b.ParentHash(nodeCtx))
 		if b == nil {
-			return nil
+			return nil, fmt.Errorf("unable to find hash %s", b.ParentHash(nodeCtx).String())
 		}
-		if IsGenesisHash(db, a.ParentHash(nodeCtx)) || IsGenesisHash(db, b.ParentHash(nodeCtx)) {
-			return nil
+		if IsGenesisHash(db, a.ParentHash(nodeCtx)) && IsGenesisHash(db, b.ParentHash(nodeCtx)) {
+			number := ReadHeaderNumber(db, a.ParentHash(nodeCtx))
+			header := ReadHeader(db, *number, a.ParentHash(nodeCtx))
+			if header == nil {
+				return nil, fmt.Errorf("unable to find hash %s", a.ParentHash(nodeCtx).String())
+			}
+			return header, nil
 		}
 	}
-	return a
+	return a, nil
 }
 
 // ReadHeadBlock returns the current canonical head block.
@@ -1325,7 +1332,11 @@ func DeleteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash) {
 }
 
 func WriteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash, createdUTXOKeys [][]byte) error {
-	protoKeys := &types.ProtoKeys{}
+	// Sort each key by the denomination in the key
+	sort.Slice(createdUTXOKeys, func(i, j int) bool {
+		return createdUTXOKeys[i][len(createdUTXOKeys[i])-1] < createdUTXOKeys[j][len(createdUTXOKeys[j])-1] // the last byte is the denomination
+	})
+	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(createdUTXOKeys))}
 
 	protoKeys.Keys = append(protoKeys.Keys, createdUTXOKeys...)
 
@@ -1352,5 +1363,188 @@ func ReadCreatedUTXOKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, erro
 func DeleteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	if err := db.Delete(createdUTXOsKey(blockHash)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete created utxo keys")
+	}
+}
+
+func ReadUTXOSetSize(db ethdb.Reader, blockHash common.Hash) uint64 {
+	data, _ := db.Get(utxoSetSizeKey(blockHash))
+	if len(data) == 0 {
+		return 0
+	}
+	return binary.BigEndian.Uint64(data)
+}
+
+func WriteUTXOSetSize(db ethdb.KeyValueWriter, blockHash common.Hash, size uint64) {
+	data := make([]byte, 8)
+	binary.BigEndian.PutUint64(data, size)
+	if err := db.Put(utxoSetSizeKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store utxo set size")
+	}
+}
+
+func DeleteUTXOSetSize(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(utxoSetSizeKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete utxo set size")
+	}
+}
+
+func ReadLastTrimmedBlock(db ethdb.Reader, blockHash common.Hash) uint64 {
+	data, _ := db.Get(lastTrimmedBlockKey(blockHash))
+	if len(data) == 0 {
+		return 0
+	}
+	return binary.BigEndian.Uint64(data)
+}
+
+func WriteLastTrimmedBlock(db ethdb.KeyValueWriter, blockHash common.Hash, blockHeight uint64) {
+	data := make([]byte, 8)
+	binary.BigEndian.PutUint64(data, blockHeight)
+	if err := db.Put(lastTrimmedBlockKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store last trimmed block")
+	}
+}
+
+func WritePrunedUTXOKeys(db ethdb.KeyValueWriter, blockHeight uint64, keys [][]byte) error {
+	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(keys))}
+	protoKeys.Keys = append(protoKeys.Keys, keys...)
+
+	data, err := proto.Marshal(protoKeys)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(prunedUTXOsKey(blockHeight), data)
+}
+
+func ReadPrunedUTXOKeys(db ethdb.Reader, blockHeight uint64) ([][]byte, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(prunedUTXOsKey(blockHeight))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeys := new(types.ProtoKeys)
+	if err := proto.Unmarshal(data, protoKeys); err != nil {
+		return nil, err
+	}
+	return protoKeys.Keys, nil
+}
+
+func ReadTrimmedUTXOs(db ethdb.Reader, blockHash common.Hash) ([]*types.SpentUtxoEntry, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(trimmedUTXOsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	protoSpentUTXOs := new(types.ProtoSpentUTXOs)
+	if err := proto.Unmarshal(data, protoSpentUTXOs); err != nil {
+		return nil, err
+	}
+
+	spentUTXOs := make([]*types.SpentUtxoEntry, 0, len(protoSpentUTXOs.Sutxos))
+	for _, utxoProto := range protoSpentUTXOs.Sutxos {
+		utxo := new(types.SpentUtxoEntry)
+		if err := utxo.ProtoDecode(utxoProto); err != nil {
+			return nil, err
+		}
+		spentUTXOs = append(spentUTXOs, utxo)
+	}
+	return spentUTXOs, nil
+}
+
+func WriteTrimmedUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXOs []*types.SpentUtxoEntry) error {
+	protoSpentUTXOs := &types.ProtoSpentUTXOs{}
+	for _, utxo := range spentUTXOs {
+		utxoProto, err := utxo.ProtoEncode()
+		if err != nil {
+			return err
+		}
+		protoSpentUTXOs.Sutxos = append(protoSpentUTXOs.Sutxos, utxoProto)
+	}
+	data, err := proto.Marshal(protoSpentUTXOs)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+
+	// And finally, store the data in the database under the appropriate key
+	return db.Put(trimmedUTXOsKey(blockHash), data)
+}
+
+func DeleteTrimmedUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(trimmedUTXOsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete trimmed utxos")
+	}
+}
+
+func ReadTrimDepths(db ethdb.Reader, blockHash common.Hash) (map[uint8]uint64, error) {
+	data, _ := db.Get(trimDepthsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoTrimDepths := new(types.ProtoTrimDepths)
+	if err := proto.Unmarshal(data, protoTrimDepths); err != nil {
+		return nil, err
+	}
+	trimDepths := make(map[uint8]uint64, len(protoTrimDepths.TrimDepths))
+	for denomination, depth := range protoTrimDepths.TrimDepths {
+		trimDepths[uint8(denomination)] = depth
+	}
+	return trimDepths, nil
+}
+
+func WriteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash, trimDepths map[uint8]uint64) error {
+	protoTrimDepths := &types.ProtoTrimDepths{TrimDepths: make(map[uint32]uint64, len(trimDepths))}
+	for denomination, depth := range trimDepths {
+		protoTrimDepths.TrimDepths[uint32(denomination)] = depth
+	}
+	data, err := proto.Marshal(protoTrimDepths)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(trimDepthsKey(blockHash), data)
+}
+
+func DeleteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(trimDepthsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete trim depths")
+	}
+}
+
+func ReadCollidingKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, error) {
+	data, _ := db.Get(collidingKeysKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeys := new(types.ProtoKeys)
+	if err := proto.Unmarshal(data, protoKeys); err != nil {
+		return nil, err
+	}
+	return protoKeys.Keys, nil
+}
+
+func WriteCollidingKeys(db ethdb.KeyValueWriter, blockHash common.Hash, keys [][]byte) error {
+	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(keys))}
+	protoKeys.Keys = append(protoKeys.Keys, keys...)
+
+	data, err := proto.Marshal(protoKeys)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(collidingKeysKey(blockHash), data)
+}
+
+func DeleteCollidingKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(collidingKeysKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete colliding keys")
+	}
+}
+
+func ReadAlreadyPruned(db ethdb.Reader, blockHash common.Hash) bool {
+	data, _ := db.Get(alreadyPrunedKey(blockHash))
+	return len(data) > 0
+}
+
+func WriteAlreadyPruned(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Put(alreadyPrunedKey(blockHash), []byte{1}); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store already pruned")
 	}
 }
