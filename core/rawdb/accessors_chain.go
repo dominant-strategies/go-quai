@@ -1277,6 +1277,37 @@ func WriteMultiSet(db ethdb.KeyValueWriter, blockHash common.Hash, multiSet *mul
 	}
 }
 
+func ReadTokenChoicesSet(db ethdb.Reader, blockHash common.Hash) *types.TokenChoiceSet {
+	data, _ := db.Get(tokenChoiceSetKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+	protoTokenChoiceSet := new(types.ProtoTokenChoiceSet)
+	if err := proto.Unmarshal(data, protoTokenChoiceSet); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to unmarshal tokenChoicesSample")
+	}
+
+	tokenChoiceSet := new(types.TokenChoiceSet)
+	if err := tokenChoiceSet.ProtoDecode(protoTokenChoiceSet); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to decode tokenChoicesSample")
+	}
+	return tokenChoiceSet
+}
+
+func WriteTokenChoicesSet(db ethdb.KeyValueWriter, blockHash common.Hash, tokenChoiceSet *types.TokenChoiceSet) {
+	protoTokenChoiceSet, err := tokenChoiceSet.ProtoEncode()
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to encode tokenChoicesSample")
+	}
+	data, err := proto.Marshal(protoTokenChoiceSet)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to marshal tokenChoicesSample")
+	}
+	if err := db.Put(tokenChoiceSetKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store tokenChoicesSample")
+	}
+}
+
 func WriteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXOs []*types.SpentUtxoEntry) error {
 	protoSpentUTXOs := &types.ProtoSpentUTXOs{}
 	for _, utxo := range spentUTXOs {

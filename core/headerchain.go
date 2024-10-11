@@ -333,6 +333,12 @@ func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 		}
 	}
 
+	// Calculate the update for the token choices
+	_, err = CalculateTokenChoicesSet(hc, header)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

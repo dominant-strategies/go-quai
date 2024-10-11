@@ -543,6 +543,26 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	}
 }
 
+// DecodeEtxData decodes the etx data from the canonical format.
+func (tx *Transaction) DecodeEtxData() (lock byte, primeTerminus common.Hash, difficulty *big.Int, err error) {
+	data := tx.inner.data()
+	// Ensure the data length is at least 33 bytes (1 byte for lock + 32 bytes for primeTerminus)
+	if len(data) < 33 {
+		return 0, common.Hash{}, nil, errors.New("data is too short to decode")
+	}
+
+	// Extract the lock (first byte)
+	lock = data[0]
+
+	// Extract the primeTerminus (next 32 bytes)
+	primeTerminus = common.BytesToHash(data[1:33])
+
+	// Extract the difficulty (remaining bytes)
+	difficulty = new(big.Int).SetBytes(data[33:])
+
+	return lock, primeTerminus, difficulty, nil
+}
+
 // setDecoded sets the inner transaction and size after decoding.
 func (tx *Transaction) setDecoded(inner TxData, size int) {
 	tx.inner = inner

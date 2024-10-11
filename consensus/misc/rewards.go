@@ -3,37 +3,64 @@ package misc
 import (
 	"math/big"
 
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/params"
+	"modernc.org/mathutil"
 )
 
-func CalculateReward(header *types.WorkObjectHeader) *big.Int {
+var (
+	big2e64        = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)
+	denominatorIts = new(big.Int).Mul(big.NewInt(1000000000000000000), big2e64)
+)
+
+func CalculateReward(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
 	if header.PrimaryCoinbase().IsInQiLedgerScope() {
 		return CalculateQiReward(header)
 	} else {
-		return CalculateQuaiReward(header)
+		return CalculateQuaiReward(primeTerminus, header)
 	}
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
-func QiToQuai(currentHeader *types.WorkObjectHeader, qiAmt *big.Int) *big.Int {
-	quaiPerQi := new(big.Int).Div(CalculateQuaiReward(currentHeader), CalculateQiReward(currentHeader))
-	return new(big.Int).Mul(qiAmt, quaiPerQi)
+func QiToQuai(primeTerminus *types.WorkObject, header *types.WorkObject, qiAmt *big.Int) *big.Int {
+	quaiByQi := new(big.Int).Mul(CalculateQuaiReward(primeTerminus, header.WorkObjectHeader()), qiAmt)
+	return new(big.Int).Div(quaiByQi, CalculateQiReward(header.WorkObjectHeader()))
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
-func QuaiToQi(currentHeader *types.WorkObjectHeader, quaiAmt *big.Int) *big.Int {
-	qiPerQuai := new(big.Int).Div(CalculateQiReward(currentHeader), CalculateQuaiReward(currentHeader))
-	return new(big.Int).Mul(quaiAmt, qiPerQuai)
+func QuaiToQi(primeTerminus *types.WorkObject, header *types.WorkObject, quaiAmt *big.Int) *big.Int {
+	qiByQuai := new(big.Int).Mul(CalculateQiReward(header.WorkObjectHeader()), quaiAmt)
+	return new(big.Int).Div(qiByQuai, CalculateQuaiReward(primeTerminus, header.WorkObjectHeader()))
 }
 
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
-func CalculateQuaiReward(header *types.WorkObjectHeader) *big.Int {
+// k_quai = state["K Quai"]
+// alpha = params["Controller Alpha Parameter"]
+// D = spaces[0]["Block Difficulty"]
+// D = sum(D) / len(D)
+// d1 = D
+// d2 = log(D, params["Quai Reward Base Parameter"])
+// x_d = d1 / d2
+// x_b_star = -spaces[1]["Beta"][0] / spaces[1]["Beta"][1]
+// k_quai += alpha * (x_b_star / x_d - 1) * k_quai
+// spaces = [{"K Qi": state["K Qi"], "K Quai": k_quai}, spaces[1]]
+// return spaces
+func CalculateKQuai(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
+	//kQuai := new(big.Int).Set(primeTerminus.ExchangeRate())
 	return big.NewInt(1000000)
+}
+
+func CalculateQuaiReward(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
+	kQuaiIts := new(big.Int).Set(primeTerminus.ExchangeRate())
+	numerator := new(big.Int).Mul(kQuaiIts, LogBig(header.Difficulty()))
+	return new(big.Int).Div(numerator, denominatorIts)
 }
 
 // CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
 func CalculateQiReward(header *types.WorkObjectHeader) *big.Int {
-	return big.NewInt(1000)
+	return new(big.Int).Mul(header.Difficulty(), params.OneOverKqi)
 }
 
 // CalculateExchangeRate based on the quai to qi and qi to quai exchange rates
@@ -70,4 +97,13 @@ func FindMinDenominations(reward *big.Int) map[uint8]uint64 {
 		}
 	}
 	return denominationCount
+}
+
+// IntrinsicLogEntropy returns the logarithm of the intrinsic entropy reduction of a PoW hash
+func LogBig(diff *big.Int) *big.Int {
+	d := new(big.Int).Div(common.Big2e256, diff)
+	c, m := mathutil.BinaryLog(d, consensus.MantBits)
+	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(consensus.MantBits), nil))
+	bigBits = new(big.Int).Add(bigBits, m)
+	return bigBits
 }
