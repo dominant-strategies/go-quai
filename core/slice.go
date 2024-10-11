@@ -473,6 +473,9 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 }
 
 func (sl *Slice) WriteBestPh(bestPh *types.WorkObject) {
+	if bestPh == nil {
+		return
+	}
 	bestPhCopy := types.CopyWorkObject(bestPh)
 	sl.bestPh.Store(bestPhCopy)
 }
@@ -1169,7 +1172,10 @@ func (sl *Slice) loadLastState() error {
 	if sl.ProcessingState() {
 		sl.miner.worker.LoadPendingBlockBody()
 	}
-	sl.WriteBestPh(rawdb.ReadBestPendingHeader(sl.sliceDb))
+	bestPh := rawdb.ReadBestPendingHeader(sl.sliceDb)
+	if bestPh != nil {
+		sl.WriteBestPh(bestPh)
+	}
 	return nil
 }
 
