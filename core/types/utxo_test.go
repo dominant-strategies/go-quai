@@ -16,6 +16,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/multiset"
 )
 
 type KeyAggVectors struct {
@@ -869,4 +870,24 @@ func TestTxInProtoEncode(t *testing.T) {
 		})
 	}
 
+}
+
+func TestMuHash(t *testing.T) {
+	muhash1 := multiset.New()
+	muhash2 := multiset.New()
+
+	data1 := []byte("hello")
+	data2 := []byte("world")
+
+	muhash1.Add(data1)
+	muhash1.Add(data2)
+
+	muhash2.Add(data2)
+	muhash2.Add(data1)
+
+	fmt.Printf("muhash1: %x\n", muhash1.Hash())
+	fmt.Printf("muhash2: %x\n", muhash2.Hash())
+	if muhash1.Hash() != muhash2.Hash() {
+		t.Fatalf("muhash mismatch!")
+	}
 }
