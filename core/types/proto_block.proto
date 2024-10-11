@@ -228,3 +228,22 @@ message ProtoKeys {
 message ProtoTrimDepths {
   map<uint32, uint64> trim_depths = 1;
 }
+
+message ProtoTokenChoiceSet {
+  repeated ProtoTokenChoiceArray token_choice_array = 1;
+}
+
+message ProtoTokenChoiceArray {
+  optional ProtoTokenChoice token_choices = 1;
+}
+
+message ProtoTokenChoice {
+  uint64 quai = 1;
+  uint64 qi = 2;
+  bytes diff = 3; // big.Int as bytes
+}
+
+message ProtoBetas {
+  bytes beta0 = 1;
+  bytes beta1 = 2;
+}

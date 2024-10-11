@@ -130,6 +130,7 @@ type TxData interface {
 	getEcdsaSignatureValues() (v, r, s *big.Int)
 	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
 	setTo(to common.Address)
+	setValue(value *big.Int)
 	parentHash() *common.Hash
 	mixHash() *common.Hash
 	workNonce() *BlockNonce
@@ -633,6 +634,10 @@ func (tx *Transaction) To() *common.Address {
 
 func (tx *Transaction) SetTo(addr common.Address) {
 	tx.inner.setTo(addr)
+}
+
+func (tx *Transaction) SetValue(value *big.Int) {
+	tx.inner.setValue(value)
 }
 
 // Cost returns gas * gasPrice + value.

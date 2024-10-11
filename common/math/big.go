@@ -292,3 +292,73 @@ func TwoToTheX(x *big.Float) *big.Float {
 
 	return result
 }
+
+// EToTheX computes the expression 1 + x + (1/2)*x^2 + (1/6)*x^3 + (1/24)*x^4 + (1/120)*x^5 + (1/720)*x^6 + (1/5040)*x^7
+func EToTheX(x *big.Float) *big.Float {
+	// Set the desired precision
+	prec := uint(16) // You can adjust the precision as needed
+
+	// Initialize constants with the specified precision
+	one := new(big.Float).SetPrec(prec).SetInt64(1)
+	half := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(6),
+	)
+	oneSixth := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(6),
+	)
+	oneTwentyFourth := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(24),
+	)
+	oneOneTwentieth := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(120),
+	)
+	oneOneSevenTwentieth := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(720),
+	)
+	oneFiveThousandFourtieth := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(5040),
+	)
+
+	// Compute x^2
+	x2 := new(big.Float).SetPrec(prec).Mul(x, x)
+
+	// Compute x^3
+	x3 := new(big.Float).SetPrec(prec).Mul(x2, x)
+
+	// Compute x^4
+	x4 := new(big.Float).SetPrec(prec).Mul(x3, x)
+
+	// Compute x^5
+	x5 := new(big.Float).SetPrec(prec).Mul(x4, x)
+
+	// Compute x^6
+	x6 := new(big.Float).SetPrec(prec).Mul(x5, x)
+
+	// Compute x^7
+	x7 := new(big.Float).SetPrec(prec).Mul(x6, x)
+
+	// Compute terms
+	term2 := new(big.Float).SetPrec(prec).Mul(half, x2)                     // 0.5 * x^2
+	term3 := new(big.Float).SetPrec(prec).Mul(oneSixth, x3)                 // (1/6) * x^3
+	term4 := new(big.Float).SetPrec(prec).Mul(oneTwentyFourth, x4)          // (1/24) * x^4
+	term5 := new(big.Float).SetPrec(prec).Mul(oneOneTwentieth, x5)          // (1/120) * x^5
+	term6 := new(big.Float).SetPrec(prec).Mul(oneOneSevenTwentieth, x6)     // (1/720) * x^6
+	term7 := new(big.Float).SetPrec(prec).Mul(oneFiveThousandFourtieth, x7) // (1/5040) * x^7
+
+	// Sum up the terms: result = 1 + x + term2 + term3 + term4
+	result := new(big.Float).SetPrec(prec).Add(one, x) // result = 1 + x
+	result.Add(result, term2)                          // result += term2
+	result.Add(result, term3)                          // result += term3
+	result.Add(result, term4)                          // result += term4
+	result.Add(result, term5)                          // result += term5
+	result.Add(result, term6)                          // result += term6
+	result.Add(result, term7)                          // result += term7
+
+	return result
+}

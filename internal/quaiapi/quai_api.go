@@ -488,13 +488,8 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*he
 	if txType {
 		return (*hexutil.Big)(s.b.CurrentBlock().BaseFee()), nil
 	} else {
-		// Use the prime terminus if we have it
-		lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminusHash())
-		if lastPrime == nil || err != nil {
-			lastPrime = header
-		}
 		quaiBaseFee := s.b.CurrentBlock().BaseFee()
-		qiBaseFee := misc.QuaiToQi(lastPrime.WorkObjectHeader(), quaiBaseFee)
+		qiBaseFee := misc.QuaiToQi(header, quaiBaseFee)
 		if qiBaseFee.Cmp(big.NewInt(0)) == 0 {
 			// Minimum base fee is 1 qit or smallest unit
 			return (*hexutil.Big)(types.Denominations[0]), nil
@@ -526,12 +521,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	// Calculate the base fee
 	quaiBaseFee := header.BaseFee()
 	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), quaiBaseFee)
-	// Use the prime terminus if we have it
-	lastPrime, err := s.b.HeaderByHash(ctx, header.PrimeTerminusHash())
-	if lastPrime == nil || err != nil {
-		lastPrime = header
-	}
-	feeInQi := misc.QuaiToQi(lastPrime.WorkObjectHeader(), feeInQuai)
+	feeInQi := misc.QuaiToQi(header, feeInQuai)
 	if feeInQi.Cmp(big.NewInt(0)) == 0 {
 		// Minimum fee is 1 qit or smallest unit
 		return (*hexutil.Big)(types.Denominations[0]), nil
@@ -828,8 +818,7 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHa
 		s.b.Logger().WithField("err", err).Error("Error calculating QiRateAtBlock")
 		return nil
 	}
-
-	return (*hexutil.Big)(misc.QiToQuai(header.WorkObjectHeader(), new(big.Int).SetUint64(qiAmount)))
+	return (*hexutil.Big)(misc.QiToQuai(header, new(big.Int).SetUint64(qiAmount)))
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
@@ -847,8 +836,7 @@ func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockNrOr
 		s.b.Logger().WithField("err", err).Error("Error calculating QuaiRateAtBlock")
 		return nil
 	}
-
-	return (*hexutil.Big)(misc.QuaiToQi(header.WorkObjectHeader(), new(big.Int).SetUint64(quaiAmount)))
+	return (*hexutil.Big)(misc.QuaiToQi(header, new(big.Int).SetUint64(quaiAmount)))
 }
 
 func (s *PublicBlockChainQuaiAPI) CalcOrder(ctx context.Context, raw hexutil.Bytes) (hexutil.Uint, error) {

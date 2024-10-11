@@ -131,3 +131,7 @@ func (tx *QuaiTx) isCoinbase() bool {
 func (tx *QuaiTx) setTo(to common.Address) {
 	tx.To = &to
 }
+
+func (tx *QuaiTx) setValue(value *big.Int) {
+	panic("quai TX does not have set value method")
+}
