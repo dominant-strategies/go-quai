@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -36,10 +37,10 @@ func sigmoid(z *big.Float) *big.Float {
 	expNegZ := math.EToTheX(negZ)
 
 	// Compute 1 + exp(-z)
-	denom := new(big.Float).Add(big.NewFloat(1.0), expNegZ)
+	denom := new(big.Float).Add(new(big.Float).SetInt(common.Big1), expNegZ)
 
 	// Compute 1 / (1 + exp(-z))
-	result := new(big.Float).Quo(big.NewFloat(1.0), denom)
+	result := new(big.Float).Quo(new(big.Float).SetInt(common.Big1), denom)
 
 	return result
 }
@@ -65,18 +66,24 @@ func (lr *LogisticRegression) PredictLabel(x *big.Float) int {
 }
 
 // Train trains the logistic regression model using gradient descent.
-func (lr *LogisticRegression) Train(x []*big.Float, y []*big.Float) {
+func (lr *LogisticRegression) Train(x []*big.Int, y []*big.Int) {
 	nSamples := len(y)
+
+	var xfloat, yfloat []*big.Float
+	for i := 0; i < nSamples; i++ {
+		xfloat = append(xfloat, new(big.Float).SetInt(x[i]))
+		yfloat = append(yfloat, new(big.Float).SetInt(y[i]))
+	}
 
 	for epoch := 0; epoch < c_epochLength; epoch++ {
 		// Initialize gradients
-		dw := big.NewFloat(0.0)
-		db := big.NewFloat(0.0)
+		dw := new(big.Float).SetInt(common.Big0)
+		db := new(big.Float).SetInt(common.Big0)
 
 		// Compute gradients
 		for i := 0; i < nSamples; i++ {
-			xi := x[i]
-			yi := y[i]
+			xi := xfloat[i]
+			yi := yfloat[i]
 			pred := lr.Predict(xi)
 			error := new(big.Float).Sub(pred, yi)
 			dwTerm := new(big.Float).Mul(error, xi)
@@ -84,7 +91,7 @@ func (lr *LogisticRegression) Train(x []*big.Float, y []*big.Float) {
 			db.Add(db, error)
 		}
 
-		nSamplesFloat := big.NewFloat(float64(nSamples))
+		nSamplesFloat := new(big.Float).SetInt(big.NewInt(int64(nSamples))) //big.NewFloat(float64(nSamples))
 
 		// Compute gradient averages
 		dw.Quo(dw, nSamplesFloat)
