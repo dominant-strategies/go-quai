@@ -187,6 +187,8 @@ var (
 	// These numbers should be "equivalent" to the initial conversion rate
 	QuaiToQiConversionBase = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
 	QiToQuaiConversionBase = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
+
+	MaxTimeDiffBetweenBlocks int64 = 100 // Max time difference between the blocks to 100 secs
 )
 
 func init() {

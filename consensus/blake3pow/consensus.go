@@ -531,9 +531,15 @@ func (blake3pow *Blake3pow) CalcDifficulty(chain consensus.ChainHeaderReader, pa
 	bigTime := new(big.Int).SetUint64(time)
 	bigParentTime := new(big.Int).SetUint64(parentOfParent.Time())
 
+	// Bound the time diff so that the difficulty doesnt have huge discontinuity
+	// in the values
+	timeDiff := new(big.Int).Sub(bigTime, bigParentTime)
+	if timeDiff.Cmp(big.NewInt(params.MaxTimeDiffBetweenBlocks)) > 0 {
+		timeDiff = big.NewInt(params.MaxTimeDiffBetweenBlocks)
+	}
+
 	// holds intermediate values to make the algo easier to read & audit
-	x := new(big.Int)
-	x.Sub(bigTime, bigParentTime)
+	x := new(big.Int).Set(timeDiff)
 	x.Sub(blake3pow.config.DurationLimit, x)
 	x.Mul(x, parent.Difficulty())
 	k, _ := mathutil.BinaryLog(new(big.Int).Set(parent.Difficulty()), 64)
