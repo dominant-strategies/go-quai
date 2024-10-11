@@ -17,6 +17,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/common/logistic"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -1507,6 +1508,15 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			return nil, err
 		}
 
+		// Do the regression to calculate new betas
+		diff, tokenChoice := SerializeTokenChoiceSet(updatedTokenChoiceSet)
+		r := logistic.NewLogisticRegression()
+		r.Train(diff, tokenChoice)
+		primeTerminus := w.hc.GetPrimeTerminus(parent)
+		if primeTerminus == nil {
+			return nil, errors.New("prime terminus not found")
+		}
+		misc.CalculateKQuai(primeTerminus, parent.WorkObjectHeader(), r.BigBeta0(), r.BigBeta1())
 		fmt.Println("Updated Token Choice Set len: ", len(updatedTokenChoiceSet))
 		// Update the exchange rate
 		qiToQuai := new(big.Int).Set(parent.Header().QiToQuai())

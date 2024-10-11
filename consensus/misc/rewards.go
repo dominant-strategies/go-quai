@@ -47,9 +47,19 @@ func QuaiToQi(primeTerminus *types.WorkObject, header *types.WorkObject, quaiAmt
 // k_quai += alpha * (x_b_star / x_d - 1) * k_quai
 // spaces = [{"K Qi": state["K Qi"], "K Quai": k_quai}, spaces[1]]
 // return spaces
-func CalculateKQuai(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
-	//kQuai := new(big.Int).Set(primeTerminus.ExchangeRate())
-	return big.NewInt(1000000)
+func CalculateKQuai(primeTerminus *types.WorkObject, header *types.WorkObjectHeader, beta0 *big.Int, beta1 *big.Int) *big.Int {
+	kQuai := new(big.Int).Set(primeTerminus.ExchangeRate()) // in Its
+	d2 := LogBig(header.Difficulty())
+	num := new(big.Int).Mul(beta0, d2)
+	negnum := new(big.Int).Neg(num)
+	denom := new(big.Int).Mul(beta1, header.Difficulty())
+	frac := new(big.Int).Quo(negnum, denom)
+	sub := new(big.Int).Sub(frac, common.Big2e64)
+	bykQuai := new(big.Int).Mul(sub, kQuai)
+	divisor := new(big.Int).Mul(params.OneOverAlpha, common.Big2e64)
+	final := new(big.Int).Quo(bykQuai, divisor)
+
+	return final
 }
 
 func CalculateQuaiReward(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {

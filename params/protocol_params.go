@@ -189,6 +189,7 @@ var (
 	QiToQuaiConversionBase         = big.NewInt(10000000)      // Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
 	OneOverKqi                     = big.NewInt(3000000000000) // This is the initial exchange rate in Qi per Quai in Its/Qit
 	MaxTimeDiffBetweenBlocks int64 = 100                       // Max time difference between the blocks to 100 secs
+	OneOverAlpha                   = big.NewInt(200)           // The alpha value for the quai to qi conversion
 
 )
 

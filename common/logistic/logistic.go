@@ -117,6 +117,20 @@ func (lr *LogisticRegression) Beta1() *big.Float {
 	return new(big.Float).Set(lr.beta1)
 }
 
+// BigBeta0 returns the model's bias (intercept) term.
+func (lr *LogisticRegression) BigBeta0() *big.Int {
+	bigBeta := new(big.Float).Mul(lr.beta0, new(big.Float).SetInt(common.Big2e64))
+	bigBetaInt, _ := bigBeta.Int(nil)
+	return bigBetaInt
+}
+
+// BigBeta1 returns the model's weight (slope) term.
+func (lr *LogisticRegression) BigBeta1() *big.Int {
+	bigBeta := new(big.Float).Mul(lr.beta1, new(big.Float).SetInt(common.Big2e64))
+	bigBetaInt, _ := bigBeta.Int(nil)
+	return bigBetaInt
+}
+
 // Plot the given trained logistic regression values with Beta0 and Beta1
 func (lr *LogisticRegression) PlotSigmoid(xValues, yValues []float64) error {
 	// Create a new plot
