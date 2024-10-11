@@ -103,3 +103,22 @@ func CalculateTokenChoicesSet(hc *HeaderChain, parent *types.WorkObject) (*types
 }
 
 // serialize tokenChoiceSet
+func SerializeTokenChoiceSet(tokenChoiceSet *types.TokenChoiceSet) ([]*big.Int, []*big.Int) {
+	var diff []*big.Int
+	var token []*big.Int
+
+	for _, tokenChoices := range tokenChoiceSet {
+		for _, choice := range tokenChoices {
+			for i := 0; i < int(choice.Quai); i++ {
+				diff = append(diff, choice.Diff)
+				token = append(token, big.NewInt(0))
+			}
+			for i := 0; i < int(choice.Qi); i++ {
+				diff = append(diff, choice.Diff)
+				token = append(token, big.NewInt(1))
+			}
+		}
+	}
+
+	return diff, token
+}
