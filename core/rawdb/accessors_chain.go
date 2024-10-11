@@ -19,6 +19,7 @@ package rawdb
 import (
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"sort"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -1281,6 +1282,89 @@ func WriteMultiSet(db ethdb.KeyValueWriter, blockHash common.Hash, multiSet *mul
 	data := multiSet.Serialize()
 	if err := db.Put(multiSetKey(blockHash), data); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store multiSet")
+	}
+}
+
+func ReadTokenChoicesSet(db ethdb.Reader, blockHash common.Hash) *types.TokenChoiceSet {
+	data, _ := db.Get(tokenChoiceSetKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+	protoTokenChoiceSet := new(types.ProtoTokenChoiceSet)
+	if err := proto.Unmarshal(data, protoTokenChoiceSet); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to unmarshal tokenChoicesSample")
+		return nil
+	}
+
+	tokenChoiceSet := new(types.TokenChoiceSet)
+	if err := tokenChoiceSet.ProtoDecode(protoTokenChoiceSet); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to decode tokenChoicesSample")
+		return nil
+	}
+	return tokenChoiceSet
+}
+
+func WriteTokenChoicesSet(db ethdb.KeyValueWriter, blockHash common.Hash, tokenChoiceSet *types.TokenChoiceSet) error {
+	protoTokenChoiceSet, err := tokenChoiceSet.ProtoEncode()
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to encode tokenChoicesSample")
+		return err
+	}
+	data, err := proto.Marshal(protoTokenChoiceSet)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to marshal tokenChoicesSample")
+		return err
+	}
+	if err := db.Put(tokenChoiceSetKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store tokenChoicesSample")
+		return err
+	}
+	return nil
+}
+
+func DeleteTokenChoicesSet(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(tokenChoiceSetKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete token choices set key")
+	}
+}
+
+func ReadBetas(db ethdb.KeyValueReader, blockHash common.Hash) *types.Betas {
+	data, _ := db.Get(betasKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+	protoBetas := new(types.ProtoBetas)
+	if err := proto.Unmarshal(data, protoBetas); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to unmarshal proto betas")
+		return nil
+	}
+
+	betas := new(types.Betas)
+	if err := betas.ProtoDecode(protoBetas); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to decode betas")
+		return nil
+	}
+	return betas
+}
+
+func WriteBetas(db ethdb.KeyValueWriter, blockHash common.Hash, beta0, beta1 *big.Float) error {
+	protoBetas, err := types.NewBetas(beta0, beta1).ProtoEncode()
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoBetas)
+	if err != nil {
+		return err
+	}
+	if err := db.Put(betasKey(blockHash), data); err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteBetas(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(betasKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete betas")
 	}
 }
 

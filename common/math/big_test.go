@@ -384,3 +384,49 @@ func TestTwoToTheX(t *testing.T) {
 		}
 	}
 }
+
+func TestEtoTheX(t *testing.T) {
+	tests := []struct {
+		x      *big.Float
+		actual *big.Float
+	}{
+		{
+			x:      big.NewFloat(1.625),
+			actual: big.NewFloat(5.0784190371800815),
+		},
+		{
+			x:      big.NewFloat(0.765),
+			actual: big.NewFloat(2.1489943746552203),
+		},
+		{
+			x:      big.NewFloat(1.685),
+			actual: big.NewFloat(5.392450932349507),
+		},
+		{
+			x:      big.NewFloat(2.0),
+			actual: big.NewFloat(7.38905609893065),
+		},
+		{
+			x:      big.NewFloat(5.5),
+			actual: big.NewFloat(244.69193226422038),
+		},
+		{
+			x:      big.NewFloat(-0.00000045456),
+			actual: big.NewFloat(0.9999999999),
+		},
+		{
+			x:      big.NewFloat(0.0),
+			actual: big.NewFloat(1.0), // e^0 = 1
+		},
+	}
+
+	for _, test := range tests {
+		result := EToTheX(test.x)
+		lowerBound := new(big.Float).Mul(test.actual, big.NewFloat(0.60))
+		upperBound := new(big.Float).Mul(test.actual, big.NewFloat(1.40))
+
+		if result.Cmp(lowerBound) < 0 || result.Cmp(upperBound) > 0 {
+			t.Errorf("TwoToTheX(%s) = %g, want %g within 40%%", test.x.Text('f', -1), result, test.actual)
+		}
+	}
+}

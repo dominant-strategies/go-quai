@@ -85,6 +85,9 @@ var (
 	processedStatePrefix    = []byte("ps")    // processedStatePrefix + hash -> boolean
 	multiSetPrefix          = []byte("ms")    // multiSetPrefix + hash -> multiset
 	UtxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
+	tokenChoicePrefix       = []byte("tc")    // tokenChoicePrefix + hash -> tokenChoices
+	betasPrefix             = []byte("betas") // tokenChoicePrefix + hash -> tokenChoices
+	utxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix        = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	trimmedUTXOsPrefix      = []byte("tutxo") // trimmedUTXOsPrefix + hash -> []types.SpentTxOut
 	trimDepthsPrefix        = []byte("td")    // trimDepthsPrefix + hash -> uint64
@@ -369,4 +372,12 @@ func collidingKeysKey(hash common.Hash) []byte {
 
 func alreadyPrunedKey(hash common.Hash) []byte {
 	return append(prunedPrefix, hash.Bytes()...)
+}
+
+func tokenChoiceSetKey(hash common.Hash) []byte {
+	return append(tokenChoicePrefix, hash.Bytes()...)
+}
+
+func betasKey(hash common.Hash) []byte {
+	return append(betasPrefix, hash.Bytes()...)
 }

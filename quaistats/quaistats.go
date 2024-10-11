@@ -1266,17 +1266,23 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 			woCount += 1
 		}
 	}
+	parent, err := s.backend.(fullNodeBackend).BlockByHash(context.Background(), block.ParentHash(common.ZONE_CTX))
+	if err != nil {
+		s.backend.Logger().WithField("err", err).Error("Failed to get prime terminus block")
+		return nil
+	}
+
 	qiType := block.PrimaryCoinbase().IsInQiLedgerScope()
 	difficulty := block.Difficulty().String()
-	quaiPerQi := misc.QiToQuai(block.WorkObjectHeader(), big.NewInt(1)).String()
+	quaiPerQi := misc.QiToQuai(parent, big.NewInt(1)).String()
 	var quaiReward *big.Int
 	var qiReward *big.Int
 	if qiType {
-		qiReward = misc.CalculateReward(block.WorkObjectHeader())
-		quaiReward = misc.QiToQuai(block.WorkObjectHeader(), qiReward)
+		qiReward = misc.CalculateReward(parent, block.WorkObjectHeader())
+		quaiReward = misc.QiToQuai(parent, qiReward)
 	} else {
-		quaiReward = misc.CalculateReward(block.WorkObjectHeader())
-		qiReward = misc.QuaiToQi(block.WorkObjectHeader(), quaiReward)
+		quaiReward = misc.CalculateReward(parent, block.WorkObjectHeader())
+		qiReward = misc.QuaiToQi(parent, quaiReward)
 	}
 
 	// Assemble and return the block stats
