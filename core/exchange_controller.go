@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -84,10 +85,9 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject, etxs typ
 
 	tokenChoices := make(map[string]struct{ Quai, Qi int })
 
+	diff := block.Difficulty()
 	for _, tx := range etxs {
 		if types.IsCoinBaseTx(tx) {
-
-			diff := block.Difficulty()
 
 			diffKey := diff.String()
 
@@ -105,6 +105,30 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject, etxs typ
 				} else if tx.ETXSender().IsInQuaiLedgerScope() {
 					quai = 1
 				}
+				tokenChoices[diffKey] = struct{ Quai, Qi int }{
+					Quai: quai,
+					Qi:   qi,
+				}
+			}
+		} else if types.IsConversionTx(tx) {
+			// Convert diff (big.Int) to a string key
+			diffKey := diff.String()
+
+			if entry, exists := tokenChoices[diffKey]; exists {
+				if tx.ETXSender().IsInQiLedgerScope() {
+					entry.Quai += NormalizeConversionValueToBlock(block, tx.Value(), false)
+				} else if tx.ETXSender().IsInQuaiLedgerScope() {
+					entry.Qi += NormalizeConversionValueToBlock(block, tx.Value(), true)
+				}
+				tokenChoices[diffKey] = entry
+			} else {
+				var quai, qi int
+				if tx.ETXSender().IsInQiLedgerScope() {
+					quai += NormalizeConversionValueToBlock(block, tx.Value(), false)
+				} else if tx.ETXSender().IsInQuaiLedgerScope() {
+					qi += NormalizeConversionValueToBlock(block, tx.Value(), true)
+				}
+
 				tokenChoices[diffKey] = struct{ Quai, Qi int }{
 					Quai: quai,
 					Qi:   qi,
@@ -146,6 +170,19 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject, etxs typ
 	}
 
 	return newTokenChoiceSet, nil
+}
+
+func NormalizeConversionValueToBlock(block *types.WorkObject, value *big.Int, chooseQi bool) int {
+	var reward *big.Int
+	if chooseQi {
+		reward = misc.CalculateQiReward(block.WorkObjectHeader())
+	} else {
+		reward = misc.CalculateQuaiReward(block)
+	}
+
+	numBlocks := int(new(big.Int).Quo(value, reward).Int64())
+	fmt.Printf("numBlocks: %v\n", numBlocks)
+	return numBlocks
 }
 
 // serialize tokenChoiceSet
