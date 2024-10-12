@@ -47,8 +47,8 @@ func QuaiToQi(primeTerminus *types.WorkObject, header *types.WorkObject, quaiAmt
 // k_quai += alpha * (x_b_star / x_d - 1) * k_quai
 // spaces = [{"K Qi": state["K Qi"], "K Quai": k_quai}, spaces[1]]
 // return spaces
-func CalculateKQuai(primeTerminus *types.WorkObject, header *types.WorkObjectHeader, beta0 *big.Int, beta1 *big.Int) *big.Int {
-	kQuai := new(big.Int).Set(primeTerminus.ExchangeRate()) // in Its
+func CalculateKQuai(header *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *big.Int {
+	kQuai := new(big.Int).Set(header.ExchangeRate()) // in Its
 	d2 := LogBig(header.Difficulty())
 	num := new(big.Int).Mul(beta0, d2)
 	negnum := new(big.Int).Neg(num)

@@ -1516,7 +1516,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		if primeTerminus == nil {
 			return nil, errors.New("prime terminus not found")
 		}
-		misc.CalculateKQuai(primeTerminus, parent.WorkObjectHeader(), r.BigBeta0(), r.BigBeta1())
+		misc.CalculateKQuai(parent, r.BigBeta0(), r.BigBeta1())
 		fmt.Println("Updated Token Choice Set len: ", len(updatedTokenChoiceSet))
 		// Update the exchange rate
 		qiToQuai := new(big.Int).Set(parent.Header().QiToQuai())
