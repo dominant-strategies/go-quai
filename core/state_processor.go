@@ -1398,7 +1398,7 @@ func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, pare
 			}
 		}
 		// Convert Qi to Quai
-		msg.SetValue(misc.QiToQuai(primeTerminus, header, tx.Value()))
+		msg.SetValue(misc.QiToQuai(primeTerminus, parent, tx.Value()))
 		msg.SetData([]byte{}) // data is not used in conversion
 	}
 	// Create a new context to be used in the EVM environment

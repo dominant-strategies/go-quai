@@ -576,7 +576,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		// If the primary coinbase belongs to a ledger and there is no fees
 		// for other ledger, there is no etxs emitted for the other ledger
 		if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
-			coinbaseReward := misc.CalculateReward(primeTerminus, work.wo.WorkObjectHeader())
+			coinbaseReward := misc.CalculateReward(primeTerminus, block.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.quaiFees)
 			data := []byte{defaultCoinbaseLockup}
 			data = append(data, block.PrimeTerminusHash().Bytes()...)
@@ -588,7 +588,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		} else if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
-			coinbaseReward := misc.CalculateReward(primeTerminus, work.wo.WorkObjectHeader())
+			coinbaseReward := misc.CalculateReward(primeTerminus, block.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.utxoFees)
 			data := []byte{defaultCoinbaseLockup}
 			data = append(data, block.PrimeTerminusHash().Bytes()...)
