@@ -767,6 +767,8 @@ func (sl *Slice) init() error {
 			genesisTermini.SetDomTerminiAtIndex(genesisHash, i)
 		}
 
+		rawdb.WriteBetas(sl.sliceDb, genesisHash, big.NewFloat(0.5), big.NewFloat(0.00083222))
+
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 		rawdb.WriteManifest(sl.sliceDb, genesisHash, types.BlockManifest{genesisHash})
 

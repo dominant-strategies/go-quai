@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"encoding/binary"
+	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -1312,6 +1313,46 @@ func WriteTokenChoicesSet(db ethdb.KeyValueWriter, blockHash common.Hash, tokenC
 		return err
 	}
 	return nil
+}
+
+func ReadBetas(db ethdb.KeyValueReader, blockHash common.Hash) *types.Betas {
+	data, _ := db.Get(betasKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+	protoBetas := new(types.ProtoBetas)
+	if err := proto.Unmarshal(data, protoBetas); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to unmarshal proto betas")
+		return nil
+	}
+
+	betas := new(types.Betas)
+	if err := betas.ProtoDecode(protoBetas); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to decode betas")
+		return nil
+	}
+	return betas
+}
+
+func WriteBetas(db ethdb.KeyValueWriter, blockHash common.Hash, beta0, beta1 *big.Float) error {
+	protoBetas, err := types.NewBetas(beta0, beta1).ProtoEncode()
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoBetas)
+	if err != nil {
+		return err
+	}
+	if err := db.Put(betasKey(blockHash), data); err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteBetas(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(betasKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete proto utxos")
+	}
 }
 
 func WriteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXOs []*types.SpentUtxoEntry) error {

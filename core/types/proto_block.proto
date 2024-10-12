@@ -238,3 +238,8 @@ message ProtoTokenChoice {
   uint64 qi = 2;
   bytes diff = 3; // big.Int as bytes
 }
+
+message ProtoBetas {
+  bytes beta0 = 1;
+  bytes beta1 = 2;
+}

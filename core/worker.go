@@ -17,7 +17,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
-	"github.com/dominant-strategies/go-quai/common/logistic"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -1499,24 +1498,16 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	// Calculate the new Qi/Quai exchange rate
 	if nodeCtx == common.PRIME_CTX {
 
-		// convert map to a slice
-		updatedTokenChoiceSet, err := CalculateTokenChoicesSet(w.hc, parent)
-		if err != nil {
-			return nil, err
+		var exchangeRate *big.Int
+		if w.hc.IsGenesisHash(parent.Hash()) {
+			exchangeRate = params.ExchangeRate
+		} else {
+			exchangeRate, err = CalculateExchangeRate(w.hc, parent)
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		// Do the regression to calculate new betas
-		diff, tokenChoice := SerializeTokenChoiceSet(updatedTokenChoiceSet)
-		var exchangeRate *big.Int
-		if len(tokenChoice) != 0 {
-			r := logistic.NewLogisticRegression()
-			// If parent is genesis, there is nothing to train
-			exchangeRate = misc.CalculateKQuai(types.CopyWorkObject(parent), r.BigBeta0(), r.BigBeta1())
-			r.Train(diff, tokenChoice)
-		} else {
-			exchangeRate = params.ExchangeRate
-		}
-		fmt.Println("Updated Token Choice Set len: ", len(updatedTokenChoiceSet))
 		// Update the exchange rate
 		qiToQuai := new(big.Int).Set(parent.Header().QiToQuai())
 		quaiToQi := new(big.Int).Set(parent.Header().QuaiToQi())

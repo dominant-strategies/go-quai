@@ -1,9 +1,12 @@
 package core
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/logistic"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
@@ -27,6 +30,49 @@ func ConvertMapToSlice(tokenChoicesMap map[string]struct{ Quai, Qi int }) []type
 	}
 
 	return result
+}
+
+func CalculateExchangeRate(hc *HeaderChain, parent *types.WorkObject) (*big.Int, error) {
+	// convert map to a slice
+	updatedTokenChoiceSet, err := CalculateTokenChoicesSet(hc, parent)
+	if err != nil {
+		return nil, err
+	}
+
+	// Do the regression to calculate new betas
+	diff, tokenChoice := SerializeTokenChoiceSet(updatedTokenChoiceSet)
+	var exchangeRate *big.Int
+	// Read the parents beta values
+	betas := rawdb.ReadBetas(hc.headerDb, parent.ParentHash(common.PRIME_CTX))
+	if betas == nil {
+		return nil, errors.New("could not find the betas stored for parent hash")
+	}
+	if len(tokenChoice) != 0 {
+		r := logistic.NewLogisticRegression(betas.Beta0(), betas.Beta1())
+		// If parent is genesis, there is nothing to train
+		exchangeRate = misc.CalculateKQuai(types.CopyWorkObject(parent), r.BigBeta0(), r.BigBeta1())
+		r.Train(diff, tokenChoice)
+
+		rawdb.WriteBetas(hc.headerDb, parent.Hash(), r.Beta0(), r.Beta1())
+
+		// Plotting for testing purpose
+		xFloat := make([]float64, len(diff))
+		for i, x := range diff {
+			xFloat[i] = float64(x.Uint64())
+		}
+		yFloat := make([]float64, len(tokenChoice))
+		for i, y := range tokenChoice {
+			yFloat[i] = float64(y.Uint64())
+		}
+		r.PlotSigmoid(xFloat, yFloat, parent.NumberU64(common.PRIME_CTX))
+	} else {
+
+		rawdb.WriteBetas(hc.headerDb, parent.Hash(), betas.Beta0(), betas.Beta1())
+
+		exchangeRate = parent.ExchangeRate()
+	}
+
+	return exchangeRate, nil
 }
 
 func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject) (types.TokenChoiceSet, error) {

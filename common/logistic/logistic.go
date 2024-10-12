@@ -23,7 +23,7 @@ type LogisticRegression struct {
 }
 
 // NewLogisticRegression initializes a new LogisticRegression model.
-func NewLogisticRegression() *LogisticRegression {
+func NewLogisticRegression(beta0, beta1 *big.Float) *LogisticRegression {
 	return &LogisticRegression{
 		beta0: big.NewFloat(0.1),
 		beta1: big.NewFloat(0.000081),
@@ -122,7 +122,7 @@ func (lr *LogisticRegression) BigBeta1() *big.Int {
 }
 
 // Plot the given trained logistic regression values with Beta0 and Beta1
-func (lr *LogisticRegression) PlotSigmoid(xValues, yValues []float64) error {
+func (lr *LogisticRegression) PlotSigmoid(xValues, yValues []float64, blockNumber uint64) error {
 	// Create a new plot
 	p := plot.New()
 
@@ -176,7 +176,7 @@ func (lr *LogisticRegression) PlotSigmoid(xValues, yValues []float64) error {
 	p.Add(sigmoidFunc)
 
 	// Save the plot as a PNG image
-	if err := p.Save(6*vg.Inch, 4*vg.Inch, "sigmoid.png"); err != nil {
+	if err := p.Save(6*vg.Inch, 4*vg.Inch, fmt.Sprintf("sigmoid-%d.png", blockNumber)); err != nil {
 		return err
 	}
 

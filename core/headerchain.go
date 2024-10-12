@@ -335,9 +335,21 @@ func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 
 	if nodeCtx == common.PRIME_CTX {
 		// Calculate the update for the token choices
-		_, err = CalculateTokenChoicesSet(hc, header)
-		if err != nil {
-			return err
+		var exchangeRate *big.Int
+		if hc.IsGenesisHash(header.ParentHash(common.PRIME_CTX)) {
+			exchangeRate = params.ExchangeRate
+		} else {
+			parent := hc.GetBlockByHash(header.ParentHash(common.PRIME_CTX))
+			if parent == nil {
+				return errors.New("parent not found in the AppendHeader")
+			}
+			exchangeRate, err = CalculateExchangeRate(hc, parent)
+			if err != nil {
+				return err
+			}
+		}
+		if header.ExchangeRate().Cmp(exchangeRate) != 0 {
+			return fmt.Errorf("invalid exchange rate: expected %s, have %s", exchangeRate, header.ExchangeRate())
 		}
 	}
 

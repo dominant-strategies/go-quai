@@ -82,6 +82,7 @@ var (
 	processedStatePrefix    = []byte("ps")    // processedStatePrefix + hash -> boolean
 	multiSetPrefix          = []byte("ms")    // multiSetPrefix + hash -> multiset
 	tokenChoicePrefix       = []byte("tc")    // tokenChoicePrefix + hash -> tokenChoices
+	betasPrefix             = []byte("betas") // tokenChoicePrefix + hash -> tokenChoices
 	utxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix        = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	createdUTXOsPrefix      = []byte("cutxo") // createdUTXOsPrefix + hash -> []common.Hash
@@ -318,4 +319,8 @@ func multiSetKey(hash common.Hash) []byte {
 
 func tokenChoiceSetKey(hash common.Hash) []byte {
 	return append(tokenChoicePrefix, hash.Bytes()...)
+}
+
+func betasKey(hash common.Hash) []byte {
+	return append(betasPrefix, hash.Bytes()...)
 }
