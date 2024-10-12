@@ -691,7 +691,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 	for denomination, depth := range trimDepths {
-		if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth+1 {
+		if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth+params.MinimumTrimDepth {
 			wg.Add(1)
 			go func(denomination uint8, depth uint64) {
 				defer func() {
@@ -735,7 +735,9 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 		}()
 	}
 	wg.Wait()
-	blake3pow.logger.Infof("Trimmed %d UTXOs from db in %s", len(trimmedUtxos), common.PrettyDuration(time.Since(start)))
+	if len(trimmedUtxos) > 0 {
+		blake3pow.logger.Infof("Trimmed %d UTXOs from db in %s", len(trimmedUtxos), common.PrettyDuration(time.Since(start)))
+	}
 	if !setRoots {
 		rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
 		if len(newCollidingKeys) > 0 {
