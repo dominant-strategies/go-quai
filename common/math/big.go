@@ -299,27 +299,30 @@ func EToTheX(x *big.Float) *big.Float {
 	prec := uint(16) // You can adjust the precision as needed
 
 	// Initialize constants with the specified precision
-	one := new(big.Float).SetPrec(prec).SetFloat64(1.0)
-	half := new(big.Float).SetPrec(prec).SetFloat64(0.5)
+	one := new(big.Float).SetPrec(prec).SetInt64(1)
+	half := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(6),
+	)
 	oneSixth := new(big.Float).SetPrec(prec).Quo(
-		new(big.Float).SetPrec(prec).SetFloat64(1.0),
-		new(big.Float).SetPrec(prec).SetFloat64(6.0),
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(6),
 	)
 	oneTwentyFourth := new(big.Float).SetPrec(prec).Quo(
-		new(big.Float).SetPrec(prec).SetFloat64(1.0),
-		new(big.Float).SetPrec(prec).SetFloat64(24.0),
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(24),
 	)
 	oneOneTwentieth := new(big.Float).SetPrec(prec).Quo(
-		new(big.Float).SetPrec(prec).SetFloat64(1.0),
-		new(big.Float).SetPrec(prec).SetFloat64(120.0),
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(120),
 	)
 	oneOneSevenTwentieth := new(big.Float).SetPrec(prec).Quo(
-		new(big.Float).SetPrec(prec).SetFloat64(1.0),
-		new(big.Float).SetPrec(prec).SetFloat64(720.0),
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(720),
 	)
 	oneFiveThousandFourtieth := new(big.Float).SetPrec(prec).Quo(
-		new(big.Float).SetPrec(prec).SetFloat64(1.0),
-		new(big.Float).SetPrec(prec).SetFloat64(5040.0),
+		new(big.Float).SetPrec(prec).SetInt64(1),
+		new(big.Float).SetPrec(prec).SetInt64(5040),
 	)
 
 	// Compute x^2
