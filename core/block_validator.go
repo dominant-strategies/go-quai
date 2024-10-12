@@ -181,6 +181,8 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 	}
 	newBlockIntrinsic := v.engine.IntrinsicLogEntropy(powhash)
 
+	log.Global.Error("current header hash", v.hc.CurrentHeader().Hash())
+
 	// cannot have a pow filter when the current header is genesis
 	if v.hc.IsGenesisHash(v.hc.CurrentHeader().Hash()) {
 		return pubsub.ValidationAccept

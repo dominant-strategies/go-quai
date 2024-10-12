@@ -333,10 +333,12 @@ func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 		}
 	}
 
-	// Calculate the update for the token choices
-	_, err = CalculateTokenChoicesSet(hc, header)
-	if err != nil {
-		return err
+	if nodeCtx == common.PRIME_CTX {
+		// Calculate the update for the token choices
+		_, err = CalculateTokenChoicesSet(hc, header)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -439,6 +441,8 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 
 // SetCurrentHeader sets the current header based on the POEM choice
 func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
+
+	log.Global.Error("set current header hash inside", head.Hash())
 	nodeCtx := hc.NodeCtx()
 
 	prevHeader := hc.CurrentHeader()
@@ -1258,6 +1262,7 @@ func (hc *HeaderChain) CheckIfEtxIsEligible(etxEligibleSlices common.Hash, to co
 
 // IsGenesisHash checks if a hash is a genesis hash
 func (hc *HeaderChain) IsGenesisHash(hash common.Hash) bool {
+	log.Global.Error("Inside IsGenesisHash", hash)
 	return rawdb.IsGenesisHash(hc.headerDb, hash)
 }
 

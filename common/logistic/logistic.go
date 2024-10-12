@@ -13,7 +13,7 @@ import (
 
 var (
 	c_learningRate = big.NewFloat(0.001)
-	c_epochLength  = 100000
+	c_epochLength  = 1000
 )
 
 // LogisticRegression represents a logistic regression model.

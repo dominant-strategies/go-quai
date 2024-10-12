@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -41,6 +40,7 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject) (types.T
 		}
 
 		var subRollup types.Transactions
+		var err error
 		rollup, exists := hc.subRollupCache.Peek(block.Hash())
 		if exists && rollup != nil {
 			subRollup = rollup
@@ -49,7 +49,7 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject) (types.T
 				"len":  len(subRollup),
 			}).Debug("Found the rollup in cache")
 		} else {
-			subRollup, err := hc.CollectSubRollup(block)
+			subRollup, err = hc.CollectSubRollup(block)
 			if err != nil {
 				return types.TokenChoiceSet{}, err
 			}
@@ -59,9 +59,12 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject) (types.T
 
 		for _, tx := range subRollup {
 			if types.IsCoinBaseTx(tx) {
-				_, _, diff, err := tx.DecodeEtxData()
+				_, diff, err := tx.DecodeEtxData()
 				if err != nil {
 					return types.TokenChoiceSet{}, err
+				}
+				if diff == nil {
+					continue
 				}
 				// Convert diff (big.Int) to a string key
 				diffKey := diff.String()
@@ -126,13 +129,16 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject) (types.T
 			// Last element is set to the current block choices
 			newTokenChoiceSet[types.C_tokenChoiceSetSize-1] = tokenChoicesSlice
 		}
-		rawdb.WriteTokenChoicesSet(hc.headerDb, block.Hash(), &newTokenChoiceSet)
+		err = rawdb.WriteTokenChoicesSet(hc.headerDb, block.Hash(), &newTokenChoiceSet)
+		if err != nil {
+			return types.TokenChoiceSet{}, err
+		}
+
+		return newTokenChoiceSet, nil
 
 	} else {
 		return *blockTokenChoicesSet, nil
 	}
-
-	return types.TokenChoiceSet{}, errors.New("Failed to calculate token choices set")
 }
 
 // serialize tokenChoiceSet

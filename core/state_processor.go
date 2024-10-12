@@ -660,11 +660,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	// If the primary coinbase belongs to a ledger and there is no fees
 	// for other ledger, there is no etxs emitted for the other ledger
 	if bytes.Equal(block.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
-		coinbaseReward := misc.CalculateReward(primeTerminus, block.WorkObjectHeader())
+		coinbaseReward := misc.CalculateReward(primeTerminus, parent.WorkObjectHeader())
 		blockReward := new(big.Int).Add(coinbaseReward, quaiFees)
-		data := []byte{defaultCoinbaseLockup}
-		data = append(data, block.PrimeTerminusHash().Bytes()...)
-		data = append(data, block.Difficulty().Bytes()...)
+		data := []byte{block.Lock()}
+		data = append(data, parent.Difficulty().Bytes()...)
 		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: data})
 		emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		if qiFees.Cmp(big.NewInt(0)) != 0 {
@@ -672,11 +671,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		}
 	} else if bytes.Equal(block.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
-		coinbaseReward := misc.CalculateReward(primeTerminus, block.WorkObjectHeader())
+		coinbaseReward := misc.CalculateReward(primeTerminus, parent.WorkObjectHeader())
 		blockReward := new(big.Int).Add(coinbaseReward, qiFees)
-		data := []byte{defaultCoinbaseLockup}
-		data = append(data, block.PrimeTerminusHash().Bytes()...)
-		data = append(data, block.Difficulty().Bytes()...)
+		data := []byte{block.Lock()}
+		data = append(data, parent.Difficulty().Bytes()...)
 		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: data})
 		emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		if quaiFees.Cmp(big.NewInt(0)) != 0 {
@@ -686,11 +684,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	}
 	// Add an etx for each workshare for it to be rewarded
 	for _, uncle := range block.Uncles() {
-		reward := misc.CalculateReward(primeTerminus, uncle)
+		reward := misc.CalculateReward(primeTerminus, parent.WorkObjectHeader())
 		uncleCoinbase := uncle.PrimaryCoinbase()
 		data := []byte{uncle.Lock()}
-		data = append(data, block.PrimeTerminusHash().Bytes()...)
-		data = append(data, block.Difficulty().Bytes()...)
+		data = append(data, parent.Difficulty().Bytes()...)
 		emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: data}))
 	}
 

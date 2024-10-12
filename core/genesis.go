@@ -319,6 +319,7 @@ func (g *Genesis) Commit(db ethdb.Database, nodeLocation common.Location, starti
 	if config == nil {
 		config = params.AllProgpowProtocolChanges
 	}
+	log.Global.Error("genesis hash", block.Hash())
 	rawdb.WriteGenesisHashes(db, common.Hashes{block.Hash()})
 	rawdb.WriteTermini(db, block.Hash(), types.EmptyTermini())
 	rawdb.WriteWorkObject(db, block.Hash(), block, types.BlockObject, nodeCtx)

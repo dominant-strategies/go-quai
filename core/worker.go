@@ -579,7 +579,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			coinbaseReward := misc.CalculateReward(primeTerminus, block.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.quaiFees)
 			data := []byte{defaultCoinbaseLockup}
-			data = append(data, block.PrimeTerminusHash().Bytes()...)
 			data = append(data, block.Difficulty().Bytes()...)
 			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: data})
 			work.etxs = append(work.etxs, coinbaseEtx)
@@ -591,7 +590,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			coinbaseReward := misc.CalculateReward(primeTerminus, block.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.utxoFees)
 			data := []byte{defaultCoinbaseLockup}
-			data = append(data, block.PrimeTerminusHash().Bytes()...)
 			data = append(data, block.Difficulty().Bytes()...)
 			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: data})
 			work.etxs = append(work.etxs, coinbaseEtx)
@@ -603,10 +601,9 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 
 		// Add an etx for each workshare for it to be rewarded
 		for _, uncle := range uncles {
-			reward := misc.CalculateReward(primeTerminus, uncle)
+			reward := misc.CalculateReward(primeTerminus, block.WorkObjectHeader())
 			uncleCoinbase := uncle.PrimaryCoinbase()
 			data := []byte{uncle.Lock()}
-			data = append(data, block.PrimeTerminusHash().Bytes()...)
 			data = append(data, block.Difficulty().Bytes()...)
 			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: origin, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: data}))
 		}
@@ -1510,13 +1507,15 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 
 		// Do the regression to calculate new betas
 		diff, tokenChoice := SerializeTokenChoiceSet(updatedTokenChoiceSet)
-		r := logistic.NewLogisticRegression()
-		r.Train(diff, tokenChoice)
-		primeTerminus := w.hc.GetPrimeTerminus(parent)
-		if primeTerminus == nil {
-			return nil, errors.New("prime terminus not found")
+		var exchangeRate *big.Int
+		if len(tokenChoice) != 0 {
+			r := logistic.NewLogisticRegression()
+			// If parent is genesis, there is nothing to train
+			exchangeRate = misc.CalculateKQuai(types.CopyWorkObject(parent), r.BigBeta0(), r.BigBeta1())
+			r.Train(diff, tokenChoice)
+		} else {
+			exchangeRate = params.ExchangeRate
 		}
-		misc.CalculateKQuai(parent, r.BigBeta0(), r.BigBeta1())
 		fmt.Println("Updated Token Choice Set len: ", len(updatedTokenChoiceSet))
 		// Update the exchange rate
 		qiToQuai := new(big.Int).Set(parent.Header().QiToQuai())
@@ -1524,7 +1523,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 
 		newWo.Header().SetQiToQuai(qiToQuai)
 		newWo.Header().SetQuaiToQi(quaiToQi)
-		newWo.Header().SetExchangeRate(params.ExchangeRate)
+		newWo.Header().SetExchangeRate(exchangeRate)
 	}
 
 	// Only zone should calculate state

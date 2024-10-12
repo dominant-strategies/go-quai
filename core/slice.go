@@ -778,6 +778,8 @@ func (sl *Slice) init() error {
 		if err != nil {
 			return err
 		}
+
+		log.Global.Error("genesis hash at the beginning of the header chain empty", genesisHeader.Hash())
 		// This is just done for the startup process
 		sl.hc.SetCurrentHeader(genesisHeader)
 
