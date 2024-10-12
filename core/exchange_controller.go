@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
@@ -29,25 +30,30 @@ func ConvertMapToSlice(tokenChoicesMap map[string]struct{ Quai, Qi int }) []type
 	return result
 }
 
-func CalculateTokenChoicesSet(hc *HeaderChain, parent *types.WorkObject) (*types.TokenChoiceSet, error) {
+func CalculateTokenChoicesSet(hc *HeaderChain, block *types.WorkObject) (types.TokenChoiceSet, error) {
 
 	// Look up prior tokenChoiceSet and update
-	parentTokenChoiceSet := rawdb.ReadTokenChoicesSet(hc.headerDb, parent.Hash())
-	if parentTokenChoiceSet == nil {
+	blockTokenChoicesSet := rawdb.ReadTokenChoicesSet(hc.headerDb, block.Hash())
+	if blockTokenChoicesSet == nil {
+		// If the block is genesis return an empty set
+		if block.Hash() == hc.config.DefaultGenesisHash {
+			return types.TokenChoiceSet{}, nil
+		}
+
 		var subRollup types.Transactions
-		rollup, exists := hc.subRollupCache.Peek(parent.Hash())
+		rollup, exists := hc.subRollupCache.Peek(block.Hash())
 		if exists && rollup != nil {
 			subRollup = rollup
 			hc.logger.WithFields(log.Fields{
-				"Hash": parent.Hash(),
+				"Hash": block.Hash(),
 				"len":  len(subRollup),
 			}).Debug("Found the rollup in cache")
 		} else {
-			subRollup, err := hc.CollectSubRollup(parent)
+			subRollup, err := hc.CollectSubRollup(block)
 			if err != nil {
-				return nil, err
+				return types.TokenChoiceSet{}, err
 			}
-			hc.subRollupCache.Add(parent.Hash(), subRollup)
+			hc.subRollupCache.Add(block.Hash(), subRollup)
 		}
 		tokenChoices := make(map[string]struct{ Quai, Qi int })
 
@@ -55,7 +61,7 @@ func CalculateTokenChoicesSet(hc *HeaderChain, parent *types.WorkObject) (*types
 			if types.IsCoinBaseTx(tx) {
 				_, _, diff, err := tx.DecodeEtxData()
 				if err != nil {
-					return nil, err
+					return types.TokenChoiceSet{}, err
 				}
 				// Convert diff (big.Int) to a string key
 				diffKey := diff.String()
@@ -87,23 +93,50 @@ func CalculateTokenChoicesSet(hc *HeaderChain, parent *types.WorkObject) (*types
 		tokenChoicesSlice := ConvertMapToSlice(tokenChoices)
 
 		newTokenChoiceSet := types.NewTokenChoiceSet()
-		for i, tokenChoices := range parentTokenChoiceSet {
-			if i > 0 {
-				newTokenChoiceSet[i-1] = tokenChoices
-			}
+
+		var parentTokenChoiceSet *types.TokenChoiceSet
+		// read the parents token choice set
+		if block.ParentHash(common.PRIME_CTX) != hc.config.DefaultGenesisHash {
+			parentTokenChoiceSet = rawdb.ReadTokenChoicesSet(hc.headerDb, block.ParentHash(common.PRIME_CTX))
 		}
-		newTokenChoiceSet[len(newTokenChoiceSet)-1] = tokenChoicesSlice
-		rawdb.WriteTokenChoicesSet(hc.headerDb, parent.Hash(), &newTokenChoiceSet)
+
+		// Until block number 100 is reached, we need to just accumulate to the
+		// set and then after block 100 we trim and add the new element
+		if block.NumberU64(common.PRIME_CTX) <= types.C_tokenChoiceSetSize {
+			if parentTokenChoiceSet == nil { // parent is genesis
+				newTokenChoiceSet[0] = tokenChoicesSlice
+			} else {
+				// go through the parent token choice set and copy it to the new
+				// token choice set
+				for i, tokenChoices := range *parentTokenChoiceSet {
+					newTokenChoiceSet[i] = tokenChoices
+				}
+				// add the elements from the current block at the end
+				newTokenChoiceSet[block.NumberU64(common.PRIME_CTX)-1] = tokenChoicesSlice
+			}
+		} else {
+			// Once block 100 is reached, the first element in the token set has
+			// to be discarded and the current block elements have to appended
+			// at the end
+			for i, tokenChoices := range *parentTokenChoiceSet {
+				if i > 0 {
+					newTokenChoiceSet[i-1] = tokenChoices
+				}
+			}
+			// Last element is set to the current block choices
+			newTokenChoiceSet[types.C_tokenChoiceSetSize-1] = tokenChoicesSlice
+		}
+		rawdb.WriteTokenChoicesSet(hc.headerDb, block.Hash(), &newTokenChoiceSet)
 
 	} else {
-		return parentTokenChoiceSet, nil
+		return *blockTokenChoicesSet, nil
 	}
 
-	return nil, errors.New("Failed to calculate token choices set")
+	return types.TokenChoiceSet{}, errors.New("Failed to calculate token choices set")
 }
 
 // serialize tokenChoiceSet
-func SerializeTokenChoiceSet(tokenChoiceSet *types.TokenChoiceSet) ([]*big.Int, []*big.Int) {
+func SerializeTokenChoiceSet(tokenChoiceSet types.TokenChoiceSet) ([]*big.Int, []*big.Int) {
 	var diff []*big.Int
 	var token []*big.Int
 

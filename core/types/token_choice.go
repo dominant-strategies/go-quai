@@ -12,13 +12,13 @@ type TokenChoices struct {
 }
 
 const (
-	c_tokenChoiceSetSize = 100
+	C_tokenChoiceSetSize = 100
 )
 
-type TokenChoiceSet [c_tokenChoiceSetSize][]TokenChoices
+type TokenChoiceSet [C_tokenChoiceSetSize][]TokenChoices
 
 func NewTokenChoiceSet() TokenChoiceSet {
-	return [c_tokenChoiceSetSize][]TokenChoices{}
+	return [C_tokenChoiceSetSize][]TokenChoices{}
 }
 
 func (tcs *TokenChoiceSet) ProtoEncode() (*ProtoTokenChoiceSet, error) {
