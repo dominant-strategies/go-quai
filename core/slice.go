@@ -768,6 +768,7 @@ func (sl *Slice) init() error {
 		}
 
 		rawdb.WriteBetas(sl.sliceDb, genesisHash, big.NewFloat(0.5), big.NewFloat(0.00083222))
+		rawdb.WriteTokenChoicesSet(sl.sliceDb, genesisHash, &types.TokenChoiceSet{})
 
 		rawdb.WriteTermini(sl.sliceDb, genesisHash, genesisTermini)
 		rawdb.WriteManifest(sl.sliceDb, genesisHash, types.BlockManifest{genesisHash})
@@ -906,9 +907,6 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetThresholdCount(header.ThresholdCount())
 		combinedPendingHeader.Header().SetEtxEligibleSlices(header.EtxEligibleSlices())
 		combinedPendingHeader.Header().SetInterlinkRootHash(header.InterlinkRootHash())
-		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
-		combinedPendingHeader.Header().SetQiToQuai(header.QiToQuai())
-		combinedPendingHeader.Header().SetQuaiToQi(header.QuaiToQi())
 	}
 
 	if inSlice {
@@ -938,6 +936,9 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
 		combinedPendingHeader.Header().SetSecondaryCoinbase(header.SecondaryCoinbase())
 		combinedPendingHeader.Header().SetExpansionNumber(header.ExpansionNumber())
+		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
+		combinedPendingHeader.Header().SetQiToQuai(header.QiToQuai())
+		combinedPendingHeader.Header().SetQuaiToQi(header.QuaiToQi())
 
 		combinedPendingHeader.Body().SetTransactions(header.Transactions())
 		combinedPendingHeader.Body().SetOutboundEtxs(header.OutboundEtxs())

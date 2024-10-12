@@ -11,33 +11,28 @@ import (
 	"modernc.org/mathutil"
 )
 
-var (
-	big2e64        = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)
-	denominatorIts = new(big.Int).Mul(big.NewInt(1000000000000000000), big2e64)
-)
-
-func CalculateReward(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
+func CalculateReward(parent *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
 	if header.PrimaryCoinbase().IsInQiLedgerScope() {
-		return CalculateQiReward(header)
+		return CalculateQiReward(parent.WorkObjectHeader())
 	} else {
-		return CalculateQuaiReward(primeTerminus, header)
+		return CalculateQuaiReward(parent)
 	}
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
-func QiToQuai(primeTerminus *types.WorkObject, header *types.WorkObject, qiAmt *big.Int) *big.Int {
-	quaiReward := CalculateQuaiReward(primeTerminus, header.WorkObjectHeader())
+func QiToQuai(parent *types.WorkObject, qiAmt *big.Int) *big.Int {
+	quaiReward := CalculateQuaiReward(parent)
 	quaiByQi := new(big.Int).Mul(quaiReward, qiAmt)
 	fmt.Printf("quaiByQi: %v\n", quaiByQi)
-	qiReward := CalculateQiReward(header.WorkObjectHeader())
+	qiReward := CalculateQiReward(parent.WorkObjectHeader())
 	fmt.Printf("qiReward: %v\n", qiReward)
 	return new(big.Int).Div(quaiByQi, qiReward)
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
-func QuaiToQi(primeTerminus *types.WorkObject, header *types.WorkObject, quaiAmt *big.Int) *big.Int {
+func QuaiToQi(header *types.WorkObject, quaiAmt *big.Int) *big.Int {
 	qiByQuai := new(big.Int).Mul(CalculateQiReward(header.WorkObjectHeader()), quaiAmt)
-	return new(big.Int).Div(qiByQuai, CalculateQuaiReward(primeTerminus, header.WorkObjectHeader()))
+	return new(big.Int).Div(qiByQuai, CalculateQuaiReward(header))
 }
 
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
@@ -52,13 +47,13 @@ func QuaiToQi(primeTerminus *types.WorkObject, header *types.WorkObject, quaiAmt
 // k_quai += alpha * (x_b_star / x_d - 1) * k_quai
 // spaces = [{"K Qi": state["K Qi"], "K Quai": k_quai}, spaces[1]]
 // return spaces
-func CalculateKQuai(header *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *big.Int {
+func CalculateKQuai(parent *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *big.Int {
 	// Set kQuai to the exchange rate from the header
-	kQuai := new(big.Int).Set(header.ExchangeRate()) // in Its
+	kQuai := new(big.Int).Set(parent.ExchangeRate()) // in Its
 	fmt.Printf("kQuai (Exchange Rate): %v\n", kQuai)
 
 	// Calculate log of the difficulty
-	d2 := LogBig(header.Difficulty())
+	d2 := LogBig(parent.Difficulty())
 	fmt.Printf("d2 (Log of Difficulty): %v\n", d2)
 
 	// Multiply beta0 and d2
@@ -70,7 +65,7 @@ func CalculateKQuai(header *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *b
 	fmt.Printf("negnum (-num): %v\n", negnum)
 
 	// Multiply beta1 and the difficulty
-	denom := new(big.Int).Mul(beta1, header.Difficulty())
+	denom := new(big.Int).Mul(beta1, parent.Difficulty())
 	fmt.Printf("denom (beta1 * Difficulty): %v\n", denom)
 
 	// Divide negnum by denom
@@ -103,9 +98,8 @@ func CalculateKQuai(header *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *b
 	return final
 }
 
-func CalculateQuaiReward(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
-	//exchangeRate := primeTerminus.ExchangeRate()
-	numerator := new(big.Int).Mul(primeTerminus.ExchangeRate(), LogBig(header.Difficulty()))
+func CalculateQuaiReward(header *types.WorkObject) *big.Int {
+	numerator := new(big.Int).Mul(header.ExchangeRate(), LogBig(header.Difficulty()))
 	reward := new(big.Int).Quo(numerator, common.Big2e64)
 	return reward
 }

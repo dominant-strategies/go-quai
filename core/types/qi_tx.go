@@ -180,3 +180,7 @@ func CalculateIntrinsicQiTxGas(transaction *Transaction) uint64 {
 func (tx *QiTx) setTo(to common.Address) {
 	panic("Cannot set To on a Qi transaction")
 }
+
+func (tx *QiTx) setValue(value *big.Int) {
+	panic("quai TX does not have set value method")
+}

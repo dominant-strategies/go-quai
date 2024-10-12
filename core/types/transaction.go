@@ -130,6 +130,7 @@ type TxData interface {
 	getEcdsaSignatureValues() (v, r, s *big.Int)
 	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
 	setTo(to common.Address)
+	setValue(value *big.Int)
 	parentHash() *common.Hash
 	mixHash() *common.Hash
 	workNonce() *BlockNonce
@@ -543,23 +544,6 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	}
 }
 
-// DecodeEtxData decodes the etx data from the canonical format.
-func (tx *Transaction) DecodeEtxData() (lock byte, difficulty *big.Int, err error) {
-	data := tx.inner.data()
-	// Ensure the data length is at least 33 bytes (1 byte for lock + 32 bytes for primeTerminus)
-	if len(data) < 1 {
-		return 0, nil, errors.New("data is too short to decode")
-	}
-
-	// Extract the lock (first byte)
-	lock = data[0]
-
-	// Extract the difficulty (remaining bytes)
-	difficulty = new(big.Int).SetBytes(data[1:])
-
-	return lock, difficulty, nil
-}
-
 // setDecoded sets the inner transaction and size after decoding.
 func (tx *Transaction) setDecoded(inner TxData, size int) {
 	tx.inner = inner
@@ -650,6 +634,10 @@ func (tx *Transaction) To() *common.Address {
 
 func (tx *Transaction) SetTo(addr common.Address) {
 	tx.inner.setTo(addr)
+}
+
+func (tx *Transaction) SetValue(value *big.Int) {
+	tx.inner.setValue(value)
 }
 
 // Cost returns gas * gasPrice + value.
