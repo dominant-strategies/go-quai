@@ -185,11 +185,11 @@ var (
 
 	ExchangeRate = big.NewInt(1000000000000000) // This is the initial exchange rate in Qi per Quai in Its/Qit
 	// These numbers should be "equivalent" to the initial conversion rate
-	QuaiToQiConversionBase         = big.NewInt(10000000)      // Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
-	QiToQuaiConversionBase         = big.NewInt(10000000)      // Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
-	OneOverKqi                     = big.NewInt(3000000000000) // This is the initial exchange rate in Qi per Quai in Its/Qit
-	MaxTimeDiffBetweenBlocks int64 = 100                       // Max time difference between the blocks to 100 secs
-	OneOverAlpha                   = big.NewInt(200)           // The alpha value for the quai to qi conversion
+	QuaiToQiConversionBase         = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
+	QiToQuaiConversionBase         = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
+	OneOverKqi                     = big.NewInt(500)      // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001
+	MaxTimeDiffBetweenBlocks int64 = 100                  // Max time difference between the blocks to 100 secs
+	OneOverAlpha                   = big.NewInt(200)      // The alpha value for the quai to qi conversion
 
 )
 

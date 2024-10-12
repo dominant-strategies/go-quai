@@ -63,14 +63,14 @@ func CalculateKQuai(header *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *b
 }
 
 func CalculateQuaiReward(primeTerminus *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
-	kQuaiIts := new(big.Int).Set(primeTerminus.ExchangeRate())
-	numerator := new(big.Int).Mul(kQuaiIts, LogBig(header.Difficulty()))
-	return new(big.Int).Div(numerator, denominatorIts)
+	//exchangeRate := primeTerminus.ExchangeRate()
+	numerator := new(big.Int).Mul(primeTerminus.ExchangeRate(), LogBig(header.Difficulty()))
+	return new(big.Int).Quo(numerator, common.Big2e64)
 }
 
 // CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
 func CalculateQiReward(header *types.WorkObjectHeader) *big.Int {
-	return new(big.Int).Mul(header.Difficulty(), params.OneOverKqi)
+	return new(big.Int).Quo(header.Difficulty(), params.OneOverKqi)
 }
 
 // CalculateExchangeRate based on the quai to qi and qi to quai exchange rates
@@ -111,8 +111,7 @@ func FindMinDenominations(reward *big.Int) map[uint8]uint64 {
 
 // IntrinsicLogEntropy returns the logarithm of the intrinsic entropy reduction of a PoW hash
 func LogBig(diff *big.Int) *big.Int {
-	d := new(big.Int).Div(common.Big2e256, diff)
-	c, m := mathutil.BinaryLog(d, consensus.MantBits)
+	c, m := mathutil.BinaryLog(diff, consensus.MantBits)
 	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(consensus.MantBits), nil))
 	bigBits = new(big.Int).Add(bigBits, m)
 	return bigBits
