@@ -153,7 +153,8 @@ const (
 	ConversionLockPeriod          uint64 = 10 // The number of zone blocks that a conversion output is locked for
 	MinQiConversionDenomination          = 1
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
-	SoftMaxUTXOSetSize                   = 1000000          // The maximum number of UTXOs that can be stored in the UTXO set
+	SoftMaxUTXOSetSize                   = 10000000         // The soft maximum number of UTXOs that can be stored in the UTXO set
+	MinimumTrimDepth                     = math.MaxInt      // The minimum block depth of the chain to begin trimming
 )
 
 var (
