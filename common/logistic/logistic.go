@@ -55,16 +55,6 @@ func (lr *LogisticRegression) Predict(x *big.Float) *big.Float {
 	return sigmoid(z)
 }
 
-// PredictLabel predicts the class label (0 or 1) for the input.
-func (lr *LogisticRegression) PredictLabel(x *big.Float) int {
-	prob := lr.Predict(x)
-	cmp := prob.Cmp(big.NewFloat(0.5))
-	if cmp >= 0 {
-		return 1
-	}
-	return 0
-}
-
 // Train trains the logistic regression model using gradient descent.
 func (lr *LogisticRegression) Train(x []*big.Int, y []*big.Int) {
 	nSamples := len(y)
