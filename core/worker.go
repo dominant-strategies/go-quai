@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -503,6 +504,12 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		w.primaryCoinbase = common.Zero
 	}
 	secondaryCoinbase = w.secondaryCoinbase // Use the preset address as the fee recipient
+
+	if rand.Float64() < 0.5 {
+		copyPrimaryCoinbase := primaryCoinbase
+		primaryCoinbase = secondaryCoinbase
+		secondaryCoinbase = copyPrimaryCoinbase
+	}
 
 	work, err := w.prepareWork(&generateParams{
 		timestamp:         uint64(timestamp),
@@ -1530,8 +1537,8 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 				w.logger.Error("Refusing to mine without secondary coinbase")
 				return nil, errors.New("refusing to mine without secondary coinbase")
 			}
-			newWo.WorkObjectHeader().SetPrimaryCoinbase(w.primaryCoinbase)
-			newWo.Header().SetSecondaryCoinbase(w.secondaryCoinbase)
+			newWo.WorkObjectHeader().SetPrimaryCoinbase(genParams.primaryCoinbase)
+			newWo.Header().SetSecondaryCoinbase(genParams.secondaryCoinbase)
 		}
 
 		// Get the latest transactions to be broadcasted from the pool
