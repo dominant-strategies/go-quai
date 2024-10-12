@@ -38,48 +38,97 @@ func TestCalculateReward(t *testing.T) {
 
 func TestQiToQuai(t *testing.T) {
 	primeTerminus := &types.WorkObject{}
-	header := &types.WorkObject{}
-	qiAmt := big.NewInt(1000)
+	wb := &types.WorkObjectBody{}
+	header := &types.Header{}
+	wb.SetHeader(header)
+	primeTerminus.SetBody(wb)
+	primeTerminus.Header().SetExchangeRate(big.NewInt(52821824897296313)) //10^18/log2(500000) numerator is the target reward in its and 5e5 is starting difficulty
+
+	currentWo := &types.WorkObject{}
+	currentWoHeader := &types.WorkObjectHeader{}
+	currentWoHeader.SetDifficulty(big.NewInt(500000))
+	currentWo.SetWorkObjectHeader(currentWoHeader)
+
+	qiAmt := big.NewInt(1000) // 1 Qi or 1000 Qits
 
 	// Expected result for conversion
-	expectedQuaiAmt := big.NewInt(500) // Replace with actual expected value
+	expectedQuaiAmt := big.NewInt(999999999999999999) // Replace with actual expected value
 
 	// Call the function
-	actualQuaiAmt := QiToQuai(primeTerminus, header, qiAmt)
+	actualQuaiAmt := QiToQuai(primeTerminus, currentWo, qiAmt)
 
 	// Assert the result
 	assert.Equal(t, expectedQuaiAmt, actualQuaiAmt, "QiToQuai should return the correct Quai amount")
 }
-
-func TestCalculateQuaiReward(t *testing.T) {
+func TestQuaiToQi(t *testing.T) {
 	primeTerminus := &types.WorkObject{}
-	header := &types.WorkObjectHeader{}
+	wb := &types.WorkObjectBody{}
+	header := &types.Header{}
+	wb.SetHeader(header)
+	primeTerminus.SetBody(wb)
+	primeTerminus.Header().SetExchangeRate(big.NewInt(52821824897296313)) // 10^18/log2(500000), numerator is the target reward in Qits, 5e5 is starting difficulty
 
-	// Mock ExchangeRate and Difficulty
-	// primeTerminus.ExchangeRate = func() *big.Int {
-	// 	return big.NewInt(100000)
-	// }
-	// header.Difficulty = func() *big.Int {
-	// 	return big.NewInt(100)
-	// }
+	currentWo := &types.WorkObject{}
+	currentWoHeader := &types.WorkObjectHeader{}
+	currentWoHeader.SetDifficulty(big.NewInt(500000))
+	currentWo.SetWorkObjectHeader(currentWoHeader)
 
-	// Expected result
-	expectedReward := big.NewInt(50) // Replace with actual expected value
+	quaiAmt := big.NewInt(999999999999999999) // 1 Quai or 10^18 Qits
+
+	// Expected result for conversion
+	expectedQiAmt := big.NewInt(1000) // Replace with actual expected value
 
 	// Call the function
-	actualReward := CalculateQuaiReward(primeTerminus, header)
+	actualQiAmt := QuaiToQi(primeTerminus, currentWo, quaiAmt)
 
 	// Assert the result
-	assert.Equal(t, expectedReward, actualReward, "CalculateQuaiReward should return the correct reward")
+	assert.Equal(t, expectedQiAmt, actualQiAmt, "QuaiToQi should return the correct Qi amount")
+}
+
+func TestCalculateKQuai(t *testing.T) {
+	prime := &types.WorkObject{}
+	wb := &types.WorkObjectBody{}
+	header := &types.Header{}
+	wb.SetHeader(header)
+	prime.SetBody(wb)
+	prime.Header().SetExchangeRate(big.NewInt(52821824897296313)) // 10^18/log2(500000), numerator is the target reward in Qits, 5e5 is starting difficulty
+	primeWoHeader := &types.WorkObjectHeader{}
+	primeWoHeader.SetDifficulty(big.NewInt(500000))
+	prime.ExchangeRate().Set(big.NewInt(5000000000000000000)) // Example value for KQuai
+	prime.SetWorkObjectHeader(primeWoHeader)
+
+	// Set beta0 and beta1 values for testing
+	beta0 := big.NewFloat(-0.5)        // Example value for beta0
+	beta1 := big.NewFloat(0.000189316) // Example value for beta1
+
+	bigBeta0 := BigBeta(beta0)
+	bigBeta1 := BigBeta(beta1)
+
+	// Expected result for the calculation (replace with actual expected value)
+	expectedKQuai := big.NewInt(5000000000000000000) // Placeholder expected value
+
+	// Call the CalculateKQuai function
+	actualKQuai := CalculateKQuai(prime, bigBeta0, bigBeta1)
+
+	// Assert the result
+	assert.Equal(t, expectedKQuai, actualKQuai, "CalculateKQuai should return the correct KQuai amount")
+}
+
+func BigBeta(beta *big.Float) *big.Int {
+	bigBeta := new(big.Float).Mul(beta, new(big.Float).SetInt(common.Big2e64))
+	bigBetaInt, _ := bigBeta.Int(nil)
+	return bigBetaInt
 }
 
 func TestLogBig(t *testing.T) {
 	// Test with a difficulty value
-	difficulty := big.NewInt(1000000000)
+	difficulty := big.NewInt(500000)
 
 	// Expected result (replace with actual expected logarithm result)
-	expectedLog := big.NewInt(123456) // Replace with actual expected value
-
+	expectedLog, pass := new(big.Int).SetString("349225800312206723030", 10)
+	if !pass {
+		t.Errorf("Failed to parse expected logarithmic result")
+	}
 	// Call the function
 	actualLog := LogBig(difficulty)
 
