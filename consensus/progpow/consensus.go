@@ -16,7 +16,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/multiset"
 	"github.com/dominant-strategies/go-quai/params"
@@ -667,14 +666,6 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, header *type
 	var multiSet *multiset.MultiSet
 	if nodeCtx == common.ZONE_CTX && chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		multiSet = multiset.New()
-		// Create the lockup contract account
-		lockupContract, err := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}].InternalAndQuaiAddress()
-		if err != nil {
-			return nil, err
-		}
-		state.CreateAccount(lockupContract)
-		state.SetNonce(lockupContract, 1) // so it's not considered "empty"
-
 		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_quai_"+nodeLocation.Name()+".json", progpow.logger)
 		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 

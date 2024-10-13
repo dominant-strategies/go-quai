@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"runtime/debug"
 	"sort"
@@ -22,7 +21,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -1007,17 +1005,6 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					outputIndex++
 				}
 			}
-		} else if tx.To().IsInQuaiLedgerScope() {
-			// Combine similar lockups (to address and lockup period) into a single lockup entry
-			coinbaseAddrWithLockup := [21]byte(append(tx.To().Bytes(), lockupByte))
-			if val, ok := env.quaiCoinbaseEtxs[coinbaseAddrWithLockup]; ok {
-				// Combine the values of the coinbase transactions
-				val.Add(val, tx.Value())
-				env.quaiCoinbaseEtxs[coinbaseAddrWithLockup] = val
-			} else {
-				// Add the new coinbase transaction to the map
-				env.quaiCoinbaseEtxs[coinbaseAddrWithLockup] = tx.Value() // this creates a new *big.Int
-			}
 		}
 		gasUsed := env.wo.GasUsed()
 		gasUsed += params.TxGas
@@ -1293,24 +1280,6 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 			txs.Shift(from.Bytes20(), false)
 		}
 	}
-
-	if !excludeEtx {
-		// Process Quai coinbase lockups (push all of the same coinbases to a singe lockup for state storage efficiency)
-		lockupContractAddress := vm.LockupContractAddresses[[2]byte{w.chainConfig.Location[0], w.chainConfig.Location[1]}]
-		for addressWithLockup, value := range env.quaiCoinbaseEtxs {
-			addr := common.BytesToAddress(addressWithLockup[:20], w.chainConfig.Location)
-			lockupByte := addressWithLockup[20]
-			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-			if lockup.Uint64() < params.ConversionLockPeriod {
-				return fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
-			}
-			value := params.CalculateCoinbaseValueWithLockup(value, lockupByte)
-			_, _, err := vm.AddNewLock(env.parentStateSize, env.state, addr, new(types.GasPool).AddGas(math.MaxUint64), lockup, value, lockupContractAddress)
-			if err != nil {
-				return err
-			}
-		}
-	}
 	if len(qiTxsToRemove) > 0 {
 		w.txPool.AsyncRemoveQiTxs(qiTxsToRemove) // non-blocking
 	}
@@ -1573,6 +1542,9 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
 			return nil, err
 		}
+
+		RedeemLockedQuai(w.hc, env.state, proposedWoHeader.Number())
+
 		env.parentOrder = &order
 		// Accumulate the uncles for the sealing work.
 		commitUncles := func(wos *lru.Cache[common.Hash, types.WorkObjectHeader]) {
