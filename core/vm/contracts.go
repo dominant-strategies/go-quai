@@ -504,112 +504,64 @@ func RequiredGas(input []byte) uint64 {
 }
 
 // RedeemQuai executes the lockup contract to redeem the locked balance(s) for the sender
-func RedeemQuai(blockContext BlockContext, statedb StateDB, sender common.Address, gas *types.GasPool, blockHeight *big.Int, lockupContractAddress common.Address) (uint64, uint64, error) {
+func RedeemQuai(statedb StateDB, sender common.Address, gas *types.GasPool, blockHeight *big.Int, lockupContractAddress common.Address) error {
 	internalContractAddress, err := lockupContractAddress.InternalAndQuaiAddress()
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
-	stateSize := blockContext.QuaiStateSize
-	contractSize := statedb.GetSize(internalContractAddress)
 	// The current lock is the next available lock to redeem (in order of creation)
 	currentLockHash := statedb.GetState(internalContractAddress, sender.Hash())
-	coldSloadCost := params.ColdSloadCost(stateSize, contractSize)
-	sstoreResetGas := params.SstoreResetGas(stateSize, contractSize)
-	gasUsed := coldSloadCost
-	stateGas := coldSloadCost
-	if gas.SubGas(coldSloadCost) != nil {
-		// This contract does not revert. If the caller runs out of gas, we just stop
-		return gasUsed, stateGas, ErrOutOfGas
-	}
 	if (currentLockHash == common.Hash{}) {
-		return gasUsed, stateGas, errors.New("lockup not found")
+		return errors.New("lockup not found")
 	}
 	currentLockNumber := new(big.Int).SetBytes(currentLockHash[:])
 	if !currentLockNumber.IsUint64() {
-		return gasUsed, stateGas, errors.New("account has locked too many times, overflows uint64")
+		return errors.New("account has locked too many times, overflows uint64")
 	}
 
 	for i := int64(0); i < math.MaxInt64; i++ {
-		// Ensure we have enough gas to complete this step entirely
-		requiredGas := coldSloadCost + sstoreResetGas + coldSloadCost + sstoreResetGas + sstoreResetGas + params.CallValueTransferGas
-		if gas.Gas() < requiredGas {
-			return gasUsed, stateGas, fmt.Errorf("insufficient gas to complete lockup redemption, required %d, have %d", requiredGas, gas.Gas())
-		}
-		// The key is zero padded + sender's address + current lock pointer + 1
 		key := sender.Bytes()
 		// Append current lock pointer to the key
 		key = binary.BigEndian.AppendUint64(key, currentLockNumber.Uint64())
 		key = append(key, byte(1)) // Set the 29th byte of the key to 1 to get lock height
 		if len(key) > common.HashLength {
-			return gasUsed, stateGas, errors.New("lockup key is too long, math is broken")
+			return errors.New("lockup key is too long, math is broken")
 		}
 		lockHash := statedb.GetState(internalContractAddress, common.BytesToHash(key))
-		gasUsed += coldSloadCost
-		stateGas += coldSloadCost
-		if gas.SubGas(coldSloadCost) != nil {
-			// This contract does not revert. If the caller runs out of gas, we just stop
-			return gasUsed, stateGas, ErrOutOfGas
-		}
 		if (lockHash == common.Hash{}) {
 			// Lock doesn't exist, so we're done
-			return gasUsed, stateGas, nil
+			return nil
 		}
 		lock := new(big.Int).SetBytes(lockHash[:])
 		if lock.Cmp(blockHeight) > 0 {
 			// lock not ready yet. Lockups are stored in FIFO order, so we don't have to go through the rest
 			// TODO: It's possible that coinbase lockups are stored with differing lock heights, so we may need to check all locks
-			return gasUsed, stateGas, fmt.Errorf("lockup not ready yet, lock height: %d, current block height: %d", lock, blockHeight)
+			return fmt.Errorf("lockup not ready yet, lock height: %d, current block height: %d", lock, blockHeight)
 		}
 		// Set the lock to zero
 		statedb.SetState(internalContractAddress, common.BytesToHash(key), common.Hash{})
-		gasUsed += sstoreResetGas
-		stateGas += sstoreResetGas
-		if gas.SubGas(sstoreResetGas) != nil {
-			// This contract does not revert. If the caller runs out of gas, we just stop
-			return gasUsed, stateGas, ErrOutOfGas
-		}
 		key[28] = 0 // Set the 29th byte of the key to 0 for balance
 		balanceHash := statedb.GetState(internalContractAddress, common.BytesToHash(key))
-		gasUsed += coldSloadCost
-		stateGas += coldSloadCost
-		if gas.SubGas(coldSloadCost) != nil {
-			return gasUsed, stateGas, ErrOutOfGas
-		}
 		if (balanceHash == common.Hash{}) {
 			// If locked balance after convert is zero, either it doesn't exist or something is broken
-			return gasUsed, stateGas, errors.New("balance not found")
+			return errors.New("balance not found")
 		}
 		// Set the locked balance to zero
 		statedb.SetState(internalContractAddress, common.BytesToHash(key), common.Hash{})
-		gasUsed += sstoreResetGas
-		stateGas += sstoreResetGas
-		if gas.SubGas(sstoreResetGas) != nil {
-			return gasUsed, stateGas, ErrOutOfGas
-		}
 		// Increment the current lock counter
 		currentLockNumber.Add(currentLockNumber, big1)
 		currentLockHash = common.BytesToHash(currentLockNumber.Bytes())
 		statedb.SetState(internalContractAddress, sender.Hash(), currentLockHash)
-		gasUsed += sstoreResetGas
-		stateGas += sstoreResetGas
-		if gas.SubGas(sstoreResetGas) != nil {
-			return gasUsed, stateGas, ErrOutOfGas
-		}
-
 		// Redeem the balance for the sender
 		balance := new(big.Int).SetBytes(balanceHash[:])
 		internal, err := sender.InternalAndQuaiAddress()
 		if err != nil {
-			return gasUsed, stateGas, err
+			return err
 		}
 		statedb.AddBalance(internal, balance)
-		gasUsed += params.CallValueTransferGas
-		if gas.SubGas(params.CallValueTransferGas) != nil {
-			return gasUsed, stateGas, ErrOutOfGas
-		}
 	}
 
-	return gasUsed, stateGas, errors.New("account has locked too many times, overflows int64")
+	return errors.New("account has locked too many times, overflows int64")
 }
 
 // AddNewLock adds a new locked balance to the lockup contract
@@ -738,4 +690,114 @@ func AddNewLock(stateSize *big.Int, statedb StateDB, toAddr common.Address, gas 
 			return gasUsed, stateGas, errors.New("latest lock number is wrong, math is broken")
 		}
 	}
+}
+
+func GetUnlockableBalance(statedb StateDB, sender common.Address, blockHeight *big.Int, lockupContractAddress common.Address) (*big.Int, error) {
+	// Initialize total unlockable balance
+	totalUnlockableBalance := big.NewInt(0)
+
+	internalContractAddress, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the current lock hash (i.e., pointer to the next redeemable lock)
+	currentLockHash := statedb.GetState(internalContractAddress, sender.Hash())
+	if (currentLockHash == common.Hash{}) {
+		return nil, errors.New("no locks found for this address")
+	}
+
+	currentLockNumber := new(big.Int).SetBytes(currentLockHash[:])
+	if !currentLockNumber.IsUint64() {
+		return nil, errors.New("account has locked too many times, overflows uint64")
+	}
+
+	// Iterate over all locks for this address
+	for i := int64(0); i < math.MaxInt64; i++ {
+		// Construct key to retrieve the lock
+		key := sender.Bytes()
+		key = binary.BigEndian.AppendUint64(key, currentLockNumber.Uint64())
+		key = append(key, byte(1)) // Set the 29th byte of the key to 1 for lock height
+
+		// Get the lock (height) for the current lock number
+		lockHash := statedb.GetState(internalContractAddress, common.BytesToHash(key))
+		if (lockHash == common.Hash{}) {
+			// No more locks, exit the loop
+			break
+		}
+
+		lock := new(big.Int).SetBytes(lockHash[:])
+		if lock.Cmp(blockHeight) > 0 {
+			// The lock is not yet unlockable (lock height > current block height)
+			break
+		}
+
+		// Now retrieve the balance associated with the current lock
+		key[28] = 0 // Set the 29th byte of the key to 0 for balance
+		balanceHash := statedb.GetState(internalContractAddress, common.BytesToHash(key))
+		if (balanceHash == common.Hash{}) {
+			return nil, errors.New("balance not found for lock")
+		}
+
+		// Convert the balance from hash to big.Int and add it to totalUnlockableBalance
+		balance := new(big.Int).SetBytes(balanceHash[:])
+		totalUnlockableBalance.Add(totalUnlockableBalance, balance)
+
+		// Increment the current lock number to move to the next lock
+		currentLockNumber.Add(currentLockNumber, big1)
+	}
+
+	return totalUnlockableBalance, nil
+}
+
+func GetLockContractQuaiBalance(statedb StateDB, sender common.Address, lockupContractAddress common.Address) (*big.Int, error) {
+	// Initialize total locked balance
+	totalLockedBalance := big.NewInt(0)
+
+	internalContractAddress, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the current lock hash (i.e., pointer to the next lock)
+	currentLockHash := statedb.GetState(internalContractAddress, sender.Hash())
+	if (currentLockHash == common.Hash{}) {
+		return nil, errors.New("no locks found for this address")
+	}
+
+	currentLockNumber := new(big.Int).SetBytes(currentLockHash[:])
+	if !currentLockNumber.IsUint64() {
+		return nil, errors.New("account has locked too many times, overflows uint64")
+	}
+
+	// Iterate over all locks for this address
+	for i := int64(0); i < math.MaxInt64; i++ {
+		// Construct key to retrieve the lock
+		key := sender.Bytes()
+		key = binary.BigEndian.AppendUint64(key, currentLockNumber.Uint64())
+		key = append(key, byte(1)) // Set the 29th byte of the key to 1 for lock height
+
+		// Get the lock (height) for the current lock number
+		lockHash := statedb.GetState(internalContractAddress, common.BytesToHash(key))
+		if (lockHash == common.Hash{}) {
+			// No more locks, exit the loop
+			break
+		}
+
+		// Now retrieve the balance associated with the current lock
+		key[28] = 0 // Set the 29th byte of the key to 0 for balance
+		balanceHash := statedb.GetState(internalContractAddress, common.BytesToHash(key))
+		if (balanceHash == common.Hash{}) {
+			return nil, errors.New("balance not found for lock")
+		}
+
+		// Convert the balance from hash to big.Int and add it to totalLockedBalance
+		balance := new(big.Int).SetBytes(balanceHash[:])
+		totalLockedBalance.Add(totalLockedBalance, balance)
+
+		// Increment the current lock number to move to the next lock
+		currentLockNumber.Add(currentLockNumber, big1)
+	}
+
+	return totalLockedBalance, nil
 }

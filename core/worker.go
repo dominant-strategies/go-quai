@@ -1573,6 +1573,10 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
 			return nil, err
 		}
+
+		lockupContractAddress := vm.LockupContractAddresses[[2]byte{w.chainConfig.Location[0], w.chainConfig.Location[1]}]
+		RedeemLockedQuai(w.hc, env.state, proposedWoHeader.Number(), lockupContractAddress)
+
 		env.parentOrder = &order
 		// Accumulate the uncles for the sealing work.
 		commitUncles := func(wos *lru.Cache[common.Hash, types.WorkObjectHeader]) {

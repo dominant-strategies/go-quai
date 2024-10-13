@@ -320,6 +320,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if primeTerminus == nil {
 		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 	}
+
+	lockupContractAddress := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}]
+
+	// Redeem all Quai for the different lock up periods
+	RedeemLockedQuai(p.hc, statedb, block.Number(nodeCtx), lockupContractAddress)
+
 	// Set the min gas price to the lowest gas price in the transaction If that
 	// value is not the basefee mentioned in the block, the block is invalid In
 	// the case of the Qi transactions, its converted into Quai at the rate
@@ -625,7 +631,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		p.logger.Errorf("prevInboundEtxs: %d, oldestIndex: %d, etxHash: %s", len(prevInboundEtxs), oldestIndex.Int64(), etx.Hash().Hex())
 		return nil, nil, nil, nil, 0, 0, nil, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
 	}
-	lockupContractAddress := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}]
+
 	for coinbaseAddrWithLockup, value := range quaiCoinbaseEtxs {
 		addr := common.BytesToAddress(coinbaseAddrWithLockup[:20], nodeLocation)
 		lockupByte := coinbaseAddrWithLockup[20]
@@ -737,6 +743,71 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return nil, nil, nil, nil, 0, 0, nil, err
 	}
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, multiSet, nil
+}
+
+// RedeemLockedQuai redeems any locked Quai for coinbase addresses at specific block depths.
+// It processes blocks based on predefined lockup periods and checks for unlockable Quai.
+// This function is intended to be run as part of the block processing.
+func RedeemLockedQuai(hc *HeaderChain, statedb *state.StateDB, currentBlockHeight *big.Int, lockupContractAddress common.Address) error {
+	// Array of specific block depths for which we will redeem the Quai
+	blockDepths := []uint64{
+		params.ConversionLockPeriod,      // Minimum lockup period
+		params.LockupByteToBlockDepth[0], // 2 hours
+		params.LockupByteToBlockDepth[1], // 4 hours
+		params.LockupByteToBlockDepth[2], // 8 hours
+		params.LockupByteToBlockDepth[3], // 12 hours
+	}
+
+	// Loop through the predefined block depths
+	for _, blockDepth := range blockDepths {
+		// Ensure we can look back far enough
+		if currentBlockHeight.Uint64() <= blockDepth {
+			// Skip this depth if the current block height is less than or equal to the block depth
+			break
+		}
+
+		// Calculate the target block height by subtracting the blockDepth from the current height
+		targetBlockHeight := new(big.Int).Sub(currentBlockHeight, new(big.Int).SetUint64(blockDepth))
+
+		// Fetch the header and block at the calculated target height
+		targetHeader := hc.GetHeaderByNumber(targetBlockHeight.Uint64())
+		if targetHeader == nil {
+			return fmt.Errorf("header at height %d not found", targetBlockHeight.Uint64())
+		}
+
+		// Fetch the block at the calculated target height
+		targetBlock := hc.bc.GetBlock(targetHeader.Hash(), targetBlockHeight.Uint64())
+		if targetBlock == nil {
+			return fmt.Errorf("block at height %d not found", targetBlockHeight.Uint64())
+		}
+
+		for _, etx := range targetBlock.Body().ExternalTransactions() {
+			// Check if the transaction is a conversion transaction
+			if types.IsCoinBaseTx(etx) && etx.ETXSender().IsInQuaiLedgerScope() {
+				// Redeem all unlocked Quai for the coinbase address
+				sender := etx.To()
+
+				gasPool := new(types.GasPool).AddGas(math.MaxUint64) // Use unlimited gas, as this is part of block processing
+				err := vm.RedeemQuai(statedb, *sender, gasPool, currentBlockHeight, lockupContractAddress)
+				if err != nil {
+					return fmt.Errorf("failed to redeem Quai for coinbase address at block depth %d: %w", blockDepth, err)
+				}
+			}
+
+			if types.IsConversionTx(etx) {
+				// If sender is in Qi, check for unlock in Quai
+				if etx.ETXSender().IsInQiLedgerScope() {
+					receiver := etx.To()
+					gasPool := new(types.GasPool).AddGas(math.MaxUint64) // Use unlimited gas, as this is part of block processing
+					err := vm.RedeemQuai(statedb, *receiver, gasPool, currentBlockHeight, lockupContractAddress)
+					if err != nil {
+						return fmt.Errorf("failed to redeem Quai for coinbase address at block depth %d: %w", blockDepth, err)
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {

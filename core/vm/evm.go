@@ -199,19 +199,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, 0, ErrInsufficientBalance
 	}
 	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
-	if addr.Equal(lockupContractAddress) {
-		gasUsed, stateGasUsed, err := RedeemQuai(evm.Context, evm.StateDB, caller.Address(), new(types.GasPool).AddGas(gas), evm.Context.BlockNumber, lockupContractAddress)
-		if gas > gasUsed {
-			gas = gas - gasUsed
-		} else {
-			gas = 0
-		}
-		stateGas += stateGasUsed
-		if err != nil {
-			log.Global.Error("RedeemQuai failed", "err", err)
-		}
-		return []byte{}, gas, stateGas, err
-	} else if lock != nil && lock.Sign() != 0 {
+	if lock != nil && lock.Sign() != 0 {
 		if err := evm.Context.Transfer(evm.StateDB, caller.Address(), lockupContractAddress, value); err != nil {
 			return nil, gas, stateGas, err
 		}

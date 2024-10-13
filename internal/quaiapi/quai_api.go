@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
@@ -143,6 +144,92 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 			return nil, err
 		}
 		return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
+	}
+}
+
+// GetUnlockableQuaiBalance returns the total amount of Quai that is currently
+// unlockable for a given address in the state at the specified block number or hash.
+// This function checks the lockup contract for any Quai that has completed its lockup
+// period and is ready to be redeemed. The meta block numbers rpc.LatestBlockNumber
+// and rpc.PendingBlockNumber are also allowed.
+//
+// This call is only valid on the zone chain and cannot be made on a Qi address.
+func (s *PublicBlockChainQuaiAPI) GetUnlockableQuaiBalance(ctx context.Context, address common.MixedcaseAddress, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	if !address.ValidChecksum() {
+		return nil, errors.New("address has invalid checksum")
+	}
+	nodeCtx := s.b.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getBalance call can only be made in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getBalance call can only be made on chain processing the state")
+	}
+
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
+	if addr.IsInQiLedgerScope() {
+		return nil, errors.New("getBalance cannot be called on a Qi Address")
+	} else {
+		_, err := addr.InternalAndQuaiAddress()
+		if err != nil {
+			return nil, err
+		}
+		lockupContractAddress := vm.LockupContractAddresses[[2]byte(s.b.NodeLocation())]
+
+		balance, err := vm.GetUnlockableBalance(state, addr, header.Number(2), lockupContractAddress)
+		if err != nil {
+			return nil, err
+		}
+
+		return (*hexutil.Big)(balance), state.Error()
+	}
+}
+
+// GetLockContractQuaiBalance returns the total amount of Quai locked in the lockup
+// contract for a given address in the state at the specified block number or hash.
+// It checks the lockup contract to find the Quai that is currently locked for the
+// given address. The meta block numbers rpc.LatestBlockNumber and rpc.PendingBlockNumber
+// are also allowed.
+//
+// This call is only valid on the zone chain and cannot be made on a Qi address.
+func (s *PublicBlockChainQuaiAPI) GetLockContractQuaiBalance(ctx context.Context, address common.MixedcaseAddress, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	if !address.ValidChecksum() {
+		return nil, errors.New("address has invalid checksum")
+	}
+	nodeCtx := s.b.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getBalance call can only be made in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getBalance call can only be made on chain processing the state")
+	}
+
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
+	if addr.IsInQiLedgerScope() {
+		return nil, errors.New("getBalance cannot be called on a Qi Address")
+	} else {
+		_, err := addr.InternalAndQuaiAddress()
+		if err != nil {
+			return nil, err
+		}
+		lockupContractAddress := vm.LockupContractAddresses[[2]byte(s.b.NodeLocation())]
+
+		balance, err := vm.GetLockContractQuaiBalance(state, addr, lockupContractAddress)
+		if err != nil {
+			return nil, err
+		}
+
+		return (*hexutil.Big)(balance), state.Error()
 	}
 }
 
