@@ -710,7 +710,7 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 		}
 	case QiTxType:
 		// the origin of this tx is the *destination* of the utxos being spent
-		origin := tx.TxIn()[0].PreviousOutPoint.TxHash[1]
+		origin := tx.TxIn()[0].PreviousOutPoint.TxHash[2]
 		h[0] = origin
 		h[1] |= 0x80 // 10000000 in binary (set first bit to 1)
 		h[2] = origin
