@@ -1222,14 +1222,9 @@ func (m Message) IsETX() bool               { return m.isETX }
 func (m Message) ETXSender() common.Address { return m.etxsender }
 func (m Message) Type() byte                { return m.txtype }
 func (m Message) Hash() common.Hash         { return m.hash }
-func (m Message) Lock() *big.Int            { return m.lock }
 
 func (m *Message) SetValue(v *big.Int) {
 	m.amount = v
-}
-
-func (m *Message) SetLock(lock *big.Int) {
-	m.lock = lock
 }
 
 func (m *Message) SetData(data []byte) {
