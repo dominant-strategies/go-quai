@@ -766,3 +766,25 @@ func NewChainsAdded(expansionNumber uint8) []Location {
 	}
 	return newChains
 }
+
+// SetBlockHashForQuai sets the correct first 4 bytes in the block hash for QIP10 and Quai origin
+func SetBlockHashForQuai(blockHash Hash, nodeLocation Location) Hash {
+	// Set the first byte of the block hash to the zone prefix
+	origin := (uint8(nodeLocation[0]) * 16) + uint8(nodeLocation[1])
+	blockHash[0] = origin
+	blockHash[2] = origin
+	blockHash[1] &= 0x7F // 01111111 in binary (set first bit to 0)
+	blockHash[3] &= 0x7F // 01111111 in binary (set first bit to 0)
+	return blockHash
+}
+
+// SetBlockHashForQuai sets the correct first 4 bytes in the block hash for QIP10 and Qi origin
+func SetBlockHashForQi(blockHash Hash, nodeLocation Location) Hash {
+	// Set the first byte of the block hash to the zone prefix
+	origin := (uint8(nodeLocation[0]) * 16) + uint8(nodeLocation[1])
+	blockHash[0] = origin
+	blockHash[2] = origin
+	blockHash[1] |= 0x80 // 10000000 in binary (set first bit to 1)
+	blockHash[3] |= 0x80 // 10000000 in binary (set first bit to 1)
+	return blockHash
+}
