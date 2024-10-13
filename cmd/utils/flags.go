@@ -1153,7 +1153,6 @@ func setConsensusEngineConfig(cfg *quaiconfig.Config) {
 		case params.OrchardName:
 			cfg.Progpow.DurationLimit = params.OrchardDurationLimit
 			cfg.Progpow.GasCeil = params.OrchardGasCeil
-			cfg.Progpow.GasCeil = params.ColosseumGasCeil
 			cfg.Progpow.MinDifficulty = new(big.Int).Div(core.DefaultOrchardGenesisBlock(cfg.ConsensusEngine, cfg.GenesisNonce).Difficulty, common.Big2)
 		case params.LighthouseName:
 			cfg.Progpow.DurationLimit = params.LighthouseDurationLimit
