@@ -28,7 +28,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
 )
@@ -186,7 +185,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, lock *big.Int) (ret []byte, leftOverGas uint64, stateGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, stateGas uint64, err error) {
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, gas, 0, nil
 	}
@@ -197,35 +196,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// Fail if we're trying to transfer more than the available balance
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, 0, ErrInsufficientBalance
-	}
-	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
-	if addr.Equal(lockupContractAddress) {
-		gasUsed, stateGasUsed, err := RedeemQuai(evm.Context, evm.StateDB, caller.Address(), new(types.GasPool).AddGas(gas), evm.Context.BlockNumber, lockupContractAddress)
-		if gas > gasUsed {
-			gas = gas - gasUsed
-		} else {
-			gas = 0
-		}
-		stateGas += stateGasUsed
-		if err != nil {
-			log.Global.Error("RedeemQuai failed", "err", err)
-		}
-		return []byte{}, gas, stateGas, err
-	} else if lock != nil && lock.Sign() != 0 {
-		if err := evm.Context.Transfer(evm.StateDB, caller.Address(), lockupContractAddress, value); err != nil {
-			return nil, gas, stateGas, err
-		}
-		gasUsed, stateGasUsed, err := AddNewLock(evm.Context.QuaiStateSize, evm.StateDB, addr, new(types.GasPool).AddGas(gas), lock, evm.Context.BlockNumber, lockupContractAddress)
-		if gas > gasUsed {
-			gas = gas - gasUsed
-		} else {
-			gas = 0
-		}
-		stateGas += stateGasUsed
-		if err != nil {
-			log.Global.Error("AddNewLock failed", "err", err)
-		}
-		return []byte{}, gas, stateGas, err
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)

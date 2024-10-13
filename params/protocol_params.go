@@ -91,7 +91,7 @@ const (
 
 	BaseFeeChangeDenominator = 8          // Bounds the amount the base fee can change between blocks.
 	ElasticityMultiplier     = 2          // Bounds the maximum gas limit a block may have.
-	InitialBaseFee           = 1 * GWei   // Initial base fee for blocks.
+	InitialBaseFee           = 1 * Wei    // Initial base fee for blocks.
 	MaxBaseFee               = 100 * GWei // Maximum base fee for blocks.
 	InitialStateLimit        = 5000000    // Initial state fee for blocks.
 
@@ -154,6 +154,7 @@ const (
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	SoftMaxUTXOSetSize                   = 10000000         // The soft maximum number of UTXOs that can be stored in the UTXO set
 	MinimumTrimDepth                     = math.MaxInt      // The minimum block depth of the chain to begin trimming
+	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
 )
 
 var (

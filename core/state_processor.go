@@ -313,7 +313,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	quaiFees := big.NewInt(0)
 	qiFees := big.NewInt(0)
 	emittedEtxs := make([]*types.Transaction, 0)
-	quaiCoinbaseEtxs := make(map[[21]byte]*big.Int)
 	var totalQiTime time.Duration
 	var totalEtxAppendTime time.Duration
 	var totalEtxCoinbaseTime time.Duration
@@ -334,6 +333,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if primeTerminus == nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
 	}
+
+	// Redeem all Quai for the different lock up periods
+	if err := RedeemLockedQuai(p.hc, header, parent, statedb); err != nil {
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("error redeeming locked quai: %w", err)
+	}
+
 	// Set the min gas price to the lowest gas price in the transaction If that
 	// value is not the basefee mentioned in the block, the block is invalid In
 	// the case of the Qi transactions, its converted into Quai at the rate
@@ -477,17 +482,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							outputIndex++
 						}
 					}
-				} else if tx.To().IsInQuaiLedgerScope() {
-					// Combine similar lockups (to address and lockup period) into a single lockup entry
-					coinbaseAddrWithLockup := [21]byte(append(tx.To().Bytes(), lockupByte))
-					if val, ok := quaiCoinbaseEtxs[coinbaseAddrWithLockup]; ok {
-						// Combine the values of the coinbase transactions
-						val.Add(val, tx.Value())
-						quaiCoinbaseEtxs[coinbaseAddrWithLockup] = val
-					} else {
-						// Add the new coinbase transaction to the map
-						quaiCoinbaseEtxs[coinbaseAddrWithLockup] = tx.Value() // this creates a new *big.Int
-					}
 				}
 				if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
 					// subtract the minimum tx gas from the gas pool
@@ -564,11 +558,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				timeQuaiToQi += timeDelta
 				continue
 			} else {
-				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Qi->Quai Conversion
-					msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), new(big.Int).SetUint64(params.ConversionLockPeriod)))
-					msg.SetValue(etx.Value())
-					msg.SetData([]byte{}) // data is not used in conversion
-					p.logger.Infof("Converting Qi to Quai for ETX %032x with value %d lock %d\n", tx.Hash(), msg.Value().Uint64(), msg.Lock().Uint64())
+				if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() { // Qi->Quai Conversion
+					// subtract the minimum tx gas from the gas pool
+					if err := gp.SubGas(params.QiToQuaiConversionGas); err != nil {
+						return nil, nil, nil, nil, 0, 0, 0, nil, err
+					}
+					*usedGas += params.QiToQuaiConversionGas
+					continue // locked and redeemed later
 				}
 				fees := big.NewInt(0)
 				prevZeroBal := prepareApplyETX(statedb, msg.Value(), nodeLocation)
@@ -664,21 +660,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx && (etxAvailable && totalEtxGas < minimumEtxGas) || totalEtxGas > maximumEtxGas {
 		p.logger.Errorf("prevInboundEtxs: %d, oldestIndex: %d, etxHash: %s", len(prevInboundEtxs), oldestIndex.Int64(), etx.Hash().Hex())
 		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
-	}
-	lockupContractAddress := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}]
-	for coinbaseAddrWithLockup, value := range quaiCoinbaseEtxs {
-		addr := common.BytesToAddress(coinbaseAddrWithLockup[:20], nodeLocation)
-		lockupByte := coinbaseAddrWithLockup[20]
-		lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-		if lockup.Uint64() < params.ConversionLockPeriod {
-			return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
-		}
-		value := params.CalculateCoinbaseValueWithLockup(value, lockupByte)
-		gasUsed, _, err := vm.AddNewLock(parent.QuaiStateSize(), statedb, addr, new(types.GasPool).AddGas(math.MaxUint64), lockup, value, lockupContractAddress)
-		if err != nil {
-			return nil, nil, nil, nil, 0, 0, 0, nil, err
-		}
-		p.logger.Debugf("Creating Lockup for coinbase addr %s with value %d lock %d gasUsed %d\n", addr.String(), value.Uint64(), lockup.Int64(), gasUsed)
 	}
 
 	quaiCoinbase, err := block.QuaiCoinbase()
@@ -820,6 +801,95 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return nil, nil, nil, nil, 0, 0, 0, nil, err
 	}
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, utxoSetSize, multiSet, nil
+}
+
+// RedeemLockedQuai redeems any locked Quai for coinbase addresses at specific block depths.
+// It processes blocks based on predefined lockup periods and checks for unlockable Quai.
+// This function is intended to be run as part of the block processing.
+func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.WorkObject, statedb *state.StateDB) error {
+	// Array of specific block depths for which we will redeem the Quai
+	blockDepths := []uint64{
+		params.ConversionLockPeriod,
+		params.LockupByteToBlockDepth[0],
+		params.LockupByteToBlockDepth[1],
+		params.LockupByteToBlockDepth[2],
+		params.LockupByteToBlockDepth[3],
+	}
+
+	currentBlockHeight := header.Number(hc.NodeCtx()).Uint64()
+
+	// Loop through the predefined block depths
+	for _, blockDepth := range blockDepths {
+		// Ensure we can look back far enough
+		if currentBlockHeight <= blockDepth {
+			// Skip this depth if the current block height is less than or equal to the block depth
+			continue
+		}
+
+		// Calculate the target block height by subtracting the blockDepth from the current height
+		targetBlockHeight := currentBlockHeight - blockDepth
+
+		// Fetch the block at the calculated target height
+		targetBlock := hc.GetBlockByNumber(targetBlockHeight)
+		if targetBlock == nil {
+			return fmt.Errorf("block at height %d not found", targetBlockHeight)
+		}
+
+		for _, etx := range targetBlock.Body().ExternalTransactions() {
+			// Check if the transaction is a conversion transaction
+			if types.IsCoinBaseTx(etx) && etx.ETXSender().IsInQuaiLedgerScope() {
+				// Redeem all unlocked Quai for the coinbase address
+				internal, err := etx.To().InternalAddress()
+				if err != nil {
+					return fmt.Errorf("error converting address to internal address: %v", err)
+				}
+
+				lockupByte := etx.Data()[0]
+				lockup := params.LockupByteToBlockDepth[lockupByte]
+				if lockup == blockDepth {
+					balance := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte)
+
+					if !statedb.Exist(internal) {
+						newAccountCreationGas := params.CallNewAccountGas(parent.QuaiStateSize())
+						newAccountCreationFee := new(big.Int).Mul(new(big.Int).SetUint64(newAccountCreationGas), big.NewInt(params.InitialBaseFee))
+						// Check if balance is greater than or equal to newAccountCreationFee
+						if balance.Cmp(newAccountCreationFee) >= 0 {
+							// If balance >= newAccountCreationFee, proceed with subtraction
+							balance.Sub(balance, newAccountCreationFee)
+						} else {
+							// Continue processing, user has not mined enough to pay for state fee
+							continue
+						}
+					}
+					hc.logger.Infof("Redeeming %s locked Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
+					statedb.AddBalance(internal, balance)
+				}
+			}
+
+			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && blockDepth == params.ConversionLockPeriod {
+				internal, err := etx.To().InternalAddress()
+				if err != nil {
+					fmt.Errorf("Error converting address to internal address: %v", err)
+				}
+				balance := etx.Value()
+				if !statedb.Exist(internal) {
+					newAccountCreationGas := params.CallNewAccountGas(parent.QuaiStateSize())
+					newAccountCreationFee := new(big.Int).Mul(new(big.Int).SetUint64(newAccountCreationGas), big.NewInt(params.InitialBaseFee))
+					// Check if balance is greater than or equal to newAccountCreationFee
+					if balance.Cmp(newAccountCreationFee) >= 0 {
+						// If balance >= newAccountCreationFee, proceed with subtraction
+						balance.Sub(balance, newAccountCreationFee)
+					} else {
+						// Continue processing, user has not mined enough to pay for state fee
+						continue
+					}
+				}
+				hc.logger.Infof("Redeeming %s converted Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
+				statedb.AddBalance(internal, balance)
+			}
+		}
+	}
+	return nil
 }
 
 func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
@@ -1465,21 +1535,6 @@ func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, pare
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
 		return nil, nil, err
-	}
-	if tx.Type() == types.ExternalTxType && tx.ETXSender().Location().Equal(*tx.To().Location()) { // Qi->Quai Conversion
-		msg.SetLock(new(big.Int).Add(header.Number(nodeCtx), new(big.Int).SetUint64(params.ConversionLockPeriod)))
-		var primeTerminus *types.WorkObject
-		if parentOrder == common.PRIME_CTX {
-			primeTerminus = parent
-		} else {
-			primeTerminus = bc.GetHeaderByHash(header.PrimeTerminusHash())
-			if primeTerminus == nil {
-				return nil, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
-			}
-		}
-		// Convert Qi to Quai
-		msg.SetValue(misc.QiToQuai(parent, tx.Value()))
-		msg.SetData([]byte{}) // data is not used in conversion
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext, err := NewEVMBlockContext(header, parent, bc, author)
