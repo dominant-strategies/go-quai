@@ -408,10 +408,7 @@ func CalcGasLimit(parent *types.WorkObject, gasCeil uint64) uint64 {
 	var desiredLimit uint64
 	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
 	if percentGasUsed > params.PercentGasUsedThreshold {
-		desiredLimit = CalcGasCeil(parent.NumberU64(common.ZONE_CTX), gasCeil)
-		if desiredLimit > gasCeil {
-			desiredLimit = gasCeil
-		}
+		desiredLimit = gasCeil
 		if limit+delta > desiredLimit {
 			return desiredLimit
 		} else {
@@ -425,15 +422,4 @@ func CalcGasLimit(parent *types.WorkObject, gasCeil uint64) uint64 {
 			return limit - delta/2
 		}
 	}
-}
-
-func CalcGasCeil(blockNumber uint64, gasCeil uint64) uint64 {
-	if blockNumber < params.GasLimitStepOneBlockThreshold {
-		return gasCeil / 4
-	} else if blockNumber < params.GasLimitStepTwoBlockThreshold {
-		return gasCeil / 2
-	} else if blockNumber < params.GasLimitStepThreeBlockThreshold {
-		return gasCeil * 3 / 4
-	}
-	return gasCeil
 }

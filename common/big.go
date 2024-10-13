@@ -22,6 +22,10 @@ import (
 	"modernc.org/mathutil"
 )
 
+const (
+	MantBits = 64
+)
+
 // Common big integers often used
 var (
 	Big0     = big.NewInt(0)
@@ -63,4 +67,13 @@ func BigBitsArrayToBitsArray(original []*big.Int) []*big.Int {
 func EntropyBigBitsToDifficultyBits(bigBits *big.Int) *big.Int {
 	twopowerBits := new(big.Int).Exp(big.NewInt(2), new(big.Int).Div(bigBits, Big2e64), nil)
 	return new(big.Int).Div(Big2e256, twopowerBits)
+}
+
+// IntrinsicLogEntropy returns the logarithm of the intrinsic entropy reduction of a PoW hash
+func LogBig(diff *big.Int) *big.Int {
+	diffCopy := new(big.Int).Set(diff)
+	c, m := mathutil.BinaryLog(diffCopy, MantBits)
+	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(MantBits), nil))
+	bigBits = new(big.Int).Add(bigBits, m)
+	return bigBits
 }

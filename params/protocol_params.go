@@ -24,15 +24,12 @@ import (
 )
 
 const (
-	GasLimitBoundDivisor            uint64 = 1024 // The bound divisor of the gas limit, used in update calculations.
-	PercentGasUsedThreshold         uint64 = 50   // Percent Gas used threshold at which the gas limit adjusts
-	GasLimitStepOneBlockThreshold   uint64 = 150000
-	GasLimitStepTwoBlockThreshold   uint64 = 300000
-	GasLimitStepThreeBlockThreshold uint64 = 450000
-	MinGasLimit                     uint64 = 40000000 // Minimum the gas limit may ever be.
-	GenesisGasLimit                 uint64 = 5000000  // Gas limit of the Genesis block.
+	GasLimitBoundDivisor    uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
+	PercentGasUsedThreshold uint64 = 90      // Percent Gas used threshold at which the gas limit adjusts
+	MinGasLimit             uint64 = 5000000 // Minimum the gas limit may ever be.
+	GenesisGasLimit         uint64 = 5000000 // Gas limit of the Genesis block.
 
-	StateCeil                 uint64 = 40000000 // Maximum the StateCeil may ever be
+	StateCeil                 uint64 = 20000000 // Maximum the StateCeil may ever be
 	StateLimitBoundDivisor    uint64 = 1024     // The bound divisor of the gas limit, used in update calculations.
 	PercentStateUsedThreshold uint64 = 90       // Percent Gas used threshold at which the gas limit adjusts
 
@@ -153,7 +150,7 @@ const (
 	TREE_EXPANSION_WAIT_COUNT = 1024
 
 	ConversionLockPeriod          uint64 = 10 // The number of zone blocks that a conversion output is locked for
-	MinQiConversionDenomination          = 1
+	MinQiConversionDenomination          = 10
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	SoftMaxUTXOSetSize                   = 10000000         // The soft maximum number of UTXOs that can be stored in the UTXO set
 	MinimumTrimDepth                     = math.MaxInt      // The minimum block depth of the chain to begin trimming
@@ -161,37 +158,33 @@ const (
 
 var (
 	MaxGossipsubPacketSize            = 3 << 20
-	GasCeil                    uint64 = 20000000
-	ColosseumGasCeil           uint64 = 70000000
-	GardenGasCeil              uint64 = 160000000
-	OrchardGasCeil             uint64 = 50000000
-	LighthouseGasCeil          uint64 = 160000000
-	LocalGasCeil               uint64 = 20000000
-	DifficultyBoundDivisor            = big.NewInt(2048)  // The bound divisor of the difficulty, used in the update calculations.
-	ZoneMinDifficulty                 = big.NewInt(1000)  // The minimum difficulty in a zone. Prime & regions should be multiples of this value
-	MinimumDifficulty                 = ZoneMinDifficulty // The minimum that the difficulty may ever be.
-	GenesisDifficulty                 = ZoneMinDifficulty // Difficulty of the Genesis block.
-	DurationLimit                     = big.NewInt(12)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	GardenDurationLimit               = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	OrchardDurationLimit              = big.NewInt(5)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LighthouseDurationLimit           = big.NewInt(7)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LocalDurationLimit                = big.NewInt(1)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeToStartTx              uint64 = 30
+	GasCeil                    uint64 = 30000000
+	ColosseumGasCeil           uint64 = 30000000
+	GardenGasCeil              uint64 = 30000000
+	OrchardGasCeil             uint64 = 30000000
+	LighthouseGasCeil          uint64 = 30000000
+	LocalGasCeil               uint64 = 30000000
+	DifficultyBoundDivisor            = big.NewInt(2048) // The bound divisor of the difficulty, used in the update calculations.
+	DurationLimit                     = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	GardenDurationLimit               = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	OrchardDurationLimit              = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LighthouseDurationLimit           = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LocalDurationLimit                = big.NewInt(1)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	TimeToStartTx              uint64 = 100
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
-	DifficultyAdjustmentPeriod        = big.NewInt(360)                                             // This is the number of blocks over which the average has to be taken
+	DifficultyAdjustmentPeriod        = big.NewInt(720)                                             // This is the number of blocks over which the average has to be taken
 	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
-	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(1), big.NewInt(GWei))           // 0.000000001 Quai
+	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(10000000000), big.NewInt(GWei)) // 0.000000001 Quai
 	MaxWorkShareCount                 = 16
 	WorkSharesThresholdDiff           = 3 // Number of bits lower than the target that the default consensus engine uses
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	LockupByteToBlockDepth            = make(map[uint8]uint64)
 	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
-
-	ExchangeRate = big.NewInt(1000000000000000) // This is the initial exchange rate in Qi per Quai in Its/Qit
+	ExchangeRate                      = big.NewInt(73170731707317073) // This is the initial exchange rate in Qi per Quai in Its/Qit
 	// These numbers should be "equivalent" to the initial conversion rate
-	QuaiToQiConversionBase          = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
-	QiToQuaiConversionBase          = big.NewInt(10000000) // Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
-	OneOverKqi                      = big.NewInt(500)      // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001
+	QuaiToQiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
+	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
+	OneOverKqi                      = big.NewInt(3e12)     // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001
 	MaxTimeDiffBetweenBlocks int64  = 100                  // Max time difference between the blocks to 100 secs
 	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
 	ControllerKickInBlock    uint64 = 1000000000
@@ -199,15 +192,13 @@ var (
 
 func init() {
 	LockupByteToBlockDepth[0] = ConversionLockPeriod // minimum lockup period
-	LockupByteToBlockDepth[1] = 720                  // 2 hours
-	LockupByteToBlockDepth[2] = 1440                 // 4 hours
-	LockupByteToBlockDepth[3] = 2880                 // 8 hours
-	LockupByteToBlockDepth[4] = 4320                 // 12 hours
+	LockupByteToBlockDepth[1] = 30240                // 1.75 days
+	LockupByteToBlockDepth[2] = 60480                // 3.5 days
+	LockupByteToBlockDepth[3] = 120960               // 7 days
 
-	LockupByteToRewardsRatio[1] = big.NewInt(7) // additional 14%
-	LockupByteToRewardsRatio[2] = big.NewInt(6) // additional 16%
-	LockupByteToRewardsRatio[3] = big.NewInt(5) // additional 20%
-	LockupByteToRewardsRatio[4] = big.NewInt(4) // additional 25%
+	LockupByteToRewardsRatio[1] = big.NewInt(24) // additional 16% WPY
+	LockupByteToRewardsRatio[2] = big.NewInt(10) // additional 20% WPY
+	LockupByteToRewardsRatio[3] = big.NewInt(4)  // additional 25% WPY
 }
 
 // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
@@ -263,17 +254,18 @@ func SstoreClearsScheduleRefund(stateSize, contractSize *big.Int) uint64 {
 }
 
 func CalculateGasWithStateScaling(stateSize, contractSize *big.Int, baseRate uint64) uint64 {
-	var stateSizeFloat, contractSizeFloat, scalingFactor float64
+	var scalingFactor *big.Int
 	if stateSize.Sign() != 0 {
-		stateSizeFloat, _ = stateSize.Float64()
-		scalingFactor += math.Log(stateSizeFloat)
+		scalingFactor = common.LogBig(stateSize)
 	}
 	if contractSize.Sign() != 0 {
-		contractSizeFloat, _ = contractSize.Float64()
-		scalingFactor += math.Log(contractSizeFloat)
+		logContractSize := common.LogBig(contractSize)
+		scalingFactor = new(big.Int).Add(scalingFactor, logContractSize)
 	}
-	// If we can assume that the gas price constants is correct for level 7 trie
-	return (uint64(scalingFactor) * baseRate) / 7
+	// If we can assume that the gas price constants is correct for level 4 trie
+	num := new(big.Int).Mul(scalingFactor, big.NewInt(int64(baseRate)))
+	den := new(big.Int).Mul(big.NewInt(4), common.Big2e64)
+	return new(big.Int).Div(num, den).Uint64()
 }
 
 func CalculateCoinbaseValueWithLockup(value *big.Int, lockupByte uint8) *big.Int {
