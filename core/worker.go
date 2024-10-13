@@ -599,38 +599,28 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			return nil, err
 		}
 
-		// Encode the parent hash with the correct origin location and use it in the OriginatingTxHash field for coinbase
-		blockhash := block.Hash()
-		origin := (uint8(w.hc.NodeLocation()[0]) * 16) + uint8(w.hc.NodeLocation()[1])
-		blockhash[0] = origin
-		blockhash[2] = origin
-
 		// If the primary coinbase belongs to a ledger and there is no fees
 		// for other ledger, there is no etxs emitted for the other ledger
 		if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
 			coinbaseReward := misc.CalculateReward(block, work.wo.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.quaiFees)
-			blockhash[1] &= 0x7F // 01111111 in binary (set first bit to 0)
-			blockhash[3] &= 0x7F // 01111111 in binary (set first bit to 0)
 			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: blockhash, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 			work.etxs = append(work.etxs, coinbaseEtx)
 			if work.utxoFees.Cmp(big.NewInt(0)) != 0 {
 				secondaryCoinbase := w.GetSecondaryCoinbase()
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: blockhash, ETXIndex: uint16(len(work.etxs)), Sender: w.secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: w.secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		} else if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
 			coinbaseReward := misc.CalculateReward(block, work.wo.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.utxoFees)
-			blockhash[1] |= 0x80 // 10000000 in binary (set first bit to 1)
-			blockhash[3] |= 0x80 // 10000000 in binary (set first bit to 1)
 			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: blockhash, ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 			work.etxs = append(work.etxs, coinbaseEtx)
 			if work.quaiFees.Cmp(big.NewInt(0)) != 0 {
 				secondaryCoinbase := w.GetSecondaryCoinbase()
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: blockhash, ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
 				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		}
@@ -639,14 +629,13 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		for _, uncle := range uncles {
 			reward := misc.CalculateReward(block, uncle)
 			uncleCoinbase := uncle.PrimaryCoinbase()
+			var originHash common.Hash
 			if uncleCoinbase.IsInQuaiLedgerScope() {
-				blockhash[1] &= 0x7F // 01111111 in binary (set first bit to 0)
-				blockhash[3] &= 0x7F // 01111111 in binary (set first bit to 0)
+				originHash = common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation())
 			} else {
-				blockhash[1] |= 0x80 // 10000000 in binary (set first bit to 1)
-				blockhash[3] |= 0x80 // 10000000 in binary (set first bit to 1)
+				originHash = common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation())
 			}
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: blockhash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
+			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
 		}
 
 	}

@@ -789,8 +789,8 @@ func qiTxData() (*Transaction, common.Hash) {
 
 func TestQiTxHash(t *testing.T) {
 	_, hash := qiTxData()
-	correctHash := common.HexToHash("0x20b720e4860b3db006d7a19fed6be3efe5619f53f499ef561f42c46bc12b555d")
-	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+	correctHash := common.HexToHash("0x3ab73ae4860b3db006d7a19fed6be3efe5619f53f499ef561f42c46bc12b555d")
+	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 
 func FuzzQiTxHashingChainID(f *testing.F) {
