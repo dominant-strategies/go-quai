@@ -370,7 +370,7 @@ func DefaultColosseumGenesisBlock(consensusEngine string, genesisNonce uint64) *
 		Nonce:      genesisNonce,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
 		GasLimit:   5000000,
-		Difficulty: big.NewInt(1000000000),
+		Difficulty: big.NewInt(30000000000),
 	}
 }
 

@@ -164,12 +164,11 @@ var (
 	OrchardGasCeil             uint64 = 30000000
 	LighthouseGasCeil          uint64 = 30000000
 	LocalGasCeil               uint64 = 30000000
-	DifficultyBoundDivisor            = big.NewInt(2048) // The bound divisor of the difficulty, used in the update calculations.
-	DurationLimit                     = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	GardenDurationLimit               = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	OrchardDurationLimit              = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LighthouseDurationLimit           = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LocalDurationLimit                = big.NewInt(1)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	DurationLimit                     = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	GardenDurationLimit               = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	OrchardDurationLimit              = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LighthouseDurationLimit           = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LocalDurationLimit                = big.NewInt(1) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	TimeToStartTx              uint64 = 100
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
 	DifficultyAdjustmentPeriod        = big.NewInt(720)                                             // This is the number of blocks over which the average has to be taken
@@ -180,11 +179,11 @@ var (
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	LockupByteToBlockDepth            = make(map[uint8]uint64)
 	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
-	ExchangeRate                      = big.NewInt(73170731707317073) // This is the initial exchange rate in Qi per Quai in Its/Qit
+	ExchangeRate                      = big.NewInt(86196385918997143) // This is the initial exchange rate in Qi per Quai in Its/Qit // Garden = big.NewInt(166666666666666667)
 	// These numbers should be "equivalent" to the initial conversion rate
 	QuaiToQiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
 	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
-	OneOverKqi                      = big.NewInt(3e12)     // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001
+	OneOverKqi                      = big.NewInt(30000000) // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001 // = big.NewInt(500)
 	MaxTimeDiffBetweenBlocks int64  = 100                  // Max time difference between the blocks to 100 secs
 	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
 	ControllerKickInBlock    uint64 = 1000000000

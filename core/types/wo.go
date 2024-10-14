@@ -492,6 +492,7 @@ func (wo *WorkObject) TransactionsInfo() map[string]interface{} {
 	txInfo["coinbaseEtxInbound"] = coinbaseInboundEtx
 	txInfo["conversionEtxOutbound"] = conversionOutboundEtx
 	txInfo["conversionEtxInbound"] = conversionInboundEtx
+	txInfo["baseFee"] = wo.BaseFee()
 	return txInfo
 }
 
