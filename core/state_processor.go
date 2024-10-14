@@ -320,7 +320,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	}
 
 	// Redeem all Quai for the different lock up periods
-	RedeemLockedQuai(p.hc, statedb, block.Number(nodeCtx))
+	RedeemLockedQuai(p.hc, header, parent, statedb, p.config, p.vmConfig)
 
 	// Set the min gas price to the lowest gas price in the transaction If that
 	// value is not the basefee mentioned in the block, the block is invalid In
@@ -718,7 +718,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 // RedeemLockedQuai redeems any locked Quai for coinbase addresses at specific block depths.
 // It processes blocks based on predefined lockup periods and checks for unlockable Quai.
 // This function is intended to be run as part of the block processing.
-func RedeemLockedQuai(hc *HeaderChain, statedb *state.StateDB, currentBlockHeight *big.Int) error {
+func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.WorkObject, statedb *state.StateDB, config *params.ChainConfig, cfg vm.Config) error {
 	// Array of specific block depths for which we will redeem the Quai
 	blockDepths := []uint64{
 		params.ConversionLockPeriod,      // Minimum lockup period
@@ -727,6 +727,15 @@ func RedeemLockedQuai(hc *HeaderChain, statedb *state.StateDB, currentBlockHeigh
 		params.LockupByteToBlockDepth[2], // 8 hours
 		params.LockupByteToBlockDepth[3], // 12 hours
 	}
+
+	// Create a new context to be used in the EVM environment
+	blockContext, err := NewEVMBlockContext(header, parent, hc, nil)
+	if err != nil {
+		return err
+	}
+	evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+
+	currentBlockHeight := header.Number(hc.NodeCtx())
 
 	// Loop through the predefined block depths
 	for _, blockDepth := range blockDepths {
@@ -764,6 +773,23 @@ func RedeemLockedQuai(hc *HeaderChain, statedb *state.StateDB, currentBlockHeigh
 				lockup := params.LockupByteToBlockDepth[lockupByte]
 				if lockup == blockDepth {
 					balance := etx.Value()
+
+					if !statedb.Exist(internal) {
+						newAccountCreationGas := params.CallNewAccountGas(evm.Context.QuaiStateSize)
+
+						// Convert newAccountCreationGas (uint64) to *big.Int
+						newAccountCreationGasBigInt := new(big.Int).SetUint64(newAccountCreationGas)
+
+						// Check if balance is greater than or equal to newAccountCreationGasBigInt
+						if balance.Cmp(newAccountCreationGasBigInt) >= 0 {
+							// If balance >= newAccountCreationGasBigInt, proceed with subtraction
+							balance.Sub(balance, newAccountCreationGasBigInt)
+						} else {
+							// Continue processing, user has not mined enough to pay for state fee
+							continue
+						}
+					}
+
 					statedb.AddBalance(internal, balance)
 				}
 			}
@@ -771,7 +797,7 @@ func RedeemLockedQuai(hc *HeaderChain, statedb *state.StateDB, currentBlockHeigh
 			if types.IsConversionTx(etx) && blockDepth == params.ConversionLockPeriod {
 				// If sender is in Qi, check for unlock in Quai
 				if etx.ETXSender().IsInQiLedgerScope() {
-					receiver, err := etx.To().InternalAddress()
+					internal, err := etx.To().InternalAddress()
 					if err != nil {
 						fmt.Errorf("Error converting address to internal address: %v", err)
 					}
@@ -779,9 +805,25 @@ func RedeemLockedQuai(hc *HeaderChain, statedb *state.StateDB, currentBlockHeigh
 					currentHeader := hc.CurrentHeader()
 					primeTerminusHash := currentHeader.PrimeTerminusHash()
 					primeTerminusHeader := hc.GetHeaderByHash(primeTerminusHash)
-					quaiValue := misc.QiToQuai(primeTerminusHeader.WorkObjectHeader(), etx.Value())
+					balance := misc.QiToQuai(primeTerminusHeader.WorkObjectHeader(), etx.Value())
 
-					statedb.AddBalance(receiver, quaiValue)
+					if !statedb.Exist(internal) {
+						newAccountCreationGas := params.CallNewAccountGas(evm.Context.QuaiStateSize)
+
+						// Convert newAccountCreationGas (uint64) to *big.Int
+						newAccountCreationGasBigInt := new(big.Int).SetUint64(newAccountCreationGas)
+
+						// Check if balance is greater than or equal to newAccountCreationGasBigInt
+						if balance.Cmp(newAccountCreationGasBigInt) >= 0 {
+							// If balance >= newAccountCreationGasBigInt, proceed with subtraction
+							balance.Sub(balance, newAccountCreationGasBigInt)
+						} else {
+							// Continue processing, user has not mined enough to pay for state fee
+							continue
+						}
+					}
+
+					statedb.AddBalance(internal, balance)
 				}
 			}
 		}

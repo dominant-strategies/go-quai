@@ -1543,7 +1543,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			return nil, err
 		}
 
-		RedeemLockedQuai(w.hc, env.state, proposedWoHeader.Number())
+		RedeemLockedQuai(w.hc, proposedWo, parent, env.state, w.chainConfig, *w.hc.bc.processor.GetVMConfig())
 
 		env.parentOrder = &order
 		// Accumulate the uncles for the sealing work.
