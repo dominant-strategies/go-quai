@@ -3,7 +3,12 @@ package common
 var (
 	BootstrapPeers = map[string][]string{
 		"colosseum": {
-			"/dns4/bootnode.colosseum0.quai.network/tcp/4001/p2p/12D3KooWK3nVCWjToi3igfs8oyJscVQYLd4SmQanohAuF8M6eZBn",
+			"/dns4/bootnode.colosseum0.quai.network/tcp/4001/p2p/12D3KooWNkQ5uA7GSxA4QBZDJgp4QzFgVqJYDW2hZepMqmu8RSbj",
+			"/dns4/bootnode.colosseum1.quai.network/tcp/4001/p2p/12D3KooWSyfnhGuJAAtQoZuJruuU2dTR8rMrLVK4a9c9utS68pBx",
+			"/dns4/bootnode.colosseum2.quai.network/tcp/4001/p2p/12D3KooWCQCh2QuBh1Cpc8Lgubwy66j2SHCfDzctRFVnUWahhPB2",
+			"/dns4/bootnode.colosseum3.quai.network/tcp/4001/p2p/12D3KooWQHFQQTUydBzH3gQ2rNei213SKisrFxaQ2HwLyGG54geZ",
+			"/dns4/bootnode.colosseum4.quai.network/tcp/4001/p2p/12D3KooWQ28KUBqdei8X1hejB6YUnqxB2PK7bcNZBjJU6YMaDfhJ",
+			"/dns4/bootnode.colosseum5.quai.network/tcp/4001/p2p/12D3KooWKVZTwbT716mKfHuhjiuVwkpha6NDhm19uqk6vxWz2Eyr",
 		},
 		"garden": {
 			"/dns4/bootnode.garden0.quai.network/tcp/4001/p2p/12D3KooWRQrLVEeJtfyKoJDYWYjryBKR8qxkDooMMzyf2ZpLaZRR",
