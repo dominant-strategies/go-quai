@@ -181,18 +181,20 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 	}
 	newBlockIntrinsic := v.engine.IntrinsicLogEntropy(powhash)
 
+	currentHeader := v.hc.CurrentHeader()
+	currentHeaderHash := currentHeader.Hash()
 	// cannot have a pow filter when the current header is genesis
-	if v.hc.IsGenesisHash(v.hc.CurrentHeader().Hash()) {
+	if v.hc.IsGenesisHash(currentHeaderHash) {
 		return pubsub.ValidationAccept
 	}
 
-	currentHeaderPowHash, exists := v.hc.powHashCache.Peek(v.hc.CurrentHeader().Hash())
+	currentHeaderPowHash, exists := v.hc.powHashCache.Peek(currentHeaderHash)
 	if !exists {
-		currentHeaderPowHash, err = v.engine.VerifySeal(v.hc.CurrentHeader().WorkObjectHeader())
+		currentHeaderPowHash, err = v.engine.VerifySeal(currentHeader.WorkObjectHeader())
 		if err != nil {
 			return pubsub.ValidationReject
 		}
-		v.hc.powHashCache.Add(v.hc.CurrentHeader().Hash(), currentHeaderPowHash)
+		v.hc.powHashCache.Add(currentHeaderHash, currentHeaderPowHash)
 	}
 	currentHeaderIntrinsic := v.engine.IntrinsicLogEntropy(currentHeaderPowHash)
 
@@ -203,7 +205,7 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 		return pubsub.ValidationIgnore
 	}
 
-	currentS := v.hc.CurrentHeader().ParentEntropy(v.hc.NodeCtx())
+	currentS := currentHeader.ParentEntropy(v.hc.NodeCtx())
 	MaxAllowableEntropyDist := new(big.Int).Mul(currentHeaderIntrinsic, big.NewInt(c_maxAllowableEntropyDist))
 
 	broadCastEntropy := wo.ParentEntropy(common.ZONE_CTX)
