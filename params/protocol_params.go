@@ -155,6 +155,8 @@ const (
 	SoftMaxUTXOSetSize                   = 10000000         // The soft maximum number of UTXOs that can be stored in the UTXO set
 	MinimumTrimDepth                     = math.MaxInt      // The minimum block depth of the chain to begin trimming
 	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
+	DuplicateUtxoSetFrequency            = 100              // The frequency in Prime blocks at which a new duplicate UTXO set is created and old one deleted
+	MaxDuplicateUtxoSets                 = 100              // The maximum number of duplicate UTXO sets that can be stored
 )
 
 var (

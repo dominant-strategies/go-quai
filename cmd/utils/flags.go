@@ -112,6 +112,7 @@ var NodeFlags = []Flag{
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
 	IndexAddressUtxos,
+	DuplicateUTXOSetFlag,
 	StartingExpansionNumberFlag,
 	NodeLogLevelFlag,
 	GenesisNonce,
@@ -528,6 +529,12 @@ var (
 		Name:  c_NodeFlagPrefix + "index-address-utxos",
 		Value: false,
 		Usage: "Index address utxos" + generateEnvDoc(c_NodeFlagPrefix+"index-address-utxos"),
+	}
+
+	DuplicateUTXOSetFlag = Flag{
+		Name:  c_NodeFlagPrefix + "duplicate-utxo-set",
+		Value: false,
+		Usage: "Store a copy of the UTXO set every DuplicateUtxoSetFrequency blocks" + generateEnvDoc(c_NodeFlagPrefix+"duplicate-utxo-set"),
 	}
 
 	EnvironmentFlag = Flag{
@@ -1351,6 +1358,8 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		cfg.EnablePreimageRecording = viper.GetBool(VMEnableDebugFlag.Name)
 	}
 	cfg.IndexAddressUtxos = viper.GetBool(IndexAddressUtxos.Name)
+
+	cfg.DuplicateUTXOSet = viper.GetBool(DuplicateUTXOSetFlag.Name)
 
 	if viper.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = viper.GetUint64(RPCGlobalGasCapFlag.Name)

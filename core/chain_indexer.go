@@ -95,6 +95,9 @@ type ChainIndexer struct {
 	ctx       context.Context
 	ctxCancel func()
 
+	prevHeader *types.WorkObject // Previous header processed in the indexer
+	prevHash   common.Hash       // Hash of the previous header processed in the indexer
+
 	sectionSize uint64 // Number of blocks in a single chain segment to process
 	confirmsReq uint64 // Number of confirmations before processing a completed segment
 
@@ -238,10 +241,10 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			}).Error("Go-Quai Panicked")
 		}
 	}()
-	var (
-		prevHeader = currentHeader
-		prevHash   = currentHeader.Hash()
-	)
+
+	c.prevHeader = currentHeader
+	c.prevHash = currentHeader.Hash()
+
 	for {
 		select {
 		case errc := <-c.quit:
@@ -260,6 +263,8 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 				}
 				c.PruneOldBlockData(block.NumberU64(nodeCtx) - PruneDepth)
 			}
+			c.lock.Lock()
+			defer c.lock.Unlock()
 			time1 := time.Since(start)
 			var validUtxoIndex bool
 			var addressOutpoints map[string]map[string]*types.OutpointAndDenomination
@@ -270,19 +275,19 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			time2 := time.Since(start)
 
 			var time3, time4, time5 time.Duration
-			if block.ParentHash(nodeCtx) != prevHash {
+			if block.ParentHash(nodeCtx) != c.prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO: This seems a bit brittle, can we detect this case explicitly?
 
-				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.NumberU64(nodeCtx)) != prevHash {
-					h, err := rawdb.FindCommonAncestor(c.chainDb, prevHeader, block, nodeCtx)
+				if rawdb.ReadCanonicalHash(c.chainDb, c.prevHeader.NumberU64(nodeCtx)) != c.prevHash {
+					h, err := rawdb.FindCommonAncestor(c.chainDb, c.prevHeader, block, nodeCtx)
 					if h != nil {
 
 						// If indexAddressUtxos flag is enabled, update the address utxo map
 						// TODO: Need to be able to turn on/off indexer and fix corrupted state
 						if c.indexAddressUtxos {
 							reorgHeaders := make([]*types.WorkObject, 0)
-							for prev := prevHeader; prev.Hash() != h.Hash(); {
+							for prev := c.prevHeader; prev.Hash() != h.Hash(); {
 								prevNumber := rawdb.ReadHeaderNumber(c.chainDb, prev.ParentHash(nodeCtx))
 								if prevNumber == nil {
 									break
@@ -353,9 +358,9 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			addressOutpoints = nil
 
 			time10 := time.Since(start)
-			prevHeader, prevHash = block, block.Hash()
+			c.prevHeader, c.prevHash = block, block.Hash()
 
-			c.logger.Info("ChainIndexer: setting the prevHeader and prevHash", prevHeader.NumberArray(), prevHash)
+			c.logger.Info("ChainIndexer: setting the prevHeader and prevHash", c.prevHeader.NumberArray(), c.prevHash)
 			c.logger.WithFields(log.Fields{
 				"time1":  common.PrettyDuration(time1),
 				"time2":  common.PrettyDuration(time2),
@@ -433,8 +438,6 @@ func compareMinLength(a, b []byte) bool {
 
 // newHead notifies the indexer about new chain heads and/or reorgs.
 func (c *ChainIndexer) newHead(head uint64, reorg bool) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 
 	// If a reorg happened, invalidate all sections until that point
 	if reorg {
@@ -802,4 +805,17 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 		}
 	}
 	return nil
+}
+
+func (c *ChainIndexer) ResetUtxoIndexer(currentHeader *types.WorkObject) {
+	it := c.chainDb.NewIterator(rawdb.AddressUtxosPrefix, nil)
+	defer it.Release()
+	for it.Next() {
+		if len(it.Key()) != len(rawdb.AddressUtxosPrefix)+common.AddressLength {
+			continue
+		}
+		c.chainDb.Delete(it.Key())
+	}
+	c.prevHeader = currentHeader
+	c.prevHash = currentHeader.Hash()
 }

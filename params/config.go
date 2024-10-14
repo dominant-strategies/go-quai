@@ -112,9 +112,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false}
+	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false, false}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false}
+	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false, false}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -132,6 +132,7 @@ type ChainConfig struct {
 	Location           common.Location
 	DefaultGenesisHash common.Hash
 	IndexAddressUtxos  bool
+	DuplicateUTXOSet   bool
 }
 
 // SetLocation sets the location on the chain config
