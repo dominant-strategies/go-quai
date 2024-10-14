@@ -401,7 +401,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 		st.state.SetNonce(from, st.state.GetNonce(addr)+1)
-		ret, st.gas, stateUsed, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.msg.Lock())
+		ret, st.gas, stateUsed, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
 	// At this point, the execution completed, so the ETX cache can be dumped and reset

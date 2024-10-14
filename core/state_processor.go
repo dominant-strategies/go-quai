@@ -775,7 +775,13 @@ func RedeemLockedQuai(hc *HeaderChain, statedb *state.StateDB, currentBlockHeigh
 					if err != nil {
 						fmt.Errorf("Error converting address to internal address: %v", err)
 					}
-					statedb.AddBalance(receiver, etx.Value())
+
+					currentHeader := hc.CurrentHeader()
+					primeTerminusHash := currentHeader.PrimeTerminusHash()
+					primeTerminusHeader := hc.GetHeaderByHash(primeTerminusHash)
+					quaiValue := misc.QiToQuai(primeTerminusHeader.WorkObjectHeader(), etx.Value())
+
+					statedb.AddBalance(receiver, quaiValue)
 				}
 			}
 		}

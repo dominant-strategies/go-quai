@@ -708,7 +708,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		return nil, ErrInvalidAccessList
 	}
 
-	ret, returnGas, stateGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal, nil)
+	ret, returnGas, stateGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()
