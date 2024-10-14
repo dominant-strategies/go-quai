@@ -26,13 +26,13 @@ func QiToQuai(parent *types.WorkObject, qiAmt *big.Int) *big.Int {
 	fmt.Printf("quaiByQi: %v\n", quaiByQi)
 	qiReward := CalculateQiReward(parent.WorkObjectHeader())
 	fmt.Printf("qiReward: %v\n", qiReward)
-	return new(big.Int).Div(quaiByQi, qiReward)
+	return new(big.Int).Quo(quaiByQi, qiReward)
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
 func QuaiToQi(header *types.WorkObject, quaiAmt *big.Int) *big.Int {
 	qiByQuai := new(big.Int).Mul(CalculateQiReward(header.WorkObjectHeader()), quaiAmt)
-	return new(big.Int).Div(qiByQuai, CalculateQuaiReward(header))
+	return new(big.Int).Quo(qiByQuai, CalculateQuaiReward(header))
 }
 
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
@@ -101,6 +101,9 @@ func CalculateKQuai(parent *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *b
 func CalculateQuaiReward(header *types.WorkObject) *big.Int {
 	numerator := new(big.Int).Mul(header.ExchangeRate(), LogBig(header.Difficulty()))
 	reward := new(big.Int).Quo(numerator, common.Big2e64)
+	if reward.Cmp(big.NewInt(0)) == 0 {
+		reward = big.NewInt(1)
+	}
 	return reward
 }
 
@@ -108,6 +111,9 @@ func CalculateQuaiReward(header *types.WorkObject) *big.Int {
 func CalculateQiReward(header *types.WorkObjectHeader) *big.Int {
 	diff := header.Difficulty()
 	qiReward := new(big.Int).Quo(diff, params.OneOverKqi)
+	if qiReward.Cmp(big.NewInt(0)) == 0 {
+		qiReward = big.NewInt(1)
+	}
 	return qiReward
 }
 
