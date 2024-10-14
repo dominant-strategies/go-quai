@@ -14,6 +14,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -1244,6 +1245,37 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) (uint16,
 	// Calculate the exponential moving average
 	ewma := (uint16(efficiencyScore.Uint64()) + parent.EfficiencyScore()*params.TREE_EXPANSION_FILTER_ALPHA) / 10
 	return ewma, nil
+}
+
+// CalcMaxBaseFee takes an average of the base fee over past 100 blocks
+func (hc *HeaderChain) CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error) {
+	// get the parent block
+	parent := hc.GetBlockByHash(block.ParentHash(hc.NodeCtx()))
+	if parent == nil {
+		return nil, errors.New("parent cannot be found in the CalcMaxBaseFee")
+	}
+	parentBaseFee := parent.BaseFee()
+	// Adjust the max base fee calculation for next block using this formula,
+	// nextBlockBaseFee = blockBaseFee/OneOverBaseFeeControllerAlpha + parentBaseFee
+	baseFee := new(big.Int).Div(block.BaseFee(), params.OneOverBaseFeeControllerAlpha)
+	baseFee = new(big.Int).Add(baseFee, parentBaseFee)
+
+	minBaseFee := hc.CalcMinBaseFee(block)
+	if minBaseFee.Cmp(baseFee) >= 0 {
+		baseFee = minBaseFee
+	}
+
+	return baseFee, nil
+}
+
+// CalcMinBaseFee calculates the mininum base fee supplied by the transaction
+// to get inclusion in the next block
+func (hc *HeaderChain) CalcMinBaseFee(block *types.WorkObject) *big.Int {
+	// If the base fee is calculated is less than the min base fee, then set
+	// this to min base fee
+	minBaseFee := misc.QiToQuai(block, params.MinBaseFeeInQits)
+	minBaseFee = new(big.Int).Div(minBaseFee, big.NewInt(int64(params.TxGas)))
+	return minBaseFee
 }
 
 // UpdateEtxEligibleSlices returns the updated etx eligible slices field

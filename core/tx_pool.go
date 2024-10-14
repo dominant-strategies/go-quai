@@ -169,6 +169,7 @@ type blockChain interface {
 	GetMaxTxInWorkShare() uint64
 	CheckInCalcOrderCache(common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(common.Hash, int, *big.Int)
+	CalcMinBaseFee(block *types.WorkObject) *big.Int
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -609,6 +610,16 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	pool.logger.WithField("price", price).Info("Transaction pool price threshold updated")
 }
 
+func (pool *TxPool) GetMinGasPrice() *big.Int {
+	currentHeader := pool.chain.CurrentBlock()
+	if currentHeader == nil {
+		return big.NewInt(0)
+	}
+	baseFeeMin := pool.chain.CalcMinBaseFee(currentHeader)
+	baseFeeMinInGwei := new(big.Int).Div(baseFeeMin, new(big.Int).SetInt64(int64(params.GWei)))
+	return baseFeeMinInGwei
+}
+
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (pool *TxPool) Nonce(addr common.InternalAddress) uint64 {
@@ -707,12 +718,15 @@ func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.AddressBytes]typ
 		// If the miner requests tip enforcement, cap the lists now
 		if enforceTips && !pool.locals.contains(addr) {
 			for i, tx := range txs {
-				if pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+				// make sure that the tx has atleast min base fee as the gas
+				// price
+				currentBlock := pool.chain.CurrentBlock()
+				minBaseFee := pool.chain.CalcMinBaseFee(currentBlock)
+				if minBaseFee.Cmp(tx.GasPrice()) > 0 {
 					pool.logger.WithFields(log.Fields{
-						"tx":           tx.Hash().String(),
-						"gasPrice":     tx.GasPrice().String(),
-						"poolGasPrice": pool.gasPrice.String(),
-						"baseFee":      pool.priced.urgent.baseFee.String(),
+						"tx":         tx.Hash().String(),
+						"gasPrice":   tx.GasPrice().String(),
+						"minBaseFee": minBaseFee.String(),
 					}).Debug("TX has incorrect or low gas price")
 					txs = txs[:i]
 					break

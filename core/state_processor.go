@@ -322,6 +322,14 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	nonEtxExists := false
 
+	// Calculate the min base fee from the parent
+	minBaseFee := p.hc.CalcMinBaseFee(parent)
+	// Check the min base fee, and max base fee
+	maxBaseFee, err := p.hc.CalcMaxBaseFee(parent)
+	if maxBaseFee == nil && !p.hc.IsGenesisHash(parent.Hash()) {
+		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not calculate max base fee %s", err)
+	}
+
 	primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 	if primeTerminus == nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("could not find prime terminus header %032x", header.PrimeTerminusHash())
@@ -358,6 +366,17 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			qiTxFeeInQuai := misc.QiToQuai(parent, qiTxFee)
 			// get the gas price by dividing the fee by qiTxGas
 			qiGasPrice := new(big.Int).Div(qiTxFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx, qiScalingFactor, p.hc.NodeLocation()))))
+
+			if qiGasPrice.Cmp(minBaseFee) < 0 {
+				return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("qi tx has base fee less than min base fee not apply tx %d [%v]", i, tx.Hash().Hex())
+			}
+
+			// If the gas price from this qi tx is greater than the max base fee
+			// set the qi gas price to the max base fee
+			if qiGasPrice.Cmp(maxBaseFee) > 0 {
+				qiGasPrice = new(big.Int).Set(maxBaseFee)
+			}
+
 			if minGasPrice == nil {
 				minGasPrice = new(big.Int).Set(qiGasPrice)
 			} else {
@@ -580,13 +599,25 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 			quaiFees.Add(quaiFees, fees)
 
+			gasPrice := tx.GasPrice()
+
+			if gasPrice.Cmp(minBaseFee) < 0 {
+				return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("quai tx has gas price less than min base fee not apply tx %d [%v]", i, tx.Hash().Hex())
+			}
+
+			// If the gas price from this quai tx is greater than the max base fee
+			// set the quai gas price to the max base fee
+			if gasPrice.Cmp(maxBaseFee) > 0 {
+				gasPrice = new(big.Int).Set(maxBaseFee)
+			}
+
 			// update the min gas price if the gas price in the tx is less than
 			// the min gas price
 			if minGasPrice == nil {
-				minGasPrice = new(big.Int).Set(tx.GasPrice())
+				minGasPrice = new(big.Int).Set(gasPrice)
 			} else {
 				if minGasPrice.Cmp(tx.GasPrice()) > 0 {
-					minGasPrice = new(big.Int).Set(tx.GasPrice())
+					minGasPrice = new(big.Int).Set(gasPrice)
 				}
 			}
 

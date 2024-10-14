@@ -386,6 +386,10 @@ func (b *QuaiAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) 
 	return b.quai.core.Nonce(addr), nil
 }
 
+func (b *QuaiAPIBackend) GetMinGasPrice() *big.Int {
+	return b.quai.core.GetMinGasPrice()
+}
+
 func (b *QuaiAPIBackend) GetPoolGasPrice() *big.Int {
 	return b.quai.core.GetPoolGasPrice()
 }

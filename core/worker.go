@@ -1030,6 +1030,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	if tx.Type() != types.ExternalTxType && tx.GasPrice().Cmp(env.wo.BaseFee()) < 0 {
 		return nil, false, errors.New("gas price fee less than base fee")
 	}
+
+	minBaseFee := w.hc.CalcMinBaseFee(parent)
+	if tx.Type() != types.ExternalTxType && tx.GasPrice().Cmp(minBaseFee) < 0 {
+		return nil, false, errors.New("gas price fee less than min base fee")
+	}
 	// coinbase tx
 	// 1) is a external tx type
 	// 2) do not consume any gas
@@ -1733,12 +1738,21 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		txByPriceAndNonce := types.TransactionsByPriceAndNonce{}
 		txByPriceAndNonce.SetHead(orderedTxs)
 
-		if baseFee.Cmp(big.NewInt(0)) == 0 {
-			return errors.New("ordered txs had min gas price of zero")
-		}
+		minBaseFee := w.hc.CalcMinBaseFee(block)
+		if baseFee.Cmp(minBaseFee) < 0 {
+			return errors.New("ordered txs had price less than the min base fee allowed")
 
+		}
+		// Check the min base fee, and max base fee
+		maxBaseFee, err := w.hc.CalcMaxBaseFee(block)
+		if maxBaseFee == nil && !w.hc.IsGenesisHash(block.Hash()) {
+			return fmt.Errorf("could not calculate the max base fee, err: %s", err)
+		}
+		if baseFee.Cmp(maxBaseFee) > 0 {
+			baseFee = maxBaseFee
+		}
 		env.wo.Header().SetBaseFee(baseFee)
-		err := w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, false)
+		err = w.commitTransactions(env, primeTerminus, block, &txByPriceAndNonce, false)
 		if err != nil {
 			return err
 		}
@@ -1771,8 +1785,9 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		// update the fee
 		qiFeeInQuai := misc.QiToQuai(block, tx.MinerFee())
 		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), env.qiGasScalingFactor, w.hc.NodeLocation()))))
-		if minerFeeInQuai.Cmp(big.NewInt(0)) == 0 {
-			w.logger.Error("rejecting qi tx that has zero gas price")
+		minBaseFee := w.hc.CalcMinBaseFee(block)
+		if minerFeeInQuai.Cmp(minBaseFee) < 0 {
+			w.logger.Debug("qi tx has less fee than min base fee")
 			continue
 		}
 		qiTx, err := types.NewTxWithMinerFee(tx.Tx(), minerFeeInQuai, time.Now())
@@ -1799,8 +1814,19 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 			// read the gas price of the lowest fee transaction and set the base
 			// fee for the pending header on each iteration
 			baseFee = lowestFeeTx.PeekAndGetFee().MinerFee()
-			if baseFee.Cmp(big.NewInt(0)) == 0 {
+			minBaseFee := w.hc.CalcMinBaseFee(block)
+			if baseFee.Cmp(minBaseFee) < 0 {
+				w.logger.Debug("baseFee is less than the minBaseFee")
+				count++
 				continue
+			}
+			// Check the min base fee, and max base fee
+			maxBaseFee, err := w.hc.CalcMaxBaseFee(block)
+			if maxBaseFee == nil && !w.hc.IsGenesisHash(block.Hash()) {
+				return fmt.Errorf("could not calculate the max base fee, err %s", err)
+			}
+			if baseFee.Cmp(maxBaseFee) > 0 {
+				baseFee = maxBaseFee
 			}
 			env.wo.Header().SetBaseFee(baseFee)
 			w.commitTransactions(env, primeTerminus, block, lowestFeeTx, etxIncluded)

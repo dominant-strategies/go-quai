@@ -1301,8 +1301,14 @@ func (c *Core) Nonce(addr common.Address) uint64 {
 	return c.sl.txPool.Nonce(internal)
 }
 
+// GetMinGasPrice returns the minimum gas price needed to be included in the current block
+func (c *Core) GetMinGasPrice() *big.Int {
+	return c.sl.txPool.GetMinGasPrice()
+}
+
+// GetPoolGasPrice returns the pool gas price set by the node
 func (c *Core) GetPoolGasPrice() *big.Int {
-	return c.sl.txPool.gasPrice
+	return c.sl.txPool.GasPrice()
 }
 
 func (c *Core) Stats() (int, int, int) {

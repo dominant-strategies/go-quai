@@ -56,7 +56,7 @@ func NewPublicQuaiAPI(b Backend) *PublicQuaiAPI {
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(s.b.GetPoolGasPrice()), nil
+	return (*hexutil.Big)(s.b.GetMinGasPrice()), nil
 }
 
 // MinerTip returns the gas price of the pool
