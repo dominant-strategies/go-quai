@@ -783,8 +783,8 @@ func (hc *HeaderChain) Stop() {
 // and if if the hash exists it returns the order value
 func (hc *HeaderChain) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool) {
 	calcOrderResponse, exists := hc.calcOrderCache.Peek(hash)
-	if !exists {
-		return common.Big0, -1, false
+	if !exists || calcOrderResponse.intrinsicEntropy.Cmp(common.Big0) == 0 {
+		return nil, -1, false
 	} else {
 		return calcOrderResponse.intrinsicEntropy, calcOrderResponse.order, true
 	}
@@ -792,6 +792,10 @@ func (hc *HeaderChain) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, b
 
 // AddToCalcOrderCache adds the hash and the order pair to the calcorder cache
 func (hc *HeaderChain) AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int) {
+	if intrinsicS.Cmp(common.Big0) == 0 {
+		hc.logger.Error("Tried to write intrinsicS of zero to CalcOrderCache")
+		return
+	}
 	hc.calcOrderCache.Add(hash, calcOrderResponse{intrinsicEntropy: intrinsicS, order: order})
 }
 
