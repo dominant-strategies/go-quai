@@ -357,7 +357,10 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 				return fmt.Errorf("invalid threshold count: have %v, want %v", header.ThresholdCount(), 0)
 			}
 		} else {
-			expectedEfficiencyScore := chain.ComputeEfficiencyScore(parent)
+			expectedEfficiencyScore, err := chain.ComputeEfficiencyScore(parent)
+			if err != nil {
+				return err
+			}
 			if header.EfficiencyScore() != expectedEfficiencyScore {
 				return fmt.Errorf("invalid efficiency score: have %v, want %v", header.EfficiencyScore(), expectedEfficiencyScore)
 			}

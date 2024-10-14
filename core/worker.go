@@ -1461,7 +1461,10 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			newWo.Header().SetThresholdCount(0)
 		} else {
 			// compute the efficiency score at each prime block
-			efficiencyScore := w.hc.ComputeEfficiencyScore(parent)
+			efficiencyScore, err := w.hc.ComputeEfficiencyScore(parent)
+			if err != nil {
+				return nil, err
+			}
 			newWo.Header().SetEfficiencyScore(efficiencyScore)
 
 			// If the threshold count is zero we have not started considering for the

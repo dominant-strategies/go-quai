@@ -629,7 +629,7 @@ func (b *QuaiAPIBackend) IsBlockHashABadHash(hash common.Hash) bool {
 	return b.quai.core.IsBlockHashABadHash(hash)
 }
 
-func (b *QuaiAPIBackend) ComputeEfficiencyScore(header *types.WorkObject) uint16 {
+func (b *QuaiAPIBackend) ComputeEfficiencyScore(header *types.WorkObject) (uint16, error) {
 	return b.quai.core.ComputeEfficiencyScore(header)
 }
 

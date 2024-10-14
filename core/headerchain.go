@@ -35,6 +35,10 @@ const (
 	c_calcOrderCacheLimit = 10000
 )
 
+var (
+	errInvalidEfficiencyScore = errors.New("unable to compute efficiency score")
+)
+
 type calcOrderResponse struct {
 	intrinsicEntropy *big.Int
 	order            int
@@ -1225,17 +1229,21 @@ func (hc *HeaderChain) ComputeExpansionNumber(parent *types.WorkObject) (uint8, 
 }
 
 // ComputeEfficiencyScore calculates the efficiency score for the given header
-func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) uint16 {
+func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) (uint16, error) {
 	deltaEntropy := new(big.Int).Add(parent.ParentDeltaEntropy(common.REGION_CTX), parent.ParentDeltaEntropy(common.ZONE_CTX))
 	uncledDeltaEntropy := new(big.Int).Add(parent.ParentUncledDeltaEntropy(common.REGION_CTX), parent.ParentUncledDeltaEntropy(common.ZONE_CTX))
 
 	// Take the ratio of deltaEntropy to the uncledDeltaEntropy in percentage
 	efficiencyScore := uncledDeltaEntropy.Mul(uncledDeltaEntropy, big.NewInt(100))
+	if deltaEntropy.Cmp(common.Big0) == 0 {
+		hc.logger.Error(errInvalidEfficiencyScore)
+		return 0, errInvalidEfficiencyScore
+	}
 	efficiencyScore.Div(efficiencyScore, deltaEntropy)
 
 	// Calculate the exponential moving average
 	ewma := (uint16(efficiencyScore.Uint64()) + parent.EfficiencyScore()*params.TREE_EXPANSION_FILTER_ALPHA) / 10
-	return ewma
+	return ewma, nil
 }
 
 // UpdateEtxEligibleSlices returns the updated etx eligible slices field

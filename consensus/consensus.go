@@ -93,7 +93,7 @@ type ChainHeaderReader interface {
 	ProcessingState() bool
 
 	// ComputeEfficiencyScore returns the efficiency score computed at each prime block
-	ComputeEfficiencyScore(header *types.WorkObject) uint16
+	ComputeEfficiencyScore(header *types.WorkObject) (uint16, error)
 
 	// ComputeExpansionNumber returns the expansion number of the block
 	ComputeExpansionNumber(parent *types.WorkObject) (uint8, error)
