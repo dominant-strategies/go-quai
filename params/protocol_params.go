@@ -170,7 +170,7 @@ var (
 	OrchardDurationLimit              = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LighthouseDurationLimit           = big.NewInt(5)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit                = big.NewInt(1)    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeToStartTx              uint64 = 100
+	TimeToStartTx              uint64 = 20
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
 	DifficultyAdjustmentPeriod        = big.NewInt(720)                                             // This is the number of blocks over which the average has to be taken
 	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
@@ -180,11 +180,11 @@ var (
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	LockupByteToBlockDepth            = make(map[uint8]uint64)
 	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
-	ExchangeRate                      = big.NewInt(73170731707317073) // This is the initial exchange rate in Qi per Quai in Its/Qit
+	ExchangeRate                      = big.NewInt(166666666666666667) // This is the initial exchange rate in Qi per Quai in Its/Qit
 	// These numbers should be "equivalent" to the initial conversion rate
 	QuaiToQiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
 	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
-	OneOverKqi                      = big.NewInt(3e12)     // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001
+	OneOverKqi                      = big.NewInt(500)      // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001
 	MaxTimeDiffBetweenBlocks int64  = 100                  // Max time difference between the blocks to 100 secs
 	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
 	ControllerKickInBlock    uint64 = 1000000000
