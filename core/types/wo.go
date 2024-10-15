@@ -536,6 +536,11 @@ func (wo *WorkObject) SetNumber(val *big.Int, nodeCtx int) {
 	}
 }
 
+func (wo *WorkObject) SetCoinbases(primary common.Address, secondary common.Address) {
+	wo.WorkObjectHeader().SetPrimaryCoinbase(primary)
+	wo.Header().SetSecondaryCoinbase(secondary)
+}
+
 ////////////////////////////////////////////////////////////
 /////////////////// Work Object Header Getters ///////////////
 ////////////////////////////////////////////////////////////

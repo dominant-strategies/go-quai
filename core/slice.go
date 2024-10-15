@@ -306,7 +306,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 			}
 			time5_1 = common.PrettyDuration(time.Since(start))
 			// Cache the subordinate's pending ETXs
-			pEtxs := types.PendingEtxs{header.ConvertToPEtxView(), subPendingEtxs}
+			pEtxs := types.PendingEtxs{Header: header.ConvertToPEtxView(), OutboundEtxs: subPendingEtxs}
 			time5_2 = common.PrettyDuration(time.Since(start))
 			// Add the pending etx given by the sub in the rollup
 			sl.AddPendingEtxs(pEtxs)
@@ -330,7 +330,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 					}
 				}
 				// We also need to store the pendingEtxRollup to the dom
-				pEtxRollup := types.PendingEtxsRollup{header.ConvertToPEtxView(), crossPrimeRollup}
+				pEtxRollup := types.PendingEtxsRollup{Header: header.ConvertToPEtxView(), EtxsRollup: crossPrimeRollup}
 				sl.AddPendingEtxsRollup(pEtxRollup)
 			}
 			time5_3 = common.PrettyDuration(time.Since(start))
@@ -396,6 +396,12 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		sl.logger.WithFields(block.TransactionsInfo()).Info("Transactions info for Block")
 	}
 
+	var coinbaseType string
+	if block.PrimaryCoinbase().IsInQiLedgerScope() {
+		coinbaseType = "QuaiCoinbase"
+	} else {
+		coinbaseType = "QiCoinbase"
+	}
 	sl.logger.WithFields(log.Fields{
 		"number":               block.NumberArray(),
 		"hash":                 block.Hash(),
@@ -413,6 +419,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		"order":                order,
 		"location":             block.Location(),
 		"elapsed":              common.PrettyDuration(time.Since(start)),
+		"coinbaseType":         coinbaseType,
 	}).Info("Appended new block")
 
 	if nodeCtx == common.ZONE_CTX {
@@ -736,6 +743,10 @@ func (sl *Slice) GetPendingEtxsFromSub(hash common.Hash, location common.Locatio
 		return types.PendingEtxs{Header: block.ConvertToPEtxView(), OutboundEtxs: block.OutboundEtxs()}, nil
 	}
 	return types.PendingEtxs{}, ErrPendingEtxNotFound
+}
+
+func (sl *Slice) GetPrimaryCoinbase() common.Address {
+	return sl.miner.worker.GetPrimaryCoinbase()
 }
 
 // init checks if the headerchain is empty and if it's empty appends the Knot

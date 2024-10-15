@@ -105,7 +105,9 @@ var NodeFlags = []Flag{
 	VMEnableDebugFlag,
 	PprofFlag,
 	InsecureUnlockAllowedFlag,
-	CoinbaseAddressFlag,
+	QuaiCoinbaseFlag,
+	QiCoinbaseFlag,
+	MinerPreferenceFlag,
 	EnvironmentFlag,
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
@@ -504,10 +506,22 @@ var (
 		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http" + generateEnvDoc(c_NodeFlagPrefix+"allow-insecure-unlock"),
 	}
 
-	CoinbaseAddressFlag = Flag{
-		Name:  c_NodeFlagPrefix + "coinbases",
+	QuaiCoinbaseFlag = Flag{
+		Name:  c_NodeFlagPrefix + "quai-coinbase",
 		Value: "",
-		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"coinbases"),
+		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"quai-coinbase"),
+	}
+
+	QiCoinbaseFlag = Flag{
+		Name:  c_NodeFlagPrefix + "qi-coinbase",
+		Value: "",
+		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"qi-coinbase"),
+	}
+
+	MinerPreferenceFlag = Flag{
+		Name:  c_NodeFlagPrefix + "miner-preference",
+		Value: 0.5,
+		Usage: "Indicates preference towards mining Quai or Qi. Any value between 0 and 1 is valid. Neutral: 0.5, Quai only: 0, Qi only: 1" + generateEnvDoc(c_NodeFlagPrefix+"miner-preference"),
 	}
 
 	IndexAddressUtxos = Flag{
@@ -728,62 +742,50 @@ var (
 	}
 )
 
-/*
-ParseCoinbaseAddresses parses the coinbase addresses from different sources based on the user input.
-It handles three scenarios:
+// ParseCoinbaseAddresses reads the coinbase addresses and performs necessary validation.
+func ParseCoinbaseAddresses() (map[string]common.Address, error) {
+	quaiCoinbase := viper.GetString(QuaiCoinbaseFlag.Name)
+	qiCoinbase := viper.GetString(QiCoinbaseFlag.Name)
+	coinbases := make(map[string]common.Address)
 
- 1. File Path Input:
-    If the user specifies a file path, the function expects a TOML file containing the coinbase addresses.
-    The file should have a 'coinbases' section with shard-address mappings.
-    Example:
-    Command: --coinbases "0x00Address0, 0x01Address1, 0x02Address2, ..."
-
-The function reads the coinbase addresses and performs necessary validation as per the above scenarios.
-*/
-func ParseCoinbaseAddresses() (map[string]string, error) {
-	coinbaseInput := viper.GetString(CoinbaseAddressFlag.Name)
-	coinbases := make(map[string]string)
-
-	if coinbaseInput == "" {
-		log.Global.Info("No coinbase addresses provided")
-		return coinbases, nil
+	if quaiCoinbase == "" || qiCoinbase == "" {
+		missingCoinbaseErr := errors.New("must provide both a Quai and Qi coinbase address")
+		log.Global.Fatal(missingCoinbaseErr)
+		return nil, missingCoinbaseErr
 	}
 
-	for _, coinbase := range strings.Split(coinbaseInput, ",") {
-		coinbase = strings.TrimSpace(coinbase)
-		address := common.HexToAddress(coinbase, common.Location{0, 0})
-		location := address.Location()
-
-		// check if the primary key exists, otherwise, the first address in the given shard becomes the primary coinbase
-		// second one becomes the secondary coinbase
-		primaryCoinbaseKey := location.Name() + "primary"
-		if _, exists := coinbases[primaryCoinbaseKey]; exists {
-			// add this address to the secondary coinbases list
-			secondaryCoinbaseKey := location.Name() + "secondary"
-			if _, exists := coinbases[secondaryCoinbaseKey]; exists {
-				log.Global.WithField("key", secondaryCoinbaseKey).Fatalf("Duplicate secondary coinbase address for the given ledger in the shard")
-			}
-			coinbases[secondaryCoinbaseKey] = coinbase
-		} else {
-			coinbases[primaryCoinbaseKey] = coinbase
-		}
-
-		if err := isValidAddress(coinbase); err != nil {
-			log.Global.WithField("err", err).Fatalf("Error parsing coinbase addresses")
-		}
+	quaiAddr, err := isValidAddress(quaiCoinbase)
+	if err != nil {
+		log.Global.WithField("err", err).Fatalf("Error parsing quai address")
+		return nil, err
 	}
+	quaiAddrCoinbaseKey := quaiAddr.Location().Name() + "quai"
+	coinbases[quaiAddrCoinbaseKey] = quaiAddr
 
-	log.Global.Infof("Coinbase Addresses: %v", coinbases)
+	qiAddr, err := isValidAddress(qiCoinbase)
+	if err != nil {
+		log.Global.WithField("err", err).Fatalf("Error parsing qi address")
+		return nil, err
+	}
+	qiAddrCoinbaseKey := qiAddr.Location().Name() + "qi"
+	coinbases[qiAddrCoinbaseKey] = qiAddr
+
+	log.Global.WithFields(log.Fields{
+		"quai": quaiAddr,
+		"qi":   qiAddr,
+	}).Info("Coinbase Addresses")
 
 	return coinbases, nil
 }
 
-func isValidAddress(address string) error {
+func isValidAddress(addressStr string) (common.Address, error) {
+	addressStr = strings.TrimSpace(addressStr)
+	address := common.HexToAddress(addressStr, common.Location{0, 0})
 	re := regexp.MustCompile(`^(0x)?[0-9a-fA-F]{40}$`)
-	if !re.MatchString(address) {
-		return fmt.Errorf("invalid address: %s", address)
+	if !re.MatchString(addressStr) {
+		return common.Address{}, fmt.Errorf("invalid address: %s", address)
 	}
-	return nil
+	return address, nil
 }
 
 func CreateAndBindFlag(flag Flag, cmd *cobra.Command) {
@@ -802,6 +804,8 @@ func CreateAndBindFlag(flag Flag, cmd *cobra.Command) {
 		cmd.PersistentFlags().Int64P(flag.GetName(), flag.GetAbbreviation(), val, flag.GetUsage())
 	case uint64:
 		cmd.PersistentFlags().Uint64P(flag.GetName(), flag.GetAbbreviation(), val, flag.GetUsage())
+	case float64:
+		cmd.PersistentFlags().Float64P(flag.GetName(), flag.GetAbbreviation(), val, flag.GetUsage())
 	case *TextMarshalerValue:
 		cmd.PersistentFlags().VarP(val, flag.GetName(), flag.GetAbbreviation(), flag.GetUsage())
 	case *BigIntValue:
@@ -964,24 +968,17 @@ func setCoinbase(cfg *quaiconfig.Config) {
 	if err != nil {
 		log.Global.Fatalf("error parsing coinbase addresses: %s", err)
 	}
-	primaryCoinbase := coinbaseMap[cfg.NodeLocation.Name()+"primary"]
-	secondaryCoinbase := coinbaseMap[cfg.NodeLocation.Name()+"secondary"]
-	// Convert the coinbase into an address and configure it
-	if primaryCoinbase != "" {
-		account, err := HexAddress(primaryCoinbase, cfg.NodeLocation)
-		if err != nil {
-			Fatalf("Invalid primary coinbase: %v", err)
-		}
-		cfg.Miner.PrimaryCoinbase = account
+	quaiCoinbase, ok := coinbaseMap[cfg.NodeLocation.Name()+"quai"]
+	if !ok {
+		log.Global.Fatal("Missing Quai coinbase for this location")
 	}
-	// Convert the coinbase into an address and configure it
-	if secondaryCoinbase != "" {
-		account, err := HexAddress(secondaryCoinbase, cfg.NodeLocation)
-		if err != nil {
-			Fatalf("Invalid secondary coinbase: %v", err)
-		}
-		cfg.Miner.SecondaryCoinbase = account
+	qiCoinbase, ok := coinbaseMap[cfg.NodeLocation.Name()+"qi"]
+	if !ok {
+		log.Global.Fatal("Missing Qi coinbase for this location")
 	}
+
+	cfg.Miner.QuaiCoinbase = quaiCoinbase
+	cfg.Miner.QiCoinbase = qiCoinbase
 }
 
 // MakePasswordList reads password lines from the file specified by the global --password flag.
@@ -1370,10 +1367,15 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 
 	cfg.Miner.WorkShareMining = viper.GetBool(WorkShareMiningFlag.Name)
 	cfg.Miner.WorkShareThreshold = params.WorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
-	if viper.IsSet(WorkShareMinerEndpoints.Name) {
-		if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
-			cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
-		}
+	if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
+		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
+	}
+
+	minerPreference := viper.GetFloat64(MinerPreferenceFlag.Name)
+	if minerPreference < 0 || minerPreference > 1 {
+		log.Global.WithField("MinerPreference", minerPreference).Fatal("Invalid MinerPreference field. Must be [0,1]")
+	} else {
+		cfg.Miner.MinerPreference = minerPreference
 	}
 
 	// Override any default configs for hard coded networks.

@@ -51,7 +51,7 @@ func NewPublicQuaiAPI(e *Quai) *PublicQuaiAPI {
 
 // PrimaryCoinbase is the address that mining rewards will be send to
 func (api *PublicQuaiAPI) PrimaryCoinbase() (common.Address, error) {
-	return api.e.PrimaryCoinbase()
+	return api.e.core.Slice().GetPrimaryCoinbase(), nil
 }
 
 // PublicMinerAPI provides an API to control the miner.

@@ -35,23 +35,19 @@ import (
 
 // Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
-	worker            *worker
-	primaryCoinbase   common.Address
-	secondaryCoinbase common.Address
-	hc                *HeaderChain
-	engine            consensus.Engine
-	startCh           chan []common.Address
-	logger            *log.Logger
+	worker  *worker
+	hc      *HeaderChain
+	engine  consensus.Engine
+	startCh chan []common.Address
+	logger  *log.Logger
 }
 
 func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, chainConfig *params.ChainConfig, engine consensus.Engine, isLocalBlock func(block *types.WorkObject) bool, processingState bool, logger *log.Logger) *Miner {
 	miner := &Miner{
-		hc:                hc,
-		engine:            engine,
-		startCh:           make(chan []common.Address, 2),
-		worker:            newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true, processingState, logger),
-		primaryCoinbase:   config.PrimaryCoinbase,
-		secondaryCoinbase: config.SecondaryCoinbase,
+		hc:      hc,
+		engine:  engine,
+		startCh: make(chan []common.Address, 2),
+		worker:  newWorker(config, chainConfig, db, engine, hc, txPool, isLocalBlock, true, processingState, logger),
 	}
 
 	miner.SetExtra(miner.MakeExtraData(config.ExtraData))
@@ -131,12 +127,10 @@ func (miner *Miner) PendingBlockAndReceipts() (*types.WorkObject, types.Receipts
 }
 
 func (miner *Miner) SetPrimaryCoinbase(addr common.Address) {
-	miner.primaryCoinbase = addr
 	miner.worker.setPrimaryCoinbase(addr)
 }
 
 func (miner *Miner) SetSecondaryCoinbase(addr common.Address) {
-	miner.secondaryCoinbase = addr
 	miner.worker.setSecondaryCoinbase(addr)
 }
 
