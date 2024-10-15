@@ -507,13 +507,13 @@ var (
 	}
 
 	QuaiCoinbaseFlag = Flag{
-		Name:  c_NodeFlagPrefix + "quai-coinbase",
+		Name:  c_NodeFlagPrefix + "quai-coinbases",
 		Value: "",
 		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"quai-coinbase"),
 	}
 
 	QiCoinbaseFlag = Flag{
-		Name:  c_NodeFlagPrefix + "qi-coinbase",
+		Name:  c_NodeFlagPrefix + "qi-coinbases",
 		Value: "",
 		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"qi-coinbase"),
 	}
@@ -744,36 +744,35 @@ var (
 
 // ParseCoinbaseAddresses reads the coinbase addresses and performs necessary validation.
 func ParseCoinbaseAddresses() (map[string]common.Address, error) {
-	quaiCoinbase := viper.GetString(QuaiCoinbaseFlag.Name)
-	qiCoinbase := viper.GetString(QiCoinbaseFlag.Name)
+	quaiCoinbases := viper.GetString(QuaiCoinbaseFlag.Name)
+	qiCoinbases := viper.GetString(QiCoinbaseFlag.Name)
 	coinbases := make(map[string]common.Address)
 
-	if quaiCoinbase == "" || qiCoinbase == "" {
-		missingCoinbaseErr := errors.New("must provide both a Quai and Qi coinbase address")
+	if quaiCoinbases == "" || qiCoinbases == "" {
+		missingCoinbaseErr := errors.New("must provide both Quai and Qi coinbase addresses")
 		log.Global.Fatal(missingCoinbaseErr)
 		return nil, missingCoinbaseErr
 	}
 
-	quaiAddr, err := isValidAddress(quaiCoinbase)
-	if err != nil {
-		log.Global.WithField("err", err).Fatalf("Error parsing quai address")
-		return nil, err
+	for _, quaiCoinbase := range strings.Split(quaiCoinbases, ",") {
+		quaiAddr, err := isValidAddress(quaiCoinbase)
+		if err != nil {
+			log.Global.WithField("err", err).Fatalf("Error parsing quai address")
+			return nil, err
+		}
+		quaiAddrCoinbaseKey := quaiAddr.Location().Name() + "quai"
+		coinbases[quaiAddrCoinbaseKey] = quaiAddr
 	}
-	quaiAddrCoinbaseKey := quaiAddr.Location().Name() + "quai"
-	coinbases[quaiAddrCoinbaseKey] = quaiAddr
 
-	qiAddr, err := isValidAddress(qiCoinbase)
-	if err != nil {
-		log.Global.WithField("err", err).Fatalf("Error parsing qi address")
-		return nil, err
+	for _, qiCoinbase := range strings.Split(qiCoinbases, ",") {
+		qiAddr, err := isValidAddress(qiCoinbase)
+		if err != nil {
+			log.Global.WithField("err", err).Fatalf("Error parsing qi address")
+			return nil, err
+		}
+		qiAddrCoinbaseKey := qiAddr.Location().Name() + "qi"
+		coinbases[qiAddrCoinbaseKey] = qiAddr
 	}
-	qiAddrCoinbaseKey := qiAddr.Location().Name() + "qi"
-	coinbases[qiAddrCoinbaseKey] = qiAddr
-
-	log.Global.WithFields(log.Fields{
-		"quai": quaiAddr,
-		"qi":   qiAddr,
-	}).Info("Coinbase Addresses")
 
 	return coinbases, nil
 }
