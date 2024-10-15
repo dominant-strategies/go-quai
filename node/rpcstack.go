@@ -152,8 +152,8 @@ func (h *httpServer) start() error {
 					"stacktrace": string(debug.Stack()),
 				}).Error("Go-Quai Panicked")
 			}
-			h.server.Serve(listener)
 		}()
+		h.server.Serve(listener)
 	}()
 
 	if h.wsAllowed() {
