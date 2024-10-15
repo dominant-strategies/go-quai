@@ -345,6 +345,10 @@ func (p *P2PNode) GetWorkObjectsFrom(hash common.Hash, location common.Location,
 	return response
 }
 
+func (p *P2PNode) GetHeight(location common.Location) uint64 {
+	return p.consensus.GetHeight(location)
+}
+
 func (p *P2PNode) GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash {
 	return p.consensus.LookupBlockHashByNumber(number, location)
 }

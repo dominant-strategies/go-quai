@@ -170,8 +170,8 @@ func (qbe *QuaiBackend) GetTrieNode(hash common.Hash, location common.Location) 
 
 // Returns the current block height for the given location
 func (qbe *QuaiBackend) GetHeight(location common.Location) uint64 {
-	// Example/mock implementation
-	panic("todo")
+	be := qbe.GetBackend(location)
+	return (*be).CurrentHeader().NumberU64(location.Context())
 }
 
 // SetCurrentExpansionNumber sets the expansion number into the slice object on all the backends

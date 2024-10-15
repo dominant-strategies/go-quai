@@ -6,11 +6,14 @@ import (
 	"io"
 	"math/big"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	libp2pprotocol "github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -84,6 +87,56 @@ func ProcRequestRate(peerId peer.ID, inbound bool) error {
 	return nil
 }
 
+// Splits a protocol version into its name, major, minor, and patch values
+func splitVersion(version libp2pprotocol.ID) (string, int, int, int) {
+	split := strings.Split(string(ProtocolVersion), "/")
+	if len(split) != 3 {
+		return "", -1, -1, -1
+	}
+	name := split[1]
+	split = strings.Split(split[2], ".")
+	if len(split) != 3 {
+		return "", -2, -1, -1
+	}
+	major, err := strconv.Atoi(split[0])
+	if err != nil {
+		return "", -3, -1, -1
+	}
+	minor, err := strconv.Atoi(split[1])
+	if err != nil {
+		return "", -4, -1, -1
+	}
+	patch, err := strconv.Atoi(split[2])
+	if err != nil {
+		return "", -5, -1, -1
+	}
+	return name, major, minor, patch
+}
+
+// Compares two protocol versions and returns true if they are compatible
+func isPeerVersionCompatible(theirVersion libp2pprotocol.ID, node QuaiP2PNode) bool {
+	ourName, ourMajor, ourMinor, ourPatch := splitVersion(ProtocolVersion)
+	if ourName == "" || ourMajor < 0 || ourMinor < 0 || ourPatch < 0 {
+		return false
+	}
+	theirName, theirMajor, theirMinor, theirPatch := splitVersion(theirVersion)
+	if theirName == "" || theirMajor < 0 || theirMinor < 0 || theirPatch < 0 {
+		return false
+	}
+	if theirName != ourName {
+		return false
+	}
+	// If they are more than one major version behind, we cannot be compatible
+	if theirMajor < ourMajor-1 {
+		return false
+	}
+	// If they are exactly one version behind, they may be compatible if the grace period has not expired
+	if theirMajor == ourMajor-1 && ProtocolGraceHeight >= node.GetHeight(common.Location{}) {
+		return false
+	}
+	return true
+}
+
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
 func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2PNode) {
 	defer func() {
@@ -99,8 +152,8 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 	log.Global.Debugf("Received a new stream from %s", stream.Conn().RemotePeer())
 
 	// if there is a protocol mismatch, close the stream
-	if stream.Protocol() != ProtocolVersion {
-		log.Global.Warnf("Invalid protocol: %s", stream.Protocol())
+	if !isPeerVersionCompatible(stream.Protocol(), node) {
+		log.Global.Warnf("Incompatible protocol: %s", stream.Protocol())
 		// TODO: add logic to drop the peer
 		return
 	}

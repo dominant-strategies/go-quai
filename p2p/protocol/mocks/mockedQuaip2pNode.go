@@ -73,6 +73,14 @@ func (mr *MockQuaiP2PNodeMockRecorder) GetBandwidthCounter() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBandwidthCounter", reflect.TypeOf((*MockQuaiP2PNode)(nil).GetBandwidthCounter))
 }
 
+// GetHeight returns the latest accepted height for the given location
+func (m *MockQuaiP2PNode) GetHeight(location common.Location) uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeight", location)
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
 // GetBlockHashByNumber mocks base method.
 func (m *MockQuaiP2PNode) GetBlockHashByNumber(number *big.Int, location common.Location) *common.Hash {
 	m.ctrl.T.Helper()
