@@ -53,8 +53,8 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 					"stacktrace": string(debug.Stack()),
 				}).Error("Go-Quai Panicked")
 			}
-			httpSrv.Serve(listener)
 		}()
+		httpSrv.Serve(listener)
 	}()
 	return httpSrv, listener.Addr(), err
 }
