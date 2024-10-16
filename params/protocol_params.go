@@ -191,6 +191,7 @@ var (
 
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
+	BaseFeeMultiplier             = big.NewInt(50)
 )
 
 func init() {

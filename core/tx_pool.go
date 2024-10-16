@@ -617,6 +617,11 @@ func (pool *TxPool) GetMinGasPrice() *big.Int {
 	}
 	baseFeeMin := pool.chain.CalcMinBaseFee(currentHeader)
 	baseFeeMinInGwei := new(big.Int).Div(baseFeeMin, new(big.Int).SetInt64(int64(params.GWei)))
+
+	// Increase this estimate by ~10% so that we account for the difficulty adjustment
+	baseFeeMinInGwei = new(big.Int).Mul(baseFeeMinInGwei, big.NewInt(100))
+	baseFeeMinInGwei = new(big.Int).Div(baseFeeMinInGwei, big.NewInt(90))
+
 	return baseFeeMinInGwei
 }
 

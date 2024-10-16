@@ -1260,6 +1260,9 @@ func (hc *HeaderChain) CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error)
 	baseFee := new(big.Int).Div(block.BaseFee(), params.OneOverBaseFeeControllerAlpha)
 	baseFee = new(big.Int).Add(baseFee, parentBaseFee)
 
+	// Make sure max base fee is less than 50x of the average base fee
+	baseFee = new(big.Int).Mul(baseFee, params.BaseFeeMultiplier)
+
 	minBaseFee := hc.CalcMinBaseFee(block)
 	if minBaseFee.Cmp(baseFee) >= 0 {
 		baseFee = minBaseFee
