@@ -29,6 +29,7 @@ import (
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
+	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
@@ -317,6 +318,10 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 	}
 
 	rpcSub := notifier.CreateSubscription()
+	internalAddr, err := addr.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
 
 	go func() {
 		defer func() {
@@ -331,7 +336,8 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 		api.activeSubscriptions += 1
 		headers := make(chan *types.WorkObject)
 		headersSub := api.events.SubscribeNewHeads(headers)
-
+		unlocks := make(chan core.UnlocksEvent)
+		unlocksSub := api.events.SubscribeUnlocks(unlocks)
 		for {
 			select {
 			case h := <-headers:
@@ -339,7 +345,7 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 				hash := h.Hash()
 				nodeLocation := api.backend.NodeLocation()
 				nodeCtx := nodeLocation.Context()
-				if block, err := api.backend.GetBlock(h.Hash(), h.NumberU64(nodeCtx)); err != nil {
+				if block, err := api.backend.GetBlock(hash, h.NumberU64(nodeCtx)); err != nil {
 					for _, tx := range block.Transactions() {
 						// Check for external accesses
 						if tx.To() == &addr || tx.From(nodeLocation) == &addr {
@@ -355,11 +361,20 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 						}
 					}
 				}
+			case u := <-unlocks:
+				for _, unlock := range u.Unlocks {
+					if unlock.Addr == internalAddr {
+						notifier.Notify(rpcSub.ID, u.Hash)
+						break
+					}
+				}
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
+				unlocksSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
 				headersSub.Unsubscribe()
+				unlocksSub.Unsubscribe()
 				return
 			}
 		}

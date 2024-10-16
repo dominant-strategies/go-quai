@@ -24,6 +24,11 @@ type ChainEvent struct {
 	Entropy *big.Int
 }
 
+type UnlocksEvent struct {
+	Hash    common.Hash
+	Unlocks []common.Unlock
+}
+
 type ChainSideEvent struct {
 	Blocks []*types.WorkObject
 }
