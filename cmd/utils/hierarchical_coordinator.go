@@ -602,6 +602,45 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 	for {
 		select {
 		case head := <-chainEvent:
+			// If this is the first block we have after a restart, then we can
+			// add this block into the node set directly
+			// Since on startup we initialize the pending headers cache with the
+			// genesis block, we can check and see if we are in that state
+			// We can do that by checking the length of the pendding headers order
+			// cache length is 1
+			if len(hc.pendingHeaders.order) == 1 {
+				// create a nodeset on this block
+				nodeSet := NodeSet{
+					nodes: make(map[string]Node),
+				}
+
+				//Initialize for prime
+				backend := hc.GetBackend(common.Location{})
+				entropy := backend.TotalLogEntropy(head.Block)
+				newNode := Node{
+					hash:     head.Block.ParentHash(common.PRIME_CTX),
+					number:   head.Block.NumberArray(),
+					location: common.Location{},
+					entropy:  entropy,
+				}
+				nodeSet.nodes[common.Location{}.Name()] = newNode
+
+				regionLocation := common.Location{byte(head.Block.Location().Region())}
+				backend = hc.GetBackend(regionLocation)
+				newNode.hash = head.Block.ParentHash(common.REGION_CTX)
+				newNode.location = regionLocation
+				newNode.entropy = entropy
+				nodeSet.nodes[regionLocation.Name()] = newNode
+
+				zoneLocation := head.Block.Location()
+				backend = hc.GetBackend(zoneLocation)
+				newNode.hash = head.Block.ParentHash(common.ZONE_CTX)
+				newNode.location = zoneLocation
+				newNode.entropy = entropy
+				nodeSet.nodes[zoneLocation.Name()] = newNode
+				hc.Add(entropy, nodeSet, hc.pendingHeaders)
+			}
+
 			go hc.ReapplicationLoop(head)
 			go hc.ComputeMapPending(head)
 
