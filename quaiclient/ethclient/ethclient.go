@@ -448,7 +448,7 @@ func (ec *Client) PendingCallContract(ctx context.Context, msg quai.CallMsg) ([]
 // execution of a transaction.
 func (ec *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	var hex hexutil.Big
-	if err := ec.c.CallContext(ctx, &hex, "eth_gasPrice"); err != nil {
+	if err := ec.c.CallContext(ctx, &hex, "quai_gasPrice"); err != nil {
 		return nil, err
 	}
 	return (*big.Int)(&hex), nil
