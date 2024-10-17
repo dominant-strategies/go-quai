@@ -565,6 +565,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						return nil, nil, nil, nil, 0, 0, 0, nil, err
 					}
 					*usedGas += params.QiToQuaiConversionGas
+					totalEtxGas += params.QiToQuaiConversionGas
 					continue // locked and redeemed later
 				}
 				fees := big.NewInt(0)
