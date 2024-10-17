@@ -1162,6 +1162,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
 		env.wo.Header().SetGasUsed(gasUsed)
 		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+		env.txs = append(env.txs, tx)
 		return []*types.Log{}, false, nil // The conversion is locked and will be redeemed later
 	}
 	snap := env.state.Snapshot()
@@ -1769,12 +1770,12 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), env.qiGasScalingFactor, w.hc.NodeLocation()))))
 		minBaseFee := w.hc.CalcMinBaseFee(block)
 		if minerFeeInQuai.Cmp(minBaseFee) < 0 {
-			w.logger.Debug("qi tx has less fee than min base fee")
+			w.logger.Debugf("qi tx has less fee than min base fee: have %s, want %s", minerFeeInQuai, minBaseFee)
 			continue
 		}
 		qiTx, err := types.NewTxWithMinerFee(tx.Tx(), minerFeeInQuai, time.Now())
 		if err != nil {
-			w.logger.WithField("err", err).Error("Error created new tx with miner Fee for Qi TX", tx.Tx().Hash())
+			w.logger.WithField("err", err).Error("Error creating new tx with miner Fee for Qi TX", tx.Tx().Hash())
 			continue
 		}
 		pendingQiTxsWithQuaiFee = append(pendingQiTxsWithQuaiFee, qiTx)

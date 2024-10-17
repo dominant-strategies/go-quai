@@ -530,7 +530,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	return (*hexutil.Big)(feeInQi), nil
 }
 
-func (s *PublicBlockChainQuaiAPI) GetLatestUTXOSetSize(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+func (s *PublicBlockChainQuaiAPI) GetLatestUTXOSetSize(ctx context.Context) (hexutil.Uint64, error) {
 	return hexutil.Uint64(rawdb.ReadUTXOSetSize(s.b.Database(), s.b.CurrentBlock().Hash())), nil
 }
 
