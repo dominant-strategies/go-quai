@@ -335,26 +335,44 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 		}()
 		api.activeSubscriptions += 1
 		headers := make(chan *types.WorkObject)
-		headersSub := api.events.SubscribeNewHeads(headers)
+		headersSub := api.events.SubscribeChainHeadEvent(headers)
 		unlocks := make(chan core.UnlocksEvent)
 		unlocksSub := api.events.SubscribeUnlocks(unlocks)
 		for {
 			select {
 			case h := <-headers:
+
 				// Marshal the header data
 				hash := h.Hash()
 				nodeLocation := api.backend.NodeLocation()
-				nodeCtx := nodeLocation.Context()
-				if block, err := api.backend.GetBlock(hash, h.NumberU64(nodeCtx)); err != nil {
-					for _, tx := range block.Transactions() {
-						// Check for external accesses
-						if tx.To() == &addr || tx.From(nodeLocation) == &addr {
+				for _, tx := range h.Transactions() {
+					// Check for external accesses
+					switch tx.Type() {
+					case types.QuaiTxType:
+						if tx.To().Equal(addr) || tx.From(nodeLocation).Equal(addr) {
 							notifier.Notify(rpcSub.ID, hash)
 							break
 						}
+					case types.ExternalTxType:
+						if tx.To().Equal(addr) || tx.ETXSender().Equal(addr) {
+							notifier.Notify(rpcSub.ID, hash)
+							break
+						}
+					case types.QiTxType:
+						// For Qi Tx go through the tx out and notify if the out
+						// address matches the subscription address
+						for _, out := range tx.TxOut() {
+							if common.BytesToAddress(out.Address, api.backend.NodeLocation()).Equal(addr) {
+								notifier.Notify(rpcSub.ID, hash)
+								break
+							}
+						}
+					}
+
+					if tx.Type() == types.QuaiTxType {
 						// Check for EVM accesses
 						for _, access := range tx.AccessList() {
-							if access.Address == addr {
+							if access.Address.Equal(addr) {
 								notifier.Notify(rpcSub.ID, hash)
 								break
 							}

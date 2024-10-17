@@ -52,6 +52,7 @@ type testBackend struct {
 	rmLogsFeed        event.Feed
 	pendingLogsFeed   event.Feed
 	chainFeed         event.Feed
+	chainHeadFeed     event.Feed
 	pendingHeaderFeed event.Feed
 	unlocksFeed       event.Feed
 }
@@ -126,6 +127,10 @@ func (b *testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Su
 
 func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.chainFeed.Subscribe(ch)
+}
+
+func (b *testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+	return b.chainHeadFeed.Subscribe(ch)
 }
 
 func (b *testBackend) BloomStatus() (uint64, uint64) {

@@ -1,4 +1,3 @@
-// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -53,6 +52,8 @@ const (
 	BlocksSubscription
 	// UnlocksSubscription queries balances that are recently unlocked
 	UnlocksSubscription
+	// ChainHeadSubscription queries for the chain head block
+	ChainHeadSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -97,6 +98,7 @@ type EventSystem struct {
 	pendingLogsSub event.Subscription // Subscription for pending log event
 	chainSub       event.Subscription // Subscription for new chain event
 	unlocksSub     event.Subscription // Subscription for new unlocks event
+	chainHeadSub   event.Subscription // Subscription for new head event
 
 	// Channels
 	install       chan *subscription         // install filter for event notification
@@ -107,6 +109,7 @@ type EventSystem struct {
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
 	unlocksCh     chan core.UnlocksEvent     // Channel to receive newly unlocked coinbases
+	chainHeadCh   chan core.ChainHeadEvent   // Channel to receive new chain event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -126,6 +129,7 @@ func NewEventSystem(backend Backend) *EventSystem {
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
 		unlocksCh:     make(chan core.UnlocksEvent, unlocksEvChanSize),
+		chainHeadCh:   make(chan core.ChainHeadEvent, chainEvChanSize),
 	}
 
 	nodeCtx := backend.NodeCtx()
@@ -138,9 +142,11 @@ func NewEventSystem(backend Backend) *EventSystem {
 	}
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 
+	m.chainHeadSub = m.backend.SubscribeChainHeadEvent(m.chainHeadCh)
+
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
-		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.unlocksSub == nil {
+		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.chainHeadCh == nil {
 			backend.Logger().Fatal("Subscribe for event system failed")
 		}
 	} else {
@@ -308,12 +314,25 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.WorkObject) *Subscr
 // SubscribeUnlocks creates a subscription that writes the recently unlocked balances
 func (es *EventSystem) SubscribeUnlocks(unlocks chan core.UnlocksEvent) *Subscription {
 	sub := &subscription{
+		id:      rpc.NewID(),
+		typ:     UnlocksSubscription,
+		created: time.Now(),
+		logs:    make(chan []*types.Log),
+		hashes:  make(chan []common.Hash),
+		unlocks: unlocks,
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribeChainHeadEvent subscribes to the chain head feed
+func (es *EventSystem) SubscribeChainHeadEvent(headers chan *types.WorkObject) *Subscription {
+	sub := &subscription{
 		id:        rpc.NewID(),
-		typ:       UnlocksSubscription,
+		typ:       ChainHeadSubscription,
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
-		unlocks:   unlocks,
+		headers:   headers,
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -438,6 +457,16 @@ func (es *EventSystem) handleUnlocksEvent(filters filterIndex, ev core.UnlocksEv
 	}
 }
 
+func (es *EventSystem) handleChainHeadEvent(filters filterIndex, ev core.ChainHeadEvent) {
+	for _, f := range filters[ChainHeadSubscription] {
+		select {
+		case f.headers <- ev.Block:
+		default:
+			es.backend.Logger().Error("Failed to deliver head feed event to a subscriber")
+		}
+	}
+}
+
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
 	defer func() {
@@ -458,6 +487,7 @@ func (es *EventSystem) eventLoop() {
 			es.unlocksSub.Unsubscribe()
 		}
 		es.chainSub.Unsubscribe()
+		es.chainHeadSub.Unsubscribe()
 
 	}()
 
@@ -467,77 +497,64 @@ func (es *EventSystem) eventLoop() {
 	}
 
 	if nodeCtx == common.ZONE_CTX && es.backend.ProcessingState() {
-		go es.handleZoneEventLoop(index)
-	}
-
-	for {
-		select {
-		case ev := <-es.chainCh:
-			es.handleChainEvent(index, ev)
-
-		case f := <-es.install:
-			if f.typ != MinedAndPendingLogsSubscription {
+		for {
+			select {
+			case ev := <-es.chainCh:
+				es.handleChainEvent(index, ev)
+			case ev := <-es.chainHeadCh:
+				es.handleChainHeadEvent(index, ev)
+			case ev := <-es.txsCh:
+				es.handleTxsEvent(index, ev)
+			case ev := <-es.logsCh:
+				es.handleLogs(index, ev)
+			case ev := <-es.rmLogsCh:
+				es.handleRemovedLogs(index, ev)
+			case ev := <-es.pendingLogsCh:
+				es.handlePendingLogs(index, ev)
+			case ev := <-es.unlocksCh:
+				es.handleUnlocksEvent(index, ev)
+			case f := <-es.install:
 				index[f.typ][f.id] = f
-			}
-			close(f.installed)
+				close(f.installed)
 
-		case f := <-es.uninstall:
-			if f.typ != MinedAndPendingLogsSubscription {
+			case f := <-es.uninstall:
 				delete(index[f.typ], f.id)
+				close(f.err)
+			// System stopped
+			case <-es.logsSub.Err():
+				return
+			case <-es.rmLogsSub.Err():
+				return
+			case <-es.pendingLogsSub.Err():
+				return
+			case <-es.chainSub.Err():
+				return
+			case <-es.chainHeadSub.Err():
+				return
 			}
-			close(f.err)
-
-		case <-es.chainSub.Err():
-			return
 		}
-	}
-}
+	} else {
+		for {
+			select {
+			case ev := <-es.chainCh:
+				es.handleChainEvent(index, ev)
 
-func (es *EventSystem) handleZoneEventLoop(index filterIndex) {
-	defer func() {
-		if r := recover(); r != nil {
-			es.backend.Logger().WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Error("Go-Quai Panicked")
-		}
-	}()
-	for {
-		select {
-		case ev := <-es.txsCh:
-			es.handleTxsEvent(index, ev)
-		case ev := <-es.logsCh:
-			es.handleLogs(index, ev)
-		case ev := <-es.rmLogsCh:
-			es.handleRemovedLogs(index, ev)
-		case ev := <-es.pendingLogsCh:
-			es.handlePendingLogs(index, ev)
-		case ev := <-es.unlocksCh:
-			es.handleUnlocksEvent(index, ev)
-		case f := <-es.install:
-			if f.typ == MinedAndPendingLogsSubscription {
-				// the type are logs and pending logs subscriptions
-				index[LogsSubscription][f.id] = f
-				index[PendingLogsSubscription][f.id] = f
-			} else {
+			case ev := <-es.chainHeadCh:
+				es.handleChainHeadEvent(index, ev)
+
+			case f := <-es.install:
 				index[f.typ][f.id] = f
-			}
-			close(f.installed)
+				close(f.installed)
 
-		case f := <-es.uninstall:
-			if f.typ == MinedAndPendingLogsSubscription {
-				// the type are logs and pending logs subscriptions
-				delete(index[LogsSubscription], f.id)
-				delete(index[PendingLogsSubscription], f.id)
-			} else {
+			case f := <-es.uninstall:
 				delete(index[f.typ], f.id)
+				close(f.err)
+
+			case <-es.chainSub.Err():
+				return
+			case <-es.chainHeadSub.Err():
+				return
 			}
-			close(f.err)
-		// System stopped
-		case <-es.logsSub.Err():
-			return
-		case <-es.rmLogsSub.Err():
-			return
 		}
 	}
 }

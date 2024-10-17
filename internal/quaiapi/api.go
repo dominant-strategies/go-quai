@@ -1015,14 +1015,14 @@ type RPCTransaction struct {
 }
 
 type RPCTxIn struct {
-	PreviousOutPoint types.OutpointJSON `json:"previousOutPoint,omitempty"`
-	PubKey           hexutil.Bytes      `json:"pubKey,omitempty"`
+	PreviousOutPoint types.OutpointJSON `json:"previousOutPoint"`
+	PubKey           hexutil.Bytes      `json:"pubKey"`
 }
 
 type RPCTxOut struct {
-	Denomination hexutil.Uint  `json:"denomination,omitempty"`
-	Address      hexutil.Bytes `json:"address,omitempty"`
-	Lock         *hexutil.Big  `json:"lock,omitempty"`
+	Denomination hexutil.Uint  `json:"denomination"`
+	Address      hexutil.Bytes `json:"address"`
+	Lock         *hexutil.Big  `json:"lock"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
