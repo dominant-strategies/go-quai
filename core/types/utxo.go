@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	MaxDenomination = 16
+	MaxDenomination = 14
 
 	MaxOutputIndex                  = math.MaxUint16
-	MaxTrimDenomination             = 6
+	MaxTrimDenomination             = 5
 	MaxTrimCollisionsPerKeyPerBlock = 1000
 )
 
@@ -34,18 +34,16 @@ func init() {
 	Denominations[2] = big.NewInt(10)          // 0.01 Qi
 	Denominations[3] = big.NewInt(50)          // 0.05 Qi
 	Denominations[4] = big.NewInt(100)         // 0.1 Qi
-	Denominations[5] = big.NewInt(250)         // 0.25 Qi
-	Denominations[6] = big.NewInt(500)         // 0.5 Qi
-	Denominations[7] = big.NewInt(1000)        // 1 Qi
-	Denominations[8] = big.NewInt(5000)        // 5 Qi
-	Denominations[9] = big.NewInt(10000)       // 10 Qi
-	Denominations[10] = big.NewInt(20000)      // 20 Qi
-	Denominations[11] = big.NewInt(50000)      // 50 Qi
-	Denominations[12] = big.NewInt(100000)     // 100 Qi
-	Denominations[13] = big.NewInt(1000000)    // 1000 Qi
-	Denominations[14] = big.NewInt(10000000)   // 10000 Qi
-	Denominations[15] = big.NewInt(100000000)  // 100000 Qi
-	Denominations[16] = big.NewInt(1000000000) // 1000000 Qi
+	Denominations[5] = big.NewInt(500)         // 0.5 Qi
+	Denominations[6] = big.NewInt(1000)        // 1 Qi
+	Denominations[7] = big.NewInt(5000)        // 5 Qi
+	Denominations[8] = big.NewInt(10000)       // 10 Qi
+	Denominations[9] = big.NewInt(20000)       // 20 Qi
+	Denominations[10] = big.NewInt(100000)     // 100 Qi
+	Denominations[11] = big.NewInt(1000000)    // 1000 Qi
+	Denominations[12] = big.NewInt(10000000)   // 10000 Qi
+	Denominations[13] = big.NewInt(100000000)  // 100000 Qi
+	Denominations[14] = big.NewInt(1000000000) // 1000000 Qi
 
 	TrimDepths = make(map[uint8]uint64)
 	TrimDepths[0] = 720  // 2 hours
