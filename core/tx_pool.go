@@ -616,13 +616,12 @@ func (pool *TxPool) GetMinGasPrice() *big.Int {
 		return big.NewInt(0)
 	}
 	baseFeeMin := pool.chain.CalcMinBaseFee(currentHeader)
-	baseFeeMinInGwei := new(big.Int).Div(baseFeeMin, new(big.Int).SetInt64(int64(params.GWei)))
 
 	// Increase this estimate by ~10% so that we account for the difficulty adjustment
-	baseFeeMinInGwei = new(big.Int).Mul(baseFeeMinInGwei, big.NewInt(100))
-	baseFeeMinInGwei = new(big.Int).Div(baseFeeMinInGwei, big.NewInt(90))
+	baseFeeMin = new(big.Int).Mul(baseFeeMin, big.NewInt(100))
+	baseFeeMin = new(big.Int).Div(baseFeeMin, big.NewInt(90))
 
-	return baseFeeMinInGwei
+	return baseFeeMin
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
@@ -720,22 +719,19 @@ func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.AddressBytes]typ
 	for addr, list := range pool.pending {
 		txs := list.Flatten()
 
-		// If the miner requests tip enforcement, cap the lists now
-		if enforceTips && !pool.locals.contains(addr) {
-			for i, tx := range txs {
-				// make sure that the tx has atleast min base fee as the gas
-				// price
-				currentBlock := pool.chain.CurrentBlock()
-				minBaseFee := pool.chain.CalcMinBaseFee(currentBlock)
-				if minBaseFee.Cmp(tx.GasPrice()) > 0 {
-					pool.logger.WithFields(log.Fields{
-						"tx":         tx.Hash().String(),
-						"gasPrice":   tx.GasPrice().String(),
-						"minBaseFee": minBaseFee.String(),
-					}).Debug("TX has incorrect or low gas price")
-					txs = txs[:i]
-					break
-				}
+		for i, tx := range txs {
+			// make sure that the tx has atleast min base fee as the gas
+			// price
+			currentBlock := pool.chain.CurrentBlock()
+			minBaseFee := pool.chain.CalcMinBaseFee(currentBlock)
+			if minBaseFee.Cmp(tx.GasPrice()) > 0 {
+				pool.logger.WithFields(log.Fields{
+					"tx":         tx.Hash().String(),
+					"gasPrice":   tx.GasPrice().String(),
+					"minBaseFee": minBaseFee.String(),
+				}).Debug("TX has incorrect or low gas price")
+				txs = txs[:i]
+				break
 			}
 		}
 		if len(txs) > 0 {
@@ -814,6 +810,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		if err != nil {
 			return err
 		}
+	}
+	currentBlock := pool.chain.CurrentBlock()
+	minBaseFee := pool.chain.CalcMinBaseFee(currentBlock)
+	if minBaseFee.Cmp(tx.GasPrice()) > 0 {
+		pool.logger.WithFields(log.Fields{
+			"tx":         tx.Hash().String(),
+			"gasPrice":   tx.GasPrice().String(),
+			"minBaseFee": minBaseFee.String(),
+		}).Debug("TX has incorrect or low gas price")
+		return fmt.Errorf("tx has incorrect or low gas price, have %s, want %s", tx.GasPrice().String(), minBaseFee.String())
 	}
 
 	// Drop non-local transactions under our own minimal accepted gas price or tip
@@ -1876,6 +1882,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.WorkObject) {
 	pool.qiGasScalingFactor = math.Log(float64(rawdb.ReadUTXOSetSize(pool.db, newHead.Hash())))
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit()
+	if pool.currentMaxGas == 0 {
+		pool.currentMaxGas = params.GenesisGasLimit
+	}
 
 	// Inject any transactions discarded due to reorgs
 	pool.logger.WithField("count", len(reinject)).Debug("Reinjecting stale transactions")

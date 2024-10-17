@@ -519,8 +519,8 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	}
 
 	// Calculate the base fee
-	quaiBaseFee := header.BaseFee()
-	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), quaiBaseFee)
+	minGasPrice := s.b.GetMinGasPrice()
+	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), minGasPrice)
 	feeInQi := misc.QuaiToQi(header, feeInQuai)
 	if feeInQi.Cmp(big.NewInt(0)) == 0 {
 		// Minimum fee is 1 qit or smallest unit
