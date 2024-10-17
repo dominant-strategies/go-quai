@@ -88,6 +88,8 @@ var (
 	tokenChoicePrefix       = []byte("tc")    // tokenChoicePrefix + hash -> tokenChoices
 	betasPrefix             = []byte("betas") // tokenChoicePrefix + hash -> tokenChoices
 	utxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
+	DuplicateUtxoSetPrefix  = []byte("du")    // duplicateUtxoSetPrefix + hash -> multiset
+	duplicateUtxoKeysPrefix = []byte("dk")    // duplicateUtxoKeysPrefix + hash -> [][]byte
 	spentUTXOsPrefix        = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	trimmedUTXOsPrefix      = []byte("tutxo") // trimmedUTXOsPrefix + hash -> []types.SpentTxOut
 	trimDepthsPrefix        = []byte("td")    // trimDepthsPrefix + hash -> uint64
@@ -326,7 +328,7 @@ func UtxoKeyWithDenomination(hash common.Hash, index uint16, denomination uint8)
 }
 
 func ReverseUtxoKey(key []byte) (common.Hash, uint16, error) {
-	if len(key) != len(UtxoPrefix)+common.HashLength+2 {
+	if len(key) != UtxoKeyLength {
 		return common.Hash{}, 0, fmt.Errorf("invalid key length %d", len(key))
 	}
 	hash := common.BytesToHash(key[len(UtxoPrefix) : common.HashLength+len(UtxoPrefix)])
@@ -380,4 +382,12 @@ func tokenChoiceSetKey(hash common.Hash) []byte {
 
 func betasKey(hash common.Hash) []byte {
 	return append(betasPrefix, hash.Bytes()...)
+}
+
+func duplicateUtxoSetKey(hash []byte) []byte {
+	return append(DuplicateUtxoSetPrefix, hash...)
+}
+
+func duplicateUtxoKeysKey(hash []byte) []byte {
+	return append(duplicateUtxoKeysPrefix, hash...)
 }

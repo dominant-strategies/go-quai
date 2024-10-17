@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -38,6 +40,7 @@ const (
 
 var (
 	errInvalidEfficiencyScore = errors.New("unable to compute efficiency score")
+	primeBlockCounter         uint64
 )
 
 type calcOrderResponse struct {
@@ -95,8 +98,8 @@ type HeaderChain struct {
 	powHashCache *lru.Cache[common.Hash, common.Hash]
 
 	calcOrderCache *lru.Cache[common.Hash, calcOrderResponse]
-
-	logger *log.Logger
+	chainIndexer   *ChainIndexer
+	logger         *log.Logger
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
@@ -463,6 +466,78 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			"Number": head.NumberArray(),
 		}).Info("Setting the current header")
 		hc.currentHeader.Store(head)
+		if hc.config.DuplicateUTXOSet && nodeCtx == common.ZONE_CTX && hc.ProcessingState() {
+			_, order, err := hc.engine.CalcOrder(hc, head)
+			if err != nil {
+				hc.logger.Errorf("Unable to duplicate: Error calculating order for block %s: %+v", head.Hash(), err)
+			}
+			if order == common.PRIME_CTX {
+				primeBlockCounter++
+			}
+			if err == nil && order == common.PRIME_CTX && primeBlockCounter%params.DuplicateUtxoSetFrequency == 0 {
+				hc.logger.Info("Duplicating UTXO set")
+				it := hc.Database().NewIterator(rawdb.UtxoPrefix, nil)
+				defer it.Release()
+				setSize := rawdb.ReadUTXOSetSize(hc.headerDb, head.Hash())
+				utxos := make(types.TxOuts, 0, setSize)
+				utxoKeys := make([][]byte, 0, setSize)
+				for it.Next() {
+					data := it.Value()
+					if len(it.Key()) != rawdb.UtxoKeyLength {
+						hc.logger.Errorf("Error duplicating Utxo set: Invalid key length: %+v", it.Key())
+						continue
+					}
+					utxoProto := new(types.ProtoTxOut)
+					if err := proto.Unmarshal(data, utxoProto); err != nil {
+						hc.logger.Errorf("Error duplicating Utxo set: Failed to unmarshal ProtoTxOut: %+v data: %+v key: %+v", err, data, it.Key())
+						continue
+					}
+					utxo := new(types.TxOut)
+					if err := utxo.ProtoDecode(utxoProto); err != nil {
+						hc.logger.WithFields(log.Fields{
+							"key":  it.Key(),
+							"data": data,
+							"err":  err,
+						}).Error("Error duplicating Utxo set: Invalid utxo Proto")
+						continue
+					}
+					utxos = append(utxos, *utxo)
+					utxoKeys = append(utxoKeys, it.Key())
+				}
+				it.Release()
+				hash := head.Hash().Bytes()
+				// Append the block number to the hash
+				hash = binary.BigEndian.AppendUint64(hash, head.NumberU64(hc.NodeCtx()))
+				hc.logger.Infof("Writing duplicate UTXO set size: %d, utxos: %d utxoKeys: %d hash: %+v", setSize, len(utxos), len(utxoKeys), hash)
+				if err := rawdb.WriteDuplicateUTXOSet(hc.headerDb, hash, utxos, utxoKeys); err != nil {
+					hc.logger.Errorf("Error duplicating Utxo set: %+v", err)
+				}
+
+				var lowestBlockHeight uint64
+				lowestBlockHeightKey := make([]byte, len(rawdb.DuplicateUtxoSetPrefix)+common.HashLength+8)
+				i := 0
+				it = hc.Database().NewIterator(rawdb.DuplicateUtxoSetPrefix, nil)
+				for it.Next() {
+					if len(it.Key()) != len(rawdb.DuplicateUtxoSetPrefix)+common.HashLength+8 {
+						hc.logger.Errorf("Error pruning duplicate utxo set: Invalid key length: %+v", it.Key())
+						continue
+					}
+					numberStart := len(rawdb.DuplicateUtxoSetPrefix) + common.HashLength
+					height := binary.BigEndian.Uint64(it.Key()[numberStart:])
+					if lowestBlockHeight == 0 || height < lowestBlockHeight {
+						lowestBlockHeight = height
+						copy(lowestBlockHeightKey, it.Key())
+					}
+					i++
+				}
+				it.Release()
+				if i > params.MaxDuplicateUtxoSets {
+					hc.logger.Infof("Deleting duplicate UTXO set: %+v", lowestBlockHeightKey)
+					rawdb.DeleteDuplicateUTXOSet(hc.headerDb, lowestBlockHeightKey[len(rawdb.DuplicateUtxoSetPrefix):])
+				}
+			}
+		}
+
 		return nil
 	}
 
@@ -1354,4 +1429,99 @@ func (hc *HeaderChain) GetMaxTxInWorkShare() uint64 {
 
 func (hc *HeaderChain) Database() ethdb.Database {
 	return hc.headerDb
+}
+
+func (hc *HeaderChain) SetIndexer(indexer *ChainIndexer) {
+	hc.chainIndexer = indexer
+}
+
+// DeleteUTXOSetAndReplaceFromLatest deletes the UTXO set and replaces it with the duplicated UTXO set of the latest block
+// Returns the hash of the new head block
+// This function MUST be called with headermu lock held.
+func (hc *HeaderChain) DeleteUTXOSetAndReplaceFromLatest() (*common.Hash, error) {
+	// Delete the UTXO set
+	it := hc.Database().NewIterator(rawdb.UtxoPrefix, nil)
+
+	i := 0
+	for it.Next() {
+		data := it.Value()
+		if len(it.Key()) != rawdb.UtxoKeyLength {
+			hc.logger.Errorf("Error duplicating Utxo set: Invalid key length: %+v", it.Key())
+			continue
+		}
+		// Ensure the data is a valid proto-encoded UTXO before deleting it
+		utxoProto := new(types.ProtoTxOut)
+		if err := proto.Unmarshal(data, utxoProto); err != nil {
+			hc.logger.Errorf("Error duplicating Utxo set: Failed to unmarshal ProtoTxOut: %+v data: %+v key: %+v", err, data, it.Key())
+			continue
+		}
+		hc.Database().Delete(it.Key())
+		i++
+	}
+	it.Release()
+	hc.logger.Infof("Deleted %d UTXOs", i)
+
+	var highestBlockHeight uint64
+	highestBlockHeightKey := make([]byte, len(rawdb.DuplicateUtxoSetPrefix)+common.HashLength+8)
+	it = hc.Database().NewIterator(rawdb.DuplicateUtxoSetPrefix, nil)
+	for it.Next() {
+		if len(it.Key()) != len(rawdb.DuplicateUtxoSetPrefix)+common.HashLength+8 {
+			hc.logger.Errorf("Error pruning duplicate utxo set: Invalid key length: %+v", it.Key())
+			continue
+		}
+		numberStart := len(rawdb.DuplicateUtxoSetPrefix) + common.HashLength
+		height := binary.BigEndian.Uint64(it.Key()[numberStart:])
+		if highestBlockHeight == 0 || height > highestBlockHeight {
+			highestBlockHeight = height
+			copy(highestBlockHeightKey, it.Key())
+		}
+	}
+	it.Release()
+	// Get the UTXO set of the latest block
+	utxoSet, utxoKeys, err := rawdb.ReadDuplicateUTXOSet(hc.headerDb, highestBlockHeightKey[len(rawdb.DuplicateUtxoSetPrefix):])
+	if err != nil {
+		hc.logger.Errorf("Error reading duplicate utxo set: %v", err)
+		return nil, fmt.Errorf("error reading duplicate utxo set: %v", err)
+	}
+	if len(utxoSet) != len(utxoKeys) {
+		hc.logger.Errorf("Error duplicating Utxo set: UTXO set and keys are not the same length")
+		return nil, fmt.Errorf("error duplicating Utxo set: UTXO set and keys are not the same length")
+	}
+	addressOutpoints := make(map[string]map[string]*types.OutpointAndDenomination)
+	i = 0
+	// Write the UTXO set to the database
+	for i, key := range utxoKeys {
+		txhash, index, err := rawdb.ReverseUtxoKey(key)
+		if err != nil {
+			hc.logger.Errorf("Error duplicating Utxo set: Failed to reverse UTXO key: %v", err)
+			continue
+		}
+		if err := rawdb.CreateUTXO(hc.headerDb, txhash, index, &types.UtxoEntry{Denomination: utxoSet[i].Denomination, Address: utxoSet[i].Address, Lock: utxoSet[i].Lock}); err != nil {
+			hc.logger.Errorf("Error duplicating Utxo set: Failed to create UTXO: %v", err)
+			continue
+		}
+		outpointAndDenom := &types.OutpointAndDenomination{TxHash: txhash, Index: index, Denomination: utxoSet[i].Denomination}
+		address := common.BytesToAddress(utxoSet[i].Address, hc.NodeLocation()).Hex()
+		if _, ok := addressOutpoints[address]; !ok {
+			addressOutpoints[address] = make(map[string]*types.OutpointAndDenomination)
+		}
+		addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
+		i++
+	}
+	newHeadBlockHash := common.BytesToHash(highestBlockHeightKey[len(rawdb.DuplicateUtxoSetPrefix) : len(rawdb.DuplicateUtxoSetPrefix)+common.HashLength])
+	// Update the indexer
+	if hc.chainIndexer != nil {
+		header := hc.GetHeaderByHash(newHeadBlockHash)
+		if header == nil {
+			return nil, fmt.Errorf("error getting header for new head hash: %v", newHeadBlockHash)
+		}
+		hc.chainIndexer.ResetUtxoIndexer(header)
+		if err := rawdb.WriteAddressOutpoints(hc.bc.db, addressOutpoints); err != nil {
+			return nil, fmt.Errorf("error writing address outpoints: %v", err)
+		}
+	} else {
+		hc.logger.Warn("Chain indexer is nil")
+	}
+	hc.logger.Infof("Reset UTXO set from block hash %v height %d utxo set size %d", newHeadBlockHash, highestBlockHeight, i)
+	return &newHeadBlockHash, nil
 }

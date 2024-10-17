@@ -1632,3 +1632,63 @@ func WriteAlreadyPruned(db ethdb.KeyValueWriter, blockHash common.Hash) {
 		db.Logger().WithField("err", err).Fatal("Failed to store already pruned")
 	}
 }
+
+func WriteDuplicateUTXOSet(db ethdb.KeyValueWriter, blockHashAndNumber []byte, duplicateUTXOs types.TxOuts, duplicateUTXOKeys [][]byte) error {
+	protoDuplicateUTXOs, err := duplicateUTXOs.ProtoEncode()
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoDuplicateUTXOs)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal duplicate utxo set")
+	}
+	if err := db.Put(duplicateUtxoSetKey(blockHashAndNumber), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store duplicate utxo set")
+	}
+	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(duplicateUTXOKeys))}
+	protoKeys.Keys = append(protoKeys.Keys, duplicateUTXOKeys...)
+	keysData, err := proto.Marshal(protoKeys)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Marshal duplicate utxo keys")
+	}
+	if err := db.Put(duplicateUtxoKeysKey(blockHashAndNumber), keysData); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store duplicate utxo set")
+	}
+	return nil
+}
+
+func ReadDuplicateUTXOSet(db ethdb.Reader, blockHashAndNumber []byte) (types.TxOuts, [][]byte, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(duplicateUtxoSetKey(blockHashAndNumber))
+	if len(data) == 0 {
+		return nil, nil, nil
+	}
+	protoDuplicateUTXOs := new(types.ProtoTxOuts)
+	if err := proto.Unmarshal(data, protoDuplicateUTXOs); err != nil {
+		return nil, nil, err
+	}
+	duplicateUTXOs := types.TxOuts{}
+	if err := duplicateUTXOs.ProtoDecode(protoDuplicateUTXOs); err != nil {
+		return nil, nil, err
+	}
+	data, _ = db.Get(duplicateUtxoKeysKey(blockHashAndNumber))
+	if len(data) == 0 {
+		return nil, nil, nil
+	}
+	protoKeys := new(types.ProtoKeys)
+	if err := proto.Unmarshal(data, protoKeys); err != nil {
+		return nil, nil, err
+	}
+	duplicateUTXOKeys := make([][]byte, 0, len(protoKeys.Keys))
+	duplicateUTXOKeys = append(duplicateUTXOKeys, protoKeys.Keys...)
+	return duplicateUTXOs, duplicateUTXOKeys, nil
+}
+
+func DeleteDuplicateUTXOSet(db ethdb.KeyValueWriter, blockHashAndNumber []byte) {
+	if err := db.Delete(duplicateUtxoSetKey(blockHashAndNumber)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete duplicate utxo set")
+	}
+	if err := db.Delete(duplicateUtxoKeysKey(blockHashAndNumber)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete duplicate utxo keys")
+	}
+}

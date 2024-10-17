@@ -181,6 +181,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	chainConfig.Location = config.NodeLocation // TODO: See why this is necessary
 	chainConfig.DefaultGenesisHash = config.DefaultGenesisHash
 	chainConfig.IndexAddressUtxos = config.IndexAddressUtxos
+	chainConfig.DuplicateUTXOSet = config.DuplicateUTXOSet
 	logger.WithFields(log.Fields{
 		"Ctx":          nodeCtx,
 		"NodeLocation": config.NodeLocation,
@@ -255,6 +256,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	if quai.core.ProcessingState() && nodeCtx == common.ZONE_CTX {
 		quai.bloomIndexer = core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms, chainConfig.Location.Context(), logger, config.IndexAddressUtxos)
 		quai.bloomIndexer.Start(quai.Core().Slice().HeaderChain(), newChainConfig)
+		quai.Core().Slice().HeaderChain().SetIndexer(quai.bloomIndexer)
 	}
 
 	// Set the p2p Networking API

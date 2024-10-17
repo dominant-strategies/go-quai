@@ -530,6 +530,10 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	return (*hexutil.Big)(feeInQi), nil
 }
 
+func (s *PublicBlockChainQuaiAPI) GetLatestUTXOSetSize(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+	return hexutil.Uint64(rawdb.ReadUTXOSetSize(s.b.Database(), s.b.CurrentBlock().Hash())), nil
+}
+
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.

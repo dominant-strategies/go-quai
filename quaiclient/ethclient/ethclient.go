@@ -510,6 +510,15 @@ func (ec *Client) EstimateFeeForQi(ctx context.Context, tx *types.Transaction) (
 	return (*big.Int)(&result), nil
 }
 
+func (ec *Client) GetLatestUTXOSetSize(ctx context.Context) (uint64, error) {
+	var result hexutil.Uint64
+	err := ec.c.CallContext(ctx, &result, "quai_getLatestUTXOSetSize")
+	if err != nil {
+		return 0, err
+	}
+	return uint64(result), nil
+}
+
 // AccessListResult returns an optional accesslist
 // Its the result of the `quai_createAccessList` RPC call.
 // It contains an error if the transaction itself failed.

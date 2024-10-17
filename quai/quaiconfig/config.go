@@ -158,6 +158,9 @@ type Config struct {
 	// IndexAddressUtxos enables or disables address utxo indexing
 	IndexAddressUtxos bool
 
+	// DuplicateUTXOSet enables or disables copying utxo set every DuplicateUtxoSetFrequency blocks
+	DuplicateUTXOSet bool
+
 	// DefaultGenesisHash is the hard coded genesis hash
 	DefaultGenesisHash common.Hash
 }
