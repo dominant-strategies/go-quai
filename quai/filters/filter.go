@@ -44,6 +44,7 @@ type Backend interface {
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription
+	SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.Subscription
 	ProcessingState() bool
 	NodeLocation() common.Location
 	NodeCtx() int
