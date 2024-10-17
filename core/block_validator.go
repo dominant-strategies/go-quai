@@ -225,9 +225,11 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 	if err == nil || err.Error() == consensus.ErrUnknownAncestor.Error() {
 		return pubsub.ValidationAccept
 	} else if err.Error() == consensus.ErrFutureBlock.Error() {
+		v.hc.logger.WithField("hash", wo.Hash()).WithError(err).Debug("Future block, ignoring")
 		// Weird future block, don't fail, but neither propagate
 		return pubsub.ValidationIgnore
 	} else {
+		v.hc.logger.WithField("hash", wo.Hash()).WithError(err).Debug("Invalid block, rejecting")
 		return pubsub.ValidationReject
 	}
 }

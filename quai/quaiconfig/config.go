@@ -64,7 +64,7 @@ var Defaults = Config{
 	},
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   params.GasCeil,
-	RPCTxFeeCap: 100, // 100 quai
+	RPCTxFeeCap: 10000, // 10000 quai
 }
 
 //go:generate gencodec -type Config -formats toml -out gen_config.go

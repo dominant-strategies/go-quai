@@ -722,6 +722,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, errors.New("block not found")
 		}
 		hi = block.GasLimit()
+		if hi == 0 {
+			hi = params.GasCeil
+		}
 	}
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
@@ -825,6 +828,8 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
+	// Add 10% to the final gas estimate
+	hi = hi + hi/10
 	return hexutil.Uint64(hi), nil
 }
 
