@@ -1113,7 +1113,7 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		}
 	}
 	// Ensure the transaction does not spend more than its inputs.
-	if totalQitOut.Cmp(totalQitIn) == 1 {
+	if totalQitOut.Cmp(totalQitIn) > 1 {
 		str := fmt.Sprintf("total value of all transaction inputs for "+
 			"transaction %v is %v which is less than the amount "+
 			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
@@ -1348,7 +1348,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	// Start timing for fee verification
 	stepStart = time.Now()
 	// Ensure the transaction does not spend more than its inputs.
-	if totalQitOut.Cmp(totalQitIn) == 1 {
+	if totalQitOut.Cmp(totalQitIn) > 1 {
 		str := fmt.Sprintf("total value of all transaction inputs for "+
 			"transaction %v is %v which is less than the amount "+
 			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
