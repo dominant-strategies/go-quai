@@ -671,7 +671,7 @@ func (hc *HierarchicalCoordinator) MapConstructProc() {
 	for {
 		select {
 		case <-hc.pendingHeaderBackupCh:
-			log.Global.Error("Running the backup calculation")
+			log.Global.Info("Running the backup calculation on recent blocks")
 			hc.PendingHeadersMap()
 		case <-hc.quitCh:
 			return

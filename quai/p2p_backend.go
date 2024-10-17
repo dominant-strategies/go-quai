@@ -111,6 +111,8 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			return false
 		}
 
+		backend.Logger().WithFields(log.Fields{"message id": Id, "Number": data.WorkObject.NumberArray(), "Hash": data.WorkObject.Hash()}).Info("Received a work object block view broadcast")
+
 		backend.WriteBlock(data.WorkObject)
 		blockIngressCounter.Inc()
 	case types.WorkObjectHeaderView:
@@ -119,6 +121,9 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			log.Global.Error("no backend found")
 			return false
 		}
+
+		backend.Logger().WithFields(log.Fields{"message id": Id, "Number": data.WorkObject.NumberArray(), "Hash": data.WorkObject.Hash()}).Info("Received a work object header view broadcast")
+
 		// Only append this in the case of the slice
 		if !backend.ProcessingState() && backend.NodeCtx() == common.ZONE_CTX {
 			backend.WriteBlock(data.WorkObject)

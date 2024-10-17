@@ -866,7 +866,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 							continue
 						}
 					}
-					hc.logger.Infof("Redeeming %s locked Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
+					hc.logger.Debugf("Redeeming %s locked Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
 					statedb.AddBalance(internal, balance)
 				}
 			}
@@ -889,7 +889,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 						continue
 					}
 				}
-				hc.logger.Infof("Redeeming %s converted Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
+				hc.logger.Debugf("Redeeming %s converted Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
 				statedb.AddBalance(internal, balance)
 			}
 		}

@@ -108,7 +108,8 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	}
 	bwctr := libp2pmetrics.NewBandwidthCounter()
 
-	log.Global.Warn("listen addr strings", fmt.Sprintf("/ip4/%s/udp/%s/quic", ipAddr, port))
+	log.Global.Info("listen addr tcp ", fmt.Sprintf("/ip4/%s/udp/%s/tcp", ipAddr, port))
+	log.Global.Info("listen addrs quic ", fmt.Sprintf("/ip4/%s/udp/%s/quic", ipAddr, port))
 	// Create the libp2p host
 
 	peerKey := getNodeKey()

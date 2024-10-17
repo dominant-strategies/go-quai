@@ -1095,7 +1095,7 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		"number": block.NumberArray(),
 		"hash":   block.Hash(),
 		"fill":   fill,
-	}).Info("GeneratePendingHeader")
+	}).Debug("GeneratePendingHeader")
 	start := time.Now()
 	// set the current header to this block
 	switch sl.NodeCtx() {
