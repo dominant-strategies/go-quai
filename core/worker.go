@@ -2004,10 +2004,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 				types.MaxDenomination)
 			return errors.New(str)
 		}
-		// Check for duplicate addresses. This also checks for duplicate inputs.
-		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
-			return errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
-		}
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
 		utxoHash := types.UTXOHash(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo)

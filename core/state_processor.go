@@ -982,10 +982,6 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 		if !address.Equal(entryAddr) {
 			return nil, fmt.Errorf("tx %032x spends UTXO %032x:%d with invalid pubkey, have %s want %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, address.String(), entryAddr.String())
 		}
-		// Check for duplicate addresses. This also checks for duplicate inputs.
-		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
-			return nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String())
-		}
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 
 		// Perform some spend processing logic
@@ -1223,10 +1219,6 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 				return nil, nil, nil, err, nil
 			}
 			pubKeys = append(pubKeys, pubKey)
-		}
-		// Check for duplicate addresses. This also checks for duplicate inputs.
-		if _, exists := addresses[common.AddressBytes(utxo.Address)]; exists {
-			return nil, nil, nil, errors.New("Duplicate address in QiTx inputs: " + common.AddressBytes(utxo.Address).String()), nil
 		}
 		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
 
