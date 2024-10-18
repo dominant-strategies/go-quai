@@ -203,6 +203,7 @@ message ProtoOutPointAndDenomination {
   optional common.ProtoHash hash = 1;
   optional uint32 index = 2;
   optional uint32 denomination = 3;
+  optional bytes lock = 4;
 }
 
 message ProtoAddressOutPoints {

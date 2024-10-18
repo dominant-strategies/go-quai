@@ -182,9 +182,10 @@ func (outPoint *OutPoint) ProtoDecode(protoOutPoint *ProtoOutPoint) error {
 }
 
 type OutpointAndDenomination struct {
-	TxHash       common.Hash
-	Index        uint16
-	Denomination uint8
+	TxHash       common.Hash `json:"txHash"`
+	Index        uint16      `json:"index"`
+	Denomination uint8       `json:"denomination"`
+	Lock         *big.Int    `json:"lock"`
 }
 
 func (outPoint OutpointAndDenomination) Key() string {
@@ -201,6 +202,9 @@ func (outPoint OutpointAndDenomination) ProtoEncode() (*ProtoOutPointAndDenomina
 	protoOutPoint.Index = &index
 	denomination := uint32(outPoint.Denomination)
 	protoOutPoint.Denomination = &denomination
+	if outPoint.Lock != nil {
+		protoOutPoint.Lock = outPoint.Lock.Bytes()
+	}
 
 	return protoOutPoint, nil
 }
@@ -209,6 +213,11 @@ func (outPoint *OutpointAndDenomination) ProtoDecode(protoOutPoint *ProtoOutPoin
 	outPoint.TxHash.ProtoDecode(protoOutPoint.Hash)
 	outPoint.Index = uint16(*protoOutPoint.Index)
 	outPoint.Denomination = uint8(*protoOutPoint.Denomination)
+	if protoOutPoint.Lock != nil {
+		outPoint.Lock = new(big.Int).SetBytes(protoOutPoint.Lock)
+	} else {
+		outPoint.Lock = big.NewInt(0)
+	}
 	return nil
 }
 

@@ -458,6 +458,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					if lockup.Uint64() < params.ConversionLockPeriod {
 						return nil, nil, nil, nil, 0, 0, 0, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 					}
+					lockup.Add(lockup, blockNumber)
 					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
 					denominations := misc.FindMinDenominations(value)
 					outputIndex := uint16(0)

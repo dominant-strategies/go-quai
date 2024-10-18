@@ -148,12 +148,30 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	}
 }
 
-func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, address common.Address) (map[string]*types.OutpointAndDenomination, error) {
-	outpints, err := s.b.AddressOutpoints(ctx, address)
+func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, address common.Address) ([]interface{}, error) {
+	outpoints, err := s.b.AddressOutpoints(ctx, address)
 	if err != nil {
 		return nil, err
 	}
-	return outpints, nil
+	jsonOutpoints := make([]interface{}, 0, len(outpoints))
+	for _, outpoint := range outpoints {
+		if outpoint == nil {
+			continue
+		}
+		lock := big.NewInt(0)
+		if outpoint.Lock != nil {
+			lock = outpoint.Lock
+		}
+		jsonOutpoint := map[string]interface{}{
+			"txHash":       outpoint.TxHash.Hex(),
+			"index":        hexutil.Uint64(outpoint.Index),
+			"denomination": hexutil.Uint64(outpoint.Denomination),
+			"lock":         hexutil.Big(*lock),
+		}
+		jsonOutpoints = append(jsonOutpoints, jsonOutpoint)
+	}
+
+	return jsonOutpoints, nil
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
