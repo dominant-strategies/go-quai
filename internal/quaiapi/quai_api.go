@@ -812,7 +812,11 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHa
 	var header *types.WorkObject
 	var err error
 	if blockNr, ok := blockNrOrHash.Number(); ok {
-		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+		if blockNr == rpc.LatestBlockNumber {
+			header = s.b.CurrentHeader()
+		} else {
+			header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+		}
 	} else if hash, ok := blockNrOrHash.Hash(); ok {
 		header, err = s.b.HeaderByHash(ctx, hash)
 	} else {
@@ -820,6 +824,8 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHa
 	}
 	if err != nil {
 		s.b.Logger().WithField("err", err).Error("Error calculating QiRateAtBlock")
+		return nil
+	} else if header == nil {
 		return nil
 	}
 	return (*hexutil.Big)(misc.QiToQuai(header, new(big.Int).SetUint64(qiAmount)))
@@ -830,7 +836,11 @@ func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockNrOr
 	var header *types.WorkObject
 	var err error
 	if blockNr, ok := blockNrOrHash.Number(); ok {
-		header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+		if blockNr == rpc.LatestBlockNumber {
+			header = s.b.CurrentHeader()
+		} else {
+			header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+		}
 	} else if hash, ok := blockNrOrHash.Hash(); ok {
 		header, err = s.b.HeaderByHash(ctx, hash)
 	} else {
@@ -838,6 +848,8 @@ func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockNrOr
 	}
 	if err != nil {
 		s.b.Logger().WithField("err", err).Error("Error calculating QuaiRateAtBlock")
+		return nil
+	} else if header == nil {
 		return nil
 	}
 	return (*hexutil.Big)(misc.QuaiToQi(header, new(big.Int).SetUint64(quaiAmount)))
