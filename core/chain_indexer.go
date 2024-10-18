@@ -19,7 +19,6 @@ package core
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 	"runtime/debug"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -36,6 +36,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"google.golang.org/protobuf/proto"
 )
 
 var PruneDepth = uint64(100000000) // Number of blocks behind in which we begin pruning old block data
@@ -702,10 +703,6 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpoints map[string]map[str
 	for _, tx := range utxos {
 		for _, in := range tx.TxIn() {
 
-			if types.IsCoinBaseTx(tx) {
-				continue
-			}
-
 			outpoint := in.PreviousOutPoint
 
 			address := crypto.PubkeyBytesToAddress(in.PubKey, config.Location).Hex()
@@ -740,66 +737,145 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpoints map[string]map[str
 			addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
 		}
 	}
+
+	for _, tx := range block.Body().ExternalTransactions() {
+		if tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
+			lockupByte := tx.Data()[0]
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+			lockup.Add(lockup, block.Number(nodeCtx))
+
+			coinbaseAddr := tx.To().Hex()
+
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+				// If the denomination count is zero, skip it
+				if denominations[uint8(denomination)] == 0 {
+					continue
+				}
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if outputIndex >= types.MaxOutputIndex {
+						// No more gas, the rest of the denominations are lost but the tx is still valid
+						break
+					}
+					// the ETX hash is guaranteed to be unique
+					outpointAndDenom := &types.OutpointAndDenomination{
+						TxHash:       tx.Hash(),
+						Index:        outputIndex,
+						Denomination: uint8(denomination),
+						Lock:         lockup,
+					}
+					if _, exists := addressOutpoints[coinbaseAddr]; !exists {
+						addressOutpoints[coinbaseAddr] = rawdb.ReadOutpointsForAddress(c.chainDb, coinbaseAddr)
+					}
+					addressOutpoints[coinbaseAddr][outpointAndDenom.Key()] = outpointAndDenom
+					outputIndex++
+				}
+			}
+		} else if tx.EtxType() == types.ConversionType && tx.To().IsInQiLedgerScope() {
+			lock := new(big.Int).Add(block.Number(nodeCtx), new(big.Int).SetUint64(params.ConversionLockPeriod))
+			value := tx.Value()
+			addr := tx.To().Hex()
+			txGas := tx.Gas()
+			if txGas < params.TxGas {
+				continue
+			}
+			txGas -= params.TxGas
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+				// If the denomination count is zero, skip it
+				if denominations[uint8(denomination)] == 0 {
+					continue
+				}
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						// No more gas, the rest of the denominations are lost but the tx is still valid
+						break
+					}
+					txGas -= params.CallValueTransferGas
+					// the ETX hash is guaranteed to be unique
+
+					outpointAndDenom := &types.OutpointAndDenomination{
+						TxHash:       tx.Hash(),
+						Index:        outputIndex,
+						Denomination: uint8(denomination),
+						Lock:         lock,
+					}
+					if _, exists := addressOutpoints[addr]; !exists {
+						addressOutpoints[addr] = rawdb.ReadOutpointsForAddress(c.chainDb, addr)
+					}
+					addressOutpoints[addr][outpointAndDenom.Key()] = outpointAndDenom
+					outputIndex++
+				}
+			}
+		}
+	}
 }
 
 // reorgUtxoIndexer adds back previously removed outpoints and removes newly added outpoints.
 // This is done in reverse order from the old header to the common ancestor.
 func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutpoints map[string]map[string]*types.OutpointAndDenomination, nodeCtx int, config params.ChainConfig) error {
 	for _, header := range headers {
-		block := rawdb.ReadWorkObject(c.chainDb, header.NumberU64(nodeCtx), header.Hash(), types.BlockObject)
 
-		for _, tx := range block.QiTransactions() {
-			for i, out := range tx.TxOut() {
+		sutxos, err := rawdb.ReadSpentUTXOs(c.chainDb, header.Hash())
+		if err != nil {
+			return err
+		}
+		trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(c.chainDb, header.Hash())
+		if err != nil {
+			return err
+		}
+		sutxos = append(sutxos, trimmedUtxos...)
+		for _, sutxo := range sutxos {
 
-				address := out.Address
+			addrBytes := sutxo.Address
+			address := common.BytesToAddress(addrBytes, config.Location).Hex()
 
-				addr := common.BytesToAddress(address, config.Location).Hex()
-				outpointsForAddress, exists := addressOutpoints[addr]
-				if !exists {
-					outpointsForAddress = rawdb.ReadOutpointsForAddress(c.chainDb, addr)
-					addressOutpoints[addr] = outpointsForAddress
-				}
-
-				// reconstruct outpoint to remove it via outpoint.Key()
-				outpoint := types.OutPoint{
-					TxHash: tx.Hash(),
-					Index:  uint16(i),
-				}
-
-				delete(outpointsForAddress, outpoint.Key())
+			outpointAndDenom := &types.OutpointAndDenomination{
+				TxHash:       sutxo.TxHash,
+				Index:        sutxo.Index,
+				Denomination: sutxo.Denomination,
+				Lock:         sutxo.Lock,
 			}
 
-			if types.IsCoinBaseTx(tx) {
-				continue
+			if _, exists := addressOutpoints[address]; !exists {
+				addressOutpoints[address] = rawdb.ReadOutpointsForAddress(c.chainDb, address)
 			}
-
-			for _, in := range tx.TxIn() {
-				outpoint := in.PreviousOutPoint
-				address := crypto.PubkeyBytesToAddress(in.PubKey, config.Location).Hex()
-				parentNumber := rawdb.ReadHeaderNumber(c.chainDb, block.ParentHash(nodeCtx))
-				if parentNumber == nil {
-					return errors.New("parent number cannot be found")
-				}
-
-				entry := rawdb.GetUTXO(c.chainDb, outpoint.TxHash, outpoint.Index)
-				if entry == nil {
-					// missing entry while tryig to add back outpoint
-					continue
-				}
-
-				outpointAndDenom := &types.OutpointAndDenomination{
-					TxHash:       outpoint.TxHash,
-					Index:        outpoint.Index,
-					Denomination: entry.Denomination,
-				}
-
-				if _, exists := addressOutpoints[address]; !exists {
-					addressOutpoints[address] = rawdb.ReadOutpointsForAddress(c.chainDb, address)
-				}
-				addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
-			}
+			addressOutpoints[address][outpointAndDenom.Key()] = outpointAndDenom
 
 		}
+		utxoKeys, err := rawdb.ReadCreatedUTXOKeys(c.chainDb, header.Hash())
+		if err != nil {
+			return err
+		}
+		for _, key := range utxoKeys {
+			if len(key) == rawdb.UtxoKeyWithDenominationLength {
+				key = key[:rawdb.UtxoKeyLength] // The last byte of the key is the denomination (but only in CreatedUTXOKeys)
+			}
+			data, _ := c.chainDb.Get(key)
+			utxoProto := new(types.ProtoTxOut)
+			if err := proto.Unmarshal(data, utxoProto); err != nil {
+				continue
+			}
+			utxo := new(types.TxOut)
+			if err := utxo.ProtoDecode(utxoProto); err != nil {
+				continue
+			}
+			address := common.BytesToAddress(utxo.Address, config.Location).Hex()
+
+			outpointsForAddress, exists := addressOutpoints[address]
+			if !exists {
+				outpointsForAddress = rawdb.ReadOutpointsForAddress(c.chainDb, address)
+				addressOutpoints[address] = outpointsForAddress
+			}
+			keyWithoutPrefix := key[len(rawdb.UtxoPrefix):]
+			delete(outpointsForAddress, common.Bytes2Hex(keyWithoutPrefix))
+		}
+
 	}
 	return nil
 }
