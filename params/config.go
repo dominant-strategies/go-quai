@@ -26,7 +26,7 @@ import (
 // Genesis hashes to enforce below configs on.
 var (
 	// Progpow GenesisHashes
-	ProgpowColosseumGenesisHash  = common.HexToHash("0x538d42d42e54935b3de4b16afdc2d9680d1b75ab11ccc5c37611d51aa093796a")
+	ProgpowColosseumGenesisHash  = common.HexToHash("0xba33a6807db85d5de6f51ff95c4805feaa9b81951a57e43254117d489031e96f")
 	ProgpowGardenGenesisHash     = common.HexToHash("0xb610af2eef9d854d01510785b0171247cb221912124c74fcef888bbed42448bb")
 	ProgpowOrchardGenesisHash    = common.HexToHash("0x863406b0b535b316d4ae5a4d97336c0a015a36c0e5c055aa2e4461e9048b62c9")
 	ProgpowLighthouseGenesisHash = common.HexToHash("0xf60de17f1ae6cbae820d14599eb95581f5c18799f84904520c264be9cfff64c4")
