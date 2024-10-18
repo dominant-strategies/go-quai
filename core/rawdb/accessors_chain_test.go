@@ -787,12 +787,14 @@ func TestAddressOutpointsStorage(t *testing.T) {
 		TxHash:       common.Hash{1},
 		Index:        uint16(1),
 		Denomination: uint8(1),
+		Lock:         big.NewInt(0),
 	}
 
 	outpoint2 := types.OutpointAndDenomination{
 		TxHash:       common.Hash{2},
 		Index:        uint16(1),
 		Denomination: uint8(1),
+		Lock:         big.NewInt(0),
 	}
 
 	outpointMap := map[string]*types.OutpointAndDenomination{
@@ -811,17 +813,11 @@ func TestAddressOutpointsStorage(t *testing.T) {
 	WriteAddressOutpoints(db, addressOutpointMap)
 
 	if entry := ReadOutpointsForAddress(db, address); len(entry) == 0 || *entry[outpoint.Key()] != outpoint {
-		if len(entry) > 0 {
-			t.Fatalf("expected: %v \n found: %v", entry[outpoint.Key()], outpoint)
-		}
-		t.Fatal("Stored outpoint not found")
+		require.Equal(t, outpoint, *entry[outpoint.Key()])
 	}
 
 	if entry := ReadOutpointsForAddress(db, address2); len(entry) == 0 || *entry[outpoint2.Key()] != outpoint2 {
-		if len(entry) > 0 {
-			t.Fatalf("expected: %v \n found: %v", entry[outpoint2.Key()], outpoint2)
-		}
-		t.Fatal("Stored outpoint not found")
+		require.Equal(t, outpoint2, *entry[outpoint2.Key()])
 	}
 }
 

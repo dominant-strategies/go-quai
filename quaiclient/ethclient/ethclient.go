@@ -338,8 +338,8 @@ func (ec *Client) ContractSizeAt(ctx context.Context, account common.MixedcaseAd
 	return (*big.Int)(&result), err
 }
 
-func (ec *Client) GetOutpointsByAddress(ctx context.Context, address common.MixedcaseAddress) (map[string]*types.OutpointAndDenomination, error) {
-	var outpoints map[string]*types.OutpointAndDenomination
+func (ec *Client) GetOutpointsByAddress(ctx context.Context, address common.MixedcaseAddress) ([]*types.OutpointAndDenomination, error) {
+	var outpoints []*types.OutpointAndDenomination
 	err := ec.c.CallContext(ctx, &outpoints, "quai_getOutpointsByAddress", address.Original())
 	return outpoints, err
 }
