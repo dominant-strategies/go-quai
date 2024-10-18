@@ -1612,7 +1612,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			return nil, err
 		}
 
-		if err := RedeemLockedQuai(w.hc, proposedWo, parent, env.state); err != nil {
+		if err, _ := RedeemLockedQuai(w.hc, proposedWo, parent, env.state); err != nil {
 			w.logger.WithField("err", err).Error("Failed to redeem locked Quai")
 			return nil, err
 		}
