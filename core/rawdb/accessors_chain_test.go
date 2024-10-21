@@ -779,7 +779,7 @@ func TestAddressOutpointsStorage(t *testing.T) {
 	address := "0x008aeeda4d805471df9b2a5b0f38a0c3bcba786b"
 	address2 := "0x008b2a5b0f38a0c3bcba786ba3df9b2a5b0f38a0"
 
-	if entry := ReadOutpointsForAddress(db, address); len(entry) != 0 {
+	if entry, err := ReadOutpointsForAddress(db, common.HexToAddress(address, db.Location())); len(entry) != 0 || err != nil {
 		t.Fatalf("Non existent address outpoints returned: %v", entry)
 	}
 
@@ -797,27 +797,19 @@ func TestAddressOutpointsStorage(t *testing.T) {
 		Lock:         big.NewInt(0),
 	}
 
-	outpointMap := map[string]*types.OutpointAndDenomination{
-		outpoint.Key(): &outpoint,
-	}
-
-	outpointMap2 := map[string]*types.OutpointAndDenomination{
-		outpoint2.Key(): &outpoint2,
-	}
-
-	addressOutpointMap := map[string]map[string]*types.OutpointAndDenomination{
-		address:  outpointMap,
-		address2: outpointMap2,
+	addressOutpointMap := map[[20]byte][]*types.OutpointAndDenomination{
+		common.HexToAddressBytes(address):  {&outpoint},
+		common.HexToAddressBytes(address2): {&outpoint2},
 	}
 
 	WriteAddressOutpoints(db, addressOutpointMap)
 
-	if entry := ReadOutpointsForAddress(db, address); len(entry) == 0 || *entry[outpoint.Key()] != outpoint {
-		require.Equal(t, outpoint, *entry[outpoint.Key()])
+	if entry, err := ReadOutpointsForAddress(db, common.HexToAddress(address, db.Location())); len(entry) == 0 || *entry[0] != outpoint || err != nil {
+		require.Equal(t, outpoint, *entry[0])
 	}
 
-	if entry := ReadOutpointsForAddress(db, address2); len(entry) == 0 || *entry[outpoint2.Key()] != outpoint2 {
-		require.Equal(t, outpoint2, *entry[outpoint2.Key()])
+	if entry, err := ReadOutpointsForAddress(db, common.HexToAddress(address2, db.Location())); len(entry) == 0 || *entry[0] != outpoint2 || err != nil {
+		require.Equal(t, outpoint2, *entry[0])
 	}
 }
 

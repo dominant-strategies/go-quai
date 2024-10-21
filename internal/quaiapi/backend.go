@@ -65,8 +65,9 @@ type Backend interface {
 	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.WorkObject, error)
 	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.WorkObject, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.WorkObject, error)
-	AddressOutpoints(ctx context.Context, address common.Address) (map[string]*types.OutpointAndDenomination, error)
-	UTXOsByAddressAtState(ctx context.Context, state *state.StateDB, address common.Address) ([]*types.UtxoEntry, error)
+	AddressOutpoints(ctx context.Context, address common.Address) ([]*types.OutpointAndDenomination, error)
+	GetOutpointsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error)
+	UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, parent *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SetCurrentExpansionNumber(expansionNumber uint8)
@@ -111,7 +112,6 @@ type Backend interface {
 	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
-
 	consensus.ChainHeaderReader
 	TxMiningEnabled() bool
 	GetWorkShareThreshold() int

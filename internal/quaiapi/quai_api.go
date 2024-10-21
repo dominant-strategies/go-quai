@@ -41,6 +41,7 @@ import (
 var (
 	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
 	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
+	maxOutpointsRange    = uint32(1000)
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -125,7 +126,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
 		}
 
-		utxos, err := s.b.UTXOsByAddressAtState(ctx, state, addr)
+		utxos, err := s.b.UTXOsByAddress(ctx, addr)
 		if utxos == nil || err != nil {
 			return nil, err
 		}
@@ -178,6 +179,37 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	}
 
 	return jsonOutpoints, nil
+}
+
+func (s *PublicBlockChainAPI) GetOutPointsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) (map[string][]interface{}, error) {
+	if start > end {
+		return nil, fmt.Errorf("start is greater than end")
+	}
+	if uint32(end)-uint32(start) > maxOutpointsRange {
+		return nil, fmt.Errorf("range is too large, max range is %d", maxOutpointsRange)
+	}
+	outpoints, err := s.b.GetOutpointsByAddressAndRange(ctx, address, uint32(start), uint32(end))
+	if err != nil {
+		return nil, err
+	}
+	txHashToOutpointsJson := make(map[string][]interface{})
+	for _, outpoint := range outpoints {
+		if outpoint == nil {
+			continue
+		}
+		lock := big.NewInt(0)
+		if outpoint.Lock != nil {
+			lock = outpoint.Lock
+		}
+		jsonOutpoint := map[string]interface{}{
+			"index":        hexutil.Uint64(outpoint.Index),
+			"denomination": hexutil.Uint64(outpoint.Denomination),
+			"lock":         hexutil.Big(*lock),
+		}
+		txHashToOutpointsJson[outpoint.TxHash.Hex()] = append(txHashToOutpointsJson[outpoint.TxHash.Hex()], jsonOutpoint)
+	}
+
+	return txHashToOutpointsJson, nil
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.

@@ -207,7 +207,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
 		}
 
-		utxos, err := s.b.UTXOsByAddressAtState(ctx, state, addr)
+		utxos, err := s.b.UTXOsByAddress(ctx, addr)
 		if utxos == nil || err != nil {
 			return nil, err
 		}
@@ -238,14 +238,6 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 		}
 		return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
 	}
-}
-
-func (s *PublicBlockChainAPI) GetOutpointsByAddressAtBlock(ctx context.Context, address common.Address) (map[string]*types.OutpointAndDenomination, error) {
-	outpoints, err := s.b.AddressOutpoints(ctx, address)
-	if err != nil {
-		return nil, err
-	}
-	return outpoints, nil
 }
 
 // Result structs for GetProof
