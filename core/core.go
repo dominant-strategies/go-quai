@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"errors"
 	"io"
 	"math/big"
@@ -1023,7 +1024,7 @@ func (c *Core) CheckIfEtxIsEligible(etxEligibleSlices common.Hash, location comm
 	return c.sl.hc.CheckIfEtxIsEligible(etxEligibleSlices, location)
 }
 
-func (c *Core) WriteAddressOutpoints(outpoints map[string]map[string]*types.OutpointAndDenomination) error {
+func (c *Core) WriteAddressOutpoints(outpoints map[[20]byte][]*types.OutpointAndDenomination) error {
 	return c.sl.hc.WriteAddressOutpoints(outpoints)
 }
 
@@ -1255,12 +1256,29 @@ func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
 	return c.sl.hc.bc.processor.TrieNode(hash)
 }
 
-func (c *Core) GetOutpointsByAddress(address common.Address) map[string]*types.OutpointAndDenomination {
-	return rawdb.ReadOutpointsForAddress(c.sl.sliceDb, address.Hex())
+func (c *Core) GetOutpointsByAddressAndRange(address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error) {
+	outpoints := make([]*types.OutpointAndDenomination, 0)
+	for i := start; i <= end; i++ {
+		addr20 := address.Bytes20()
+		binary.BigEndian.PutUint32(addr20[16:], i)
+		outpointsAtBlock, err := rawdb.ReadOutpointsForAddressAtBlock(c.sl.sliceDb, addr20)
+		if err != nil {
+			return nil, err
+		}
+		outpoints = append(outpoints, outpointsAtBlock...)
+	}
+	return outpoints, nil
 }
 
-func (c *Core) GetUTXOsByAddressAtState(state *state.StateDB, address common.Address) ([]*types.UtxoEntry, error) {
-	outpointsForAddress := c.GetOutpointsByAddress(address)
+func (c *Core) GetOutpointsByAddress(address common.Address) ([]*types.OutpointAndDenomination, error) {
+	return rawdb.ReadOutpointsForAddress(c.sl.sliceDb, address)
+}
+
+func (c *Core) GetUTXOsByAddress(address common.Address) ([]*types.UtxoEntry, error) {
+	outpointsForAddress, err := c.GetOutpointsByAddress(address)
+	if err != nil {
+		return nil, err
+	}
 	utxos := make([]*types.UtxoEntry, 0, len(outpointsForAddress))
 
 	for _, outpoint := range outpointsForAddress {

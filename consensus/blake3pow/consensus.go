@@ -638,7 +638,7 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 				continue
 			}
 		}
-		addressOutpointMap := make(map[string]map[string]*types.OutpointAndDenomination)
+		addressOutpointMap := make(map[[20]byte][]*types.OutpointAndDenomination)
 		core.AddGenesisUtxos(chain.Database(), &utxosCreate, nodeLocation, addressOutpointMap, blake3pow.logger)
 		if chain.Config().IndexAddressUtxos {
 			chain.WriteAddressOutpoints(addressOutpointMap)

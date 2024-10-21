@@ -696,7 +696,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 				continue
 			}
 		}
-		addressOutpointMap := make(map[string]map[string]*types.OutpointAndDenomination)
+		addressOutpointMap := make(map[[20]byte][]*types.OutpointAndDenomination)
 		core.AddGenesisUtxos(chain.Database(), &utxosCreate, nodeLocation, addressOutpointMap, progpow.logger)
 		if chain.Config().IndexAddressUtxos {
 			chain.WriteAddressOutpoints(addressOutpointMap)
