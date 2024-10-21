@@ -224,8 +224,10 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			// Request timed out, return
 			log.Global.WithFields(log.Fields{
 				"peerId":  peerID,
-				"message": "Request timed out, data not sent",
+				"message": "Request timed out, data not received",
 			}).Warning("Missed data request")
+			// Mark this peer as not responding
+			p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
 		default:
 			// Optionally log the missed send or handle it in another way
 			log.Global.WithFields(log.Fields{
@@ -242,8 +244,6 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			"topic":  topic.String(),
 			"err":    err,
 		}).Error("Error requesting the data from peer")
-		// Mark this peer as not responding
-		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
 	}
 }
 
