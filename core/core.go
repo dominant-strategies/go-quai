@@ -32,18 +32,18 @@ import (
 )
 
 const (
-	c_maxAppendQueue                    = 100000 // Maximum number of future headers we can store in cache
-	c_maxFutureTime                     = 30     // Max time into the future (in seconds) we will accept a block
-	c_appendQueueRetryPeriod            = 1      // Time (in seconds) before retrying to append from AppendQueue
-	c_appendQueueThreshold              = 200    // Number of blocks to load from the disk to ram on every proc of append queue
-	c_processingCache                   = 10     // Number of block hashes held to prevent multi simultaneous appends on a single block hash
-	c_primeRetryThreshold               = 1800   // Number of times a block is retry to be appended before eviction from append queue in Prime
-	c_regionRetryThreshold              = 1200   // Number of times a block is retry to be appended before eviction from append queue in Region
-	c_zoneRetryThreshold                = 600    // Number of times a block is retry to be appended before eviction from append queue in Zone
-	c_appendQueueRetryPriorityThreshold = 5      // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
-	c_appendQueueRemoveThreshold        = 10     // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
-	c_normalListProcCounter             = 1      // Ratio of Number of times the PriorityList is serviced over the NormalList
-	c_statsPrintPeriod                  = 60     // Time between stats prints
+	c_maxAppendQueue                    = 100000                 // Maximum number of future headers we can store in cache
+	c_maxFutureTime                     = 30                     // Max time into the future (in seconds) we will accept a block
+	c_appendQueueRetryPeriod            = 100 * time.Millisecond // Time before retrying to append from AppendQueue
+	c_appendQueueThreshold              = 200                    // Number of blocks to load from the disk to ram on every proc of append queue
+	c_processingCache                   = 10                     // Number of block hashes held to prevent multi simultaneous appends on a single block hash
+	c_primeRetryThreshold               = 1800                   // Number of times a block is retry to be appended before eviction from append queue in Prime
+	c_regionRetryThreshold              = 1200                   // Number of times a block is retry to be appended before eviction from append queue in Region
+	c_zoneRetryThreshold                = 600                    // Number of times a block is retry to be appended before eviction from append queue in Zone
+	c_appendQueueRetryPriorityThreshold = 5                      // If retry counter for a block is less than this number,  then its put in the special list that is tried first to be appended
+	c_appendQueueRemoveThreshold        = 10                     // Number of blocks behind the block should be from the current header to be eligble for removal from the append queue
+	c_normalListProcCounter             = 1                      // Ratio of Number of times the PriorityList is serviced over the NormalList
+	c_statsPrintPeriod                  = 60                     // Time between stats prints
 	c_appendQueuePrintSize              = 10
 	c_normalListBackoffThreshold        = 5 // Max multiple on the c_normalListProcCounter
 	c_maxRemoteTxQueue                  = 50000
@@ -442,7 +442,7 @@ func (c *Core) updateAppendQueue() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
-	futureTimer := time.NewTicker(c_appendQueueRetryPeriod * time.Second)
+	futureTimer := time.NewTicker(c_appendQueueRetryPeriod)
 	defer futureTimer.Stop()
 	for {
 		select {

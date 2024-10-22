@@ -201,6 +201,7 @@ func (h *handler) checkNextPrimeBlock() {
 						// protocol.C_NumPrimeBlocksToDownload
 						if i < 2*protocol.C_NumPrimeBlocksToDownload {
 							h.GetNextPrimeBlock(syncHeight.Add(syncHeight, big.NewInt(protocol.C_NumPrimeBlocksToDownload)))
+							h.GetNextPrimeBlock(syncHeight.Add(new(big.Int).Add(syncHeight, big.NewInt(protocol.C_NumPrimeBlocksToDownload)), big.NewInt(protocol.C_NumPrimeBlocksToDownload)))
 						}
 						break
 					}
