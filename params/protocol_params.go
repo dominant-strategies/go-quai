@@ -155,6 +155,7 @@ const (
 	SoftMaxUTXOSetSize                   = 10000000         // The soft maximum number of UTXOs that can be stored in the UTXO set
 	MinimumTrimDepth                     = math.MaxInt      // The minimum block depth of the chain to begin trimming
 	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
+	DefaultCoinbaseLockup                = 0                // The default lockup byte for coinbase rewards
 )
 
 var (
