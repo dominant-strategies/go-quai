@@ -897,6 +897,7 @@ func (s *PublicBlockChainQuaiAPI) CalcOrder(ctx context.Context, raw hexutil.Byt
 	}
 	return hexutil.Uint(order), nil
 }
+
 func (s *PublicBlockChainQuaiAPI) SuggestFinalityDepth(ctx context.Context, qiValue hexutil.Uint64, correlatedRisk hexutil.Uint64) (hexutil.Uint64, error) {
 
 	depth, err := s.b.SuggestFinalityDepth(ctx, big.NewInt(int64(qiValue)), big.NewInt(int64(correlatedRisk)))

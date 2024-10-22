@@ -138,6 +138,7 @@ type Backend interface {
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
 	GetMinGasPrice() *big.Int
 	GetPoolGasPrice() *big.Int
+	SendTxToSharingClients(tx *types.Transaction)
 
 	// Filter API
 	BloomStatus() (uint64, uint64)

@@ -1331,6 +1331,9 @@ func (c *Core) ContentFrom(addr common.Address) (types.Transactions, types.Trans
 	}
 	return c.sl.txPool.ContentFrom(internal)
 }
+func (c *Core) SendTxToSharingClients(tx *types.Transaction) {
+	c.sl.txPool.SendTxToSharingClients(tx)
+}
 
 func (c *Core) SuggestFinalityDepth(qiValue *big.Int, correlatedRisk *big.Int) *big.Int {
 	qiRewardPerBlock := misc.CalculateQiReward(c.CurrentHeader().WorkObjectHeader())

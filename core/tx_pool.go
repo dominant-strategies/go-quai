@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -38,6 +39,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quaiclient"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -193,6 +195,8 @@ type TxPoolConfig struct {
 	QiTxLifetime    time.Duration // Maximum amount of time Qi transactions are queued
 	Lifetime        time.Duration // Maximum amount of time non-executable transaction are queued
 	ReorgFrequency  time.Duration // Frequency of reorgs outside of new head events
+
+	SharingClientsEndpoints []string // List of end points of the nodes to share the incoming local transactions with
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -356,6 +360,9 @@ type TxPool struct {
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 
 	logger *log.Logger
+
+	poolSharingClients []*quaiclient.Client
+	poolSharingTxCh    chan *types.Transaction
 }
 
 type txpoolResetRequest struct {
@@ -403,30 +410,32 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:          config,
-		chainconfig:     chainconfig,
-		chain:           chain,
-		signer:          types.LatestSigner(chainconfig),
-		pending:         make(map[common.InternalAddress]*txList),
-		queue:           make(map[common.InternalAddress]*txList),
-		beats:           make(map[common.InternalAddress]time.Time),
-		sendersCh:       make(chan newSender, config.SendersChBuffer),
-		feesCh:          make(chan newFee, config.SendersChBuffer),
-		invalidQiTxsCh:  make(chan []*common.Hash, config.SendersChBuffer),
-		all:             newTxLookup(),
-		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:      make(chan *txpoolResetRequest, chainHeadChanSize),
-		reqPromoteCh:    make(chan *accountSet, chainHeadChanSize),
-		queueTxEventCh:  make(chan *types.Transaction, chainHeadChanSize),
-		broadcastSet:    make(types.Transactions, 0),
-		reorgDoneCh:     make(chan chan struct{}, chainHeadChanSize),
-		reorgShutdownCh: make(chan struct{}),
-		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
-		localTxsCount:   0,
-		remoteTxsCount:  0,
-		reOrgCounter:    0,
-		logger:          logger,
-		db:              db,
+		config:             config,
+		chainconfig:        chainconfig,
+		chain:              chain,
+		signer:             types.LatestSigner(chainconfig),
+		pending:            make(map[common.InternalAddress]*txList),
+		queue:              make(map[common.InternalAddress]*txList),
+		beats:              make(map[common.InternalAddress]time.Time),
+		sendersCh:          make(chan newSender, config.SendersChBuffer),
+		feesCh:             make(chan newFee, config.SendersChBuffer),
+		invalidQiTxsCh:     make(chan []*common.Hash, config.SendersChBuffer),
+		all:                newTxLookup(),
+		chainHeadCh:        make(chan ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:         make(chan *txpoolResetRequest, chainHeadChanSize),
+		reqPromoteCh:       make(chan *accountSet, chainHeadChanSize),
+		queueTxEventCh:     make(chan *types.Transaction, chainHeadChanSize),
+		broadcastSet:       make(types.Transactions, 0),
+		reorgDoneCh:        make(chan chan struct{}, chainHeadChanSize),
+		reorgShutdownCh:    make(chan struct{}),
+		gasPrice:           new(big.Int).SetUint64(config.PriceLimit),
+		localTxsCount:      0,
+		remoteTxsCount:     0,
+		reOrgCounter:       0,
+		logger:             logger,
+		db:                 db,
+		poolSharingClients: make([]*quaiclient.Client, len(config.SharingClientsEndpoints)),
+		poolSharingTxCh:    make(chan *types.Transaction, 100),
 	}
 
 	qiPool, _ := lru.New[common.Hash, *types.TxWithMinerFee](int(config.QiPoolSize))
@@ -455,6 +464,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	pool.wg.Add(1)
 	go pool.scheduleReorgLoop()
 
+	pool.wg.Add(1)
+	go pool.txListenerLoop()
+
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
 		pool.journal = newTxJournal(config.Journal, logger)
@@ -465,6 +477,21 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		if err := pool.journal.rotate(pool.local()); err != nil {
 			logger.WithField("err", err).Warn("Failed to rotate transaction journal")
 		}
+	}
+
+	// connect to the pool sharing clients
+	for i := range config.SharingClientsEndpoints {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					pool.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Error("Go-Quai Panicked")
+				}
+			}()
+			pool.createSharingClient(i)
+		}()
 	}
 
 	// Subscribe events from blockchain and start the main event loop.
@@ -1091,6 +1118,7 @@ func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
 	if len(txs) == 0 {
 		return []error{}
 	}
+
 	return pool.addTxs(txs, !pool.config.NoLocals, true)
 }
 
@@ -1540,6 +1568,60 @@ func (pool *TxPool) queueTxEvent(tx *types.Transaction) {
 		case <-pool.reorgShutdownCh:
 		}
 	}
+}
+
+// SendTxToSharingClients sends the tx into the pool sharing tx ch and
+// if its full logs it
+func (pool *TxPool) SendTxToSharingClients(tx *types.Transaction) {
+	select {
+	case pool.poolSharingTxCh <- tx:
+	default:
+		pool.logger.Warn("pool sharing tx ch is full")
+	}
+}
+
+// txListenerLoop listens to tx coming on the pool sharing tx ch and
+// then sends the tx into the pool sharing clients
+func (pool *TxPool) txListenerLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			pool.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+	defer pool.wg.Done()
+
+	for {
+		select {
+		case tx := <-pool.poolSharingTxCh:
+			// send to all pool sharing clients
+			for _, client := range pool.poolSharingClients {
+				if client != nil {
+					err := client.SendTransactionToPoolSharingClient(context.Background(), tx)
+					if err != nil {
+						pool.logger.WithField("err", err).Error("Error sending transaction to pool sharing client")
+					}
+				}
+			}
+		}
+	}
+}
+
+// createSharingClient creates a quaiclient connection and writes it to the
+// SharingClients
+func (pool *TxPool) createSharingClient(index int) {
+	client, err := quaiclient.Dial(pool.config.SharingClientsEndpoints[index], pool.logger)
+	if err != nil {
+		pool.logger.WithField("end point", pool.config.SharingClientsEndpoints[index]).Warn("Client was nil trying to send transactions")
+		return
+	}
+
+	pool.logger.WithField("endpoint", pool.config.SharingClientsEndpoints[index]).Info("Pool sharing client connected")
+
+	// set the created client into the pool sharing client
+	pool.poolSharingClients[index] = client
 }
 
 // scheduleReorgLoop schedules runs of reset and promoteExecutables. Code above should not

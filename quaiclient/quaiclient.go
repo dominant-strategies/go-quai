@@ -60,7 +60,7 @@ func DialContext(ctx context.Context, rawurl string, logger *log.Logger) (*Clien
 		attempts += 1
 		// exponential back-off implemented
 		// delaySecs := int64(math.Floor((math.Pow(2, float64(attempts)) - 1) * 0.5))
-		delaySecs := int64(1)
+		delaySecs := int64(attempts) * 5
 		if delaySecs > exponentialBackoffCeilingSecs {
 			return nil, err
 		}
@@ -331,4 +331,20 @@ func (ec *Client) CalcOrder(ctx context.Context, header *types.WorkObject) (int,
 		return -1, err
 	}
 	return int(result), nil
+}
+
+// SendTransactionToPoolSharingClient injects a signed transaction into the pending pool for execution.
+//
+// If the transaction was a contract creation use the TransactionReceipt method to get the
+// contract address after the transaction has been mined.
+func (ec *Client) SendTransactionToPoolSharingClient(ctx context.Context, tx *types.Transaction) error {
+	protoTx, err := tx.ProtoEncode()
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoTx)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "quai_receiveTxFromPoolSharingClient", hexutil.Encode(data))
 }

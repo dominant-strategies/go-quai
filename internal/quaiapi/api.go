@@ -1564,7 +1564,31 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	if err != nil {
 		return common.Hash{}, err
 	}
+	// Send the tx to tx pool sharing clients
+	s.b.SendTxToSharingClients(tx)
+
 	return SubmitTransaction(ctx, s.b, tx)
+}
+
+func (s *PublicTransactionPoolAPI) ReceiveTxFromPoolSharingClient(ctx context.Context, input hexutil.Bytes) error {
+	tx := new(types.Transaction)
+	protoTransaction := new(types.ProtoTransaction)
+	err := proto.Unmarshal(input, protoTransaction)
+	if err != nil {
+		return err
+	}
+	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
+	if err != nil {
+		return err
+	}
+
+	s.b.Logger().Info("Received a tx from pool sharing client")
+
+	_, err = SubmitTransaction(ctx, s.b, tx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // PublicDebugAPI is the collection of Quai APIs exposed over the public

@@ -129,6 +129,7 @@ var TXPoolFlags = []Flag{
 	TxPoolAccountQueueFlag,
 	TxPoolGlobalQueueFlag,
 	TxPoolLifetimeFlag,
+	TxPoolSharingClientsFlag,
 }
 
 var WorkShareFlags = []Flag{
@@ -402,6 +403,12 @@ var (
 		Name:  c_TXPoolPrefix + "lifetime",
 		Value: quaiconfig.Defaults.TxPool.Lifetime,
 		Usage: "Maximum amount of time non-executable transaction are queued" + generateEnvDoc(c_TXPoolPrefix+"lifetime"),
+	}
+
+	TxPoolSharingClientsFlag = Flag{
+		Name:  c_TXPoolPrefix + "sharing-clients",
+		Value: "",
+		Usage: "Comma separated list of clients end points that the node would directy share the transactions with" + generateEnvDoc(c_TXPoolPrefix+"sharing-clients"),
 	}
 
 	CacheFlag = Flag{
@@ -1099,6 +1106,8 @@ func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
 	if viper.IsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = viper.GetDuration(TxPoolLifetimeFlag.Name)
 	}
+
+	cfg.SharingClientsEndpoints = SplitAndTrim(viper.GetString(TxPoolSharingClientsFlag.Name))
 }
 
 func setConsensusEngineConfig(cfg *quaiconfig.Config) {
