@@ -33,6 +33,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
@@ -115,6 +116,14 @@ func (api *PrivateMinerAPI) SetPrimaryCoinbase(primaryCoinbase common.Address) b
 func (api *PrivateMinerAPI) SetSecondaryCoinbase(secondaryCoinbase common.Address) bool {
 	api.e.Core().SetSecondaryCoinbase(secondaryCoinbase)
 	return true
+}
+
+func (api *PrivateMinerAPI) SetLockupByte(lockupByte hexutil.Uint64) (bool, error) {
+	if uint8(lockupByte) > uint8(len(params.LockupByteToBlockDepth)-1) {
+		return false, fmt.Errorf("lockup byte %d out of range", lockupByte)
+	}
+	api.e.Core().SetLockupByte(uint8(lockupByte))
+	return true, nil
 }
 
 // SetRecommitInterval updates the interval for miner sealing work recommitting.

@@ -51,8 +51,6 @@ const (
 	chainSideChanSize = 10
 
 	c_uncleCacheSize = 100
-
-	defaultCoinbaseLockup = 0
 )
 
 // environment is the worker's current environment and holds all
@@ -104,6 +102,7 @@ func (env *environment) unclelist() []*types.WorkObjectHeader {
 type Config struct {
 	QuaiCoinbase       common.Address `toml:",omitempty"` // Public address for Quai mining rewards
 	QiCoinbase         common.Address `toml:",omitempty"` // Public address for Qi mining rewards
+	CoinbaseLockup     uint8          `toml:",omitempty"` // Lockup byte the determines number of blocks before mining rewards can be spent
 	MinerPreference    float64        // Determines the relative preference of Qi or Quai [0, 1] respectively
 	Notify             []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
 	NotifyFull         bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
@@ -161,6 +160,7 @@ type worker struct {
 	qiCoinbase        common.Address
 	primaryCoinbase   common.Address
 	secondaryCoinbase common.Address
+	coinbaseLockup    uint8
 	extra             []byte
 
 	workerDb ethdb.Database
@@ -235,6 +235,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		resubmitIntervalCh:             make(chan time.Duration),
 		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 		logger:                         logger,
+		coinbaseLockup:                 config.CoinbaseLockup,
+	}
+	if worker.coinbaseLockup > uint8(len(params.LockupByteToBlockDepth))-1 {
+		logger.Errorf("Invalid coinbase lockup value %d, using default value %d", worker.coinbaseLockup, params.DefaultCoinbaseLockup)
+		worker.coinbaseLockup = params.DefaultCoinbaseLockup
 	}
 	// initialize a uncle cache
 	uncles, _ := lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
@@ -318,6 +323,20 @@ func (w *worker) GetSecondaryCoinbase() common.Address {
 	defer w.mu.RUnlock()
 
 	return w.secondaryCoinbase
+}
+
+func (w *worker) GetLockupByte() uint8 {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	return w.coinbaseLockup
+}
+
+func (w *worker) SetLockupByte(lockupByte uint8) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.coinbaseLockup = lockupByte
 }
 
 func (w *worker) setGasCeil(ceil uint64) {
@@ -598,6 +617,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		if err != nil {
 			return nil, err
 		}
+		lockupByte := work.wo.Lock()
 
 		// If the primary coinbase belongs to a ledger and there is no fees
 		// for other ledger, there is no etxs emitted for the other ledger
@@ -605,22 +625,22 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			coinbaseReward := misc.CalculateReward(block, work.wo.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.quaiFees)
 			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{lockupByte}})
 			work.etxs = append(work.etxs, coinbaseEtx)
 			if work.utxoFees.Cmp(big.NewInt(0)) != 0 {
 				secondaryCoinbase := w.GetSecondaryCoinbase()
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: w.secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: w.secondaryCoinbase, Data: []byte{lockupByte}})
 				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		} else if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
 			coinbaseReward := misc.CalculateReward(block, work.wo.WorkObjectHeader())
 			blockReward := new(big.Int).Add(coinbaseReward, work.utxoFees)
 			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{lockupByte}})
 			work.etxs = append(work.etxs, coinbaseEtx)
 			if work.quaiFees.Cmp(big.NewInt(0)) != 0 {
 				secondaryCoinbase := w.GetSecondaryCoinbase()
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{defaultCoinbaseLockup}})
+				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{lockupByte}})
 				work.etxs = append(work.etxs, coinbaseEtx)
 			}
 		}
@@ -1427,7 +1447,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number(nodeCtx)
 	newWo := types.EmptyWorkObject(nodeCtx)
-	newWo.WorkObjectHeader().SetLock(defaultCoinbaseLockup)
+	newWo.WorkObjectHeader().SetLock(w.GetLockupByte())
 	newWo.SetParentHash(wo.Hash(), nodeCtx)
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		newWo.SetNumber(big.NewInt(1), nodeCtx)
