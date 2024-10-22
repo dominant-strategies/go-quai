@@ -397,7 +397,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	}
 
 	var coinbaseType string
-	if block.PrimaryCoinbase().IsInQiLedgerScope() {
+	if block.PrimaryCoinbase().IsInQuaiLedgerScope() {
 		coinbaseType = "QuaiCoinbase"
 	} else {
 		coinbaseType = "QiCoinbase"
