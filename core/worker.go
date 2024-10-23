@@ -161,6 +161,7 @@ type worker struct {
 	primaryCoinbase   common.Address
 	secondaryCoinbase common.Address
 	coinbaseLockup    uint8
+	minerPreference   float64
 	extra             []byte
 
 	workerDb ethdb.Database
@@ -236,6 +237,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		fillTransactionsRollingAverage: &RollingAverage{windowSize: 100},
 		logger:                         logger,
 		coinbaseLockup:                 config.CoinbaseLockup,
+		minerPreference:                config.MinerPreference,
 	}
 	if worker.coinbaseLockup > uint8(len(params.LockupByteToBlockDepth))-1 {
 		logger.Errorf("Invalid coinbase lockup value %d, using default value %d", worker.coinbaseLockup, params.DefaultCoinbaseLockup)
@@ -286,7 +288,7 @@ func (w *worker) pickCoinbases() {
 	defer w.mu.Unlock()
 
 	// Use the MinerPreference to bias the decision
-	if rand.Float64() > w.config.MinerPreference {
+	if rand.Float64() > w.minerPreference {
 		// if MinerPreference < 0.5, bias is towards Quai
 		w.primaryCoinbase = w.quaiCoinbase
 		w.secondaryCoinbase = w.qiCoinbase
@@ -323,6 +325,18 @@ func (w *worker) GetSecondaryCoinbase() common.Address {
 	defer w.mu.RUnlock()
 
 	return w.secondaryCoinbase
+}
+
+func (w *worker) SetMinerPreference(preference float64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.minerPreference = preference
+}
+
+func (w *worker) GetMinerPreference() float64 {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.minerPreference
 }
 
 func (w *worker) GetLockupByte() uint8 {
