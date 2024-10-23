@@ -24,6 +24,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,6 +124,18 @@ func (api *PrivateMinerAPI) SetLockupByte(lockupByte hexutil.Uint64) (bool, erro
 		return false, fmt.Errorf("lockup byte %d out of range", lockupByte)
 	}
 	api.e.Core().SetLockupByte(uint8(lockupByte))
+	return true, nil
+}
+
+func (api *PrivateMinerAPI) SetMinerPreference(minerPreference string) (bool, error) {
+	preferenceFloat, err := strconv.ParseFloat(minerPreference, 64)
+	if err != nil {
+		return false, err
+	}
+	if preferenceFloat < 0 || preferenceFloat > 1 {
+		return false, errors.New("miner preference must be between 0 and 1")
+	}
+	api.e.Core().SetMinerPreference(preferenceFloat)
 	return true, nil
 }
 
