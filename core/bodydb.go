@@ -77,7 +77,7 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 }
 
 // Append
-func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, error) {
+func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, []common.Unlock, error) {
 	startLock := time.Now()
 
 	batch := bc.db.NewBatch()
@@ -85,12 +85,13 @@ func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, error) {
 	locktime := time.Since(startLock)
 	nodeCtx := bc.NodeCtx()
 	var logs []*types.Log
+	var unlocks []common.Unlock
 	var err error
 	if nodeCtx == common.ZONE_CTX && bc.ProcessingState() {
 		// Process our block
-		logs, err = bc.processor.Apply(batch, block)
+		logs, unlocks, err = bc.processor.Apply(batch, block)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		rawdb.WriteTxLookupEntriesByBlock(batch, block, nodeCtx)
 	}
@@ -103,9 +104,9 @@ func (bc *BodyDb) Append(block *types.WorkObject) ([]*types.Log, error) {
 
 	bc.logger.WithField("apply state", common.PrettyDuration(time.Since(stateApply))).Debug("Time taken to")
 	if err = batch.Write(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return logs, nil
+	return logs, unlocks, nil
 }
 
 func (bc *BodyDb) ProcessingState() bool {

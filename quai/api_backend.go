@@ -296,6 +296,14 @@ func (b *QuaiAPIBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event
 	return b.quai.core.SubscribePendingLogs(ch)
 }
 
+func (b *QuaiAPIBackend) SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.Subscription {
+	nodeCtx := b.quai.core.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return nil
+	}
+	return b.quai.core.SubscribeUnlocks(ch)
+}
+
 func (b *QuaiAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.quai.Core().SubscribeChainEvent(ch)
 }

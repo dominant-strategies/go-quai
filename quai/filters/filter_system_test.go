@@ -53,6 +53,7 @@ type testBackend struct {
 	pendingLogsFeed   event.Feed
 	chainFeed         event.Feed
 	pendingHeaderFeed event.Feed
+	unlocksFeed       event.Feed
 }
 
 func (b *testBackend) ChainDb() ethdb.Database {
@@ -180,6 +181,10 @@ func (b *testBackend) ProcessingState() bool {
 
 func (b *testBackend) SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription {
 	return b.pendingHeaderFeed.Subscribe(ch)
+}
+
+func (b *testBackend) SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.Subscription {
+	return b.unlocksFeed.Subscribe(ch)
 }
 
 // TestPendingTxFilter tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.

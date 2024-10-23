@@ -63,6 +63,7 @@ type HeaderChain struct {
 	currentExpansionNumber uint8
 
 	chainHeadFeed event.Feed
+	unlocksFeed   event.Feed
 	chainSideFeed event.Feed
 	scope         event.SubscriptionScope
 
@@ -423,9 +424,15 @@ func (hc *HeaderChain) setStateProcessing() bool {
 func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 	blockappend := time.Now()
 	// Append block else revert header append
-	logs, err := hc.bc.Append(block)
+	logs, unlocks, err := hc.bc.Append(block)
 	if err != nil {
 		return err
+	}
+	if unlocks != nil && len(unlocks) > 0 {
+		hc.unlocksFeed.Send(UnlocksEvent{
+			Hash:    block.Hash(),
+			Unlocks: unlocks,
+		})
 	}
 	hc.logger.WithField("append block", common.PrettyDuration(time.Since(blockappend))).Debug("Time taken to")
 
@@ -1175,6 +1182,11 @@ func (hc *HeaderChain) Engine() consensus.Engine {
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return hc.scope.Track(hc.chainHeadFeed.Subscribe(ch))
+}
+
+// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+func (hc *HeaderChain) SubscribeUnlocksEvent(ch chan<- UnlocksEvent) event.Subscription {
+	return hc.scope.Track(hc.unlocksFeed.Subscribe(ch))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.

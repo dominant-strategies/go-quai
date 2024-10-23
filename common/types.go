@@ -788,3 +788,8 @@ func SetBlockHashForQi(blockHash Hash, nodeLocation Location) Hash {
 	blockHash[3] |= 0x80 // 10000000 in binary (set first bit to 1)
 	return blockHash
 }
+
+type Unlock struct {
+	Addr InternalAddress
+	Amt  *big.Int
+}
