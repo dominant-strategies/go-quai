@@ -352,7 +352,11 @@ func (es *EventSystem) handleLogs(filters filterIndex, ev []*types.Log) {
 		}
 		matchedLogs := filterLogs(ev, f.logsCrit.FromBlock, f.logsCrit.ToBlock, addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
-			f.logs <- matchedLogs
+			select {
+			case f.logs <- matchedLogs:
+				es.backend.Logger().Error("Failed to deliver logs event to a subscriber")
+			default:
+			}
 		}
 	}
 }
@@ -371,7 +375,11 @@ func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
 		}
 		matchedLogs := filterLogs(ev, nil, f.logsCrit.ToBlock, addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
-			f.logs <- matchedLogs
+			select {
+			case f.logs <- matchedLogs:
+			default:
+				es.backend.Logger().Error("Failed to deliver pending logs event to a subscriber")
+			}
 		}
 	}
 }
@@ -387,7 +395,11 @@ func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev core.RemovedLog
 		}
 		matchedLogs := filterLogs(ev.Logs, f.logsCrit.FromBlock, f.logsCrit.ToBlock, addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
-			f.logs <- matchedLogs
+			select {
+			case f.logs <- matchedLogs:
+			default:
+				es.backend.Logger().Error("Failed to deliver removed logs event to a subscriber")
+			}
 		}
 	}
 }
@@ -398,19 +410,31 @@ func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) 
 		hashes = append(hashes, tx.Hash())
 	}
 	for _, f := range filters[PendingTransactionsSubscription] {
-		f.hashes <- hashes
+		select {
+		case f.hashes <- hashes:
+		default:
+			es.backend.Logger().Error("Failed to deliver txs event to a subscriber")
+		}
 	}
 }
 
 func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent) {
 	for _, f := range filters[BlocksSubscription] {
-		f.headers <- ev.Block
+		select {
+		case f.headers <- ev.Block:
+		default:
+			es.backend.Logger().Error("Failed to deliver chain event to a subscriber")
+		}
 	}
 }
 
 func (es *EventSystem) handleUnlocksEvent(filters filterIndex, ev core.UnlocksEvent) {
 	for _, f := range filters[UnlocksSubscription] {
-		f.unlocks <- ev
+		select {
+		case f.unlocks <- ev:
+		default:
+			es.backend.Logger().Error("Failed to deliver unlocks event to a subscriber")
+		}
 	}
 }
 
