@@ -979,9 +979,6 @@ func (hc *HeaderChain) RecoverCurrentHeader() *types.WorkObject {
 // In theory, if header is present in the database, all relative components
 // like td and hash->number should be present too.
 func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
-	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
-		return true
-	}
 	return rawdb.HasHeader(hc.headerDb, hash, number)
 }
 
