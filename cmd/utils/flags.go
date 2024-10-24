@@ -108,6 +108,7 @@ var NodeFlags = []Flag{
 	QuaiCoinbaseFlag,
 	QiCoinbaseFlag,
 	MinerPreferenceFlag,
+	CoinbaseLockupFlag,
 	EnvironmentFlag,
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
@@ -529,6 +530,12 @@ var (
 		Name:  c_NodeFlagPrefix + "miner-preference",
 		Value: 0.5,
 		Usage: "Indicates preference towards mining Quai or Qi. Any value between 0 and 1 is valid. Neutral: 0.5, Quai only: 0, Qi only: 1" + generateEnvDoc(c_NodeFlagPrefix+"miner-preference"),
+	}
+
+	CoinbaseLockupFlag = Flag{
+		Name:  c_NodeFlagPrefix + "coinbase-lockup",
+		Value: 0,
+		Usage: "Lockup byte used to determine the number of blocks that coinbase rewards are locked for" + generateEnvDoc(c_NodeFlagPrefix+"coinbase-lockup"),
 	}
 
 	IndexAddressUtxos = Flag{
@@ -1384,6 +1391,14 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		log.Global.WithField("MinerPreference", minerPreference).Fatal("Invalid MinerPreference field. Must be [0,1]")
 	} else {
 		cfg.Miner.MinerPreference = minerPreference
+	}
+
+	coinbaseLockup := viper.GetUint64(CoinbaseLockupFlag.Name)
+	if coinbaseLockup < 0 || coinbaseLockup > uint64(len(params.LockupByteToBlockDepth))-1 {
+		log.Global.WithField("CoinbaseLockup", coinbaseLockup).Error("Invalid CoinbaseLockup field. Must be [0,3]. Setting to default value 0")
+		cfg.Miner.CoinbaseLockup = params.DefaultCoinbaseLockup
+	} else {
+		cfg.Miner.CoinbaseLockup = uint8(coinbaseLockup)
 	}
 
 	// Override any default configs for hard coded networks.

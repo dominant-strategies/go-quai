@@ -1161,6 +1161,14 @@ func (c *Core) SetSecondaryCoinbase(addr common.Address) {
 	c.sl.miner.SetSecondaryCoinbase(addr)
 }
 
+func (c *Core) SetLockupByte(lockupByte uint8) {
+	c.sl.miner.worker.SetLockupByte(lockupByte)
+}
+
+func (c *Core) SetMinerPreference(minerPreference float64) {
+	c.sl.miner.worker.SetMinerPreference(minerPreference)
+}
+
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {

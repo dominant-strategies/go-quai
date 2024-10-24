@@ -452,7 +452,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				}
 				lockupByte := tx.Data()[0]
 				if tx.To().IsInQiLedgerScope() {
-					if int(lockupByte) > len(params.LockupByteToBlockDepth) {
+					if int(lockupByte) > len(params.LockupByteToBlockDepth)-1 {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
 					}
 					lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
