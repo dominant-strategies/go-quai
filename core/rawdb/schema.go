@@ -82,6 +82,7 @@ var (
 	badHashesListPrefix     = []byte("bh")
 	inboundEtxsPrefix       = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
 	AddressUtxosPrefix      = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
+	utxoToBlockHeightPrefix = []byte("ub")    // utxoToBlockHeightPrefix + hash -> uint64
 	processedStatePrefix    = []byte("ps")    // processedStatePrefix + hash -> boolean
 	multiSetPrefix          = []byte("ms")    // multiSetPrefix + hash -> multiset
 	UtxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
@@ -302,7 +303,7 @@ func inboundEtxsKey(hash common.Hash) []byte {
 	return append(inboundEtxsPrefix, hash.Bytes()...)
 }
 
-func addressUtxosKey(address string) []byte {
+func addressUtxosKey(address [20]byte) []byte {
 	return append(AddressUtxosPrefix, address[:]...)
 }
 
@@ -380,4 +381,12 @@ func tokenChoiceSetKey(hash common.Hash) []byte {
 
 func betasKey(hash common.Hash) []byte {
 	return append(betasPrefix, hash.Bytes()...)
+}
+
+func utxoToBlockHeightKey(txHash common.Hash, index uint16) []byte {
+	indexBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(indexBytes, index)
+	txHash[common.HashLength-1] = indexBytes[0]
+	txHash[common.HashLength-2] = indexBytes[1]
+	return append(utxoToBlockHeightPrefix, txHash[:]...)
 }

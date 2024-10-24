@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -521,7 +522,7 @@ func ReadGenesisQiAlloc(filename string, logger *log.Logger) map[string]GenesisU
 }
 
 // WriteGenesisUtxoSet writes the genesis utxo set to the database
-func AddGenesisUtxos(db ethdb.Database, utxosCreate *[]common.Hash, nodeLocation common.Location, addressOutpointMap map[string]map[string]*types.OutpointAndDenomination, logger *log.Logger) {
+func AddGenesisUtxos(db ethdb.Database, utxosCreate *[]common.Hash, nodeLocation common.Location, addressOutpointMap map[[20]byte][]*types.OutpointAndDenomination, logger *log.Logger) {
 	qiAlloc := ReadGenesisQiAlloc("genallocs/gen_alloc_qi_"+nodeLocation.Name()+".json", logger)
 	// logger.WithField("alloc", len(qiAlloc)).Info("Allocating genesis accounts")
 	for addressString, utxo := range qiAlloc {
@@ -553,10 +554,8 @@ func AddGenesisUtxos(db ethdb.Database, utxosCreate *[]common.Hash, nodeLocation
 			Index:        uint16(utxo.Index),
 			Denomination: uint8(utxo.Denomination),
 		}
-
-		if _, ok := addressOutpointMap[addr.Hex()]; !ok {
-			addressOutpointMap[addr.Hex()] = make(map[string]*types.OutpointAndDenomination)
-		}
-		addressOutpointMap[addr.Hex()][outpointAndDenomination.Key()] = outpointAndDenomination
+		addr20 := addr.Bytes20()
+		binary.BigEndian.PutUint32(addr20[16:], uint32(0))
+		addressOutpointMap[addr20] = append(addressOutpointMap[addr20], outpointAndDenomination)
 	}
 }

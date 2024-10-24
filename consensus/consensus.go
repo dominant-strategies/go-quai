@@ -105,7 +105,7 @@ type ChainHeaderReader interface {
 	UpdateEtxEligibleSlices(header *types.WorkObject, location common.Location) common.Hash
 
 	// WriteAddressOutpoints writes the address outpoints to the database
-	WriteAddressOutpoints(outpointsMap map[string]map[string]*types.OutpointAndDenomination) error
+	WriteAddressOutpoints(outpointsMap map[[20]byte][]*types.OutpointAndDenomination) error
 
 	// WorkShareDistance calculates the geodesic distance between the
 	// workshare and the workobject in which that workshare is included.

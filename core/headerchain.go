@@ -1350,7 +1350,7 @@ func (hc *HeaderChain) GetPrimeTerminus(header *types.WorkObject) *types.WorkObj
 	return hc.GetHeaderByHash(header.PrimeTerminusHash())
 }
 
-func (hc *HeaderChain) WriteAddressOutpoints(outpoints map[string]map[string]*types.OutpointAndDenomination) error {
+func (hc *HeaderChain) WriteAddressOutpoints(outpoints map[[20]byte][]*types.OutpointAndDenomination) error {
 	return rawdb.WriteAddressOutpoints(hc.bc.db, outpoints)
 }
 

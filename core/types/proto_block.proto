@@ -207,11 +207,7 @@ message ProtoOutPointAndDenomination {
 }
 
 message ProtoAddressOutPoints {
-  map<string, ProtoOutPointAndDenomination> out_points = 1;
-}
-
-message ProtoOutPointsMap {
-  map<string, ProtoAddressOutPoints> entries = 1;
+  repeated ProtoOutPointAndDenomination out_points = 1;
 }
 
 message ProtoSpentUTXO {

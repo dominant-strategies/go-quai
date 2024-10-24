@@ -1113,19 +1113,19 @@ func DeleteInboundEtxs(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-func WriteAddressOutpoints(db ethdb.KeyValueWriter, outpointMap map[string]map[string]*types.OutpointAndDenomination) error {
-	for address, outpoints := range outpointMap {
-		if err := WriteOutpointsForAddress(db, address, outpoints); err != nil {
+func WriteAddressOutpoints(db ethdb.KeyValueWriter, outpointMap map[[20]byte][]*types.OutpointAndDenomination) error {
+	for addressWithBlockHeight, outpoints := range outpointMap {
+		if err := WriteOutpointsForAddressAndBlockHeight(db, addressWithBlockHeight, outpoints); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func WriteOutpointsForAddress(db ethdb.KeyValueWriter, address string, outpoints map[string]*types.OutpointAndDenomination) error {
+func WriteOutpointsForAddressAndBlockHeight(db ethdb.KeyValueWriter, address [20]byte, outpoints []*types.OutpointAndDenomination) error {
 
 	addressOutpointsProto := &types.ProtoAddressOutPoints{
-		OutPoints: make(map[string]*types.ProtoOutPointAndDenomination, len(outpoints)),
+		OutPoints: make([]*types.ProtoOutPointAndDenomination, 0, len(outpoints)),
 	}
 
 	for _, outpoint := range outpoints {
@@ -1134,7 +1134,7 @@ func WriteOutpointsForAddress(db ethdb.KeyValueWriter, address string, outpoints
 			return err
 		}
 
-		addressOutpointsProto.OutPoints[outpoint.Key()] = outpointProto
+		addressOutpointsProto.OutPoints = append(addressOutpointsProto.OutPoints, outpointProto)
 	}
 
 	// Now, marshal utxosProto to protobuf bytes
@@ -1148,19 +1148,19 @@ func WriteOutpointsForAddress(db ethdb.KeyValueWriter, address string, outpoints
 	return nil
 }
 
-func ReadOutpointsForAddress(db ethdb.Reader, address string) map[string]*types.OutpointAndDenomination {
+func ReadOutpointsForAddressAtBlock(db ethdb.Reader, address [20]byte) ([]*types.OutpointAndDenomination, error) {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(addressUtxosKey(address))
 	if len(data) == 0 {
-		return make(map[string]*types.OutpointAndDenomination)
+		return []*types.OutpointAndDenomination{}, nil
 	}
 	addressOutpointsProto := &types.ProtoAddressOutPoints{
-		OutPoints: make(map[string]*types.ProtoOutPointAndDenomination),
+		OutPoints: make([]*types.ProtoOutPointAndDenomination, 0),
 	}
 	if err := proto.Unmarshal(data, addressOutpointsProto); err != nil {
-		return nil
+		return nil, err
 	}
-	outpoints := map[string]*types.OutpointAndDenomination{}
+	outpoints := make([]*types.OutpointAndDenomination, 0, len(addressOutpointsProto.OutPoints))
 
 	for _, outpointProto := range addressOutpointsProto.OutPoints {
 		outpoint := new(types.OutpointAndDenomination)
@@ -1170,15 +1170,46 @@ func ReadOutpointsForAddress(db ethdb.Reader, address string) map[string]*types.
 				"err":      err,
 				"outpoint": outpointProto,
 			}).Error("Invalid outpointProto")
-			return nil
+			return nil, err
 		}
-		outpoints[outpoint.Key()] = outpoint
+		outpoints = append(outpoints, outpoint)
 	}
 
-	return outpoints
+	return outpoints, nil
 }
 
-func DeleteOutpointsForAddress(db ethdb.KeyValueWriter, address string) {
+func ReadOutpointsForAddress(db ethdb.Database, address common.Address) ([]*types.OutpointAndDenomination, error) {
+	prefix := append(AddressUtxosPrefix, address.Bytes()[:16]...)
+	it := db.NewIterator(prefix, nil)
+	defer it.Release()
+	outpoints := make([]*types.OutpointAndDenomination, 0)
+	for it.Next() {
+		if len(it.Key()) != len(AddressUtxosPrefix)+common.AddressLength {
+			continue
+		}
+		addressOutpointsProto := &types.ProtoAddressOutPoints{
+			OutPoints: make([]*types.ProtoOutPointAndDenomination, 0),
+		}
+		if err := proto.Unmarshal(it.Value(), addressOutpointsProto); err != nil {
+			db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal addressOutpointsProto")
+			return nil, err
+		}
+		for _, outpointProto := range addressOutpointsProto.OutPoints {
+			outpoint := new(types.OutpointAndDenomination)
+			if err := outpoint.ProtoDecode(outpointProto); err != nil {
+				db.Logger().WithFields(log.Fields{
+					"err":      err,
+					"outpoint": outpointProto,
+				}).Error("Invalid outpointProto")
+				return nil, err
+			}
+			outpoints = append(outpoints, outpoint)
+		}
+	}
+	return outpoints, nil
+}
+
+func DeleteOutpointsForAddress(db ethdb.KeyValueWriter, address [20]byte) {
 	if err := db.Delete(addressUtxosKey(address)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxos")
 	}
@@ -1630,5 +1661,29 @@ func ReadAlreadyPruned(db ethdb.Reader, blockHash common.Hash) bool {
 func WriteAlreadyPruned(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	if err := db.Put(alreadyPrunedKey(blockHash), []byte{1}); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to store already pruned")
+	}
+}
+
+// ReadUtxoToBlockHeight reads the block height at which a UTXO was created
+// This is not meant to be used in consensus. It is only used in the UTXO indexer or RPC API.
+func ReadUtxoToBlockHeight(db ethdb.Reader, txHash common.Hash, index uint16) uint32 {
+	data, _ := db.Get(utxoToBlockHeightKey(txHash, index))
+	if len(data) == 0 {
+		return 0
+	}
+	return binary.BigEndian.Uint32(data)
+}
+
+func WriteUtxoToBlockHeight(db ethdb.KeyValueWriter, txHash common.Hash, index uint16, blockHeight uint32) {
+	data := make([]byte, 4)
+	binary.BigEndian.PutUint32(data, blockHeight)
+	if err := db.Put(utxoToBlockHeightKey(txHash, index), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store utxo to block height")
+	}
+}
+
+func DeleteUtxoToBlockHeight(db ethdb.KeyValueWriter, txHash common.Hash, index uint16) {
+	if err := db.Delete(utxoToBlockHeightKey(txHash, index)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete utxo to block height")
 	}
 }

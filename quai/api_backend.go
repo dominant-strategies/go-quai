@@ -210,12 +210,20 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, block
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (b *QuaiAPIBackend) AddressOutpoints(ctx context.Context, address common.Address) (map[string]*types.OutpointAndDenomination, error) {
-	return b.quai.core.GetOutpointsByAddress(address), nil
+func (b *QuaiAPIBackend) GetOutpointsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error) {
+	return b.quai.core.GetOutpointsByAddressAndRange(address, start, end)
 }
 
-func (b *QuaiAPIBackend) UTXOsByAddressAtState(ctx context.Context, state *state.StateDB, address common.Address) ([]*types.UtxoEntry, error) {
-	return b.quai.core.GetUTXOsByAddressAtState(state, address)
+func (b *QuaiAPIBackend) AddressOutpoints(ctx context.Context, address common.Address) ([]*types.OutpointAndDenomination, error) {
+	return b.quai.core.GetOutpointsByAddress(address)
+}
+
+func (b *QuaiAPIBackend) UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error) {
+	return b.quai.core.GetUTXOsByAddress(address)
+}
+
+func (b *QuaiAPIBackend) WriteAddressOutpoints(outpoints map[[20]byte][]*types.OutpointAndDenomination) error {
+	return b.quai.core.WriteAddressOutpoints(outpoints)
 }
 
 func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
@@ -679,10 +687,6 @@ func (b *QuaiAPIBackend) IsGenesisHash(hash common.Hash) bool {
 
 func (b *QuaiAPIBackend) UpdateEtxEligibleSlices(header *types.WorkObject, location common.Location) common.Hash {
 	return b.quai.core.UpdateEtxEligibleSlices(header, location)
-}
-
-func (b *QuaiAPIBackend) WriteAddressOutpoints(outpointsMap map[string]map[string]*types.OutpointAndDenomination) error {
-	return b.quai.core.WriteAddressOutpoints(outpointsMap)
 }
 
 func (b *QuaiAPIBackend) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error {
