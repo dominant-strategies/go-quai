@@ -320,6 +320,7 @@ func (es *EventSystem) SubscribeUnlocks(unlocks chan core.UnlocksEvent) *Subscri
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
 		installed: make(chan struct{}),
+		err:       make(chan error),
 		unlocks:   unlocks,
 	}
 	return es.subscribe(sub)
