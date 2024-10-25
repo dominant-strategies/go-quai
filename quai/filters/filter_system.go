@@ -314,12 +314,13 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.WorkObject) *Subscr
 // SubscribeUnlocks creates a subscription that writes the recently unlocked balances
 func (es *EventSystem) SubscribeUnlocks(unlocks chan core.UnlocksEvent) *Subscription {
 	sub := &subscription{
-		id:      rpc.NewID(),
-		typ:     UnlocksSubscription,
-		created: time.Now(),
-		logs:    make(chan []*types.Log),
-		hashes:  make(chan []common.Hash),
-		unlocks: unlocks,
+		id:        rpc.NewID(),
+		typ:       UnlocksSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		hashes:    make(chan []common.Hash),
+		installed: make(chan struct{}),
+		unlocks:   unlocks,
 	}
 	return es.subscribe(sub)
 }
