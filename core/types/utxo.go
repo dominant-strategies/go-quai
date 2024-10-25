@@ -2,11 +2,13 @@ package types
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"math"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
 )
@@ -188,6 +190,36 @@ type OutpointAndDenomination struct {
 	Lock         *big.Int    `json:"lock"`
 }
 
+func (outpoint *OutpointAndDenomination) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		Txhash       *common.Hash    `json:"txHash"`
+		Index        *hexutil.Uint64 `json:"index"`
+		Denomination *hexutil.Uint64 `json:"denomination"`
+		Lock         *hexutil.Big    `json:"lock"`
+	}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.Txhash == nil {
+		return errors.New("missing txHash")
+	}
+	if dec.Index == nil {
+		return errors.New("missing index")
+	}
+	if dec.Denomination == nil {
+		return errors.New("missing denomination")
+	}
+	outpoint.TxHash = *dec.Txhash
+	outpoint.Index = uint16(*dec.Index)
+	outpoint.Denomination = uint8(*dec.Denomination)
+	if dec.Lock != nil {
+		outpoint.Lock = dec.Lock.ToInt()
+	} else {
+		outpoint.Lock = big.NewInt(0)
+	}
+	return nil
+}
+
 func (outPoint OutpointAndDenomination) Key() string {
 	indexBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(indexBytes, outPoint.Index)
@@ -314,9 +346,9 @@ func NewTxOut(denomination uint8, address []byte, lock *big.Int) *TxOut {
 // the block that contains the tx, whether or not it is spent, its public key
 // script, and how much it pays.
 type UtxoEntry struct {
-	Denomination uint8
-	Address      []byte   // The address of the output holder.
-	Lock         *big.Int // Block height the entry unlocks. 0 = unlocked
+	Denomination uint8    `json:"denomination"`
+	Address      []byte   `json:"address"` // The address of the output holder.
+	Lock         *big.Int `json:"lock"`    // Block height the entry unlocks. 0 = unlocked
 }
 
 // SpentUtxoEntry houses details about a spent UtxoEntry.
@@ -393,6 +425,31 @@ func (utxo *UtxoEntry) ProtoDecode(protoTxOut *ProtoTxOut) error {
 		utxo.Lock = nil
 	} else {
 		utxo.Lock = new(big.Int).SetBytes(protoTxOut.Lock)
+	}
+	return nil
+}
+
+func (utxo *UtxoEntry) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		Denomination *hexutil.Uint64 `json:"denomination"`
+		Address      *string         `json:"address"`
+		Lock         *hexutil.Big    `json:"lock"`
+	}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.Denomination == nil {
+		return errors.New("missing denomination")
+	}
+	if dec.Address == nil {
+		return errors.New("missing address")
+	}
+	utxo.Denomination = uint8(*dec.Denomination)
+	utxo.Address = common.HexToAddressBytes(*dec.Address).Bytes()
+	if dec.Lock != nil {
+		utxo.Lock = dec.Lock.ToInt()
+	} else {
+		utxo.Lock = big.NewInt(0)
 	}
 	return nil
 }

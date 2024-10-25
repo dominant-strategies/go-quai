@@ -344,6 +344,12 @@ func (ec *Client) GetOutpointsByAddress(ctx context.Context, address common.Mixe
 	return outpoints, err
 }
 
+func (ec *Client) GetUTXO(ctx context.Context, txHash common.Hash, index uint16) (*types.UtxoEntry, error) {
+	var utxo *types.UtxoEntry
+	err := ec.c.CallContext(ctx, &utxo, "quai_getUTXO", txHash, hexutil.Uint64(index))
+	return utxo, err
+}
+
 // StorageAt returns the value of key in the contract storage of the given account.
 // The block number can be nil, in which case the value is taken from the latest known block.
 func (ec *Client) StorageAt(ctx context.Context, account common.MixedcaseAddress, key common.Hash, blockNumber *big.Int) ([]byte, error) {
