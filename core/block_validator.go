@@ -149,6 +149,13 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 			}
 		}
 	} else {
+		// If the fork has been triggered and within some grace period the nodes
+		// have not upgraded we reject the block validation
+		if wo.NumberU64(common.ZONE_CTX) > params.GoldenAgeForkNumberV1+params.GoldenAgeForkGraceNumber {
+			if wo.GasLimit() < params.MinGasLimit(params.GoldenAgeForkNumberV1) {
+				return fmt.Errorf("zone gas limit is less than the new fork gas limit")
+			}
+		}
 		if len(wo.Manifest()) != 0 {
 			return fmt.Errorf("zone body has non zero manifests")
 		}
@@ -270,6 +277,13 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 			}
 		}
 	} else {
+		// If the fork has been triggered and within some grace period the nodes
+		// have not upgraded we reject the block validation
+		if wo.NumberU64(common.ZONE_CTX) > params.GoldenAgeForkNumberV1+params.GoldenAgeForkGraceNumber {
+			if wo.GasLimit() < params.MinGasLimit(params.GoldenAgeForkNumberV1) {
+				return fmt.Errorf("zone gas limit is less than the new fork gas limit")
+			}
+		}
 		// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
 		if len(wo.Transactions()) != 0 {
 			return fmt.Errorf("zone body has non zero transactions")
@@ -399,7 +413,7 @@ func CalcGasLimit(parent *types.WorkObject, gasCeil uint64) uint64 {
 
 	// If parent gas is zero and we have passed the 5 day threshold, we can set the first block gas limit to min gas limit
 	if parent.GasLimit() == 0 {
-		return params.MinGasLimit
+		return params.MinGasLimit(parent.NumberU64(common.ZONE_CTX))
 	}
 
 	parentGasLimit := parent.GasLimit()
@@ -417,7 +431,7 @@ func CalcGasLimit(parent *types.WorkObject, gasCeil uint64) uint64 {
 			return limit + delta
 		}
 	} else {
-		desiredLimit = params.MinGasLimit
+		desiredLimit = params.MinGasLimit(parent.NumberU64(common.ZONE_CTX))
 		if limit-delta/2 < desiredLimit {
 			return desiredLimit
 		} else {

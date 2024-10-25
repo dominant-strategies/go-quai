@@ -15,11 +15,10 @@ func CalcStateLimit(parent *types.WorkObject, stateCeil uint64) uint64 {
 
 	// If parent gas is zero and we have passed the 5 day threshold, we can set the first block gas limit to min gas limit
 	if parent.StateLimit() == 0 {
-		return params.MinGasLimit
+		return params.MinGasLimit(parent.NumberU64(common.ZONE_CTX))
 	}
 
 	parentStateLimit := parent.StateLimit()
-
 	delta := parentStateLimit/params.StateLimitBoundDivisor - 1
 	limit := parentStateLimit
 
@@ -33,7 +32,7 @@ func CalcStateLimit(parent *types.WorkObject, stateCeil uint64) uint64 {
 			return limit + delta
 		}
 	} else {
-		desiredLimit = params.MinGasLimit
+		desiredLimit = params.MinGasLimit(parent.NumberU64(common.ZONE_CTX))
 		if limit-delta/2 < desiredLimit {
 			return desiredLimit
 		} else {

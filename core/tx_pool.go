@@ -172,6 +172,7 @@ type blockChain interface {
 	CheckInCalcOrderCache(common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(common.Hash, int, *big.Int)
 	CalcMinBaseFee(block *types.WorkObject) *big.Int
+	CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error)
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.

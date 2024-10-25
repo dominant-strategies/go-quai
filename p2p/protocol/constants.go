@@ -17,5 +17,5 @@ const (
 	//
 	// Note, in this example, peers below `quai/8.0.0` are not tolerated even
 	// during the grace period.
-	ProtocolGraceHeight uint64 = 0
+	ProtocolGraceHeight uint64 = 40000
 )

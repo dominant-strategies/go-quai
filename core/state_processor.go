@@ -455,9 +455,19 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					if int(lockupByte) > len(params.LockupByteToBlockDepth)-1 {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
 					}
-					lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-					if lockup.Uint64() < params.ConversionLockPeriod {
-						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+					var lockup *big.Int
+					// The first lock up period changes after the fork
+					if lockupByte == 0 {
+						if block.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV1 {
+							lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
+						} else {
+							lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
+						}
+					} else {
+						lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+						if lockup.Uint64() < params.OldConversionLockPeriod {
+							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.OldConversionLockPeriod)
+						}
 					}
 					lockup.Add(lockup, blockNumber)
 					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
@@ -500,7 +510,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 			if etx.To().IsInQiLedgerScope() {
 				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Quai->Qi Conversion
-					lock := new(big.Int).Add(header.Number(nodeCtx), new(big.Int).SetUint64(params.ConversionLockPeriod))
+					var lockup *big.Int
+					if block.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV1 {
+						lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
+					} else {
+						lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
+					}
+					lock := new(big.Int).Add(block.Number(nodeCtx), lockup)
 					value := etx.Value()
 					txGas := etx.Gas()
 					if txGas < params.TxGas {
@@ -538,7 +554,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							}
 							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
 							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
-							p.logger.Infof("Converting Quai to Qi %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, lock)
+							p.logger.Debugf("Converting Quai to Qi %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, lock)
 							outputIndex++
 						}
 					}
@@ -815,20 +831,47 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 // This function is intended to be run as part of the block processing.
 // Returns the list of unlocked coinbases
 func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.WorkObject, statedb *state.StateDB) (error, []common.Unlock) {
-	// Array of specific block depths for which we will redeem the Quai
-	blockDepths := []uint64{
-		params.ConversionLockPeriod,
-		params.LockupByteToBlockDepth[0],
-		params.LockupByteToBlockDepth[1],
-		params.LockupByteToBlockDepth[2],
-		params.LockupByteToBlockDepth[3],
-	}
-
 	currentBlockHeight := header.Number(hc.NodeCtx()).Uint64()
+
+	var blockDepths []uint64
+	if currentBlockHeight < params.GoldenAgeForkNumberV1 {
+		blockDepths = []uint64{
+			params.OldConversionLockPeriod,
+			params.LockupByteToBlockDepth[0],
+			params.LockupByteToBlockDepth[1],
+			params.LockupByteToBlockDepth[2],
+			params.LockupByteToBlockDepth[3],
+		}
+	} else {
+		blockDepths = []uint64{
+			params.LockupByteToBlockDepth[0],
+			params.LockupByteToBlockDepth[1],
+			params.LockupByteToBlockDepth[2],
+			params.LockupByteToBlockDepth[3],
+		}
+	}
+	// Array of specific block depths for which we will redeem the Quai
+
 	unlocks := []common.Unlock{}
 
 	// Loop through the predefined block depths
-	for _, blockDepth := range blockDepths {
+	for i, blockDepth := range blockDepths {
+
+		// Minimum lock period is neutered between the fork number + old
+		// conversion period and fork number + new conversion period
+		if i == 0 {
+			if currentBlockHeight >= params.GoldenAgeForkNumberV1+params.OldConversionLockPeriod &&
+				currentBlockHeight < params.GoldenAgeForkNumberV1+params.NewConversionLockPeriod {
+				continue
+			}
+
+			if currentBlockHeight >= params.GoldenAgeForkNumberV1+params.NewConversionLockPeriod {
+				// block depth for the first index gets changed into the new conversion lock period
+				// after the fork height + new conversion number
+				blockDepth = params.NewConversionLockPeriod
+			}
+		}
+
 		// Ensure we can look back far enough
 		if currentBlockHeight <= blockDepth {
 			// Skip this depth if the current block height is less than or equal to the block depth
@@ -854,7 +897,16 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 				}
 
 				lockupByte := etx.Data()[0]
-				lockup := params.LockupByteToBlockDepth[lockupByte]
+				// if lock up byte is 0, the fork change updates the lockup time
+				var lockup uint64
+				if lockupByte == 0 {
+					lockup = params.OldConversionLockPeriod
+					if currentBlockHeight >= params.GoldenAgeForkNumberV1+params.NewConversionLockPeriod {
+						lockup = params.NewConversionLockPeriod
+					}
+				} else {
+					lockup = params.LockupByteToBlockDepth[lockupByte]
+				}
 				if lockup == blockDepth {
 					balance := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte)
 
@@ -879,7 +931,14 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 				}
 			}
 
-			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && blockDepth == params.ConversionLockPeriod {
+			var conversionPeriodValid bool
+			if currentBlockHeight < params.GoldenAgeForkNumberV1 {
+				conversionPeriodValid = blockDepth == params.OldConversionLockPeriod
+			} else {
+				conversionPeriodValid = blockDepth == params.NewConversionLockPeriod
+			}
+
+			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && conversionPeriodValid {
 				internal, err := etx.To().InternalAddress()
 				if err != nil {
 					fmt.Errorf("Error converting address to internal address: %v", err)

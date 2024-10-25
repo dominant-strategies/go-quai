@@ -26,7 +26,6 @@ import (
 const (
 	GasLimitBoundDivisor    uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
 	PercentGasUsedThreshold uint64 = 90      // Percent Gas used threshold at which the gas limit adjusts
-	MinGasLimit             uint64 = 5000000 // Minimum the gas limit may ever be.
 	GenesisGasLimit         uint64 = 5000000 // Gas limit of the Genesis block.
 
 	StateCeil                 uint64 = 20000000 // Maximum the StateCeil may ever be
@@ -149,7 +148,8 @@ const (
 	// infrastructure, if needed, to account for the upcoming network change.
 	TREE_EXPANSION_WAIT_COUNT = 1024
 
-	ConversionLockPeriod          uint64 = 10 // The number of zone blocks that a conversion output is locked for
+	OldConversionLockPeriod       uint64 = 10 // The number of zone blocks that a conversion output is locked for
+	NewConversionLockPeriod       uint64 = 7200
 	MinQiConversionDenomination          = 10
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	SoftMaxUTXOSetSize                   = math.MaxInt      // The soft maximum number of UTXOs that can be stored in the UTXO set
@@ -195,11 +195,16 @@ var (
 	BaseFeeMultiplier             = big.NewInt(50)
 )
 
+const (
+	GoldenAgeForkNumberV1    = 180000
+	GoldenAgeForkGraceNumber = 4000
+)
+
 func init() {
-	LockupByteToBlockDepth[0] = ConversionLockPeriod // minimum lockup period
-	LockupByteToBlockDepth[1] = 30240                // 1.75 days
-	LockupByteToBlockDepth[2] = 60480                // 3.5 days
-	LockupByteToBlockDepth[3] = 120960               // 7 days
+	LockupByteToBlockDepth[0] = OldConversionLockPeriod
+	LockupByteToBlockDepth[1] = 30240  // 1.75 days
+	LockupByteToBlockDepth[2] = 60480  // 3.5 days
+	LockupByteToBlockDepth[3] = 120960 // 7 days
 
 	LockupByteToRewardsRatio[1] = big.NewInt(24) // additional 16% WPY
 	LockupByteToRewardsRatio[2] = big.NewInt(10) // additional 20% WPY
@@ -220,6 +225,14 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 	_, numZones := common.GetHierarchySizeForExpansionNumber(expansionNum)
 	timeFactor := int64(max(numZones, 2))
 	return new(big.Int).Mul(big.NewInt(timeFactor), new(big.Int).SetUint64(numZones))
+}
+
+func MinGasLimit(number uint64) uint64 {
+	if number < GoldenAgeForkNumberV1 {
+		return 5000000
+	} else {
+		return 10000000
+	}
 }
 
 // Gas calculation functions
