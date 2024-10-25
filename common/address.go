@@ -387,6 +387,10 @@ func (a AddressBytes) hex() []byte {
 	return buf[:]
 }
 
+func (a AddressBytes) Bytes() []byte {
+	return a[:]
+}
+
 func (a AddressBytes) Location() *Location {
 	// Extract nibbles
 	lowerNib := a[0] & 0x0F        // Lower 4 bits

@@ -181,7 +181,7 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	return jsonOutpoints, nil
 }
 
-func (s *PublicBlockChainAPI) GetOutPointsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) (map[string][]interface{}, error) {
+func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) (map[string][]interface{}, error) {
 	if start > end {
 		return nil, fmt.Errorf("start is greater than end")
 	}
@@ -210,6 +210,23 @@ func (s *PublicBlockChainAPI) GetOutPointsByAddressAndRange(ctx context.Context,
 	}
 
 	return txHashToOutpointsJson, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) GetUTXO(ctx context.Context, txHash common.Hash, index hexutil.Uint64) (map[string]interface{}, error) {
+	utxo := rawdb.GetUTXO(s.b.Database(), txHash, uint16(index))
+	if utxo == nil {
+		return nil, nil
+	}
+	lock := big.NewInt(0)
+	if utxo.Lock != nil {
+		lock = utxo.Lock
+	}
+	jsonOutpoint := map[string]interface{}{
+		"address":      common.BytesToAddress(utxo.Address, s.b.NodeLocation()).Hex(),
+		"denomination": hexutil.Uint64(utxo.Denomination),
+		"lock":         hexutil.Big(*lock),
+	}
+	return jsonOutpoint, nil
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
