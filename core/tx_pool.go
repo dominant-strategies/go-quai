@@ -605,6 +605,11 @@ func (pool *TxPool) Stop() {
 	if pool.journal != nil {
 		pool.journal.close()
 	}
+	for _, client := range pool.poolSharingClients {
+		if client != nil {
+			client.Close()
+		}
+	}
 	pool.logger.Info("Transaction pool stopped")
 }
 
@@ -1605,6 +1610,8 @@ func (pool *TxPool) txListenerLoop() {
 					}
 				}
 			}
+		case <-pool.reorgShutdownCh:
+			return
 		}
 	}
 }
