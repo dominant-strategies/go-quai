@@ -349,12 +349,12 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 					// Check for external accesses
 					switch tx.Type() {
 					case types.QuaiTxType:
-						if tx.To().Equal(addr) || tx.From(nodeLocation).Equal(addr) {
+						if (tx.To() != nil && tx.To().Equal(addr)) || (tx.From != nil && tx.From(nodeLocation).Equal(addr)) {
 							notifier.Notify(rpcSub.ID, hash)
 							break
 						}
 					case types.ExternalTxType:
-						if tx.To().Equal(addr) || tx.ETXSender().Equal(addr) {
+						if (tx.To() != nil && tx.To().Equal(addr)) || tx.ETXSender().Equal(addr) {
 							notifier.Notify(rpcSub.ID, hash)
 							break
 						}
