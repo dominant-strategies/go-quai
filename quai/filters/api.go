@@ -92,7 +92,7 @@ func (api *PublicFilterAPI) timeoutLoop(timeout time.Duration) {
 			api.backend.Logger().WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	var toUninstall []*Subscription
@@ -188,7 +188,7 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 				api.backend.Logger().WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 			api.activeSubscriptions -= 1
 		}()
@@ -237,7 +237,7 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 				api.backend.Logger().WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		for {
@@ -279,7 +279,7 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 				api.backend.Logger().WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 			api.activeSubscriptions -= 1
 		}()
@@ -329,7 +329,7 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 				api.backend.Logger().WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 			api.activeSubscriptions -= 1
 		}()
@@ -349,7 +349,7 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 					// Check for external accesses
 					switch tx.Type() {
 					case types.QuaiTxType:
-						if tx.To().Equal(addr) || tx.From(nodeLocation).Equal(addr) {
+						if tx.To() != nil && tx.To().Equal(addr) || tx.From(nodeLocation).Equal(addr) {
 							notifier.Notify(rpcSub.ID, hash)
 							break
 						}
@@ -428,7 +428,7 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 				api.backend.Logger().WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 			api.activeSubscriptions -= 1
 		}()
@@ -486,7 +486,7 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 				api.backend.Logger().WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		for {
@@ -795,7 +795,7 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 				api.backend.Logger().WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		header := make(chan *types.WorkObject, c_pendingHeaderChSize)
@@ -810,7 +810,7 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 							api.backend.Logger().WithFields(log.Fields{
 								"error":      r,
 								"stacktrace": string(debug.Stack()),
-							}).Fatal("Go-Quai Panicked")
+							}).Error("Go-Quai Panicked")
 						}
 					}()
 					// Marshal the header data

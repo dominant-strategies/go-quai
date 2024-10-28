@@ -476,7 +476,7 @@ func (es *EventSystem) eventLoop() {
 			es.backend.Logger().WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	nodeCtx := es.backend.NodeCtx()
