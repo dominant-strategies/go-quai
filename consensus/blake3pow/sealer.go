@@ -164,8 +164,6 @@ search:
 			workObject.WorkObjectHeader().SetNonce(types.EncodeNonce(nonce))
 			hash := workObject.Hash().Bytes()
 			if powBuffer.SetBytes(hash).Cmp(target) <= 0 {
-				// Correct nonce found, create a new header with it
-
 				// Seal and return a block (if still needed)
 				select {
 				case found <- workObject:
