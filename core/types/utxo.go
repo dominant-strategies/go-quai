@@ -339,6 +339,17 @@ func NewTxOut(denomination uint8, address []byte, lock *big.Int) *TxOut {
 	}
 }
 
+type RPCTxIn struct {
+	PreviousOutPoint OutpointJSON  `json:"previousOutPoint"`
+	PubKey           hexutil.Bytes `json:"pubKey"`
+}
+
+type RPCTxOut struct {
+	Denomination hexutil.Uint  `json:"denomination"`
+	Address      hexutil.Bytes `json:"address"`
+	Lock         *hexutil.Big  `json:"lock"`
+}
+
 // UtxoEntry houses details about an individual transaction output in a utxo
 // view such as whether or not it was contained in a coinbase tx, the height of
 // the block that contains the tx, whether or not it is spent, its public key

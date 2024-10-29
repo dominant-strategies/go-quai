@@ -52,9 +52,9 @@ type TransactionArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 
 	// Support for Qi (UTXO) transaction
-	TxIn   types.TxIns  `json:"txIn,omitempty"`
-	TxOut  types.TxOuts `json:"txOut,omitempty"`
-	TxType uint8        `json:"txType,omitempty"`
+	TxIn   []types.RPCTxIn  `json:"txIn,omitempty"`
+	TxOut  []types.RPCTxOut `json:"txOut,omitempty"`
+	TxType uint8            `json:"txType,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -194,11 +194,34 @@ func (args *TransactionArgs) CalculateQiTxGas(qiScalingFactor float64, location 
 
 	if len(args.TxIn) == 0 || len(args.TxOut) == 0 {
 		return 0, errors.New("Qi transaction must have at least one input and one output")
+	} else if len(args.TxIn) > types.MaxOutputIndex {
+		return 0, fmt.Errorf("Qi transaction has too many inputs: %d", len(args.TxIn))
+	}
+	ins := make([]types.TxIn, len(args.TxIn))
+	outs := make([]types.TxOut, len(args.TxOut))
+	for i, in := range args.TxIn {
+		if in.PreviousOutPoint.Index > types.MaxOutputIndex {
+			return 0, fmt.Errorf("Qi transaction has an input with an index too large: %d", in.PreviousOutPoint.Index)
+		}
+		ins[i] = types.TxIn{
+			PreviousOutPoint: types.OutPoint{
+				TxHash: in.PreviousOutPoint.TxHash,
+				Index:  uint16(in.PreviousOutPoint.Index),
+			},
+			PubKey: in.PubKey,
+		}
+	}
+	for i, out := range args.TxOut {
+		outs[i] = types.TxOut{
+			Denomination: uint8(out.Denomination),
+			Address:      out.Address,
+			Lock:         out.Lock.ToInt(),
+		}
 	}
 
 	qiTx := &types.QiTx{
-		TxIn:  args.TxIn,
-		TxOut: args.TxOut,
+		TxIn:  ins,
+		TxOut: outs,
 	}
 
 	tx := types.NewTx(qiTx)

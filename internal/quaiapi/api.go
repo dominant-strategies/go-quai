@@ -998,23 +998,12 @@ type RPCTransaction struct {
 	V                 *hexutil.Big             `json:"v,omitempty"`
 	R                 *hexutil.Big             `json:"r,omitempty"`
 	S                 *hexutil.Big             `json:"s,omitempty"`
-	TxIn              []RPCTxIn                `json:"inputs,omitempty"`
-	TxOut             []RPCTxOut               `json:"outputs,omitempty"`
+	TxIn              []types.RPCTxIn          `json:"inputs,omitempty"`
+	TxOut             []types.RPCTxOut         `json:"outputs,omitempty"`
 	UTXOSignature     hexutil.Bytes            `json:"utxoSignature,omitempty"`
 	OriginatingTxHash *common.Hash             `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64          `json:"etxIndex,omitempty"`
 	ETxType           *hexutil.Uint64          `json:"etxType,omitempty"`
-}
-
-type RPCTxIn struct {
-	PreviousOutPoint types.OutpointJSON `json:"previousOutPoint"`
-	PubKey           hexutil.Bytes      `json:"pubKey"`
-}
-
-type RPCTxOut struct {
-	Denomination hexutil.Uint  `json:"denomination"`
-	Address      hexutil.Bytes `json:"address"`
-	Lock         *hexutil.Big  `json:"lock"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1035,10 +1024,10 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			UTXOSignature: hexutil.Bytes(sig),
 		}
 		for _, txin := range tx.TxIn() {
-			result.TxIn = append(result.TxIn, RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
+			result.TxIn = append(result.TxIn, types.RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
 		}
 		for _, txout := range tx.TxOut() {
-			result.TxOut = append(result.TxOut, RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
+			result.TxOut = append(result.TxOut, types.RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
 		}
 		if blockHash != (common.Hash{}) {
 			result.BlockHash = &blockHash
