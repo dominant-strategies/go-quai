@@ -466,7 +466,7 @@ func (ec *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 // but it should provide a basis for setting a reasonable default.
 func (ec *Client) EstimateGas(ctx context.Context, msg quai.CallMsg) (uint64, error) {
 	var hex hexutil.Uint64
-	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg))
+	err := ec.c.CallContext(ctx, &hex, "quai_estimateGas", toCallArg(msg))
 	if err != nil {
 		return 0, err
 	}
@@ -587,6 +587,23 @@ func toCallArg(msg quai.CallMsg) interface{} {
 	}
 	if msg.GasPrice != nil {
 		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
+	}
+	if msg.TxType != 0 {
+		arg["txType"] = msg.TxType
+	}
+	txIns := make([]types.RPCTxIn, 0, len(msg.TxIn))
+	txOuts := make([]types.RPCTxOut, 0, len(msg.TxOut))
+	for _, txin := range msg.TxIn {
+		txIns = append(txIns, types.RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
+	}
+	for _, txout := range msg.TxOut {
+		txOuts = append(txOuts, types.RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
+	}
+	if msg.TxIn != nil {
+		arg["txIn"] = msg.TxIn
+	}
+	if msg.TxOut != nil {
+		arg["txOut"] = msg.TxOut
 	}
 	return arg
 }
