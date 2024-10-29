@@ -122,6 +122,10 @@ type CallMsg struct {
 	Data     []byte          // input data, usually an ABI-encoded contract method invocation
 
 	AccessList types.AccessList // access list
+	// Support for Qi (UTXO) transaction
+	TxIn   types.TxIns  `json:"txIn,omitempty"`
+	TxOut  types.TxOuts `json:"txOut,omitempty"`
+	TxType uint8        `json:"txType,omitempty"`
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by
