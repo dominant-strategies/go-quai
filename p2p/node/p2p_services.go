@@ -19,6 +19,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
@@ -125,6 +126,15 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 					return recvdType, nil
 				}
 			case []*types.WorkObjectBlockView:
+				for _, block := range recvdType.([]*types.WorkObjectBlockView) {
+					// If a block is received which has a number greater than
+					// the goldenage fork number and does not have the updated
+					// gas limit, reject the response
+					if block != nil && block.NumberU64(common.ZONE_CTX) > params.GoldenAgeForkNumberV1 && block.GasLimit() < params.MinGasLimit(params.GoldenAgeForkNumberV1) {
+						p.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnBadResponse)
+						return nil, errors.New("invalid response")
+					}
+				}
 				return recvdType, nil
 			default:
 				return nil, errors.New("invalid response")

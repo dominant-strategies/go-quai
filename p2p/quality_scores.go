@@ -25,3 +25,6 @@ func QualityAdjOnNack(current int) int {
 func QualityAdjOnTimeout(current int) int {
 	return boundedAdj(current, -20)
 }
+func QualityAdjOnBadResponse(curent int) int {
+	return boundedAdj(curent, -40)
+}
