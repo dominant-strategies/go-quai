@@ -59,7 +59,6 @@ func DialContext(ctx context.Context, rawurl string, logger *log.Logger) (*Clien
 
 		attempts += 1
 		// exponential back-off implemented
-		// delaySecs := int64(math.Floor((math.Pow(2, float64(attempts)) - 1) * 0.5))
 		delaySecs := int64(attempts) * 5
 		if delaySecs > exponentialBackoffCeilingSecs {
 			return nil, err
