@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	c_maxAllowableEntropyDist = 3500 // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
+	c_maxAllowableEntropyDist = 200 // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
 )
 
 // BlockValidator is responsible for validating block headers, uncles and

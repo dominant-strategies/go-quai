@@ -35,7 +35,7 @@ import (
 const (
 	c_maxAppendQueue                    = 100000                 // Maximum number of future headers we can store in cache
 	c_maxFutureTime                     = 30                     // Max time into the future (in seconds) we will accept a block
-	c_appendQueueRetryPeriod            = 100 * time.Millisecond // Time before retrying to append from AppendQueue
+	c_appendQueueRetryPeriod            = 200 * time.Millisecond // Time before retrying to append from AppendQueue
 	c_appendQueueThreshold              = 200                    // Number of blocks to load from the disk to ram on every proc of append queue
 	c_processingCache                   = 10                     // Number of block hashes held to prevent multi simultaneous appends on a single block hash
 	c_primeRetryThreshold               = 1800                   // Number of times a block is retry to be appended before eviction from append queue in Prime
@@ -50,7 +50,7 @@ const (
 	c_maxRemoteTxQueue                  = 50000
 	c_remoteTxProcPeriod                = 2 // Time between remote tx pool processing
 	c_asyncWorkShareTimer               = 1 * time.Second
-	c_maxFutureEntropyMultiple          = 500
+	c_maxFutureEntropyMultiple          = 200
 )
 
 type blockNumberAndRetryCounter struct {
