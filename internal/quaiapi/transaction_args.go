@@ -215,7 +215,7 @@ func (args *TransactionArgs) CalculateQiTxGas(qiScalingFactor float64, location 
 	for i, out := range args.TxOut {
 		outs[i] = types.TxOut{
 			Denomination: uint8(out.Denomination),
-			Address:      out.Address,
+			Address:      out.Address.Address().Bytes(),
 			Lock:         out.Lock.ToInt(),
 		}
 	}
