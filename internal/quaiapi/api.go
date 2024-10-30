@@ -573,14 +573,12 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
-	if args.Nonce == nil {
-		internal, err := args.from(b.NodeLocation()).InternalAndQuaiAddress()
-		if err != nil {
-			return nil, err
-		}
-		nonce := state.GetNonce(internal)
-		args.Nonce = (*hexutil.Uint64)(&nonce)
+	internal, err := args.from(b.NodeLocation()).InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
 	}
+	nonce := state.GetNonce(internal)
+	args.Nonce = (*hexutil.Uint64)(&nonce) // Ignore provided nonce, reset to correct nonce
 
 	// Get a new instance of the EVM.
 	msg, err := args.ToMessage(globalGasCap, header.BaseFee(), b.NodeLocation())
@@ -1201,7 +1199,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	nogas := args.Gas == nil
 
 	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b); err != nil {
+	if err := args.setDefaults(ctx, b, db); err != nil {
 		return nil, 0, nil, err
 	}
 	var to common.Address
@@ -1235,7 +1233,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// and it's convered by the sender only anyway.
 		if nogas {
 			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
+			if err := args.setDefaults(ctx, b, db); err != nil {
 				return nil, 0, nil, err // shouldn't happen, just in case
 			}
 		}
