@@ -128,22 +128,20 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 
 		utxos, err := s.b.UTXOsByAddress(ctx, addr)
 		if utxos == nil || err != nil {
-			return nil, err
+			return (*hexutil.Big)(big.NewInt(0)), err
 		}
 
 		if len(utxos) == 0 {
 			return (*hexutil.Big)(big.NewInt(0)), nil
 		}
 
-		var balance *big.Int
+		balance := big.NewInt(0)
 		for _, utxo := range utxos {
-			denomination := utxo.Denomination
-			value := types.Denominations[denomination]
-			if balance == nil {
-				balance = new(big.Int).Set(value)
-			} else {
-				balance.Add(balance, value)
+			if utxo.Lock != nil && currHeader.Number(nodeCtx).Cmp(utxo.Lock) < 0 {
+				continue
 			}
+			value := types.Denominations[utxo.Denomination]
+			balance.Add(balance, value)
 		}
 		return (*hexutil.Big)(balance), nil
 	} else {
@@ -153,6 +151,37 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 		}
 		return (*hexutil.Big)(state.GetBalance(internal)), state.Error()
 	}
+}
+
+func (s *PublicBlockChainQuaiAPI) GetLockedBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
+	nodeCtx := s.b.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getBalance call can only be made in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getBalance call can only be made on chain processing the state")
+	}
+
+	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
+	if addr.IsInQiLedgerScope() {
+		currHeader := s.b.CurrentHeader()
+		utxos, err := s.b.UTXOsByAddress(ctx, addr)
+		if utxos == nil || err != nil {
+			return (*hexutil.Big)(big.NewInt(0)), err
+		}
+		if len(utxos) == 0 {
+			return (*hexutil.Big)(big.NewInt(0)), nil
+		}
+		lockedBalance := big.NewInt(0)
+		for _, utxo := range utxos {
+			if utxo.Lock != nil && currHeader.Number(nodeCtx).Cmp(utxo.Lock) < 0 {
+				value := types.Denominations[utxo.Denomination]
+				lockedBalance.Add(lockedBalance, value)
+			}
+		}
+		return (*hexutil.Big)(lockedBalance), nil
+	}
+	return nil, nil
 }
 
 func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, address common.Address) ([]interface{}, error) {
