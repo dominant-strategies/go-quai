@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -77,7 +78,7 @@ func (arg *TransactionArgs) data() []byte {
 }
 
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, db *state.StateDB) error {
 
 	head := b.CurrentHeader()
 	if args.MinerTip == nil {
@@ -97,13 +98,13 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
 	}
-	if args.Nonce == nil {
-		nonce, err := b.GetPoolNonce(ctx, args.from(b.NodeLocation()))
-		if err != nil {
-			return err
-		}
-		args.Nonce = (*hexutil.Uint64)(&nonce)
+	internal, err := args.from(b.NodeLocation()).InternalAddress()
+	if err != nil {
+		return err
 	}
+	nonce := db.GetNonce(internal)
+	args.Nonce = (*hexutil.Uint64)(&nonce) // Ignore provided nonce, reset to correct nonce
+
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
 		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
 	}
