@@ -18,7 +18,7 @@ const (
 	C_workObjectType                    = "blocks"
 	C_transactionType                   = "transactions"
 	C_headerType                        = "headers"
-	C_workObjectShareType               = "workshare"
+	C_workObjectShareType               = "worksharev2"
 	C_workObjectRequestDegree           = 3
 	C_workObjectHeaderTypeRequestDegree = 3
 	C_defaultRequestDegree              = 3
