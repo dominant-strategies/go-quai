@@ -153,8 +153,6 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.WriteGenesisBlock(genesisBlock, chainConfig.Location)
 	}
 
-	sl.CheckForBadHashAndRecover()
-
 	if nodeCtx == common.ZONE_CTX && sl.ProcessingState() {
 		go sl.asyncPendingHeaderLoop()
 		go sl.asyncWorkShareUpdateLoop()

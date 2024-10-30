@@ -106,6 +106,12 @@ func (h *handler) missingBlockLoop() {
 		select {
 		case blockRequest := <-h.missingBlockCh:
 
+			// If the blockRequest Hash is a bad block hash, node should not ask
+			// any peer for the hash
+			if h.core.IsBlockHashABadHash(blockRequest.Hash) {
+				continue
+			}
+
 			_, exists := h.recentBlockReqCache.Get(blockRequest.Hash)
 			if !exists {
 				// Add the block request to the cache to avoid requesting the same block multiple times
