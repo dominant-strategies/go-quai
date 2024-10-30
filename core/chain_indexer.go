@@ -271,7 +271,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			time2 := time.Since(start)
 
 			var time3, time4, time5 time.Duration
-			if block.ParentHash(nodeCtx) != prevHash && rawdb.ReadCanonicalHash(c.chainDb, prevHeader.NumberU64(nodeCtx)) != prevHash {
+			if block.ParentHash(nodeCtx) != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO: This seems a bit brittle, can we detect this case explicitly?
 				commonHeader, err := rawdb.FindCommonAncestor(c.chainDb, prevHeader, block, nodeCtx)
@@ -323,7 +323,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 
 					time3 = time.Since(start)
 
-					// Reorg out all outpoints of the reorg headers
+					// Remove all outpoints of the reorg headers (old chain)
 					err := c.reorgUtxoIndexer(prevHashStack, addressOutpoints, nodeCtx)
 					if err != nil {
 						c.logger.Error("Failed to reorg utxo indexer", "err", err)
@@ -710,7 +710,7 @@ func (c *ChainIndexer) removeSectionHead(section uint64) {
 
 // addOutpointsToIndexer removes the spent outpoints and adds new utxos to the indexer.
 func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map[[20]byte][]*types.OutpointAndDenomination, nodeCtx int, config params.ChainConfig, block *types.WorkObject) {
-	utxos := block.QiTransactions() // TODO: Need to add the coinbase outputs into the Indexer
+	utxos := block.QiTransactions()
 
 	for _, tx := range utxos {
 		for _, in := range tx.TxIn() {
@@ -724,10 +724,10 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 				c.logger.Warn("Utxo is spent in a future block", "utxo", outpoint, "block", block.Number(nodeCtx))
 				continue
 			}
-			outpointsForAddress, exists := addressOutpointsWithBlockHeight[address20]
+			_, exists := addressOutpointsWithBlockHeight[address20]
 			if !exists {
 				var err error
-				outpointsForAddress, err = rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, address20)
+				outpointsForAddress, err := rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, address20)
 				if err != nil {
 					c.logger.Error("Failed to read outpoints for address", "address", address20, "err", err)
 					continue
@@ -756,14 +756,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 				Index:        outpoint.Index,
 				Denomination: out.Denomination,
 			}
-			if _, exists := addressOutpointsWithBlockHeight[address20]; !exists {
-				var err error
-				addressOutpointsWithBlockHeight[address20], err = rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, address20)
-				if err != nil {
-					c.logger.Error("Failed to read outpoints for address", "address", address20, "err", err)
-					continue
-				}
-			}
+
 			addressOutpointsWithBlockHeight[address20] = append(addressOutpointsWithBlockHeight[address20], outpointAndDenom)
 			rawdb.WriteUtxoToBlockHeight(c.chainDb, outpointAndDenom.TxHash, outpointAndDenom.Index, uint32(block.NumberU64(nodeCtx)))
 		}
@@ -809,14 +802,6 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 						Lock:         lockup,
 					}
 
-					if _, exists := addressOutpointsWithBlockHeight[coinbaseAddr]; !exists {
-						var err error
-						addressOutpointsWithBlockHeight[coinbaseAddr], err = rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, coinbaseAddr)
-						if err != nil {
-							c.logger.Error("Failed to read outpoints for address", "address", coinbaseAddr, "err", err)
-							continue
-						}
-					}
 					addressOutpointsWithBlockHeight[coinbaseAddr] = append(addressOutpointsWithBlockHeight[coinbaseAddr], outpointAndDenom)
 					rawdb.WriteUtxoToBlockHeight(c.chainDb, outpointAndDenom.TxHash, outpointAndDenom.Index, uint32(block.NumberU64(nodeCtx)))
 					outputIndex++
@@ -860,14 +845,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 						Denomination: uint8(denomination),
 						Lock:         lock,
 					}
-					if _, exists := addressOutpointsWithBlockHeight[addr20]; !exists {
-						var err error
-						addressOutpointsWithBlockHeight[addr20], err = rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, addr20)
-						if err != nil {
-							c.logger.Error("Failed to read outpoints for address", "address", addr20, "err", err)
-							continue
-						}
-					}
+
 					addressOutpointsWithBlockHeight[addr20] = append(addressOutpointsWithBlockHeight[addr20], outpointAndDenom)
 					rawdb.WriteUtxoToBlockHeight(c.chainDb, outpointAndDenom.TxHash, outpointAndDenom.Index, uint32(block.NumberU64(nodeCtx)))
 					outputIndex++
@@ -902,15 +880,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 			height := rawdb.ReadUtxoToBlockHeight(c.chainDb, sutxo.TxHash, sutxo.Index)
 			addr20 := [20]byte(sutxo.Address)
 			binary.BigEndian.PutUint32(addr20[16:], height)
-			if _, exists := addressOutpoints[addr20]; !exists {
-				var err error
-				addressOutpoints[addr20], err = rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, addr20)
-				if err != nil {
-					return err
-				}
-			}
 			addressOutpoints[addr20] = append(addressOutpoints[addr20], outpointAndDenom)
-			rawdb.WriteUtxoToBlockHeight(c.chainDb, sutxo.TxHash, sutxo.Index, height)
 
 		}
 		utxoKeys, err := rawdb.ReadCreatedUTXOKeys(c.chainDb, header.Hash())
@@ -924,23 +894,28 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 			data, _ := c.chainDb.Get(key)
 			utxoProto := new(types.ProtoTxOut)
 			if err := proto.Unmarshal(data, utxoProto); err != nil {
+				c.logger.Error("Failed to unmarshal utxo proto", "err", err)
 				continue
 			}
 			utxo := new(types.TxOut)
 			if err := utxo.ProtoDecode(utxoProto); err != nil {
+				c.logger.Error("Failed to decode utxo proto", "err", err)
 				continue
 			}
 			addr20 := [20]byte(utxo.Address)
 			binary.BigEndian.PutUint32(addr20[16:], uint32(header.NumberU64(nodeCtx)))
 
-			outpointsForAddress, exists := addressOutpoints[addr20]
+			_, exists := addressOutpoints[addr20]
 			if !exists {
 				var err error
-				outpointsForAddress, err = rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, addr20)
+				outpointsForAddress, err := rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, addr20)
 				if err != nil {
 					return err
 				}
 				addressOutpoints[addr20] = outpointsForAddress
+				if len(outpointsForAddress) == 0 {
+					c.logger.Error("No outpoints for address in reorg", "address", addr20)
+				}
 			}
 			txHash, index, err := rawdb.ReverseUtxoKey(key)
 			if err != nil {
