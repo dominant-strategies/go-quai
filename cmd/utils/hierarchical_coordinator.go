@@ -397,11 +397,6 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 
 	hc.p2p.Subscribe(location, &types.WorkObjectHeaderView{})
 
-	if quaiBackend.ProcessingState(location) && location.Context() == common.ZONE_CTX {
-		// Subscribe to the new topics after setting the api backend
-		hc.p2p.Subscribe(location, &types.WorkObjectShareView{})
-	}
-
 	if location.Context() == common.PRIME_CTX || location.Context() == common.REGION_CTX || quaiBackend.ProcessingState(location) {
 		hc.p2p.Subscribe(location, &types.WorkObjectBlockView{})
 	}
