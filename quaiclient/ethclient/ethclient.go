@@ -188,7 +188,7 @@ func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
 // TransactionByHash returns the transaction with the given hash.
 func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	var json *rpcTransaction
-	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
+	err = ec.c.CallContext(ctx, &json, "quai_getTransactionByHash", hash)
 	if err != nil {
 		return nil, false, err
 	} else if json == nil {
@@ -597,7 +597,7 @@ func toCallArg(msg quai.CallMsg) interface{} {
 		txIns = append(txIns, types.RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
 	}
 	for _, txout := range msg.TxOut {
-		txOuts = append(txOuts, types.RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
+		txOuts = append(txOuts, types.RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: common.BytesToAddress(txout.Address, common.Location{0, 0}).MixedcaseAddress(), Lock: (*hexutil.Big)(txout.Lock)})
 	}
 	if msg.TxIn != nil {
 		arg["txIn"] = msg.TxIn
