@@ -233,6 +233,12 @@ func toCallArg(msg quai.CallMsg) interface{} {
 	if msg.GasPrice != nil {
 		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
 	}
+	if msg.MinerTip != nil {
+		arg["minerTip"] = (*hexutil.Big)(msg.MinerTip)
+	}
+	if msg.AccessList != nil {
+		arg["accessList"] = msg.AccessList
+	}
 	return arg
 }
 
