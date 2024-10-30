@@ -3,6 +3,7 @@ package pubsubManager
 import (
 	"context"
 	"errors"
+	"math/big"
 	"runtime/debug"
 	"sync"
 
@@ -21,8 +22,11 @@ import (
 	"github.com/dominant-strategies/go-quai/quai"
 )
 
-const numWorkers = 20   // Number of workers per stream
-const msgChanSize = 500 // 500 requests per subscription
+const (
+	numWorkers         = 20  // Number of workers per stream
+	msgChanSize        = 500 // 500 requests per subscription
+	c_MaxWorkShareDist = 5
+)
 
 var (
 	ErrConsensusNotSet     = errors.New("consensus backend not set")
@@ -367,10 +371,50 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				backend.Logger().Error("workshare contains more transactions than allowed")
 				return pubsub.ValidationReject
 			}
-			_, err = backend.Engine().ComputePowHash(block.WorkObject.WorkObjectHeader())
+
+			powHash, err := backend.Engine().ComputePowHash(block.WorkObject.WorkObjectHeader())
 			if err != nil {
 				backend.Logger().WithField("err", err).Error("Error computing the powHash of the work object header received from peer")
 				return pubsub.ValidationReject
+			}
+
+			currentHeader := backend.CurrentHeader()
+
+			// Check that the work share is atmost c_MaxWorkShareDist behind
+			if block.WorkObject.NumberU64(backend.NodeCtx())+c_MaxWorkShareDist < currentHeader.NumberU64(backend.NodeCtx()) {
+				return pubsub.ValidationIgnore
+			}
+
+			// Check that the workshare is atmost c_MaxWorkShareDist ahead
+			if block.WorkObject.NumberU64(backend.NodeCtx()) > currentHeader.NumberU64(backend.NodeCtx())+c_MaxWorkShareDist {
+				return pubsub.ValidationIgnore
+			}
+
+			currentHeaderHash := currentHeader.Hash()
+			// cannot have a pow filter when the current header is genesis
+			if backend.IsGenesisHash(currentHeaderHash) {
+				return pubsub.ValidationAccept
+			}
+
+			currentHeaderPowHash, err := backend.Engine().VerifySeal(currentHeader.WorkObjectHeader())
+			if err != nil {
+				return pubsub.ValidationReject
+			}
+			currentHeaderIntrinsic := backend.Engine().IntrinsicLogEntropy(currentHeaderPowHash)
+			if currentHeaderIntrinsic == nil {
+				return pubsub.ValidationIgnore
+			}
+
+			workShareIntrinsicEntropy := backend.Engine().IntrinsicLogEntropy(powHash)
+			if workShareIntrinsicEntropy == nil {
+				return pubsub.ValidationIgnore
+			}
+
+			// Check if the Block is atleast half the current difficulty in Zone Context,
+			// this makes sure that the nodes don't listen to the forks with the PowHash
+			//	with less than 50% of current difficulty
+			if backend.NodeCtx() == common.ZONE_CTX && workShareIntrinsicEntropy.Cmp(new(big.Int).Div(currentHeaderIntrinsic, big.NewInt(2))) < 0 {
+				return pubsub.ValidationIgnore
 			}
 		}
 		return pubsub.ValidationAccept
