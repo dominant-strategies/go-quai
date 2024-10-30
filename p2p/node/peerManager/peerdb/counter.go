@@ -1,7 +1,6 @@
 package peerdb
 
 import (
-	"github.com/dominant-strategies/go-quai/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -26,7 +25,6 @@ func (pdb *PeerDB) decrementPeerCount() {
 	pdb.mu.Lock()
 	defer pdb.mu.Unlock()
 	if pdb.peerCounter == 0 {
-		log.Global.Errorf("Peer counter is already at 0")
 		return
 	}
 	pdb.peerCounter--

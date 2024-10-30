@@ -225,7 +225,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			log.Global.WithFields(log.Fields{
 				"peerId":  peerID,
 				"message": "Request timed out, data not received",
-			}).Warning("Missed data request")
+			}).Info("Success Missed data request")
 			// Mark this peer as not responding
 			p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
 		default:
@@ -233,7 +233,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			log.Global.WithFields(log.Fields{
 				"peerId":  peerID,
 				"message": "Channel is full, data not sent",
-			}).Warning("Missed data send")
+			}).Info("Success Missed data send")
 		}
 	} else {
 		if err.Error() == streamManager.ErrStreamNotFound.Error() {
@@ -242,8 +242,8 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
 			"topic":  topic.String(),
-			"err":    err,
-		}).Error("Error requesting the data from peer")
+			"info":   err,
+		}).Info("Success requesting the data from peer")
 	}
 }
 

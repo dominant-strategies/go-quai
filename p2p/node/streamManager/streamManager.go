@@ -138,7 +138,7 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 			go func(peerID peer.ID) {
 				err := sm.OpenStream(peerID)
 				if err != nil {
-					log.Global.WithFields(log.Fields{"peerId": peerID, "err": err}).Warn("Error opening new stream into peer")
+					log.Global.WithFields(log.Fields{"peerId": peerID, "info": err}).Info("Success opening new stream into peer")
 				}
 			}(peerID)
 
@@ -209,7 +209,7 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 		}
 		return nil, ErrStreamNotFound
 	} else {
-		log.Global.WithField("PeerID", peerID).Info("Requested stream was found in cache")
+		log.Global.WithField("PeerID", peerID).Debug("Requested stream was found in cache")
 	}
 
 	return wrappedStream.stream, err

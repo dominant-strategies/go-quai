@@ -80,7 +80,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 		log.Global.WithFields(log.Fields{
 			"requestID": id,
 			"peerId":    peerID,
-		}).Warn("Peer did not respond in time")
+		}).Info("Success Peer did not respond in time")
 		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
 		return nil, errors.New("peer did not respond in time")
 	}
