@@ -345,9 +345,9 @@ type RPCTxIn struct {
 }
 
 type RPCTxOut struct {
-	Denomination hexutil.Uint  `json:"denomination"`
-	Address      hexutil.Bytes `json:"address"`
-	Lock         *hexutil.Big  `json:"lock"`
+	Denomination hexutil.Uint            `json:"denomination"`
+	Address      common.MixedcaseAddress `json:"address"`
+	Lock         *hexutil.Big            `json:"lock"`
 }
 
 // UtxoEntry houses details about an individual transaction output in a utxo

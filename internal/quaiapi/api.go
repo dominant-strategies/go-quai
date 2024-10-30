@@ -1025,7 +1025,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.TxIn = append(result.TxIn, types.RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
 		}
 		for _, txout := range tx.TxOut() {
-			result.TxOut = append(result.TxOut, types.RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: hexutil.Bytes(txout.Address), Lock: (*hexutil.Big)(txout.Lock)})
+			result.TxOut = append(result.TxOut, types.RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: common.BytesToAddress(txout.Address, nodeLocation).MixedcaseAddress(), Lock: (*hexutil.Big)(txout.Lock)})
 		}
 		if blockHash != (common.Hash{}) {
 			result.BlockHash = &blockHash
