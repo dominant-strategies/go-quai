@@ -1492,7 +1492,13 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 
 // Get returns a transaction if it is contained in the pool and nil otherwise.
 func (pool *TxPool) Get(hash common.Hash) *types.Transaction {
-	return pool.all.Get(hash)
+	tx := pool.all.Get(hash)
+	if tx == nil {
+		if qiTx, ok := pool.qiPool.Get(hash); ok {
+			return qiTx.Tx()
+		}
+	}
+	return tx
 }
 
 // Has returns an indicator whether txpool has a transaction cached with the
