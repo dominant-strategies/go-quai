@@ -81,7 +81,8 @@ var (
 	workObjectBodyPrefix    = []byte("wb")    //workObjectBodyPrefix + hash -> []common.Hash
 	badHashesListPrefix     = []byte("bh")
 	inboundEtxsPrefix       = []byte("ie")    // inboundEtxsPrefix + hash -> types.Transactions
-	AddressUtxosPrefix      = []byte("au")    // addressUtxosPrefix + hash -> []types.UtxoEntry
+	AddressUtxosPrefix      = []byte("au")    // addressUtxosPrefix + address -> []types.UtxoEntry
+	AddressLockupsPrefix    = []byte("al")    // addressLockupsPrefix + address -> []types.Lockup
 	utxoToBlockHeightPrefix = []byte("ub")    // utxoToBlockHeightPrefix + hash -> uint64
 	processedStatePrefix    = []byte("ps")    // processedStatePrefix + hash -> boolean
 	multiSetPrefix          = []byte("ms")    // multiSetPrefix + hash -> multiset
@@ -303,6 +304,10 @@ func inboundEtxsKey(hash common.Hash) []byte {
 
 func addressUtxosKey(address [20]byte) []byte {
 	return append(AddressUtxosPrefix, address[:]...)
+}
+
+func addressLockupsKey(address [20]byte) []byte {
+	return append(AddressLockupsPrefix, address[:]...)
 }
 
 var UtxoKeyLength = len(UtxoPrefix) + common.HashLength + 2
