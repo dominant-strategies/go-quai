@@ -264,9 +264,11 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			time1 := time.Since(start)
 			var validUtxoIndex bool
 			var addressOutpoints map[[20]byte][]*types.OutpointAndDenomination
+			var addressLockups map[[20]byte][]*types.Lockup
 			if c.indexAddressUtxos {
 				validUtxoIndex = true
 				addressOutpoints = make(map[[20]byte][]*types.OutpointAndDenomination)
+				addressLockups = make(map[[20]byte][]*types.Lockup)
 			}
 			time2 := time.Since(start)
 
@@ -324,7 +326,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 					time3 = time.Since(start)
 
 					// Remove all outpoints of the reorg headers (old chain)
-					err := c.reorgUtxoIndexer(prevHashStack, addressOutpoints, nodeCtx)
+					err := c.reorgUtxoIndexer(prevHashStack, addressOutpoints, addressLockups, nodeCtx)
 					if err != nil {
 						c.logger.Error("Failed to reorg utxo indexer", "err", err)
 						validUtxoIndex = false
@@ -339,7 +341,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 							c.logger.Error("Failed to read block during reorg")
 							continue
 						}
-						c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, block)
+						c.addOutpointsToIndexer(addressOutpoints, addressLockups, nodeCtx, config, block)
 					}
 				}
 
@@ -349,7 +351,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			} else {
 				time3 = time.Since(start)
 				if c.indexAddressUtxos {
-					c.addOutpointsToIndexer(addressOutpoints, nodeCtx, config, block)
+					c.addOutpointsToIndexer(addressOutpoints, addressLockups, nodeCtx, config, block)
 				}
 				time4 = time.Since(start)
 				c.newHead(block.NumberU64(nodeCtx), false)
@@ -358,6 +360,10 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 
 			if c.indexAddressUtxos && validUtxoIndex {
 				err := rawdb.WriteAddressOutpoints(c.chainDb, addressOutpoints)
+				if err != nil {
+					panic(err)
+				}
+				err = rawdb.WriteAddressLockups(c.chainDb, addressLockups)
 				if err != nil {
 					panic(err)
 				}
@@ -709,7 +715,8 @@ func (c *ChainIndexer) removeSectionHead(section uint64) {
 }
 
 // addOutpointsToIndexer removes the spent outpoints and adds new utxos to the indexer.
-func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map[[20]byte][]*types.OutpointAndDenomination, nodeCtx int, config params.ChainConfig, block *types.WorkObject) {
+func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map[[20]byte][]*types.OutpointAndDenomination, addressLockups map[[20]byte][]*types.Lockup, nodeCtx int, config params.ChainConfig, block *types.WorkObject) {
+
 	utxos := block.QiTransactions()
 
 	for _, tx := range utxos {
@@ -763,7 +770,22 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 	}
 
 	for _, tx := range block.Body().ExternalTransactions() {
-		if tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
+		if tx.EtxType() == types.CoinbaseType && tx.To().IsInQuaiLedgerScope() {
+			if len(tx.Data()) == 0 {
+				c.logger.Error("Coinbase transaction has no data", "tx", tx.Hash())
+				continue
+			}
+			lockupByte := tx.Data()[0]
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			unlockHeight := block.NumberU64(nodeCtx) + params.LockupByteToBlockDepth[lockupByte]
+			coinbaseAddr := tx.To().Bytes20()
+			binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
+			addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr], &types.Lockup{UnlockHeight: unlockHeight, Value: value})
+		} else if tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
+			if len(tx.Data()) == 0 {
+				c.logger.Error("Coinbase transaction has no data", "tx", tx.Hash())
+				continue
+			}
 			lockupByte := tx.Data()[0]
 			// After the BigSporkFork the minimum conversion period changes to 7200 blocks
 			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
@@ -798,6 +820,10 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 					outputIndex++
 				}
 			}
+		} else if tx.EtxType() == types.ConversionType && tx.To().IsInQuaiLedgerScope() {
+			coinbaseAddr := tx.To().Bytes20()
+			binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
+			addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr], &types.Lockup{UnlockHeight: block.NumberU64(nodeCtx) + params.NewConversionLockPeriod, Value: tx.Value()})
 		} else if tx.EtxType() == types.ConversionType && tx.To().IsInQiLedgerScope() {
 			var lockup *big.Int
 			lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
@@ -840,11 +866,58 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 			}
 		}
 	}
+
+	blockDepths := []uint64{
+		params.LockupByteToBlockDepth[0],
+		params.LockupByteToBlockDepth[1],
+		params.LockupByteToBlockDepth[2],
+		params.LockupByteToBlockDepth[3],
+	}
+
+	for _, blockDepth := range blockDepths {
+		// Ensure we can look back far enough
+		if block.NumberU64(nodeCtx) <= blockDepth {
+			// Skip this depth if the current block height is less than or equal to the block depth
+			continue
+		}
+		// Calculate the target block height by subtracting the blockDepth from the current height
+		targetBlockHeight := block.NumberU64(nodeCtx) - blockDepth
+
+		// Fetch the block at the calculated target height
+		targetBlock := c.GetBlockByNumber(targetBlockHeight)
+		if targetBlock == nil {
+			c.logger.Errorf("ChainIndexer: Unable to process block depth %d block at height %d not found", blockDepth, targetBlockHeight)
+			continue
+		}
+		for _, etx := range targetBlock.Body().ExternalTransactions() {
+			// Check if the transaction is a coinbase or conversion transaction
+			if (types.IsCoinBaseTx(etx) || types.IsConversionTx(etx)) && etx.To().IsInQuaiLedgerScope() {
+				coinbase := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(coinbase[16:], uint32(targetBlockHeight))
+				if _, exists := addressLockups[coinbase]; !exists {
+					lockups, err := rawdb.ReadLockupsForAddressAtBlock(c.chainDb, coinbase)
+					if err != nil {
+						c.logger.Errorf("ChainIndexer: Error reading lockups for address: %v", err)
+						continue
+					}
+					addressLockups[coinbase] = lockups
+				}
+				for j, lockup := range addressLockups[coinbase] {
+					// Remove all locks that are eligible
+					if lockup.UnlockHeight == block.NumberU64(nodeCtx) {
+						addressLockups[coinbase] = append(addressLockups[coinbase][:j], addressLockups[coinbase][j+1:]...) // remove the unlocked lockup
+					} else if lockup.UnlockHeight < block.NumberU64(nodeCtx) {
+						c.logger.Errorf("ChainIndexer: Lockup unlock height is less than current block height: %d < %d", lockup.UnlockHeight, block.NumberU64(nodeCtx))
+					}
+				}
+			}
+		}
+	}
 }
 
 // reorgUtxoIndexer adds back previously removed outpoints and removes newly added outpoints.
 // This is done in reverse order from the old header to the common ancestor.
-func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutpoints map[[20]byte][]*types.OutpointAndDenomination, nodeCtx int) error {
+func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutpoints map[[20]byte][]*types.OutpointAndDenomination, addressLockups map[[20]byte][]*types.Lockup, nodeCtx int) error {
 	for _, header := range headers {
 
 		sutxos, err := rawdb.ReadSpentUTXOs(c.chainDb, header.Hash())
@@ -916,6 +989,112 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 			}
 		}
 
+		block := rawdb.ReadWorkObject(c.chainDb, header.NumberU64(nodeCtx), header.Hash(), types.BlockObject)
+		if block == nil {
+			c.logger.Errorf("ChainIndexer: Error reading block during reorg hash: %s", header.Hash().String())
+			continue
+		}
+		for _, etx := range block.Body().ExternalTransactions() {
+			if etx.EtxType() == types.CoinbaseType && etx.To().IsInQuaiLedgerScope() {
+				if len(etx.Data()) == 0 {
+					c.logger.Error("Coinbase transaction has no data", "tx", etx.Hash())
+					continue
+				}
+				lockupByte := etx.Data()[0]
+				unlockHeight := block.NumberU64(nodeCtx) + params.LockupByteToBlockDepth[lockupByte]
+				coinbaseAddr := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
+				if _, exists := addressLockups[coinbaseAddr]; !exists {
+					lockups, err := rawdb.ReadLockupsForAddressAtBlock(c.chainDb, coinbaseAddr)
+					if err != nil {
+						c.logger.Errorf("ChainIndexer: Error reading lockups for address: %v", err)
+						continue
+					}
+					addressLockups[coinbaseAddr] = lockups
+				}
+				for j, lockup := range addressLockups[coinbaseAddr] {
+					// Remove all locks that were previously added in this block
+					if lockup.UnlockHeight == unlockHeight {
+						addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr][:j], addressLockups[coinbaseAddr][j+1:]...)
+					}
+				}
+			} else if etx.EtxType() == types.ConversionType && etx.To().IsInQuaiLedgerScope() {
+				coinbaseAddr := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
+				if _, exists := addressLockups[coinbaseAddr]; !exists {
+					lockups, err := rawdb.ReadLockupsForAddressAtBlock(c.chainDb, coinbaseAddr)
+					if err != nil {
+						c.logger.Errorf("ChainIndexer: Error reading lockups for address: %v", err)
+						continue
+					}
+					addressLockups[coinbaseAddr] = lockups
+				}
+				for j, lockup := range addressLockups[coinbaseAddr] {
+					// Remove all locks that were previously added in this block
+					if lockup.UnlockHeight == block.NumberU64(nodeCtx) {
+						addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr][:j], addressLockups[coinbaseAddr][j+1:]...)
+					}
+				}
+			}
+		}
+
+		blockDepths := []uint64{
+			params.LockupByteToBlockDepth[0],
+			params.LockupByteToBlockDepth[1],
+			params.LockupByteToBlockDepth[2],
+			params.LockupByteToBlockDepth[3],
+		}
+
+		for _, blockDepth := range blockDepths {
+			// Ensure we can look back far enough
+			if block.NumberU64(nodeCtx) <= blockDepth {
+				// Skip this depth if the current block height is less than or equal to the block depth
+				continue
+			}
+			// Calculate the target block height by subtracting the blockDepth from the current height
+			targetBlockHeight := block.NumberU64(nodeCtx) - blockDepth
+
+			// Fetch the block at the calculated target height
+			targetBlock := c.GetBlockByNumber(targetBlockHeight)
+			if targetBlock == nil {
+				c.logger.Errorf("Unable to process block depth %d block at height %d not found", blockDepth, targetBlockHeight)
+				continue
+			}
+			for _, etx := range targetBlock.Body().ExternalTransactions() {
+				if etx.EtxType() == types.CoinbaseType && etx.To().IsInQuaiLedgerScope() {
+					if len(etx.Data()) == 0 {
+						c.logger.Error("Coinbase transaction has no data", "tx", etx.Hash())
+						continue
+					}
+					lockupByte := etx.Data()[0]
+					value := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte)
+					unlockHeight := targetBlockHeight + params.LockupByteToBlockDepth[lockupByte]
+					coinbaseAddr := etx.To().Bytes20()
+					binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(targetBlockHeight))
+					if _, exists := addressLockups[coinbaseAddr]; !exists {
+						lockups, err := rawdb.ReadLockupsForAddressAtBlock(c.chainDb, coinbaseAddr)
+						if err != nil {
+							c.logger.Errorf("ChainIndexer: Error reading lockups for address: %v", err)
+							continue
+						}
+						addressLockups[coinbaseAddr] = lockups
+					}
+					addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr], &types.Lockup{UnlockHeight: unlockHeight, Value: value})
+				} else if etx.EtxType() == types.ConversionType && etx.To().IsInQuaiLedgerScope() {
+					addr20 := etx.To().Bytes20()
+					binary.BigEndian.PutUint32(addr20[16:], uint32(targetBlockHeight))
+					if _, exists := addressLockups[addr20]; !exists {
+						lockups, err := rawdb.ReadLockupsForAddressAtBlock(c.chainDb, addr20)
+						if err != nil {
+							c.logger.Errorf("ChainIndexer: Error reading lockups for address: %v", err)
+							continue
+						}
+						addressLockups[addr20] = lockups
+					}
+					addressLockups[addr20] = append(addressLockups[addr20], &types.Lockup{UnlockHeight: targetBlockHeight + params.NewConversionLockPeriod, Value: etx.Value()})
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -936,4 +1115,16 @@ func (c *ChainIndexer) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 		return nil
 	}
 	return header
+}
+
+func (c *ChainIndexer) GetBlockByNumber(number uint64) *types.WorkObject {
+	hash := rawdb.ReadCanonicalHash(c.chainDb, number)
+	if hash == (common.Hash{}) {
+		return nil
+	}
+	block := rawdb.ReadWorkObject(c.chainDb, number, hash, types.BlockObject)
+	if block == nil {
+		return nil
+	}
+	return block
 }
