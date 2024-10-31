@@ -113,6 +113,7 @@ var NodeFlags = []Flag{
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
 	IndexAddressUtxos,
+	ReIndex,
 	StartingExpansionNumberFlag,
 	NodeLogLevelFlag,
 	GenesisNonce,
@@ -542,6 +543,12 @@ var (
 		Name:  c_NodeFlagPrefix + "index-address-utxos",
 		Value: false,
 		Usage: "Index address utxos" + generateEnvDoc(c_NodeFlagPrefix+"index-address-utxos"),
+	}
+
+	ReIndex = Flag{
+		Name:  c_NodeFlagPrefix + "reindex",
+		Value: false,
+		Usage: "Re-index the UTXO indexer. This will take a long time!" + generateEnvDoc(c_NodeFlagPrefix+"reindex"),
 	}
 
 	EnvironmentFlag = Flag{
@@ -1366,6 +1373,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		cfg.EnablePreimageRecording = viper.GetBool(VMEnableDebugFlag.Name)
 	}
 	cfg.IndexAddressUtxos = viper.GetBool(IndexAddressUtxos.Name)
+	cfg.ReIndex = viper.GetBool(ReIndex.Name)
 
 	if viper.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = viper.GetUint64(RPCGlobalGasCapFlag.Name)

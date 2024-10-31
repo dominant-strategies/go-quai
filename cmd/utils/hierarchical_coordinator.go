@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"sync"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
@@ -259,6 +261,9 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 	db, err := OpenBackendDB()
 	if err != nil {
 		log.Global.WithField("err", err).Fatal("Error opening the backend db")
+	}
+	if viper.GetBool(ReIndex.Name) {
+		ReIndexChainIndexer()
 	}
 	hc := &HierarchicalCoordinator{
 		wg:                          nodeWg,
@@ -1320,4 +1325,30 @@ func (hc *HierarchicalCoordinator) GetBackendForLocationAndOrder(location common
 		return *hc.consensus.GetBackend(common.Location{byte(location.Region()), byte(location.Zone())})
 	}
 	return nil
+}
+
+func ReIndexChainIndexer() {
+	providedDataDir := viper.GetString(DataDirFlag.Name)
+	if providedDataDir == "" {
+		log.Global.Fatal("Data directory not provided for reindexing")
+	}
+	dbDir := filepath.Join(filepath.Join(providedDataDir, "zone-0-0/go-quai"), "chaindata")
+	ancientDir := filepath.Join(dbDir, "ancient")
+	zoneDb, err := rawdb.Open(rawdb.OpenOptions{
+		Type:              "leveldb",
+		Directory:         dbDir,
+		AncientsDirectory: ancientDir,
+		Namespace:         "eth/db/chaindata/",
+		Cache:             512,
+		Handles:           5120,
+		ReadOnly:          false,
+	}, common.ZONE_CTX, log.Global, common.Location{0, 0})
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Error opening the zone db for reindexing")
+	}
+	core.ReIndexChainIndexer(zoneDb)
+	if err := zoneDb.Close(); err != nil {
+		log.Global.WithField("err", err).Fatal("Error closing the zone db")
+	}
+	time.Sleep(10 * time.Second)
 }
