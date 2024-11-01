@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -264,6 +265,9 @@ func NewHierarchicalCoordinator(p2p quai.NetworkingAPI, logLevel string, nodeWg 
 	}
 	if viper.GetBool(ReIndex.Name) {
 		ReIndexChainIndexer()
+	}
+	if viper.GetBool(ValidateIndexer.Name) {
+		ValidateChainIndexer()
 	}
 	hc := &HierarchicalCoordinator{
 		wg:                          nodeWg,
@@ -1351,4 +1355,208 @@ func ReIndexChainIndexer() {
 		log.Global.WithField("err", err).Fatal("Error closing the zone db")
 	}
 	time.Sleep(10 * time.Second)
+}
+
+func ValidateChainIndexer() {
+	providedDataDir := viper.GetString(DataDirFlag.Name)
+	if providedDataDir == "" {
+		log.Global.Fatal("Data directory not provided for reindexing")
+	}
+	dbDir := filepath.Join(filepath.Join(providedDataDir, "zone-0-0/go-quai"), "chaindata")
+	ancientDir := filepath.Join(dbDir, "ancient")
+	zoneDb, err := rawdb.Open(rawdb.OpenOptions{
+		Type:              "leveldb",
+		Directory:         dbDir,
+		AncientsDirectory: ancientDir,
+		Namespace:         "eth/db/chaindata/",
+		Cache:             512,
+		Handles:           5120,
+		ReadOnly:          false,
+	}, common.ZONE_CTX, log.Global, common.Location{0, 0})
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Error opening the zone db for reindexing")
+	}
+	start := time.Now()
+	head := rawdb.ReadHeadBlockHash(zoneDb)
+	if head == (common.Hash{}) {
+		log.Global.Fatal("Head block hash not found")
+	}
+	headNum := rawdb.ReadHeaderNumber(zoneDb, head)
+	latestSetSize := rawdb.ReadUTXOSetSize(zoneDb, head)
+	log.Global.Infof("Starting the UTXO indexer validation for height %d set size %d", *headNum, latestSetSize)
+	i := 0
+	utxosChecked := make(map[[34]byte]uint8)
+	it := zoneDb.NewIterator(rawdb.UtxoPrefix, nil)
+	for it.Next() {
+		if len(it.Key()) != rawdb.UtxoKeyLength {
+			continue
+		}
+		data := it.Value()
+		if len(data) == 0 {
+			log.Global.Infof("Empty key found")
+			continue
+		}
+		utxoProto := new(types.ProtoTxOut)
+		if err := proto.Unmarshal(data, utxoProto); err != nil {
+			log.Global.Errorf("Failed to unmarshal ProtoTxOut: %+v data: %+v key: %+v", err, data, it.Key())
+			continue
+		}
+
+		utxo := new(types.UtxoEntry)
+		if err := utxo.ProtoDecode(utxoProto); err != nil {
+			log.Global.WithFields(log.Fields{
+				"key":  it.Key(),
+				"data": data,
+				"err":  err,
+			}).Error("Invalid utxo Proto")
+			continue
+		}
+		txHash, index, err := rawdb.ReverseUtxoKey(it.Key())
+		if err != nil {
+			log.Global.WithField("err", err).Error("Failed to parse utxo key")
+			continue
+		}
+		u16 := make([]byte, 2)
+		binary.BigEndian.PutUint16(u16, index)
+		key := [34]byte(append(txHash.Bytes(), u16...))
+		if _, exists := utxosChecked[key]; exists {
+			log.Global.WithField("hash", key).Error("Duplicate utxo found")
+			continue
+		}
+		height := rawdb.ReadUtxoToBlockHeight(zoneDb, txHash, index)
+		addr20 := common.BytesToAddress(utxo.Address, common.Location{0, 0}).Bytes20()
+		binary.BigEndian.PutUint32(addr20[16:], height)
+		outpoints, err := rawdb.ReadOutpointsForAddressAtBlock(zoneDb, addr20)
+		if err != nil {
+			log.Global.WithField("err", err).Error("Error reading outpoints for address")
+			continue
+		}
+		found := false
+		for _, outpoint := range outpoints {
+			if outpoint.TxHash == txHash && outpoint.Index == index {
+				utxosChecked[key] = outpoint.Denomination
+				found = true
+			}
+		}
+		if !found {
+			log.Global.WithFields(log.Fields{
+				"tx":    txHash,
+				"index": index,
+			}).Error("Utxo not found in outpoints")
+			prefix := append(rawdb.AddressUtxosPrefix, addr20.Bytes()[:16]...)
+			it2 := zoneDb.NewIterator(prefix, nil)
+			for it2.Next() {
+				if len(it.Key()) != len(rawdb.AddressUtxosPrefix)+common.AddressLength {
+					continue
+				}
+				addressOutpointsProto := &types.ProtoAddressOutPoints{
+					OutPoints: make([]*types.ProtoOutPointAndDenomination, 0),
+				}
+				if err := proto.Unmarshal(it.Value(), addressOutpointsProto); err != nil {
+					log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal addressOutpointsProto")
+					continue
+				}
+				for _, outpointProto := range addressOutpointsProto.OutPoints {
+					outpoint := new(types.OutpointAndDenomination)
+					if err := outpoint.ProtoDecode(outpointProto); err != nil {
+						log.Global.WithFields(log.Fields{
+							"err":      err,
+							"outpoint": outpointProto,
+						}).Error("Invalid outpointProto")
+						continue
+					}
+					if outpoint.TxHash == txHash && outpoint.Index == index {
+						log.Global.WithFields(log.Fields{
+							"tx":    txHash,
+							"index": index,
+						}).Error("Utxo found in address outpoints")
+						utxosChecked[key] = outpoint.Denomination
+						found = true
+					}
+				}
+			}
+			it2.Release()
+		}
+		i++
+		if i%100000 == 0 {
+			log.Global.Infof("Checked %d utxos out of %d total elapsed %s", i, latestSetSize, common.PrettyDuration(time.Since(start)))
+		}
+	}
+	it.Release()
+	log.Global.Infof("Checked %d utxos and %d are good, elapsed %s", i, len(utxosChecked), common.PrettyDuration(time.Since(start)))
+	if len(utxosChecked) != int(latestSetSize) {
+		log.Global.WithFields(log.Fields{
+			"expected": latestSetSize,
+			"actual":   len(utxosChecked),
+		}).Error("Mismatch in utxo set size")
+	}
+	log.Global.Infof("Checking for duplicates in Address Outpoints Index...")
+	utxosChecked_ := make(map[[34]byte]uint8)
+	duplicatesFound := false
+	it = zoneDb.NewIterator(rawdb.AddressUtxosPrefix, nil)
+	for it.Next() {
+		if len(it.Key()) != len(rawdb.AddressUtxosPrefix)+common.AddressLength {
+			continue
+		}
+		addressOutpointsProto := &types.ProtoAddressOutPoints{
+			OutPoints: make([]*types.ProtoOutPointAndDenomination, 0),
+		}
+		if err := proto.Unmarshal(it.Value(), addressOutpointsProto); err != nil {
+			log.Global.WithField("err", err).Fatal("Failed to proto Unmarshal addressOutpointsProto")
+			continue
+		}
+		for _, outpointProto := range addressOutpointsProto.OutPoints {
+			outpoint := new(types.OutpointAndDenomination)
+			if err := outpoint.ProtoDecode(outpointProto); err != nil {
+				log.Global.WithFields(log.Fields{
+					"err":      err,
+					"outpoint": outpointProto,
+				}).Error("Invalid outpointProto")
+				continue
+			}
+			u16 := make([]byte, 2)
+			binary.BigEndian.PutUint16(u16, outpoint.Index)
+			key := [34]byte(append(outpoint.TxHash.Bytes(), u16...))
+			if _, exists := utxosChecked_[key]; exists {
+				log.Global.WithFields(log.Fields{
+					"tx":    outpoint.TxHash.String(),
+					"index": outpoint.Index,
+				}).Error("Duplicate outpoint found")
+				duplicatesFound = true
+				continue
+			}
+			utxosChecked_[key] = outpoint.Denomination
+		}
+	}
+	it.Release()
+	if len(utxosChecked_) != int(latestSetSize) {
+		log.Global.WithFields(log.Fields{
+			"expected": latestSetSize,
+			"actual":   len(utxosChecked_),
+		}).Error("Mismatch in utxo set size")
+		time.Sleep(5 * time.Second)
+		if len(utxosChecked_) > len(utxosChecked) {
+			log.Global.Infof("Finding diff...")
+			for key, val := range utxosChecked_ {
+				if _, exists := utxosChecked[key]; !exists {
+					txhash := key[:32]
+					index := binary.BigEndian.Uint16(key[32:])
+					log.Global.WithFields(log.Fields{
+						"tx":           common.BytesToHash(txhash).String(),
+						"index":        index,
+						"denomination": val,
+					}).Error("Missing key")
+				}
+			}
+		}
+	}
+	if duplicatesFound {
+		log.Global.Error("Duplicates found in address outpoints")
+	} else {
+		log.Global.Info("No duplicates found in address-outpoints index. Validation completed")
+	}
+	if err := zoneDb.Close(); err != nil {
+		log.Global.WithField("err", err).Fatal("Error closing the zone db")
+	}
+	time.Sleep(30 * time.Second)
 }
