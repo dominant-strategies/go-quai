@@ -158,8 +158,6 @@ type Config struct {
 	// IndexAddressUtxos enables or disables address utxo indexing
 	IndexAddressUtxos bool
 
-	ReIndex bool
-
 	// DefaultGenesisHash is the hard coded genesis hash
 	DefaultGenesisHash common.Hash
 }
