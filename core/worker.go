@@ -502,7 +502,7 @@ func (w *worker) asyncStateLoop() {
 						return
 					}
 				}
-				wo := w.hc.CurrentHeader()
+				wo := w.hc.CurrentBlock()
 				w.hc.headermu.Lock()
 				defer w.hc.headermu.Unlock()
 				header, err := w.GeneratePendingHeader(wo, true, nil, false)
