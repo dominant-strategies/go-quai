@@ -334,6 +334,10 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 				}
 				c.PruneOldBlockData(block.NumberU64(nodeCtx) - PruneDepth)
 			}
+			if block.Hash() == prevHash {
+				c.logger.WithField("block", block.NumberU64(nodeCtx)).Debug("ChainIndexer: Skipping already indexed block")
+				continue
+			}
 			time1 := time.Since(start)
 			var validUtxoIndex bool
 			var addressOutpoints map[[20]byte][]*types.OutpointAndDenomination
@@ -824,6 +828,10 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 		}
 
 		for i, out := range tx.TxOut() {
+			if common.BytesToAddress(out.Address, common.Location{0, 0}).IsInQuaiLedgerScope() {
+				// This is a conversion output
+				continue
+			}
 
 			outpoint := types.OutPoint{
 				TxHash: tx.Hash(),
