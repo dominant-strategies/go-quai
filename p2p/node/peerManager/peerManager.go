@@ -454,13 +454,13 @@ func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]
 	}
 	peerList := make(map[p2p.PeerID]struct{})
 	// Add best peers into the peerList
-	bestPeers := pm.getBestPeers(topic)
+	bestPeers := pm.getBestPeers(topic.String())
 	maps.Copy(peerList, bestPeers)
 	// Add responsive peers into the peerList
-	responsivePeers := pm.getResponsivePeers(topic)
+	responsivePeers := pm.getResponsivePeers(topic.String())
 	maps.Copy(peerList, responsivePeers)
 	// Add last resort peers into the peerList
-	lastResortPeers := pm.getLastResortPeers(topic)
+	lastResortPeers := pm.getLastResortPeers(topic.String())
 	maps.Copy(peerList, lastResortPeers)
 
 	// Randomly select request degree number of peers from the peerList
@@ -506,16 +506,16 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2
 	return peerList
 }
 
-func (pm *BasicPeerManager) getBestPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][Best], c_minBestPeersFromDb)
+func (pm *BasicPeerManager) getBestPeers(topic string) map[p2p.PeerID]struct{} {
+	return pm.getPeersHelper(pm.peerDBs[topic][Best], c_minBestPeersFromDb)
 }
 
-func (pm *BasicPeerManager) getResponsivePeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][Responsive], c_minResponsivePeersFromDb)
+func (pm *BasicPeerManager) getResponsivePeers(topic string) map[p2p.PeerID]struct{} {
+	return pm.getPeersHelper(pm.peerDBs[topic][Responsive], c_minResponsivePeersFromDb)
 }
 
-func (pm *BasicPeerManager) getLastResortPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic.String()][LastResort], c_minLastResortPeersFromDb)
+func (pm *BasicPeerManager) getLastResortPeers(topic string) map[p2p.PeerID]struct{} {
+	return pm.getPeersHelper(pm.peerDBs[topic][LastResort], c_minLastResortPeersFromDb)
 }
 
 func (pm *BasicPeerManager) AdjustPeerQuality(peer p2p.PeerID, topic string, adjFn func(int) int) {
@@ -553,6 +553,22 @@ func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID, topic string) er
 	topics := pm.getPeerTopics(peerID)
 	topics[topic] = struct{}{}
 
+	var maxPeerQuality int
+	// get the max peer quality among all peers
+	bestPeers := pm.getBestPeers(topic)
+	for peer := range bestPeers {
+		if pm.GetTagInfo(peer) != nil {
+			peerQ := pm.GetTagInfo(peer).Tags["quality"]
+			if peerQ > maxPeerQuality {
+				maxPeerQuality = peerQ
+			}
+		}
+	}
+
+	if maxPeerQuality > p2p.MaxScore {
+		maxPeerQuality = p2p.MaxScore
+	}
+
 	// remove peer from DBs first
 	for topic := range topics {
 		err := pm.removePeerFromTopic(peerID, topic)
@@ -572,14 +588,15 @@ func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID, topic string) er
 			return errors.Wrap(err, "error marshaling peer info")
 		}
 
-		if peerQuality > c_bestThreshold*p2p.MaxScore {
+		// max score among all peers
+		if peerQuality > int(c_bestThreshold*float64(maxPeerQuality)) {
 			// Best peers: high liveness and responsiveness
 			err := pm.peerDBs[topic][Best].Put(pm.ctx, key, peerInfo)
 			if err != nil {
 				return errors.Wrap(err, "error putting peer in bestPeersDB")
 			}
 
-		} else if peerQuality >= c_worstThreshold*p2p.MaxScore {
+		} else if peerQuality >= int(c_worstThreshold*float64(maxPeerQuality)) {
 			err := pm.peerDBs[topic][Responsive].Put(pm.ctx, key, peerInfo)
 			if err != nil {
 				return errors.Wrap(err, "error putting peer in responsivePeersDB")
