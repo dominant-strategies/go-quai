@@ -1327,7 +1327,7 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 				break
 			}
 			if err := w.processQiTx(tx, env, primeTerminus, parent, firstQiTx); err != nil {
-				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") {
+				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") || strings.Contains(err.Error(), "combine smaller denominations") {
 					// This is not an invalid tx, our block is just full of ETXs
 					// Alternatively, a tx double spends a cached deleted UTXO, likely replaced-by-fee
 					txs.PopNoSort()
@@ -2087,6 +2087,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 				txOut.Denomination,
 				types.MaxDenomination)
 			return errors.New(str)
+		}
+		if env.wo.NumberU64(common.ZONE_CTX) >= params.GoldenAgeForkNumberV2 && txOut.Lock != nil && txOut.Lock.Sign() != 0 {
+			return errors.New("QiTx output has non-zero lock")
 		}
 		outputs[uint(txOut.Denomination)] += 1
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
