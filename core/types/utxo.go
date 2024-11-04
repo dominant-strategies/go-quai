@@ -16,9 +16,8 @@ import (
 const (
 	MaxDenomination = 14
 
-	MaxOutputIndex                  = math.MaxUint16
-	MaxTrimDenomination             = 5
-	MaxTrimCollisionsPerKeyPerBlock = 1000
+	MaxOutputIndex      = math.MaxUint16
+	MaxTrimDenomination = 5
 )
 
 var MaxQi = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
@@ -54,7 +53,6 @@ func init() {
 	TrimDepths[3] = 1080 // 3 hours
 	TrimDepths[4] = 2160 // 6 hours
 	TrimDepths[5] = 4320 // 12 hours
-	TrimDepths[6] = 8640 // 24 hours
 }
 
 type TxIns []TxIn
