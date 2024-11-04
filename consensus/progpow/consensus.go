@@ -112,7 +112,7 @@ func (progpow *Progpow) VerifyHeaders(chain consensus.ChainHeaderReader, headers
 					progpow.logger.WithFields(log.Fields{
 						"error":      r,
 						"stacktrace": string(debug.Stack()),
-					}).Fatal("Go-Quai Panicked")
+					}).Error("Go-Quai Panicked")
 				}
 			}()
 			for index := range inputs {
