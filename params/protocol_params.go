@@ -152,8 +152,6 @@ const (
 	NewConversionLockPeriod       uint64 = 7200
 	MinQiConversionDenomination          = 10
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
-	SoftMaxUTXOSetSize                   = math.MaxInt      // The soft maximum number of UTXOs that can be stored in the UTXO set
-	MinimumTrimDepth                     = math.MaxInt      // The minimum block depth of the chain to begin trimming
 	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
 	DefaultCoinbaseLockup                = 0                // The default lockup byte for coinbase rewards
 )

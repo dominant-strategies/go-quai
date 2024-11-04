@@ -91,8 +91,6 @@ var (
 	utxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix        = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	trimmedUTXOsPrefix      = []byte("tutxo") // trimmedUTXOsPrefix + hash -> []types.SpentTxOut
-	trimDepthsPrefix        = []byte("td")    // trimDepthsPrefix + hash -> uint64
-	collidingKeysPrefix     = []byte("ck")    // collidingKeysPrefix + hash -> [][]byte
 	createdUTXOsPrefix      = []byte("cutxo") // createdUTXOsPrefix + hash -> []common.Hash
 	prunedUTXOKeysPrefix    = []byte("putxo") // prunedUTXOKeysPrefix + num (uint64 big endian) -> hash
 	prunedPrefix            = []byte("pru")   // prunedPrefix + hash -> pruned
@@ -361,14 +359,6 @@ func prunedUTXOsKey(blockHeight uint64) []byte {
 
 func lastTrimmedBlockKey(hash common.Hash) []byte {
 	return append(lastTrimmedBlockPrefix, hash.Bytes()...)
-}
-
-func trimDepthsKey(hash common.Hash) []byte {
-	return append(trimDepthsPrefix, hash.Bytes()...)
-}
-
-func collidingKeysKey(hash common.Hash) []byte {
-	return append(collidingKeysPrefix, hash.Bytes()...)
 }
 
 func alreadyPrunedKey(hash common.Hash) []byte {

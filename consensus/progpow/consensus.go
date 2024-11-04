@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"runtime"
 	"runtime/debug"
-	"sort"
 	"sync"
 	"time"
 
@@ -18,9 +17,9 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	"google.golang.org/protobuf/proto"
@@ -715,85 +714,35 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 	}
 	utxoSetSize -= uint64(len(utxosDelete))
 
-	trimDepths := types.TrimDepths
-	if utxoSetSize > params.SoftMaxUTXOSetSize/2 {
-		var err error
-		trimDepths, err = rawdb.ReadTrimDepths(chain.Database(), header.ParentHash(nodeCtx))
-		if err != nil || trimDepths == nil {
-			progpow.logger.Errorf("Failed to read trim depths for block %s: %+v", header.ParentHash(nodeCtx).String(), err)
-			trimDepths = make(map[uint8]uint64, len(types.TrimDepths))
-			for denomination, depth := range types.TrimDepths { // copy the default trim depths
-				trimDepths[denomination] = depth
+	trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
+	if header.NumberU64(common.ZONE_CTX) >= params.GoldenAgeForkNumberV2 {
+		start := time.Now()
+		var wg sync.WaitGroup
+		var lock sync.Mutex
+		for denomination, depth := range types.TrimDepths {
+			if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth {
+				wg.Add(1)
+				go func(denomination uint8, depth uint64) {
+					defer func() {
+						if r := recover(); r != nil {
+							progpow.logger.WithFields(log.Fields{
+								"error":      r,
+								"stacktrace": string(debug.Stack()),
+							}).Error("Go-Quai Panicked")
+						}
+					}()
+					nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), header.NumberU64(nodeCtx)-depth)
+					TrimBlock(chain, batch, denomination, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, &utxoSetSize, !setRoots, &lock, progpow.logger) // setRoots is false when we are processing the block
+					wg.Done()
+				}(denomination, depth)
 			}
 		}
-		if UpdateTrimDepths(trimDepths, utxoSetSize) {
-			progpow.logger.Infof("Updated trim depths at height %d new depths: %+v", header.NumberU64(nodeCtx), trimDepths)
+		wg.Wait()
+		if len(trimmedUtxos) > 0 {
+			progpow.logger.Infof("Trimmed %d UTXOs from db in %s", len(trimmedUtxos), common.PrettyDuration(time.Since(start)))
 		}
 		if !setRoots {
-			rawdb.WriteTrimDepths(batch, header.Hash(), trimDepths)
-		}
-	}
-	start := time.Now()
-	collidingKeys, err := rawdb.ReadCollidingKeys(chain.Database(), header.ParentHash(nodeCtx))
-	if err != nil {
-		progpow.logger.Errorf("Failed to read colliding keys for block %s: %+v", header.ParentHash(nodeCtx).String(), err)
-	}
-	newCollidingKeys := make([][]byte, 0)
-	trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
-	var wg sync.WaitGroup
-	var lock sync.Mutex
-	for denomination, depth := range trimDepths {
-		if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth+params.MinimumTrimDepth {
-			wg.Add(1)
-			go func(denomination uint8, depth uint64) {
-				defer func() {
-					if r := recover(); r != nil {
-						progpow.logger.WithFields(log.Fields{
-							"error":      r,
-							"stacktrace": string(debug.Stack()),
-						}).Error("Go-Quai Panicked")
-					}
-				}()
-				nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), header.NumberU64(nodeCtx)-depth)
-				collisions := TrimBlock(chain, batch, denomination, true, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, nil, &utxoSetSize, !setRoots, &lock, progpow.logger) // setRoots is false when we are processing the block
-				if len(collisions) > 0 {
-					lock.Lock()
-					newCollidingKeys = append(newCollidingKeys, collisions...)
-					lock.Unlock()
-				}
-				wg.Done()
-			}(denomination, depth)
-		}
-	}
-	if len(collidingKeys) > 0 {
-		wg.Add(1)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					progpow.logger.WithFields(log.Fields{
-						"error":      r,
-						"stacktrace": string(debug.Stack()),
-					}).Error("Go-Quai Panicked")
-				}
-			}()
-			// Trim colliding/duplicate keys here - an optimization could be to do this above in parallel with the other trims
-			collisions := TrimBlock(chain, batch, 0, false, 0, common.Hash{}, &utxosDelete, &trimmedUtxos, collidingKeys, &utxoSetSize, !setRoots, &lock, progpow.logger)
-			if len(collisions) > 0 {
-				lock.Lock()
-				newCollidingKeys = append(newCollidingKeys, collisions...)
-				lock.Unlock()
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	if len(trimmedUtxos) > 0 {
-		progpow.logger.Infof("Trimmed %d UTXOs from db in %s", len(trimmedUtxos), common.PrettyDuration(time.Since(start)))
-	}
-	if !setRoots {
-		rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
-		if len(newCollidingKeys) > 0 {
-			rawdb.WriteCollidingKeys(batch, header.Hash(), newCollidingKeys)
+			rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
 		}
 	}
 	for _, hash := range utxosCreate {
@@ -815,164 +764,68 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 
 // TrimBlock trims all UTXOs of a given denomination that were created in a given block.
 // In the event of an attacker intentionally creating too many 9-byte keys that collide, we return the colliding keys to be trimmed in the next block.
-func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denomination uint8, checkDenom bool, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, collidingKeys [][]byte, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) [][]byte {
-	utxosCreated, _ := rawdb.ReadPrunedUTXOKeys(chain.Database(), blockHeight)
+func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denomination uint8, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) {
+	utxosCreated, _ := rawdb.ReadCreatedUTXOKeys(chain.Database(), blockHash)
 	if len(utxosCreated) == 0 {
-		// This should almost never happen, but we need to handle it
-		utxosCreated, _ = rawdb.ReadCreatedUTXOKeys(chain.Database(), blockHash)
-		logger.Infof("Reading non-pruned UTXOs for block %d", blockHeight)
-		for i, key := range utxosCreated {
-			if len(key) == rawdb.UtxoKeyWithDenominationLength {
-				if key[len(key)-1] > types.MaxTrimDenomination {
-					// Don't keep it if the denomination is not trimmed
-					// The keys are sorted in order of denomination, so we can break here
-					break
-				}
-				key[rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)-1] = key[len(key)-1] // place the denomination at the end of the pruned key (11th byte will become 9th byte)
-			}
-			// Reduce key size to 9 bytes and cut off the prefix
-			key = key[len(rawdb.UtxoPrefix) : rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)]
-			utxosCreated[i] = key
-		}
+		logger.Infof("UTXOs created in block %d: %d", blockHeight, len(utxosCreated))
+		return
 	}
 
 	logger.Infof("UTXOs created in block %d: %d", blockHeight, len(utxosCreated))
-	if len(collidingKeys) > 0 {
-		logger.Infof("Colliding keys: %d", len(collidingKeys))
-		utxosCreated = append(utxosCreated, collidingKeys...)
-		sort.Slice(utxosCreated, func(i, j int) bool {
-			return utxosCreated[i][len(utxosCreated[i])-1] < utxosCreated[j][len(utxosCreated[j])-1]
-		})
-	}
-	newCollisions := make([][]byte, 0)
-	duplicateKeys := make(map[[36]byte]bool) // cannot use rawdb.UtxoKeyLength for map as it's not const
 	// Start by grabbing all the UTXOs created in the block (that are still in the UTXO set)
 	for _, key := range utxosCreated {
-		if len(key) != rawdb.PrunedUtxoKeyWithDenominationLength {
+
+		if key[len(key)-1] != denomination {
+			if key[len(key)-1] > denomination {
+				break // The keys are stored in order of denomination, so we can stop checking here
+			} else {
+				continue
+			}
+		} else {
+			key = key[:len(key)-1] // remove the denomination byte
+		}
+
+		data, _ := chain.Database().Get(key)
+		if len(data) == 0 {
+			logger.Infof("Empty key found, denomination: %d", denomination)
 			continue
 		}
-		if checkDenom {
-			if key[len(key)-1] != denomination {
-				if key[len(key)-1] > denomination {
-					break // The keys are stored in order of denomination, so we can stop checking here
-				} else {
-					continue
-				}
-			} else {
-				key = append(rawdb.UtxoPrefix, key...) // prepend the db prefix
-				key = key[:len(key)-1]                 // remove the denomination byte
-			}
+		utxoProto := new(types.ProtoTxOut)
+		if err := proto.Unmarshal(data, utxoProto); err != nil {
+			logger.Errorf("Failed to unmarshal ProtoTxOut: %+v data: %+v key: %+v", err, data, key)
+			continue
 		}
-		// Check key in database
-		i := 0
-		it := chain.Database().NewIterator(key, nil)
-		for it.Next() {
-			data := it.Value()
-			if len(data) == 0 {
-				logger.Infof("Empty key found, denomination: %d", denomination)
-				continue
-			}
-			// Check if the key is a duplicate
-			if len(it.Key()) == rawdb.UtxoKeyLength {
-				key36 := [36]byte(it.Key())
-				if duplicateKeys[key36] {
-					continue
-				} else {
-					duplicateKeys[key36] = true
-				}
-			}
-			utxoProto := new(types.ProtoTxOut)
-			if err := proto.Unmarshal(data, utxoProto); err != nil {
-				logger.Errorf("Failed to unmarshal ProtoTxOut: %+v data: %+v key: %+v", err, data, key)
-				continue
-			}
-
-			utxo := new(types.UtxoEntry)
-			if err := utxo.ProtoDecode(utxoProto); err != nil {
-				logger.WithFields(log.Fields{
-					"key":  key,
-					"data": data,
-					"err":  err,
-				}).Error("Invalid utxo Proto")
-				continue
-			}
-			if checkDenom && utxo.Denomination != denomination {
-				continue
-			}
-			txHash, index, err := rawdb.ReverseUtxoKey(it.Key())
-			if err != nil {
-				logger.WithField("err", err).Error("Failed to parse utxo key")
-				continue
-			}
-			lock.Lock()
-			*utxosDelete = append(*utxosDelete, types.UTXOHash(txHash, index, utxo))
-			if deleteFromDb {
-				batch.Delete(it.Key())
-				*trimmedUtxos = append(*trimmedUtxos, &types.SpentUtxoEntry{OutPoint: types.OutPoint{txHash, index}, UtxoEntry: utxo})
-			}
-			*utxoSetSize--
-			lock.Unlock()
-			i++
-			if i >= types.MaxTrimCollisionsPerKeyPerBlock {
-				// This will rarely ever happen, but if it does, we should continue trimming this key in the next block
-				logger.WithField("blockHeight", blockHeight).Error("MaxTrimCollisionsPerBlock exceeded")
-				newCollisions = append(newCollisions, key)
-				break
-			}
+		utxo := new(types.UtxoEntry)
+		if err := utxo.ProtoDecode(utxoProto); err != nil {
+			logger.WithFields(log.Fields{
+				"key":  key,
+				"data": data,
+				"err":  err,
+			}).Error("Invalid utxo Proto")
+			continue
 		}
-		it.Release()
+		if utxo.Denomination != denomination {
+			continue
+		}
+		// Only the coinbase and conversion txs are allowed to have lockups that
+		// is non zero
+		if utxo.Lock.Sign() == 0 {
+			continue
+		}
+		txHash, index, err := rawdb.ReverseUtxoKey(key)
+		if err != nil {
+			logger.WithField("err", err).Error("Failed to parse utxo key")
+			continue
+		}
+		lock.Lock()
+		*utxosDelete = append(*utxosDelete, types.UTXOHash(txHash, index, utxo))
+		if deleteFromDb {
+			batch.Delete(key)
+			*trimmedUtxos = append(*trimmedUtxos, &types.SpentUtxoEntry{OutPoint: types.OutPoint{txHash, index}, UtxoEntry: utxo})
+		}
+		*utxoSetSize--
+		lock.Unlock()
 	}
-	return newCollisions
-}
-
-func UpdateTrimDepths(trimDepths map[uint8]uint64, utxoSetSize uint64) bool {
-	switch {
-	case utxoSetSize > params.SoftMaxUTXOSetSize/2 && trimDepths[255] == 0: // 50% full
-		for denomination, depth := range trimDepths {
-			trimDepths[denomination] = depth - (depth / 10) // decrease lifespan of this denomination by 10%
-		}
-		trimDepths[255] = 1 // level 1
-	case utxoSetSize > params.SoftMaxUTXOSetSize-(params.SoftMaxUTXOSetSize/4) && trimDepths[255] == 1: // 75% full
-		for denomination, depth := range trimDepths {
-			trimDepths[denomination] = depth - (depth / 5) // decrease lifespan of this denomination by an additional 20%
-		}
-		trimDepths[255] = 2 // level 2
-	case utxoSetSize > params.SoftMaxUTXOSetSize-(params.SoftMaxUTXOSetSize/10) && trimDepths[255] == 2: // 90% full
-		for denomination, depth := range trimDepths {
-			trimDepths[denomination] = depth - (depth / 2) // decrease lifespan of this denomination by an additional 50%
-		}
-		trimDepths[255] = 3 // level 3
-	case utxoSetSize > params.SoftMaxUTXOSetSize && trimDepths[255] == 3:
-		for denomination, depth := range trimDepths {
-			trimDepths[denomination] = depth - (depth / 2) // decrease lifespan of this denomination by an additional 50%
-		}
-		trimDepths[255] = 4 // level 4
-
-	// Resets
-	case utxoSetSize <= params.SoftMaxUTXOSetSize/2 && trimDepths[255] == 1: // Below 50% full
-		for denomination, depth := range types.TrimDepths { // reset to the default trim depths
-			trimDepths[denomination] = depth
-		}
-		trimDepths[255] = 0 // level 0
-	case utxoSetSize <= params.SoftMaxUTXOSetSize-(params.SoftMaxUTXOSetSize/4) && trimDepths[255] == 2: // Below 75% full
-		for denomination, depth := range trimDepths {
-			trimDepths[denomination] = depth + (depth / 5) // increase lifespan of this denomination by 20%
-		}
-		trimDepths[255] = 1 // level 1
-	case utxoSetSize <= params.SoftMaxUTXOSetSize-(params.SoftMaxUTXOSetSize/10) && trimDepths[255] == 3: // Below 90% full
-		for denomination, depth := range trimDepths {
-			trimDepths[denomination] = depth + (depth / 2) // increase lifespan of this denomination by 50%
-		}
-		trimDepths[255] = 2 // level 2
-	case utxoSetSize <= params.SoftMaxUTXOSetSize && trimDepths[255] == 4: // Below 100% full
-		for denomination, depth := range trimDepths {
-			trimDepths[denomination] = depth + (depth / 2) // increase lifespan of this denomination by 50%
-		}
-		trimDepths[255] = 3 // level 3
-	default:
-		return false
-	}
-	return true
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
