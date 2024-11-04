@@ -207,7 +207,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	}
 
 	// Don't append the block which already exists in the database.
-	if sl.hc.HasHeader(header.Hash(), header.NumberU64(nodeCtx)) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) {
+	if sl.hc.HasHeader(header.Hash(), header.NumberU64(nodeCtx)) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) && !domOrigin {
 		sl.logger.WithField("hash", header.Hash()).Debug("Block has already been appended")
 		return nil, ErrKnownBlock
 	}
