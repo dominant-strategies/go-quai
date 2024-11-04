@@ -1142,9 +1142,6 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 
 		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai conversion
 			conversion = true
-			if txOut.Denomination < params.MinQiConversionDenomination {
-				return nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination)
-			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			delete(addresses, toAddr.Bytes20())
 			continue
@@ -1207,6 +1204,9 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		return nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64())
 	}
 	if conversion {
+		if totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
+			return nil, fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64())
+		}
 		ETXPCount++
 		if ETXPCount > etxPLimit {
 			return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
@@ -1360,9 +1360,6 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai conversion
 			conversion = true
 			convertAddress = toAddr
-			if txOut.Denomination < params.MinQiConversionDenomination {
-				return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination), nil
-			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
@@ -1442,6 +1439,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64()), nil
 	}
 	if conversion {
+		if totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
+			return nil, nil, nil, fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64()), nil
+		}
 		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
 		remainingTxFeeInQuai := misc.QiToQuai(parent, txFeeInQit)
 		// Fee is basefee * gas, so gas remaining is fee remaining / basefee

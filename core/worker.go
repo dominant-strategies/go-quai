@@ -2105,9 +2105,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			}
 			conversion = true
 			convertAddress = toAddr
-			if txOut.Denomination < params.MinQiConversionDenomination {
-				return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), txOut.Denomination)
-			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
@@ -2184,6 +2181,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 	}
 	if conversion {
+		if totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
+			return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64())
+		}
 		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
 		remainingTxFeeInQuai := misc.QiToQuai(parent, txFeeInQit)
 		// Fee is basefee * gas, so gas remaining is fee remaining / basefee
