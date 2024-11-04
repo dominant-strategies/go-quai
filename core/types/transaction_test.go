@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestTransactionProtoEncodeDecode(t *testing.T) {
@@ -1064,4 +1065,36 @@ func TestCoinbaseTxEncodeDecode(t *testing.T) {
 	reflect.DeepEqual(coinbaseTx, tx)
 
 	require.Equal(t, coinbaseTx.Hash(), tx.Hash())
+}
+
+func TestTxNilDecode(t *testing.T) {
+	// If empty data is sent from the wire or from rpc
+	// proto.Unmarshal should read it and not return any error
+	protoTransaction := new(ProtoTransaction)
+	err := proto.Unmarshal(nil, protoTransaction)
+	require.Equal(t, err, nil)
+
+	// This empty protoTransaction struct should not crash the proto decode
+	tx := Transaction{}
+	err = tx.ProtoDecode(protoTransaction, common.Location{0, 0})
+	require.NotEqual(t, err, nil)
+}
+
+func TestNilChainIDDecode(t *testing.T) {
+	// get an empty quai tx
+	quaiTx, _ := quaiTxData()
+
+	protoQuaiTx, err := quaiTx.ProtoEncode()
+	require.Equal(t, err, nil)
+
+	// set the proto quai tx chain id to nil
+	protoQuaiTx.ChainId = nil
+
+	tx := Transaction{}
+	err = tx.ProtoDecode(protoQuaiTx, common.Location{0, 0})
+
+	// This should print missing required field 'ChainId'
+	t.Log(err)
+
+	require.NotEqual(t, err, nil)
 }
