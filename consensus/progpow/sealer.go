@@ -166,10 +166,10 @@ search:
 				}
 				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)
 			}
-			cache := progpow.cache(workObject.PrimeTerminusNumber().Uint64())
-			size := datasetSize(workObject.PrimeTerminusNumber().Uint64())
+			cache := progpow.cache(workObject.NumberU64(common.ZONE_CTX))
+			size := datasetSize(workObject.NumberU64(common.ZONE_CTX))
 			// Compute the PoW value of this nonce
-			digest, result := powLight(size, cache.cache, workObject.SealHash().Bytes(), nonce, workObject.PrimeTerminusNumber().Uint64())
+			digest, result := powLight(size, cache.cache, workObject.SealHash().Bytes(), nonce, workObject.NumberU64(common.ZONE_CTX))
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
 				workObject = types.CopyWorkObject(workObject)

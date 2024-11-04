@@ -591,9 +591,9 @@ func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash
 		}
 		return progpowLight(size, cache, hash.Bytes(), nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)
 	}
-	cache := progpow.cache(header.PrimeTerminusNumber().Uint64())
-	size := datasetSize(header.PrimeTerminusNumber().Uint64())
-	digest, result := powLight(size, cache.cache, header.SealHash(), header.NonceU64(), header.PrimeTerminusNumber().Uint64())
+	cache := progpow.cache(header.NumberU64())
+	size := datasetSize(header.NumberU64())
+	digest, result := powLight(size, cache.cache, header.SealHash(), header.NonceU64(), header.NumberU64())
 	mixHash = common.BytesToHash(digest)
 	powHash = common.BytesToHash(result)
 	header.PowDigest.Store(mixHash)
