@@ -1076,6 +1076,9 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 				types.MaxDenomination)
 			return nil, errors.New(str)
 		}
+		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
+			return nil, errors.New("QiTx output has non-zero lock")
+		}
 		outputs[uint(txOut.Denomination)]++
 		if common.IsConversionOutput(txOut.Address, location) { // Qi->Quai conversion
 			outputs[uint(txOut.Denomination)] -= 1 // This output no longer exists because it has been aggregated
@@ -1117,7 +1120,9 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if txOutIdx > types.MaxOutputIndex {
 			return nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
 		}
-
+		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
+			return nil, errors.New("QiTx output has non-zero lock")
+		}
 		if txOut.Denomination > types.MaxDenomination {
 			str := fmt.Sprintf("transaction output value of %v is "+
 				"higher than max allowed value of %v",
