@@ -657,34 +657,11 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 	}
 	utxoSetSize -= uint64(len(utxosDelete))
 
-	trimDepths := types.TrimDepths
-	if utxoSetSize > params.SoftMaxUTXOSetSize/2 {
-		var err error
-		trimDepths, err = rawdb.ReadTrimDepths(chain.Database(), header.ParentHash(nodeCtx))
-		if err != nil || trimDepths == nil {
-			blake3pow.logger.Errorf("Failed to read trim depths for block %s: %+v", header.ParentHash(nodeCtx).String(), err)
-			trimDepths = make(map[uint8]uint64, len(types.TrimDepths))
-			for denomination, depth := range types.TrimDepths { // copy the default trim depths
-				trimDepths[denomination] = depth
-			}
-		}
-		if UpdateTrimDepths(trimDepths, utxoSetSize) {
-			blake3pow.logger.Infof("Updated trim depths at height %d new depths: %+v", header.NumberU64(nodeCtx), trimDepths)
-		}
-		if !setRoots {
-			rawdb.WriteTrimDepths(batch, header.Hash(), trimDepths)
-		}
-	}
 	start := time.Now()
-	collidingKeys, err := rawdb.ReadCollidingKeys(chain.Database(), header.ParentHash(nodeCtx))
-	if err != nil {
-		blake3pow.logger.Errorf("Failed to read colliding keys for block %s: %+v", header.ParentHash(nodeCtx).String(), err)
-	}
-	newCollidingKeys := make([][]byte, 0)
 	trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
 	var wg sync.WaitGroup
 	var lock sync.Mutex
-	for denomination, depth := range trimDepths {
+	for denomination, depth := range types.TrimDepths {
 		if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth+params.MinimumTrimDepth {
 			wg.Add(1)
 			go func(denomination uint8, depth uint64) {
@@ -697,36 +674,10 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 					}
 				}()
 				nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), header.NumberU64(nodeCtx)-depth)
-				collisions := TrimBlock(chain, batch, denomination, true, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, nil, &utxoSetSize, !setRoots, &lock, blake3pow.logger) // setRoots is false when we are processing the block
-				if len(collisions) > 0 {
-					lock.Lock()
-					newCollidingKeys = append(newCollidingKeys, collisions...)
-					lock.Unlock()
-				}
+				TrimBlock(chain, batch, denomination, true, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, nil, &utxoSetSize, !setRoots, &lock, blake3pow.logger) // setRoots is false when we are processing the block
 				wg.Done()
 			}(denomination, depth)
 		}
-	}
-	if len(collidingKeys) > 0 {
-		wg.Add(1)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					blake3pow.logger.WithFields(log.Fields{
-						"error":      r,
-						"stacktrace": string(debug.Stack()),
-					}).Error("Go-Quai Panicked")
-				}
-			}()
-			// Trim colliding/duplicate keys here - an optimization could be to do this above in parallel with the other trims
-			collisions := TrimBlock(chain, batch, 0, false, 0, common.Hash{}, &utxosDelete, &trimmedUtxos, collidingKeys, &utxoSetSize, !setRoots, &lock, blake3pow.logger)
-			if len(collisions) > 0 {
-				lock.Lock()
-				newCollidingKeys = append(newCollidingKeys, collisions...)
-				lock.Unlock()
-			}
-			wg.Done()
-		}()
 	}
 	wg.Wait()
 	if len(trimmedUtxos) > 0 {
@@ -734,9 +685,6 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 	}
 	if !setRoots {
 		rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
-		if len(newCollidingKeys) > 0 {
-			rawdb.WriteCollidingKeys(batch, header.Hash(), newCollidingKeys)
-		}
 	}
 	for _, hash := range utxosCreate {
 		multiSet.Add(hash.Bytes())
@@ -757,31 +705,25 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 
 // TrimBlock trims all UTXOs of a given denomination that were created in a given block.
 // In the event of an attacker intentionally creating too many 9-byte keys that collide, we return the colliding keys to be trimmed in the next block.
-func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denomination uint8, checkDenom bool, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, collidingKeys [][]byte, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) [][]byte {
-	utxosCreated, err := rawdb.ReadPrunedUTXOKeys(chain.Database(), blockHeight)
+func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denomination uint8, checkDenom bool, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, collidingKeys [][]byte, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) {
+	// This should almost never happen, but we need to handle it
+	utxosCreated, err := rawdb.ReadCreatedUTXOKeys(chain.Database(), blockHash)
 	if err != nil {
-		logger.Errorf("Failed to read pruned UTXOs for block %d: %+v", blockHeight, err)
+		logger.Errorf("Failed to read created UTXOs for block %d: %+v", blockHeight, err)
 	}
-	if len(utxosCreated) == 0 {
-		// This should almost never happen, but we need to handle it
-		utxosCreated, err = rawdb.ReadCreatedUTXOKeys(chain.Database(), blockHash)
-		if err != nil {
-			logger.Errorf("Failed to read created UTXOs for block %d: %+v", blockHeight, err)
-		}
-		logger.Infof("Reading non-pruned UTXOs for block %d", blockHeight)
-		for i, key := range utxosCreated {
-			if len(key) == rawdb.UtxoKeyWithDenominationLength {
-				if key[len(key)-1] > types.MaxTrimDenomination {
-					// Don't keep it if the denomination is not trimmed
-					// The keys are sorted in order of denomination, so we can break here
-					break
-				}
-				key[rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)-1] = key[len(key)-1] // place the denomination at the end of the pruned key (11th byte will become 9th byte)
+	logger.Infof("Reading non-pruned UTXOs for block %d", blockHeight)
+	for i, key := range utxosCreated {
+		if len(key) == rawdb.UtxoKeyWithDenominationLength {
+			if key[len(key)-1] > types.MaxTrimDenomination {
+				// Don't keep it if the denomination is not trimmed
+				// The keys are sorted in order of denomination, so we can break here
+				break
 			}
-			// Reduce key size to 9 bytes and cut off the prefix
-			key = key[len(rawdb.UtxoPrefix) : rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)]
-			utxosCreated[i] = key
+			key[rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)-1] = key[len(key)-1] // place the denomination at the end of the pruned key (11th byte will become 9th byte)
 		}
+		// Reduce key size to 9 bytes and cut off the prefix
+		key = key[len(rawdb.UtxoPrefix) : rawdb.PrunedUtxoKeyWithDenominationLength+len(rawdb.UtxoPrefix)]
+		utxosCreated[i] = key
 	}
 
 	logger.Infof("UTXOs created in block %d: %d", blockHeight, len(utxosCreated))
@@ -792,7 +734,6 @@ func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denominatio
 			return utxosCreated[i][len(utxosCreated[i])-1] < utxosCreated[j][len(utxosCreated[j])-1]
 		})
 	}
-	newCollisions := make([][]byte, 0)
 	duplicateKeys := make(map[[36]byte]bool) // cannot use rawdb.UtxoKeyLength for map as it's not const
 	// Start by grabbing all the UTXOs created in the block (that are still in the UTXO set)
 	for _, key := range utxosCreated {
@@ -864,16 +805,10 @@ func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denominatio
 			*utxoSetSize--
 			lock.Unlock()
 			i++
-			if i >= types.MaxTrimCollisionsPerKeyPerBlock {
-				// This will rarely ever happen, but if it does, we should continue trimming this key in the next block
-				logger.WithField("blockHeight", blockHeight).Error("MaxTrimCollisionsPerBlock exceeded")
-				newCollisions = append(newCollisions, key)
-				break
-			}
 		}
 		it.Release()
 	}
-	return newCollisions
+	return
 }
 
 func UpdateTrimDepths(trimDepths map[uint8]uint64, utxoSetSize uint64) bool {

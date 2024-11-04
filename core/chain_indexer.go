@@ -424,8 +424,6 @@ func (c *ChainIndexer) PruneOldBlockData(blockHeight uint64) {
 	rawdb.DeleteCreatedUTXOKeys(c.chainDb, blockHash)
 	rawdb.DeleteSpentUTXOs(c.chainDb, blockHash)
 	rawdb.DeleteTrimmedUTXOs(c.chainDb, blockHash)
-	rawdb.DeleteTrimDepths(c.chainDb, blockHash)
-	rawdb.DeleteCollidingKeys(c.chainDb, blockHash)
 }
 
 func compareMinLength(a, b []byte) bool {

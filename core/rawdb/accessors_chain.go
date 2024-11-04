@@ -1590,69 +1590,6 @@ func DeleteTrimmedUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	}
 }
 
-func ReadTrimDepths(db ethdb.Reader, blockHash common.Hash) (map[uint8]uint64, error) {
-	data, _ := db.Get(trimDepthsKey(blockHash))
-	if len(data) == 0 {
-		return nil, nil
-	}
-	protoTrimDepths := new(types.ProtoTrimDepths)
-	if err := proto.Unmarshal(data, protoTrimDepths); err != nil {
-		return nil, err
-	}
-	trimDepths := make(map[uint8]uint64, len(protoTrimDepths.TrimDepths))
-	for denomination, depth := range protoTrimDepths.TrimDepths {
-		trimDepths[uint8(denomination)] = depth
-	}
-	return trimDepths, nil
-}
-
-func WriteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash, trimDepths map[uint8]uint64) error {
-	protoTrimDepths := &types.ProtoTrimDepths{TrimDepths: make(map[uint32]uint64, len(trimDepths))}
-	for denomination, depth := range trimDepths {
-		protoTrimDepths.TrimDepths[uint32(denomination)] = depth
-	}
-	data, err := proto.Marshal(protoTrimDepths)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
-	}
-	return db.Put(trimDepthsKey(blockHash), data)
-}
-
-func DeleteTrimDepths(db ethdb.KeyValueWriter, blockHash common.Hash) {
-	if err := db.Delete(trimDepthsKey(blockHash)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete trim depths")
-	}
-}
-
-func ReadCollidingKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, error) {
-	data, _ := db.Get(collidingKeysKey(blockHash))
-	if len(data) == 0 {
-		return nil, nil
-	}
-	protoKeys := new(types.ProtoKeys)
-	if err := proto.Unmarshal(data, protoKeys); err != nil {
-		return nil, err
-	}
-	return protoKeys.Keys, nil
-}
-
-func WriteCollidingKeys(db ethdb.KeyValueWriter, blockHash common.Hash, keys [][]byte) error {
-	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(keys))}
-	protoKeys.Keys = append(protoKeys.Keys, keys...)
-
-	data, err := proto.Marshal(protoKeys)
-	if err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
-	}
-	return db.Put(collidingKeysKey(blockHash), data)
-}
-
-func DeleteCollidingKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
-	if err := db.Delete(collidingKeysKey(blockHash)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete colliding keys")
-	}
-}
-
 func ReadAlreadyPruned(db ethdb.Reader, blockHash common.Hash) bool {
 	data, _ := db.Get(alreadyPrunedKey(blockHash))
 	return len(data) > 0

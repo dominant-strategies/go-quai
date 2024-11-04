@@ -715,34 +715,11 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 	}
 	utxoSetSize -= uint64(len(utxosDelete))
 
-	trimDepths := types.TrimDepths
-	if utxoSetSize > params.SoftMaxUTXOSetSize/2 {
-		var err error
-		trimDepths, err = rawdb.ReadTrimDepths(chain.Database(), header.ParentHash(nodeCtx))
-		if err != nil || trimDepths == nil {
-			progpow.logger.Errorf("Failed to read trim depths for block %s: %+v", header.ParentHash(nodeCtx).String(), err)
-			trimDepths = make(map[uint8]uint64, len(types.TrimDepths))
-			for denomination, depth := range types.TrimDepths { // copy the default trim depths
-				trimDepths[denomination] = depth
-			}
-		}
-		if UpdateTrimDepths(trimDepths, utxoSetSize) {
-			progpow.logger.Infof("Updated trim depths at height %d new depths: %+v", header.NumberU64(nodeCtx), trimDepths)
-		}
-		if !setRoots {
-			rawdb.WriteTrimDepths(batch, header.Hash(), trimDepths)
-		}
-	}
 	start := time.Now()
-	collidingKeys, err := rawdb.ReadCollidingKeys(chain.Database(), header.ParentHash(nodeCtx))
-	if err != nil {
-		progpow.logger.Errorf("Failed to read colliding keys for block %s: %+v", header.ParentHash(nodeCtx).String(), err)
-	}
-	newCollidingKeys := make([][]byte, 0)
 	trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
 	var wg sync.WaitGroup
 	var lock sync.Mutex
-	for denomination, depth := range trimDepths {
+	for denomination, depth := range types.TrimDepths {
 		if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth+params.MinimumTrimDepth {
 			wg.Add(1)
 			go func(denomination uint8, depth uint64) {
@@ -755,36 +732,10 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 					}
 				}()
 				nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), header.NumberU64(nodeCtx)-depth)
-				collisions := TrimBlock(chain, batch, denomination, true, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, nil, &utxoSetSize, !setRoots, &lock, progpow.logger) // setRoots is false when we are processing the block
-				if len(collisions) > 0 {
-					lock.Lock()
-					newCollidingKeys = append(newCollidingKeys, collisions...)
-					lock.Unlock()
-				}
+				TrimBlock(chain, batch, denomination, true, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, nil, &utxoSetSize, !setRoots, &lock, progpow.logger) // setRoots is false when we are processing the block
 				wg.Done()
 			}(denomination, depth)
 		}
-	}
-	if len(collidingKeys) > 0 {
-		wg.Add(1)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					progpow.logger.WithFields(log.Fields{
-						"error":      r,
-						"stacktrace": string(debug.Stack()),
-					}).Error("Go-Quai Panicked")
-				}
-			}()
-			// Trim colliding/duplicate keys here - an optimization could be to do this above in parallel with the other trims
-			collisions := TrimBlock(chain, batch, 0, false, 0, common.Hash{}, &utxosDelete, &trimmedUtxos, collidingKeys, &utxoSetSize, !setRoots, &lock, progpow.logger)
-			if len(collisions) > 0 {
-				lock.Lock()
-				newCollidingKeys = append(newCollidingKeys, collisions...)
-				lock.Unlock()
-			}
-			wg.Done()
-		}()
 	}
 	wg.Wait()
 	if len(trimmedUtxos) > 0 {
@@ -792,9 +743,6 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 	}
 	if !setRoots {
 		rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
-		if len(newCollidingKeys) > 0 {
-			rawdb.WriteCollidingKeys(batch, header.Hash(), newCollidingKeys)
-		}
 	}
 	for _, hash := range utxosCreate {
 		multiSet.Add(hash.Bytes())
@@ -815,7 +763,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 
 // TrimBlock trims all UTXOs of a given denomination that were created in a given block.
 // In the event of an attacker intentionally creating too many 9-byte keys that collide, we return the colliding keys to be trimmed in the next block.
-func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denomination uint8, checkDenom bool, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, collidingKeys [][]byte, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) [][]byte {
+func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denomination uint8, checkDenom bool, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, collidingKeys [][]byte, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) {
 	utxosCreated, _ := rawdb.ReadPrunedUTXOKeys(chain.Database(), blockHeight)
 	if len(utxosCreated) == 0 {
 		// This should almost never happen, but we need to handle it
@@ -922,7 +870,7 @@ func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denominatio
 		}
 		it.Release()
 	}
-	return newCollisions
+	return
 }
 
 func UpdateTrimDepths(trimDepths map[uint8]uint64, utxoSetSize uint64) bool {
