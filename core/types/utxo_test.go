@@ -16,7 +16,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
-	"github.com/dominant-strategies/go-quai/multiset"
+	"github.com/dominant-strategies/go-quai/crypto/multiset"
 )
 
 type KeyAggVectors struct {

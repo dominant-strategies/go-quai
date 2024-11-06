@@ -20,7 +20,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
-	"github.com/dominant-strategies/go-quai/multiset"
+	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
