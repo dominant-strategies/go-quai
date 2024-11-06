@@ -64,7 +64,7 @@ func (ec *Client) Close() {
 // ChainId retrieves the current chain ID for transaction replay protection.
 func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
 	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_chainId")
+	err := ec.c.CallContext(ctx, &result, "quai_chainId")
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Wor
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
 func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.WorkObject, error) {
-	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
+	return ec.getBlock(ctx, "quai_getBlockByNumber", toBlockNumArg(number), true)
 }
 
 func (ec *Client) BlockOrCandidateByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
@@ -95,7 +95,7 @@ func (ec *Client) BlockOrCandidateByHash(ctx context.Context, hash common.Hash) 
 // BlockNumber returns the most recent block number
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_blockNumber")
+	err := ec.c.CallContext(ctx, &result, "quai_blockNumber")
 	return uint64(result), err
 }
 
@@ -149,7 +149,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 // HeaderByHash returns the block header with the given hash.
 func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
 	var head *types.WorkObject
-	err := ec.c.CallContext(ctx, &head, "eth_getBlockByHash", hash, false)
+	err := ec.c.CallContext(ctx, &head, "quai_getBlockByHash", hash, false)
 	if err == nil && head == nil {
 		err = quai.NotFound
 	}
@@ -160,7 +160,7 @@ func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Wo
 // nil, the latest known header is returned.
 func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.WorkObject, error) {
 	var head *types.WorkObject
-	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
+	err := ec.c.CallContext(ctx, &head, "quai_getBlockByNumber", toBlockNumArg(number), false)
 	if err == nil && head == nil {
 		err = quai.NotFound
 	}
@@ -188,7 +188,7 @@ func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
 // TransactionByHash returns the transaction with the given hash.
 func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	var json *rpcTransaction
-	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
+	err = ec.c.CallContext(ctx, &json, "quai_getTransactionByHash", hash)
 	if err != nil {
 		return nil, false, err
 	} else if json == nil {
@@ -218,7 +218,7 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 		Hash common.Hash
 		From common.MixedcaseAddress
 	}
-	if err = ec.c.CallContext(ctx, &meta, "eth_getTransactionByBlockHashAndIndex", block, hexutil.Uint64(index)); err != nil {
+	if err = ec.c.CallContext(ctx, &meta, "quai_getTransactionByBlockHashAndIndex", block, hexutil.Uint64(index)); err != nil {
 		return common.NewMixedcaseAddress(common.Zero), err
 	}
 	if meta.Hash == (common.Hash{}) || meta.Hash != tx.Hash() {
@@ -230,14 +230,14 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 // TransactionCount returns the total number of transactions in the given block.
 func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error) {
 	var num hexutil.Uint
-	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByHash", blockHash)
+	err := ec.c.CallContext(ctx, &num, "quai_getBlockTransactionCountByHash", blockHash)
 	return uint(num), err
 }
 
 // TransactionInBlock returns a single transaction at index in the given block.
 func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
 	var json *rpcTransaction
-	err := ec.c.CallContext(ctx, &json, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
+	err := ec.c.CallContext(ctx, &json, "quai_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 // Note that the receipt is not available for pending transactions.
 func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	var r *types.Receipt
-	err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
+	err := ec.c.CallContext(ctx, &r, "quai_getTransactionReceipt", txHash)
 	if err == nil {
 		if r == nil {
 			return nil, quai.NotFound
@@ -277,7 +277,7 @@ type rpcProgress struct {
 // no sync currently running, it returns nil.
 func (ec *Client) SyncProgress(ctx context.Context) (*quai.SyncProgress, error) {
 	var raw json.RawMessage
-	if err := ec.c.CallContext(ctx, &raw, "eth_syncing"); err != nil {
+	if err := ec.c.CallContext(ctx, &raw, "quai_syncing"); err != nil {
 		return nil, err
 	}
 	// Handle the possible response types
@@ -328,7 +328,7 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 // The block number can be nil, in which case the balance is taken from the latest known block.
 func (ec *Client) BalanceAt(ctx context.Context, account common.MixedcaseAddress, blockNumber *big.Int) (*big.Int, error) {
 	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account.Original(), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "quai_getBalance", account.Original(), toBlockNumArg(blockNumber))
 	return (*big.Int)(&result), err
 }
 
@@ -354,7 +354,7 @@ func (ec *Client) GetUTXO(ctx context.Context, txHash common.Hash, index uint16)
 // The block number can be nil, in which case the value is taken from the latest known block.
 func (ec *Client) StorageAt(ctx context.Context, account common.MixedcaseAddress, key common.Hash, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account.Original(), key, toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "quai_getStorageAt", account.Original(), key, toBlockNumArg(blockNumber))
 	return result, err
 }
 
@@ -362,7 +362,7 @@ func (ec *Client) StorageAt(ctx context.Context, account common.MixedcaseAddress
 // The block number can be nil, in which case the code is taken from the latest known block.
 func (ec *Client) CodeAt(ctx context.Context, account common.MixedcaseAddress, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getCode", account.Original(), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "quai_getCode", account.Original(), toBlockNumArg(blockNumber))
 	return result, err
 }
 
@@ -370,7 +370,7 @@ func (ec *Client) CodeAt(ctx context.Context, account common.MixedcaseAddress, b
 // The block number can be nil, in which case the nonce is taken from the latest known block.
 func (ec *Client) NonceAt(ctx context.Context, account common.MixedcaseAddress, blockNumber *big.Int) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account.Original(), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "quai_getTransactionCount", account.Original(), toBlockNumArg(blockNumber))
 	return uint64(result), err
 }
 
@@ -379,21 +379,21 @@ func (ec *Client) NonceAt(ctx context.Context, account common.MixedcaseAddress, 
 // PendingBalanceAt returns the wei balance of the given account in the pending state.
 func (ec *Client) PendingBalanceAt(ctx context.Context, account common.MixedcaseAddress) (*big.Int, error) {
 	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account.Original(), "pending")
+	err := ec.c.CallContext(ctx, &result, "quai_getBalance", account.Original(), "pending")
 	return (*big.Int)(&result), err
 }
 
 // PendingStorageAt returns the value of key in the contract storage of the given account in the pending state.
 func (ec *Client) PendingStorageAt(ctx context.Context, account common.MixedcaseAddress, key common.Hash) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account.Original(), key, "pending")
+	err := ec.c.CallContext(ctx, &result, "quai_getStorageAt", account.Original(), key, "pending")
 	return result, err
 }
 
 // PendingCodeAt returns the contract code of the given account in the pending state.
 func (ec *Client) PendingCodeAt(ctx context.Context, account common.MixedcaseAddress) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getCode", account.Original(), "pending")
+	err := ec.c.CallContext(ctx, &result, "quai_getCode", account.Original(), "pending")
 	return result, err
 }
 
@@ -401,14 +401,14 @@ func (ec *Client) PendingCodeAt(ctx context.Context, account common.MixedcaseAdd
 // This is the nonce that should be used for the next transaction.
 func (ec *Client) PendingNonceAt(ctx context.Context, account common.MixedcaseAddress) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account.Original(), "pending")
+	err := ec.c.CallContext(ctx, &result, "quai_getTransactionCount", account.Original(), "pending")
 	return uint64(result), err
 }
 
 // PendingTransactionCount returns the total number of transactions in the pending state.
 func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 	var num hexutil.Uint
-	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByNumber", "pending")
+	err := ec.c.CallContext(ctx, &num, "quai_getBlockTransactionCountByNumber", "pending")
 	return uint(num), err
 }
 
@@ -432,7 +432,7 @@ func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, erro
 // blocks might not be available.
 func (ec *Client) CallContract(ctx context.Context, msg quai.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &hex, "quai_call", toCallArg(msg), toBlockNumArg(blockNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +443,7 @@ func (ec *Client) CallContract(ctx context.Context, msg quai.CallMsg, blockNumbe
 // The state seen by the contract call is the pending state.
 func (ec *Client) PendingCallContract(ctx context.Context, msg quai.CallMsg) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
+	err := ec.c.CallContext(ctx, &hex, "quai_call", toCallArg(msg), "pending")
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,7 @@ func (ec *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 // but it should provide a basis for setting a reasonable default.
 func (ec *Client) EstimateGas(ctx context.Context, msg quai.CallMsg) (uint64, error) {
 	var hex hexutil.Uint64
-	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg))
+	err := ec.c.CallContext(ctx, &hex, "quai_estimateGas", toCallArg(msg))
 	if err != nil {
 		return 0, err
 	}
