@@ -11,11 +11,19 @@ import (
 )
 
 func CalculateReward(parent *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
+	var reward *big.Int
 	if header.PrimaryCoinbase().IsInQiLedgerScope() {
-		return CalculateQiReward(parent.WorkObjectHeader())
+		reward = new(big.Int).Set(CalculateQiReward(parent.WorkObjectHeader()))
 	} else {
-		return CalculateQuaiReward(parent)
+		reward = new(big.Int).Set(CalculateQuaiReward(parent))
 	}
+
+	// ~30% extra reward for grace number of blocks after the fork to encourage nodes to move to the fork
+	if header.NumberU64() >= params.GoldenAgeForkNumberV2 && header.NumberU64() < params.GoldenAgeForkNumberV2+params.GoldenAgeForkGraceNumber {
+		reward = new(big.Int).Add(reward, new(big.Int).Div(reward, big.NewInt(70)))
+	}
+
+	return reward
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
