@@ -208,10 +208,13 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 }
 
 type UtxosCreatedDeleted struct {
-	UtxosCreatedKeys   [][]byte
-	UtxosCreatedHashes []common.Hash
-	UtxosDeleted       []*types.SpentUtxoEntry
-	UtxosDeletedHashes []common.Hash
+	UtxosCreatedKeys       [][]byte
+	UtxosCreatedHashes     []common.Hash
+	UtxosDeleted           []*types.SpentUtxoEntry
+	UtxosDeletedHashes     []common.Hash
+	CoinbaseLockupsCreated map[string]common.Hash
+	CoinbaseLockupsDeleted map[string]common.Hash
+	RotatedEpochs          map[string]struct{}
 }
 
 // Process processes the state changes according to the Quai rules by running
@@ -246,6 +249,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	// enable the batch pending cache
 	batch.SetPending(true)
 
+	// enable the batch pending cache
+	batch.SetPending(true)
+
 	parentEvmRoot := parent.Header().EVMRoot()
 	parentEtxSetRoot := parent.Header().EtxSetRoot()
 	parentQuaiStateSize := parent.QuaiStateSize()
@@ -263,6 +269,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, 0, nil, nil, err
 	}
 	utxosCreatedDeleted := new(UtxosCreatedDeleted) // utxos created and deleted in this block
+	utxosCreatedDeleted.CoinbaseLockupsCreated = make(map[string]common.Hash)
+	utxosCreatedDeleted.CoinbaseLockupsDeleted = make(map[string]common.Hash)
+	utxosCreatedDeleted.RotatedEpochs = make(map[string]struct{})
 	// Apply the previous inbound ETXs to the ETX set state
 	prevInboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, header.ParentHash(nodeCtx))
 	if len(prevInboundEtxs) > 0 {
@@ -271,6 +280,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		}
 	}
 	time2 := common.PrettyDuration(time.Since(start))
+
+	coinbaseLockupEpoch := uint32((blockNumber.Uint64() / params.CoinbaseEpochBlocks) + 1) // zero epoch is an invalid state
 
 	var timeSign, timePrepare, timeQiToQuai, timeQuaiToQi, timeCoinbase, timeEtx, timeTx time.Duration
 	startTimeSenders := time.Now()
@@ -299,7 +310,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if err != nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 	}
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, p.vmConfig, batch)
 	time3 := common.PrettyDuration(time.Since(start))
 
 	// Iterate over and process the individual transactions.
@@ -342,7 +353,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	}
 
 	// Redeem all Quai for the different lock up periods
-	err, unlocks := RedeemLockedQuai(p.hc, header, parent, statedb)
+	unlocks, err := RedeemLockedQuai(p.hc, header, parent, statedb, vmenv)
 	if err != nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("error redeeming locked quai: %w", err)
 	}
@@ -426,7 +437,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		timePrepare += timePrepareDelta
 
 		var receipt *types.Receipt
-		var addReceipt bool
+
 		if tx.Type() == types.ExternalTxType {
 			etxCount++
 			startTimeEtx := time.Now()
@@ -440,6 +451,63 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 			if etx.Hash() != tx.Hash() {
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid external transaction: etx %x is not in order or not found in unspent etx set", tx.Hash())
+			}
+
+			if etx.EtxType() == types.CoinbaseLockupType {
+				// This is either an unlocked Qi coinbase that was redeemed or Wrapped Qi
+				// An unlocked/redeemed Quai coinbase ETX is processed below as a standard Quai ETX
+				if tx.To().IsInQiLedgerScope() {
+					txGas := tx.Gas()
+					denominations := misc.FindMinDenominations(etx.Value())
+					total := big.NewInt(0)
+					outputIndex := uint16(0)
+					success := true
+					// Iterate over the denominations in descending order
+					for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+						// If the denomination count is zero, skip it
+						if denominations[uint8(denomination)] == 0 {
+							continue
+						}
+
+						for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+							if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+								// No more gas, the rest of the denominations are lost but the tx is still valid
+								success = false
+								break
+							}
+							txGas -= params.CallValueTransferGas
+							if err := gp.SubGas(params.CallValueTransferGas); err != nil {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							}
+							*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
+							totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
+							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), etx.To().Bytes(), big.NewInt(0)))
+							// the ETX hash is guaranteed to be unique
+							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							}
+							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
+							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
+							p.logger.Debugf("Converting Quai to Qi %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, 0)
+							total.Add(total, types.Denominations[uint8(denomination)])
+							outputIndex++
+						}
+					}
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: etx.Gas() - txGas, TxHash: tx.Hash(),
+						Logs: []*types.Log{{
+							Address: *etx.To(),
+							Topics:  []common.Hash{types.QuaiToQiConversionTopic},
+							Data:    total.Bytes(),
+						}},
+					}
+
+					if !success {
+						receipt.Status = types.ReceiptStatusFailed
+						receipt.GasUsed = etx.Gas()
+					}
+					receipts = append(receipts, receipt)
+					allLogs = append(allLogs, receipt.Logs...)
+				}
 			}
 
 			// check if the tx is a coinbase tx
@@ -459,41 +527,159 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 				}
 				lockupByte := tx.Data()[0]
-				if tx.To().IsInQiLedgerScope() {
-					if int(lockupByte) > len(params.LockupByteToBlockDepth)-1 {
-						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
+				if int(lockupByte) > len(params.LockupByteToBlockDepth)-1 {
+					return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
+				}
+				if tx.To().IsInQiLedgerScope() { // Qi coinbase
+					_, err := tx.To().InternalAndQiAddress()
+					if err != nil {
+						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 					}
-					var lockup *big.Int
-					lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+					total := big.NewInt(0)
+					lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 					if lockup.Uint64() < params.ConversionLockPeriod {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 					}
 					lockup.Add(lockup, blockNumber)
 					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
-					denominations := misc.FindMinDenominations(value)
-					outputIndex := uint16(0)
-					// Iterate over the denominations in descending order
-					for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
-						// If the denomination count is zero, skip it
-						if denominations[uint8(denomination)] == 0 {
-							continue
+					if len(tx.Data()) == 1 {
+						denominations := misc.FindMinDenominations(value)
+						outputIndex := uint16(0)
+						// Iterate over the denominations in descending order
+						for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+							// If the denomination count is zero, skip it
+							if denominations[uint8(denomination)] == 0 {
+								continue
+							}
+							for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+								if outputIndex >= types.MaxOutputIndex {
+									// No more gas, the rest of the denominations are lost but the tx is still valid
+									break
+								}
+								utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lockup))
+								// the ETX hash is guaranteed to be unique
+								if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
+									return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+								}
+								utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
+								utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
+								p.logger.Debugf("Creating UTXO for coinbase %032x with denomination %d index %d\n", tx.Hash(), denomination, outputIndex)
+								total.Add(total, types.Denominations[uint8(denomination)])
+								outputIndex++
+							}
 						}
-						for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
-							if outputIndex >= types.MaxOutputIndex {
-								// No more gas, the rest of the denominations are lost but the tx is still valid
-								break
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
+					} else if len(tx.Data()) == common.AddressLength+1 || len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
+						contractAddr := common.BytesToAddress(tx.Data()[1:common.AddressLength+1], nodeLocation)
+						internal, err := tx.To().InternalAndQiAddress()
+						if err != nil {
+							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
+						}
+						if statedb.GetCode(internal) == nil {
+							// No code at contract address
+							// Coinbase reward is lost
+							// Justification: We should not store a coinbase lockup that can never be claimed
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+						} else {
+							var delegate common.Address
+							if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
+								delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:], nodeLocation)
+							} else {
+								delegate = common.Zero
 							}
-							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lockup))
-							// the ETX hash is guaranteed to be unique
-							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
-								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, value, nodeLocation, true)
+							if err != nil || newCoinbaseLockupHash == nil {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not add new lock: %w", err)
 							}
-							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
-							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
-							p.logger.Debugf("Creating UTXO for coinbase %032x with denomination %d index %d\n", tx.Hash(), denomination, outputIndex)
-							outputIndex++
+							// Store the new lockup key every time
+							utxosCreatedDeleted.CoinbaseLockupsCreated[string(newCoinbaseLockupKey)] = *newCoinbaseLockupHash
+
+							if oldCoinbaseLockupHash != nil {
+								// We deleted (updated) the old lockup, write it to deleted list but only the first time
+								if _, exists := utxosCreatedDeleted.CoinbaseLockupsDeleted[string(oldCoinbaseLockupKey)]; !exists {
+									if _, exists := utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)]; !exists {
+										// We only want to add a delete if we have not rotated the epoch (we haven't created a new lock) because otherwise there is nothing to delete
+										utxosCreatedDeleted.CoinbaseLockupsDeleted[string(oldCoinbaseLockupKey)] = *oldCoinbaseLockupHash
+										utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, *oldCoinbaseLockupHash)
+									}
+								}
+							} else {
+								// If we did not delete, we are rotating the epoch and need to store it
+								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
+							}
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+						}
+					} else {
+						// Coinbase data is either too long or too small
+						// Coinbase reward is lost
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+					}
+					receipts = append(receipts, receipt)
+					allLogs = append(allLogs, receipt.Logs...)
+				} else if tx.To().IsInQuaiLedgerScope() { // Quai coinbase
+					_, err := tx.To().InternalAndQuaiAddress()
+					if err != nil {
+						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
+					}
+					if len(tx.Data()) == 1 {
+						// Coinbase is valid, no gas used
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
+					} else if len(tx.Data()) != common.AddressLength+1 && len(tx.Data()) != common.AddressLength+common.AddressLength+1 {
+						// Coinbase data is either too long or too small
+						// Coinbase reward is lost
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+					} else { // Quai coinbase lockup contract
+						// Create params for uint256 lockup, uint256 balance, address recipient
+						lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+						if lockup.Uint64() < params.ConversionLockPeriod {
+							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+						}
+						lockup.Add(lockup, blockNumber)
+
+						contractAddr := common.BytesToAddress(tx.Data()[1:common.AddressLength+1], nodeLocation)
+						internal, err := contractAddr.InternalAndQuaiAddress()
+						if err != nil {
+							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
+						}
+						if statedb.GetCode(internal) == nil {
+							// No code at contract address
+							// Coinbase reward is lost
+							// Justification: We should not store a coinbase lockup that can never be claimed
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+						} else {
+							var delegate common.Address
+							if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
+								delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:], nodeLocation)
+							} else {
+								delegate = common.Zero
+							}
+							reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
+							// Add the lockup owned by the smart contract with the miner as beneficiary
+							oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, reward, nodeLocation, true)
+							if err != nil || newCoinbaseLockupHash == nil {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not add new lock: %w", err)
+							}
+							// Store the new lockup key every time
+							utxosCreatedDeleted.CoinbaseLockupsCreated[string(newCoinbaseLockupKey)] = *newCoinbaseLockupHash
+
+							if oldCoinbaseLockupHash != nil {
+								// We deleted (updated) the old lockup, write it to deleted list but only the first time
+								if _, exists := utxosCreatedDeleted.CoinbaseLockupsDeleted[string(oldCoinbaseLockupKey)]; !exists {
+									if _, exists := utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)]; !exists {
+										// Don't register deletes for any rotated epochs
+										utxosCreatedDeleted.CoinbaseLockupsDeleted[string(oldCoinbaseLockupKey)] = *oldCoinbaseLockupHash
+										utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, *oldCoinbaseLockupHash)
+									}
+								}
+							} else {
+								// If we did not delete, we are rotating the epoch and need to store it
+								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
+							}
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
 						}
 					}
+					receipts = append(receipts, receipt)
+					allLogs = append(allLogs, receipt.Logs...)
 				}
 				if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
 					// subtract the minimum tx gas from the gas pool
@@ -506,8 +692,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				timeDelta := time.Since(startTimeEtx)
 				timeCoinbase += timeDelta
 				continue
-			}
-			if etx.To().IsInQiLedgerScope() {
+			} else if !types.IsCoinBaseTx(tx) && etx.To().IsInQiLedgerScope() {
 				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Quai->Qi Conversion
 					var lockup *big.Int
 					lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
@@ -564,22 +749,16 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							outputIndex++
 						}
 					}
-					if success {
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: etx.Gas() - txGas, TxHash: tx.Hash(),
-							Logs: []*types.Log{{
-								Address: *etx.To(),
-								Topics:  []common.Hash{types.QuaiToQiConversionTopic},
-								Data:    total.Bytes(),
-							}},
-						}
-					} else {
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: etx.Gas(), TxHash: tx.Hash(),
-							Logs: []*types.Log{{
-								Address: *etx.To(),
-								Topics:  []common.Hash{types.QuaiToQiConversionTopic},
-								Data:    total.Bytes(),
-							}},
-						}
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: etx.Gas() - txGas, TxHash: tx.Hash(),
+						Logs: []*types.Log{{
+							Address: *etx.To(),
+							Topics:  []common.Hash{types.QuaiToQiConversionTopic},
+							Data:    total.Bytes(),
+						}},
+					}
+					if !success {
+						receipt.Status = types.ReceiptStatusFailed
+						receipt.GasUsed = etx.Gas()
 					}
 					receipts = append(receipts, receipt)
 					allLogs = append(allLogs, receipt.Logs...)
@@ -611,6 +790,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					totalEtxGas += params.QiToQuaiConversionGas
 					continue // locked and redeemed later
 				}
+				// Apply ETX to Quai state
+				// This could also be an unlocked Quai coinbase redemption ETX, the process is the same
 				fees := big.NewInt(0)
 				prevZeroBal := prepareApplyETX(statedb, msg.Value(), nodeLocation)
 				receipt, fees, err = applyTransaction(msg, parent, p.config, p.hc, gp, statedb, blockNumber, blockHash, etx, usedGas, usedState, vmenv, &etxRLimit, &etxPLimit, p.logger)
@@ -618,15 +799,22 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				if err != nil {
 					return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
-				addReceipt = true
 
 				quaiFees.Add(quaiFees, fees)
 
 				totalEtxGas += receipt.GasUsed
 				timeDelta := time.Since(startTimeEtx)
 				timeQiToQuai += timeDelta
+				for _, etx := range receipt.OutboundEtxs {
+					if receipt.Status == types.ReceiptStatusSuccessful {
+						emittedEtxs = append(emittedEtxs, etx)
+					}
+				}
+				receipts = append(receipts, receipt)
+				allLogs = append(allLogs, receipt.Logs...)
+				i++
 			}
-		} else if tx.Type() == types.QuaiTxType {
+		} else if tx.Type() == types.QuaiTxType { // Regular Quai tx
 			startTimeTx := time.Now()
 
 			fees := big.NewInt(0)
@@ -634,7 +822,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if err != nil {
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
-			addReceipt = true
 			timeTxDelta := time.Since(startTimeTx)
 			timeTx += timeTxDelta
 
@@ -663,19 +850,17 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 			blockMinFee, blockMaxFee = calcTxStats(blockMinFee, blockMaxFee, fees, numTxsProcessed)
 
+			for _, etx := range receipt.OutboundEtxs {
+				if receipt.Status == types.ReceiptStatusSuccessful {
+					emittedEtxs = append(emittedEtxs, etx)
+				}
+			}
+			receipts = append(receipts, receipt)
+			allLogs = append(allLogs, receipt.Logs...)
+			i++
 		} else {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, ErrTxTypeNotSupported
 		}
-		for _, etx := range receipt.OutboundEtxs {
-			if receipt.Status == types.ReceiptStatusSuccessful {
-				emittedEtxs = append(emittedEtxs, etx)
-			}
-		}
-		if addReceipt {
-			receipts = append(receipts, receipt)
-			allLogs = append(allLogs, receipt.Logs...)
-		}
-		i++
 	}
 
 	if nonEtxExists && block.BaseFee().Cmp(big.NewInt(0)) == 0 {
@@ -726,19 +911,19 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		coinbaseReward := misc.CalculateReward(parent, block.WorkObjectHeader())
 		blockReward := new(big.Int).Add(coinbaseReward, quaiFees)
 
-		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: []byte{block.Lock()}})
+		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: block.Data()})
 		emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		if qiFees.Cmp(big.NewInt(0)) != 0 {
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: qiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: secondaryCoinbase, Data: []byte{block.Lock()}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: qiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: secondaryCoinbase, Data: block.Data()})
 			emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		}
 	} else if bytes.Equal(block.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
 		coinbaseReward := misc.CalculateReward(parent, block.WorkObjectHeader())
 		blockReward := new(big.Int).Add(coinbaseReward, qiFees)
-		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: []byte{block.Lock()}})
+		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: block.Data()})
 		emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		if quaiFees.Cmp(big.NewInt(0)) != 0 {
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: secondaryCoinbase, Data: []byte{block.Lock()}})
+			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: secondaryCoinbase, Data: block.Data()})
 			emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		}
 	}
@@ -752,7 +937,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		} else {
 			originHash = common.SetBlockHashForQi(parentHash, nodeLocation)
 		}
-		emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
+		emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: uncle.Data()}))
 	}
 
 	updatedTokenChoiceSet, err := CalculateTokenChoicesSet(p.hc, parent, emittedEtxs)
@@ -797,6 +982,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 			etx.SetValue(value)
 		}
+	}
+
+	for _, hash := range utxosCreatedDeleted.CoinbaseLockupsCreated {
+		// Update the created hash list with the latest new elements (instead of intermediate ones)
+		utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, hash)
 	}
 
 	time4 := common.PrettyDuration(time.Since(start))
@@ -858,7 +1048,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 // It processes blocks based on predefined lockup periods and checks for unlockable Quai.
 // This function is intended to be run as part of the block processing.
 // Returns the list of unlocked coinbases
-func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.WorkObject, statedb *state.StateDB) (error, []common.Unlock) {
+func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.WorkObject, statedb *state.StateDB, vmenv *vm.EVM) ([]common.Unlock, error) {
 	currentBlockHeight := header.Number(hc.NodeCtx()).Uint64()
 
 	blockDepths := []uint64{
@@ -886,43 +1076,47 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 		// Fetch the block at the calculated target height
 		targetBlock := hc.GetBlockByNumber(targetBlockHeight)
 		if targetBlock == nil {
-			return fmt.Errorf("block at height %d not found", targetBlockHeight), nil
+			return nil, fmt.Errorf("block at height %d not found", targetBlockHeight)
 		}
 
 		for _, etx := range targetBlock.Body().ExternalTransactions() {
-			// Check if the transaction is a conversion transaction
-			if types.IsCoinBaseTx(etx) && etx.ETXSender().IsInQuaiLedgerScope() {
-				// Redeem all unlocked Quai for the coinbase address
-				internal, err := etx.To().InternalAddress()
-				if err != nil {
-					return fmt.Errorf("error converting address to internal address: %v", err), nil
-				}
+			// Check if the transaction is a coinbase transaction
+			if types.IsCoinBaseTx(etx) && etx.To().IsInQuaiLedgerScope() {
 
-				lockupByte := etx.Data()[0]
-				// if lock up byte is 0, the fork change updates the lockup time
-				var lockup uint64
-				lockup = params.LockupByteToBlockDepth[lockupByte]
-				if lockup == blockDepth {
-					balance := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte, header.NumberU64(common.ZONE_CTX))
-
-					if !statedb.Exist(internal) {
-						newAccountCreationGas := params.CallNewAccountGas(parent.QuaiStateSize())
-						newAccountCreationFee := new(big.Int).Mul(new(big.Int).SetUint64(newAccountCreationGas), big.NewInt(params.InitialBaseFee))
-						// Check if balance is greater than or equal to newAccountCreationFee
-						if balance.Cmp(newAccountCreationFee) >= 0 {
-							// If balance >= newAccountCreationFee, proceed with subtraction
-							balance.Sub(balance, newAccountCreationFee)
-						} else {
-							// Continue processing, user has not mined enough to pay for state fee
-							continue
-						}
+				if len(etx.Data()) == 1 {
+					// Redeem all unlocked Quai for the coinbase address
+					internal, err := etx.To().InternalAddress()
+					if err != nil {
+						return nil, fmt.Errorf("error converting address to internal address: %v", err)
 					}
-					hc.logger.Debugf("Redeeming %s locked Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
-					statedb.AddBalance(internal, balance)
-					unlocks = append(unlocks, common.Unlock{
-						Addr: internal,
-						Amt:  balance,
-					})
+
+					lockupByte := etx.Data()[0]
+					lockup := params.LockupByteToBlockDepth[lockupByte]
+					if lockup == blockDepth {
+						balance := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte, header.NumberU64(common.ZONE_CTX))
+
+						if !statedb.Exist(internal) {
+							newAccountCreationGas := params.CallNewAccountGas(parent.QuaiStateSize())
+							newAccountCreationFee := new(big.Int).Mul(new(big.Int).SetUint64(newAccountCreationGas), big.NewInt(params.InitialBaseFee))
+							// Check if balance is greater than or equal to newAccountCreationFee
+							if balance.Cmp(newAccountCreationFee) >= 0 {
+								// If balance >= newAccountCreationFee, proceed with subtraction
+								balance.Sub(balance, newAccountCreationFee)
+							} else {
+								// Continue processing, user has not mined enough to pay for state fee
+								continue
+							}
+						}
+						hc.logger.Debugf("Redeeming %s locked Quai for %s at block depth %d", balance.String(), internal.Hex(), blockDepth)
+						statedb.AddBalance(internal, balance)
+						unlocks = append(unlocks, common.Unlock{
+							Addr: internal,
+							Amt:  balance,
+						})
+					}
+				} else if len(etx.Data()) == common.AddressLength+1 || len(etx.Data()) == common.AddressLength+common.AddressLength+1 {
+					// This coinbase is owned by a smart contract and must be unlocked manually
+					continue
 				}
 			}
 
@@ -931,7 +1125,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && conversionPeriodValid {
 				internal, err := etx.To().InternalAddress()
 				if err != nil {
-					return fmt.Errorf("Error converting address to internal address: %v", err), nil
+					return nil, fmt.Errorf("Error converting address to internal address: %v", err)
 				}
 				balance := etx.Value()
 				if !statedb.Exist(internal) {
@@ -955,7 +1149,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 			}
 		}
 	}
-	return nil, unlocks
+	return unlocks, nil
 }
 
 func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
@@ -1000,9 +1194,10 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas, OutboundEtxs: result.Etxs}
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
+		evm.UndoCoinbasesDeleted()
 		logger.WithField("err", result.Err).Debug("Transaction failed")
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
@@ -1010,6 +1205,7 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 		if result.ContractAddr != nil {
 			receipt.ContractAddress = *result.ContractAddr
 		}
+		receipt.OutboundEtxs = result.Etxs
 	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
@@ -1606,7 +1802,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, parentOrder int, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, usedState *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
+func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, parentOrder int, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, usedState *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, batch ethdb.Batch, logger *log.Logger) (*types.Receipt, *big.Int, error) {
 	nodeCtx := config.Location.Context()
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {
@@ -1617,7 +1813,7 @@ func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, pare
 	if err != nil {
 		return nil, nil, err
 	}
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg, batch)
 	if tx.Type() == types.ExternalTxType {
 		prevZeroBal := prepareApplyETX(statedb, msg.Value(), config.Location)
 		receipt, quaiFees, err := applyTransaction(msg, parent, config, bc, gp, statedb, header.Number(nodeCtx), header.Hash(), tx, usedGas, usedState, vmenv, etxRLimit, etxPLimit, logger)
@@ -1898,7 +2094,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.WorkObject, txIndex int
 			return msg, context, statedb, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, txContext, statedb, p.hc.Config(), vm.Config{})
+		vmenv := vm.NewEVM(context, txContext, statedb, p.hc.Config(), vm.Config{}, nil)
 		statedb.Prepare(tx.Hash(), idx)
 		if _, err := ApplyMessage(vmenv, msg, new(types.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)

@@ -153,6 +153,7 @@ const (
 	ConversionConfirmationContext = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	QiToQuaiConversionGas         = 100000           // The gas used to convert Qi to Quai
 	DefaultCoinbaseLockup         = 0                // The default lockup byte for coinbase rewards
+	MaxCoinbaseTrancheElements    = 100              // Maximum number of elements in a coinbase tranche
 )
 
 var (
@@ -196,6 +197,7 @@ var (
 	BaseFeeMultiplier             = big.NewInt(50)
 
 	ConversionLockPeriod uint64 = 2 * BlocksPerWeek
+	CoinbaseEpochBlocks  uint64 = 100 // Maximum number of blocks in a coinbase tranche
 )
 
 func init() {

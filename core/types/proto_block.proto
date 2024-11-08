@@ -91,6 +91,7 @@ message ProtoWorkObjectHeader {
   optional bytes prime_terminus_number = 10;
   optional uint32 lock = 11;
   optional common.ProtoAddress primary_coinbase = 12;
+  bytes data = 13;
 }
 
 message ProtoWorkObjectHeaders {

@@ -23,6 +23,8 @@ const (
 var (
 	MaxQi                   = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
 	QuaiToQiConversionTopic = crypto.Keccak256Hash([]byte("QuaiToQiConversion"))
+	QuaiCoinbaseLockupTopic = crypto.Keccak256Hash([]byte("QuaiCoinbaseLockup"))
+	QiCoinbaseLockupTopic   = crypto.Keccak256Hash([]byte("QiCoinbaseLockup"))
 )
 
 // Denominations is a map of denomination to number of Qi
@@ -473,4 +475,8 @@ func UTXOHash(txHash common.Hash, index uint16, utxo *UtxoEntry) common.Hash {
 	indexBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(indexBytes, index)
 	return RlpHash([]interface{}{txHash, indexBytes, utxo}) // TODO: Consider encoding to protobuf instead
+}
+
+func CoinbaseLockupHash(ownerContract common.Address, beneficiaryMiner common.Address, delegate common.Address, lockupByte byte, epoch uint32, balance *big.Int, unlockHeight uint32, elements uint16) common.Hash {
+	return RlpHash([]interface{}{ownerContract, beneficiaryMiner, delegate, lockupByte, epoch, balance, unlockHeight, elements}) // TODO: Consider encoding to protobuf instead
 }

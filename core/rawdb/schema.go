@@ -114,6 +114,7 @@ var (
 
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
 	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
+	CoinbaseLockupPrefix = []byte("cl") // coinbaseLockupPrefix + ownerContract + beneficiaryMiner + lockupByte + epoch -> lockup
 )
 
 const (
@@ -386,4 +387,15 @@ func utxoToBlockHeightKey(txHash common.Hash, index uint16) []byte {
 	txHash[common.HashLength-1] = indexBytes[0]
 	txHash[common.HashLength-2] = indexBytes[1]
 	return append(utxoToBlockHeightPrefix, txHash[:]...)
+}
+
+func CoinbaseLockupKey(ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) []byte {
+	epochBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(epochBytes, epoch)
+	ownerBytes := ownerContract.Bytes()
+	beneficiaryBytes := beneficiaryMiner.Bytes()
+	combined := append(ownerBytes, beneficiaryBytes...)
+	combined = append(combined, lockupByte)
+	combined = append(combined, epochBytes...)
+	return append(CoinbaseLockupPrefix, combined...)
 }
