@@ -54,6 +54,7 @@ const (
 	DefaultType = iota
 	CoinbaseType
 	ConversionType
+	CoinbaseLockupType
 )
 
 const (

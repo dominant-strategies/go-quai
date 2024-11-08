@@ -699,6 +699,13 @@ func ZeroInternal(nodeLocation Location) InternalAddress {
 	return InternalAddress{nodeLocation.BytePrefix()}
 }
 
+// OneInternal returns an address starting with the byte prefix and ending in 1
+func OneInternal(nodeLocation Location) InternalAddress {
+	one := ZeroInternal(nodeLocation)
+	one[AddressLength-1] = 1
+	return one
+}
+
 func ZeroAddress(nodeLocation Location) Address {
 	internal := InternalAddress{nodeLocation.BytePrefix()}
 	return Address{&internal}

@@ -28,6 +28,9 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/ethdb/memorydb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
 )
@@ -139,21 +142,31 @@ type EVM struct {
 	// applied in opCall*.
 	callGasTemp uint64
 
-	ETXCache     []*types.Transaction
-	ETXCacheLock sync.RWMutex
+	ETXCache              []*types.Transaction
+	CoinbaseDeletedHashes []*common.Hash
+	CoinbasesDeleted      map[[47]byte][]byte
+	ETXCacheLock          sync.RWMutex
+	Batch                 ethdb.Batch
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
+func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, batch ethdb.Batch) *EVM {
 	evm := &EVM{
-		Context:     blockCtx,
-		TxContext:   txCtx,
-		StateDB:     statedb,
-		Config:      config,
-		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
-		ETXCache:    make([]*types.Transaction, 0),
+		Context:               blockCtx,
+		TxContext:             txCtx,
+		StateDB:               statedb,
+		Config:                config,
+		chainConfig:           chainConfig,
+		chainRules:            chainConfig.Rules(blockCtx.BlockNumber),
+		ETXCache:              make([]*types.Transaction, 0),
+		CoinbaseDeletedHashes: make([]*common.Hash, 0),
+		CoinbasesDeleted:      make(map[[47]byte][]byte),
+	}
+	if batch != nil {
+		evm.Batch = batch
+	} else {
+		evm.Batch = memorydb.New(log.Global).NewBatch() // Just used as a cache for simulating calls
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
@@ -164,6 +177,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 	evm.TxContext = txCtx
 	evm.StateDB = statedb
+	evm.ResetCoinbasesDeleted()
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -197,6 +211,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// Fail if we're trying to transfer more than the available balance
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, 0, ErrInsufficientBalance
+	}
+	if addr.Equal(LockupContractAddresses[[2]byte(evm.chainConfig.Location)]) {
+		ret, err := RunLockupContract(evm, caller.Address(), &gas, input)
+		return ret, gas, 0, err
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
@@ -689,3 +707,16 @@ func calcEtxFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+
+func (evm *EVM) GetLatestMinerEpoch() (uint32, error) { return evm.StateDB.GetLatestEpoch() }
+
+func (evm *EVM) ResetCoinbasesDeleted() {
+	evm.CoinbasesDeleted = make(map[[47]byte][]byte)
+}
+
+func (evm *EVM) UndoCoinbasesDeleted() {
+	for key, value := range evm.CoinbasesDeleted {
+		evm.Batch.Put(key[:], value)
+	}
+	evm.ResetCoinbasesDeleted()
+}
