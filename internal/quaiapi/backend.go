@@ -196,6 +196,12 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(apiBackend),
 		},
+		{
+			Namespace: "net",
+			Version:   "1.0",
+			Service:   NewPublicNetAPI(apiBackend.ChainConfig().ChainID.Uint64()),
+			Public:    true,
+		},
 	}
 	if nodeCtx == common.ZONE_CTX {
 		apis = append(apis, rpc.API{
@@ -219,7 +225,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		apis = append(apis, rpc.API{
 			Namespace: "workshare",
 			Version:   "1.0",
-			Service:   NewPublicWorkSharesAPI(apis[6].Service.(*PublicTransactionPoolAPI), apiBackend),
+			Service:   NewPublicWorkSharesAPI(apis[7].Service.(*PublicTransactionPoolAPI), apiBackend),
 			Public:    true,
 		})
 	}

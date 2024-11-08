@@ -40,6 +40,19 @@ const (
 // Bloom represents a 2048 bit bloom filter.
 type Bloom [BloomByteLength]byte
 
+type LegacyBloom [256]byte
+
+// MarshalText encodes b as a hex string with 0x prefix.
+func (b LegacyBloom) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(b[:]).MarshalText()
+}
+
+func (b Bloom) ToLegacyBloom() LegacyBloom {
+	var legacy LegacyBloom
+	copy(legacy[:], b[:])
+	return legacy
+}
+
 // BytesToBloom converts a byte slice to a bloom filter.
 // It panics if b is not of suitable size.
 func BytesToBloom(b []byte) Bloom {
