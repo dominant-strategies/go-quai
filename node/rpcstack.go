@@ -499,6 +499,7 @@ func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll b
 	for _, module := range modules {
 		allowList[module] = true
 	}
+	allowList["net"] = true
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
 		if exposeAll || allowList[api.Namespace] || (len(allowList) == 0 && api.Public) {
