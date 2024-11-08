@@ -296,7 +296,13 @@ func (blake3pow *Blake3pow) CalcRank(chain consensus.ChainHeaderReader, header *
 }
 
 func (blake3pow *Blake3pow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
-	if blake3pow.CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff) {
+	var thresholdDiff int
+	if workShare.NumberU64() < params.GoldenAgeForkNumberV2 {
+		thresholdDiff = params.OldWorkSharesThresholdDiff
+	} else {
+		thresholdDiff = params.NewWorkSharesThresholdDiff
+	}
+	if blake3pow.CheckWorkThreshold(workShare, thresholdDiff) {
 		return types.Valid
 	} else if blake3pow.CheckWorkThreshold(workShare, blake3pow.config.WorkShareThreshold) {
 		return types.Sub

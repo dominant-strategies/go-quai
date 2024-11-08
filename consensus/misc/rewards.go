@@ -23,6 +23,12 @@ func CalculateReward(parent *types.WorkObject, header *types.WorkObjectHeader) *
 		reward = new(big.Int).Add(reward, new(big.Int).Div(reward, big.NewInt(70)))
 	}
 
+	// Since after the second fork, the number of the workshares allowed is increased by 2x,
+	// the reward value is cut by half to keep the rate of inflation the same
+	if header.NumberU64() >= params.GoldenAgeForkNumberV2 {
+		reward = new(big.Int).Div(reward, common.Big2)
+	}
+
 	return reward
 }
 

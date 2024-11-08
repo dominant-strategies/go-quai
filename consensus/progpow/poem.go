@@ -295,7 +295,13 @@ func (progpow *Progpow) CalcRank(chain consensus.ChainHeaderReader, header *type
 }
 
 func (progpow *Progpow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
-	if progpow.CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff) {
+	var thresholdDiff int
+	if workShare.NumberU64() < params.GoldenAgeForkNumberV2 {
+		thresholdDiff = params.OldWorkSharesThresholdDiff
+	} else {
+		thresholdDiff = params.NewWorkSharesThresholdDiff
+	}
+	if progpow.CheckWorkThreshold(workShare, thresholdDiff) {
 		return types.Valid
 	} else if progpow.CheckWorkThreshold(workShare, progpow.config.WorkShareThreshold) {
 		return types.Sub

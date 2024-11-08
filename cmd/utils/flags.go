@@ -1381,7 +1381,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	cfg.GenesisNonce = viper.GetUint64(GenesisNonce.Name)
 
 	cfg.Miner.WorkShareMining = viper.GetBool(WorkShareMiningFlag.Name)
-	cfg.Miner.WorkShareThreshold = params.WorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
+	cfg.Miner.WorkShareThreshold = params.NewWorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
 	if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
 		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
 	}

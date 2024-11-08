@@ -1363,7 +1363,12 @@ func (hc *HeaderChain) GetMaxTxInWorkShare() uint64 {
 	currentGasLimit := hc.CurrentHeader().GasLimit()
 	maxEoaInBlock := currentGasLimit / params.TxGas
 	// (maxEoaInBlock*2)/(2^bits)
-	return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.WorkSharesThresholdDiff)))
+	currentHeader := hc.CurrentHeader()
+	if currentHeader != nil && currentHeader.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
+		return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.OldWorkSharesThresholdDiff)))
+	} else {
+		return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.NewWorkSharesThresholdDiff)))
+	}
 }
 
 func (hc *HeaderChain) Database() ethdb.Database {
