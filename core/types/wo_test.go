@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -23,6 +24,7 @@ func woTestData() (*WorkObject, common.Hash) {
 			time:                uint64(1),
 			nonce:               EncodeNonce(uint64(1)),
 			lock:                0,
+			data:                []byte{0, 1, 2, 3},
 		},
 	}
 	return wo, wo.Hash()
@@ -30,7 +32,7 @@ func woTestData() (*WorkObject, common.Hash) {
 
 func TestWoHash(t *testing.T) {
 	_, actualHash := woTestData()
-	expectedHash := common.HexToHash("0x572273f26629ca2a02c329cd21dc3def6e1d1934465ea11fca393c7a9ce3c89b")
+	expectedHash := common.HexToHash("0x5ea71d29dbbfbd3d0ca07fa7349f9275ed9f80376e4077a07ef7d78266b4204a")
 	require.Equal(t, expectedHash, actualHash, "Hash not equal to expected hash")
 }
 
@@ -102,6 +104,19 @@ func FuzzNonceHash(f *testing.F) {
 	fuzzUint64Field(f,
 		func(woh *WorkObjectHeader) uint64 { return woh.nonce.Uint64() },
 		func(woh *WorkObjectHeader, nonce uint64) { woh.nonce = EncodeNonce(nonce) })
+}
+
+func FuzzDataHash(f *testing.F) {
+	header, _ := woTestData()
+	f.Add(testByte)
+	f.Add(header.Data())
+	f.Fuzz(func(t *testing.T, b []byte) {
+		localHeader, hash := headerTestData()
+		if !bytes.Equal(localHeader.extra, b) {
+			localHeader.extra = b
+			require.NotEqual(t, localHeader.Hash(), hash, "Hash equal for extra \noriginal: %v, modified: %v", header.Data(), b)
+		}
+	})
 }
 
 func fuzzHash(f *testing.F, getField func(*WorkObjectHeader) common.Hash, setField func(*WorkObjectHeader, common.Hash)) {
