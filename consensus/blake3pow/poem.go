@@ -44,8 +44,15 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 	// the given header determines the prime block
 	totalDeltaEntropyPrime := new(big.Int).Add(header.ParentDeltaEntropy(common.REGION_CTX), header.ParentDeltaEntropy(common.ZONE_CTX))
 	totalDeltaEntropyPrime = new(big.Int).Add(totalDeltaEntropyPrime, intrinsicEntropy)
-	primeDeltaEntropyTarget := new(big.Int).Div(params.PrimeEntropyTarget(expansionNum), big2)
-	primeDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, primeDeltaEntropyTarget)
+
+	var primeDeltaEntropyTarget *big.Int
+	if header.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
+		primeDeltaEntropyTarget = new(big.Int).Div(params.PrimeEntropyTarget(expansionNum), big2)
+		primeDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, primeDeltaEntropyTarget)
+	} else {
+		primeDeltaEntropyTarget = new(big.Int).Mul(params.PrimeEntropyTarget(expansionNum), zoneThresholdEntropy)
+		primeDeltaEntropyTarget = new(big.Int).Div(primeDeltaEntropyTarget, common.Big2)
+	}
 
 	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
 	if intrinsicEntropy.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaEntropyPrime.Cmp(primeDeltaEntropyTarget) > 0 {
@@ -56,8 +63,16 @@ func (blake3pow *Blake3pow) CalcOrder(chain consensus.BlockReader, header *types
 	// REGION
 	// Compute the total accumulated entropy since the last region block
 	totalDeltaEntropyRegion := new(big.Int).Add(header.ParentDeltaEntropy(common.ZONE_CTX), intrinsicEntropy)
-	regionDeltaEntropyTarget := new(big.Int).Div(params.RegionEntropyTarget(expansionNum), big2)
-	regionDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, regionDeltaEntropyTarget)
+
+	var regionDeltaEntropyTarget *big.Int
+	if header.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
+		regionDeltaEntropyTarget = new(big.Int).Div(params.RegionEntropyTarget(expansionNum), big2)
+		regionDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, regionDeltaEntropyTarget)
+	} else {
+		regionDeltaEntropyTarget = new(big.Int).Mul(zoneThresholdEntropy, params.RegionEntropyTarget(expansionNum))
+		regionDeltaEntropyTarget = new(big.Int).Div(regionDeltaEntropyTarget, big2)
+	}
+
 	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
 	if intrinsicEntropy.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaEntropyRegion.Cmp(regionDeltaEntropyTarget) > 0 {
 		chain.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicEntropy)
