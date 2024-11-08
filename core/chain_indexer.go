@@ -911,8 +911,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 			binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
 			addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr], &types.Lockup{UnlockHeight: block.NumberU64(nodeCtx) + params.ConversionLockPeriod, Value: tx.Value()})
 		} else if tx.EtxType() == types.ConversionType && tx.To().IsInQiLedgerScope() {
-			var lockup *big.Int
-			lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
+			lockup := new(big.Int).SetUint64(params.ConversionLockPeriod)
 			lock := new(big.Int).Add(block.Number(nodeCtx), lockup)
 			value := tx.Value()
 			addr20 := tx.To().Bytes20()

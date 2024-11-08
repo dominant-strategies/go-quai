@@ -335,6 +335,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 		Nonce      BlockNonce     `json:"nonce" gencoden:"required"`
 		Lock 	   hexutil.Uint64 `json:"lock" gencoden:"required"`
 		PrimaryCoinbase   string `json:"primaryCoinbase" gencoden:"required"`
+		Data hexutil.Bytes       `json:"data" gencoden:"required"`
 	}
 
 	enc.HeaderHash = wh.HeaderHash()
@@ -348,6 +349,7 @@ func (wh *WorkObjectHeader) MarshalJSON() ([]byte, error) {
 	enc.Nonce = wh.Nonce()
 	enc.Lock = hexutil.Uint64(wh.Lock())
 	enc.PrimaryCoinbase = wh.PrimaryCoinbase().Hex()
+	enc.Data = wh.Data()
 
 	raw, err := json.Marshal(&enc)
 	return raw, err
@@ -367,6 +369,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 		Nonce      BlockNonce      `json:"nonce" gencoden:"required"`
 		Lock 	   hexutil.Uint64  `json:"lock" gencoden:"required"`
 		PrimaryCoinbase   string  `json:"primaryCoinbase" gencoden:"required"`
+		Data hexutil.Bytes        `json:"data" gencoden:"required"`
 	}
 
 	err := json.Unmarshal(input, &dec)
@@ -393,6 +396,7 @@ func (wh *WorkObjectHeader) UnmarshalJSON(input []byte) error {
 		return err
 	}
 	wh.SetPrimaryCoinbase(coinbaseAddr.Address())
+	wh.SetData(dec.Data)
 	return nil
 }
 
