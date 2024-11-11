@@ -530,25 +530,12 @@ func (pm *BasicPeerManager) AdjustPeerQuality(peer p2p.PeerID, topic string, adj
 	pm.recategorizePeer(peer, topic)
 }
 
-func (pm *BasicPeerManager) calculatePeerLiveness(peer p2p.PeerID) float64 {
-	peerTag := pm.GetTagInfo(peer)
-	if peerTag == nil {
+func (pm *BasicPeerManager) GetPeerQuality(peer p2p.PeerID) int {
+	if info := pm.GetTagInfo(peer); info != nil {
+		return info.Tags["quality"]
+	} else {
 		return 0
 	}
-
-	liveness := peerTag.Tags["liveness_reports"]
-	latents := peerTag.Tags["latency_reports"]
-	return float64(liveness) / float64(latents)
-}
-
-func (pm *BasicPeerManager) calculatePeerResponsiveness(peer p2p.PeerID) float64 {
-	peerTag := pm.GetTagInfo(peer)
-	if peerTag == nil {
-		return 0
-	}
-	responses := peerTag.Tags["responses_served"]
-	misses := peerTag.Tags["responses_missed"]
-	return float64(responses) / float64(misses)
 }
 
 // Peers will be divided into three buckets (good, bad, ugly) based on their quality score
