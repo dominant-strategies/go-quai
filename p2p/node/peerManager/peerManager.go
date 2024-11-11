@@ -511,15 +511,24 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2
 }
 
 func (pm *BasicPeerManager) getBestPeers(topic string) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic][Best], c_minBestPeersFromDb)
+	if db, ok := pm.peerDBs[topic]; ok {
+		return pm.getPeersHelper(db[Best], c_minBestPeersFromDb)
+	}
+	return make(map[peer.ID]struct{})
 }
 
 func (pm *BasicPeerManager) getResponsivePeers(topic string) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic][Responsive], c_minResponsivePeersFromDb)
+	if db, ok := pm.peerDBs[topic]; ok {
+		return pm.getPeersHelper(db[Responsive], c_minBestPeersFromDb)
+	}
+	return make(map[peer.ID]struct{})
 }
 
 func (pm *BasicPeerManager) getLastResortPeers(topic string) map[p2p.PeerID]struct{} {
-	return pm.getPeersHelper(pm.peerDBs[topic][LastResort], c_minLastResortPeersFromDb)
+	if db, ok := pm.peerDBs[topic]; ok {
+		return pm.getPeersHelper(db[LastResort], c_minBestPeersFromDb)
+	}
+	return make(map[peer.ID]struct{})
 }
 
 func (pm *BasicPeerManager) AdjustPeerQuality(peer p2p.PeerID, topic string, adjFn func(int) int) {
