@@ -1531,6 +1531,8 @@ func MakeGenesis() *core.Genesis {
 		genesis = core.DefaultLocalGenesisBlock(consensusEngine, genesisNonce)
 	case params.DevName:
 		Fatalf("Developer chains are ephemeral")
+	default:
+		genesis = core.DefaultGenesisBlock(genesisNonce)
 	}
 	return genesis
 }
