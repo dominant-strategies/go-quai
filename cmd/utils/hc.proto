@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package hc;
+option go_package = "github.com/dominant-strategies/go-quai/cmd/utils";
+
+import "common/proto_common.proto";
+
+message ProtoNode {
+    optional common.ProtoHash hash = 1;
+    repeated bytes number = 2;
+    optional common.ProtoLocation location = 3;
+    optional bytes entropy = 4;
+}
+
+message ProtoNodeSet {
+    map<string, ProtoNode> node_set = 1;
+}

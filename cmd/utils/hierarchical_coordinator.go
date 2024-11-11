@@ -36,6 +36,7 @@ const (
 
 var (
 	c_currentExpansionNumberKey = []byte("cexp")
+	c_bestNodeKey               = []byte("best")
 )
 
 type Node struct {
@@ -45,8 +46,59 @@ type Node struct {
 	entropy  *big.Int
 }
 
+func (ch *Node) ProtoEncode() *ProtoNode {
+	protoNumber := make([][]byte, common.HierarchyDepth)
+	for i, num := range ch.number {
+		protoNumber[i] = num.Bytes()
+	}
+	protoNode := &ProtoNode{
+		Hash:     ch.hash.ProtoEncode(),
+		Number:   protoNumber,
+		Location: ch.location.ProtoEncode(),
+		Entropy:  ch.entropy.Bytes(),
+	}
+	return protoNode
+}
+
+func (ch *Node) ProtoDecode(protoNode *ProtoNode) {
+	hash := &common.Hash{}
+	hash.ProtoDecode(protoNode.GetHash())
+	ch.hash = *hash
+
+	number := make([]*big.Int, common.HierarchyDepth)
+	for i, num := range protoNode.GetNumber() {
+		number[i] = new(big.Int).SetBytes(num)
+	}
+	ch.number = number
+
+	location := &common.Location{}
+	location.ProtoDecode(protoNode.GetLocation())
+	ch.location = *location
+
+	ch.entropy = new(big.Int).SetBytes(protoNode.GetEntropy())
+}
+
 type NodeSet struct {
 	nodes map[string]Node
+}
+
+func (ns *NodeSet) ProtoEncode() *ProtoNodeSet {
+	protoNodeSet := &ProtoNodeSet{}
+	protoNodeSet.NodeSet = make(map[string]*ProtoNode)
+
+	for loc, node := range ns.nodes {
+		node := node.ProtoEncode()
+		protoNodeSet.NodeSet[loc] = node
+	}
+	return protoNodeSet
+}
+
+func (ns *NodeSet) ProtoDecode(protoNodeSet *ProtoNodeSet) {
+	for loc, protoNode := range protoNodeSet.NodeSet {
+		node := &Node{}
+		node.ProtoDecode(protoNode)
+		ns.nodes[loc] = *node
+	}
 }
 
 func (ch *Node) Empty() bool {
@@ -137,6 +189,8 @@ func (hc *HierarchicalCoordinator) InitPendingHeaders() {
 		}
 	}
 	hc.Add(new(big.Int).SetUint64(0), nodeSet, hc.pendingHeaders)
+
+	hc.LoadBestNodeSet()
 }
 
 func (hc *HierarchicalCoordinator) Add(entropy *big.Int, node NodeSet, newPendingHeaders *PendingHeaders) {
@@ -208,11 +262,14 @@ func (ns *NodeSet) Extendable(wo *types.WorkObject, order int) bool {
 func (ns *NodeSet) Entropy(numRegions int, numZones int) *big.Int {
 	entropy := new(big.Int)
 
-	entropy.Add(entropy, ns.nodes[common.Location{}.Name()].entropy)
+	primeEntropy := ns.nodes[common.Location{}.Name()].entropy
+	entropy.Add(entropy, primeEntropy)
 	for i := 0; i < numRegions; i++ {
-		entropy.Add(entropy, ns.nodes[common.Location{byte(i)}.Name()].entropy)
+		regionEntropy := ns.nodes[common.Location{byte(i)}.Name()].entropy
+		entropy.Add(entropy, regionEntropy)
 		for j := 0; j < numZones; j++ {
-			entropy.Add(entropy, ns.nodes[common.Location{byte(i), byte(j)}.Name()].entropy)
+			zoneEntropy := ns.nodes[common.Location{byte(i), byte(j)}.Name()].entropy
+			entropy.Add(entropy, zoneEntropy)
 		}
 	}
 
@@ -430,6 +487,7 @@ func (hc *HierarchicalCoordinator) Stop() {
 	for _, chainEventSub := range hc.chainSubs {
 		chainEventSub.Unsubscribe()
 	}
+	hc.StoreBestNodeSet()
 	hc.expansionSub.Unsubscribe()
 	hc.db.Close()
 	hc.wg.Wait()
@@ -602,44 +660,6 @@ func (hc *HierarchicalCoordinator) ChainEventLoop(chainEvent chan core.ChainEven
 	for {
 		select {
 		case head := <-chainEvent:
-			// If this is the first block we have after a restart, then we can
-			// add this block into the node set directly
-			// Since on startup we initialize the pending headers cache with the
-			// genesis block, we can check and see if we are in that state
-			// We can do that by checking the length of the pendding headers order
-			// cache length is 1
-			if len(hc.pendingHeaders.order) == 1 {
-				// create a nodeset on this block
-				nodeSet := NodeSet{
-					nodes: make(map[string]Node),
-				}
-
-				//Initialize for prime
-				backend := hc.GetBackend(common.Location{})
-				entropy := backend.TotalLogEntropy(head.Block)
-				newNode := Node{
-					hash:     head.Block.ParentHash(common.PRIME_CTX),
-					number:   head.Block.NumberArray(),
-					location: common.Location{},
-					entropy:  entropy,
-				}
-				nodeSet.nodes[common.Location{}.Name()] = newNode
-
-				regionLocation := common.Location{byte(head.Block.Location().Region())}
-				backend = hc.GetBackend(regionLocation)
-				newNode.hash = head.Block.ParentHash(common.REGION_CTX)
-				newNode.location = regionLocation
-				newNode.entropy = entropy
-				nodeSet.nodes[regionLocation.Name()] = newNode
-
-				zoneLocation := head.Block.Location()
-				backend = hc.GetBackend(zoneLocation)
-				newNode.hash = head.Block.ParentHash(common.ZONE_CTX)
-				newNode.location = zoneLocation
-				newNode.entropy = entropy
-				nodeSet.nodes[zoneLocation.Name()] = newNode
-				hc.Add(entropy, nodeSet, hc.pendingHeaders)
-			}
 
 			go hc.ReapplicationLoop(head)
 			go hc.ComputeMapPending(head)
@@ -1320,4 +1340,51 @@ func (hc *HierarchicalCoordinator) GetBackendForLocationAndOrder(location common
 		return *hc.consensus.GetBackend(common.Location{byte(location.Region()), byte(location.Zone())})
 	}
 	return nil
+}
+
+func (hc *HierarchicalCoordinator) StoreBestNodeSet() {
+
+	log.Global.Info("Storing the best node set on stop")
+
+	bestNode, exists := hc.pendingHeaders.collection.Get(hc.bestEntropy.String())
+	if !exists {
+		log.Global.Error("best entropy node set doesnt exist in the pending headers collection")
+	}
+
+	protoBestNode := bestNode.ProtoEncode()
+
+	data, err := proto.Marshal(protoBestNode)
+	if err != nil {
+		log.Global.Error("Error marshalling best node, err: ", err)
+		return
+	}
+
+	err = hc.db.Put(c_bestNodeKey, data, nil)
+	if err != nil {
+		log.Global.Error("Error storing the best node key, err: ", err)
+		return
+	}
+}
+
+func (hc *HierarchicalCoordinator) LoadBestNodeSet() {
+	data, err := hc.db.Get(c_bestNodeKey, nil)
+	if err != nil {
+		log.Global.Error("Error loading the best node, err: ", err)
+		return
+	}
+
+	protoNodeSet := &ProtoNodeSet{}
+	err = proto.Unmarshal(data, protoNodeSet)
+	if err != nil {
+		log.Global.Error("Error unmarshalling the proto node set, err: ", err)
+		return
+	}
+
+	nodeSet := NodeSet{}
+	nodeSet.nodes = make(map[string]Node)
+	nodeSet.ProtoDecode(protoNodeSet)
+
+	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
+	hc.bestEntropy = nodeSet.Entropy(int(numRegions), int(numZones))
+	hc.Add(hc.bestEntropy, nodeSet, hc.pendingHeaders)
 }
