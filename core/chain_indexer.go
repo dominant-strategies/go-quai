@@ -36,7 +36,6 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"google.golang.org/protobuf/proto"
 )
 
 var PruneDepth = uint64(100000000) // Number of blocks behind in which we begin pruning old block data
@@ -1009,11 +1008,60 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutpoints map[[20]byte][]*types.OutpointAndDenomination, addressLockups map[[20]byte][]*types.Lockup, nodeCtx int) error {
 	for _, header := range headers {
 
-		sutxos, err := rawdb.ReadSpentUTXOs(c.chainDb, header.Hash())
+		block := rawdb.ReadWorkObject(c.chainDb, header.NumberU64(nodeCtx), header.Hash(), types.BlockObject)
+		if block == nil {
+			c.logger.Errorf("ChainIndexer: Error reading block during reorg hash: %s", block.Hash().String())
+			continue
+		}
+		for _, tx := range block.QiTransactions() {
+			for _, out := range tx.TxOut() {
+				if common.BytesToAddress(out.Address, common.Location{0, 0}).IsInQuaiLedgerScope() {
+					// This is a conversion output
+					continue
+				}
+				address20 := [20]byte(out.Address)
+				binary.BigEndian.PutUint32(address20[16:], uint32(block.NumberU64(nodeCtx)))
+				// Delete all outpoints for this address and block combination
+				addressOutpoints[address20] = make([]*types.OutpointAndDenomination, 0)
+			}
+		}
+		for _, etx := range block.Body().ExternalTransactions() {
+			if etx.EtxType() == types.CoinbaseType && etx.To().IsInQuaiLedgerScope() {
+				if len(etx.Data()) == 0 {
+					c.logger.Error("ChainIndexer: Coinbase transaction has no data", "tx", etx.Hash())
+					continue
+				}
+				coinbaseAddr := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
+				// Remove all the lockups created by this address and block
+				addressLockups[coinbaseAddr] = make([]*types.Lockup, 0)
+			} else if etx.EtxType() == types.ConversionType && etx.To().IsInQuaiLedgerScope() {
+				coinbaseAddr := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
+				// Remove all the lockups created by this address and block
+				addressLockups[coinbaseAddr] = make([]*types.Lockup, 0)
+			} else if etx.EtxType() == types.CoinbaseType && etx.To().IsInQiLedgerScope() {
+				if len(etx.Data()) == 0 {
+					c.logger.Error("ChainIndexer: Coinbase transaction has no data", "tx", etx.Hash())
+					continue
+				}
+				coinbaseAddr := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
+				// Remove all the UTXOs created by this address and block
+				addressOutpoints[coinbaseAddr] = make([]*types.OutpointAndDenomination, 0)
+			} else if etx.EtxType() == types.ConversionType && etx.To().IsInQiLedgerScope() {
+				addr20 := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(addr20[16:], uint32(block.NumberU64(nodeCtx)))
+				// Remove all the UTXOs created by this address and block
+				addressOutpoints[addr20] = make([]*types.OutpointAndDenomination, 0)
+			}
+		}
+		// Re-create spent UTXOs (inputs)
+		sutxos, err := rawdb.ReadSpentUTXOs(c.chainDb, block.Hash())
 		if err != nil {
 			return err
 		}
-		trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(c.chainDb, header.Hash())
+		trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(c.chainDb, block.Hash())
 		if err != nil {
 			return err
 		}
@@ -1030,75 +1078,6 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, addressOutp
 			addr20 := [20]byte(sutxo.Address)
 			binary.BigEndian.PutUint32(addr20[16:], height)
 			addressOutpoints[addr20] = append(addressOutpoints[addr20], outpointAndDenom)
-
-		}
-		utxoKeys, err := rawdb.ReadCreatedUTXOKeys(c.chainDb, header.Hash())
-		if err != nil {
-			return err
-		}
-		for _, key := range utxoKeys {
-			if len(key) == rawdb.UtxoKeyWithDenominationLength {
-				key = key[:rawdb.UtxoKeyLength] // The last byte of the key is the denomination (but only in CreatedUTXOKeys)
-			}
-			data, _ := c.chainDb.Get(key)
-			utxoProto := new(types.ProtoTxOut)
-			if err := proto.Unmarshal(data, utxoProto); err != nil {
-				c.logger.Error("ChainIndexer: Failed to unmarshal utxo proto", "err", err)
-				continue
-			}
-			utxo := new(types.TxOut)
-			if err := utxo.ProtoDecode(utxoProto); err != nil {
-				c.logger.Error("ChainIndexer: Failed to decode utxo proto", "err", err)
-				continue
-			}
-			addr20 := [20]byte(utxo.Address)
-			binary.BigEndian.PutUint32(addr20[16:], uint32(header.NumberU64(nodeCtx)))
-
-			_, exists := addressOutpoints[addr20]
-			if !exists {
-				var err error
-				outpointsForAddress, err := rawdb.ReadOutpointsForAddressAtBlock(c.chainDb, addr20)
-				if err != nil {
-					return err
-				}
-				addressOutpoints[addr20] = outpointsForAddress
-				if len(outpointsForAddress) == 0 {
-					c.logger.Error("ChainIndexer: No outpoints for address in reorg", "address", addr20)
-				}
-			}
-			txHash, index, err := rawdb.ReverseUtxoKey(key)
-			if err != nil {
-				return err
-			}
-			for i, outpointAndDenom := range addressOutpoints[addr20] {
-				if outpointAndDenom.TxHash == txHash && outpointAndDenom.Index == index {
-					addressOutpoints[addr20] = append(addressOutpoints[addr20][:i], addressOutpoints[addr20][i+1:]...)
-					break
-				}
-			}
-		}
-
-		block := rawdb.ReadWorkObject(c.chainDb, header.NumberU64(nodeCtx), header.Hash(), types.BlockObject)
-		if block == nil {
-			c.logger.Errorf("ChainIndexer: Error reading block during reorg hash: %s", header.Hash().String())
-			continue
-		}
-		for _, etx := range block.Body().ExternalTransactions() {
-			if etx.EtxType() == types.CoinbaseType && etx.To().IsInQuaiLedgerScope() {
-				if len(etx.Data()) == 0 {
-					c.logger.Error("ChainIndexer: Coinbase transaction has no data", "tx", etx.Hash())
-					continue
-				}
-				coinbaseAddr := etx.To().Bytes20()
-				binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
-				// Remove all the lockups created by this block
-				addressLockups[coinbaseAddr] = make([]*types.Lockup, 0)
-			} else if etx.EtxType() == types.ConversionType && etx.To().IsInQuaiLedgerScope() {
-				coinbaseAddr := etx.To().Bytes20()
-				binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
-				// Remove all the lockups created by this block
-				addressLockups[coinbaseAddr] = make([]*types.Lockup, 0)
-			}
 		}
 
 		blockDepths := []uint64{
