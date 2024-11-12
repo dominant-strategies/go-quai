@@ -320,6 +320,9 @@ func (txOut TxOut) ProtoEncode() (*ProtoTxOut, error) {
 
 func (txOut *TxOut) ProtoDecode(protoTxOut *ProtoTxOut) error {
 	// check if protoTxOut.Denomination is above the max uint8 value
+	if protoTxOut.Denomination == nil {
+		return errors.New("protoTxOut.Denomination is nil")
+	}
 	if *protoTxOut.Denomination > math.MaxUint8 {
 		return errors.New("protoTxOut.Denomination is above the max uint8 value")
 	}
