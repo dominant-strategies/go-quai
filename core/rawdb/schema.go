@@ -104,7 +104,7 @@ var (
 	bloomPrefix             = []byte("bl")    // bloomPrefix + hash -> bloom at block
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
-	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
+	BloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
@@ -240,9 +240,11 @@ func storageSnapshotsKey(accountHash common.Hash) []byte {
 	return append(SnapshotStoragePrefix, accountHash.Bytes()...)
 }
 
+var BloomBitsKeyLength = len(BloomBitsPrefix) + 2 + 8 + common.HashLength
+
 // bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
 func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
-	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
+	key := append(append(BloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
 
 	binary.BigEndian.PutUint16(key[1:], uint16(bit))
 	binary.BigEndian.PutUint64(key[3:], section)
