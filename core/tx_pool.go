@@ -209,12 +209,12 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	PriceLimit: 0,
 	PriceBump:  5,
 
-	AccountSlots:    10,
+	AccountSlots:    200,
 	GlobalSlots:     19000 + 1024, // urgent + floating queue capacity with 4:1 ratio
 	MaxSenders:      10000,        // 5 MB - at least 10 blocks worth of transactions in case of reorg or high production rate
 	MaxFeesCached:   50000,
 	SendersChBuffer: 1024, // at 500 TPS in zone, 2s buffer
-	AccountQueue:    3,
+	AccountQueue:    200,
 	GlobalQueue:     20048,
 	QiPoolSize:      10024,
 	QiTxLifetime:    30 * time.Minute,
