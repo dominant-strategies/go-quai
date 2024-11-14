@@ -156,7 +156,7 @@ func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
 		if bytes.Compare(it.Key(), end) >= 0 {
 			break
 		}
-		if len(it.Key()) != len(bloomBitsPrefix)+2+8+32 {
+		if len(it.Key()) != BloomBitsKeyLength {
 			continue
 		}
 		db.Delete(it.Key())

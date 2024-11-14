@@ -136,8 +136,16 @@ func NewChainIndexer(chainDb ethdb.Database, indexDb ethdb.Database, backend Cha
 }
 
 func ReIndexChainIndexer(chainDb ethdb.Database) {
+	backend := &BloomIndexer{
+		db:     chainDb,
+		size:   params.BloomBitsBlocks,
+		logger: log.Global,
+	}
+	table := rawdb.NewTable(chainDb, string(rawdb.BloomBitsIndexPrefix), chainDb.Location(), chainDb.Logger())
 	c := &ChainIndexer{
 		chainDb:           chainDb,
+		indexDb:           table,
+		backend:           backend,
 		logger:            log.Global,
 		sectionSize:       params.BloomBitsBlocks,
 		confirmsReq:       params.BloomConfirms,
@@ -146,6 +154,7 @@ func ReIndexChainIndexer(chainDb ethdb.Database) {
 		qiIndexerCh:       make(chan *types.WorkObject),
 		quit:              make(chan chan error),
 	}
+
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
 	c.ReIndexUTXOIndexer()
 }
@@ -187,7 +196,29 @@ func (c *ChainIndexer) ReIndexUTXOIndexer() {
 		c.logger.Errorf("Failed to reindex UTXO Indexer at block %d: failed to ReadWorkObject", 0)
 		return
 	}
+	c.logger.Info("Deleting all Bloom information")
+	countLen := len(rawdb.BloomBitsIndexPrefix) + len([]byte("count"))
+	sheadLen := len(rawdb.BloomBitsIndexPrefix) + len([]byte("shead")) + 8
+	it = c.chainDb.NewIterator((rawdb.BloomBitsIndexPrefix), nil)
+	for it.Next() {
+		if len(it.Key()) == countLen && len(it.Value()) == 8 {
+			c.chainDb.Delete(it.Key())
+		} else if len(it.Key()) == sheadLen && len(it.Value()) == 32 {
+			c.chainDb.Delete(it.Key())
+		}
+	}
+	it.Release()
+	it = c.chainDb.NewIterator(rawdb.BloomBitsPrefix, nil)
+	for it.Next() {
+		if len(it.Key()) == rawdb.BloomBitsKeyLength {
+			c.chainDb.Delete(it.Key())
+		}
+	}
+	it.Release()
+	c.logger.Info("Deleted all Bloom information")
 	go c.indexerLoop(genesis, c.qiIndexerCh, common.ZONE_CTX, params.ChainConfig{Location: common.Location{0, 0}, IndexAddressUtxos: true})
+	go c.updateLoop(common.ZONE_CTX)
+
 	time.Sleep(100 * time.Millisecond) // Give indexer time to start
 	head := rawdb.ReadHeadBlockHash(c.chainDb)
 	for {
@@ -197,7 +228,6 @@ func (c *ChainIndexer) ReIndexUTXOIndexer() {
 			c.logger.Errorf("Failed to reindex UTXO Indexer at block %d: failed to ReadWorkObject", height)
 			break
 		}
-
 		c.qiIndexerCh <- block
 
 		if hash == head {
