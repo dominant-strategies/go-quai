@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
@@ -123,7 +124,7 @@ func newFilter(backend Backend, addresses []common.Address, topics [][]common.Ha
 }
 
 // Logs searches the blockchain for matching log entries by manually checking
-// each block within the specified range, without using bloom filters.
+// each block within the specified range using 8 goroutines for parallel processing.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// If we're doing singleton block filtering, execute and return
 	if f.block != (common.Hash{}) {
@@ -137,7 +138,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return f.blockLogs(ctx, workObject)
 	}
 
-	// Figure out the limits of the filter range
+	// Determine the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
 		return nil, nil
@@ -152,11 +153,88 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		end = head
 	}
 
-	// Gather all logs by scanning each block in the specified range
-	var logs []*types.Log
-	logs, err := f.unindexedLogs(ctx, end)
+	// Prepare to collect logs from goroutines
+	var (
+		logs     []*types.Log
+		logsLock sync.Mutex
+		wg       sync.WaitGroup
+		errChan  = make(chan error, 8)
+	)
 
-	return logs, err
+	totalBlocks := int64(end) - f.begin + 1
+	if totalBlocks <= 0 {
+		return nil, nil
+	}
+
+	// Adjust the number of goroutines if total blocks are fewer than 8
+	numGoroutines := 8
+	if totalBlocks < int64(numGoroutines) {
+		numGoroutines = int(totalBlocks)
+	}
+
+	blocksPerGoroutine := totalBlocks / int64(numGoroutines)
+	remainderBlocks := totalBlocks % int64(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			// Calculate the start and end blocks for this goroutine
+			startBlock := f.begin + int64(i)*blocksPerGoroutine
+			endBlock := startBlock + blocksPerGoroutine - 1
+			if i == numGoroutines-1 {
+				// The last goroutine handles any remaining blocks
+				endBlock += remainderBlocks
+			}
+
+			// Collect logs from startBlock to endBlock
+			var localLogs []*types.Log
+			for blockNum := startBlock; blockNum <= endBlock; blockNum++ {
+				// Check for context cancellation
+				select {
+				case <-ctx.Done():
+					errChan <- ctx.Err()
+					return
+				default:
+				}
+
+				workObject, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNum))
+				if err != nil {
+					errChan <- err
+					return
+				}
+				if workObject == nil {
+					continue
+				}
+
+				found, err := f.blockLogs(ctx, workObject)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				localLogs = append(localLogs, found...)
+			}
+
+			// Append localLogs to the main logs slice safely
+			logsLock.Lock()
+			logs = append(logs, localLogs...)
+			logsLock.Unlock()
+		}(i)
+	}
+
+	// Wait for all goroutines to finish
+	wg.Wait()
+	close(errChan)
+
+	// Check for errors from goroutines
+	for err := range errChan {
+		if err != nil {
+			return logs, err
+		}
+	}
+
+	return logs, nil
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
