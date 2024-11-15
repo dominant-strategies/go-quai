@@ -154,6 +154,7 @@ const (
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
 	DefaultCoinbaseLockup                = 0                // The default lockup byte for coinbase rewards
+	CoinbaseGas                          = 80000            // Gas given to a coinbase transaction
 )
 
 var (

@@ -23,6 +23,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -30,6 +31,7 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru/v2"
 	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -669,7 +671,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			} else {
 				originHash = common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation())
 			}
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
+			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: append([]byte{uncle.Lock()}, uncle.Data()...)}))
 		}
 
 	}
@@ -1092,7 +1094,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				return nil, false, nil
 			}
 		}
-		if tx.To().IsInQiLedgerScope() {
+		if tx.To().IsInQiLedgerScope() { // Qi coinbase
 			var lockup *big.Int
 			// The first lock up period changes after the fork
 			if lockupByte == 0 {
@@ -1131,16 +1133,89 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					outputIndex++
 				}
 			}
-		}
-		gasUsed := env.wo.GasUsed()
-		if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
-			gasUsed += params.TxGas
-		}
-		env.wo.Header().SetGasUsed(gasUsed)
-		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
-		env.txs = append(env.txs, tx)
+			gasUsed := env.wo.GasUsed()
+			if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
+				gasUsed += params.TxGas
+			}
+			env.wo.Header().SetGasUsed(gasUsed)
+			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+			env.txs = append(env.txs, tx)
 
-		return []*types.Log{}, false, nil
+			return []*types.Log{}, false, nil
+
+		} else if tx.To().IsInQuaiLedgerScope() { // Quai coinbase
+			internal, err := tx.To().InternalAndQuaiAddress()
+			if err != nil {
+				return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
+			}
+			var receipt *types.Receipt
+			code := env.state.GetCode(internal)
+			if len(code) == 0 && len(tx.Data()) == 1 {
+				// No code and coinbase has no extra data
+				// Coinbase is valid, no gas used
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
+				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, 0)
+				env.txs = append(env.txs, tx)
+				env.receipts = append(env.receipts, receipt)
+				return []*types.Log{}, false, nil
+			} else if (len(code) == 0 && len(tx.Data()) > 1) || (len(code) > 0 && len(tx.Data()) < 5) {
+				// No code, but coinbase has extra data
+				// Or there is code, but coinbase data doesn't include 4-byte function sig
+				// Coinbase reward is lost
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, 0)
+				env.txs = append(env.txs, tx)
+				env.receipts = append(env.receipts, receipt)
+				return []*types.Log{}, false, nil
+			}
+			// Create params for uint256 lockup, uint256 balance, address recipient
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+			if lockup.Uint64() < params.OldConversionLockPeriod {
+				return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.OldConversionLockPeriod)
+			}
+			lockup.Add(lockup, env.wo.Number(w.hc.NodeCtx()))
+			sig := tx.Data()[1:5]
+			data := make([]byte, 0, 0)
+			data = append(data, sig...)
+			if len(tx.Data()) > 5 {
+				// If there is extra data, append it to the data (for example, reward beneficiary)
+				data = append(data, tx.Data()[5:]...)
+			}
+			reward, overflow := uint256.FromBig(params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte))
+			if overflow {
+				return nil, false, fmt.Errorf("coinbase value overflow")
+			}
+			temp := reward.Bytes32()
+			data = append(data, temp[:]...)
+			lockup256, overflow := uint256.FromBig(lockup)
+			if overflow {
+				return nil, false, fmt.Errorf("coinbase lockup overflow")
+			}
+			temp = lockup256.Bytes32()
+			data = append(data, temp[:]...)
+
+			gp := new(types.GasPool).AddGas(params.CoinbaseGas)
+			gasUsed := env.wo.GasUsed()
+			stateUsed := env.wo.StateUsed()
+			// This lockup contract transaction comes from the 0x000...1 address, so the contract should only accept calls from this address
+			receipt, _, err = ApplyCoinbaseLockupTransaction(w.chainConfig, parent, *env.parentOrder, w.hc, &env.primaryCoinbase, gp, env.state, env.wo, tx, &gasUsed, &stateUsed, *w.hc.bc.processor.GetVMConfig(), &env.etxRLimit, &env.etxPLimit, data, w.logger)
+			if err != nil {
+				return nil, false, fmt.Errorf("could not apply coinbase tx %v: %w", tx.Hash().Hex(), err)
+			}
+			if len(receipt.OutboundEtxs) > 0 {
+				return nil, false, fmt.Errorf("coinbase tx %x has outbound etxs", tx.Hash())
+			}
+			if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
+				gasUsed += params.TxGas
+			}
+			env.wo.Header().SetGasUsed(gasUsed)
+			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+			env.wo.Header().SetStateUsed(stateUsed)
+			env.receipts = append(env.receipts, receipt)
+			env.txs = append(env.txs, tx)
+
+			return receipt.Logs, true, nil
+		}
 	}
 	if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
 		gasUsed := env.wo.GasUsed()
@@ -1292,11 +1367,11 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 		}
 		env.state.Prepare(etx.Hash(), env.tcount)
 
-		logs, receipt, err := w.commitTransaction(env, parent, etx)
-		if err == nil && receipt {
+		logs, hasLog, err := w.commitTransaction(env, parent, etx)
+		if err == nil && hasLog {
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
-		} else if err == nil && !receipt {
+		} else if err == nil && !hasLog {
 			env.tcount++
 		} else {
 			w.logger.WithField("err", err).Error("Failed to commit an etx")
@@ -1366,7 +1441,7 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
-		logs, receipt, err := w.commitTransaction(env, parent, tx)
+		logs, hasLog, err := w.commitTransaction(env, parent, tx)
 		switch {
 		case errors.Is(err, types.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -1396,7 +1471,7 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
-			if receipt {
+			if hasLog {
 				coalescedLogs = append(coalescedLogs, logs...)
 			}
 			env.tcount++
@@ -1665,8 +1740,12 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
 			return nil, err
 		}
-
-		if err, _ := RedeemLockedQuai(w.hc, proposedWo, parent, env.state); err != nil {
+		blockContext, err := NewEVMBlockContext(proposedWo, parent, w.hc, nil)
+		if err != nil {
+			return nil, err
+		}
+		vmenv := vm.NewEVM(blockContext, vm.TxContext{}, env.state, w.chainConfig, *w.hc.bc.processor.GetVMConfig())
+		if _, err := RedeemLockedQuai(w.hc, proposedWo, parent, env.state, vmenv); err != nil {
 			w.logger.WithField("err", err).Error("Failed to redeem locked Quai")
 			return nil, err
 		}
