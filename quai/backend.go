@@ -181,7 +181,6 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	chainConfig.Location = config.NodeLocation // TODO: See why this is necessary
 	chainConfig.DefaultGenesisHash = config.DefaultGenesisHash
 	chainConfig.IndexAddressUtxos = config.IndexAddressUtxos
-	chainConfig.StartingExpansionNumber = startingExpansionNumber
 	logger.WithFields(log.Fields{
 		"Ctx":          nodeCtx,
 		"NodeLocation": config.NodeLocation,
