@@ -445,7 +445,7 @@ func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
 func (wo *WorkObject) TransactionsWithReceipts() []*Transaction {
 	txs := make([]*Transaction, 0)
 	for _, t := range wo.Transactions() {
-		if IsCoinBaseTx(t) {
+		if IsCoinBaseTx(t) && t.To().IsInQiLedgerScope() {
 			// ignore the coinbase tx
 			continue
 		}
