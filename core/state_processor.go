@@ -40,10 +40,10 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -1210,12 +1210,25 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if currentHeader.NumberU64(common.ZONE_CTX) >= params.GoldenAgeForkNumberV2 && totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
 			return nil, fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64())
 		}
+
+		if currentHeader.NumberU64(common.ZONE_CTX) >= params.GoldenAgeForkNumberV2 {
+			// Since this transaction contains a conversion, check if the required conversion gas is paid
+			// The user must pay this to the miner now, but it is only added to the block gas limit when the ETX is played in the destination
+			requiredGas += params.QiToQuaiConversionGas
+			minimumFeeInQuai = new(big.Int).Mul(new(big.Int).SetUint64(requiredGas), currentHeader.BaseFee())
+			if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
+				return nil, fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
+			}
+		}
 		ETXPCount++
 		if ETXPCount > etxPLimit {
 			return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
 		}
 		usedGas += params.ETXGas
-		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+
+		if currentHeader.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
+			txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+		}
 	}
 
 	if usedGas > currentHeader.GasLimit() {
@@ -1448,25 +1461,43 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		if currentHeader.NumberU64(common.ZONE_CTX) >= params.GoldenAgeForkNumberV2 && totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
 			return nil, nil, nil, fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64()), nil
 		}
-		// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
-		remainingTxFeeInQuai := misc.QiToQuai(parent, txFeeInQit)
-		// Fee is basefee * gas, so gas remaining is fee remaining / basefee
-		remainingGas := new(big.Int).Div(remainingTxFeeInQuai, currentHeader.BaseFee())
-		if remainingGas.Uint64() > (currentHeader.GasLimit() / params.MinimumEtxGasDivisor) {
-			// Limit ETX gas to max ETX gas limit (the rest is burned)
-			remainingGas = new(big.Int).SetUint64(currentHeader.GasLimit() / params.MinimumEtxGasDivisor)
+		var etxInner types.ExternalTx
+		if currentHeader.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
+			// Since this transaction contains a conversion, the rest of the tx gas is given to conversion
+			remainingTxFeeInQuai := misc.QiToQuai(parent, txFeeInQit)
+			// Fee is basefee * gas, so gas remaining is fee remaining / basefee
+			remainingGas := new(big.Int).Div(remainingTxFeeInQuai, currentHeader.BaseFee())
+			if remainingGas.Uint64() > (currentHeader.GasLimit() / params.MinimumEtxGasDivisor) {
+				// Limit ETX gas to max ETX gas limit (the rest is burned)
+				remainingGas = new(big.Int).SetUint64(currentHeader.GasLimit() / params.MinimumEtxGasDivisor)
+			}
+			ETXPCount++
+			if ETXPCount > *etxPLimit {
+				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
+			}
+			etxInner = types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: types.ConversionType, OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
+		} else {
+			// Since this transaction contains a conversion, check if the required conversion gas is paid
+			// The user must pay this to the miner now, but it is only added to the block gas limit when the ETX is played in the destination
+			requiredGas += params.QiToQuaiConversionGas
+			minimumFeeInQuai = new(big.Int).Mul(new(big.Int).SetUint64(requiredGas), currentHeader.BaseFee())
+			if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
+				return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee * gas: %d, have %d want %d", tx.Hash(), requiredGas, txFeeInQit.Uint64(), minimumFeeInQuai.Uint64()), nil
+			}
+			ETXPCount++
+			if ETXPCount > *etxPLimit {
+				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
+			}
+			etxInner = types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: types.ConversionType, OriginatingTxHash: tx.Hash(), Gas: 0} // Value is in Qits not Denomination
 		}
-		ETXPCount++
-		if ETXPCount > *etxPLimit {
-			return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
-		}
-		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: types.ConversionType, OriginatingTxHash: tx.Hash(), Gas: remainingGas.Uint64()} // Value is in Qits not Denomination
 		*usedGas += params.ETXGas
 		if err := gp.SubGas(params.ETXGas); err != nil {
 			return nil, nil, nil, err, nil
 		}
 		etxs = append(etxs, &etxInner)
-		txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+		if currentHeader.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
+			txFeeInQit.Sub(txFeeInQit, txFeeInQit) // Fee goes entirely to gas to pay for conversion
+		}
 	}
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Fee Verification"] = elapsedTime
