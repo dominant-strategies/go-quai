@@ -256,7 +256,7 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 // Note that the receipt is not available for pending transactions.
 func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	var r *types.Receipt
-	err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
+	err := ec.c.CallContext(ctx, &r, "quai_getTransactionReceipt", txHash)
 	if err == nil {
 		if r == nil {
 			return nil, quai.NotFound
@@ -328,7 +328,7 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 // The block number can be nil, in which case the balance is taken from the latest known block.
 func (ec *Client) BalanceAt(ctx context.Context, account common.MixedcaseAddress, blockNumber *big.Int) (*big.Int, error) {
 	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account.Original(), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &result, "quai_getBalance", account.Original(), toBlockNumArg(blockNumber))
 	return (*big.Int)(&result), err
 }
 
@@ -401,7 +401,7 @@ func (ec *Client) PendingCodeAt(ctx context.Context, account common.MixedcaseAdd
 // This is the nonce that should be used for the next transaction.
 func (ec *Client) PendingNonceAt(ctx context.Context, account common.MixedcaseAddress) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account.Original(), "pending")
+	err := ec.c.CallContext(ctx, &result, "quai_getTransactionCount", account.Original(), "pending")
 	return uint64(result), err
 }
 
@@ -432,7 +432,7 @@ func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, erro
 // blocks might not be available.
 func (ec *Client) CallContract(ctx context.Context, msg quai.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &hex, "quai_call", toCallArg(msg), toBlockNumArg(blockNumber))
 	if err != nil {
 		return nil, err
 	}
