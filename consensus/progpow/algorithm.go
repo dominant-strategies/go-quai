@@ -38,10 +38,10 @@ import (
 )
 
 const (
-	datasetInitBytes   = 1 << 30        // Bytes in dataset at genesis
-	datasetGrowthBytes = 1 << 23        // Dataset growth per epoch
+	datasetInitBytes   = 1 << 32        // Bytes in dataset at genesis
+	datasetGrowthBytes = 1 << 25        // Dataset growth per epoch
 	cacheInitBytes     = 1 << 24        // Bytes in cache at genesis
-	cacheGrowthBytes   = 1 << 17        // Cache growth per epoch
+	cacheGrowthBytes   = 1 << 20        // Cache growth per epoch
 	C_epochLength      = math.MaxUint64 // Blocks per epoch
 	mixBytes           = 128            // Width of mix
 	hashBytes          = 64             // Hash length in bytes
@@ -55,9 +55,9 @@ const (
 // block number.
 func cacheSize(block uint64) uint64 {
 	epoch := int(block / C_epochLength)
-	if epoch < maxEpoch {
-		return cacheSizes[epoch]
-	}
+	// if epoch < maxEpoch {
+	// 	return cacheSizes[epoch]
+	// }
 	return calcCacheSize(epoch)
 }
 
@@ -76,9 +76,9 @@ func calcCacheSize(epoch int) uint64 {
 // block number.
 func datasetSize(block uint64) uint64 {
 	epoch := int(block / C_epochLength)
-	if epoch < maxEpoch {
-		return datasetSizes[epoch]
-	}
+	// if epoch < maxEpoch {
+	// 	return datasetSizes[epoch]
+	// }
 	return calcDatasetSize(epoch)
 }
 
