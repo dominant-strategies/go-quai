@@ -32,7 +32,7 @@ const (
 	progpowDagLoads     = 4                     // Number of uint32 loads from the DAG per lane
 	progpowCntCache     = 11
 	progpowCntMath      = 18
-	progpowPeriodLength = 10
+	progpowPeriodLength = 2
 	progpowCntDag       = 64
 	progpowMixBytes     = 256
 )
