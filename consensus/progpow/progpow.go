@@ -340,7 +340,7 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 		lru.cache.Add(epoch, item)
 	}
 	// Update the 'future item' if epoch is larger than previously seen.
-	if epoch < maxEpoch-1 && lru.future < epoch+1 {
+	if epoch < maxCachedEpoch-1 && lru.future < epoch+1 {
 		lru.logger.WithField("epoch", epoch+1).Trace("Requiring new future ethash " + lru.what)
 		future = lru.new(epoch + 1)
 		lru.future = epoch + 1
