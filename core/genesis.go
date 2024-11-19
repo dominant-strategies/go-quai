@@ -451,7 +451,7 @@ func DefaultLocalGenesisBlock(consensusEngine string, genesisNonce uint64) *Gene
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   5000000,
-		Difficulty: big.NewInt(300000000),
+		Difficulty: big.NewInt(3000000000),
 	}
 }
 
