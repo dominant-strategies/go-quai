@@ -794,6 +794,7 @@ func (wo *WorkObject) WithBody(header *Header, txs []*Transaction, etxs []*Trans
 
 func EmptyWorkObjectBody() *WorkObjectBody {
 	woBody := &WorkObjectBody{}
+	woBody.SetHeader(EmptyHeader())
 	woBody.SetTransactions([]*Transaction{})
 	woBody.SetOutboundEtxs([]*Transaction{})
 	return woBody
@@ -1079,12 +1080,15 @@ func (wh *WorkObjectHeader) RPCMarshalWorkObjectHeader() map[string]interface{} 
 
 func (wh *WorkObjectHeader) Hash() (hash common.Hash) {
 	sealHash := wh.SealHash().Bytes()
+	mixHash := wh.MixHash().Bytes()
+	nonce := wh.Nonce().Bytes()
 	hasherMu.Lock()
 	defer hasherMu.Unlock()
 	hasher.Reset()
-	var hData [40]byte
-	copy(hData[:], wh.Nonce().Bytes())
-	copy(hData[len(wh.nonce):], sealHash)
+	var hData [common.HashLength + common.HashLength + NonceLength]byte
+	copy(hData[:], mixHash)
+	copy(hData[common.HashLength:], sealHash)
+	copy(hData[common.HashLength+common.HashLength:], nonce)
 	sum := blake3.Sum256(hData[:])
 	hash.SetBytes(sum[:])
 	return hash
@@ -1106,7 +1110,7 @@ func (wh *WorkObjectHeader) SealHash() (hash common.Hash) {
 
 func (wh *WorkObjectHeader) SealEncode() *ProtoWorkObjectHeader {
 	// Omit MixHash and PowHash
-	hash := common.ProtoHash{Value: wh.HeaderHash().Bytes()}
+	headerHash := common.ProtoHash{Value: wh.HeaderHash().Bytes()}
 	parentHash := common.ProtoHash{Value: wh.ParentHash().Bytes()}
 	txHash := common.ProtoHash{Value: wh.TxHash().Bytes()}
 	number := wh.Number().Bytes()
@@ -1118,7 +1122,7 @@ func (wh *WorkObjectHeader) SealEncode() *ProtoWorkObjectHeader {
 	coinbase := common.ProtoAddress{Value: wh.PrimaryCoinbase().Bytes()}
 
 	return &ProtoWorkObjectHeader{
-		HeaderHash:          &hash,
+		HeaderHash:          &headerHash,
 		ParentHash:          &parentHash,
 		Number:              number,
 		Difficulty:          difficulty,

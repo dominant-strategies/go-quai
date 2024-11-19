@@ -12,7 +12,7 @@ func woTestData() (*WorkObject, common.Hash) {
 	wo := &WorkObject{
 		woHeader: &WorkObjectHeader{
 			headerHash:          common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"),
-			parentHash:          common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1"),
+			parentHash:          common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef12"),
 			number:              big.NewInt(1),
 			difficulty:          big.NewInt(123456789),
 			primeTerminusNumber: big.NewInt(42),
@@ -24,14 +24,22 @@ func woTestData() (*WorkObject, common.Hash) {
 			nonce:               EncodeNonce(uint64(1)),
 			lock:                0,
 		},
+		woBody: EmptyWorkObjectBody(),
 	}
 	return wo, wo.Hash()
 }
 
 func TestWoHash(t *testing.T) {
 	_, actualHash := woTestData()
-	expectedHash := common.HexToHash("0x572273f26629ca2a02c329cd21dc3def6e1d1934465ea11fca393c7a9ce3c89b")
+	expectedHash := common.HexToHash("0x5699348bb74873668408253dc3c518e1570eec73516dced58cbddcf294d2f477")
 	require.Equal(t, expectedHash, actualHash, "Hash not equal to expected hash")
+}
+
+func TestWoSealHash(t *testing.T) {
+	testWo, _ := woTestData()
+	actualHash := testWo.SealHash()
+	expectedHash := common.HexToHash("0x8ea659d6d9e1da464ae1a505cc19b1fe5f3df1e7013168227be1c290b3edaf01")
+	require.Equal(t, expectedHash, actualHash, "Seal hash not equal to expected hash")
 }
 
 func FuzzHeaderHash(f *testing.F) {
@@ -60,8 +68,14 @@ func FuzzNumberHash(f *testing.F) {
 
 func FuzzTxHash(f *testing.F) {
 	fuzzHash(f,
-		func(woh *WorkObjectHeader) common.Hash { return woh.txHash },
-		func(woh *WorkObjectHeader, hash common.Hash) { woh.txHash = hash })
+		func(woh *WorkObjectHeader) common.Hash { return woh.TxHash() },
+		func(woh *WorkObjectHeader, hash common.Hash) { woh.SetTxHash(hash)})
+}
+
+func FuzzMixHash(f *testing.F) {
+	fuzzHash(f,
+		func(woh *WorkObjectHeader) common.Hash { return woh.MixHash() },
+		func(woh *WorkObjectHeader, hash common.Hash) { woh.SetMixHash(hash) })
 }
 
 func TestLocationHash(t *testing.T) {
