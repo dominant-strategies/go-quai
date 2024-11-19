@@ -166,14 +166,26 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			peers := p.peerManager.GetPeers(topic)
+			// Use stream peers if the node has accumulated
+			// c_streamPeerThreshold number of streams otherwise look up peers
+			// from the database and create streams with them
+			peers := p.peerManager.GetStreamPeers()
+			if len(peers) < c_streamPeerThreshold {
+				peersMap := p.peerManager.GetPeers(topic)
+				peers = make([]peer.ID, 0)
+				for peer := range peersMap {
+					peers = append(peers, peer)
+				}
+			} else {
+				peers = peers[:pubsubManager.C_defaultRequestDegree]
+			}
 			log.Global.WithFields(log.Fields{
 				"peers": peers,
 				"topic": topic,
 			}).Debug("Requesting data from peers")
 
 			var requestWg sync.WaitGroup
-			for peerID := range peers {
+			for _, peerID := range peers {
 				// if we have exceeded the outbound rate limit for this peer, skip them for now
 				if err := protocol.ProcRequestRate(peerID, false); err != nil {
 					log.Global.Warnf("Exceeded request rate to peer %s", peerID)

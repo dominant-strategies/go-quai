@@ -37,7 +37,8 @@ import (
 
 const (
 	// c_defaultCacheSize is the default size for the p2p cache
-	c_defaultCacheSize = 32
+	c_defaultCacheSize    = 32
+	c_streamPeerThreshold = 25
 )
 
 // P2PNode represents a libp2p node

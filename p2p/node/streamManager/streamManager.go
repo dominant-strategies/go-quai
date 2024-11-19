@@ -53,6 +53,9 @@ type StreamManager interface {
 	// GetStream returns a valid stream, either creating a new one or returning an existing one
 	GetStream(peer.ID) (network.Stream, error)
 
+	// GetStreamPeers returns the peers that the node has open streams with
+	GetStreamPeers() []peer.ID
+
 	// CloseStream goes through all the steps to properly close and remove a stream's resources
 	CloseStream(peer.ID) error
 
@@ -213,6 +216,10 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 	}
 
 	return wrappedStream.stream, err
+}
+
+func (sm *basicStreamManager) GetStreamPeers() []peer.ID {
+	return sm.streamCache.Keys()
 }
 
 func (sm *basicStreamManager) SetP2PBackend(host quaiprotocol.QuaiP2PNode) {
