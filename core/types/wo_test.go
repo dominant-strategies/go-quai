@@ -9,29 +9,28 @@ import (
 )
 
 func woTestData() (*WorkObject, common.Hash) {
-	wo := &WorkObject{
-		woHeader: &WorkObjectHeader{
-			headerHash:          common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"),
-			parentHash:          common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef12"),
-			number:              big.NewInt(1),
-			difficulty:          big.NewInt(123456789),
-			primeTerminusNumber: big.NewInt(42),
-			txHash:              common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"),
-			location:            common.Location{0, 0},
-			mixHash:             common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"),
-			primaryCoinbase:     common.HexToAddress("0x123456789abcdef0123456789abcdef0123456789", common.Location{0, 0}),
-			time:                uint64(1),
-			nonce:               EncodeNonce(uint64(1)),
-			lock:                0,
-		},
-		woBody: EmptyWorkObjectBody(),
-	}
+	wo := &WorkObject{}
+	wo.SetWorkObjectHeader(&WorkObjectHeader{})
+	wo.woHeader.SetHeaderHash(common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"))
+	wo.woHeader.SetParentHash(common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef12"))
+	wo.woHeader.SetNumber(big.NewInt(1))
+	wo.woHeader.SetDifficulty(big.NewInt(123456789))
+	wo.woHeader.SetPrimeTerminusNumber(big.NewInt(42))
+	wo.woHeader.SetTxHash(common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3"))
+	wo.woHeader.SetLocation(common.Location{0, 0})
+	wo.woHeader.SetMixHash(common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4"))
+	wo.woHeader.SetPrimaryCoinbase(common.HexToAddress("0x123456789abcdef0123456789abcdef0123456789", common.Location{0, 0}))
+	wo.woHeader.SetTime(uint64(1))
+	wo.woHeader.SetNonce(EncodeNonce(uint64(1)))
+	wo.woHeader.SetLock(0)
+
+	wo.woBody = EmptyWorkObjectBody()
 	return wo, wo.Hash()
 }
 
 func TestWoHash(t *testing.T) {
 	_, actualHash := woTestData()
-	expectedHash := common.HexToHash("0x5699348bb74873668408253dc3c518e1570eec73516dced58cbddcf294d2f477")
+	expectedHash := common.HexToHash("0x1bfdf14daa1844a372da6f2a2024d2fcc2bf92feb01d11b4e02f88d17ee9e9f8")
 	require.Equal(t, expectedHash, actualHash, "Hash not equal to expected hash")
 }
 

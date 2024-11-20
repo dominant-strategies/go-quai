@@ -797,6 +797,9 @@ func EmptyWorkObjectBody() *WorkObjectBody {
 	woBody.SetHeader(EmptyHeader())
 	woBody.SetTransactions([]*Transaction{})
 	woBody.SetOutboundEtxs([]*Transaction{})
+	woBody.SetUncles([]*WorkObjectHeader{})
+	woBody.SetManifest(BlockManifest{})
+	woBody.SetInterlinkHashes(common.Hashes{})
 	return woBody
 }
 
