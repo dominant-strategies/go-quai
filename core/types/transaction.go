@@ -799,14 +799,16 @@ func (s Transactions) ProtoEncode() (*ProtoTransactions, error) {
 
 // ProtoDecode decodes the ProtoTransactions into the Transactions format
 func (s *Transactions) ProtoDecode(transactions *ProtoTransactions, location common.Location) error {
-	*s = make(Transactions, 0, len(transactions.Transactions))
-	for _, protoTx := range transactions.Transactions {
-		tx := &Transaction{}
-		err := tx.ProtoDecode(protoTx, location)
-		if err != nil {
-			return err
+	if transactions != nil {
+		*s = make(Transactions, 0, len(transactions.Transactions))
+		for _, protoTx := range transactions.Transactions {
+			tx := &Transaction{}
+			err := tx.ProtoDecode(protoTx, location)
+			if err != nil {
+				return err
+			}
+			*s = append(*s, tx)
 		}
-		*s = append(*s, tx)
 	}
 	return nil
 }

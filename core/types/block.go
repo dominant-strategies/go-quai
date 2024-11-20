@@ -1234,10 +1234,12 @@ func (m BlockManifest) ProtoEncode() (*ProtoManifest, error) {
 
 // ProtoDecode deserializes th ProtoManifest into the BlockManifest format
 func (m *BlockManifest) ProtoDecode(protoManifest *ProtoManifest) error {
-	for _, protoHash := range protoManifest.Manifest {
-		hash := &common.Hash{}
-		hash.ProtoDecode(protoHash)
-		*m = append(*m, *hash)
+	if protoManifest != nil {
+		for _, protoHash := range protoManifest.Manifest {
+			hash := &common.Hash{}
+			hash.ProtoDecode(protoHash)
+			*m = append(*m, *hash)
+		}
 	}
 	return nil
 }
