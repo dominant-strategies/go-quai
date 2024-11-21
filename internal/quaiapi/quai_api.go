@@ -819,6 +819,44 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
+
+	if args.from(s.b.NodeLocation()).IsInQuaiLedgerScope() && args.To.IsInQiLedgerScope() {
+		// Conversion transaction
+		var header *types.WorkObject
+		var err error
+		if blockNr, ok := blockNrOrHash.Number(); ok {
+			if blockNr == rpc.LatestBlockNumber {
+				header = s.b.CurrentHeader()
+			} else {
+				header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+			}
+		} else if hash, ok := blockNrOrHash.Hash(); ok {
+			header, err = s.b.HeaderByHash(ctx, hash)
+		} else {
+			return 0, errors.New("invalid block number or hash")
+		}
+		if err != nil {
+			return 0, err
+		}
+		estimatedQiAmount := misc.QuaiToQi(header, args.Value.ToInt())
+		usedGas := uint64(0)
+
+		usedGas += params.TxGas
+		denominations := misc.FindMinDenominations(estimatedQiAmount)
+		outputIndex := uint16(0)
+		// Iterate over the denominations in descending order
+		for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+			// If the denomination count is zero, skip it
+			if denominations[uint8(denomination)] == 0 {
+				continue
+			}
+			for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+				usedGas += params.CallValueTransferGas
+				outputIndex++
+			}
+		}
+		return hexutil.Uint64(usedGas), nil
+	}
 	switch args.TxType {
 	case types.QiTxType:
 		block, err := s.b.BlockByNumberOrHash(ctx, bNrOrHash)
