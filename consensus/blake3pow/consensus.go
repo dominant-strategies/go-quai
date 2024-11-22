@@ -658,35 +658,33 @@ func (blake3pow *Blake3pow) Finalize(chain consensus.ChainHeaderReader, batch et
 
 	trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
 
-	if header.NumberU64(common.ZONE_CTX) >= params.GoldenAgeForkNumberV2 {
-		start := time.Now()
-		var wg sync.WaitGroup
-		var lock sync.Mutex
-		for denomination, depth := range types.TrimDepths {
-			if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth {
-				wg.Add(1)
-				go func(denomination uint8, depth uint64) {
-					defer func() {
-						if r := recover(); r != nil {
-							blake3pow.logger.WithFields(log.Fields{
-								"error":      r,
-								"stacktrace": string(debug.Stack()),
-							}).Error("Go-Quai Panicked")
-						}
-					}()
-					nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), header.NumberU64(nodeCtx)-depth)
-					TrimBlock(chain, batch, denomination, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, &utxoSetSize, !setRoots, &lock, blake3pow.logger) // setRoots is false when we are processing the block
-					wg.Done()
-				}(denomination, depth)
-			}
+	start := time.Now()
+	var wg sync.WaitGroup
+	var lock sync.Mutex
+	for denomination, depth := range types.TrimDepths {
+		if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth {
+			wg.Add(1)
+			go func(denomination uint8, depth uint64) {
+				defer func() {
+					if r := recover(); r != nil {
+						blake3pow.logger.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Error("Go-Quai Panicked")
+					}
+				}()
+				nextBlockToTrim := rawdb.ReadCanonicalHash(chain.Database(), header.NumberU64(nodeCtx)-depth)
+				TrimBlock(chain, batch, denomination, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, &utxoSetSize, !setRoots, &lock, blake3pow.logger) // setRoots is false when we are processing the block
+				wg.Done()
+			}(denomination, depth)
 		}
-		wg.Wait()
-		if len(trimmedUtxos) > 0 {
-			blake3pow.logger.Infof("Trimmed %d UTXOs from db in %s", len(trimmedUtxos), common.PrettyDuration(time.Since(start)))
-		}
-		if !setRoots {
-			rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
-		}
+	}
+	wg.Wait()
+	if len(trimmedUtxos) > 0 {
+		blake3pow.logger.Infof("Trimmed %d UTXOs from db in %s", len(trimmedUtxos), common.PrettyDuration(time.Since(start)))
+	}
+	if !setRoots {
+		rawdb.WriteTrimmedUTXOs(batch, header.Hash(), trimmedUtxos)
 	}
 	for _, hash := range utxosCreate {
 		multiSet.Add(hash.Bytes())

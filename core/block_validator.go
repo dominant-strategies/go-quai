@@ -159,10 +159,8 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 	} else {
 		// If the fork has been triggered and within some grace period the nodes
 		// have not upgraded we reject the block validation
-		if wo.NumberU64(common.ZONE_CTX) > params.GoldenAgeForkNumberV2+params.GoldenAgeForkGraceNumber {
-			if wo.GasLimit() < params.MinGasLimit(params.GoldenAgeForkNumberV2) {
-				return fmt.Errorf("zone gas limit is less than the new fork gas limit")
-			}
+		if wo.GasLimit() < params.MinGasLimit(wo.NumberU64(common.ZONE_CTX)) {
+			return fmt.Errorf("zone gas limit is less than the new fork gas limit")
 		}
 		if len(wo.Manifest()) != 0 {
 			return fmt.Errorf("zone body has non zero manifests")
