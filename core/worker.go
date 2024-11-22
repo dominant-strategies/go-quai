@@ -1096,16 +1096,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			var lockup *big.Int
 			// The first lock up period changes after the fork
 			if lockupByte == 0 {
-				if env.wo.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV1 {
-					lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
-					if lockup.Uint64() < params.OldConversionLockPeriod {
-						return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.OldConversionLockPeriod)
-					}
-				} else {
-					lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
-					if lockup.Uint64() < params.NewConversionLockPeriod {
-						return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.NewConversionLockPeriod)
-					}
+				lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
+				if lockup.Uint64() < params.NewConversionLockPeriod {
+					return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.NewConversionLockPeriod)
 				}
 			} else {
 				lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
@@ -1147,11 +1140,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		if tx.ETXSender().Location().Equal(*tx.To().Location()) { // Quai->Qi conversion
 			txGas := tx.Gas()
 			var lockup *big.Int
-			if env.wo.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV1 {
-				lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
-			} else {
-				lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
-			}
+			lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
 			lock := new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), lockup)
 			if env.parentOrder == nil {
 				return nil, false, errors.New("parent order not set")

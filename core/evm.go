@@ -115,11 +115,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 	}
 
 	var averageBaseFee *big.Int
-	if header.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV1 {
-		averageBaseFee = new(big.Int).Set(baseFee)
-	} else {
-		averageBaseFee = new(big.Int).Div(maxBaseFee, params.BaseFeeMultiplier)
-	}
+	averageBaseFee = new(big.Int).Div(maxBaseFee, params.BaseFeeMultiplier)
 
 	return vm.BlockContext{
 		CanTransfer:        CanTransfer,

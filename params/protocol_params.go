@@ -195,7 +195,6 @@ var (
 )
 
 const (
-	GoldenAgeForkNumberV1       = 180000
 	GoldenAgeForkNumberV2       = 588000
 	GoldenAgeForkGraceNumber    = 100
 	GoldenAgeGracePaymentPeriod = 6000
@@ -229,9 +228,7 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 }
 
 func MinGasLimit(number uint64) uint64 {
-	if number < GoldenAgeForkNumberV1 {
-		return 5000000
-	} else if number < GoldenAgeForkNumberV2 {
+	if number < GoldenAgeForkNumberV2 {
 		return 10000000
 	} else {
 		return 12000000

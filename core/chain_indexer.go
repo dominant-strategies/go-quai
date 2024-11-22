@@ -775,11 +775,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 			// After the BigSporkFork the minimum conversion period changes to 7200 blocks
 			var lockup *big.Int
 			if lockupByte == 0 {
-				if block.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV1 {
-					lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
-				} else {
-					lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
-				}
+				lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
 			} else {
 				lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 			}
@@ -824,11 +820,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 			}
 		} else if tx.EtxType() == types.ConversionType && tx.To().IsInQiLedgerScope() {
 			var lockup *big.Int
-			if block.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV1 {
-				lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
-			} else {
-				lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
-			}
+			lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
 			lock := new(big.Int).Add(block.Number(nodeCtx), lockup)
 			value := tx.Value()
 			addr20 := tx.To().Bytes20()
