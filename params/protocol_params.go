@@ -193,12 +193,6 @@ var (
 	BaseFeeMultiplier             = big.NewInt(50)
 )
 
-const (
-	GoldenAgeForkNumberV2       = 588000
-	GoldenAgeForkGraceNumber    = 100
-	GoldenAgeGracePaymentPeriod = 6000
-)
-
 func init() {
 	LockupByteToBlockDepth[0] = OldConversionLockPeriod
 	LockupByteToBlockDepth[1] = 30240  // 1.75 days

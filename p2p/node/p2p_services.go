@@ -127,10 +127,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 				}
 			case []*types.WorkObjectBlockView:
 				for _, block := range recvdType.([]*types.WorkObjectBlockView) {
-					// If a block is received which has a number greater than
-					// the goldenage fork number and does not have the updated
-					// gas limit, reject the response
-					if block != nil && block.NumberU64(common.ZONE_CTX) >= params.GoldenAgeForkNumberV2 && block.GasLimit() < params.MinGasLimit(params.GoldenAgeForkNumberV2) {
+					if block != nil && block.GasLimit() < params.MinGasLimit(block.NumberU64(common.ZONE_CTX)) {
 						p.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnBadResponse)
 						return nil, errors.New("invalid response")
 					}

@@ -47,12 +47,12 @@ func init() {
 	Denominations[14] = big.NewInt(1000000000) // 1000000 Qi
 
 	TrimDepths = make(map[uint8]uint64)
-	TrimDepths[0] = params.GoldenAgeForkNumberV2 + 720  // 2 hours after fork starts from block 1
-	TrimDepths[1] = params.GoldenAgeForkNumberV2 + 720  // 2 hours
-	TrimDepths[2] = params.GoldenAgeForkNumberV2 + 1080  // 3 hours
-	TrimDepths[3] = params.GoldenAgeForkNumberV2 + 1080  // 3 hours
-	TrimDepths[4] = params.GoldenAgeForkNumberV2 + 2160 // 6 hours
-	TrimDepths[5] = params.GoldenAgeForkNumberV2 + 4320 // 12 hours
+	TrimDepths[0] = 720  // 2 hours after fork starts from block 1
+	TrimDepths[1] = 720  // 2 hours
+	TrimDepths[2] = 1080 // 3 hours
+	TrimDepths[3] = 1080 // 3 hours
+	TrimDepths[4] = 2160 // 6 hours
+	TrimDepths[5] = 4320 // 12 hours
 }
 
 type TxIns []TxIn

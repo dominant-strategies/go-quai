@@ -157,10 +157,8 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 			}
 		}
 	} else {
-		// If the fork has been triggered and within some grace period the nodes
-		// have not upgraded we reject the block validation
 		if wo.GasLimit() < params.MinGasLimit(wo.NumberU64(common.ZONE_CTX)) {
-			return fmt.Errorf("zone gas limit is less than the new fork gas limit")
+			return fmt.Errorf("zone gas limit is less than the required gas limit")
 		}
 		if len(wo.Manifest()) != 0 {
 			return fmt.Errorf("zone body has non zero manifests")
@@ -283,12 +281,8 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 			}
 		}
 	} else {
-		// If the fork has been triggered and within some grace period the nodes
-		// have not upgraded we reject the block validation
-		if wo.NumberU64(common.ZONE_CTX) > params.GoldenAgeForkNumberV2+params.GoldenAgeForkGraceNumber {
-			if wo.GasLimit() < params.MinGasLimit(params.GoldenAgeForkNumberV2) {
-				return fmt.Errorf("zone gas limit is less than the new fork gas limit")
-			}
+		if wo.GasLimit() < params.MinGasLimit(wo.NumberU64(common.ZONE_CTX)) {
+			return fmt.Errorf("zone gas limit is less than the required gas limit")
 		}
 		// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
 		if len(wo.Transactions()) != 0 {
@@ -426,9 +420,6 @@ func CalcGasLimit(parent *types.WorkObject, gasCeil uint64) uint64 {
 
 	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
 	limit := parentGasLimit
-	if parent.NumberU64(common.ZONE_CTX) == params.GoldenAgeForkNumberV2 {
-		limit = params.MinGasLimit(parent.NumberU64(common.ZONE_CTX))
-	}
 
 	var desiredLimit uint64
 	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
