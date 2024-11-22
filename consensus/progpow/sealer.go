@@ -121,11 +121,7 @@ func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.Wor
 }
 
 func (progpow *Progpow) Mine(workObject *types.WorkObject, abort <-chan struct{}, found chan *types.WorkObject) {
-	if workObject.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
-		progpow.MineToThreshold(workObject, params.OldWorkSharesThresholdDiff, abort, found)
-	} else {
-		progpow.MineToThreshold(workObject, params.NewWorkSharesThresholdDiff, abort, found)
-	}
+	progpow.MineToThreshold(workObject, params.WorkSharesThresholdDiff, abort, found)
 }
 
 func (progpow *Progpow) MineToThreshold(workObject *types.WorkObject, workShareThreshold int, abort <-chan struct{}, found chan *types.WorkObject) {

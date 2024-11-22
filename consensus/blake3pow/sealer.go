@@ -10,7 +10,6 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
@@ -121,11 +120,7 @@ func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types
 }
 
 func (blake3pow *Blake3pow) Mine(header *types.WorkObject, abort <-chan struct{}, found chan *types.WorkObject) {
-	if header.NumberU64(common.ZONE_CTX) < params.GoldenAgeForkNumberV2 {
-		blake3pow.MineToThreshold(header, params.OldWorkSharesThresholdDiff, abort, found)
-	} else {
-		blake3pow.MineToThreshold(header, params.NewWorkSharesThresholdDiff, abort, found)
-	}
+	blake3pow.MineToThreshold(header, params.WorkSharesThresholdDiff, abort, found)
 }
 
 func (blake3pow *Blake3pow) MineToThreshold(workObject *types.WorkObject, workShareThreshold int, abort <-chan struct{}, found chan *types.WorkObject) {
