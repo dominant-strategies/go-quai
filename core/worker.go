@@ -1253,12 +1253,12 @@ var qiTxErrs uint64
 
 func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkObject, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, excludeEtx bool) error {
 	qiTxsToRemove := make([]*common.Hash, 0)
-	gasLimit := env.wo.GasLimit
+	gasLimit := env.wo.GasLimit()
 	if env.gasPool == nil {
-		env.gasPool = new(types.GasPool).AddGas(gasLimit())
+		env.gasPool = new(types.GasPool).AddGas(gasLimit)
 	}
 	var coalescedLogs []*types.Log
-	minEtxGas := gasLimit() / params.MinimumEtxGasDivisor
+	minEtxGas := gasLimit / params.MinimumEtxGasDivisor
 	etxCount := 0
 	for {
 		if excludeEtx {
@@ -1319,6 +1319,13 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 		}
 		if tx.Type() == types.QiTxType {
 			txGas := types.CalculateBlockQiTxGas(tx, env.qiGasScalingFactor, w.hc.NodeLocation())
+			if txGas > gasLimit {
+				// This QiTx uses too much gas to include in the block
+				txs.PopNoSort()
+				hash := tx.Hash()
+				qiTxsToRemove = append(qiTxsToRemove, &hash)
+				continue
+			}
 			if env.gasPool.Gas() < txGas {
 				w.logger.WithFields(log.Fields{
 					"have": env.gasPool,
