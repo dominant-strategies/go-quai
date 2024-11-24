@@ -1323,8 +1323,13 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 				w.logger.WithFields(log.Fields{
 					"have": env.gasPool,
 					"want": txGas,
-				}).Trace("Not enough gas for further transactions")
-				break
+				}).Info("Not enough gas for further transactions")
+				txs.PopNoSort()
+				// Remove this tx from the pool as it consumes more gas than the block
+				// gas
+				hash := tx.Hash()
+				qiTxsToRemove = append(qiTxsToRemove, &hash)
+				continue
 			}
 			if err := w.processQiTx(tx, env, primeTerminus, parent, firstQiTx); err != nil {
 				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") || strings.Contains(err.Error(), "combine smaller denominations") {
