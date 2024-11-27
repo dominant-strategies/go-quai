@@ -1306,7 +1306,7 @@ func (c *Core) GetUTXOsByAddress(address common.Address) ([]*types.UtxoEntry, er
 	for _, outpoint := range outpointsForAddress {
 		entry := rawdb.GetUTXO(c.sl.sliceDb, outpoint.TxHash, outpoint.Index)
 		if entry == nil {
-			return nil, errors.New("failed to get UTXO for address")
+			continue
 		}
 		utxos = append(utxos, entry)
 	}
