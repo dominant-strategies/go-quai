@@ -261,7 +261,7 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure that transaction gasPrice is greater than the baseFee
 	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-	if !st.evm.Config.NoBaseFee || st.gasPrice.BitLen() > 0 || st.gasPrice.BitLen() > 0 {
+	if !st.evm.Config.NoBaseFee || st.gasPrice.BitLen() > 0 || st.minerTip.BitLen() > 0 {
 		if l := st.gasPrice.BitLen(); l > 256 {
 			return fmt.Errorf("%w: address %v, gasPrice bit length: %d", ErrFeeCapVeryHigh,
 				st.msg.From().Hex(), l)
