@@ -820,7 +820,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 		bNrOrHash = *blockNrOrHash
 	}
 
-	if args.from(s.b.NodeLocation()).IsInQuaiLedgerScope() && args.To.IsInQiLedgerScope() {
+	if args.from(s.b.NodeLocation()).IsInQuaiLedgerScope() && args.To != nil && args.To.IsInQiLedgerScope() {
 		// Conversion transaction
 		var header *types.WorkObject
 		var err error
