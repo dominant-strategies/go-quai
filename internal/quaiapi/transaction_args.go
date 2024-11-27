@@ -168,12 +168,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		gasPrice *big.Int
 		minerTip *big.Int
 	)
-	// User specified max fee (or none), use those
-	gasPrice = new(big.Int)
-	if args.GasPrice != nil {
-		gasPrice = args.GasPrice.ToInt()
-	}
-	minerTip = gasPrice
+	gasPrice = new(big.Int).Set(common.Big0) // Skip base fee check in state_transition.go
+	minerTip = gasPrice                      // Skip base fee check in state_transition.go
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
@@ -183,6 +179,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+
 	msg := types.NewMessage(addr, args.To, uint64(*args.Nonce), value, gas, gasPrice, minerTip, data, accessList, false)
 	return msg, nil
 }

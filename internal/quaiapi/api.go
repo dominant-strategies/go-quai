@@ -704,14 +704,14 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		hi = uint64(*args.Gas)
 	} else {
 		// Retrieve the block to act as the gas ceiling
-		block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		header, err := b.HeaderByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
 			return 0, err
 		}
-		if block == nil {
+		if header == nil {
 			return 0, errors.New("block not found")
 		}
-		hi = block.GasLimit()
+		hi = header.GasLimit()
 		if hi == 0 {
 			hi = params.GasCeil
 		}
