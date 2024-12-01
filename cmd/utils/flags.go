@@ -113,6 +113,8 @@ var NodeFlags = []Flag{
 	QuaiStatsURLFlag,
 	SendFullStatsFlag,
 	IndexAddressUtxos,
+	ReIndex,
+	ValidateIndexer,
 	StartingExpansionNumberFlag,
 	NodeLogLevelFlag,
 	GenesisNonce,
@@ -542,6 +544,18 @@ var (
 		Name:  c_NodeFlagPrefix + "index-address-utxos",
 		Value: false,
 		Usage: "Index address utxos" + generateEnvDoc(c_NodeFlagPrefix+"index-address-utxos"),
+	}
+
+	ReIndex = Flag{
+		Name:  c_NodeFlagPrefix + "reindex",
+		Value: false,
+		Usage: "Re-index the UTXO indexer. This will take a long time!" + generateEnvDoc(c_NodeFlagPrefix+"reindex"),
+	}
+
+	ValidateIndexer = Flag{
+		Name:  c_NodeFlagPrefix + "validate-indexer",
+		Value: false,
+		Usage: "Validate the UTXO indexer. This will take a long time!" + generateEnvDoc(c_NodeFlagPrefix+"validate-index"),
 	}
 
 	EnvironmentFlag = Flag{
