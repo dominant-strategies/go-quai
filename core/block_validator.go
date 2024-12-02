@@ -94,9 +94,23 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 		if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash() {
 			return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash())
 		}
-		if v.hc.ProcessingState() {
-			if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
-				return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
+		if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash() {
+			return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash())
+		}
+		activeLocations := common.NewChainsAdded(v.hc.currentExpansionNumber)
+		for _, tx := range block.Transactions() {
+			if types.QiTxType == tx.Type() {
+				for _, txo := range tx.TxOut() {
+					found := false
+					for _, activeLoc := range activeLocations {
+						if common.IsInChainScope(txo.Address, activeLoc) {
+							found = true
+						}
+					}
+					if !found {
+						return fmt.Errorf("Qi TXO emitted to an inactive chain")
+					}
+				}
 			}
 		}
 		// The header view should have the etxs populated
