@@ -1276,8 +1276,21 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
+	activeLocations := common.NewChainsAdded(pool.chain.CurrentBlock().ExpansionNumber())
 	transactionsWithoutErrors := make([]*types.TxWithMinerFee, 0, len(txs))
 	for _, tx := range txs {
+		// Reject TX if it emits an output to an inactive chain
+		for _, txo := range tx.TxOut() {
+			found := false
+			for _, activeLoc := range activeLocations {
+				if common.IsInChainScope(txo.Address, activeLoc) {
+					found = true
+				}
+			}
+			if !found {
+				errs = append(errs, fmt.Errorf("Qi TXO emitted to an inactive chain"))
+			}
+		}
 
 		totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.db, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
 		if err != nil {
