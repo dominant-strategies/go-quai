@@ -456,14 +456,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
 					}
 					var lockup *big.Int
-					// The first lock up period changes after the fork
-					if lockupByte == 0 {
-						lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
-					} else {
-						lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-						if lockup.Uint64() < params.OldConversionLockPeriod {
-							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.OldConversionLockPeriod)
-						}
+					lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+					if lockup.Uint64() < params.ConversionLockPeriod {
+						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 					}
 					lockup.Add(lockup, blockNumber)
 					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
@@ -507,7 +502,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if etx.To().IsInQiLedgerScope() {
 				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Quai->Qi Conversion
 					var lockup *big.Int
-					lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
+					lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
 					lock := new(big.Int).Add(block.Number(nodeCtx), lockup)
 					value := etx.Value()
 					txGas := etx.Gas()
@@ -891,7 +886,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 			}
 
 			var conversionPeriodValid bool
-			conversionPeriodValid = blockDepth == params.NewConversionLockPeriod
+			conversionPeriodValid = blockDepth == params.ConversionLockPeriod
 			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && conversionPeriodValid {
 				internal, err := etx.To().InternalAddress()
 				if err != nil {

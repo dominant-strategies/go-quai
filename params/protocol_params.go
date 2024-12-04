@@ -148,8 +148,7 @@ const (
 	// infrastructure, if needed, to account for the upcoming network change.
 	TREE_EXPANSION_WAIT_COUNT = 1024
 
-	OldConversionLockPeriod       uint64 = 10 // The number of zone blocks that a conversion output is locked for
-	NewConversionLockPeriod       uint64 = 7200
+	ConversionLockPeriod          uint64 = 7200
 	MinQiConversionDenomination          = 10
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
@@ -194,7 +193,7 @@ var (
 )
 
 func init() {
-	LockupByteToBlockDepth[0] = OldConversionLockPeriod
+	LockupByteToBlockDepth[0] = ConversionLockPeriod
 	LockupByteToBlockDepth[1] = 30240  // 1.75 days
 	LockupByteToBlockDepth[2] = 60480  // 3.5 days
 	LockupByteToBlockDepth[3] = 120960 // 7 days
