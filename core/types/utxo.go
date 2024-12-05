@@ -20,7 +20,10 @@ const (
 	MaxTrimDenomination = 5
 )
 
-var MaxQi = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
+var (
+	MaxQi                   = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
+	QuaiToQiConversionTopic = crypto.Keccak256Hash([]byte("QuaiToQiConversion"))
+)
 
 // Denominations is a map of denomination to number of Qi
 var Denominations map[uint8]*big.Int
