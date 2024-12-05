@@ -1315,3 +1315,17 @@ func IsConversionTx(tx *Transaction) bool {
 	}
 	return tx.EtxType() == ConversionType
 }
+
+func IsQiToQuaiConversionTx(tx *Transaction) bool {
+	if tx.Type() == ExternalTxType && tx.EtxType() == ConversionType && tx.To().IsInQuaiLedgerScope() {
+		return true
+	}
+	return false
+}
+
+func IsQuaiToQiConversionTx(tx *Transaction) bool {
+	if tx.Type() == ExternalTxType && tx.EtxType() == ConversionType && tx.To().IsInQiLedgerScope() {
+		return true
+	}
+	return false
+}
