@@ -577,7 +577,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					value := etx.Value()
 					txGas := etx.Gas()
 					if txGas < params.TxGas {
-						continue
+						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("etx gas is less than the minimum gas required")
 					}
 					txGas -= params.TxGas
 					if err := gp.SubGas(params.TxGas); err != nil {
@@ -587,15 +587,19 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					totalEtxGas += params.TxGas
 					denominations := misc.FindMinDenominations(value)
 					outputIndex := uint16(0)
+					total := big.NewInt(0)
+					success := true
 					// Iterate over the denominations in descending order
 					for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
 						// If the denomination count is zero, skip it
 						if denominations[uint8(denomination)] == 0 {
 							continue
 						}
+
 						for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 							if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
 								// No more gas, the rest of the denominations are lost but the tx is still valid
+								success = false
 								break
 							}
 							txGas -= params.CallValueTransferGas
@@ -612,9 +616,29 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
 							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
 							p.logger.Debugf("Converting Quai to Qi %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, lock)
+							total.Add(total, types.Denominations[uint8(denomination)])
 							outputIndex++
 						}
 					}
+					if success {
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: etx.Gas() - txGas, TxHash: tx.Hash(),
+							Logs: []*types.Log{{
+								Address: *etx.To(),
+								Topics:  []common.Hash{types.QuaiToQiConversionTopic},
+								Data:    total.Bytes(),
+							}},
+						}
+					} else {
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: etx.Gas(), TxHash: tx.Hash(),
+							Logs: []*types.Log{{
+								Address: *etx.To(),
+								Topics:  []common.Hash{types.QuaiToQiConversionTopic},
+								Data:    total.Bytes(),
+							}},
+						}
+					}
+					receipts = append(receipts, receipt)
+					allLogs = append(allLogs, receipt.Logs...)
 				} else if !types.IsCoinBaseTx(tx) && !etx.ETXSender().Location().Equal(*etx.To().Location()) && etx.To().IsInQiLedgerScope() { // Regular Qi ETX
 					utxo := types.NewUtxoEntry(types.NewTxOut(uint8(etx.Value().Uint64()), etx.To().Bytes(), big.NewInt(0)))
 					// There are no more checks to be made as the ETX is worked so add it to the set

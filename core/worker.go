@@ -1241,8 +1241,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				}
 			}
 			if txGas < params.TxGas {
-				// No gas, the result is a no-op but the tx is still valid
-				return nil, false, nil
+				return nil, false, fmt.Errorf("insufficient gas for Qi->Quai conversion")
 			}
 			txGas -= params.TxGas
 			if err := env.gasPool.SubGas(params.TxGas); err != nil {
@@ -1251,7 +1250,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			gasUsed += params.TxGas
 			denominations := misc.FindMinDenominations(tx.Value())
 			outputIndex := uint16(0)
-
+			total := big.NewInt(0)
+			success := true
 			// Iterate over the denominations in descending order
 			for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
 				// If the denomination count is zero, skip it
@@ -1261,6 +1261,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
 						// No more gas, the rest of the denominations are lost but the tx is still valid
+						success = false
 						break
 					}
 					txGas -= params.CallValueTransferGas
@@ -1271,9 +1272,32 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					// the ETX hash is guaranteed to be unique
 					utxoHash := types.UTXOHash(tx.Hash(), outputIndex, types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock)))
 					env.utxosCreate = append(env.utxosCreate, utxoHash)
+					total.Add(total, types.Denominations[uint8(denomination)])
 					outputIndex++
 				}
 			}
+			var receipt *types.Receipt
+			if success {
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: tx.Gas() - txGas, TxHash: tx.Hash(),
+					Logs: []*types.Log{{
+						Address: *tx.To(),
+						Topics:  []common.Hash{types.QuaiToQiConversionTopic},
+						Data:    total.Bytes(),
+					}},
+				}
+			} else {
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: tx.Gas(), TxHash: tx.Hash(),
+					Logs: []*types.Log{{
+						Address: *tx.To(),
+						Topics:  []common.Hash{types.QuaiToQiConversionTopic},
+						Data:    total.Bytes(),
+					}},
+				}
+			}
+			env.wo.Header().SetGasUsed(gasUsed)
+			env.txs = append(env.txs, tx)
+			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+			return receipt.Logs, true, nil
 		} else {
 			// This Qi ETX should cost more gas
 			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
@@ -1282,11 +1306,13 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			utxoHash := types.UTXOHash(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), common.Big0)))
 			env.utxosCreate = append(env.utxosCreate, utxoHash)
 			gasUsed += params.CallValueTransferGas
+
+			env.wo.Header().SetGasUsed(gasUsed)
+			env.txs = append(env.txs, tx)
+			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+			return []*types.Log{}, false, nil
 		}
-		env.wo.Header().SetGasUsed(gasUsed)
-		env.txs = append(env.txs, tx)
-		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
-		return []*types.Log{}, false, nil
+
 	} else if tx.Type() == types.ExternalTxType && types.IsConversionTx(tx) && tx.To().IsInQuaiLedgerScope() { // Qi->Quai Conversion
 		gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
 		env.wo.Header().SetGasUsed(gasUsed)

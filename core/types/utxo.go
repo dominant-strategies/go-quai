@@ -20,7 +20,10 @@ const (
 	MaxTrimDenomination = 5
 )
 
-var MaxQi = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
+var (
+	MaxQi                   = new(big.Int).Mul(big.NewInt(math.MaxInt64), big.NewInt(params.Ether)) // This is just a default; determine correct value later
+	QuaiToQiConversionTopic = crypto.Keccak256Hash([]byte("QuaiToQiConversion"))
+)
 
 // Denominations is a map of denomination to number of Qi
 var Denominations map[uint8]*big.Int
@@ -49,8 +52,8 @@ func init() {
 	TrimDepths = make(map[uint8]uint64)
 	TrimDepths[0] = params.GoldenAgeForkNumberV2 + 720  // 2 hours after fork starts from block 1
 	TrimDepths[1] = params.GoldenAgeForkNumberV2 + 720  // 2 hours
-	TrimDepths[2] = params.GoldenAgeForkNumberV2 + 1080  // 3 hours
-	TrimDepths[3] = params.GoldenAgeForkNumberV2 + 1080  // 3 hours
+	TrimDepths[2] = params.GoldenAgeForkNumberV2 + 1080 // 3 hours
+	TrimDepths[3] = params.GoldenAgeForkNumberV2 + 1080 // 3 hours
 	TrimDepths[4] = params.GoldenAgeForkNumberV2 + 2160 // 6 hours
 	TrimDepths[5] = params.GoldenAgeForkNumberV2 + 4320 // 12 hours
 }
