@@ -127,7 +127,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
 		}
 
-		utxos, err := s.b.UTXOsByAddress(ctx, addr)
+		utxos, err := s.b.AddressOutpoints(ctx, addr)
 		if utxos == nil || err != nil {
 			return (*hexutil.Big)(big.NewInt(0)), err
 		}
@@ -166,7 +166,7 @@ func (s *PublicBlockChainQuaiAPI) GetLockedBalance(ctx context.Context, address 
 	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
 	if addr.IsInQiLedgerScope() {
 		currHeader := s.b.CurrentHeader()
-		utxos, err := s.b.UTXOsByAddress(ctx, addr)
+		utxos, err := s.b.AddressOutpoints(ctx, addr)
 		if utxos == nil || err != nil {
 			return (*hexutil.Big)(big.NewInt(0)), err
 		}
@@ -206,6 +206,9 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	jsonOutpoints := make([]interface{}, 0, len(outpoints))
 	for _, outpoint := range outpoints {
 		if outpoint == nil {
+			continue
+		}
+		if rawdb.GetUTXO(s.b.Database(), outpoint.TxHash, outpoint.Index) == nil {
 			continue
 		}
 		lock := big.NewInt(0)
@@ -285,6 +288,9 @@ func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Cont
 	txHashToOutpointsJson := make(map[string][]interface{})
 	for _, outpoint := range outpoints {
 		if outpoint == nil {
+			continue
+		}
+		if rawdb.GetUTXO(s.b.Database(), outpoint.TxHash, outpoint.Index) == nil {
 			continue
 		}
 		lock := big.NewInt(0)
