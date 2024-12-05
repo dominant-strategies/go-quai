@@ -444,7 +444,7 @@ func (wo *WorkObject) TransactionsWithReceipts() []*Transaction {
 			// ignore the coinbase tx
 			continue
 		}
-		if !IsConversionTx(t) && (t.Type() == QuaiTxType || (t.Type() == ExternalTxType && t.To().IsInQuaiLedgerScope())) {
+		if t.Type() == QuaiTxType || (t.Type() == ExternalTxType && t.Type() != ConversionType && t.To().IsInQuaiLedgerScope()) || IsQuaiToQiConversionTx(t) {
 			txs = append(txs, t)
 		}
 	}
