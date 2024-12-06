@@ -135,3 +135,8 @@ func (tx *QuaiTx) setTo(to common.Address) {
 func (tx *QuaiTx) setValue(value *big.Int) {
 	panic("quai TX does not have set value method")
 }
+
+type Lockup struct {
+	UnlockHeight uint64
+	Value        *big.Int
+}
