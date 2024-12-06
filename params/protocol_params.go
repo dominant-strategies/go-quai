@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	GasLimitBoundDivisor    uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
-	PercentGasUsedThreshold uint64 = 90      // Percent Gas used threshold at which the gas limit adjusts
-	GenesisGasLimit         uint64 = 5000000 // Gas limit of the Genesis block.
+	GasLimitBoundDivisor    uint64 = 1024     // The bound divisor of the gas limit, used in update calculations.
+	PercentGasUsedThreshold uint64 = 90       // Percent Gas used threshold at which the gas limit adjusts
+	GenesisGasLimit         uint64 = 12000000 // Gas limit of the Genesis block.
 
 	StateCeil                 uint64 = 20000000 // Maximum the StateCeil may ever be
 	StateLimitBoundDivisor    uint64 = 1024     // The bound divisor of the gas limit, used in update calculations.
@@ -220,7 +220,11 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 }
 
 func MinGasLimit(number uint64) uint64 {
-	return 12000000
+	if number < TimeToStartTx {
+		return 0
+	} else {
+		return 12000000
+	}
 }
 
 // Gas calculation functions
