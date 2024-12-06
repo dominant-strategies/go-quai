@@ -20,7 +20,8 @@ func CalculateReward(parent *types.WorkObject, header *types.WorkObjectHeader) *
 
 	// ~30% extra reward for grace number of blocks after the fork to encourage nodes to move to the fork
 	if header.NumberU64() >= params.GoldenAgeForkNumberV2 && header.NumberU64() < params.GoldenAgeForkNumberV2+params.GoldenAgeGracePaymentPeriod {
-		reward = new(big.Int).Add(reward, new(big.Int).Div(reward, big.NewInt(70)))
+		extraReward := new(big.Int).Div(reward, big.NewInt(100)).Mul(reward, big.NewInt(30))
+		reward = new(big.Int).Add(reward, extraReward)
 	}
 
 	// Since after the second fork, the number of the workshares allowed is increased by 2x,
