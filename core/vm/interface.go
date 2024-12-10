@@ -27,6 +27,8 @@ import (
 type StateDB interface {
 	CreateAccount(common.InternalAddress)
 
+	ConfigureAccessListChecks(bool) bool
+
 	SubBalance(common.InternalAddress, *big.Int)
 	AddBalance(common.InternalAddress, *big.Int)
 	GetBalance(common.InternalAddress) *big.Int

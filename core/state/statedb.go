@@ -139,8 +139,8 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList      *accessList
-	accessListDebug bool // used for simulating the EVM to create an access list
+	accessList            *accessList
+	bypassAccessListCheck bool // used for simulating the EVM to create an access list, and allowing ETXs which do not contain an access list
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -445,6 +445,13 @@ func (s *StateDB) HasSuicided(addr common.InternalAddress) bool {
 /*
  * SETTERS
  */
+
+// ConfigureAccessListChecks enables or disables accessList checking
+func (s *StateDB) ConfigureAccessListChecks(enable bool) bool {
+	orig := s.bypassAccessListCheck
+	s.bypassAccessListCheck = !enable
+	return orig
+}
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.InternalAddress, amount *big.Int) {
@@ -936,7 +943,7 @@ func (s *StateDB) Copy() *StateDB {
 	// However, it doesn't cost us much to copy an empty list, so we do it anyway
 	// to not blow up if we ever decide copy it in the middle of a transaction
 	state.accessList = s.accessList.Copy()
-	state.accessListDebug = s.accessListDebug
+	state.bypassAccessListCheck = s.bypassAccessListCheck
 	// If there's a prefetcher running, make an inactive copy of it that can
 	// only access data but does not actively preload (since the user will not
 	// know that they need to explicitly terminate an active copy).
@@ -1234,7 +1241,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Add precompiles to access list
 // - Add the contents of the optional tx access list
 func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList, debug bool) {
-	s.accessListDebug = debug
+	s.bypassAccessListCheck = debug
 	s.AddAddressToAccessList(sender.Bytes20())
 	if dst != nil {
 		s.AddAddressToAccessList(dst.Bytes20())
@@ -1278,7 +1285,7 @@ func (s *StateDB) AddSlotToAccessList(addr common.AddressBytes, slot common.Hash
 
 // AddressInAccessList returns true if the given address is in the access list.
 func (s *StateDB) AddressInAccessList(addr common.AddressBytes) bool {
-	if s.accessListDebug {
+	if s.bypassAccessListCheck {
 		return true
 	}
 	return s.accessList.ContainsAddress(addr)
@@ -1286,7 +1293,7 @@ func (s *StateDB) AddressInAccessList(addr common.AddressBytes) bool {
 
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.AddressBytes, slot common.Hash) (addressPresent bool, slotPresent bool) {
-	if s.accessListDebug {
+	if s.bypassAccessListCheck {
 		return true, true
 	}
 	return s.accessList.Contains(addr, slot)

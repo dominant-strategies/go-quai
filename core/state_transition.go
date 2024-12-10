@@ -304,6 +304,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
+	// If ETX, bypass accessList enforcement
+	if st.msg.IsETX() {
+		orig := st.state.ConfigureAccessListChecks(false)
+		defer st.state.ConfigureAccessListChecks(orig)
+	}
+
 	// Check clauses 1-3, buy gas if everything is correct
 	if !st.msg.IsETX() {
 		if err := st.preCheck(); err != nil {
