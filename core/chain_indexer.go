@@ -863,7 +863,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 			}
 			lockupByte := tx.Data()[0]
 			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
-			unlockHeight := block.NumberU64(nodeCtx) + LockupByteToBlockDepthFunc(lockupByte)
+			unlockHeight := block.NumberU64(nodeCtx) + params.LockupByteToBlockDepth[lockupByte]
 			coinbaseAddr := tx.To().Bytes20()
 			binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
 			addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr], &types.Lockup{UnlockHeight: unlockHeight, Value: value})
@@ -909,7 +909,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 		} else if tx.EtxType() == types.ConversionType && tx.To().IsInQuaiLedgerScope() {
 			coinbaseAddr := tx.To().Bytes20()
 			binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
-			addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr], &types.Lockup{UnlockHeight: block.NumberU64(nodeCtx) + params.NewConversionLockPeriod, Value: tx.Value()})
+			addressLockups[coinbaseAddr] = append(addressLockups[coinbaseAddr], &types.Lockup{UnlockHeight: block.NumberU64(nodeCtx) + params.ConversionLockPeriod, Value: tx.Value()})
 		} else if tx.EtxType() == types.ConversionType && tx.To().IsInQiLedgerScope() {
 			var lockup *big.Int
 			lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
@@ -954,7 +954,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 	}
 
 	blockDepths := []uint64{
-		params.NewConversionLockPeriod,
+		params.ConversionLockPeriod,
 		params.LockupByteToBlockDepth[1],
 		params.LockupByteToBlockDepth[2],
 		params.LockupByteToBlockDepth[3],
@@ -1127,7 +1127,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, nodeCtx int
 					}
 					lockupByte := etx.Data()[0]
 					value := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte)
-					unlockHeight := targetBlockHeight + LockupByteToBlockDepthFunc(lockupByte)
+					unlockHeight := targetBlockHeight + params.LockupByteToBlockDepth[lockupByte]
 					coinbaseAddr := etx.To().Bytes20()
 					binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(targetBlockHeight))
 					if _, exists := addressLockups[coinbaseAddr]; !exists {
@@ -1150,7 +1150,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, nodeCtx int
 						}
 						addressLockups[addr20] = lockups
 					}
-					addressLockups[addr20] = append(addressLockups[addr20], &types.Lockup{UnlockHeight: targetBlockHeight + params.NewConversionLockPeriod, Value: etx.Value()})
+					addressLockups[addr20] = append(addressLockups[addr20], &types.Lockup{UnlockHeight: targetBlockHeight + params.ConversionLockPeriod, Value: etx.Value()})
 				}
 			}
 		}
@@ -1194,11 +1194,4 @@ func (c *ChainIndexer) GetBlockByNumber(number uint64) *types.WorkObject {
 		return nil
 	}
 	return block
-}
-
-func LockupByteToBlockDepthFunc(lockupByte uint8) uint64 {
-	if lockupByte == 0 {
-		return params.NewConversionLockPeriod
-	}
-	return params.LockupByteToBlockDepth[lockupByte]
 }
