@@ -66,7 +66,9 @@ type Backend interface {
 	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.WorkObject, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.WorkObject, error)
 	AddressOutpoints(ctx context.Context, address common.Address) ([]*types.OutpointAndDenomination, error)
+	AddressLockups(ctx context.Context, address common.Address) ([]*types.Lockup, error)
 	GetOutpointsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error)
+	GetLockupsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.Lockup, error)
 	UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, parent *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error)
@@ -194,6 +196,12 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(apiBackend),
 		},
+		{
+			Namespace: "net",
+			Version:   "1.0",
+			Service:   NewPublicNetAPI(apiBackend.ChainConfig().ChainID.Uint64()),
+			Public:    true,
+		},
 	}
 	if nodeCtx == common.ZONE_CTX {
 		apis = append(apis, rpc.API{
@@ -217,7 +225,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		apis = append(apis, rpc.API{
 			Namespace: "workshare",
 			Version:   "1.0",
-			Service:   NewPublicWorkSharesAPI(apis[6].Service.(*PublicTransactionPoolAPI), apiBackend),
+			Service:   NewPublicWorkSharesAPI(apis[7].Service.(*PublicTransactionPoolAPI), apiBackend),
 			Public:    true,
 		})
 	}

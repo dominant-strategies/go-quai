@@ -1037,6 +1037,9 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 	if tx.Type() != types.QiTxType {
 		return nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
 	}
+	if tx.ChainId().Cmp(signer.ChainID()) != 0 {
+		return nil, fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
+	}
 	totalQitIn := big.NewInt(0)
 	addresses := make(map[common.AddressBytes]struct{})
 	inputs := make(map[uint]uint64)
