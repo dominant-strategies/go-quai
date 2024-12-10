@@ -445,17 +445,7 @@ func GetDeltas(s *PublicBlockChainQuaiAPI, currentBlock *types.WorkObject, addre
 				continue
 			}
 			lockupByte := tx.Data()[0]
-			// After the BigSporkFork the minimum conversion period changes to 7200 blocks
-			var lockup *big.Int
-			if lockupByte == 0 {
-				if currentBlock.NumberU64(nodeCtx) < params.GoldenAgeForkNumberV1 {
-					lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
-				} else {
-					lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
-				}
-			} else {
-				lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-			}
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 			lockup.Add(lockup, currentBlock.Number(nodeCtx))
 			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
 			denominations := misc.FindMinDenominations(value)
@@ -485,12 +475,7 @@ func GetDeltas(s *PublicBlockChainQuaiAPI, currentBlock *types.WorkObject, addre
 			if _, ok := addressMap[common.AddressBytes(tx.To().Bytes20())]; !ok {
 				continue
 			}
-			var lockup *big.Int
-			if currentBlock.NumberU64(nodeCtx) < params.GoldenAgeForkNumberV1 {
-				lockup = new(big.Int).SetUint64(params.OldConversionLockPeriod)
-			} else {
-				lockup = new(big.Int).SetUint64(params.NewConversionLockPeriod)
-			}
+			lockup := new(big.Int).SetUint64(params.ConversionLockPeriod)
 			lockup.Add(lockup, currentBlock.Number(nodeCtx))
 			value := tx.Value()
 			txGas := tx.Gas()
