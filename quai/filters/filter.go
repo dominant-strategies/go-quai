@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -151,6 +152,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	end := uint64(f.end)
 	if f.end == -1 {
 		end = head
+	}
+	if end > uint64(f.begin) && end-uint64(f.begin) > MaxFilterRange {
+		return nil, fmt.Errorf("filter range exceeds maximum limit of %d blocks", MaxFilterRange)
 	}
 
 	// Prepare to collect logs from goroutines
