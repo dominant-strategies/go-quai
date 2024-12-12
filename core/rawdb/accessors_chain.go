@@ -1475,46 +1475,6 @@ func DeleteTokenChoicesSet(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	}
 }
 
-func ReadBetas(db ethdb.KeyValueReader, blockHash common.Hash) *types.Betas {
-	data, _ := db.Get(betasKey(blockHash))
-	if len(data) == 0 {
-		return nil
-	}
-	protoBetas := new(types.ProtoBetas)
-	if err := proto.Unmarshal(data, protoBetas); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to unmarshal proto betas")
-		return nil
-	}
-
-	betas := new(types.Betas)
-	if err := betas.ProtoDecode(protoBetas); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to decode betas")
-		return nil
-	}
-	return betas
-}
-
-func WriteBetas(db ethdb.KeyValueWriter, blockHash common.Hash, beta0, beta1 *big.Float) error {
-	protoBetas, err := types.NewBetas(beta0, beta1).ProtoEncode()
-	if err != nil {
-		return err
-	}
-	data, err := proto.Marshal(protoBetas)
-	if err != nil {
-		return err
-	}
-	if err := db.Put(betasKey(blockHash), data); err != nil {
-		return err
-	}
-	return nil
-}
-
-func DeleteBetas(db ethdb.KeyValueWriter, blockHash common.Hash) {
-	if err := db.Delete(betasKey(blockHash)); err != nil {
-		db.Logger().WithField("err", err).Fatal("Failed to delete betas")
-	}
-}
-
 func WriteSpentUTXOs(db ethdb.KeyValueWriter, blockHash common.Hash, spentUTXOs []*types.SpentUtxoEntry) error {
 	protoSpentUTXOs := &types.ProtoSpentUTXOs{}
 	for _, utxo := range spentUTXOs {
@@ -1747,5 +1707,65 @@ func WriteUtxoToBlockHeight(db ethdb.KeyValueWriter, txHash common.Hash, index u
 func DeleteUtxoToBlockHeight(db ethdb.KeyValueWriter, txHash common.Hash, index uint16) {
 	if err := db.Delete(utxoToBlockHeightKey(txHash, index)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxo to block height")
+	}
+}
+
+func ReadConversionFlowAmount(db ethdb.Reader, hash common.Hash) *big.Int {
+	data, _ := db.Get(conversionFlowAmountKey(hash))
+	if len(data) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).SetBytes(data)
+}
+
+func WriteConversionFlowAmount(db ethdb.KeyValueWriter, hash common.Hash, amount *big.Int) {
+	if err := db.Put(conversionFlowAmountKey(hash), amount.Bytes()); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to get the conversion flow amount for the block hash")
+	}
+}
+
+func DeleteConversionFlowAmount(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(conversionFlowAmountKey(hash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete the conversion flow amount")
+	}
+}
+
+func ReadMinerDifficulty(db ethdb.Reader, hash common.Hash) *big.Int {
+	data, _ := db.Get(minerDifficultyKey(hash))
+	if len(data) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).SetBytes(data)
+}
+
+func WriteMinerDifficulty(db ethdb.KeyValueWriter, hash common.Hash, difficulty *big.Int) {
+	if err := db.Put(minerDifficultyKey(hash), difficulty.Bytes()); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to get the miner difficulty value for the block hash")
+	}
+}
+
+func DeleteMinerDifficulty(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(minerDifficultyKey(hash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete the miner difficulty")
+	}
+}
+
+func ReadKQuaiDiscount(db ethdb.Reader, hash common.Hash) *big.Int {
+	data, _ := db.Get(kQuaiDiscountKey(hash))
+	if len(data) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).SetBytes(data)
+}
+
+func WriteKQuaiDiscount(db ethdb.KeyValueWriter, hash common.Hash, discount *big.Int) {
+	if err := db.Put(kQuaiDiscountKey(hash), discount.Bytes()); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to write the kQuai discount value for the block hash")
+	}
+}
+
+func DeleteKQuaiDiscount(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(kQuaiDiscountKey(hash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delte the k quai discount value for the block hash")
 	}
 }

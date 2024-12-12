@@ -248,6 +248,12 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		}
 	}
 
+	if nodeCtx == common.ZONE_CTX {
+		// compute and store the miner difficulty
+		minerDifficulty := sl.hc.ComputeMinerDifficulty(block)
+		rawdb.WriteMinerDifficulty(batch, block.Hash(), minerDifficulty)
+	}
+
 	if order < nodeCtx {
 		// Store the inbound etxs for all dom blocks and use
 		// it in the future if dom switch happens
@@ -776,7 +782,6 @@ func (sl *Slice) init() error {
 			genesisTermini.SetDomTerminiAtIndex(genesisHash, i)
 		}
 
-		rawdb.WriteBetas(sl.sliceDb, genesisHash, big.NewFloat(0.5), big.NewFloat(0.00083222))
 		newTokenChoiceSet := types.NewTokenChoiceSet()
 		rawdb.WriteTokenChoicesSet(sl.sliceDb, genesisHash, &newTokenChoiceSet)
 
