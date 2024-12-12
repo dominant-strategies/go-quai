@@ -1843,6 +1843,9 @@ func (p *StateProcessor) StateAtTransaction(block *types.WorkObject, txIndex int
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(p.hc.Config(), block.Number(nodeCtx))
 	for idx, tx := range block.Transactions() {
+		if types.IsCoinBaseTx(tx) || tx.Type() != types.QuaiTxType {
+			continue
+		}
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := NewEVMTxContext(msg)
