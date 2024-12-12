@@ -154,7 +154,7 @@ const (
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
 	DefaultCoinbaseLockup                = 0                // The default lockup byte for coinbase rewards
-	CoinbaseGas                          = 80000            // Gas given to a coinbase transaction
+	MaxCoinbaseTrancheElements           = 100              // Maximum number of elements in a coinbase tranche
 )
 
 var (
@@ -193,6 +193,8 @@ var (
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
 	BaseFeeMultiplier             = big.NewInt(50)
+
+	CoinbaseEpochBlocks uint64 = 100 // Maximum number of blocks in a coinbase tranche
 )
 
 const (

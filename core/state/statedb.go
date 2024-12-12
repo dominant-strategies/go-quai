@@ -32,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/rlp"
@@ -45,10 +46,10 @@ type revision struct {
 
 var (
 	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	newestEtxKey = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // max hash
-	oldestEtxKey = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffe") // max hash - 1
-
+	emptyRoot       = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	newestEtxKey    = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // max hash
+	oldestEtxKey    = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffe") // max hash - 1
+	currentEpochKey = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffd") // max hash - 2
 )
 
 type proofList [][]byte
@@ -349,6 +350,7 @@ func (s *StateDB) TxIndex() int {
 }
 
 func (s *StateDB) GetCode(addr common.InternalAddress) []byte {
+	return []byte{}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Code(s.db)
@@ -420,6 +422,10 @@ func (s *StateDB) Database() Database {
 
 func (s *StateDB) ETXDatabase() Database {
 	return s.etxDb
+}
+
+func (s *StateDB) UnderlyingDatabase() ethdb.KeyValueReader {
+	return s.db.TrieDB().DiskDB()
 }
 
 // StorageTrie returns the storage trie of an account.
@@ -700,6 +706,30 @@ func (s *StateDB) CommitEtxs() (common.Hash, error) {
 		s.setError(fmt.Errorf("commitETXs error: %v", err))
 	}
 	return root, err
+}
+
+func (s *StateDB) GetLatestEpoch() (uint32, error) {
+	epochBytes, err := s.etxTrie.TryGet(currentEpochKey[:])
+	if err != nil {
+		return 0, err
+	}
+	if epochBytes == nil || len(epochBytes) == 0 {
+		return 0, nil
+	}
+	if len(epochBytes) != 4 {
+		return 0, fmt.Errorf("invalid epoch length: %d", len(epochBytes))
+	}
+	epoch := binary.BigEndian.Uint32(epochBytes)
+	return epoch, nil
+}
+
+func (s *StateDB) SetLatestEpoch(epoch uint32) error {
+	epochBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(epochBytes, epoch)
+	if err := s.etxTrie.TryUpdate(currentEpochKey[:], epochBytes); err != nil {
+		return err
+	}
+	return nil
 }
 
 // getDeletedStateObject is similar to getStateObject, but instead of returning

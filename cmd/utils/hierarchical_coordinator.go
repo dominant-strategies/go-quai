@@ -981,7 +981,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 		log.Global.Debug("Entropy: ", common.BigBitsToBits(entropy))
 		nodeSet, exists := hc.Get(entropy)
 		if !exists {
-			log.Global.WithFields(log.Fields{"entropy": common.BigBitsToBits(entropy), "order": order, "number": wo.NumberArray(), "hash": wo.Hash()}).Debug("NodeSet not found for entropy")
+			log.Global.WithFields(log.Fields{"entropy": common.BigBitsToBits(entropy), "order": order, "number": wo.NumberArray(), "hash": wo.Hash()}).Trace("NodeSet not found for entropy")
 		}
 
 		if nodeSet.Extendable(wo, order) {
@@ -997,7 +997,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 			}
 			hc.Add(newSetEntropy, newNodeSet, newPendingHeaders)
 		} else {
-			log.Global.WithFields(log.Fields{"entropy": common.BigBitsToBits(entropy), "order": order, "number": wo.NumberArray(), "hash": wo.Hash()}).Debug("NodeSet not found for entropy")
+			log.Global.WithFields(log.Fields{"entropy": common.BigBitsToBits(entropy), "order": order, "number": wo.NumberArray(), "hash": wo.Hash()}).Trace("NodeSet not found for entropy")
 		}
 		misses++
 		if misses > threshold {

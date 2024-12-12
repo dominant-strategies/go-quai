@@ -24,9 +24,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 )
@@ -1709,4 +1709,85 @@ func DeleteUtxoToBlockHeight(db ethdb.KeyValueWriter, txHash common.Hash, index 
 	if err := db.Delete(utxoToBlockHeightKey(txHash, index)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxo to block height")
 	}
+}
+
+func ReadCoinbaseLockup(db ethdb.KeyValueReader, batch ethdb.Batch, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) (*big.Int, uint32, uint16, common.Address) {
+	deleted, data := batch.GetPending(CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch))
+	if deleted {
+		return new(big.Int), 0, 0, common.Zero
+	} else if data != nil {
+		amount := new(big.Int).SetBytes(data[:32])
+		blockHeight := binary.BigEndian.Uint32(data[32:36])
+		elements := binary.BigEndian.Uint16(data[36:38])
+		var delegate common.Address
+		if len(data) == 58 {
+			delegate = common.BytesToAddress(data[38:], db.Location())
+		} else {
+			delegate = common.Zero
+		}
+		return amount, blockHeight, elements, delegate
+	}
+	// If the data is not in the batch, try to look up the data in leveldb
+	data, _ = db.Get(CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch))
+	if len(data) == 0 {
+		return new(big.Int), 0, 0, common.Zero
+	}
+	amount := new(big.Int).SetBytes(data[:32])
+	blockHeight := binary.BigEndian.Uint32(data[32:36])
+	elements := binary.BigEndian.Uint16(data[36:38])
+	var delegate common.Address
+	if len(data) == 58 {
+		delegate = common.BytesToAddress(data[38:], db.Location())
+	} else {
+		delegate = common.Zero
+	}
+	return amount, blockHeight, elements, delegate
+}
+
+func WriteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32, amount *big.Int, blockHeight uint32, elements uint16, delegate common.Address) ([]byte, error) {
+	data := make([]byte, 38)
+	amountBytes := amount.Bytes()
+	if len(amountBytes) > 32 {
+		return nil, fmt.Errorf("amount is too large")
+	}
+	// Right-align amountBytes in data[:32]
+	copy(data[32-len(amountBytes):32], amountBytes)
+	binary.BigEndian.PutUint32(data[32:36], blockHeight)
+	binary.BigEndian.PutUint16(data[36:38], elements)
+	if !delegate.Equal(common.Zero) {
+		data = append(data, delegate.Bytes()...)
+	}
+	key := CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch)
+	if err := db.Put(key, data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store coinbase lockup")
+	}
+	return key, nil
+}
+
+func WriteCoinbaseLockupToMap(coinbaseMap map[[47]byte][]byte, key [47]byte, amount *big.Int, blockHeight uint32, elements uint16, delegate common.Address) error {
+	data := make([]byte, 38)
+	amountBytes := amount.Bytes()
+	if len(amountBytes) > 32 {
+		return fmt.Errorf("amount is too large")
+	}
+	// Right-align amountBytes in data[:32]
+	copy(data[32-len(amountBytes):32], amountBytes)
+	binary.BigEndian.PutUint32(data[32:36], blockHeight)
+	binary.BigEndian.PutUint16(data[36:38], elements)
+	if !delegate.Equal(common.Zero) {
+		data = append(data, delegate.Bytes()...)
+	}
+	coinbaseMap[[47]byte(key)] = data
+	return nil
+}
+
+func DeleteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) [47]byte {
+	key := CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch)
+	if err := db.Delete(key); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete coinbase lockup")
+	}
+	if len(key) != 47 {
+		db.Logger().Fatal("CoinbaseLockupKey is not 47 bytes")
+	}
+	return [47]byte(key)
 }

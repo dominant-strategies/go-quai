@@ -293,7 +293,7 @@ func (b *QuaiAPIBackend) GetEVM(ctx context.Context, msg core.Message, state *st
 	if err != nil {
 		return nil, vmError, err
 	}
-	return vm.NewEVM(context, txContext, state, b.quai.core.Config(), *vmConfig), vmError, nil
+	return vm.NewEVM(context, txContext, state, b.quai.core.Config(), *vmConfig, nil), vmError, nil
 }
 
 func (b *QuaiAPIBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
