@@ -191,6 +191,9 @@ var (
 	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
 	ControllerKickInBlock    uint64 = 1000000000
 
+	StartingConversionFlowAmount        = big.NewInt(100000000000) // TODO: this amount has to be calculated based on the exchange rate
+	MinerDifficultyWindow        uint64 = 1000
+
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
 	BaseFeeMultiplier             = big.NewInt(50)

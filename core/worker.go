@@ -745,36 +745,193 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		var exchangeRate *big.Int
 		if w.hc.IsGenesisHash(block.Hash()) {
 			exchangeRate = params.ExchangeRate
+			work.wo.Header().SetExchangeRate(exchangeRate)
 		} else {
-			if block.NumberU64(common.ZONE_CTX) > params.ControllerKickInBlock {
-				// convert map to a slice
-				updatedTokenChoiceSet, err := CalculateTokenChoicesSet(w.hc, block, work.etxs)
-				if err != nil {
-					return nil, err
-				}
-				exchangeRate, _, _, err = CalculateExchangeRate(w.hc, block, updatedTokenChoiceSet)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				exchangeRate = block.ExchangeRate()
-			}
-		}
-		work.wo.Header().SetExchangeRate(exchangeRate)
 
-		for _, etx := range work.etxs {
-			// If the etx is conversion
-			if types.IsConversionTx(etx) {
-				value := etx.Value()
-				// If to is in Qi, convert the value into Qi
-				if etx.To().IsInQiLedgerScope() {
-					value = misc.QuaiToQi(work.wo, value)
+			actualConversionAmountInHash := big.NewInt(0)
+			realizedConversionAmountInHash := big.NewInt(0)
+
+			if work.wo.NumberU64(common.ZONE_CTX) < params.ControllerKickInBlock {
+				for _, etx := range work.etxs {
+					// If the etx is conversion
+					if types.IsConversionTx(etx) {
+						value := etx.Value()
+						originalValue := new(big.Int).Set(value)
+						// If to is in Qi, convert the value into Qi
+						if etx.To().IsInQiLedgerScope() {
+							value = misc.QuaiToQi(block, value)
+						}
+						// If To is in Quai, convert the value into Quai
+						if etx.To().IsInQuaiLedgerScope() {
+							value = misc.QiToQuai(block, value)
+						}
+						log.Global.Info("////// WORKER: setting the etx conversion value", originalValue, value)
+						etx.SetValue(value)
+					}
 				}
-				// If To is in Quai, convert the value into Quai
-				if etx.To().IsInQuaiLedgerScope() {
-					value = misc.QiToQuai(work.wo, value)
+
+				exchangeRate = block.ExchangeRate()
+				work.wo.Header().SetExchangeRate(exchangeRate)
+
+			} else {
+
+				// There are 6 steps to the exchange rate calculation
+				// 1. Convert the amounts using the parent exchange rate
+				// 2. Using the parent K Quai apply a discount to the converted amount
+				// 3. Calculate the new exchange rate for this block
+				// 4. Convert the amounts using this newly computed exchange rate
+				// 5. Apply the K Quai discount using the new exchange rate
+				// 6. Apply the quadratic Conversion Flow discount
+
+				///////// Step 1 //////////
+				var conversionFlowAmount *big.Int
+				if work.wo.NumberU64(common.ZONE_CTX) == params.ControllerKickInBlock {
+					conversionFlowAmount = new(big.Int).Set(params.StartingConversionFlowAmount)
+				} else {
+					// Read the conversion flow amount saved for the parent block hash
+					conversionFlowAmount = rawdb.ReadConversionFlowAmount(w.hc.headerDb, work.wo.ParentHash(common.ZONE_CTX))
 				}
-				etx.SetValue(value)
+
+				// Need a variable to calculate the total hash value that is being converted
+				conversionAmountInHash := big.NewInt(0)
+				// Calculate the total conversion amount in hash
+				for _, etx := range work.etxs {
+					// If the etx is conversion
+					if types.IsConversionTx(etx) {
+						value := etx.Value()
+						// If to is in Qi, convert the value into Qi
+						if etx.To().IsInQiLedgerScope() {
+							value = misc.QuaiToQi(block, value)
+							conversionAmountInHash = new(big.Int).Add(conversionAmountInHash, misc.QiToHash(block, value))
+						}
+						// If To is in Quai, convert the value into Quai
+						if etx.To().IsInQuaiLedgerScope() {
+							value = misc.QiToQuai(block, value)
+							conversionAmountInHash = new(big.Int).Add(conversionAmountInHash, misc.QuaiToHash(block, value))
+						}
+					}
+				}
+
+				///////// Step 2 /////////
+				// Apply K Quai discount before applying the quadratic discount, conversionAmount = (1-kQuaiDiscount)*conversionAmountInHash
+				kQuaiDiscount := w.hc.ComputeKQuaiDiscount(block)
+				conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(conversionAmountInHash, new(big.Int).Sub(big.NewInt(100), kQuaiDiscount))
+
+				originalEtxValues := make([]*big.Int, len(work.etxs))
+
+				for i, etx := range work.etxs {
+
+					// store the original etx values
+					originalEtxValues[i] = new(big.Int).Set(etx.Value())
+
+					// If the etx is conversion
+					if types.IsConversionTx(etx) {
+						value := etx.Value()
+						// If to is in Qi, convert the value into Qi
+						if etx.To().IsInQiLedgerScope() {
+							value = misc.QuaiToQi(block, value)
+
+							// Apply the slip to each conversion
+							value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+							value = new(big.Int).Div(value, conversionAmountInHash)
+						}
+						// If To is in Quai, convert the value into Quai
+						if etx.To().IsInQuaiLedgerScope() {
+							value = misc.QiToQuai(block, value)
+
+							// Apply the slip to each conversion
+							value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+							value = new(big.Int).Div(value, conversionAmountInHash)
+						}
+						etx.SetValue(value)
+					}
+				}
+
+				//////// Step 3 /////////
+				minerDifficulty := w.hc.ComputeMinerDifficulty(work.wo)
+
+				// save the actual and realized conversion amount
+				actualConversionAmountInHash = new(big.Int).Set(conversionAmountInHash)
+				realizedConversionAmountInHash = new(big.Int).Set(conversionAmountAfterKQuaiDiscount)
+
+				// convert map to a slice
+				updatedTokenChoiceSet, err := CalculateTokenChoicesSet(w.hc, work.wo, block, work.etxs, actualConversionAmountInHash, realizedConversionAmountInHash, minerDifficulty)
+				if err != nil {
+					return nil, err
+				}
+				exchangeRate, err = CalculateBetaFromMiningChoiceAndConversions(w.hc, block, updatedTokenChoiceSet)
+				if err != nil {
+					return nil, err
+				}
+				// set the calculated exchange rate
+				work.wo.Header().SetExchangeRate(exchangeRate)
+
+				//////// Step 4 ////////
+				newConversionAmountInHash := big.NewInt(0)
+				for i, etx := range work.etxs {
+					// If the etx is conversion
+					if types.IsConversionTx(etx) {
+						// Use the original etx values
+						value := originalEtxValues[i]
+						// If to is in Qi, convert the value into Qi
+						if etx.To().IsInQiLedgerScope() {
+							value = misc.QuaiToQi(work.wo, value)
+							newConversionAmountInHash = new(big.Int).Add(newConversionAmountInHash, misc.QiToHash(work.wo, value))
+						}
+						// If To is in Quai, convert the value into Quai
+						if etx.To().IsInQuaiLedgerScope() {
+							value = misc.QiToQuai(work.wo, value)
+							newConversionAmountInHash = new(big.Int).Add(newConversionAmountInHash, misc.QiToHash(work.wo, value))
+						}
+						etx.SetValue(value)
+					}
+				}
+
+				//////// Step 5 ///////
+				newkQuaiDiscount := w.hc.ComputeKQuaiDiscount(work.wo)
+				newConversionAmountAfterKQuaiDiscount := new(big.Int).Mul(newConversionAmountInHash, new(big.Int).Sub(big.NewInt(100), newkQuaiDiscount))
+				for _, etx := range work.etxs {
+					// If the etx is conversion
+					if types.IsConversionTx(etx) {
+						value := etx.Value()
+						// If to is in Qi, convert the value into Qi
+						if etx.To().IsInQiLedgerScope() {
+							// Apply the slip to each conversion
+							value = new(big.Int).Mul(value, newConversionAmountAfterKQuaiDiscount)
+							value = new(big.Int).Div(value, newConversionAmountInHash)
+						}
+						// If To is in Quai, convert the value into Quai
+						if etx.To().IsInQuaiLedgerScope() {
+							// Apply the slip to each conversion
+							value = new(big.Int).Mul(value, newConversionAmountAfterKQuaiDiscount)
+							value = new(big.Int).Div(value, newConversionAmountInHash)
+						}
+						etx.SetValue(value)
+					}
+				}
+
+				/////// Step 6 ////////
+				discountedConversionAmount := w.hc.ApplyQuadraticDiscount(newConversionAmountAfterKQuaiDiscount, conversionFlowAmount)
+				discountedConversionAmountInInt, _ := discountedConversionAmount.Int64()
+				for _, etx := range work.etxs {
+					// If the etx is conversion
+					if types.IsConversionTx(etx) {
+						value := etx.Value()
+						// If to is in Qi, convert the value into Qi
+						if etx.To().IsInQiLedgerScope() {
+							// Apply the slip to each conversion
+							value = new(big.Int).Mul(value, big.NewInt(discountedConversionAmountInInt))
+							value = new(big.Int).Div(value, newConversionAmountAfterKQuaiDiscount)
+						}
+						// If To is in Quai, convert the value into Quai
+						if etx.To().IsInQuaiLedgerScope() {
+							// Apply the slip to each conversion
+							value = new(big.Int).Mul(value, big.NewInt(discountedConversionAmountInInt))
+							value = new(big.Int).Div(value, newConversionAmountAfterKQuaiDiscount)
+						}
+						etx.SetValue(value)
+					}
+				}
 			}
 		}
 	}

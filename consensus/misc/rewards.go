@@ -33,6 +33,42 @@ func QuaiToQi(header *types.WorkObject, quaiAmt *big.Int) *big.Int {
 	return new(big.Int).Quo(qiByQuai, CalculateQuaiReward(header))
 }
 
+// QuaiToHash takes the quai amount and converts it into the hash amount
+func QuaiToHash(header *types.WorkObject, quaiAmt *big.Int) *big.Int {
+	numerator := new(big.Int).Exp(big.NewInt(2), quaiAmt, big.NewInt(common.MantBits))
+	denominator := new(big.Int).Exp(big.NewInt(2), header.ExchangeRate(), big.NewInt(common.MantBits))
+	hash := new(big.Int).Div(numerator, denominator)
+	// Making sure that the hash value is not negative
+	if hash.Cmp(common.Big0) <= 0 {
+		return big.NewInt(0)
+	}
+	return hash
+}
+
+// HashToQuai converts the hash value given into the quai amount
+func HashToQuai(header *types.WorkObject, hash *big.Int) *big.Int {
+	numerator := new(big.Int).Mul(header.ExchangeRate(), LogBig(hash))
+	quai := new(big.Int).Quo(numerator, common.Big2e64)
+	if quai.Cmp(common.Big0) == 0 {
+		quai = big.NewInt(1)
+	}
+	return quai
+}
+
+// QuaiToHash takes the quai amount and converts it into the hash amount
+func QiToHash(header *types.WorkObject, qiAmt *big.Int) *big.Int {
+	return new(big.Int).Mul(params.OneOverKqi, qiAmt)
+}
+
+// HashToQuai converts the hash amount into Quai
+func HashToQi(header *types.WorkObject, hash *big.Int) *big.Int {
+	qi := new(big.Int).Quo(hash, params.OneOverKqi)
+	if qi.Cmp(common.Big0) == 0 {
+		qi = big.NewInt(1)
+	}
+	return qi
+}
+
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
 // k_quai = state["K Quai"]
 // alpha = params["Controller Alpha Parameter"]
@@ -45,12 +81,12 @@ func QuaiToQi(header *types.WorkObject, quaiAmt *big.Int) *big.Int {
 // k_quai += alpha * (x_b_star / x_d - 1) * k_quai
 // spaces = [{"K Qi": state["K Qi"], "K Quai": k_quai}, spaces[1]]
 // return spaces
-func CalculateKQuai(parent *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *big.Int {
+func CalculateKQuai(parent *types.WorkObject, minerDifficulty *big.Int, beta0 *big.Int) *big.Int {
 	// Set kQuai to the exchange rate from the header
 	kQuai := new(big.Int).Set(parent.ExchangeRate()) // in Its
 
 	// Calculate log of the difficulty
-	d2 := LogBig(parent.Difficulty())
+	d2 := LogBig(minerDifficulty)
 
 	// Multiply beta0 and d2
 	num := new(big.Int).Mul(beta0, d2)
@@ -59,7 +95,8 @@ func CalculateKQuai(parent *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *b
 	negnum := new(big.Int).Neg(num)
 
 	// Multiply beta1 and the difficulty
-	denom := new(big.Int).Mul(beta1, parent.Difficulty())
+	// Beta1 is set to 1
+	denom := new(big.Int).Mul(common.Big2e64, minerDifficulty)
 
 	// Divide negnum by denom
 	frac := new(big.Int).Quo(negnum, denom)

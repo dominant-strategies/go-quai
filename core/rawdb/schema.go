@@ -88,7 +88,6 @@ var (
 	multiSetPrefix          = []byte("ms")    // multiSetPrefix + hash -> multiset
 	UtxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	tokenChoicePrefix       = []byte("tc")    // tokenChoicePrefix + hash -> tokenChoices
-	betasPrefix             = []byte("betas") // tokenChoicePrefix + hash -> tokenChoices
 	utxoPrefix              = []byte("ut")    // outpointPrefix + hash -> types.Outpoint
 	spentUTXOsPrefix        = []byte("sutxo") // spentUTXOsPrefix + hash -> []types.SpentTxOut
 	trimmedUTXOsPrefix      = []byte("tutxo") // trimmedUTXOsPrefix + hash -> []types.SpentTxOut
@@ -102,6 +101,9 @@ var (
 	manifestPrefix          = []byte("ma")    // manifestPrefix + hash -> Manifest at block
 	interlinkPrefix         = []byte("il")    // interlinkPrefix + hash -> Interlink at block
 	bloomPrefix             = []byte("bl")    // bloomPrefix + hash -> bloom at block
+	conversionFlowPrefix    = []byte("cf")    // conversionFlowPrefix + hash -> conversion flow amount at block
+	minerDifficultyPrefix   = []byte("md")    // minerDifficultyPrefix + hash -> long term average of the difficulty
+	kQuaiDiscountPrefix     = []byte("kd")    // kQuaiDiscountPrefix + hash -> k quai discount based on the dirivative
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	BloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
@@ -376,14 +378,22 @@ func tokenChoiceSetKey(hash common.Hash) []byte {
 	return append(tokenChoicePrefix, hash.Bytes()...)
 }
 
-func betasKey(hash common.Hash) []byte {
-	return append(betasPrefix, hash.Bytes()...)
-}
-
 func utxoToBlockHeightKey(txHash common.Hash, index uint16) []byte {
 	indexBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(indexBytes, index)
 	txHash[common.HashLength-1] = indexBytes[0]
 	txHash[common.HashLength-2] = indexBytes[1]
 	return append(utxoToBlockHeightPrefix, txHash[:]...)
+}
+
+func conversionFlowAmountKey(hash common.Hash) []byte {
+	return append(conversionFlowPrefix, hash.Bytes()...)
+}
+
+func minerDifficultyKey(hash common.Hash) []byte {
+	return append(minerDifficultyPrefix, hash.Bytes()...)
+}
+
+func kQuaiDiscountKey(hash common.Hash) []byte {
+	return append(kQuaiDiscountPrefix, hash.Bytes()...)
 }
