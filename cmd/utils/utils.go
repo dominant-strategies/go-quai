@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"io/fs"
+	"strings"
 
 	"github.com/spf13/viper"
 
@@ -40,4 +41,5 @@ func InitConfig() {
 	log.Global.Infof("Loading config from environment variables with prefix: '%s_'", constants.ENV_PREFIX)
 	viper.SetEnvPrefix(constants.ENV_PREFIX)
 	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // Replace hyphens with underscores for env variables
 }

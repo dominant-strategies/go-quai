@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common/constants"
@@ -21,8 +22,8 @@ func testXDGConfigLoading(t *testing.T) {
 	defer tempFile.Close()
 	defer os.RemoveAll(mockConfigPath)
 
-	// write 'LOG_LEVEL=debug' config to mock config.yaml file
-	_, err := tempFile.WriteString(LogLevelFlag.Name + " : " + "debug\n")
+	// write 'log-level = debug' config to mock config.yaml file
+	_, err := tempFile.WriteString(LogLevelFlag.Name + " = " + "\"debug\"\n")
 	require.NoError(t, err)
 
 	// Set config path to the temporary config directory
@@ -38,19 +39,21 @@ func testXDGConfigLoading(t *testing.T) {
 // the loading of the environment variable and the loading of the cobra flag.
 // It verifies the expected order of precedence of config loading.
 func TestCobraFlagConfigLoading(t *testing.T) {
-	t.Skip("Todo: fix failing test")
 	// Clear viper instance to simulate a fresh start
 	viper.Reset()
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix(constants.ENV_PREFIX)
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // Replace hyphens with underscores
 
 	// Test loading config from XDG config home
 	testXDGConfigLoading(t)
 	assert.Equal(t, "debug", viper.GetString(LogLevelFlag.Name))
 
 	// Test loading config from environment variable
-	err := os.Setenv(constants.ENV_PREFIX+"_"+"LOG-LEVEL", "error")
-	defer os.Unsetenv(constants.ENV_PREFIX + "_" + "LOG-LEVEL")
+	err := os.Setenv(constants.ENV_PREFIX+"_"+"LOG_LEVEL", "error")
+	defer os.Unsetenv(constants.ENV_PREFIX + "_" + "LOG_LEVEL")
 	require.NoError(t, err)
-	assert.Equal(t, "error", viper.GetString(LogLevelFlag.Name))
+	assert.Equal(t, "error", viper.GetString("LOG_LEVEL"))
 
 	// Test loading config from cobra flag
 	rootCmd := &cobra.Command{}
