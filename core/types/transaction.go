@@ -82,23 +82,56 @@ func NewTx(inner TxData) *Transaction {
 	return tx
 }
 
-func NewEmptyTx() *Transaction {
-	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
+func QuaiTxData() *Transaction {
+	to := common.HexToAddress("0x00bcdef0123456789abcdef0123456789abcdef2", common.Location{0, 0})
+	address := common.HexToAddress("0x0056789abcdef0123456789abcdef0123456789a", common.Location{0, 0})
+	parentHash := common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3")
+	mixHash := common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4")
+	workNonce := EncodeNonce(1)
 	inner := &QuaiTx{
-		ChainID:    new(big.Int).SetUint64(1),
-		Nonce:      1,
-		MinerTip:   new(big.Int).SetUint64(0),
-		GasPrice:   new(big.Int).SetUint64(0),
-		Gas:        uint64(0),
-		To:         &to,
-		Value:      new(big.Int).SetUint64(0),
-		Data:       []byte{},
-		AccessList: AccessList{},
-		V:          new(big.Int).SetUint64(0),
-		R:          new(big.Int).SetUint64(0),
-		S:          new(big.Int).SetUint64(0),
+		ChainID:  big.NewInt(1),
+		Nonce:    1,
+		MinerTip: big.NewInt(1),
+		GasPrice: big.NewInt(1),
+		Gas:      1,
+		To:       &to,
+		Value:    big.NewInt(1),
+		Data:     []byte{0x04},
+		AccessList: AccessList{AccessTuple{
+			Address:     address,
+			StorageKeys: []common.Hash{common.HexToHash("0x23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1")},
+		},
+		},
+		V:          new(big.Int).SetUint64(1),
+		R:          new(big.Int).SetUint64(1),
+		S:          new(big.Int).SetUint64(1),
+		ParentHash: &parentHash,
+		MixHash:    &mixHash,
+		WorkNonce:  &workNonce,
 	}
 	return NewTx(inner)
+}
+
+func NewEmptyQiTx() *Transaction {
+	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
+	in := TxIn{
+		PreviousOutPoint: *NewOutPoint(&common.Hash{},
+			MaxOutputIndex),
+		PubKey: []byte{0x04, 0x50, 0x49, 0x5c, 0xb2, 0xf9, 0x53, 0x5c, 0x68, 0x4e, 0xbe, 0x46, 0x87, 0xb5, 0x01, 0xc0, 0xd4, 0x1a, 0x62, 0x3d, 0x68, 0xc1, 0x18, 0xb8, 0xdc, 0xec, 0xd3, 0x93, 0x37, 0x0f, 0x1d, 0x90, 0xe6, 0x5c, 0x4c, 0x6c, 0x44, 0xcd, 0x3f, 0xe8, 0x09, 0xb4, 0x1d, 0xfa, 0xc9, 0x06, 0x0a, 0xd8, 0x4c, 0xb5, 0x7e, 0x2d, 0x57, 0x5f, 0xad, 0x24, 0xd2, 0x5a, 0x7e, 0xfa, 0x33, 0x96, 0xe7, 0x3c, 0x10},
+	}
+
+	newOut := TxOut{
+		Denomination: uint8(1),
+		Address:      to.Bytes(),
+	}
+
+	utxo := &QiTx{
+		ChainID: big.NewInt(1337),
+		TxIn:    TxIns{in},
+		TxOut:   TxOuts{newOut},
+	}
+
+	return NewTx(utxo)
 }
 
 func (tx *Transaction) SetInner(inner TxData) {
@@ -151,27 +184,27 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 	// Other fields are set conditionally depending on tx type.
 	switch tx.Type() {
 	case QuaiTxType:
+		if tx.To() != nil {
+			protoTx.To = tx.To().Bytes()
+		}
 		nonce := tx.Nonce()
-		gas := tx.Gas()
 		protoTx.Nonce = &nonce
-		protoTx.Gas = &gas
-		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		protoTx.Value = tx.Value().Bytes()
+		gas := tx.Gas()
+		protoTx.Gas = &gas
 		if tx.Data() == nil {
 			protoTx.Data = []byte{}
 		} else {
 			protoTx.Data = tx.Data()
 		}
-		if tx.To() != nil {
-			protoTx.To = tx.To().Bytes()
-		}
+		protoTx.ChainId = tx.ChainId().Bytes()
 		protoTx.MinerTip = tx.MinerTip().Bytes()
 		protoTx.GasPrice = tx.GasPrice().Bytes()
+		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		V, R, S := tx.GetEcdsaSignatureValues()
 		protoTx.V = V.Bytes()
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
-		protoTx.ChainId = tx.ChainId().Bytes()
 		if tx.ParentHash() != nil {
 			protoTx.ParentHash = tx.ParentHash().ProtoEncode()
 		}
@@ -235,7 +268,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	txType := protoTx.GetType()
 
 	switch txType {
-	case 0:
+	case QuaiTxType:
 		if protoTx.Nonce == nil {
 			return errors.New("missing required field 'Nonce' in ProtoTransaction")
 		}
@@ -318,7 +351,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		tx.SetInner(&quaiTx)
 
-	case 1:
+	case ExternalTxType:
 		if protoTx.Gas == nil {
 			return errors.New("missing required field 'Gas' in ProtoTransaction")
 		}
@@ -359,7 +392,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 
 		tx.SetInner(&etx)
 
-	case 2:
+	case QiTxType:
 		if protoTx.TxIns == nil {
 			return errors.New("missing required field 'TxIns' in ProtoTransaction")
 		}
@@ -425,7 +458,7 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		return protoTxSigningData
 	}
 	switch tx.Type() {
-	case 0:
+	case QuaiTxType:
 		txType := uint64(tx.Type())
 		protoTxSigningData.Type = &txType
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
@@ -445,9 +478,9 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		}
 		protoTxSigningData.MinerTip = tx.MinerTip().Bytes()
 		protoTxSigningData.GasPrice = tx.GasPrice().Bytes()
-	case 1:
+	case ExternalTxType:
 		return protoTxSigningData
-	case 2:
+	case QiTxType:
 		txType := uint64(tx.Type())
 		protoTxSigningData.Type = &txType
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
