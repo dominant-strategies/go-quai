@@ -82,21 +82,27 @@ func NewTx(inner TxData) *Transaction {
 	return tx
 }
 
-func NewEmptyTx() *Transaction {
-	to := common.BytesToAddress([]byte{0x01}, common.Location{0, 0})
+func NewEmptyQuaiTx() *Transaction {
 	inner := &QuaiTx{
-		ChainID:    new(big.Int).SetUint64(1),
-		Nonce:      1,
-		MinerTip:   new(big.Int).SetUint64(0),
-		GasPrice:   new(big.Int).SetUint64(0),
-		Gas:        uint64(0),
-		To:         &to,
-		Value:      new(big.Int).SetUint64(0),
-		Data:       []byte{},
-		AccessList: AccessList{},
-		V:          new(big.Int).SetUint64(0),
-		R:          new(big.Int).SetUint64(0),
-		S:          new(big.Int).SetUint64(0),
+		ChainID:  new(big.Int),
+		Nonce:    *new(uint64),
+		MinerTip: new(big.Int),
+		GasPrice: new(big.Int),
+		Gas:      *new(uint64),
+		To:       &common.Address{},
+		Value:    new(big.Int),
+		Data:     []byte{},
+		AccessList: AccessList{AccessTuple{
+			Address:     common.Address{},
+			StorageKeys: []common.Hash{},
+		},
+		},
+		V:          new(big.Int),
+		R:          new(big.Int),
+		S:          new(big.Int),
+		ParentHash: &common.Hash{},
+		MixHash:    &common.Hash{},
+		WorkNonce:  &BlockNonce{},
 	}
 	return NewTx(inner)
 }
@@ -151,27 +157,27 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 	// Other fields are set conditionally depending on tx type.
 	switch tx.Type() {
 	case QuaiTxType:
+		if tx.To() != nil {
+			protoTx.To = tx.To().Bytes()
+		}
 		nonce := tx.Nonce()
-		gas := tx.Gas()
 		protoTx.Nonce = &nonce
-		protoTx.Gas = &gas
-		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		protoTx.Value = tx.Value().Bytes()
+		gas := tx.Gas()
+		protoTx.Gas = &gas
 		if tx.Data() == nil {
 			protoTx.Data = []byte{}
 		} else {
 			protoTx.Data = tx.Data()
 		}
-		if tx.To() != nil {
-			protoTx.To = tx.To().Bytes()
-		}
+		protoTx.ChainId = tx.ChainId().Bytes()
 		protoTx.MinerTip = tx.MinerTip().Bytes()
 		protoTx.GasPrice = tx.GasPrice().Bytes()
+		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		V, R, S := tx.GetEcdsaSignatureValues()
 		protoTx.V = V.Bytes()
 		protoTx.R = R.Bytes()
 		protoTx.S = S.Bytes()
-		protoTx.ChainId = tx.ChainId().Bytes()
 		if tx.ParentHash() != nil {
 			protoTx.ParentHash = tx.ParentHash().ProtoEncode()
 		}
@@ -235,7 +241,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	txType := protoTx.GetType()
 
 	switch txType {
-	case 0:
+	case QuaiTxType:
 		if protoTx.Nonce == nil {
 			return errors.New("missing required field 'Nonce' in ProtoTransaction")
 		}
@@ -318,7 +324,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		tx.SetInner(&quaiTx)
 
-	case 1:
+	case ExternalTxType:
 		if protoTx.Gas == nil {
 			return errors.New("missing required field 'Gas' in ProtoTransaction")
 		}
@@ -359,7 +365,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 
 		tx.SetInner(&etx)
 
-	case 2:
+	case QiTxType:
 		if protoTx.TxIns == nil {
 			return errors.New("missing required field 'TxIns' in ProtoTransaction")
 		}
@@ -425,7 +431,7 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		return protoTxSigningData
 	}
 	switch tx.Type() {
-	case 0:
+	case QuaiTxType:
 		txType := uint64(tx.Type())
 		protoTxSigningData.Type = &txType
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
@@ -445,9 +451,9 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		}
 		protoTxSigningData.MinerTip = tx.MinerTip().Bytes()
 		protoTxSigningData.GasPrice = tx.GasPrice().Bytes()
-	case 1:
+	case ExternalTxType:
 		return protoTxSigningData
-	case 2:
+	case QiTxType:
 		txType := uint64(tx.Type())
 		protoTxSigningData.Type = &txType
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
