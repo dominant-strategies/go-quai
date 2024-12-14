@@ -460,7 +460,7 @@ func TestQiAddressScope(t *testing.T) {
 }
 
 // ETX hash tests
-func etxData() (*Transaction, common.Hash) {
+func etxData() *Transaction {
 	to := common.HexToAddress("0x00bcdef0123456789abcdef0123456789abcdef2", common.Location{0, 0})
 	address := common.HexToAddress("0x3456789abcdef0123456789abcdef0123456789a", common.Location{0, 0})
 	sender := common.HexToAddress("0x89abcdef0123456789abcdef0123456789abcdef0123456789abcdef7", common.Location{0, 0})
@@ -482,18 +482,20 @@ func etxData() (*Transaction, common.Hash) {
 		EtxType: 0,
 	}
 	tx := NewTx(inner)
-	return tx, tx.Hash()
+	return tx
 }
 
 func TestEtxHash(t *testing.T) {
-	_, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	correctHash := common.HexToHash("0x569200efce076a61575a3661dcb6f59e77e0407279c8db136ef9b2fa23d361ce")
 	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
 }
 
 func FuzzEtxOriginatingTxHash(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	// Verify the hash of the transaction
 	if hash == (common.Hash{}) {
@@ -518,7 +520,8 @@ func FuzzEtxOriginatingTxHash(f *testing.F) {
 
 func FuzzEtxType(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testUInt16)
 	f.Add(tx.inner.etxIndex())
 	// Verify the hash of the transaction
@@ -541,7 +544,8 @@ func FuzzEtxType(f *testing.F) {
 
 func FuzzEtxIndex(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testUInt16)
 	f.Add(tx.inner.etxIndex())
 	// Verify the hash of the transaction
@@ -564,7 +568,8 @@ func FuzzEtxIndex(f *testing.F) {
 
 func FuzzEtxGas(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testUInt64)
 	f.Add(tx.inner.gas())
 	// Verify the hash of the transaction
@@ -587,7 +592,8 @@ func FuzzEtxGas(f *testing.F) {
 
 func FuzzEtxTo(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.inner.to().Bytes())
 
@@ -622,7 +628,8 @@ func FuzzEtxTo(f *testing.F) {
 
 func FuzzEtxValue(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testUInt64)
 	f.Add(tx.inner.value().Uint64())
 	// Verify the hash of the transaction
@@ -646,7 +653,8 @@ func FuzzEtxValue(f *testing.F) {
 
 func FuzzEtxData(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.inner.data())
 	// Verify the hash of the transaction
@@ -669,7 +677,8 @@ func FuzzEtxData(f *testing.F) {
 }
 
 func FuzzEtxAccessList(f *testing.F) {
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.inner.(*ExternalTx).accessList()[0].Address.Bytes())
 	if hash == (common.Hash{}) {
@@ -699,7 +708,8 @@ func FuzzEtxAccessList(f *testing.F) {
 
 func FuzzEtxSender(f *testing.F) {
 	// Create a new transaction
-	tx, hash := etxData()
+	tx := etxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.inner.etxSender().Bytes())
 
@@ -722,7 +732,7 @@ func FuzzEtxSender(f *testing.F) {
 }
 
 // QiTx hash tests
-func qiTxData() (*Transaction, common.Hash) {
+func qiTxData() *Transaction {
 	parentHash := common.HexToHash("0x456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef3")
 	mixHash := common.HexToHash("0x56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef4")
 	txHash := common.HexToHash("0x3a203a4f1589fe3a57a68482c048fb28c571b761a42c4cde81767e20a3d0416d")
@@ -738,18 +748,20 @@ func qiTxData() (*Transaction, common.Hash) {
 		WorkNonce:  &workNonce,
 	}
 	tx := NewTx(inner)
-	return tx, tx.Hash()
+	return tx
 }
 
 func TestQiTxHash(t *testing.T) {
-	_, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	correctHash := common.HexToHash("0x3ab73ae4860b3db006d7a19fed6be3efe5619f53f499ef561f42c46bc12b555d")
 	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 
 func FuzzQiTxHashingChainID(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testUInt64)
 	f.Add(tx.inner.chainID().Uint64())
 	// Verify the hash of the transaction
@@ -773,7 +785,8 @@ func FuzzQiTxHashingChainID(f *testing.F) {
 
 func FuzzQiTxHashingTxInOutPointTxHash(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.TxIn()[0].PreviousOutPoint.TxHash.Bytes())
 	// Verify the hash of the transaction
@@ -798,7 +811,8 @@ func FuzzQiTxHashingTxInOutPointTxHash(f *testing.F) {
 
 func FuzzQiTxHashingTxInOutPointIndex(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testUInt16)
 	f.Add(tx.TxIn()[0].PreviousOutPoint.Index)
 	// Verify the hash of the transaction
@@ -822,7 +836,8 @@ func FuzzQiTxHashingTxInOutPointIndex(f *testing.F) {
 
 func FuzzQiTxHashingTxInOutPointPubKey(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.TxIn()[0].PubKey)
 	// Verify the hash of the transaction
@@ -844,7 +859,8 @@ func FuzzQiTxHashingTxInOutPointPubKey(f *testing.F) {
 
 func FuzzQiTxHashingTxOutDenomination(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testUInt8)
 	f.Add(tx.TxOut()[0].Denomination)
 	// Verify the hash of the transaction
@@ -867,7 +883,8 @@ func FuzzQiTxHashingTxOutDenomination(f *testing.F) {
 
 func FuzzQiTxHashingTxOutAddress(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.inner.txOut()[0].Address)
 
@@ -891,7 +908,8 @@ func FuzzQiTxHashingTxOutAddress(f *testing.F) {
 
 func FuzzQiTxHashingTxOutLock(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testUInt64)
 	f.Add(tx.inner.txOut()[0].Lock.Uint64())
 	// Verify the hash of the transaction
@@ -918,7 +936,8 @@ func FuzzQiTxHashingTxOutLock(f *testing.F) {
 
 func FuzzQiTxHashingSignature(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	f.Add(tx.GetSchnorrSignature().Serialize())
 
@@ -944,7 +963,8 @@ func FuzzQiTxHashingSignature(f *testing.F) {
 
 func fuzzQitxHashingField(f *testing.F, getField func(TxData) *common.Hash, setField func(*QiTx, *common.Hash)) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testByte)
 	// Verify the hash of the transaction
 	if hash == (common.Hash{}) {
@@ -980,7 +1000,8 @@ func FuzzQitxMixHash(f *testing.F) {
 
 func FuzzQiTxHashingWorkNonce(f *testing.F) {
 	// Create a new transaction
-	tx, hash := qiTxData()
+	tx := qiTxData()
+	hash := tx.Hash()
 	f.Add(testUInt64)
 	f.Add(tx.inner.workNonce().Uint64())
 	// Verify the hash of the transaction
@@ -1052,6 +1073,74 @@ func TestNilChainIDDecode(t *testing.T) {
 	require.NotEqual(t, err, nil)
 }
 
-func TestFromChain(t *testing.T) {
+func TestLocal(t *testing.T) {
+	tests := []struct {
+		name string
+		tx   *Transaction
+	}{
+		{
+			"QuaiTx",
+			QuaiTxData(),
+		},
+		{
+			"QiTx",
+			qiTxData(),
+		},
+		{
+			"ExternalTx",
+			etxData(),
+		},
+	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.tx.SetLocal(true)
+			require.True(t, tt.tx.IsLocal())
+
+			tt.tx.SetLocal(false)
+			require.False(t, tt.tx.IsLocal())
+		})
+	}
+}
+
+func TestTransactionHash(t *testing.T) {
+	tests := []struct {
+		name        string
+		tx          func() *Transaction
+		shouldEqual bool
+	}{
+		{
+			"QuaiTx",
+			QuaiTxData,
+			// Should not equal because our VRS are made up and don't map to any zone
+			// This means that we are actually using the location variable
+			false,
+		},
+		{
+			"QiTx",
+			qiTxData,
+			true,
+		},
+		{
+			"ExternalTx",
+			etxData,
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, loc := range locations {
+				// Generate two different transactions to avoid caching
+				originalHash := tt.tx().Hash()
+				locProvidedHash := tt.tx().Hash(loc...)
+
+				if tt.shouldEqual {
+					require.Equal(t, originalHash, locProvidedHash)
+				} else {
+					require.NotEqual(t, originalHash, locProvidedHash)
+				}
+			}
+		})
+	}
 }
