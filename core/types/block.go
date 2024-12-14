@@ -195,7 +195,8 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woBody.SetTransactions([]*Transaction{})
 	wo.woBody.SetOutboundEtxs([]*Transaction{})
 	wo.woBody.SetManifest(BlockManifest{})
-	return NewWorkObjectWithHeader(wo, NewEmptyTx(), nodeCtx, BlockObject)
+	tx := QuaiTxData()
+	return NewWorkObjectWithHeader(wo, tx, nodeCtx, BlockObject)
 }
 
 func EmptyZoneWorkObject() *WorkObject {

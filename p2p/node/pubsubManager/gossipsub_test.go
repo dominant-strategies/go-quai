@@ -158,7 +158,7 @@ func TestMultipleRequests(t *testing.T) {
 
 	wo := types.EmptyZoneWorkObject()
 
-	tx := types.NewEmptyTx()
+	tx := types.QuaiTxData()
 	txs := types.Transactions{tx}
 
 	headerView := wo.ConvertToHeaderView()
