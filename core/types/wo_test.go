@@ -10,6 +10,25 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var locations = []common.Location{
+	{0, 0},
+	{0, 1},
+	{0, 2},
+	{0, 3},
+	{1, 0},
+	{1, 1},
+	{1, 2},
+	{1, 3},
+	{2, 0},
+	{2, 1},
+	{2, 2},
+	{2, 3},
+	{3, 0},
+	{3, 1},
+	{3, 2},
+	{3, 3},
+}
+
 func woTestData() (*WorkObject, common.Hash) {
 	wo := &WorkObject{}
 	wo.SetWorkObjectHeader(&WorkObjectHeader{})
@@ -197,25 +216,7 @@ func FuzzMixHash(f *testing.F) {
 func TestLocationHash(t *testing.T) {
 	wo, hash := woTestData()
 
-	locations := []common.Location{
-		{0, 1},
-		{0, 2},
-		{0, 3},
-		{1, 0},
-		{1, 1},
-		{1, 2},
-		{1, 3},
-		{2, 0},
-		{2, 1},
-		{2, 2},
-		{2, 3},
-		{3, 0},
-		{3, 1},
-		{3, 2},
-		{3, 3},
-	}
-
-	for _, loc := range locations {
+	for _, loc := range locations[1:] {
 		woCopy := *wo
 		woCopy.woHeader.location = loc
 		require.NotEqual(t, woCopy.Hash(), hash, "Hash equal for location \noriginal: %v, modified: %v", wo.woHeader.location, loc)
