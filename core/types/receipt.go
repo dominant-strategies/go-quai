@@ -73,6 +73,10 @@ type Receipt struct {
 	BlockNumber      *big.Int     `json:"blockNumber,omitempty"`
 	TransactionIndex uint         `json:"transactionIndex"`
 	OutboundEtxs     Transactions `json:"outboundEtxs"`
+
+	// Cached values: These fields are used to cache values that are expensive to compute and are not stored in the database.
+	CoinbaseLockupDeletedHashes []*common.Hash
+	CoinbaseLockupsDeleted      map[[47]byte][]byte
 }
 
 type receiptMarshaling struct {
