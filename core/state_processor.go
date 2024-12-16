@@ -892,7 +892,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && conversionPeriodValid {
 				internal, err := etx.To().InternalAddress()
 				if err != nil {
-					fmt.Errorf("Error converting address to internal address: %v", err)
+					return fmt.Errorf("Error converting address to internal address: %v", err), nil
 				}
 				balance := etx.Value()
 				if !statedb.Exist(internal) {
@@ -1506,10 +1506,12 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		return nil, nil, err
 	}
 	if block.Hash() != blockHash {
+		err := errors.New("block hash changed after processing the block")
 		p.logger.WithFields(log.Fields{
 			"oldHash": blockHash,
 			"newHash": block.Hash(),
-		}).Warn("Block hash changed after Processing the block")
+		}).Error(err)
+		return nil, nil, err
 	}
 	time3 := common.PrettyDuration(time.Since(start))
 	err = p.validator.ValidateState(block, statedb, receipts, etxs, multiSet, usedGas, usedState)
