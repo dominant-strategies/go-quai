@@ -598,6 +598,40 @@ func ABIEncodeLockupData(trancheUnlockHeight uint32, balance *big.Int, elements 
 	return encoded, nil
 }
 
+func GetAllLockupData(db ethdb.Database, ownerContract, beneficiaryMiner common.Address, location common.Location, logger *log.Logger) (map[string]map[string][]interface{}, error) {
+	prefix := append(rawdb.CoinbaseLockupPrefix, ownerContract.Bytes()...)
+	prefix = append(prefix, beneficiaryMiner.Bytes()...)
+	it := db.NewIterator(prefix, nil)
+	batch := db.NewBatch()
+	defer it.Release()
+	epochToLockupByteToLockupMap := make(map[string]map[string][]interface{})
+	for it.Next() {
+		key := it.Key()
+		if len(key) != rawdb.CoinbaseLockupKeyLength {
+			continue
+		}
+		_, _, lockupByte, epoch, err := rawdb.ReverseCoinbaseLockupKey(key, location)
+		if err != nil {
+			return nil, err
+		}
+		balance, trancheUnlockHeight, elements, delegate := rawdb.ReadCoinbaseLockup(db, batch, ownerContract, beneficiaryMiner, lockupByte, epoch)
+		if trancheUnlockHeight == 0 {
+			logger.Errorf("lockup is empty: ownerContract=%v, beneficiaryMiner=%v, lockupByte=%v, epoch=%v", ownerContract, beneficiaryMiner, lockupByte, epoch)
+		}
+		jsonLockup := map[string]interface{}{
+			"balance":             balance,
+			"trancheUnlockHeight": trancheUnlockHeight,
+			"elements":            elements,
+			"delegate":            delegate,
+		}
+		if _, ok := epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)]; !ok {
+			epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)] = make(map[string][]interface{})
+		}
+		epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)][fmt.Sprintf("%d", lockupByte)] = append(epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)][fmt.Sprintf("%d", lockupByte)], jsonLockup)
+	}
+	return epochToLockupByteToLockupMap, nil
+}
+
 func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) error { // Ensure msg.sender is ownerContract
 	// Input should be tightly packed 33 bytes
 	if len(input) != 33 {

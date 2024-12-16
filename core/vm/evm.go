@@ -710,6 +710,7 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) ResetCoinbasesDeleted() {
 	evm.CoinbasesDeleted = make(map[[47]byte][]byte)
+	evm.CoinbaseDeletedHashes = make([]*common.Hash, 0)
 }
 
 func (evm *EVM) UndoCoinbasesDeleted() {

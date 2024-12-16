@@ -1597,6 +1597,77 @@ func DeleteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	}
 }
 
+func WriteCreatedCoinbaseLockupKeys(db ethdb.KeyValueWriter, blockHash common.Hash, keys [][]byte) error {
+	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(keys))}
+	protoKeys.Keys = append(protoKeys.Keys, keys...)
+
+	data, err := proto.Marshal(protoKeys)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(createdCoinbaseLockupsKey(blockHash), data)
+}
+
+func ReadCreatedCoinbaseLockupKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(createdCoinbaseLockupsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeys := new(types.ProtoKeys)
+	if err := proto.Unmarshal(data, protoKeys); err != nil {
+		return nil, err
+	}
+	return protoKeys.Keys, nil
+}
+
+func DeleteCreatedCoinbaseLockupKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(createdCoinbaseLockupsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete created coinbase lockup keys")
+	}
+}
+
+func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash, deletedLockups map[[47]byte][]byte) error {
+	protoKeysAndValues := &types.ProtoKeysAndValues{KeysAndValues: make([]*types.ProtoKeyValue, 0, len(deletedLockups))}
+	for key, value := range deletedLockups {
+		protoKeysAndValues.KeysAndValues = append(protoKeysAndValues.KeysAndValues, &types.ProtoKeyValue{
+			Key:   key[:],
+			Value: value,
+		})
+	}
+	data, err := proto.Marshal(protoKeysAndValues)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(deletedCoinbaseLockupsKey(blockHash), data)
+}
+
+func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[47]byte][]byte, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(deletedCoinbaseLockupsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeysAndValues := new(types.ProtoKeysAndValues)
+	if err := proto.Unmarshal(data, protoKeysAndValues); err != nil {
+		return nil, err
+	}
+	deletedLockups := make(map[[47]byte][]byte)
+	for _, keyValue := range protoKeysAndValues.KeysAndValues {
+		if len(keyValue.Key) != 47 {
+			return nil, fmt.Errorf("invalid key length %d", len(keyValue.Key))
+		}
+		deletedLockups[[47]byte(keyValue.Key)] = keyValue.Value
+	}
+	return deletedLockups, nil
+}
+
+func DeleteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(deletedCoinbaseLockupsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete deleted coinbase lockups")
+	}
+}
+
 func ReadUTXOSetSize(db ethdb.Reader, blockHash common.Hash) uint64 {
 	data, _ := db.Get(utxoSetSizeKey(blockHash))
 	if len(data) == 0 {
