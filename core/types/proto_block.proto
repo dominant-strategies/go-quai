@@ -223,6 +223,14 @@ message ProtoKeys {
   repeated bytes keys = 1;
 }
 
+message ProtoKeyValue {
+  bytes key = 1;
+  bytes value = 2;
+}
+message ProtoKeysAndValues {
+  repeated ProtoKeyValue keys_and_values = 1;
+}
+
 message ProtoTrimDepths {
   map<uint32, uint64> trim_depths = 1;
 }

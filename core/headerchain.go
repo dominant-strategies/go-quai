@@ -528,6 +528,26 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 				}
 				hc.headerDb.Delete(key)
 			}
+			createdCoinbaseKeys, err := rawdb.ReadCreatedCoinbaseLockupKeys(hc.headerDb, prevHeader.Hash())
+			if err != nil {
+				return err
+			}
+			for _, key := range createdCoinbaseKeys {
+				if len(key) != rawdb.CoinbaseLockupKeyLength {
+					return fmt.Errorf("invalid created coinbase key length: %d", len(key))
+				}
+				hc.headerDb.Delete(key)
+			}
+			deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, prevHeader.Hash())
+			if err != nil {
+				return err
+			}
+			for key, coinbase := range deletedCoinbases {
+				if len(key) != rawdb.CoinbaseLockupKeyLength {
+					return fmt.Errorf("invalid deleted coinbase key length: %d", len(key))
+				}
+				hc.headerDb.Put(key[:], coinbase)
+			}
 		}
 		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
 		if prevHeader == nil {
@@ -591,6 +611,26 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 						}
 						for _, key := range utxoKeys {
 							hc.headerDb.Delete(key)
+						}
+						createdCoinbaseKeys, err := rawdb.ReadCreatedCoinbaseLockupKeys(hc.headerDb, prevHeader.Hash())
+						if err != nil {
+							return err
+						}
+						for _, key := range createdCoinbaseKeys {
+							if len(key) != rawdb.CoinbaseLockupKeyLength {
+								return fmt.Errorf("invalid created coinbase key length: %d", len(key))
+							}
+							hc.headerDb.Delete(key)
+						}
+						deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, prevHeader.Hash())
+						if err != nil {
+							return err
+						}
+						for key, coinbase := range deletedCoinbases {
+							if len(key) != rawdb.CoinbaseLockupKeyLength {
+								return fmt.Errorf("invalid deleted coinbase key length: %d", len(key))
+							}
+							hc.headerDb.Put(key[:], coinbase)
 						}
 					}
 				}
