@@ -712,6 +712,7 @@ func (evm *EVM) GetLatestMinerEpoch() (uint32, error) { return evm.StateDB.GetLa
 
 func (evm *EVM) ResetCoinbasesDeleted() {
 	evm.CoinbasesDeleted = make(map[[47]byte][]byte)
+	evm.CoinbaseDeletedHashes = make([]*common.Hash, 0)
 }
 
 func (evm *EVM) UndoCoinbasesDeleted() {
