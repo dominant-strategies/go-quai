@@ -18,7 +18,9 @@ package common
 
 import (
 	"math/big"
+	"time"
 
+	"github.com/dominant-strategies/go-quai/log"
 	"modernc.org/mathutil"
 )
 
@@ -76,4 +78,40 @@ func LogBig(diff *big.Int) *big.Int {
 	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(MantBits), nil))
 	bigBits = new(big.Int).Add(bigBits, m)
 	return bigBits
+}
+
+// Continously verify that the common values have not been overwritten.
+func SanityCheck(quitCh chan struct{}) {
+	big0 := big.NewInt(0)
+	big1 := big.NewInt(1)
+	big2 := big.NewInt(2)
+	big3 := big.NewInt(3)
+	big8 := big.NewInt(8)
+	big32 := big.NewInt(32)
+	big256 := big.NewInt(256)
+	big257 := big.NewInt(257)
+	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	big2e64 := new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
+
+	go func(quitCh chan struct{}) {
+		for {
+			time.Sleep(1 * time.Minute)
+
+			// Verify that none of the values have mutated.
+			if big0.Cmp(Big0) != 0 ||
+				big1.Cmp(Big1) != 0 ||
+				big2.Cmp(Big2) != 0 ||
+				big3.Cmp(Big3) != 0 ||
+				big8.Cmp(Big8) != 0 ||
+				big32.Cmp(Big32) != 0 ||
+				big256.Cmp(Big256) != 0 ||
+				big257.Cmp(Big257) != 0 ||
+				big2e256.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))) != 0 ||
+				big2e64.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))) != 0 {
+				// Send a message to quitCh to abort.
+				log.Global.Error("A common value has mutated, exiting now")
+				quitCh <- struct{}{}
+			}
+		}
+	}(quitCh)
 }

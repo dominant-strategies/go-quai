@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p/node"
@@ -73,6 +74,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// create a quit channel for services to signal for a clean shutdown
 	quitCh := make(chan struct{})
 
+	common.SanityCheck(quitCh)
 	// create a new p2p node
 	node, err := node.NewNode(ctx, quitCh)
 	if err != nil {
@@ -104,8 +106,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
-	log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
+
+	select {
+	case <-ch:
+		log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
+	case <-quitCh:
+		log.Global.Warn("Received 'quit' signal from child, shutting down...")
+	}
+
 	cancel()
 	// stop the hierarchical co-ordinator
 	hc.Stop()
