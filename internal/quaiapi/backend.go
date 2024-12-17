@@ -143,6 +143,7 @@ type Backend interface {
 	GetMinGasPrice() *big.Int
 	GetPoolGasPrice() *big.Int
 	SendTxToSharingClients(tx *types.Transaction)
+	GetRollingFeeInfo() (min, max, avg *big.Int)
 
 	// Filter API
 	BloomStatus() (uint64, uint64)

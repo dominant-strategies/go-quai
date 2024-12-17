@@ -414,6 +414,10 @@ func (b *QuaiAPIBackend) SendTxToSharingClients(tx *types.Transaction) {
 	b.quai.core.SendTxToSharingClients(tx)
 }
 
+func (b *QuaiAPIBackend) GetRollingFeeInfo() (min, max, avg *big.Int) {
+	return b.quai.core.GetRollingFeeInfo()
+}
+
 func (b *QuaiAPIBackend) GetMinGasPrice() *big.Int {
 	return b.quai.core.GetMinGasPrice()
 }
