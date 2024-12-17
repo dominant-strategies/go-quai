@@ -169,6 +169,18 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	return content
 }
 
+// GetRollingFeeInfo returns an array of rolling values according to a 100 block peak filter.
+// []*hexutil.Big{min, max, avg}
+func (s *PublicTxPoolAPI) GetRollingFeeInfo() ([]*hexutil.Big, error) {
+	bigMin, bigMax, bigAvg := s.b.GetRollingFeeInfo()
+
+	if bigMin == nil || bigMax == nil || bigAvg == nil {
+		return nil, errors.New("no transactions processed to calculate min, max, or avg")
+	}
+
+	return []*hexutil.Big{(*hexutil.Big)(bigMin), (*hexutil.Big)(bigMax), (*hexutil.Big)(bigAvg)}, nil
+}
+
 // PublicBlockChainAPI provides an API to access the Quai blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainAPI struct {
