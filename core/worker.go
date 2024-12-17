@@ -54,7 +54,7 @@ const (
 	c_uncleCacheSize = 100
 )
 
-var defaultLockupContractAddress = common.HexToAddress("0x004A2e19E838218544eE571a900f62Cb050B39CE", common.Location{0, 0})
+var defaultLockupContractAddress = common.HexToAddress("0x0075E7c2bD6172Bf394Ee26B09B693daA6931DB5", common.Location{0, 0})
 
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
@@ -1149,6 +1149,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				gasUsed := env.wo.GasUsed()
 				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
 					gasUsed += params.TxGas
+					receipt.GasUsed = params.TxGas
 				}
 
 				env.wo.Header().SetGasUsed(gasUsed)
@@ -1200,6 +1201,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				gasUsed := env.wo.GasUsed()
 				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
 					gasUsed += params.TxGas
+					receipt.GasUsed = params.TxGas
 				}
 				env.wo.Header().SetGasUsed(gasUsed)
 				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
@@ -1224,9 +1226,15 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			var receipt *types.Receipt
 			if len(tx.Data()) == 1 {
 				// Coinbase has no extra data
-				// Coinbase is valid, no gas used
-				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
-				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, 0)
+				// Coinbase is valid
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 21000, TxHash: tx.Hash()}
+				gasUsed := env.wo.GasUsed()
+				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
+					gasUsed += params.TxGas
+					receipt.GasUsed = params.TxGas
+				}
+				env.wo.Header().SetGasUsed(gasUsed)
+				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 				env.txs = append(env.txs, tx)
 				env.receipts = append(env.receipts, receipt)
 				return []*types.Log{}, false, nil
@@ -1292,6 +1300,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			gasUsed := env.wo.GasUsed()
 			if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
 				gasUsed += params.TxGas
+				receipt.GasUsed = params.TxGas
 			}
 			env.wo.Header().SetGasUsed(gasUsed)
 			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
@@ -1350,6 +1359,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				env.wo.Header().SetGasUsed(gasUsed)
 				env.txs = append(env.txs, tx)
 				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+				env.receipts = append(env.receipts, receipt)
 				return receipt.Logs, true, nil
 			}
 		}
@@ -1449,6 +1459,22 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 		env.txs = append(env.txs, tx)
 		return []*types.Log{}, false, nil // The conversion is locked and will be redeemed later
+	} else if tx.Type() == types.ExternalTxType && tx.EtxType() == types.WrappingQiType && tx.To().IsInQuaiLedgerScope() { // Qi wrapping ETX
+		if len(tx.Data()) != common.AddressLength {
+			return nil, false, fmt.Errorf("wrapping Qi ETX %x has invalid data length", tx.Hash())
+		}
+		if tx.To() == nil {
+			return nil, false, fmt.Errorf("wrapping Qi ETX %x has no recipient", tx.Hash())
+		}
+		ownerContractAddr := common.BytesToAddress(tx.Data(), w.chainConfig.Location)
+		if err := vm.WrapQi(env.state, ownerContractAddr, *tx.To(), common.OneInternal(w.chainConfig.Location), tx.Value(), w.chainConfig.Location); err != nil {
+			return nil, false, fmt.Errorf("could not wrap Qi: %w", err)
+		}
+		gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
+		env.wo.Header().SetGasUsed(gasUsed)
+		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+		env.txs = append(env.txs, tx)
+		return []*types.Log{}, false, nil
 	}
 	snap := env.state.Snapshot()
 	// retrieve the gas used int and pass in the reference to the ApplyTransaction
@@ -1467,6 +1493,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	}
 	if receipt.Status == types.ReceiptStatusSuccessful {
 		env.etxs = append(env.etxs, receipt.OutboundEtxs...)
+		for _, hash := range receipt.CoinbaseLockupDeletedHashes {
+			env.utxosDelete = append(env.utxosDelete, *hash)
+		}
 	}
 	// once the gasUsed pointer is updated in the ApplyTransaction it has to be set back to the env.Header.GasUsed
 	// This extra step is needed because previously the GasUsed was a public method and direct update of the value
@@ -2277,6 +2306,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
+	if len(tx.Data()) != 0 && len(tx.Data()) != common.AddressLength {
+		return fmt.Errorf("tx %v emits UTXO with invalid data length %d", tx.Hash().Hex(), len(tx.Data()))
+	}
 	gasUsed := env.wo.GasUsed()
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx, env.qiGasScalingFactor)
 	gasUsed += intrinsicGas // the amount of block gas used in this transaction is only the txGas, regardless of ETXs emitted
@@ -2323,6 +2355,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	totalConvertQitOut := big.NewInt(0)
 	utxosCreateHashes := make([]common.Hash, 0, len(tx.TxOut()))
 	conversion := false
+	wrapping := false
 	var convertAddress common.Address
 	outputs := make(map[uint]uint64)
 	for txOutIdx, txOut := range tx.TxOut() {
@@ -2347,7 +2380,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
 
-		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() { // Qi->Quai conversion
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == 0 { // Qi->Quai conversion
 			if conversion && !toAddr.Equal(convertAddress) { // All convert outputs must have the same To address for aggregation
 				return fmt.Errorf("tx %032x emits multiple convert UTXOs with different To addresses", tx.Hash())
 			}
@@ -2357,6 +2390,16 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
 			continue
+		} else if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) != 0 { // Wrapped Qi transaction
+			ownerContract := common.BytesToAddress(tx.Data(), location)
+			if _, err := ownerContract.InternalAndQuaiAddress(); err != nil {
+				return err
+			}
+			wrapping = true
+			convertAddress = toAddr
+			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
+			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
+			delete(addresses, toAddr.Bytes20())
 		} else if toAddr.IsInQuaiLedgerScope() {
 			return fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash())
 		}
@@ -2428,9 +2471,18 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 	}
-	if conversion {
-		if totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
-			return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64())
+	if conversion && totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
+		return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64())
+	}
+	if conversion || wrapping {
+		if conversion && wrapping {
+			return fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash())
+		}
+		etxType := types.ConversionType
+		data := []byte{}
+		if wrapping {
+			etxType = types.WrappingQiType
+			data = tx.Data()
 		}
 		// Since this transaction contains a conversion, check if the required conversion gas is paid
 		// The user must pay this to the miner now, but it is only added to the block gas limit when the ETX is played in the destination
@@ -2444,7 +2496,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, env.etxPLimit)
 		}
 		// Value is in Qits not Denomination
-		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: types.ConversionType, OriginatingTxHash: tx.Hash(), Gas: 0} // Conversion gas is paid from the converted Quai balance (for new account creation, when redeemed)
+		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: uint64(etxType), OriginatingTxHash: tx.Hash(), Gas: 0, Data: data} // Conversion gas is paid from the converted Quai balance (for new account creation, when redeemed)
 		gasUsed += params.ETXGas
 		if err := env.gasPool.SubGas(params.ETXGas); err != nil {
 			return err
