@@ -1210,7 +1210,6 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	var elapsedTime time.Duration
 	stepTimings := make(map[string]time.Duration)
 
-	qiTxFee := big.NewInt(0)
 	// Start timing for sanity checks
 	stepStart := time.Now()
 	// Sanity checks
@@ -1387,7 +1386,6 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
-	qiTxFee = new(big.Int).Set(txFeeInQit)
 	// Check tx against required base fee and gas
 	requiredGas := intrinsicGas + (uint64(len(etxs)) * (params.TxGas + params.ETXGas)) // Each ETX costs extra gas that is paid in the origin
 	if requiredGas < intrinsicGas {
@@ -1462,7 +1460,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Signature Check"] = elapsedTime
 
-	return qiTxFee, txFeeInQit, etxs, nil, stepTimings
+	return txFeeInQit, txFeeInQit, etxs, nil, stepTimings
 }
 
 // Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.
