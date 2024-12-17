@@ -154,7 +154,6 @@ const (
 	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
 	DefaultCoinbaseLockup                = 0                // The default lockup byte for coinbase rewards
-	MaxCoinbaseTrancheElements           = 100              // Maximum number of elements in a coinbase tranche
 )
 
 var (
@@ -170,7 +169,7 @@ var (
 	OrchardDurationLimit              = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LighthouseDurationLimit           = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit                = big.NewInt(1) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeToStartTx              uint64 = 5 * BlocksPerDay
+	TimeToStartTx              uint64 = 5
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
 	DifficultyAdjustmentPeriod        = big.NewInt(720)                                             // This is the number of blocks over which the average has to be taken
 	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
@@ -194,7 +193,7 @@ var (
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
 	BaseFeeMultiplier             = big.NewInt(50)
 
-	CoinbaseEpochBlocks uint64 = 100 // Maximum number of blocks in a coinbase tranche
+	CoinbaseEpochBlocks uint64 = 50 // Maximum number of blocks in a coinbase tranche
 )
 
 const (
@@ -206,9 +205,9 @@ const (
 
 func init() {
 	LockupByteToBlockDepth[0] = OldConversionLockPeriod
-	LockupByteToBlockDepth[1] = 30240  // 1.75 days
-	LockupByteToBlockDepth[2] = 60480  // 3.5 days
-	LockupByteToBlockDepth[3] = 120960 // 7 days
+	LockupByteToBlockDepth[1] = OldConversionLockPeriod // 1.75 days
+	LockupByteToBlockDepth[2] = 60480                   // 3.5 days
+	LockupByteToBlockDepth[3] = 120960                  // 7 days
 
 	LockupByteToRewardsRatio[1] = big.NewInt(24) // additional 16% WPY
 	LockupByteToRewardsRatio[2] = big.NewInt(10) // additional 20% WPY
