@@ -241,6 +241,12 @@ func (b *tableBatch) Replay(w ethdb.KeyValueWriter) error {
 	return b.batch.Replay(&tableReplayer{w: w, prefix: b.prefix})
 }
 
+func (b *tableBatch) SetPending(pending bool) {}
+
+func (b *tableBatch) GetPending(key []byte) (bool, []byte) {
+	return false, nil
+}
+
 // tableIterator is a wrapper around a database iterator that prefixes each key access
 // with a pre-configured string.
 type tableIterator struct {
