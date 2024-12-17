@@ -1365,6 +1365,10 @@ func (c *Core) SendTxToSharingClients(tx *types.Transaction) {
 	c.sl.txPool.SendTxToSharingClients(tx)
 }
 
+func (c *Core) GetRollingFeeInfo() (min, max, avg *big.Int) {
+	return c.Processor().GetRollingFeeInfo()
+}
+
 func (c *Core) SuggestFinalityDepth(qiValue *big.Int, correlatedRisk *big.Int) *big.Int {
 	qiRewardPerBlock := misc.CalculateQiReward(c.CurrentHeader().WorkObjectHeader())
 
