@@ -55,6 +55,7 @@ const (
 	CoinbaseType
 	ConversionType
 	CoinbaseLockupType
+	WrappingQiType
 )
 
 const (
@@ -222,7 +223,11 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 			workNonce := tx.WorkNonce().Uint64()
 			protoTx.WorkNonce = &workNonce
 		}
-
+		if tx.Data() == nil {
+			protoTx.Data = []byte{}
+		} else {
+			protoTx.Data = tx.Data()
+		}
 	}
 	return protoTx, nil
 }
@@ -373,6 +378,9 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.ChainId == nil {
 			return errors.New("missing required field 'ChainId' in ProtoTransaction")
 		}
+		if protoTx.Data == nil {
+			return errors.New("missing required field 'Data' in ProtoTransaction")
+		}
 		var qiTx QiTx
 		qiTx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
 
@@ -411,6 +419,7 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 			nonce := BlockNonce(uint64ToByteArr(*protoTx.WorkNonce))
 			qiTx.WorkNonce = &nonce
 		}
+		qiTx.Data = protoTx.GetData()
 		tx.SetInner(&qiTx)
 
 	default:
@@ -454,6 +463,11 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
 		protoTxSigningData.TxIns, _ = tx.TxIn().ProtoEncode()
 		protoTxSigningData.TxOuts, _ = tx.TxOut().ProtoEncode()
+		if tx.Data() == nil {
+			protoTxSigningData.Data = []byte{}
+		} else {
+			protoTxSigningData.Data = tx.Data()
+		}
 	}
 	return protoTxSigningData
 }

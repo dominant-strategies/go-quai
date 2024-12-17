@@ -506,8 +506,26 @@ func RequiredGas(input []byte) uint64 {
 	return 0
 }
 
+// RunLockupContract is an API that ties together the Lockup Contract with the EVM.
+// The requested function is determined by input length. Contracts should ensure that their input is tightly packed
+// with abi.encodePacked.
 func RunLockupContract(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) ([]byte, error) {
+	if evm.interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
 	switch len(input) {
+	case 60:
+		if err := UnwrapQi(evm, ownerContract, gas, input); err != nil {
+			return nil, err
+		} else {
+			return []byte{1}, nil
+		}
+	case 20:
+		if err := ClaimQiDeposit(evm, ownerContract, gas, input); err != nil {
+			return nil, err
+		} else {
+			return []byte{1}, nil
+		}
 	case 33:
 		if err := ClaimCoinbaseLockup(evm, ownerContract, evm.Context.BlockNumber.Uint64(), gas, input); err != nil {
 			return nil, err
@@ -674,6 +692,13 @@ func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, currentHeight u
 	if err != nil {
 		return err
 	}
+	latestEpoch, err := evm.GetLatestMinerEpoch()
+	if err != nil {
+		return err
+	}
+	if epoch >= latestEpoch {
+		return fmt.Errorf("epoch is not less than the latest epoch: %d >= %d", epoch, latestEpoch)
+	}
 
 	balance, trancheUnlockHeight, elements, delegate := rawdb.ReadCoinbaseLockup(evm.StateDB.UnderlyingDatabase(), evm.Batch, ownerContract, beneficiaryMiner, lockupByte, epoch)
 	if trancheUnlockHeight == 0 {
@@ -767,4 +792,149 @@ func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address
 		log.Global.Info("Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte)
 	}
 	return oldKey, newKey, oldCoinbaseLockupHashPtr, &newCoinbaseLockupHash, nil
+}
+
+// UnwrapQi is called by a smart contract that owns wrapped Qi to unwrap it for real Qi UTXOs
+// It deducts the requested Qi balance from the contract's balance and creates an external transaction to the beneficiary
+// It is the responsibility of the contract to ensure solvency in its underyling wrapped Qi balance
+func UnwrapQi(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) error {
+	// input is tightly packed 20 bytes for Qi beneficiary, 32 bytes for value and 8 bytes for etxGasLimit
+	if len(input) != 60 {
+		return errors.New("input length is not 36 bytes")
+	}
+	beneficiaryQi := common.BytesToAddress(input[:20], evm.chainConfig.Location)
+	value := new(big.Int).SetBytes(input[20:52])
+	etxGasLimit := binary.BigEndian.Uint64(input[52:60])
+
+	if *gas < etxGasLimit {
+		return ErrOutOfGas
+	}
+	*gas -= etxGasLimit
+
+	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+
+	_, err = beneficiaryQi.InternalAndQiAddress()
+	if err != nil {
+		return err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	ownerContractHash := common.BytesToHash(ownerContractInternal[:])
+
+	balanceHash := evm.StateDB.GetState(lockupContractAddressInternal, ownerContractHash)
+	if balanceHash == (common.Hash{}) {
+		return errors.New("no wrapped Qi balance in contract to unwrap")
+	}
+	balanceBig := balanceHash.Big()
+	if balanceBig.Cmp(value) == -1 {
+		return fmt.Errorf("not enough wrapped Qi to unwrap: have %v want %v", balanceBig, value)
+	}
+	balanceBig.Sub(balanceBig, value)
+	evm.StateDB.SetState(lockupContractAddressInternal, ownerContractHash, common.BigToHash(balanceBig))
+
+	evm.ETXCacheLock.RLock()
+	index := len(evm.ETXCache)
+	evm.ETXCacheLock.RUnlock()
+	if index > math.MaxUint16 {
+		return fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
+	}
+
+	externalTx := types.ExternalTx{Value: value, To: &beneficiaryQi, Sender: ownerContract, EtxType: uint64(types.CoinbaseLockupType), OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit}
+
+	evm.ETXCacheLock.Lock()
+	evm.ETXCache = append(evm.ETXCache, types.NewTx(&externalTx))
+	evm.ETXCacheLock.Unlock()
+	return nil
+}
+
+// WrapQi is called by the state processor to process an inbound Qi wrapping ETX
+// It stores the wrapped Qi balance in the lockup contract keyed with the contract address and provided Quai beneficiary address
+// To accept the deposit, the smart contract must call the ClaimQiDeposit function on the precompile
+func WrapQi(statedb StateDB, ownerContract, beneficiary common.Address, sender common.InternalAddress, value *big.Int, location common.Location) error {
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	beneficiaryInternal, err := beneficiary.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	if sender != common.OneInternal(location) {
+		return errors.New("sender is not the correct internal address")
+	}
+	lockupContractAddress := LockupContractAddresses[[2]byte{location[0], location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+
+	if value.Sign() == -1 {
+		return errors.New("negative value")
+	}
+	if value.Sign() == 0 {
+		return nil
+	}
+	wrappedQiKey := common.Hash{}
+	copy(wrappedQiKey[:16], ownerContractInternal[:16])
+	copy(wrappedQiKey[16:], beneficiaryInternal[:16])
+	balanceHash := statedb.GetState(lockupContractAddressInternal, wrappedQiKey)
+	if (balanceHash == common.Hash{}) {
+		statedb.SetState(lockupContractAddressInternal, wrappedQiKey, common.BigToHash(value))
+	} else {
+		balanceBig := balanceHash.Big()
+		balanceBig.Add(balanceBig, value)
+		statedb.SetState(lockupContractAddressInternal, wrappedQiKey, common.BigToHash(balanceBig))
+	}
+	return nil
+}
+
+// ClaimQiDeposit is called by the owner smart contract to claim a wrapped Qi deposit
+// It adds the wrapped Qi balance to the smart contract's Wrapped Qi balance
+// The contract should then mint the equivalent amount of Wrapped Qi tokens to the Quai beneficiary
+func ClaimQiDeposit(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) error {
+	// input is tightly packed 20 bytes for Quai owner
+	if len(input) != 20 {
+		return errors.New("input length is not 20 bytes")
+	}
+	quaiOwner := common.BytesToAddress(input, evm.chainConfig.Location)
+	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	ownerQuaiInternal, err := quaiOwner.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+
+	wrappedQiKey := common.Hash{}
+	copy(wrappedQiKey[:16], ownerContractInternal[:16])
+	copy(wrappedQiKey[16:], ownerQuaiInternal[:16])
+	balanceHash := evm.StateDB.GetState(lockupContractAddressInternal, wrappedQiKey)
+	if balanceHash == (common.Hash{}) {
+		return errors.New("no wrapped Qi balance to claim")
+	}
+	evm.StateDB.SetState(lockupContractAddressInternal, wrappedQiKey, common.Hash{})
+
+	ownerContractHash := common.BytesToHash(ownerContractInternal[:])
+	ownerContractBalanceHash := evm.StateDB.GetState(lockupContractAddressInternal, ownerContractHash)
+	if ownerContractBalanceHash == (common.Hash{}) {
+		evm.StateDB.SetState(lockupContractAddressInternal, ownerContractHash, balanceHash)
+	} else {
+		ownerContractBalance := ownerContractBalanceHash.Big()
+		ownerContractBalance.Add(ownerContractBalance, balanceHash.Big())
+		evm.StateDB.SetState(lockupContractAddressInternal, ownerContractHash, common.BigToHash(ownerContractBalance))
+	}
+
+	return nil
 }
