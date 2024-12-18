@@ -31,6 +31,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dominant-strategies/go-quai/common"
+	bigMath "github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/common/prque"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
@@ -107,19 +108,20 @@ var defaultCacheConfig = &CacheConfig{
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config        *params.ChainConfig // Chain configuration options
-	hc            *HeaderChain        // Canonical block chain
-	engine        consensus.Engine    // Consensus engine used for block rewards
-	logsFeed      event.Feed
-	rmLogsFeed    event.Feed
-	cacheConfig   *CacheConfig                            // CacheConfig for StateProcessor
-	stateCache    state.Database                          // State database to reuse between imports (contains state cache)
-	etxCache      state.Database                          // ETX database to reuse between imports (contains ETX cache)
-	receiptsCache *lru.Cache[common.Hash, types.Receipts] // Cache for the most recent receipts per block
-	txLookupCache *lru.Cache[common.Hash, rawdb.LegacyTxLookupEntry]
-	validator     Validator // Block and state validator interface
-	prefetcher    Prefetcher
-	vmConfig      vm.Config
+	config                              *params.ChainConfig // Chain configuration options
+	hc                                  *HeaderChain        // Canonical block chain
+	engine                              consensus.Engine    // Consensus engine used for block rewards
+	logsFeed                            event.Feed
+	rmLogsFeed                          event.Feed
+	cacheConfig                         *CacheConfig                            // CacheConfig for StateProcessor
+	stateCache                          state.Database                          // State database to reuse between imports (contains state cache)
+	etxCache                            state.Database                          // ETX database to reuse between imports (contains ETX cache)
+	receiptsCache                       *lru.Cache[common.Hash, types.Receipts] // Cache for the most recent receipts per block
+	txLookupCache                       *lru.Cache[common.Hash, rawdb.LegacyTxLookupEntry]
+	validator                           Validator // Block and state validator interface
+	prefetcher                          Prefetcher
+	vmConfig                            vm.Config
+	minFee, maxFee, avgFee, numElements *big.Int
 
 	scope         event.SubscriptionScope
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -221,17 +223,19 @@ type UtxosCreatedDeleted struct {
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (types.Receipts, []*types.Transaction, []*types.Log, *state.StateDB, uint64, uint64, uint64, *multiset.MultiSet, []common.Unlock, error) {
 	var (
-		receipts     types.Receipts
-		usedGas      = new(uint64)
-		usedState    = new(uint64)
-		header       = types.CopyWorkObject(block)
-		blockHash    = block.Hash()
-		nodeLocation = p.hc.NodeLocation()
-		nodeCtx      = p.hc.NodeCtx()
-		blockNumber  = block.Number(nodeCtx)
-		parentHash   = block.ParentHash(nodeCtx)
-		allLogs      []*types.Log
-		gp           = new(types.GasPool).AddGas(block.GasLimit())
+		receipts                 types.Receipts
+		usedGas                  = new(uint64)
+		usedState                = new(uint64)
+		header                   = types.CopyWorkObject(block)
+		blockHash                = block.Hash()
+		nodeLocation             = p.hc.NodeLocation()
+		nodeCtx                  = p.hc.NodeCtx()
+		blockNumber              = block.Number(nodeCtx)
+		parentHash               = block.ParentHash(nodeCtx)
+		allLogs                  []*types.Log
+		gp                       = new(types.GasPool).AddGas(block.GasLimit())
+		numTxsProcessed          = big.NewInt(0)
+		blockMinFee, blockMaxFee *big.Int
 	)
 	start := time.Now()
 	parent := p.hc.GetBlock(block.ParentHash(nodeCtx), block.NumberU64(nodeCtx)-1)
@@ -391,6 +395,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					minGasPrice = new(big.Int).Set(qiGasPrice)
 				}
 			}
+
+			blockMinFee, blockMaxFee = calcTxStats(blockMinFee, blockMaxFee, qiTxFeeInQuai, numTxsProcessed)
 
 			totalEtxCoinbaseTime += time.Since(startEtxCoinbase)
 			totalQiTime += time.Since(qiTimeBefore)
@@ -623,6 +629,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					minGasPrice = new(big.Int).Set(gasPrice)
 				}
 			}
+			blockMinFee, blockMaxFee = calcTxStats(blockMinFee, blockMaxFee, fees, numTxsProcessed)
 
 		} else {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, ErrTxTypeNotSupported
@@ -768,6 +775,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	}
 	time5 := common.PrettyDuration(time.Since(start))
 
+	calcRollingFeeInfo(p.minFee, p.maxFee, p.avgFee, p.numElements, blockMinFee, blockMaxFee, quaiFees, numTxsProcessed)
+
 	p.logger.WithFields(log.Fields{
 		"signing time":       common.PrettyDuration(timeSign),
 		"prepare state time": common.PrettyDuration(timePrepare),
@@ -890,7 +899,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && conversionPeriodValid {
 				internal, err := etx.To().InternalAddress()
 				if err != nil {
-					fmt.Errorf("Error converting address to internal address: %v", err)
+					return fmt.Errorf("Error converting address to internal address: %v", err), nil
 				}
 				balance := etx.Value()
 				if !statedb.Exist(internal) {
@@ -1205,7 +1214,6 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	var elapsedTime time.Duration
 	stepTimings := make(map[string]time.Duration)
 
-	qiTxFee := big.NewInt(0)
 	// Start timing for sanity checks
 	stepStart := time.Now()
 	// Sanity checks
@@ -1382,7 +1390,6 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 
 	// the fee to pay the basefee/miner is the difference between inputs and outputs
 	txFeeInQit := new(big.Int).Sub(totalQitIn, totalQitOut)
-	qiTxFee = new(big.Int).Set(txFeeInQit)
 	// Check tx against required base fee and gas
 	requiredGas := intrinsicGas + (uint64(len(etxs)) * (params.TxGas + params.ETXGas)) // Each ETX costs extra gas that is paid in the origin
 	if requiredGas < intrinsicGas {
@@ -1457,7 +1464,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Signature Check"] = elapsedTime
 
-	return qiTxFee, txFeeInQit, etxs, nil, stepTimings
+	return txFeeInQit, txFeeInQit, etxs, nil, stepTimings
 }
 
 // Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.
@@ -1501,10 +1508,12 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		return nil, nil, err
 	}
 	if block.Hash() != blockHash {
+		err := errors.New("block hash changed after processing the block")
 		p.logger.WithFields(log.Fields{
 			"oldHash": blockHash,
 			"newHash": block.Hash(),
-		}).Warn("Block hash changed after Processing the block")
+		}).Error(err)
+		return nil, nil, err
 	}
 	time3 := common.PrettyDuration(time.Since(start))
 	err = p.validator.ValidateState(block, statedb, receipts, etxs, multiSet, usedGas, usedState)
@@ -1863,6 +1872,68 @@ func (p *StateProcessor) StateAtTransaction(block *types.WorkObject, txIndex int
 		statedb.Finalise(true)
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
+}
+
+func calcTxStats(blockMinFee, blockMaxFee, txFee, numTxsProcessed *big.Int) (newBlockMinFee, newBlockMaxFee *big.Int) {
+
+	if numTxsProcessed.Cmp(common.Big0) == 0 {
+		numTxsProcessed.Add(numTxsProcessed, common.Big1)
+		blockMinFee = new(big.Int).Set(txFee)
+		blockMaxFee = new(big.Int).Set(txFee)
+		return blockMinFee, blockMaxFee
+	}
+
+	numTxsProcessed = numTxsProcessed.Add(numTxsProcessed, common.Big1)
+	blockMinFee = bigMath.BigMin(txFee, blockMinFee)
+	blockMaxFee = bigMath.BigMax(txFee, blockMaxFee)
+
+	return blockMinFee, blockMaxFee
+}
+
+func calcRollingFeeInfo(rollingMinFee, rollingMaxFee, rollingAvgFee, rollingNumElements, blockMinFee, blockMaxFee, blockTotalFees, numTxsProcessed *big.Int) (min, max, avg, num *big.Int) {
+
+	// Implement peak/envelope filter
+	if numTxsProcessed.Cmp(common.Big0) == 0 {
+		// Block values will be nil, so don't compare or update.
+		return rollingMinFee, rollingMaxFee, rollingAvgFee, rollingNumElements
+	}
+	if rollingMinFee == nil || blockMinFee.Cmp(rollingMinFee) < 0 {
+		// If the new minimum is less than the old minimum, overwrite it.
+		rollingMinFee = new(big.Int).Set(blockMinFee)
+	} else {
+		// If not, increase the old minimum by 1%.
+		rollingMinFee.Mul(rollingMinFee, common.Big101)
+		rollingMinFee.Div(rollingMinFee, common.Big100)
+	}
+
+	if rollingMaxFee == nil || blockMaxFee.Cmp(rollingMaxFee) > 0 {
+		rollingMaxFee = new(big.Int).Set(blockMaxFee)
+	} else {
+		// Decay the max fee by 1%.
+		rollingMaxFee.Mul(rollingMaxFee, common.Big99)
+		rollingMaxFee.Div(rollingMaxFee, common.Big100)
+	}
+
+	// Implement running average
+	if rollingAvgFee == nil {
+		rollingAvgFee = big.NewInt(1)
+		rollingNumElements = big.NewInt(0)
+	}
+
+	if numTxsProcessed.Cmp(common.Big0) > 0 {
+		blockAvgFee := blockTotalFees.Div(blockTotalFees, numTxsProcessed)
+		intermediateVal := new(big.Int).Mul(rollingNumElements, rollingAvgFee)
+		intermediateVal = intermediateVal.Add(intermediateVal, blockAvgFee)
+
+		rollingNumElements.Add(rollingNumElements, common.Big1)
+		rollingAvgFee = intermediateVal.Div(intermediateVal, rollingNumElements)
+	}
+
+	return rollingMinFee, rollingMaxFee, rollingAvgFee, rollingNumElements
+}
+
+func (p *StateProcessor) GetRollingFeeInfo() (min, max, avg *big.Int) {
+	return p.minFee, p.maxFee, p.avgFee
 }
 
 func (p *StateProcessor) Stop() {
