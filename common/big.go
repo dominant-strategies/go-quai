@@ -35,11 +35,12 @@ var (
 	Big2     = big.NewInt(2)
 	Big3     = big.NewInt(3)
 	Big8     = big.NewInt(8)
+	Big10    = big.NewInt(10)
 	Big32    = big.NewInt(32)
 	Big256   = big.NewInt(256)
 	Big257   = big.NewInt(257)
-	Big2e256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 	Big2e64  = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
+	Big2e256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 )
 
 func BigBitsToBits(original *big.Int) *big.Int {
@@ -87,27 +88,29 @@ func SanityCheck(quitCh chan struct{}) {
 	big2 := big.NewInt(2)
 	big3 := big.NewInt(3)
 	big8 := big.NewInt(8)
+	big10 := big.NewInt(10)
 	big32 := big.NewInt(32)
 	big256 := big.NewInt(256)
 	big257 := big.NewInt(257)
-	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 	big2e64 := new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
+	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	go func(quitCh chan struct{}) {
 		for {
 			time.Sleep(1 * time.Minute)
 
 			// Verify that none of the values have mutated.
-			if big0.Cmp(Big0) != 0 ||
-				big1.Cmp(Big1) != 0 ||
-				big2.Cmp(Big2) != 0 ||
-				big3.Cmp(Big3) != 0 ||
-				big8.Cmp(Big8) != 0 ||
-				big32.Cmp(Big32) != 0 ||
-				big256.Cmp(Big256) != 0 ||
-				big257.Cmp(Big257) != 0 ||
-				big2e256.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))) != 0 ||
-				big2e64.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))) != 0 {
+			if Big0 == nil || big0.Cmp(Big0) != 0 ||
+				Big1 == nil || big1.Cmp(Big1) != 0 ||
+				Big2 == nil || big2.Cmp(Big2) != 0 ||
+				Big3 == nil || big3.Cmp(Big3) != 0 ||
+				Big8 == nil || big8.Cmp(Big8) != 0 ||
+				Big10 == nil || big10.Cmp(Big10) != 0 ||
+				Big32 == nil || big32.Cmp(Big32) != 0 ||
+				Big256 == nil || big256.Cmp(Big256) != 0 ||
+				Big257 == nil || big257.Cmp(Big257) != 0 ||
+				Big2e64 == nil || big2e64.Cmp(Big2e64) != 0 ||
+				Big2e256 == nil || big2e256.Cmp(Big2e256) != 0 {
 				// Send a message to quitCh to abort.
 				log.Global.Error("A common value has mutated, exiting now")
 				quitCh <- struct{}{}

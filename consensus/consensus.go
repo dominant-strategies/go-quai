@@ -24,8 +24,8 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
-	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/crypto/multiset"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/params"
 )
 
@@ -33,21 +33,6 @@ const (
 	// staleThreshold is the maximum depth of the acceptable stale but valid solution.
 	StaleThreshold = 7
 	MantBits       = 64
-)
-
-// Some useful constants to avoid constant memory allocs for them.
-var (
-	ExpDiffPeriod = big.NewInt(100000)
-	Big0          = big.NewInt(0)
-	Big1          = big.NewInt(1)
-	Big2          = big.NewInt(2)
-	Big3          = big.NewInt(3)
-	Big8          = big.NewInt(8)
-	Big9          = big.NewInt(9)
-	Big10         = big.NewInt(10)
-	Big32         = big.NewInt(32)
-	BigMinus99    = big.NewInt(-99)
-	Big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -259,8 +244,8 @@ func CalcWorkShareThreshold(workShare *types.WorkObjectHeader, workShareThreshol
 		return nil, ErrInvalidThresholdDiff
 	}
 	diff := workShare.Difficulty()
-	diffTarget := new(big.Int).Div(Big2e256, diff)
-	workShareTarget := new(big.Int).Exp(Big2, big.NewInt(int64(workShareThresholdDiff)), nil)
+	diffTarget := new(big.Int).Div(common.Big2e256, diff)
+	workShareTarget := new(big.Int).Exp(common.Big2, big.NewInt(int64(workShareThresholdDiff)), nil)
 
 	return workShareTarget.Mul(diffTarget, workShareTarget), nil
 }

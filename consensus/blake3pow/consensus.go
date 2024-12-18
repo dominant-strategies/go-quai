@@ -28,26 +28,6 @@ import (
 // Blake3pow proof-of-work protocol constants.
 var (
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
-
-	ContextTimeFactor = big10
-	ZoneBlockReward   = big.NewInt(5e+18)
-	RegionBlockReward = new(big.Int).Mul(ZoneBlockReward, big3)
-	PrimeBlockReward  = new(big.Int).Mul(RegionBlockReward, big3)
-)
-
-// Some useful constants to avoid constant memory allocs for them.
-var (
-	expDiffPeriod = big.NewInt(100000)
-	big0          = big.NewInt(0)
-	big1          = big.NewInt(1)
-	big2          = big.NewInt(2)
-	big3          = big.NewInt(3)
-	big8          = big.NewInt(8)
-	big9          = big.NewInt(9)
-	big10         = big.NewInt(10)
-	big32         = big.NewInt(32)
-	bigMinus99    = big.NewInt(-99)
-	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -592,7 +572,7 @@ func (blake3pow *Blake3pow) verifySeal(header *types.WorkObjectHeader) error {
 		return consensus.ErrInvalidDifficulty
 	}
 
-	target := new(big.Int).Div(big2e256, header.Difficulty())
+	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
 	if new(big.Int).SetBytes(header.Hash().Bytes()).Cmp(target) > 0 {
 		return consensus.ErrInvalidPoW
 	}
