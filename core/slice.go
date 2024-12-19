@@ -1095,32 +1095,14 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		"fill":   fill,
 	}).Debug("GeneratePendingHeader")
 	start := time.Now()
+
 	// set the current header to this block
-	switch sl.NodeCtx() {
-	case common.PRIME_CTX:
-		err := sl.hc.SetCurrentHeader(block)
-		if err != nil {
-			sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
-			sl.recomputeRequired = true
-			sl.hc.headermu.Unlock()
-			return nil, err
-		}
-	case common.REGION_CTX:
-		err := sl.hc.SetCurrentHeader(block)
-		if err != nil {
-			sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
-			sl.recomputeRequired = true
-			sl.hc.headermu.Unlock()
-			return nil, err
-		}
-	case common.ZONE_CTX:
-		err := sl.hc.SetCurrentHeader(block)
-		if err != nil {
-			sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
-			sl.recomputeRequired = true
-			sl.hc.headermu.Unlock()
-			return nil, err
-		}
+	err := sl.hc.SetCurrentHeader(block)
+	if err != nil {
+		sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
+		sl.recomputeRequired = true
+		sl.hc.headermu.Unlock()
+		return nil, err
 	}
 	stateProcessTime := time.Since(start)
 	if sl.ReadBestPh() == nil {
