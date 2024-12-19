@@ -60,7 +60,7 @@ const (
 	c_MaxTxForSorting = 1500
 )
 
-// Transaction is a Quai transaction.
+// Transaction can be a Quai, Qi, or External transaction.
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)

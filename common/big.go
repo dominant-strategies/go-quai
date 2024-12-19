@@ -37,6 +37,9 @@ var (
 	Big8     = big.NewInt(8)
 	Big10    = big.NewInt(10)
 	Big32    = big.NewInt(32)
+	Big99    = big.NewInt(99)
+	Big100   = big.NewInt(100)
+	Big101   = big.NewInt(101)
 	Big256   = big.NewInt(256)
 	Big257   = big.NewInt(257)
 	Big2e64  = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
@@ -90,6 +93,9 @@ func SanityCheck(quitCh chan struct{}) {
 	big8 := big.NewInt(8)
 	big10 := big.NewInt(10)
 	big32 := big.NewInt(32)
+	big99 := big.NewInt(99)
+	big100 := big.NewInt(100)
+	big101 := big.NewInt(101)
 	big256 := big.NewInt(256)
 	big257 := big.NewInt(257)
 	big2e64 := new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
@@ -107,6 +113,9 @@ func SanityCheck(quitCh chan struct{}) {
 				Big8 == nil || big8.Cmp(Big8) != 0 ||
 				Big10 == nil || big10.Cmp(Big10) != 0 ||
 				Big32 == nil || big32.Cmp(Big32) != 0 ||
+				Big99 == nil || big99.Cmp(Big99) != 0 ||
+				Big100 == nil || big100.Cmp(Big100) != 0 ||
+				Big101 == nil || big101.Cmp(Big101) != 0 ||
 				Big256 == nil || big256.Cmp(Big256) != 0 ||
 				Big257 == nil || big257.Cmp(Big257) != 0 ||
 				Big2e64 == nil || big2e64.Cmp(Big2e64) != 0 ||
