@@ -953,7 +953,7 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 		}
-		txs := block.TransactionsWithReceipts()
+		txs := block.Transactions()
 		transactions := make([]interface{}, len(txs))
 		var err error
 		for i, tx := range txs {
