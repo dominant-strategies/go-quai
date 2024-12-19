@@ -53,7 +53,7 @@ func NewQuaiBackend() (*QuaiBackend, error) {
 	for i := 0; i < common.MaxRegions; i++ {
 		zoneBackends[i] = make([]*quaiapi.Backend, common.MaxZones)
 	}
-	return &QuaiBackend{regionApiBackends: make([]*quaiapi.Backend, common.MaxZones), zoneApiBackends: zoneBackends}, nil
+	return &QuaiBackend{regionApiBackends: make([]*quaiapi.Backend, common.MaxRegions), zoneApiBackends: zoneBackends}, nil
 }
 
 // Adds the p2pBackend into the given QuaiBackend
