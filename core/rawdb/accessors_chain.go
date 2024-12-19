@@ -711,7 +711,7 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 		}).Error("Missing body but have receipt")
 		return nil
 	}
-	if err := receipts.DeriveFields(config, hash, number, body.TransactionsWithReceipts()); err != nil {
+	if err := receipts.DeriveFields(config, hash, number, body.Transactions()); err != nil {
 		db.Logger().WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,

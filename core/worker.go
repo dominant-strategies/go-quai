@@ -1151,7 +1151,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 						outputIndex++
 					}
 				}
-				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
+				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
 				gasUsed := env.wo.GasUsed()
 				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
 					gasUsed += params.TxGas
@@ -1203,7 +1203,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					// If we did not delete, we are rotating the epoch and need to store it
 					env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 				}
-				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 				gasUsed := env.wo.GasUsed()
 				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
 					gasUsed += params.TxGas
@@ -1233,7 +1233,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			if len(tx.Data()) == 1 {
 				// Coinbase has no extra data
 				// Coinbase is valid
-				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 21000, TxHash: tx.Hash()}
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 21000, TxHash: tx.Hash()}
 				gasUsed := env.wo.GasUsed()
 				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
 					gasUsed += params.TxGas
@@ -1301,7 +1301,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				// If we did not delete, we are rotating the epoch and need to store it
 				env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 			}
-			receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+			receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 
 			gasUsed := env.wo.GasUsed()
 			if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
@@ -1426,7 +1426,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					outputIndex++
 				}
 			}
-			receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: tx.Gas() - txGas, TxHash: tx.Hash(),
+			receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: tx.Gas() - txGas, TxHash: tx.Hash(),
 				Logs: []*types.Log{{
 					Address: *tx.To(),
 					Topics:  []common.Hash{types.QuaiToQiConversionTopic},
@@ -1452,16 +1452,20 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			gasUsed += params.CallValueTransferGas
 
 			env.wo.Header().SetGasUsed(gasUsed)
+			receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.CallValueTransferGas, TxHash: tx.Hash()}
+			env.receipts = append(env.receipts, receipt)
 			env.txs = append(env.txs, tx)
 			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 			return []*types.Log{}, false, nil
 		}
 
 	} else if tx.Type() == types.ExternalTxType && types.IsConversionTx(tx) && tx.To().IsInQuaiLedgerScope() { // Qi->Quai Conversion
+		receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
 		gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
 		env.wo.Header().SetGasUsed(gasUsed)
 		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 		env.txs = append(env.txs, tx)
+		env.receipts = append(env.receipts, receipt)
 		return []*types.Log{}, false, nil // The conversion is locked and will be redeemed later
 	} else if tx.Type() == types.ExternalTxType && tx.EtxType() == types.WrappingQiType && tx.To().IsInQuaiLedgerScope() { // Qi wrapping ETX
 		if len(tx.Data()) != common.AddressLength {
@@ -1474,10 +1478,12 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		if err := vm.WrapQi(env.state, ownerContractAddr, *tx.To(), common.OneInternal(w.chainConfig.Location), tx.Value(), w.chainConfig.Location); err != nil {
 			return nil, false, fmt.Errorf("could not wrap Qi: %w", err)
 		}
+		receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
 		gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
 		env.wo.Header().SetGasUsed(gasUsed)
 		env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 		env.txs = append(env.txs, tx)
+		env.receipts = append(env.receipts, receipt)
 		return []*types.Log{}, false, nil
 	}
 	snap := env.state.Snapshot()
@@ -2261,7 +2267,7 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
 func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
-	for i, tx := range block.TransactionsWithReceipts() {
+	for i, tx := range block.Transactions() {
 		minerFee := new(big.Int).Add(block.BaseFee(), tx.MinerTip())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
@@ -2543,6 +2549,8 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			return err
 		}
 	}
+	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: gasUsed - env.wo.GasUsed(), TxHash: tx.Hash()}
+	env.receipts = append(env.receipts, receipt)
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil
 }
