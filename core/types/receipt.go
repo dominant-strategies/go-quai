@@ -49,6 +49,10 @@ const (
 
 	// ReceiptStatusSuccessful is the status code of a transaction if execution succeeded.
 	ReceiptStatusSuccessful = uint64(1)
+
+	// ReceiptStatusLocked is the status code of a transaction if the transaction value is locked.
+	// Used for coinbases and conversions.
+	ReceiptStatusLocked = uint64(2)
 )
 
 // Receipt represents the results of a transaction.

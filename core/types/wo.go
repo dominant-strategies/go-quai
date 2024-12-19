@@ -442,20 +442,6 @@ func (wo *WorkObject) QiTransactionsWithoutCoinbase() []*Transaction {
 	return qiTxs
 }
 
-func (wo *WorkObject) TransactionsWithReceipts() []*Transaction {
-	txs := make([]*Transaction, 0)
-	for _, t := range wo.Transactions() {
-		if IsCoinBaseTx(t) {
-			txs = append(txs, t)
-			continue
-		}
-		if t.Type() == QuaiTxType || (t.Type() == ExternalTxType && t.Type() != ConversionType && t.To().IsInQuaiLedgerScope()) || IsQuaiToQiConversionTx(t) {
-			txs = append(txs, t)
-		}
-	}
-	return txs
-}
-
 func (wo *WorkObject) TransactionsInfo() map[string]interface{} {
 	txInfo := make(map[string]interface{})
 	txInfo["hash"] = wo.Hash()
