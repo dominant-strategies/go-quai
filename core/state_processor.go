@@ -374,7 +374,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if _, ok := senders[tx.Hash()]; ok {
 				checkSig = false
 			}
-			qiTxFee, etxs, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, qiScalingFactor, &etxRLimit, &etxPLimit, utxosCreatedDeleted)
+			qiTxFee, etxs, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, qiScalingFactor, &etxRLimit, &etxPLimit, utxosCreatedDeleted, &receipts)
 			if err != nil {
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -525,6 +525,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				if err := gp.SubGas(params.QiToQuaiConversionGas); err != nil {
 					return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 				}
+				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
+				receipts = append(receipts, receipt)
 				*usedGas += params.QiToQuaiConversionGas
 				totalEtxGas += params.QiToQuaiConversionGas
 				continue
@@ -588,7 +590,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								outputIndex++
 							}
 						}
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
 						if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
 							receipt.GasUsed = params.TxGas
 						}
@@ -630,7 +632,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								// If we did not delete, we are rotating the epoch and need to store it
 								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 							}
-							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 							if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
 								receipt.GasUsed = params.TxGas
 							}
@@ -649,7 +651,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					}
 					if len(tx.Data()) == 1 {
 						// Coinbase is valid, no gas used
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
 						if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
 							receipt.GasUsed = params.TxGas
 						}
@@ -703,7 +705,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								// If we did not delete, we are rotating the epoch and need to store it
 								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 							}
-							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: 0, TxHash: tx.Hash()}
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
 							if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
 								receipt.GasUsed = params.TxGas
 							}
@@ -780,7 +782,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							outputIndex++
 						}
 					}
-					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: etx.Gas() - txGas, TxHash: tx.Hash(),
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: etx.Gas() - txGas, TxHash: tx.Hash(),
 						Logs: []*types.Log{{
 							Address: *etx.To(),
 							Topics:  []common.Hash{types.QuaiToQiConversionTopic},
@@ -805,6 +807,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					if err := gp.SubGas(params.CallValueTransferGas); err != nil {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 					}
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.CallValueTransferGas, TxHash: tx.Hash()}
+					receipts = append(receipts, receipt)
 					*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
 					totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
 				}
@@ -819,6 +823,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					}
 					*usedGas += params.QiToQuaiConversionGas
 					totalEtxGas += params.QiToQuaiConversionGas
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
+					receipts = append(receipts, receipt)
 					continue // locked and redeemed later
 				}
 				// Apply ETX to Quai state
@@ -1510,10 +1516,10 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 	return txFee, nil
 }
 
-func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit *int, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, []*types.ExternalTx, error, map[string]time.Duration) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit *int, utxosCreatedDeleted *UtxosCreatedDeleted, receipts *types.Receipts) (*big.Int, []*types.ExternalTx, error, map[string]time.Duration) {
 	var elapsedTime time.Duration
 	stepTimings := make(map[string]time.Duration)
-
+	prevUsedGas := *usedGas
 	// Start timing for sanity checks
 	stepStart := time.Now()
 	// Sanity checks
@@ -1785,7 +1791,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	*etxPLimit -= ETXPCount
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Signature Check"] = elapsedTime
-
+	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: *usedGas - prevUsedGas, TxHash: tx.Hash()}
+	*receipts = append(*receipts, receipt)
 	return txFeeInQit, etxs, nil, stepTimings
 }
 
