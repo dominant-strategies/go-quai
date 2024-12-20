@@ -122,8 +122,8 @@ func newFilter(backend Backend, addresses []common.Address, topics [][]common.Ha
 	}
 }
 
-// Logs searches the blockchain for matching log entries by manually checking
-// each block within the specified range, without using bloom filters.
+// Logs searches the blockchain for matching log entries, returning all from the
+// first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// If we're doing singleton block filtering, execute and return
 	if f.block != (common.Hash{}) {
@@ -136,7 +136,6 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 		return f.blockLogs(ctx, workObject)
 	}
-
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
@@ -151,11 +150,24 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if f.end == -1 {
 		end = head
 	}
-
-	// Gather all logs by scanning each block in the specified range
-	var logs []*types.Log
-	logs, err := f.unindexedLogs(ctx, end)
-
+	// Gather all indexed logs, and finish with non indexed ones
+	var (
+		logs []*types.Log
+		err  error
+	)
+	size, sections := f.backend.BloomStatus()
+	if indexed := sections * size; indexed > uint64(f.begin) {
+		if indexed > end {
+			logs, err = f.indexedLogs(ctx, end)
+		} else {
+			logs, err = f.indexedLogs(ctx, indexed-1)
+		}
+		if err != nil {
+			return logs, err
+		}
+	}
+	rest, err := f.unindexedLogs(ctx, end)
+	logs = append(logs, rest...)
 	return logs, err
 }
 
@@ -227,13 +239,18 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(ctx context.Context, workObject *types.WorkObject) (logs []*types.Log, err error) {
-
-	found, err := f.checkMatches(ctx, workObject)
+	// Get block bloom from the database
+	bloom, err := f.backend.GetBloom(workObject.Hash())
 	if err != nil {
 		return logs, err
 	}
-	logs = append(logs, found...)
-
+	if bloomFilter(*bloom, f.addresses, f.topics) {
+		found, err := f.checkMatches(ctx, workObject)
+		if err != nil {
+			return logs, err
+		}
+		logs = append(logs, found...)
+	}
 	return logs, nil
 }
 
