@@ -22,6 +22,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -97,6 +98,9 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
+		if len(value) == 0 {
+			log.Global.Errorf("empty value in DeriveSha for list %+v index %d", list, i)
+		}
 		hasher.Update(indexBuf, value)
 	}
 	if list.Len() > 0 {

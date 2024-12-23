@@ -989,7 +989,7 @@ type RPCTransaction struct {
 	BlockHash         *common.Hash             `json:"blockHash"`
 	BlockNumber       *hexutil.Big             `json:"blockNumber"`
 	From              *common.MixedcaseAddress `json:"from,omitempty"`
-	Gas               hexutil.Uint64           `json:"gas,omitempty"`
+	Gas               hexutil.Uint64           `json:"gas"`
 	MinerTip          *hexutil.Big             `json:"minerTip,omitempty"`
 	GasPrice          *hexutil.Big             `json:"gasPrice,omitempty"`
 	Hash              common.Hash              `json:"hash,omitempty"`
@@ -1028,6 +1028,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			ChainID:       (*hexutil.Big)(tx.ChainId()),
 			Hash:          tx.Hash(),
 			UTXOSignature: hexutil.Bytes(sig),
+			Input:         hexutil.Bytes(tx.Data()),
 		}
 		for _, txin := range tx.TxIn() {
 			result.TxIn = append(result.TxIn, types.RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
@@ -1283,9 +1284,6 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 	if err != nil {
 		return nil, nil
 	}
-	if tx.Type() == types.QiTxType {
-		return nil, errors.New("QiTx does not have receipt")
-	}
 	receipts, err := s.b.GetReceipts(ctx, blockHash)
 	if err != nil {
 		return nil, err
@@ -1297,17 +1295,11 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 		}
 	}
 
-	// Derive the sender.
-	bigblock := new(big.Int).SetUint64(blockNumber)
-	signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
-	from, _ := types.Sender(signer, tx)
-
 	fields := map[string]interface{}{
 		"blockHash":         blockHash,
 		"blockNumber":       hexutil.Uint64(blockNumber),
 		"transactionHash":   hash,
 		"transactionIndex":  hexutil.Uint64(index),
-		"from":              from.Hex(),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
@@ -1316,8 +1308,18 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 		"type":              hexutil.Uint(tx.Type()),
 	}
 
-	if to := tx.To(); to != nil {
-		fields["to"] = to.Hex()
+	if tx.Type() == types.QuaiTxType {
+		if to := tx.To(); to != nil {
+			fields["to"] = to.Hex()
+		}
+		if to := tx.To(); to != nil {
+			fields["to"] = to.Hex()
+		}
+		// Derive the sender.
+		bigblock := new(big.Int).SetUint64(blockNumber)
+		signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
+		from, _ := types.Sender(signer, tx)
+		fields["from"] = from.Hex()
 	}
 
 	if tx.Type() == types.ExternalTxType {
@@ -1337,8 +1339,13 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 	if err != nil {
 		return nil, err
 	}
-	gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
-	fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+	if tx.Type() == types.QuaiTxType {
+		gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
+		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+	} else {
+		// QiTx
+		fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee().Uint64())
+	}
 
 	// Assign receipt status or post state.
 	if len(receipt.PostState) > 0 {

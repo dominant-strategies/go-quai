@@ -54,7 +54,7 @@ const (
 	c_uncleCacheSize = 100
 )
 
-var defaultLockupContractAddress = common.HexToAddress("0x0075E7c2bD6172Bf394Ee26B09B693daA6931DB5", common.Location{0, 0})
+var defaultLockupContractAddress = common.HexToAddress("0x006FCb6be37093D4d049D23A9A155010Fb0C8e65", common.Location{0, 0})
 
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
@@ -2271,7 +2271,10 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
-		minerFee := new(big.Int).Add(block.BaseFee(), tx.MinerTip())
+		minerFee := new(big.Int).Set(block.BaseFee())
+		if tx.Type() == types.QuaiTxType {
+			minerFee.Add(minerFee, tx.MinerTip())
+		}
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
@@ -2396,7 +2399,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
 			continue
-		} else if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) != 0 { // Wrapped Qi transaction
+		} else if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == common.AddressLength { // Wrapped Qi transaction
 			ownerContract := common.BytesToAddress(tx.Data(), location)
 			if _, err := ownerContract.InternalAndQuaiAddress(); err != nil {
 				return err
@@ -2530,7 +2533,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			return err
 		}
 	}
-	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: gasUsed - env.wo.GasUsed(), TxHash: tx.Hash()}
+	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: gasUsed - env.wo.GasUsed(), TxHash: tx.Hash(), OutboundEtxs: env.etxs[len(env.etxs)-len(etxs):]}
 	env.receipts = append(env.receipts, receipt)
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil
