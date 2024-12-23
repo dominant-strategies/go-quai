@@ -157,9 +157,6 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 			}
 		}
 	} else {
-		if wo.GasLimit() < params.MinGasLimit(wo.NumberU64(common.ZONE_CTX)) {
-			return fmt.Errorf("zone gas limit is less than the required gas limit")
-		}
 		if len(wo.Manifest()) != 0 {
 			return fmt.Errorf("zone body has non zero manifests")
 		}
@@ -281,9 +278,6 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 			}
 		}
 	} else {
-		if wo.GasLimit() < params.MinGasLimit(wo.NumberU64(common.ZONE_CTX)) {
-			return fmt.Errorf("zone gas limit is less than the required gas limit")
-		}
 		// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
 		if len(wo.Transactions()) != 0 {
 			return fmt.Errorf("zone body has non zero transactions")
