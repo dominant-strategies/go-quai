@@ -81,7 +81,7 @@ func LogBig(diff *big.Int) *big.Int {
 	return bigBits
 }
 
-// Continously verify that the common values have not been overwritten.
+// Continuously verify that the common values have not been overwritten.
 func SanityCheck(quitCh chan struct{}) {
 	big0 := big.NewInt(0)
 	big1 := big.NewInt(1)
