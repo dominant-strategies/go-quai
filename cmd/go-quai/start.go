@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	godebug "runtime/debug"
+	"strconv"
 	"sync"
 	"syscall"
 
@@ -99,7 +100,25 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	if viper.IsSet(utils.MetricsEnabledFlag.Name) {
 		log.Global.Info("Starting metrics")
-		metrics_config.EnableMetrics()
+		var (
+			addr string
+			port int
+		)
+
+		if viper.IsSet(utils.MetricsHTTPFlag.Name) {
+			addr = viper.GetString(utils.MetricsHTTPFlag.Name)
+		} else {
+			addr = utils.MetricsHTTPFlag.Value.(string)
+		}
+
+		if viper.IsSet(utils.MetricsPortFlag.Name) {
+			port = viper.GetInt(utils.MetricsPortFlag.Name)
+		} else {
+			port = utils.MetricsPortFlag.Value.(int)
+		}
+
+		endpoint := addr + ":" + strconv.Itoa(port)
+		metrics_config.EnableMetrics(endpoint)
 		go metrics_config.StartProcessMetrics()
 	}
 
