@@ -36,6 +36,7 @@ func (tx *QiTx) copy() TxData {
 		ParentHash: tx.ParentHash,
 		MixHash:    tx.MixHash,
 		WorkNonce:  tx.WorkNonce,
+		Data:       common.CopyBytes(tx.Data),
 	}
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
