@@ -368,7 +368,7 @@ func (rs Receipts) Len() int { return len(rs) }
 
 // Supported returns true if the receipt type is supported
 func (r Receipt) Supported() bool {
-	return r.Type == QuaiTxType || r.Type == ExternalTxType
+	return r.Type == QuaiTxType || r.Type == ExternalTxType || r.Type == QiTxType
 }
 
 // EncodeIndex encodes the i'th receipt to w.
@@ -400,19 +400,13 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 		r[i].TransactionIndex = uint(i)
 
 		// The contract address can be derived from the transaction itself
-		if r[i].ContractAddress.Equal(common.Address{}) && txs[i].To() == nil {
+		if txs[i].Type() == QuaiTxType && r[i].ContractAddress.Equal(common.Address{}) && txs[i].To() == nil {
 			// Deriving the signer is expensive, only do if it's actually needed
 			from, err := Sender(signer, txs[i])
 			if err != nil {
 				return err
 			}
 			r[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce(), txs[i].Data(), config.Location)
-		}
-		// The used gas can be calculated based on previous r
-		if i == 0 {
-			r[i].GasUsed = r[i].CumulativeGasUsed
-		} else {
-			r[i].GasUsed = r[i].CumulativeGasUsed - r[i-1].CumulativeGasUsed
 		}
 		// The derived log fields can simply be set from the block and transaction
 		for j := 0; j < len(r[i].Logs); j++ {

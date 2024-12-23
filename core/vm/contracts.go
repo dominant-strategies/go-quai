@@ -521,12 +521,13 @@ func RunLockupContract(evm *EVM, ownerContract common.Address, gas *uint64, inpu
 			return []byte{1}, nil
 		}
 	case 20:
-		if err := ClaimQiDeposit(evm, ownerContract, gas, input); err != nil {
+		ret, err := ClaimQiDeposit(evm, ownerContract, gas, input)
+		if err != nil {
 			return nil, err
 		} else {
-			return []byte{1}, nil
+			return ret, nil
 		}
-	case 33:
+	case 53:
 		if err := ClaimCoinbaseLockup(evm, ownerContract, evm.Context.BlockNumber.Uint64(), gas, input); err != nil {
 			return nil, err
 		} else {
@@ -663,21 +664,23 @@ func GetAllLockupData(db ethdb.Database, ownerContract, beneficiaryMiner common.
 }
 
 func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, currentHeight uint64, gas *uint64, input []byte) error { // Ensure msg.sender is ownerContract
-	// Input should be tightly packed 33 bytes
-	if len(input) != 33 {
+	// Input should be tightly packed 53 bytes
+	if len(input) != 53 {
 		return errors.New("input length is not 33 bytes")
 	}
 
 	// Extract beneficiaryMiner
 	beneficiaryMiner := common.BytesToAddress(input[:20], evm.chainConfig.Location)
+	// Extract to address
+	to := common.BytesToAddress(input[20:40], evm.chainConfig.Location)
 	// Extract lockupByte
-	lockupByte := input[20]
+	lockupByte := input[40]
 
 	// Extract epoch
-	epoch := binary.BigEndian.Uint32(input[21:25])
+	epoch := binary.BigEndian.Uint32(input[41:45])
 
 	// Extract etxGasLimit
-	etxGasLimit := binary.BigEndian.Uint64(input[25:33])
+	etxGasLimit := binary.BigEndian.Uint64(input[45:53])
 
 	if *gas < etxGasLimit {
 		return ErrOutOfGas
@@ -698,6 +701,9 @@ func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, currentHeight u
 	}
 	if epoch >= latestEpoch {
 		return fmt.Errorf("epoch is not less than the latest epoch: %d >= %d", epoch, latestEpoch)
+	}
+	if beneficiaryMiner.IsInQiLedgerScope() && to.IsInQuaiLedgerScope() || beneficiaryMiner.IsInQuaiLedgerScope() && to.IsInQiLedgerScope() {
+		return errors.New("beneficiaryMiner and to cannot be in different ledgers")
 	}
 
 	balance, trancheUnlockHeight, elements, delegate := rawdb.ReadCoinbaseLockup(evm.StateDB.UnderlyingDatabase(), evm.Batch, ownerContract, beneficiaryMiner, lockupByte, epoch)
@@ -720,7 +726,7 @@ func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, currentHeight u
 		return fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
 	}
 
-	externalTx := types.ExternalTx{Value: balance, To: &beneficiaryMiner, Sender: ownerContract, EtxType: uint64(types.CoinbaseLockupType), OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit}
+	externalTx := types.ExternalTx{Value: balance, To: &to, Sender: ownerContract, EtxType: uint64(types.CoinbaseLockupType), OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit}
 
 	evm.ETXCacheLock.Lock()
 	evm.ETXCache = append(evm.ETXCache, types.NewTx(&externalTx))
@@ -771,7 +777,6 @@ func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address
 		trancheUnlockHeight = uint32(unlockHeight) // TODO: ensure overflow is acceptable here
 		oldCoinbaseLockupHashPtr = nil
 		oldKey = nil
-		statedb.Finalise(true)
 		if log_ {
 			log.Global.Info("Rotated epoch: ", " owner: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch)
 		}
@@ -846,7 +851,7 @@ func UnwrapQi(evm *EVM, ownerContract common.Address, gas *uint64, input []byte)
 	}
 
 	externalTx := types.ExternalTx{Value: value, To: &beneficiaryQi, Sender: ownerContract, EtxType: uint64(types.CoinbaseLockupType), OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit}
-
+	log.Global.Infof("Unwrapped Qi: %v -> %v, value: %v", ownerContract, beneficiaryQi, value)
 	evm.ETXCacheLock.Lock()
 	evm.ETXCache = append(evm.ETXCache, types.NewTx(&externalTx))
 	evm.ETXCacheLock.Unlock()
@@ -891,30 +896,32 @@ func WrapQi(statedb StateDB, ownerContract, beneficiary common.Address, sender c
 		balanceBig.Add(balanceBig, value)
 		statedb.SetState(lockupContractAddressInternal, wrappedQiKey, common.BigToHash(balanceBig))
 	}
+	statedb.Finalise(true)
+	log.Global.Infof("Wrapped Qi: %v -> %v, value: %v", ownerContract, beneficiary, value)
 	return nil
 }
 
 // ClaimQiDeposit is called by the owner smart contract to claim a wrapped Qi deposit
 // It adds the wrapped Qi balance to the smart contract's Wrapped Qi balance
 // The contract should then mint the equivalent amount of Wrapped Qi tokens to the Quai beneficiary
-func ClaimQiDeposit(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) error {
+func ClaimQiDeposit(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) ([]byte, error) {
 	// input is tightly packed 20 bytes for Quai owner
 	if len(input) != 20 {
-		return errors.New("input length is not 20 bytes")
+		return nil, errors.New("input length is not 20 bytes")
 	}
 	quaiOwner := common.BytesToAddress(input, evm.chainConfig.Location)
 	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
 	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ownerQuaiInternal, err := quaiOwner.InternalAndQuaiAddress()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	wrappedQiKey := common.Hash{}
@@ -922,7 +929,7 @@ func ClaimQiDeposit(evm *EVM, ownerContract common.Address, gas *uint64, input [
 	copy(wrappedQiKey[16:], ownerQuaiInternal[:16])
 	balanceHash := evm.StateDB.GetState(lockupContractAddressInternal, wrappedQiKey)
 	if balanceHash == (common.Hash{}) {
-		return errors.New("no wrapped Qi balance to claim")
+		return nil, errors.New("no wrapped Qi balance to claim")
 	}
 	evm.StateDB.SetState(lockupContractAddressInternal, wrappedQiKey, common.Hash{})
 
@@ -935,6 +942,50 @@ func ClaimQiDeposit(evm *EVM, ownerContract common.Address, gas *uint64, input [
 		ownerContractBalance.Add(ownerContractBalance, balanceHash.Big())
 		evm.StateDB.SetState(lockupContractAddressInternal, ownerContractHash, common.BigToHash(ownerContractBalance))
 	}
+	log.Global.Infof("Claimed Qi Deposit: %v -> %v, value: %v", ownerContract, quaiOwner, balanceHash.Big().String())
+	return balanceHash[:], nil
+}
 
-	return nil
+func GetWrappedQiDeposit(statedb StateDB, ownerContract, quaiOwner common.Address, location common.Location) (*big.Int, error) {
+	lockupContractAddress := LockupContractAddresses[[2]byte{location[0], location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerQuaiInternal, err := quaiOwner.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	wrappedQiKey := common.Hash{}
+	copy(wrappedQiKey[:16], ownerContractInternal[:16])
+	copy(wrappedQiKey[16:], ownerQuaiInternal[:16])
+	balanceHash := statedb.GetState(lockupContractAddressInternal, wrappedQiKey)
+	if balanceHash == (common.Hash{}) {
+		return nil, errors.New("no wrapped Qi balance")
+	}
+	return balanceHash.Big(), nil
+}
+
+func GetWrappedQiContractBalance(statedb StateDB, ownerContract common.Address, location common.Location) (*big.Int, error) {
+	lockupContractAddress := LockupContractAddresses[[2]byte{location[0], location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerContractHash := common.BytesToHash(ownerContractInternal[:])
+
+	balanceHash := statedb.GetState(lockupContractAddressInternal, ownerContractHash)
+	if balanceHash == (common.Hash{}) {
+		return nil, errors.New("no wrapped Qi balance")
+	}
+	return balanceHash.Big(), nil
 }
