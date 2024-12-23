@@ -1093,8 +1093,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 		}
 		if tx.To().IsInQiLedgerScope() {
-			var lockup *big.Int
-			lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 			if lockup.Uint64() < params.ConversionLockPeriod {
 				return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 			}

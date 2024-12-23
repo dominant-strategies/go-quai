@@ -773,12 +773,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(addressOutpointsWithBlockHeight map
 		if tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
 			lockupByte := tx.Data()[0]
 			// After the BigSporkFork the minimum conversion period changes to 7200 blocks
-			var lockup *big.Int
-			if lockupByte == 0 {
-				lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
-			} else {
-				lockup = new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-			}
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 			lockup.Add(lockup, block.Number(nodeCtx))
 
 			coinbaseAddr := tx.To().Bytes20()
