@@ -97,7 +97,7 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 	return reqMsg.Id, reqType, *location, reqData, nil
 }
 
-// EncodeResponse creates a marshaled protobuf message for a Quai Response.
+// EncodeQuaiResponse creates a marshaled protobuf message for a Quai Response.
 // Returns the serialized protobuf message.
 func EncodeQuaiResponse(id uint32, location common.Location, respDataType interface{}, data interface{}) ([]byte, error) {
 
