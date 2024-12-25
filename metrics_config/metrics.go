@@ -58,7 +58,7 @@ func StartProcessMetrics() {
 		}
 	}()
 	// Short circuit if the metrics system is disabled
-	if !enabled || endpoint == "" {
+	if !enabled {
 		return
 	}
 
