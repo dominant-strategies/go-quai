@@ -199,8 +199,8 @@ func init() {
 	LockupByteToBlockDepth[2] = 60480  // 3.5 days
 	LockupByteToBlockDepth[3] = 120960 // 7 days
 
-	LockupByteToRewardsRatio[1] = big.NewInt(24) // additional 16% WPY
-	LockupByteToRewardsRatio[2] = big.NewInt(10) // additional 20% WPY
+	LockupByteToRewardsRatio[1] = big.NewInt(24) // additional 4.17% WPY
+	LockupByteToRewardsRatio[2] = big.NewInt(10) // additional 10% WPY
 	LockupByteToRewardsRatio[3] = big.NewInt(4)  // additional 25% WPY
 }
 
