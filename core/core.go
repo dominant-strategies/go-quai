@@ -1048,6 +1048,10 @@ func (c *Core) CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error) {
 	return c.sl.hc.CalcMaxBaseFee(block)
 }
 
+func (c *Core) GetBlockStats(hash common.Hash) types.BlockStats {
+	return c.sl.hc.GetBlockStats(hash)
+}
+
 //--------------------//
 // BlockChain methods //
 //--------------------//
