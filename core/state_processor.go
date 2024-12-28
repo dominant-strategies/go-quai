@@ -835,6 +835,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			conversionFlowAmount = rawdb.ReadConversionFlowAmount(p.hc.headerDb, block.ParentHash(common.ZONE_CTX))
 		}
 
+		qiConverted := big.NewInt(0)
+		quaiConverted := big.NewInt(0)
+
 		conversionAmountInHash := big.NewInt(0)
 		for _, etx := range emittedEtxs {
 			// If the etx is conversion
@@ -842,16 +845,27 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				value := etx.Value()
 				// If to is in Qi, convert the value into Qi
 				if etx.To().IsInQiLedgerScope() {
+
+					// this is the amount of quai that was converted
+					quaiConverted.Add(quaiConverted, value)
+
 					value = misc.QuaiToQi(parent, value)
 					conversionAmountInHash = new(big.Int).Add(conversionAmountInHash, misc.QiToHash(parent, value))
 				}
 				// If To is in Quai, convert the value into Quai
 				if etx.To().IsInQuaiLedgerScope() {
+
+					// this is the amount of qi that was converted
+					qiConverted.Add(qiConverted, value)
+
 					value = misc.QiToQuai(parent, value)
 					conversionAmountInHash = new(big.Int).Add(conversionAmountInHash, misc.QuaiToHash(parent, value))
 				}
 			}
 		}
+
+		p.hc.QiConvertedCache.Add(block.Hash(), qiConverted)
+		p.hc.QuaiConvertedCache.Add(block.Hash(), quaiConverted)
 
 		// compute and write the conversion flow amount based on the current block
 		currentBlockConversionFlowAmount := p.hc.ComputeConversionFlowAmount(block, new(big.Int).Set(conversionAmountInHash))
@@ -908,10 +922,14 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		if err != nil {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 		}
-		exchangeRate, err = CalculateBetaFromMiningChoiceAndConversions(p.hc, parent, updatedTokenChoiceSet)
+		var bigBeta0 *big.Int
+		exchangeRate, bigBeta0, err = CalculateBetaFromMiningChoiceAndConversions(p.hc, parent, updatedTokenChoiceSet)
 		if err != nil {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 		}
+
+		// add the big beta value to the beta cache
+		p.hc.BetaCache.Add(block.Hash(), bigBeta0)
 
 		//////// Step 4 ////////
 		newConversionAmountInHash := big.NewInt(0)
@@ -936,6 +954,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 		//////// Step 5 ///////
 		newkQuaiDiscount := p.hc.ComputeKQuaiDiscount(block)
+
+		// Add the real k quai slip amount into the cache
+		p.hc.KQuaiSlipCache.Add(block.Hash(), newkQuaiDiscount.Uint64())
+
 		newConversionAmountAfterKQuaiDiscount := new(big.Int).Mul(newConversionAmountInHash, new(big.Int).Sub(big.NewInt(100), newkQuaiDiscount))
 		for _, etx := range emittedEtxs {
 			// If the etx is conversion
@@ -960,6 +982,17 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		/////// Step 6 ////////
 		discountedConversionAmount := p.hc.ApplyQuadraticDiscount(newConversionAmountAfterKQuaiDiscount, conversionFlowAmount)
 		discountedConversionAmountInInt, _ := discountedConversionAmount.Int64()
+
+		// calculating the total slip amount
+		var slip *big.Int
+		if newConversionAmountInHash.Cmp(common.Big0) == 0 {
+			slip = big.NewInt(100)
+		} else {
+			slip = new(big.Int).Mul(big.NewInt(discountedConversionAmountInInt), big.NewInt(100))
+			slip = new(big.Int).Div(slip, newConversionAmountInHash)
+		}
+		p.hc.SlipCache.Add(block.Hash(), 100-slip.Uint64())
+
 		for _, etx := range emittedEtxs {
 			// If the etx is conversion
 			if types.IsConversionTx(etx) {

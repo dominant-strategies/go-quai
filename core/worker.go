@@ -859,7 +859,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 				if err != nil {
 					return nil, err
 				}
-				exchangeRate, err = CalculateBetaFromMiningChoiceAndConversions(w.hc, block, updatedTokenChoiceSet)
+				exchangeRate, _, err = CalculateBetaFromMiningChoiceAndConversions(w.hc, block, updatedTokenChoiceSet)
 				if err != nil {
 					return nil, err
 				}

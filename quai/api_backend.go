@@ -705,6 +705,10 @@ func (b *QuaiAPIBackend) IsGenesisHash(hash common.Hash) bool {
 	return b.quai.core.IsGenesisHash(hash)
 }
 
+func (b *QuaiAPIBackend) GetBlockStats(hash common.Hash) types.BlockStats {
+	return b.quai.core.GetBlockStats(hash)
+}
+
 func (b *QuaiAPIBackend) UpdateEtxEligibleSlices(header *types.WorkObject, location common.Location) common.Hash {
 	return b.quai.core.UpdateEtxEligibleSlices(header, location)
 }

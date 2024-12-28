@@ -13,11 +13,11 @@ import (
 	"github.com/dominant-strategies/go-quai/params"
 )
 
-func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.WorkObject, newTokenChoiceSet types.TokenChoiceSet) (*big.Int, error) {
+func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.WorkObject, newTokenChoiceSet types.TokenChoiceSet) (*big.Int, *big.Int, error) {
 
 	// Until there are tokenChoicesSetSize of miner token choices, the exchange rate is unchanged
 	if block.NumberU64(common.ZONE_CTX) < params.ControllerKickInBlock+types.C_tokenChoiceSetSize {
-		return params.ExchangeRate, nil
+		return params.ExchangeRate, big.NewInt(0), nil
 	}
 
 	var totalQiChoices uint64 = 0
@@ -86,7 +86,7 @@ func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.W
 	// If parent is genesis, there is nothing to train
 	exchangeRate := misc.CalculateKQuai(block, minerDifficulty, bigBeta0Int)
 
-	return exchangeRate, nil
+	return exchangeRate, bigBeta0Int, nil
 }
 
 // CalculateTokenChoicesSet reads the block token choices set and adds in the

@@ -100,6 +100,7 @@ type backend interface {
 	NodeCtx() int
 	NodeLocation() common.Location
 	Logger() *log.Logger
+	GetBlockStats(hash common.Hash) types.BlockStats
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -1006,27 +1007,34 @@ type blockTransactionStats struct {
 
 // Trusted Only
 type blockDetailStats struct {
-	Timestamp    *big.Int `json:"timestamp"`
-	ZoneHeight   uint64   `json:"zoneHeight"`
-	RegionHeight uint64   `json:"regionHeight"`
-	PrimeHeight  uint64   `json:"primeHeight"`
-	Chain        string   `json:"chain"`
-	Entropy      string   `json:"entropy"`
-	Difficulty   string   `json:"difficulty"`
-	QuaiPerQi    string   `json:"quaiPerQi"`
-	QuaiReward   string   `json:"quaiReward"`
-	QiReward     string   `json:"qiReward"`
-	QiType       bool     `json:"qiType"`
-	UncleCount   uint64   `json:"uncleCount"`
-	WoCount      uint64   `json:"woCount"`
-	QiToQuai     *big.Int `json:"qiToQuai"`
-	QuaiToQi     *big.Int `json:"quaiToQi"`
-	ExchangeRate *big.Int `json:"exchangeRate"`
-	BaseFee      *big.Int `json:"baseFee"`
-	GasLimit     uint64   `json:"gasLimit"`
-	GasUsed      uint64   `json:"gasUsed"`
-	StateLimit   uint64   `json:"stateLimit"`
-	StateUsed    uint64   `json:"stateUsed"`
+	Timestamp            *big.Int `json:"timestamp"`
+	ZoneHeight           uint64   `json:"zoneHeight"`
+	RegionHeight         uint64   `json:"regionHeight"`
+	PrimeHeight          uint64   `json:"primeHeight"`
+	Chain                string   `json:"chain"`
+	Entropy              string   `json:"entropy"`
+	Difficulty           string   `json:"difficulty"`
+	QuaiPerQi            string   `json:"quaiPerQi"`
+	QuaiReward           string   `json:"quaiReward"`
+	QiReward             string   `json:"qiReward"`
+	QiType               bool     `json:"qiType"`
+	UncleCount           uint64   `json:"uncleCount"`
+	WoCount              uint64   `json:"woCount"`
+	QiToQuai             *big.Int `json:"qiToQuai"`
+	QuaiToQi             *big.Int `json:"quaiToQi"`
+	ExchangeRate         *big.Int `json:"exchangeRate"`
+	BaseFee              *big.Int `json:"baseFee"`
+	GasLimit             uint64   `json:"gasLimit"`
+	GasUsed              uint64   `json:"gasUsed"`
+	StateLimit           uint64   `json:"stateLimit"`
+	StateUsed            uint64   `json:"stateUsed"`
+	Beta                 *big.Int `json:"beta"`
+	KQuai                *big.Int `json:"kQuai"`
+	KQi                  *big.Int `json:"kQi"`
+	Slip                 uint64   `json:"slip"`
+	KQuaiSlip            uint64   `json:"kQuaiSlip"`
+	ConversionFlowAmount *big.Int `json:"conversionFlowAmount"`
+	MinerDifficulty      *big.Int `json:"minerDifficulty"`
 }
 
 // Everyone sends every block
@@ -1285,6 +1293,9 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		qiReward = misc.QuaiToQi(parent, quaiReward)
 	}
 
+	// collect the block stats
+	blockStats := s.backend.GetBlockStats(block.Hash())
+
 	// Assemble and return the block stats
 	return &blockDetailStats{
 		Timestamp:    new(big.Int).SetUint64(block.Time()),
@@ -1300,14 +1311,22 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		QiType:       qiType,
 		UncleCount:   uncleCount,
 		WoCount:      woCount,
-		QiToQuai:     block.QiToQuai(),
-		QuaiToQi:     block.QuaiToQi(),
 		ExchangeRate: block.ExchangeRate(),
 		BaseFee:      block.BaseFee(),
 		GasLimit:     block.GasLimit(),
 		GasUsed:      block.GasUsed(),
 		StateLimit:   block.StateLimit(),
 		StateUsed:    block.StateUsed(),
+		// stats related to controller
+		KQuai:                block.ExchangeRate(),
+		KQi:                  params.OneOverKqi,
+		QiToQuai:             blockStats.QiConverted,
+		QuaiToQi:             blockStats.QuaiConverted,
+		MinerDifficulty:      blockStats.MinerDifficulty,
+		ConversionFlowAmount: blockStats.ConversionFlowAmount,
+		Slip:                 blockStats.Slip,
+		KQuaiSlip:            blockStats.KQuaiSlip,
+		Beta:                 blockStats.Beta,
 	}
 }
 

@@ -98,6 +98,15 @@ type HeaderChain struct {
 	calcOrderCache *lru.Cache[common.Hash, calcOrderResponse]
 
 	logger *log.Logger
+
+	// stats caches
+	QiConvertedCache   *lru.Cache[common.Hash, *big.Int]
+	QuaiConvertedCache *lru.Cache[common.Hash, *big.Int]
+	BetaCache          *lru.Cache[common.Hash, *big.Int]
+	// this gives the percentage of the converted amount that is lost due to k quai
+	// and flow discount
+	SlipCache      *lru.Cache[common.Hash, uint64]
+	KQuaiSlipCache *lru.Cache[common.Hash, uint64]
 }
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
@@ -129,6 +138,13 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 
 	calcOrderCache, _ := lru.New[common.Hash, calcOrderResponse](c_calcOrderCacheLimit)
 	hc.calcOrderCache = calcOrderCache
+
+	// caches for stats
+	hc.QiConvertedCache, _ = lru.New[common.Hash, *big.Int](100)
+	hc.QuaiConvertedCache, _ = lru.New[common.Hash, *big.Int](100)
+	hc.BetaCache, _ = lru.New[common.Hash, *big.Int](100)
+	hc.SlipCache, _ = lru.New[common.Hash, uint64](100)
+	hc.KQuaiSlipCache, _ = lru.New[common.Hash, uint64](100)
 
 	genesisHash := hc.GetGenesisHashes()[0]
 	genesisNumber := rawdb.ReadHeaderNumber(db, genesisHash)
@@ -1166,6 +1182,44 @@ func (hc *HeaderChain) GetBlocksFromHash(hash common.Hash, n int) (blocks types.
 		*number--
 	}
 	return
+}
+
+func (hc *HeaderChain) GetBlockStats(hash common.Hash) types.BlockStats {
+	blockStats := types.BlockStats{QiConverted: big.NewInt(0),
+		QuaiConverted:        big.NewInt(0),
+		Beta:                 big.NewInt(0),
+		Slip:                 0,
+		KQuaiSlip:            0,
+		ConversionFlowAmount: big.NewInt(0),
+		MinerDifficulty:      big.NewInt(0)}
+
+	qiConverted, exists := hc.QiConvertedCache.Peek(hash)
+	if exists {
+		blockStats.QiConverted = new(big.Int).Set(qiConverted)
+	}
+	quaiConverted, exists := hc.QuaiConvertedCache.Peek(hash)
+	if exists {
+		blockStats.QuaiConverted = new(big.Int).Set(quaiConverted)
+	}
+	beta, exists := hc.BetaCache.Peek(hash)
+	if exists && beta != nil {
+		blockStats.Beta = new(big.Int).Set(beta)
+	}
+	slip, exists := hc.SlipCache.Peek(hash)
+	if exists {
+		blockStats.Slip = slip
+	}
+	kQuaiSlip, exists := hc.KQuaiSlipCache.Peek(hash)
+	if exists {
+		blockStats.KQuaiSlip = kQuaiSlip
+	}
+	conversionFlowAmount := rawdb.ReadConversionFlowAmount(hc.headerDb, hash)
+	blockStats.ConversionFlowAmount = new(big.Int).Set(conversionFlowAmount)
+
+	minerDifficulty := rawdb.ReadMinerDifficulty(hc.headerDb, hash)
+	blockStats.MinerDifficulty = new(big.Int).Set(minerDifficulty)
+
+	return blockStats
 }
 
 func (hc *HeaderChain) NodeLocation() common.Location {
