@@ -11,10 +11,9 @@ var (
 			"/dns4/bootnode.colosseum5.quai.network/tcp/4001/p2p/12D3KooWKVZTwbT716mKfHuhjiuVwkpha6NDhm19uqk6vxWz2Eyr",
 		},
 		"garden": {
-			"/dns4/bootnode.garden0.quai.network/tcp/4001/p2p/12D3KooWRQrLVEeJtfyKoJDYWYjryBKR8qxkDooMMzyf2ZpLaZRR",
-			"/dns4/bootnode.garden1.quai.network/tcp/4001/p2p/12D3KooWLzhZXUdqhwbGpezddPkpGtZ6v7obzPkWVkfY1s6ZsX6S",
-			"/dns4/bootnode.garden2.quai.network/tcp/4001/p2p/12D3KooWR3xMB6sCpsowQcvtdMKmKbTaiDcDFAXuWABdZVPWaVuo",
-			"/dns4/bootnode.garden3.quai.network/tcp/4001/p2p/12D3KooWJnWmBukEbZtGPPJvT1r4tQ97CRSGmnjHewcrjNB8oRxU",
+			"/ip4/34.60.17.145/tcp/4001/p2p/12D3KooWMtvV1LQ7GerUQbpn2xuHbXThdv3B8VLxTg43Ecoz39ci",
+			"/ip4/35.231.67.63/tcp/4001/p2p/12D3KooWGFRBqRaeHGQQSESB3C3vcncRqSxPSvsn2vyyjXjAhQFF",
+			"/ip4/34.168.103.181/tcp/4001/p2p/12D3KooWPdZkkUBLzHYAxXAF72V8jLrh8ADXyosi7zGAhFkhvzF5",
 		},
 		"orchard": {
 			"/dns4/bootnode.orchard0.quai.network/tcp/4001/p2p/12D3KooWBv5C4tSS72nBdG6Q12s7vSHYHtFcquBxAKDkfrrzseUz",
