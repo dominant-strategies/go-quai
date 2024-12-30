@@ -239,6 +239,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, 0, nil, nil, errors.New("parent block is nil for the block given to process")
 	}
 	time1 := common.PrettyDuration(time.Since(start))
+	// enable the batch pending cache
+	batch.SetPending(true)
 
 	parentEvmRoot := parent.Header().EVMRoot()
 	parentEtxSetRoot := parent.Header().EtxSetRoot()
@@ -1239,7 +1241,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	totalQitIn := big.NewInt(0)
 	pubKeys := make([]*btcec.PublicKey, 0)
 	for _, txIn := range tx.TxIn() {
-		utxo := rawdb.GetUTXO(db, txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		utxo := rawdb.GetUTXOWithBatch(db, batch, txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
 		if utxo == nil {
 			return nil, nil, nil, fmt.Errorf("tx %032x spends non-existent UTXO %032x:%d", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index), nil
 		}

@@ -1156,10 +1156,11 @@ func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw h
 
 func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShare *types.WorkObjectHeader) error {
 	if workShare != nil {
-		// check if the workshare is valid before broadcasting as a sanity
-		workShareValidity := s.b.CheckIfValidWorkShare(workShare)
-		if workShareValidity != types.Valid {
-			return errors.New("work share is invalid")
+		var isWorkShare, isSubShare bool
+		threshold := s.b.GetWorkShareP2PThreshold()
+		isSubShare = s.b.Engine().CheckWorkThreshold(workShare, threshold)
+		if !isSubShare {
+			return errors.New("workshare has less entropy than the workshare p2p threshold")
 		}
 
 		s.b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
@@ -1170,6 +1171,12 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShar
 			if workShare.TxHash() != types.EmptyRootHash {
 				s.b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
 			}
+		}
+		// If the share qualifies is not a workshare and there are no transactions,
+		// there is no need to broadcast the share
+		isWorkShare = s.b.Engine().CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
+		if !isWorkShare && len(txs) == 0 {
+			return nil
 		}
 		if pendingBlockBody == nil {
 			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
@@ -1294,4 +1301,18 @@ func (s *PublicBlockChainQuaiAPI) SuggestFinalityDepth(ctx context.Context, qiVa
 		return 0, err
 	}
 	return hexutil.Uint64(depth.Uint64()), nil
+}
+
+func (s *PublicBlockChainQuaiAPI) GetWorkShareP2PThreshold(ctx context.Context) hexutil.Uint64 {
+	return hexutil.Uint64(s.b.GetWorkShareP2PThreshold())
+}
+
+func (s *PublicBlockChainQuaiAPI) SetWorkShareP2PThreshold(ctx context.Context, threshold hexutil.Uint64) error {
+	if threshold < hexutil.Uint64(params.WorkSharesThresholdDiff) {
+		return errors.New("the subshare threshold is less than the workshare threshold")
+	}
+
+	s.b.SetWorkShareP2PThreshold(int(threshold))
+
+	return nil
 }

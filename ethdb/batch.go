@@ -36,6 +36,10 @@ type Batch interface {
 
 	// Replay replays the batch contents.
 	Replay(w KeyValueWriter) error
+
+	SetPending(pending bool)
+
+	GetPending(key []byte) (bool, []byte)
 }
 
 // Batcher wraps the NewBatch method of a backing data store.

@@ -411,16 +411,24 @@ func (db *Database) meter(refresh time.Duration) {
 // batch is a write-only leveldb batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	db     *leveldb.DB
-	b      *leveldb.Batch
-	size   int
-	logger *log.Logger
+	db          *leveldb.DB
+	b           *leveldb.Batch
+	size        int
+	logger      *log.Logger
+	setPending  bool
+	pending     map[string]*[]byte
+	pendingLock sync.RWMutex
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.b.Put(key, value)
 	b.size += len(value)
+	if b.setPending {
+		b.pendingLock.Lock()
+		b.pending[string(key)] = &value
+		b.pendingLock.Unlock()
+	}
 	return nil
 }
 
@@ -428,7 +436,30 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key)
 	b.size += len(key)
+	if b.setPending {
+		b.pendingLock.Lock()
+		b.pending[string(key)] = nil
+		b.pendingLock.Unlock()
+	}
 	return nil
+}
+
+func (b *batch) GetPending(key []byte) (bool, []byte) {
+	b.pendingLock.RLock()
+	defer b.pendingLock.RUnlock()
+	if val, ok := b.pending[string(key)]; ok {
+		if val == nil {
+			return true, nil
+		}
+		return false, *val
+	}
+	return false, nil
+}
+
+// SetPending must be called for the batch to keep track of pending writes outside of leveldb.
+func (b *batch) SetPending(val bool) {
+	b.pending = make(map[string]*[]byte)
+	b.setPending = val
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
@@ -438,6 +469,8 @@ func (b *batch) ValueSize() int {
 
 // Write flushes any accumulated data to disk.
 func (b *batch) Write() error {
+	b.pending = nil
+	b.setPending = false
 	return b.db.Write(b.b, nil)
 }
 
@@ -445,6 +478,8 @@ func (b *batch) Write() error {
 func (b *batch) Reset() {
 	b.b.Reset()
 	b.size = 0
+	b.pending = nil
+	b.setPending = false
 }
 
 // Replay replays the batch contents.

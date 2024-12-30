@@ -362,8 +362,17 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				backend.Logger().WithField("err", err).Warn("Sanity check of work object share view failed")
 				return pubsub.ValidationReject
 			}
-			if valid := backend.CheckIfValidWorkShare(block.WorkObjectHeader()); valid != types.Valid {
-				backend.Logger().Error("work share received from peer is not valid")
+
+			threshold := backend.GetWorkShareP2PThreshold()
+			if !backend.Engine().CheckWorkThreshold(block.WorkObjectHeader(), threshold) {
+				backend.Logger().Error("workshare has less entropy than the workshare p2p threshold")
+				return pubsub.ValidationReject
+			}
+
+			// After the goldenage fork v3 if a share that is not a workshare is broadcasted without the
+			// transactions then throw an error
+			isWorkShare := backend.Engine().CheckWorkThreshold(block.WorkObjectHeader(), params.WorkSharesThresholdDiff)
+			if !isWorkShare && len(block.WorkObject.Transactions()) == 0 {
 				return pubsub.ValidationReject
 			}
 

@@ -24,9 +24,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 )
@@ -1352,6 +1352,36 @@ func CreateUTXO(db ethdb.KeyValueWriter, txHash common.Hash, index uint16, utxo 
 	return db.Put(UtxoKey(txHash, index), data)
 }
 
+func GetUTXOWithBatch(db ethdb.KeyValueReader, batch ethdb.Batch, txHash common.Hash, index uint16) *types.UtxoEntry {
+	deleted, data := batch.GetPending(UtxoKey(txHash, index))
+	if deleted {
+		return nil
+	} else if data != nil && len(data) == 0 {
+		return nil
+	} else if data == nil {
+		data, _ = db.Get(UtxoKey(txHash, index))
+		if len(data) == 0 {
+			return nil
+		}
+	}
+	utxoProto := new(types.ProtoTxOut)
+	if err := proto.Unmarshal(data, utxoProto); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal utxo")
+	}
+
+	utxo := new(types.UtxoEntry)
+	if err := utxo.ProtoDecode(utxoProto); err != nil {
+		db.Logger().WithFields(log.Fields{
+			"txHash": txHash,
+			"index":  index,
+			"err":    err,
+		}).Error("Invalid utxo Proto")
+		return nil
+	}
+
+	return utxo
+}
+
 func GetUTXO(db ethdb.KeyValueReader, txHash common.Hash, index uint16) *types.UtxoEntry {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(UtxoKey(txHash, index))
@@ -1572,6 +1602,9 @@ func ReadUTXOSetSize(db ethdb.Reader, blockHash common.Hash) uint64 {
 	if len(data) == 0 {
 		return 0
 	}
+	if len(data) != 8 {
+		db.Logger().WithField("data", data).Fatal("Invalid utxo set size data")
+	}
 	return binary.BigEndian.Uint64(data)
 }
 
@@ -1593,6 +1626,9 @@ func ReadLastTrimmedBlock(db ethdb.Reader, blockHash common.Hash) uint64 {
 	data, _ := db.Get(lastTrimmedBlockKey(blockHash))
 	if len(data) == 0 {
 		return 0
+	}
+	if len(data) != 8 {
+		db.Logger().WithField("data", data).Fatal("Invalid last trimmed block data")
 	}
 	return binary.BigEndian.Uint64(data)
 }
@@ -1693,6 +1729,9 @@ func ReadUtxoToBlockHeight(db ethdb.Reader, txHash common.Hash, index uint16) ui
 	data, _ := db.Get(utxoToBlockHeightKey(txHash, index))
 	if len(data) == 0 {
 		return 0
+	}
+	if len(data) != 4 {
+		db.Logger().WithField("data", data).Fatal("Invalid utxo to block height data")
 	}
 	return binary.BigEndian.Uint32(data)
 }

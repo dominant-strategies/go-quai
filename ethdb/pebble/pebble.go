@@ -475,6 +475,11 @@ func (b *batch) Logger() *log.Logger {
 	return b.db.logger
 }
 
+func (b *batch) SetPending(pending bool) {}
+func (b *batch) GetPending(key []byte) (bool, []byte) {
+	return false, nil
+}
+
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
 // The purpose of this structure is to implement the missing APIs.
 type pebbleIterator struct {

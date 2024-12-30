@@ -175,6 +175,7 @@ var (
 	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(10000000000), big.NewInt(GWei)) // 0.000000001 Quai
 	MaxWorkShareCount                 = 16
 	WorkSharesThresholdDiff           = 4 // Number of bits lower than the target that the default consensus engine uses
+	WorkShareP2PThresholdDiff         = 7 // Default value in bits lower than the target
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	LockupByteToBlockDepth            = make(map[uint8]uint64)
 	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
