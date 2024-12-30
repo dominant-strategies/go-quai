@@ -29,6 +29,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -352,4 +353,13 @@ func (ec *Client) SendTransactionToPoolSharingClient(ctx context.Context, tx *ty
 		return err
 	}
 	return ec.c.CallContext(ctx, nil, "quai_receiveTxFromPoolSharingClient", hexutil.Encode(data))
+}
+
+func (ec *Client) GetWorkShareP2PThreshold(ctx context.Context) uint64 {
+	var threshold hexutil.Uint64
+	err := ec.c.CallContext(ctx, &threshold, "quai_getWorkShareP2PThreshold")
+	if err != nil {
+		return uint64(params.NewWorkSharesThresholdDiff)
+	}
+	return uint64(threshold)
 }

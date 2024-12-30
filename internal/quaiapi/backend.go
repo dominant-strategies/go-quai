@@ -118,6 +118,8 @@ type Backend interface {
 	TxMiningEnabled() bool
 	GetWorkShareThreshold() int
 	GetMinerEndpoints() []string
+	GetWorkShareP2PThreshold() int
+	SetWorkShareP2PThreshold(threshold int)
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool
