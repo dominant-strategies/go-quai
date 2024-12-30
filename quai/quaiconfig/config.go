@@ -149,6 +149,8 @@ type Config struct {
 	// Sub node websocket urls
 	SubUrls []string
 
+	WorkShareP2PThreshold int
+
 	// Slices running on the node
 	SlicesRunning []common.Location
 

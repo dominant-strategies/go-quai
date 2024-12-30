@@ -177,6 +177,7 @@ var (
 	MaxWorkShareCount                 = 16
 	OldWorkSharesThresholdDiff        = 3 // Number of bits lower than the target that the default consensus engine uses
 	NewWorkSharesThresholdDiff        = 4 // Number of bits lower than the target that the default consensus engine uses
+	WorkShareP2PThresholdDiff         = 7 // Default value in bits lower than the target
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	LockupByteToBlockDepth            = make(map[uint8]uint64)
 	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
@@ -197,6 +198,7 @@ var (
 const (
 	GoldenAgeForkNumberV1       = 180000
 	GoldenAgeForkNumberV2       = 588000
+	GoldenAgeForkNumberV3       = 1333000
 	GoldenAgeForkGraceNumber    = 100
 	GoldenAgeGracePaymentPeriod = 6000
 )

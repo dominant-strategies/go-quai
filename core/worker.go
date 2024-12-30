@@ -2002,6 +2002,11 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 		return nil
 	}
 
+	// Dont add the workshare if its not valid
+	if valid := w.engine.CheckIfValidWorkShare(workShare); valid != types.Valid {
+		return errors.New("work share received from peer is not valid")
+	}
+
 	w.uncles.ContainsOrAdd(workShare.Hash(), *workShare)
 	return nil
 }

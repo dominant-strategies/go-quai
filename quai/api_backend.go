@@ -621,6 +621,14 @@ func (b *QuaiAPIBackend) AddGenesisPendingEtxs(block *types.WorkObject) {
 	b.quai.core.AddGenesisPendingEtxs(block)
 }
 
+func (b *QuaiAPIBackend) GetWorkShareP2PThreshold() int {
+	return b.quai.config.WorkShareP2PThreshold
+}
+
+func (b *QuaiAPIBackend) SetWorkShareP2PThreshold(threshold int) {
+	b.quai.SetWorkShareP2PThreshold(threshold)
+}
+
 func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription {
 	return b.quai.core.SubscribeExpansionEvent(ch)
 }
