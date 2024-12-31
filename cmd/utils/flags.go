@@ -1077,7 +1077,8 @@ func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
 			} else {
 				internal, err := common.HexToAddress(account, nodeLocation).InternalAddress()
 				if err != nil {
-					Fatalf("Invalid account in --txpool.locals: %s, err %s", account, err)
+					log.Global.Errorf("Error: NodeLocation %s, Invalid account in --txpool.locals: %s, err %s"+"\n", nodeLocation.Name(), account, err)
+					//Fatalf("Invalid account in --txpool.locals: %s, err %s", account, err)
 				}
 				cfg.Locals = append(cfg.Locals, internal)
 			}
