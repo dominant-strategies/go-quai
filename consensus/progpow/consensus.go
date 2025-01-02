@@ -227,6 +227,9 @@ func (progpow *Progpow) VerifyUncles(chain consensus.ChainReader, block *types.W
 			return err
 		}
 
+		if uncle.NumberU64() < 2*params.BlocksPerMonth && uncle.Lock() != 0 {
+			return fmt.Errorf("workshare lock byte: %v is not valid: it has to be %v for the first two months", uncle.Lock(), 0)
+		}
 		// Verify the block's difficulty based on its timestamp and parent's difficulty
 		// difficulty adjustment can only be checked in zone
 		if nodeCtx == common.ZONE_CTX {
@@ -416,6 +419,9 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 			if !header.SecondaryCoinbase().IsInQuaiLedgerScope() {
 				return fmt.Errorf("primary coinbase: %v is in qi ledger but secondary coinbase: %v is not in Quai ledger", header.PrimaryCoinbase(), header.SecondaryCoinbase())
 			}
+		}
+		if header.NumberU64(common.ZONE_CTX) < 2*params.BlocksPerMonth && header.Lock() != 0 {
+			return fmt.Errorf("header lock byte: %v is not valid: it has to be %v for the first two months", header.Lock(), 0)
 		}
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)

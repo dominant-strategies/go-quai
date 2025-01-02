@@ -310,6 +310,10 @@ func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 	if wo.WorkObjectHeader() == nil {
 		return fmt.Errorf("work object header is nil")
 	}
+	// Lockup byte for the first two months has to be zero
+	if wo.WorkObjectHeader().NumberU64() < 2*params.BlocksPerMonth && wo.WorkObjectHeader().Lock() != 0 {
+		return fmt.Errorf("work object header has invalid lockup byte")
+	}
 	if wo.Header() == nil {
 		return fmt.Errorf("wo header is nil")
 	}

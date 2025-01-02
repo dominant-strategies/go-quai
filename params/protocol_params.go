@@ -310,7 +310,7 @@ func CalculateGasWithStateScaling(stateSize, contractSize *big.Int, baseRate uin
 }
 
 func CalculateCoinbaseValueWithLockup(value *big.Int, lockupByte uint8, blockNumber uint64) *big.Int {
-	if lockupByte == 0 {
+	if lockupByte == 0 || blockNumber < 2*BlocksPerMonth {
 		return value
 	} else {
 		rewardsMultiple, _ := CalculateLockupByteRewardsMultiple(lockupByte, blockNumber)

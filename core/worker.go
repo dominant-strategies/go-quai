@@ -1463,7 +1463,14 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number(nodeCtx)
 	newWo := types.EmptyWorkObject(nodeCtx)
-	newWo.WorkObjectHeader().SetLock(w.GetLockupByte())
+
+	// the lockup byte is forced to 0 for the first two months
+	if parent.NumberU64(common.ZONE_CTX)+1 < 2*params.BlocksPerMonth {
+		newWo.WorkObjectHeader().SetLock(0)
+	} else {
+		newWo.WorkObjectHeader().SetLock(w.GetLockupByte())
+	}
+
 	newWo.SetParentHash(wo.Hash(), nodeCtx)
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		newWo.SetNumber(big.NewInt(1), nodeCtx)
