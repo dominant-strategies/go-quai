@@ -447,7 +447,7 @@ func GetDeltas(s *PublicBlockChainQuaiAPI, currentBlock *types.WorkObject, addre
 			lockupByte := tx.Data()[0]
 			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 			lockup.Add(lockup, currentBlock.Number(nodeCtx))
-			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, currentBlock.NumberU64(common.ZONE_CTX))
 			denominations := misc.FindMinDenominations(value)
 			outputIndex := uint16(0)
 			// Iterate over the denominations in descending order

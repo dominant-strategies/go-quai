@@ -1098,7 +1098,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 			}
 			lockup.Add(lockup, env.wo.Number(w.hc.NodeCtx()))
-			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, env.wo.NumberU64(common.ZONE_CTX))
 			denominations := misc.FindMinDenominations(value)
 			outputIndex := uint16(0)
 			// Iterate over the denominations in descending order
