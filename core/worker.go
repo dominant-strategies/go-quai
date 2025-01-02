@@ -1093,8 +1093,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 		}
 		if tx.To().IsInQiLedgerScope() {
-			var lockup *big.Int
-			lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 			if lockup.Uint64() < params.ConversionLockPeriod {
 				return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 			}
@@ -1984,6 +1983,11 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 	// Don't add the workshare into the list if its farther than the worksharefilterdist
 	if workShare.NumberU64()+uint64(params.WorkSharesInclusionDepth) < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
 		return nil
+	}
+
+	// Dont add the workshare if its not valid
+	if valid := w.engine.CheckIfValidWorkShare(workShare); valid != types.Valid {
+		return errors.New("work share received from peer is not valid")
 	}
 
 	w.uncles.ContainsOrAdd(workShare.Hash(), *workShare)

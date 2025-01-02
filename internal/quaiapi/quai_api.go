@@ -33,6 +33,7 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"github.com/dominant-strategies/go-quai/trie"
 	"google.golang.org/protobuf/proto"
@@ -126,24 +127,22 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
 		}
 
-		utxos, err := s.b.UTXOsByAddress(ctx, addr)
+		utxos, err := s.b.AddressOutpoints(ctx, addr)
 		if utxos == nil || err != nil {
-			return nil, err
+			return (*hexutil.Big)(big.NewInt(0)), err
 		}
 
 		if len(utxos) == 0 {
 			return (*hexutil.Big)(big.NewInt(0)), nil
 		}
 
-		var balance *big.Int
+		balance := big.NewInt(0)
 		for _, utxo := range utxos {
-			denomination := utxo.Denomination
-			value := types.Denominations[denomination]
-			if balance == nil {
-				balance = new(big.Int).Set(value)
-			} else {
-				balance.Add(balance, value)
+			if utxo.Lock != nil && currHeader.Number(nodeCtx).Cmp(utxo.Lock) < 0 {
+				continue
 			}
+			value := types.Denominations[utxo.Denomination]
+			balance.Add(balance, value)
 		}
 		return (*hexutil.Big)(balance), nil
 	} else {
@@ -155,7 +154,51 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	}
 }
 
+func (s *PublicBlockChainQuaiAPI) GetLockedBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
+	nodeCtx := s.b.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("getBalance call can only be made in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("getBalance call can only be made on chain processing the state")
+	}
+
+	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
+	if addr.IsInQiLedgerScope() {
+		currHeader := s.b.CurrentHeader()
+		utxos, err := s.b.AddressOutpoints(ctx, addr)
+		if utxos == nil || err != nil {
+			return (*hexutil.Big)(big.NewInt(0)), err
+		}
+		if len(utxos) == 0 {
+			return (*hexutil.Big)(big.NewInt(0)), nil
+		}
+		lockedBalance := big.NewInt(0)
+		for _, utxo := range utxos {
+			if utxo.Lock != nil && currHeader.Number(nodeCtx).Cmp(utxo.Lock) < 0 {
+				value := types.Denominations[utxo.Denomination]
+				lockedBalance.Add(lockedBalance, value)
+			}
+		}
+		return (*hexutil.Big)(lockedBalance), nil
+	} else if addr.IsInQuaiLedgerScope() {
+		lockups, err := s.b.AddressLockups(ctx, addr)
+		if lockups == nil || err != nil {
+			return (*hexutil.Big)(big.NewInt(0)), err
+		}
+		lockedBalance := big.NewInt(0)
+		for _, lockup := range lockups {
+			lockedBalance.Add(lockedBalance, lockup.Value)
+		}
+		return (*hexutil.Big)(lockedBalance), nil
+	}
+	return nil, nil
+}
+
 func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, address common.Address) ([]interface{}, error) {
+	if address.IsInQuaiLedgerScope() {
+		return nil, fmt.Errorf("address %s is in Quai ledger scope", address.Hex())
+	}
 	outpoints, err := s.b.AddressOutpoints(ctx, address)
 	if err != nil {
 		return nil, err
@@ -163,6 +206,9 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	jsonOutpoints := make([]interface{}, 0, len(outpoints))
 	for _, outpoint := range outpoints {
 		if outpoint == nil {
+			continue
+		}
+		if rawdb.GetUTXO(s.b.Database(), outpoint.TxHash, outpoint.Index) == nil {
 			continue
 		}
 		lock := big.NewInt(0)
@@ -181,12 +227,59 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	return jsonOutpoints, nil
 }
 
+func (s *PublicBlockChainQuaiAPI) GetLockupsByAddress(ctx context.Context, address common.Address) ([]interface{}, error) {
+	if address.IsInQiLedgerScope() {
+		return nil, fmt.Errorf("address %s is in Qi ledger scope", address.Hex())
+	}
+	lockups, err := s.b.AddressLockups(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	jsonLockups := make([]interface{}, 0, len(lockups))
+	for _, lockup := range lockups {
+		jsonLockup := map[string]interface{}{
+			"value":        hexutil.Big(*lockup.Value),
+			"unlockHeight": hexutil.Uint64(lockup.UnlockHeight),
+		}
+		jsonLockups = append(jsonLockups, jsonLockup)
+	}
+	return jsonLockups, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) GetLockupsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) ([]interface{}, error) {
+	if address.IsInQiLedgerScope() {
+		return nil, fmt.Errorf("address %s is in Qi ledger scope", address.Hex())
+	}
+	if start > end {
+		return nil, fmt.Errorf("start is greater than end")
+	}
+	if uint32(end)-uint32(start) > maxOutpointsRange {
+		return nil, fmt.Errorf("range is too large, max range is %d", maxOutpointsRange)
+	}
+	lockups, err := s.b.GetLockupsByAddressAndRange(ctx, address, uint32(start), uint32(end))
+	if err != nil {
+		return nil, err
+	}
+	jsonLockups := make([]interface{}, 0, len(lockups))
+	for _, lockup := range lockups {
+		jsonLockup := map[string]interface{}{
+			"value":        hexutil.Big(*lockup.Value),
+			"unlockHeight": hexutil.Uint64(lockup.UnlockHeight),
+		}
+		jsonLockups = append(jsonLockups, jsonLockup)
+	}
+	return jsonLockups, nil
+}
+
 func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) (map[string][]interface{}, error) {
 	if start > end {
 		return nil, fmt.Errorf("start is greater than end")
 	}
 	if uint32(end)-uint32(start) > maxOutpointsRange {
 		return nil, fmt.Errorf("range is too large, max range is %d", maxOutpointsRange)
+	}
+	if address.IsInQuaiLedgerScope() {
+		return nil, fmt.Errorf("address %s is in Quai ledger scope", address.Hex())
 	}
 	outpoints, err := s.b.GetOutpointsByAddressAndRange(ctx, address, uint32(start), uint32(end))
 	if err != nil {
@@ -195,6 +288,9 @@ func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Cont
 	txHashToOutpointsJson := make(map[string][]interface{})
 	for _, outpoint := range outpoints {
 		if outpoint == nil {
+			continue
+		}
+		if rawdb.GetUTXO(s.b.Database(), outpoint.TxHash, outpoint.Index) == nil {
 			continue
 		}
 		lock := big.NewInt(0)
@@ -210,6 +306,212 @@ func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Cont
 	}
 
 	return txHashToOutpointsJson, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) GetOutpointDeltasForAddressesInRange(ctx context.Context, addresses []common.Address, from, to common.Hash) (map[string]map[string]map[string][]interface{}, error) {
+	if s.b.NodeCtx() != common.ZONE_CTX {
+		return nil, errors.New("getOutpointDeltasForAddressesInRange can only be called in a zone chain")
+	}
+	nodeCtx := common.ZONE_CTX
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("addresses cannot be empty")
+	}
+	blockFrom := s.b.BlockOrCandidateByHash(from)
+	if blockFrom == nil {
+		return nil, fmt.Errorf("block %s not found", from.Hex())
+	}
+	blockTo := s.b.BlockOrCandidateByHash(to)
+	if blockTo == nil {
+		return nil, fmt.Errorf("block %s not found", to.Hex())
+	}
+	if blockFrom.NumberU64(nodeCtx) > blockTo.NumberU64(nodeCtx) {
+		return nil, fmt.Errorf("from block number is greater than to block number")
+	}
+	if uint32(blockTo.NumberU64(nodeCtx))-uint32(blockFrom.NumberU64(nodeCtx)) > maxOutpointsRange {
+		return nil, fmt.Errorf("range is too large, max range is %d", maxOutpointsRange)
+	}
+	addressMap := make(map[common.AddressBytes]struct{})
+	for _, address := range addresses {
+		addressMap[address.Bytes20()] = struct{}{}
+	}
+	addressToCreatedDeletedToTxHashToOutputs := make(map[string]map[string]map[string][]interface{})
+	for _, address := range addresses {
+		addressToCreatedDeletedToTxHashToOutputs[address.String()] = make(map[string]map[string][]interface{})
+		addressToCreatedDeletedToTxHashToOutputs[address.String()]["created"] = make(map[string][]interface{})
+		addressToCreatedDeletedToTxHashToOutputs[address.String()]["deleted"] = make(map[string][]interface{})
+	}
+	commonBlock := blockFrom
+	if blockFrom.Hash() != rawdb.ReadCanonicalHash(s.b.Database(), blockFrom.NumberU64(nodeCtx)) || blockTo.Hash() != rawdb.ReadCanonicalHash(s.b.Database(), blockTo.NumberU64(nodeCtx)) {
+		// One (or both) of the blocks are not canonical, find common ancestor
+		commonAncestor, err := rawdb.FindCommonAncestor(s.b.Database(), blockFrom, blockTo, nodeCtx)
+		if err != nil {
+			return nil, err
+		}
+		if commonAncestor == nil {
+			return nil, fmt.Errorf("no common ancestor found")
+		}
+		commonAncestorBlock := s.b.BlockOrCandidateByHash(commonAncestor.Hash())
+		if commonAncestorBlock == nil {
+			return nil, fmt.Errorf("block %s not found", to.Hex())
+		}
+		commonBlock = commonAncestorBlock
+	}
+	currentBlock := blockTo
+	for currentBlock.Hash() != commonBlock.Hash() { // Get deltas from blockTo to common ancestor
+		err := GetDeltas(s, currentBlock, addressMap, addressToCreatedDeletedToTxHashToOutputs)
+		if err != nil {
+			return nil, err
+		}
+		currentBlock = s.b.BlockOrCandidateByHash(currentBlock.ParentHash(nodeCtx))
+		if currentBlock == nil {
+			return nil, fmt.Errorf("block %s not found", currentBlock.ParentHash(nodeCtx).Hex())
+		}
+	}
+	if commonBlock.Hash() != blockFrom.Hash() { // Get deltas from blockFrom to common ancestor
+		currentBlock = blockFrom
+		for currentBlock.Hash() != commonBlock.Hash() {
+			err := GetDeltas(s, currentBlock, addressMap, addressToCreatedDeletedToTxHashToOutputs)
+			if err != nil {
+				return nil, err
+			}
+			currentBlock = s.b.BlockOrCandidateByHash(currentBlock.ParentHash(nodeCtx))
+			if currentBlock == nil {
+				return nil, fmt.Errorf("block %s not found", currentBlock.ParentHash(nodeCtx).Hex())
+			}
+		}
+	}
+	err := GetDeltas(s, commonBlock, addressMap, addressToCreatedDeletedToTxHashToOutputs) // Get deltas from common ancestor
+	if err != nil {
+		return nil, err
+	}
+
+	return addressToCreatedDeletedToTxHashToOutputs, nil
+}
+
+func GetDeltas(s *PublicBlockChainQuaiAPI, currentBlock *types.WorkObject, addressMap map[common.AddressBytes]struct{}, addressToCreatedDeletedToTxHashToOutputs map[string]map[string]map[string][]interface{}) error {
+	nodeCtx := common.ZONE_CTX
+	// Grab spent UTXOs for this block
+	// Eventually spent UTXOs should be pruned, so this data might not be available
+	sutxos, err := rawdb.ReadSpentUTXOs(s.b.Database(), currentBlock.Hash())
+	if err != nil {
+		return err
+	}
+	trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(s.b.Database(), currentBlock.Hash())
+	if err != nil {
+		return err
+	}
+	sutxos = append(sutxos, trimmedUtxos...)
+	for _, sutxo := range sutxos {
+		if _, ok := addressMap[common.AddressBytes(sutxo.Address)]; ok {
+			lock := big.NewInt(0)
+			if sutxo.Lock != nil {
+				lock = sutxo.Lock
+			}
+			addressToCreatedDeletedToTxHashToOutputs[common.AddressBytes(sutxo.Address).String()]["deleted"][sutxo.TxHash.String()] =
+				append(addressToCreatedDeletedToTxHashToOutputs[common.AddressBytes(sutxo.Address).String()]["deleted"][sutxo.TxHash.String()], map[string]interface{}{
+					"index":        hexutil.Uint64(sutxo.Index),
+					"denomination": hexutil.Uint64(sutxo.Denomination),
+					"lock":         hexutil.Big(*lock),
+				})
+		}
+	}
+
+	for _, tx := range currentBlock.Transactions() {
+		if tx.Type() == types.QiTxType {
+			for i, out := range tx.TxOut() {
+				if common.BytesToAddress(out.Address, common.Location{0, 0}).IsInQuaiLedgerScope() {
+					// This is a conversion output
+					continue
+				}
+				if _, ok := addressMap[common.AddressBytes(out.Address)]; !ok {
+					continue
+				}
+				lock := big.NewInt(0)
+				if out.Lock != nil {
+					lock = out.Lock
+				}
+				addressToCreatedDeletedToTxHashToOutputs[common.AddressBytes(out.Address).String()]["created"][tx.Hash().String()] =
+					append(addressToCreatedDeletedToTxHashToOutputs[common.AddressBytes(out.Address).String()]["created"][tx.Hash().String()], map[string]interface{}{
+						"index":        hexutil.Uint64(i),
+						"denomination": hexutil.Uint64(out.Denomination),
+						"lock":         hexutil.Big(*lock),
+					})
+			}
+		} else if tx.Type() == types.ExternalTxType && tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
+			if len(tx.Data()) == 0 {
+				continue
+			}
+			if _, ok := addressMap[common.AddressBytes(tx.To().Bytes20())]; !ok {
+				continue
+			}
+			lockupByte := tx.Data()[0]
+			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+			lockup.Add(lockup, currentBlock.Number(nodeCtx))
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+				// If the denomination count is zero, skip it
+				if denominations[uint8(denomination)] == 0 {
+					continue
+				}
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if outputIndex >= types.MaxOutputIndex {
+						// No more gas, the rest of the denominations are lost but the tx is still valid
+						break
+					}
+
+					addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()] =
+						append(addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()], map[string]interface{}{
+							"index":        hexutil.Uint64(outputIndex),
+							"denomination": hexutil.Uint64(uint8(denomination)),
+							"lock":         hexutil.Big(*lockup),
+						})
+					outputIndex++
+				}
+			}
+		} else if tx.Type() == types.ExternalTxType && tx.EtxType() == types.ConversionType && tx.To().IsInQiLedgerScope() {
+			if _, ok := addressMap[common.AddressBytes(tx.To().Bytes20())]; !ok {
+				continue
+			}
+			lockup := new(big.Int).SetUint64(params.ConversionLockPeriod)
+			lockup.Add(lockup, currentBlock.Number(nodeCtx))
+			value := tx.Value()
+			txGas := tx.Gas()
+			if txGas < params.TxGas {
+				continue
+			}
+			txGas -= params.TxGas
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+				// If the denomination count is zero, skip it
+				if denominations[uint8(denomination)] == 0 {
+					continue
+				}
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						// No more gas, the rest of the denominations are lost but the tx is still valid
+						break
+					}
+					txGas -= params.CallValueTransferGas
+					// the ETX hash is guaranteed to be unique
+
+					addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()] =
+						append(addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()], map[string]interface{}{
+							"index":        hexutil.Uint64(outputIndex),
+							"denomination": hexutil.Uint64(uint8(denomination)),
+							"lock":         hexutil.Big(*lockup),
+						})
+
+					outputIndex++
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (s *PublicBlockChainQuaiAPI) GetUTXO(ctx context.Context, txHash common.Hash, index hexutil.Uint64) (map[string]interface{}, error) {
@@ -507,6 +809,44 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
+	}
+
+	if args.from(s.b.NodeLocation()).IsInQuaiLedgerScope() && args.To != nil && args.To.IsInQiLedgerScope() {
+		// Conversion transaction
+		var header *types.WorkObject
+		var err error
+		if blockNr, ok := blockNrOrHash.Number(); ok {
+			if blockNr == rpc.LatestBlockNumber {
+				header = s.b.CurrentHeader()
+			} else {
+				header, err = s.b.HeaderByNumber(ctx, rpc.BlockNumber(blockNr))
+			}
+		} else if hash, ok := blockNrOrHash.Hash(); ok {
+			header, err = s.b.HeaderByHash(ctx, hash)
+		} else {
+			return 0, errors.New("invalid block number or hash")
+		}
+		if err != nil {
+			return 0, err
+		}
+		estimatedQiAmount := misc.QuaiToQi(header, args.Value.ToInt())
+		usedGas := uint64(0)
+
+		usedGas += params.TxGas
+		denominations := misc.FindMinDenominations(estimatedQiAmount)
+		outputIndex := uint16(0)
+		// Iterate over the denominations in descending order
+		for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+			// If the denomination count is zero, skip it
+			if denominations[uint8(denomination)] == 0 {
+				continue
+			}
+			for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+				usedGas += params.CallValueTransferGas
+				outputIndex++
+			}
+		}
+		return hexutil.Uint64(usedGas), nil
 	}
 	switch args.TxType {
 	case types.QiTxType:
@@ -816,10 +1156,11 @@ func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw h
 
 func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShare *types.WorkObjectHeader) error {
 	if workShare != nil {
-		// check if the workshare is valid before broadcasting as a sanity
-		workShareValidity := s.b.CheckIfValidWorkShare(workShare)
-		if workShareValidity != types.Valid {
-			return errors.New("work share is invalid")
+		var isWorkShare, isSubShare bool
+		threshold := s.b.GetWorkShareP2PThreshold()
+		isSubShare = s.b.Engine().CheckWorkThreshold(workShare, threshold)
+		if !isSubShare {
+			return errors.New("workshare has less entropy than the workshare p2p threshold")
 		}
 
 		s.b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
@@ -830,6 +1171,12 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShar
 			if workShare.TxHash() != types.EmptyRootHash {
 				s.b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
 			}
+		}
+		// If the share qualifies is not a workshare and there are no transactions,
+		// there is no need to broadcast the share
+		isWorkShare = s.b.Engine().CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
+		if !isWorkShare && len(txs) == 0 {
+			return nil
 		}
 		if pendingBlockBody == nil {
 			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
@@ -954,4 +1301,18 @@ func (s *PublicBlockChainQuaiAPI) SuggestFinalityDepth(ctx context.Context, qiVa
 		return 0, err
 	}
 	return hexutil.Uint64(depth.Uint64()), nil
+}
+
+func (s *PublicBlockChainQuaiAPI) GetWorkShareP2PThreshold(ctx context.Context) hexutil.Uint64 {
+	return hexutil.Uint64(s.b.GetWorkShareP2PThreshold())
+}
+
+func (s *PublicBlockChainQuaiAPI) SetWorkShareP2PThreshold(ctx context.Context, threshold hexutil.Uint64) error {
+	if threshold < hexutil.Uint64(params.WorkSharesThresholdDiff) {
+		return errors.New("the subshare threshold is less than the workshare threshold")
+	}
+
+	s.b.SetWorkShareP2PThreshold(int(threshold))
+
+	return nil
 }

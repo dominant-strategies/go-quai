@@ -214,8 +214,16 @@ func (b *QuaiAPIBackend) GetOutpointsByAddressAndRange(ctx context.Context, addr
 	return b.quai.core.GetOutpointsByAddressAndRange(address, start, end)
 }
 
+func (b QuaiAPIBackend) GetLockupsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.Lockup, error) {
+	return b.quai.core.GetLockupsByAddressAndRange(address, start, end)
+}
+
 func (b *QuaiAPIBackend) AddressOutpoints(ctx context.Context, address common.Address) ([]*types.OutpointAndDenomination, error) {
 	return b.quai.core.GetOutpointsByAddress(address)
+}
+
+func (b *QuaiAPIBackend) AddressLockups(ctx context.Context, address common.Address) ([]*types.Lockup, error) {
+	return b.quai.core.GetLockupsByAddress(address)
 }
 
 func (b *QuaiAPIBackend) UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error) {
@@ -611,6 +619,14 @@ func (b *QuaiAPIBackend) SetSubInterface(subInterface core.CoreBackend, location
 
 func (b *QuaiAPIBackend) AddGenesisPendingEtxs(block *types.WorkObject) {
 	b.quai.core.AddGenesisPendingEtxs(block)
+}
+
+func (b *QuaiAPIBackend) GetWorkShareP2PThreshold() int {
+	return b.quai.config.WorkShareP2PThreshold
+}
+
+func (b *QuaiAPIBackend) SetWorkShareP2PThreshold(threshold int) {
+	b.quai.SetWorkShareP2PThreshold(threshold)
 }
 
 func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription {

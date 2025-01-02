@@ -320,6 +320,9 @@ func (txOut TxOut) ProtoEncode() (*ProtoTxOut, error) {
 
 func (txOut *TxOut) ProtoDecode(protoTxOut *ProtoTxOut) error {
 	// check if protoTxOut.Denomination is above the max uint8 value
+	if protoTxOut.Denomination == nil {
+		return errors.New("protoTxOut.Denomination is nil")
+	}
 	if *protoTxOut.Denomination > math.MaxUint8 {
 		return errors.New("protoTxOut.Denomination is above the max uint8 value")
 	}
@@ -337,6 +340,17 @@ func NewTxOut(denomination uint8, address []byte, lock *big.Int) *TxOut {
 		Address:      address,
 		Lock:         lock,
 	}
+}
+
+type RPCTxIn struct {
+	PreviousOutPoint OutpointJSON  `json:"previousOutPoint"`
+	PubKey           hexutil.Bytes `json:"pubKey"`
+}
+
+type RPCTxOut struct {
+	Denomination hexutil.Uint            `json:"denomination"`
+	Address      common.MixedcaseAddress `json:"address"`
+	Lock         *hexutil.Big            `json:"lock"`
 }
 
 // UtxoEntry houses details about an individual transaction output in a utxo

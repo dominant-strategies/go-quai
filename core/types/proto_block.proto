@@ -244,3 +244,12 @@ message ProtoBetas {
   bytes beta0 = 1;
   bytes beta1 = 2;
 }
+
+message ProtoLockup {
+  bytes value = 1;
+  uint64 unlock_height = 2;
+}
+
+message ProtoLockups {
+  repeated ProtoLockup lockups = 1;
+}

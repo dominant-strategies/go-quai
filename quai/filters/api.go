@@ -40,6 +40,7 @@ import (
 
 const (
 	c_pendingHeaderChSize = 20
+	MaxFilterRange        = 10000
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -534,6 +535,11 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
+		}
+		if end != rpc.LatestBlockNumber.Int64() && begin > end {
+			return nil, errors.New("fromBlock must be less than or equal to toBlock")
+		} else if end != rpc.LatestBlockNumber.Int64() && end-begin > MaxFilterRange {
+			return nil, fmt.Errorf("filter range must be less than or equal to %d", MaxFilterRange)
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, addresses, crit.Topics, api.backend.Logger())
