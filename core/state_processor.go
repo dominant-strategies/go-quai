@@ -469,7 +469,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 					}
 					lockup.Add(lockup, blockNumber)
-					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
 					denominations := misc.FindMinDenominations(value)
 					outputIndex := uint16(0)
 					// Iterate over the denominations in descending order
@@ -873,7 +873,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 				var lockup uint64
 				lockup = params.LockupByteToBlockDepth[lockupByte]
 				if lockup == blockDepth {
-					balance := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte)
+					balance := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte, header.NumberU64(common.ZONE_CTX))
 
 					if !statedb.Exist(internal) {
 						newAccountCreationGas := params.CallNewAccountGas(parent.QuaiStateSize())

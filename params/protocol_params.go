@@ -17,6 +17,7 @@
 package params
 
 import (
+	"errors"
 	"math"
 	"math/big"
 
@@ -148,38 +149,41 @@ const (
 	// infrastructure, if needed, to account for the upcoming network change.
 	TREE_EXPANSION_WAIT_COUNT = 1024
 
-	ConversionLockPeriod          uint64 = 7200
-	MinQiConversionDenomination          = 10
-	ConversionConfirmationContext        = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
-	QiToQuaiConversionGas                = 100000           // The gas used to convert Qi to Quai
-	DefaultCoinbaseLockup                = 0                // The default lockup byte for coinbase rewards
+	MinQiConversionDenomination   = 10
+	ConversionConfirmationContext = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
+	QiToQuaiConversionGas         = 100000           // The gas used to convert Qi to Quai
+	DefaultCoinbaseLockup         = 0                // The default lockup byte for coinbase rewards
 )
 
 var (
-	MaxGossipsubPacketSize            = 3 << 20
-	GasCeil                    uint64 = 30000000
-	ColosseumGasCeil           uint64 = 30000000
-	GardenGasCeil              uint64 = 30000000
-	OrchardGasCeil             uint64 = 30000000
-	LighthouseGasCeil          uint64 = 30000000
-	LocalGasCeil               uint64 = 30000000
-	DurationLimit                     = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	GardenDurationLimit               = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	OrchardDurationLimit              = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LighthouseDurationLimit           = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	LocalDurationLimit                = big.NewInt(1) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeToStartTx              uint64 = 5 * BlocksPerDay
-	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 12 second block time
-	DifficultyAdjustmentPeriod        = big.NewInt(720)                                             // This is the number of blocks over which the average has to be taken
-	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
-	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(10000000000), big.NewInt(GWei)) // 0.000000001 Quai
-	MaxWorkShareCount                 = 16
-	WorkSharesThresholdDiff           = 3 // Number of bits lower than the target that the default consensus engine uses
-	WorkShareP2PThresholdDiff         = 7 // Default value in bits lower than the target
-	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
-	LockupByteToBlockDepth            = make(map[uint8]uint64)
-	LockupByteToRewardsRatio          = make(map[uint8]*big.Int)
-	ExchangeRate                      = big.NewInt(86196385918997143) // This is the initial exchange rate in Qi per Quai in Its/Qit // Garden = big.NewInt(166666666666666667)
+	MaxGossipsubPacketSize             = 3 << 20
+	GasCeil                     uint64 = 30000000
+	ColosseumGasCeil            uint64 = 30000000
+	GardenGasCeil               uint64 = 30000000
+	OrchardGasCeil              uint64 = 30000000
+	LighthouseGasCeil           uint64 = 30000000
+	LocalGasCeil                uint64 = 30000000
+	DurationLimit                      = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	GardenDurationLimit                = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	OrchardDurationLimit               = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LighthouseDurationLimit            = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	LocalDurationLimit                 = big.NewInt(1) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	TimeToStartTx               uint64 = 5 * BlocksPerDay
+	BlocksPerDay                uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 5 second block time
+	BlocksPerWeek               uint64 = 7 * BlocksPerDay
+	BlocksPerMonth              uint64 = 30 * BlocksPerDay
+	BlocksPerYear               uint64 = 365 * BlocksPerDay                                          // BlocksPerYear is the number of blocks per year assuming 5 secs blocks
+	DifficultyAdjustmentPeriod         = big.NewInt(720)                                             // This is the number of blocks over which the average has to be taken
+	DifficultyAdjustmentFactor  int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
+	MinQuaiConversionAmount            = new(big.Int).Mul(big.NewInt(10000000000), big.NewInt(GWei)) // 0.000000001 Quai
+	MaxWorkShareCount                  = 16
+	WorkSharesThresholdDiff            = 3 // Number of bits lower than the target that the default consensus engine uses
+	WorkShareP2PThresholdDiff          = 7 // Default value in bits lower than the target
+	WorkSharesInclusionDepth           = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
+	MaxLockupByte                      = 3 // Max lockup byte allowed in the transactions for coinbase
+	LockupByteToBlockDepth             = make(map[uint8]uint64)
+	LockupByteToRewardsMultiple        = make(map[uint8][]uint64)
+	ExchangeRate                       = big.NewInt(86196385918997143) // This is the initial exchange rate in Qi per Quai in Its/Qit // Garden = big.NewInt(166666666666666667)
 	// These numbers should be "equivalent" to the initial conversion rate
 	QuaiToQiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
 	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
@@ -191,17 +195,47 @@ var (
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
 	BaseFeeMultiplier             = big.NewInt(50)
+
+	ConversionLockPeriod uint64 = 2 * BlocksPerWeek
 )
 
 func init() {
-	LockupByteToBlockDepth[0] = ConversionLockPeriod
-	LockupByteToBlockDepth[1] = 30240  // 1.75 days
-	LockupByteToBlockDepth[2] = 60480  // 3.5 days
-	LockupByteToBlockDepth[3] = 120960 // 7 days
+	LockupByteToBlockDepth[0] = ConversionLockPeriod // 2 weeks
+	LockupByteToBlockDepth[1] = 3 * BlocksPerMonth   // 3 months
+	LockupByteToBlockDepth[2] = 6 * BlocksPerMonth   // 6 months
+	LockupByteToBlockDepth[3] = BlocksPerYear        // 12 months
 
-	LockupByteToRewardsRatio[1] = big.NewInt(24) // additional 16% WPY
-	LockupByteToRewardsRatio[2] = big.NewInt(10) // additional 20% WPY
-	LockupByteToRewardsRatio[3] = big.NewInt(4)  // additional 25% WPY
+	// The first value represents the multiplier that represents interest rate
+	// for the first year, the second value represents the terminal rate these
+	// values are divided by 100,000 to get the final values
+	LockupByteToRewardsMultiple[1] = []uint64{103500, 100218}
+	LockupByteToRewardsMultiple[2] = []uint64{110000, 100625}
+	LockupByteToRewardsMultiple[3] = []uint64{125000, 101562}
+}
+
+func CalculateLockupByteRewardsMultiple(lockupByte uint8, blockNumber uint64) (*big.Int, error) {
+	if lockupByte <= 0 || lockupByte > uint8(MaxLockupByte) {
+		return nil, errors.New("invalid lockup byte used")
+	}
+	year := blockNumber / BlocksPerYear
+	if year == 0 {
+		rewardsMultiple := LockupByteToRewardsMultiple[lockupByte][0]
+		return big.NewInt(int64(rewardsMultiple)), nil
+	} else if year > 4 {
+		rewardsMultiple := LockupByteToRewardsMultiple[lockupByte][1]
+		return big.NewInt(int64(rewardsMultiple)), nil
+	} else {
+		// using the starting and the trailing rate to establish a linear discount based on the block number
+		// y = mx + c
+		// let m be in the form a/b so that less precesion is lost in the final answer
+		// y = (ax + cb)/b
+		c := int64(LockupByteToRewardsMultiple[lockupByte][0])
+		a := (int64(LockupByteToRewardsMultiple[lockupByte][1]) - int64(LockupByteToRewardsMultiple[lockupByte][0]))
+		b := int64(4 * BlocksPerYear)
+		x := int64(blockNumber) - int64(BlocksPerYear) // subtracting a year because the discount starts after the first year
+		rewardsMultiple := (a*x + b*c) / b
+		return big.NewInt(rewardsMultiple), nil
+	}
 }
 
 // This is TimeFactor*TimeFactor*common.NumZonesInRegion*common.NumRegionsInPrime
@@ -275,11 +309,15 @@ func CalculateGasWithStateScaling(stateSize, contractSize *big.Int, baseRate uin
 	return new(big.Int).Div(num, den).Uint64()
 }
 
-func CalculateCoinbaseValueWithLockup(value *big.Int, lockupByte uint8) *big.Int {
+func CalculateCoinbaseValueWithLockup(value *big.Int, lockupByte uint8, blockNumber uint64) *big.Int {
 	if lockupByte == 0 {
 		return value
+	} else {
+		rewardsMultiple, _ := CalculateLockupByteRewardsMultiple(lockupByte, blockNumber)
+		rewardValue := new(big.Int).Mul(value, rewardsMultiple)
+		rewardValue = new(big.Int).Div(rewardValue, big.NewInt(100000))
+		return rewardValue
 	}
-	return new(big.Int).Add(value, new(big.Int).Div(value, LockupByteToRewardsRatio[lockupByte]))
 }
 
 func CalculateQiGasWithUTXOSetSizeScalingFactor(scalingFactor float64, baseRate uint64) uint64 {
