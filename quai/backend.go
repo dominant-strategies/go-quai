@@ -386,6 +386,10 @@ func (s *Quai) Start() error {
 	return nil
 }
 
+func (s *Quai) SetWorkShareP2PThreshold(threshold int) {
+	s.config.WorkShareP2PThreshold = threshold
+}
+
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Quai protocol.
 func (s *Quai) Stop() error {

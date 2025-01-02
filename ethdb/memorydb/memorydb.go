@@ -277,6 +277,11 @@ func (b *batch) Logger() *log.Logger {
 	return b.db.logger
 }
 
+func (b *batch) SetPending(pending bool) {}
+func (b *batch) GetPending(key []byte) (bool, []byte) {
+	return false, nil
+}
+
 // iterator can walk over the (potentially partial) keyspace of a memory key
 // value store. Internally it is a deep copy of the entire iterated state,
 // sorted by keys.

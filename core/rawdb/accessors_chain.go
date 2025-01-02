@@ -24,9 +24,9 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/crypto/multiset"
 	"github.com/dominant-strategies/go-quai/params"
 	"google.golang.org/protobuf/proto"
 )
@@ -1215,6 +1215,92 @@ func DeleteOutpointsForAddress(db ethdb.KeyValueWriter, address [20]byte) {
 	}
 }
 
+func WriteAddressLockups(db ethdb.KeyValueWriter, lockupMap map[[20]byte][]*types.Lockup) error {
+	for addressWithBlockHeight, lockups := range lockupMap {
+		if err := WriteLockupsForAddressAtBlock(db, addressWithBlockHeight, lockups); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func WriteLockupsForAddressAtBlock(db ethdb.KeyValueWriter, address [20]byte, lockups []*types.Lockup) error {
+	addressLockupsProto := &types.ProtoLockups{
+		Lockups: make([]*types.ProtoLockup, 0, len(lockups)),
+	}
+
+	for _, lockup := range lockups {
+		lockupProto := &types.ProtoLockup{
+			Value:        lockup.Value.Bytes(),
+			UnlockHeight: lockup.UnlockHeight,
+		}
+
+		addressLockupsProto.Lockups = append(addressLockupsProto.Lockups, lockupProto)
+	}
+
+	// Now, marshal utxosProto to protobuf bytes
+	data, err := proto.Marshal(addressLockupsProto)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxos")
+	}
+	if err := db.Put(addressLockupsKey(address), data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store utxos")
+	}
+	return nil
+}
+
+func ReadLockupsForAddressAtBlock(db ethdb.Reader, address [20]byte) ([]*types.Lockup, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(addressLockupsKey(address))
+	if len(data) == 0 {
+		return []*types.Lockup{}, nil
+	}
+	addressLockupsProto := &types.ProtoLockups{
+		Lockups: make([]*types.ProtoLockup, 0),
+	}
+	if err := proto.Unmarshal(data, addressLockupsProto); err != nil {
+		return nil, err
+	}
+	lockups := make([]*types.Lockup, 0, len(addressLockupsProto.Lockups))
+
+	for _, lockupProto := range addressLockupsProto.Lockups {
+		lockup := &types.Lockup{
+			Value:        new(big.Int).SetBytes(lockupProto.Value),
+			UnlockHeight: lockupProto.UnlockHeight,
+		}
+		lockups = append(lockups, lockup)
+	}
+
+	return lockups, nil
+}
+
+func ReadLockupsForAddress(db ethdb.Database, address common.Address) ([]*types.Lockup, error) {
+	prefix := append(AddressLockupsPrefix, address.Bytes()[:16]...)
+	it := db.NewIterator(prefix, nil)
+	defer it.Release()
+	lockups := make([]*types.Lockup, 0)
+	for it.Next() {
+		if len(it.Key()) != len(AddressUtxosPrefix)+common.AddressLength {
+			continue
+		}
+		addressLockupsProto := &types.ProtoLockups{
+			Lockups: make([]*types.ProtoLockup, 0),
+		}
+		if err := proto.Unmarshal(it.Value(), addressLockupsProto); err != nil {
+			db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal addressOutpointsProto")
+			return nil, err
+		}
+		for _, lockupProto := range addressLockupsProto.Lockups {
+			lockup := &types.Lockup{
+				Value:        new(big.Int).SetBytes(lockupProto.Value),
+				UnlockHeight: lockupProto.UnlockHeight,
+			}
+			lockups = append(lockups, lockup)
+		}
+	}
+	return lockups, nil
+}
+
 func WriteGenesisHashes(db ethdb.KeyValueWriter, hashes common.Hashes) {
 	protoHashes := hashes.ProtoEncode()
 	data, err := proto.Marshal(protoHashes)
@@ -1264,6 +1350,36 @@ func CreateUTXO(db ethdb.KeyValueWriter, txHash common.Hash, index uint16, utxo 
 
 	// And finally, store the data in the database under the appropriate key
 	return db.Put(UtxoKey(txHash, index), data)
+}
+
+func GetUTXOWithBatch(db ethdb.KeyValueReader, batch ethdb.Batch, txHash common.Hash, index uint16) *types.UtxoEntry {
+	deleted, data := batch.GetPending(UtxoKey(txHash, index))
+	if deleted {
+		return nil
+	} else if data != nil && len(data) == 0 {
+		return nil
+	} else if data == nil {
+		data, _ = db.Get(UtxoKey(txHash, index))
+		if len(data) == 0 {
+			return nil
+		}
+	}
+	utxoProto := new(types.ProtoTxOut)
+	if err := proto.Unmarshal(data, utxoProto); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to proto Unmarshal utxo")
+	}
+
+	utxo := new(types.UtxoEntry)
+	if err := utxo.ProtoDecode(utxoProto); err != nil {
+		db.Logger().WithFields(log.Fields{
+			"txHash": txHash,
+			"index":  index,
+			"err":    err,
+		}).Error("Invalid utxo Proto")
+		return nil
+	}
+
+	return utxo
 }
 
 func GetUTXO(db ethdb.KeyValueReader, txHash common.Hash, index uint16) *types.UtxoEntry {
@@ -1486,6 +1602,9 @@ func ReadUTXOSetSize(db ethdb.Reader, blockHash common.Hash) uint64 {
 	if len(data) == 0 {
 		return 0
 	}
+	if len(data) != 8 {
+		db.Logger().WithField("data", data).Fatal("Invalid utxo set size data")
+	}
 	return binary.BigEndian.Uint64(data)
 }
 
@@ -1507,6 +1626,9 @@ func ReadLastTrimmedBlock(db ethdb.Reader, blockHash common.Hash) uint64 {
 	data, _ := db.Get(lastTrimmedBlockKey(blockHash))
 	if len(data) == 0 {
 		return 0
+	}
+	if len(data) != 8 {
+		db.Logger().WithField("data", data).Fatal("Invalid last trimmed block data")
 	}
 	return binary.BigEndian.Uint64(data)
 }
@@ -1607,6 +1729,9 @@ func ReadUtxoToBlockHeight(db ethdb.Reader, txHash common.Hash, index uint16) ui
 	data, _ := db.Get(utxoToBlockHeightKey(txHash, index))
 	if len(data) == 0 {
 		return 0
+	}
+	if len(data) != 4 {
+		db.Logger().WithField("data", data).Fatal("Invalid utxo to block height data")
 	}
 	return binary.BigEndian.Uint32(data)
 }

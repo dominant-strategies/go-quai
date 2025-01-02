@@ -714,6 +714,10 @@ func (b *spongeBatch) Write() error                        { return nil }
 func (b *spongeBatch) Reset()                              {}
 func (b *spongeBatch) Replay(w ethdb.KeyValueWriter) error { return nil }
 func (b *spongeBatch) Logger() *log.Logger                 { return log.Global }
+func (b *spongeBatch) SetPending(pending bool)             {}
+func (b *spongeBatch) GetPending(key []byte) (bool, []byte) {
+	return false, nil
+}
 
 // TestCommitSequence tests that the trie.Commit operation writes the elements of the trie
 // in the expected order, and calls the callbacks in the expected order.

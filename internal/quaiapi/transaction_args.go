@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -52,9 +53,9 @@ type TransactionArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 
 	// Support for Qi (UTXO) transaction
-	TxIn   types.TxIns  `json:"txIn,omitempty"`
-	TxOut  types.TxOuts `json:"txOut,omitempty"`
-	TxType uint8        `json:"txType,omitempty"`
+	TxIn   []types.RPCTxIn  `json:"txIn,omitempty"`
+	TxOut  []types.RPCTxOut `json:"txOut,omitempty"`
+	TxType uint8            `json:"txType,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -77,7 +78,7 @@ func (arg *TransactionArgs) data() []byte {
 }
 
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, db *state.StateDB) error {
 
 	head := b.CurrentHeader()
 	if args.MinerTip == nil {
@@ -97,13 +98,13 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
 	}
-	if args.Nonce == nil {
-		nonce, err := b.GetPoolNonce(ctx, args.from(b.NodeLocation()))
-		if err != nil {
-			return err
-		}
-		args.Nonce = (*hexutil.Uint64)(&nonce)
+	internal, err := args.from(b.NodeLocation()).InternalAddress()
+	if err != nil {
+		return err
 	}
+	nonce := db.GetNonce(internal)
+	args.Nonce = (*hexutil.Uint64)(&nonce) // Ignore provided nonce, reset to correct nonce
+
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
 		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
 	}
@@ -167,12 +168,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		gasPrice *big.Int
 		minerTip *big.Int
 	)
-	// User specified max fee (or none), use those
-	gasPrice = new(big.Int)
-	if args.GasPrice != nil {
-		gasPrice = args.GasPrice.ToInt()
-	}
-	minerTip = gasPrice
+	gasPrice = new(big.Int).Set(common.Big0) // Skip base fee check in state_transition.go
+	minerTip = gasPrice                      // Skip base fee check in state_transition.go
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
@@ -182,6 +179,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+
 	msg := types.NewMessage(addr, args.To, uint64(*args.Nonce), value, gas, gasPrice, minerTip, data, accessList, false)
 	return msg, nil
 }
@@ -194,11 +192,34 @@ func (args *TransactionArgs) CalculateQiTxGas(qiScalingFactor float64, location 
 
 	if len(args.TxIn) == 0 || len(args.TxOut) == 0 {
 		return 0, errors.New("Qi transaction must have at least one input and one output")
+	} else if len(args.TxIn) > types.MaxOutputIndex {
+		return 0, fmt.Errorf("Qi transaction has too many inputs: %d", len(args.TxIn))
+	}
+	ins := make([]types.TxIn, len(args.TxIn))
+	outs := make([]types.TxOut, len(args.TxOut))
+	for i, in := range args.TxIn {
+		if in.PreviousOutPoint.Index > types.MaxOutputIndex {
+			return 0, fmt.Errorf("Qi transaction has an input with an index too large: %d", in.PreviousOutPoint.Index)
+		}
+		ins[i] = types.TxIn{
+			PreviousOutPoint: types.OutPoint{
+				TxHash: in.PreviousOutPoint.TxHash,
+				Index:  uint16(in.PreviousOutPoint.Index),
+			},
+			PubKey: in.PubKey,
+		}
+	}
+	for i, out := range args.TxOut {
+		outs[i] = types.TxOut{
+			Denomination: uint8(out.Denomination),
+			Address:      out.Address.Address().Bytes(),
+			Lock:         out.Lock.ToInt(),
+		}
 	}
 
 	qiTx := &types.QiTx{
-		TxIn:  args.TxIn,
-		TxOut: args.TxOut,
+		TxIn:  ins,
+		TxOut: outs,
 	}
 
 	tx := types.NewTx(qiTx)
