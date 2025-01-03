@@ -636,40 +636,93 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 		// If the primary coinbase belongs to a ledger and there is no fees
 		// for other ledger, there is no etxs emitted for the other ledger
 		if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
-			coinbaseReward := misc.CalculateReward(block, work.wo.WorkObjectHeader())
-			blockReward := new(big.Int).Add(coinbaseReward, work.quaiFees)
 			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{lockupByte}})
-			work.etxs = append(work.etxs, coinbaseEtx)
+			coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{lockupByte}})
+			work.etxs = append(work.etxs, coinbaseFeeEtx)
 			if work.utxoFees.Cmp(big.NewInt(0)) != 0 {
 				secondaryCoinbase := w.GetSecondaryCoinbase()
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: w.secondaryCoinbase, Data: []byte{lockupByte}})
-				work.etxs = append(work.etxs, coinbaseEtx)
+				coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: w.secondaryCoinbase, Data: []byte{lockupByte}})
+				work.etxs = append(work.etxs, coinbaseFeeEtx)
 			}
 		} else if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
-			coinbaseReward := misc.CalculateReward(block, work.wo.WorkObjectHeader())
-			blockReward := new(big.Int).Add(coinbaseReward, work.utxoFees)
 			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{lockupByte}})
-			work.etxs = append(work.etxs, coinbaseEtx)
+			coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: []byte{lockupByte}})
+			work.etxs = append(work.etxs, coinbaseFeeEtx)
 			if work.quaiFees.Cmp(big.NewInt(0)) != 0 {
 				secondaryCoinbase := w.GetSecondaryCoinbase()
-				coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{lockupByte}})
-				work.etxs = append(work.etxs, coinbaseEtx)
+				coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: []byte{lockupByte}})
+				work.etxs = append(work.etxs, coinbaseFeeEtx)
 			}
 		}
 
-		// Add an etx for each workshare for it to be rewarded
-		for _, uncle := range uncles {
-			reward := misc.CalculateReward(block, uncle)
-			uncleCoinbase := uncle.PrimaryCoinbase()
-			var originHash common.Hash
-			if uncleCoinbase.IsInQuaiLedgerScope() {
-				originHash = common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation())
-			} else {
-				originHash = common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation())
+		// The fees from transactions in the block is given, in the block itself
+		// go through the last WorkSharesInclusionDepth of blocks
+		if work.wo.NumberU64(common.ZONE_CTX) > uint64(params.WorkSharesInclusionDepth) {
+
+			targetBlockNumber := work.wo.NumberU64(common.ZONE_CTX) - uint64(params.WorkSharesInclusionDepth)
+
+			targetBlock := w.hc.GetBlockByNumber(targetBlockNumber)
+
+			totalEntropy := big.NewInt(0)
+			target := new(big.Int).Div(common.Big2e256, targetBlock.Difficulty())
+			zoneThresholdEntropy := w.engine.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
+			totalEntropy = new(big.Int).Add(totalEntropy, zoneThresholdEntropy)
+
+			// First step is to collect all the workshares and uncles at this targetBlockNumber depth, then
+			// compute the total entropy of the block, uncles and workshares at this level
+			// unclesAtTargetBlockDepth has all the uncles, workshares that is there at the block height
+			var sharesAtTargetBlockDepth []*types.WorkObjectHeader
+			var entropyOfSharesAtTargetBlockDepth []*big.Int
+			sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, block.WorkObjectHeader())
+			entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
+
+			for i := 0; i < params.WorkSharesInclusionDepth; i++ {
+				block := w.hc.GetBlockByNumber(targetBlockNumber + uint64(i))
+				for _, uncle := range block.Uncles() {
+					var uncleEntropy *big.Int
+					if uncle.NumberU64() == targetBlockNumber {
+						_, err := w.engine.VerifySeal(uncle)
+						if err != nil {
+							// uncle is a workshare
+							powHash, err := w.engine.ComputePowHash(uncle)
+							if err != nil {
+								return nil, err
+							}
+							uncleEntropy = new(big.Int).Set(w.engine.IntrinsicLogEntropy(powHash))
+							totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
+						} else {
+							// uncle is not a workshare
+							target := new(big.Int).Div(common.Big2e256, targetBlock.Difficulty())
+							uncleEntropy = new(big.Int).Set(w.engine.IntrinsicLogEntropy(common.BytesToHash(target.Bytes())))
+							totalEntropy = new(big.Int).Add(totalEntropy, zoneThresholdEntropy)
+						}
+						sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, uncle)
+						entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, uncleEntropy)
+					}
+				}
 			}
-			work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
+
+			// Once the total entropy is calculated, the block reward is split
+			// between the blocks, uncles and workshares proportional to the block
+			// weight
+			parentOfTargetBlock := w.hc.GetBlockByHash(targetBlock.ParentHash(common.ZONE_CTX))
+			blockRewardAtTargetBlock := misc.CalculateReward(parentOfTargetBlock, targetBlock.WorkObjectHeader())
+
+			// Add an etx for each workshare for it to be rewarded
+			for i, share := range sharesAtTargetBlockDepth {
+
+				shareReward := new(big.Int).Mul(blockRewardAtTargetBlock, entropyOfSharesAtTargetBlockDepth[i])
+				shareReward = new(big.Int).Div(shareReward, totalEntropy)
+
+				uncleCoinbase := share.PrimaryCoinbase()
+				var originHash common.Hash
+				if uncleCoinbase.IsInQuaiLedgerScope() {
+					originHash = common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation())
+				} else {
+					originHash = common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation())
+				}
+				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{share.Lock()}}))
+			}
 		}
 
 	}
