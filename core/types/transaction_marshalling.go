@@ -220,10 +220,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'etxIndex' in external transaction")
 		}
 		etx.ETXIndex = uint16(*dec.ETXIndex)
-		if dec.Gas == nil {
-			return errors.New("missing required field 'gas' in external transaction")
+		if dec.Gas != nil {
+			etx.Gas = uint64(*dec.Gas)
 		}
-		etx.Gas = uint64(*dec.Gas)
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in external transaction")
 		}
