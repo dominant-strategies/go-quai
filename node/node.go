@@ -298,7 +298,7 @@ func (n *Node) startRPC() error {
 		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
 			return err
 		}
-		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+		if err := n.http.enableHTTP(n.rpcAPIs, config); err != nil {
 			return err
 		}
 	}

@@ -284,8 +284,8 @@ func (h *httpServer) doStop() {
 	h.server, h.listener = nil, nil
 }
 
-// enableRPC turns on JSON-RPC over HTTP on the server.
-func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
+// enableHTTP turns on JSON-RPC over HTTP on the server.
+func (h *httpServer) enableHTTP(apis []rpc.API, config httpConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -499,7 +499,6 @@ func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll b
 	for _, module := range modules {
 		allowList[module] = true
 	}
-	allowList["net"] = true
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
 		if exposeAll || allowList[api.Namespace] || (len(allowList) == 0 && api.Public) {
