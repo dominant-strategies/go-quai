@@ -232,7 +232,7 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 	t.Helper()
 
 	srv := newHTTPServer(log.Global, rpc.DefaultHTTPTimeouts)
-	assert.NoError(t, srv.enableRPC(nil, *conf))
+	assert.NoError(t, srv.enableHTTP(nil, *conf))
 	if ws {
 		assert.NoError(t, srv.enableWS(nil, *wsConf))
 	}

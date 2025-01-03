@@ -109,8 +109,7 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = ""
 	cfg.Version = params.VersionWithCommit("", "")
-	cfg.HTTPModules = append(cfg.HTTPModules, "quai")
-	cfg.HTTPModules = append(cfg.HTTPModules, "net")
+	cfg.HTTPModules = append(cfg.HTTPModules, "quai", "net")
 	cfg.WSModules = append(cfg.WSModules, "quai")
 	return cfg
 }
