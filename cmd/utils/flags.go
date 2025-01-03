@@ -887,13 +887,21 @@ func setHTTP(cfg *node.Config, nodeLocation common.Location) {
 
 	cfg.HTTPPort = GetHttpPort(nodeLocation)
 
-	cfg.HTTPCors = SplitAndTrim(viper.GetString(HTTPCORSDomainFlag.Name))
+	if viper.IsSet(HTTPCORSDomainFlag.Name) {
+		cfg.HTTPCors = SplitAndTrim(viper.GetString(HTTPCORSDomainFlag.Name))
+	}
 
-	cfg.HTTPModules = SplitAndTrim(viper.GetString(HTTPApiFlag.Name))
+	if viper.IsSet(HTTPApiFlag.Name) {
+		cfg.HTTPModules = SplitAndTrim(viper.GetString(HTTPApiFlag.Name))
+	}
 
-	cfg.HTTPVirtualHosts = SplitAndTrim(viper.GetString(HTTPVirtualHostsFlag.Name))
+	if viper.IsSet(HTTPVirtualHostsFlag.Name) {
+		cfg.HTTPVirtualHosts = SplitAndTrim(viper.GetString(HTTPVirtualHostsFlag.Name))
+	}
 
-	cfg.HTTPPathPrefix = viper.GetString(HTTPPathPrefixFlag.Name)
+	if viper.IsSet(HTTPPathPrefixFlag.Name) {
+		cfg.HTTPPathPrefix = viper.GetString(HTTPPathPrefixFlag.Name)
+	}
 }
 
 func GetHttpPort(nodeLocation common.Location) int {
