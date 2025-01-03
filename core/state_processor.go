@@ -693,36 +693,103 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	// If the primary coinbase belongs to a ledger and there is no fees
 	// for other ledger, there is no etxs emitted for the other ledger
 	if bytes.Equal(block.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
-		coinbaseReward := misc.CalculateReward(parent, block.WorkObjectHeader())
-		blockReward := new(big.Int).Add(coinbaseReward, quaiFees)
-
-		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: []byte{block.Lock()}})
-		emittedEtxs = append(emittedEtxs, coinbaseEtx)
+		coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: []byte{block.Lock()}})
+		emittedEtxs = append(emittedEtxs, coinbaseFeeEtx)
 		if qiFees.Cmp(big.NewInt(0)) != 0 {
 			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: qiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: secondaryCoinbase, Data: []byte{block.Lock()}})
 			emittedEtxs = append(emittedEtxs, coinbaseEtx)
 		}
 	} else if bytes.Equal(block.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
-		coinbaseReward := misc.CalculateReward(parent, block.WorkObjectHeader())
-		blockReward := new(big.Int).Add(coinbaseReward, qiFees)
-		coinbaseEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: blockReward, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: []byte{block.Lock()}})
-		emittedEtxs = append(emittedEtxs, coinbaseEtx)
+		coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: qiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: primaryCoinbase, Data: []byte{block.Lock()}})
+		emittedEtxs = append(emittedEtxs, coinbaseFeeEtx)
 		if quaiFees.Cmp(big.NewInt(0)) != 0 {
-			coinbaseEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: secondaryCoinbase, Data: []byte{block.Lock()}})
-			emittedEtxs = append(emittedEtxs, coinbaseEtx)
+			coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(parentHash, nodeLocation), ETXIndex: uint16(len(emittedEtxs)), Sender: secondaryCoinbase, Data: []byte{block.Lock()}})
+			emittedEtxs = append(emittedEtxs, coinbaseFeeEtx)
 		}
 	}
-	// Add an etx for each workshare for it to be rewarded
-	for _, uncle := range block.Uncles() {
-		reward := misc.CalculateReward(parent, uncle)
-		uncleCoinbase := uncle.PrimaryCoinbase()
-		var originHash common.Hash
-		if uncleCoinbase.IsInQuaiLedgerScope() {
-			originHash = common.SetBlockHashForQuai(parentHash, nodeLocation)
-		} else {
-			originHash = common.SetBlockHashForQi(parentHash, nodeLocation)
+
+	// The fees from transactions in the block is given, in the block itself
+	// go through the last WorkSharesInclusionDepth of blocks
+	if block.NumberU64(common.ZONE_CTX) > uint64(params.WorkSharesInclusionDepth) {
+
+		targetBlockNumber := block.NumberU64(common.ZONE_CTX) - uint64(params.WorkSharesInclusionDepth)
+
+		targetBlock := p.hc.GetBlockByNumber(targetBlockNumber)
+
+		totalEntropy := big.NewInt(0)
+		target := new(big.Int).Div(common.Big2e256, targetBlock.Difficulty())
+		zoneThresholdEntropy := p.engine.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
+		totalEntropy = new(big.Int).Add(totalEntropy, zoneThresholdEntropy)
+
+		// First step is to collect all the workshares and uncles at this targetBlockNumber depth, then
+		// compute the total entropy of the block, uncles and workshares at this level
+		// unclesAtTargetBlockDepth has all the uncles, workshares that is there at the block height
+		var sharesAtTargetBlockDepth []*types.WorkObjectHeader
+		var entropyOfSharesAtTargetBlockDepth []*big.Int
+		sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, targetBlock.WorkObjectHeader())
+		entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
+
+		for i := 0; i <= params.WorkSharesInclusionDepth; i++ {
+			blockAtHeight := p.hc.GetBlockByNumber(targetBlockNumber + uint64(i))
+
+			var uncles []*types.WorkObjectHeader
+			if i == params.WorkSharesInclusionDepth {
+				uncles = block.Uncles()
+			} else {
+				uncles = blockAtHeight.Uncles()
+			}
+
+			for _, uncle := range uncles {
+				var uncleEntropy *big.Int
+				if uncle.NumberU64() == targetBlockNumber {
+					_, err := p.engine.VerifySeal(uncle)
+					if err != nil {
+						// uncle is a workshare
+						powHash, err := p.engine.ComputePowHash(uncle)
+						if err != nil {
+							return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+						}
+						uncleEntropy = new(big.Int).Set(p.engine.IntrinsicLogEntropy(powHash))
+						totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
+					}
+					sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, uncle)
+					entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, uncleEntropy)
+				}
+			}
 		}
-		emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: reward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: []byte{uncle.Lock()}}))
+
+		if totalEntropy.Cmp(common.Big0) == 0 {
+			return nil, nil, nil, nil, 0, 0, 0, nil, nil, errors.New("total entropy of all the shares in the target level cannot be zero")
+		}
+
+		// Once the total entropy is calculated, the block reward is split
+		// between the blocks, uncles and workshares proportional to the block
+		// weight
+		parentOfTargetBlock := p.hc.GetBlockByHash(targetBlock.ParentHash(common.ZONE_CTX))
+
+		blockRewardAtTargetBlock := misc.CalculateQuaiReward(parentOfTargetBlock)
+
+		// Add an etx for each workshare for it to be rewarded
+		for i, share := range sharesAtTargetBlockDepth {
+
+			shareReward := new(big.Int).Mul(blockRewardAtTargetBlock, entropyOfSharesAtTargetBlockDepth[i])
+			shareReward = new(big.Int).Div(shareReward, totalEntropy)
+
+			if shareReward.Cmp(blockRewardAtTargetBlock) > 0 {
+				return nil, nil, nil, nil, 0, 0, 0, nil, nil, errors.New("share reward cannot be greater than the total block reward")
+			}
+
+			uncleCoinbase := share.PrimaryCoinbase()
+			var originHash common.Hash
+			if uncleCoinbase.IsInQuaiLedgerScope() {
+				originHash = common.SetBlockHashForQuai(parent.Hash(), p.hc.NodeLocation())
+			} else {
+				originHash = common.SetBlockHashForQi(parent.Hash(), p.hc.NodeLocation())
+				// convert the quai reward value into Qi
+				shareReward = new(big.Int).Set(misc.QuaiToQi(parentOfTargetBlock, shareReward))
+			}
+			emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: []byte{share.Lock()}}))
+		}
 	}
 
 	updatedTokenChoiceSet, err := CalculateTokenChoicesSet(p.hc, parent, emittedEtxs)
