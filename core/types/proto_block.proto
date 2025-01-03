@@ -91,6 +91,7 @@ message ProtoWorkObjectHeader {
   optional bytes prime_terminus_number = 10;
   optional uint32 lock = 11;
   optional common.ProtoAddress primary_coinbase = 12;
+  bytes data = 13;
 }
 
 message ProtoWorkObjectHeaders {
@@ -220,6 +221,14 @@ message ProtoSpentUTXOs {
 }
 message ProtoKeys {
   repeated bytes keys = 1;
+}
+
+message ProtoKeyValue {
+  bytes key = 1;
+  bytes value = 2;
+}
+message ProtoKeysAndValues {
+  repeated ProtoKeyValue keys_and_values = 1;
 }
 
 message ProtoTrimDepths {

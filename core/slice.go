@@ -924,6 +924,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.WorkObjectHeader().SetPrimeTerminusNumber(header.PrimeTerminusNumber())
 		combinedPendingHeader.WorkObjectHeader().SetLock(header.Lock())
 		combinedPendingHeader.WorkObjectHeader().SetPrimaryCoinbase(header.PrimaryCoinbase())
+		combinedPendingHeader.WorkObjectHeader().SetData(header.Data())
 
 		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.Header().SetUncledEntropy(header.Header().UncledEntropy())

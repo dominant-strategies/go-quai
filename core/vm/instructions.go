@@ -885,6 +885,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	addr, value, etxGasLimit, gasTipCap, gasFeeCap, inOffset, inSize, accessListOffset, accessListSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Bytes20ToAddress(addr.Bytes20(), interpreter.evm.chainConfig.Location)
 	// Verify address is not in context
+	// This means that a conversion cannot happen with opETX
 	if common.IsInChainScope(toAddr.Bytes(), interpreter.evm.chainConfig.Location) {
 		temp.Clear()
 		stack.push(&temp)
@@ -908,6 +909,21 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		temp.Clear()
 		stack.push(&temp)
 		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
+		return nil, nil
+	}
+
+	if etxGasLimit.CmpUint64(math.MaxUint64) == 1 {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: gas limit %d is greater than maximum %d\n", scope.Contract.self.Address(), etxGasLimit, math.MaxInt64)
+		return nil, nil
+	}
+
+	// Overflow not a problem here as overflow guarantees a number larger than txgas
+	if etxGasLimit.Uint64() < params.TxGas {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: gas limit %d is less than minimum %d\n", scope.Contract.self.Address(), etxGasLimit, params.TxGas)
 		return nil, nil
 	}
 
@@ -1001,6 +1017,14 @@ func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		temp.Clear()
 		stack.push(&temp)
 		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
+		return nil, nil
+	}
+
+	// Overflow not a problem here as overflow guarantees a number larger than txgas
+	if etxGasLimit.Uint64() < params.TxGas {
+		temp.Clear()
+		stack.push(&temp)
+		fmt.Printf("%x opETX error: gas limit %d is less than minimum %d\n", scope.Contract.self.Address(), etxGasLimit, params.TxGas)
 		return nil, nil
 	}
 
