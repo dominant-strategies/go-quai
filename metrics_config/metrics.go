@@ -23,7 +23,10 @@ import (
 //
 // This global kill-switch helps quantify the observer effect and makes
 // for less cluttered pprof profiles.
-var enabled bool
+var (
+	enabled  bool
+	endpoint string
+)
 
 var registeredGauges = make(map[string]*prometheus.GaugeVec)
 var registeredCounters = make(map[string]*prometheus.CounterVec)
@@ -36,8 +39,9 @@ func init() {
 	enabled = false
 }
 
-func EnableMetrics() {
+func EnableMetrics(endpointStr string) {
 	enabled = true
+	endpoint = endpointStr
 }
 
 func MetricsEnabled() bool {
@@ -153,7 +157,12 @@ func initializeHttpMetrics(metricsMap map[string]*prometheus.GaugeVec) {
 			promhttp.Handler().ServeHTTP(w, r)
 		}),
 	))
-	http.ListenAndServe(":2112", nil)
+
+	log.Global.WithField("endpoint", endpoint).Info("Starting metrics server")
+
+	if err := http.ListenAndServe(endpoint, nil); err != nil {
+		log.Global.WithError(err).Error("Failed to start metrics server")
+	}
 }
 
 func defineCPUMetrics() *metrics.GaugeVec {
