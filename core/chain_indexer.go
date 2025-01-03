@@ -862,7 +862,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 				continue
 			}
 			lockupByte := tx.Data()[0]
-			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
 			unlockHeight := block.NumberU64(nodeCtx) + params.LockupByteToBlockDepth[lockupByte]
 			coinbaseAddr := tx.To().Bytes20()
 			binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
@@ -879,7 +879,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 
 			coinbaseAddr := tx.To().Bytes20()
 			binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(block.NumberU64(nodeCtx)))
-			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
 			denominations := misc.FindMinDenominations(value)
 			outputIndex := uint16(0)
 			// Iterate over the denominations in descending order
@@ -1126,7 +1126,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, nodeCtx int
 						continue
 					}
 					lockupByte := etx.Data()[0]
-					value := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte)
+					value := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte, targetBlockHeight)
 					unlockHeight := targetBlockHeight + params.LockupByteToBlockDepth[lockupByte]
 					coinbaseAddr := etx.To().Bytes20()
 					binary.BigEndian.PutUint32(coinbaseAddr[16:], uint32(targetBlockHeight))

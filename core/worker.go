@@ -1098,7 +1098,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
 			}
 			lockup.Add(lockup, env.wo.Number(w.hc.NodeCtx()))
-			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte)
+			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, env.wo.NumberU64(common.ZONE_CTX))
 			denominations := misc.FindMinDenominations(value)
 			outputIndex := uint16(0)
 			// Iterate over the denominations in descending order
@@ -1463,7 +1463,14 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number(nodeCtx)
 	newWo := types.EmptyWorkObject(nodeCtx)
-	newWo.WorkObjectHeader().SetLock(w.GetLockupByte())
+
+	// the lockup byte is forced to 0 for the first two months
+	if nodeCtx == common.ZONE_CTX && parent.NumberU64(common.ZONE_CTX)+1 < 2*params.BlocksPerMonth {
+		newWo.WorkObjectHeader().SetLock(0)
+	} else {
+		newWo.WorkObjectHeader().SetLock(w.GetLockupByte())
+	}
+
 	newWo.SetParentHash(wo.Hash(), nodeCtx)
 	if w.hc.IsGenesisHash(parent.Hash()) {
 		newWo.SetNumber(big.NewInt(1), nodeCtx)
