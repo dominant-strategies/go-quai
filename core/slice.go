@@ -840,7 +840,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 			sl.hc.chainHeadFeed.Send(ChainHeadEvent{sl.hc.CurrentHeader()})
 			return nil, ErrBodyNotFound
 		}
-		if len(pendingBlockBody.OutboundEtxs()) == 0 {
+		if wo.NumberU64(common.ZONE_CTX) > uint64(params.WorkSharesInclusionDepth) && len(pendingBlockBody.OutboundEtxs()) == 0 {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
