@@ -30,20 +30,29 @@ const (
 
 // Common big integers often used
 var (
-	Big0     = big.NewInt(0)
-	Big1     = big.NewInt(1)
-	Big2     = big.NewInt(2)
-	Big3     = big.NewInt(3)
-	Big8     = big.NewInt(8)
-	Big10    = big.NewInt(10)
-	Big32    = big.NewInt(32)
-	Big99    = big.NewInt(99)
-	Big100   = big.NewInt(100)
-	Big101   = big.NewInt(101)
-	Big256   = big.NewInt(256)
-	Big257   = big.NewInt(257)
-	Big2e64  = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
-	Big2e256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	Big0      = big.NewInt(0)
+	Big1      = big.NewInt(1)
+	Big2      = big.NewInt(2)
+	Big3      = big.NewInt(3)
+	Big4      = big.NewInt(4)
+	Big7      = big.NewInt(7)
+	Big8      = big.NewInt(8)
+	Big10     = big.NewInt(10)
+	Big16     = big.NewInt(16)
+	Big32     = big.NewInt(32)
+	Big64     = big.NewInt(64)
+	Big96     = big.NewInt(96)
+	Big99     = big.NewInt(99)
+	Big100    = big.NewInt(100)
+	Big101    = big.NewInt(101)
+	Big256    = big.NewInt(256)
+	Big257    = big.NewInt(257)
+	Big480    = big.NewInt(480)
+	Big1024   = big.NewInt(1024)
+	Big3072   = big.NewInt(3072)
+	Big199680 = big.NewInt(199680)
+	Big2e64   = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
+	Big2e256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 )
 
 func BigBitsToBits(original *big.Int) *big.Int {
@@ -89,15 +98,24 @@ func SanityCheck(quitCh chan struct{}) {
 	big0 := big.NewInt(0)
 	big1 := big.NewInt(1)
 	big2 := big.NewInt(2)
+	big4 := big.NewInt(4)
 	big3 := big.NewInt(3)
+	big7 := big.NewInt(7)
 	big8 := big.NewInt(8)
 	big10 := big.NewInt(10)
+	big16 := big.NewInt(16)
 	big32 := big.NewInt(32)
+	big64 := big.NewInt(64)
+	big96 := big.NewInt(96)
 	big99 := big.NewInt(99)
 	big100 := big.NewInt(100)
 	big101 := big.NewInt(101)
 	big256 := big.NewInt(256)
 	big257 := big.NewInt(257)
+	big480 := big.NewInt(480)
+	big1024 := big.NewInt(1024)
+	big3072 := big.NewInt(3072)
+	big199680 := big.NewInt(199680)
 	big2e64 := new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
 	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
@@ -110,14 +128,23 @@ func SanityCheck(quitCh chan struct{}) {
 				Big1 == nil || big1.Cmp(Big1) != 0 ||
 				Big2 == nil || big2.Cmp(Big2) != 0 ||
 				Big3 == nil || big3.Cmp(Big3) != 0 ||
+				Big4 == nil || big4.Cmp(Big4) != 0 ||
+				Big7 == nil || big7.Cmp(Big7) != 0 ||
 				Big8 == nil || big8.Cmp(Big8) != 0 ||
 				Big10 == nil || big10.Cmp(Big10) != 0 ||
+				Big16 == nil || big16.Cmp(Big16) != 0 ||
 				Big32 == nil || big32.Cmp(Big32) != 0 ||
+				Big64 == nil || big64.Cmp(Big64) != 0 ||
+				Big96 == nil || big96.Cmp(Big96) != 0 ||
 				Big99 == nil || big99.Cmp(Big99) != 0 ||
 				Big100 == nil || big100.Cmp(Big100) != 0 ||
 				Big101 == nil || big101.Cmp(Big101) != 0 ||
 				Big256 == nil || big256.Cmp(Big256) != 0 ||
 				Big257 == nil || big257.Cmp(Big257) != 0 ||
+				Big480 == nil || big480.Cmp(Big480) != 0 ||
+				Big1024 == nil || big1024.Cmp(Big1024) != 0 ||
+				Big3072 == nil || big3072.Cmp(Big3072) != 0 ||
+				Big199680 == nil || big199680.Cmp(Big199680) != 0 ||
 				Big2e64 == nil || big2e64.Cmp(Big2e64) != 0 ||
 				Big2e256 == nil || big2e256.Cmp(Big2e256) != 0 {
 				// Send a message to quitCh to abort.
