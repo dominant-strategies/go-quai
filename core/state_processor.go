@@ -1199,8 +1199,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 				}
 			}
 
-			var conversionPeriodValid bool
-			conversionPeriodValid = blockDepth == params.ConversionLockPeriod
+			conversionPeriodValid := blockDepth == params.ConversionLockPeriod
 			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && conversionPeriodValid {
 				internal, err := etx.To().InternalAddress()
 				if err != nil {
