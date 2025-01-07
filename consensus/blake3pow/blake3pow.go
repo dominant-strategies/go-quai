@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/genallocs"
 	"github.com/dominant-strategies/go-quai/log"
 )
 
@@ -33,6 +34,8 @@ type Config struct {
 	DurationLimit *big.Int
 
 	GasCeil uint64
+
+	GenAllocs []genallocs.GenesisAccount
 
 	NodeLocation common.Location
 
