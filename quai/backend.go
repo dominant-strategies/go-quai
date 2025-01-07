@@ -191,12 +191,14 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		blake3Config := config.Blake3Pow
 		blake3Config.NotifyFull = config.Miner.NotifyFull
 		blake3Config.NodeLocation = config.NodeLocation
+		blake3Config.GenAllocs = config.GenesisAllocs
 		quai.engine = quaiconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &blake3Config, config.Miner.Notify, config.Miner.Noverify, config.Miner.WorkShareThreshold, chainDb, logger)
 	} else {
 		// Transfer mining-related config to the progpow config.
 		progpowConfig := config.Progpow
 		progpowConfig.NodeLocation = config.NodeLocation
 		progpowConfig.NotifyFull = config.Miner.NotifyFull
+		progpowConfig.GenAllocs = config.GenesisAllocs
 		quai.engine = quaiconfig.CreateProgpowConsensusEngine(stack, config.NodeLocation, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, logger)
 	}
 	logger.WithField("config", config).Info("Initialized chain configuration")

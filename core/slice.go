@@ -1258,7 +1258,7 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 		genesisTermini.SetDomTerminiAtIndex(genesisHash, i)
 	}
 
-	// Upate the local pending header
+	// Update the local pending header
 	var localPendingHeader *types.WorkObject
 	var err error
 	var termini types.Termini

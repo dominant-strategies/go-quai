@@ -664,41 +664,32 @@ func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types
 func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.Batch, header *types.WorkObject, state *state.StateDB, setRoots bool, utxoSetSize uint64, utxosCreate, utxosDelete []common.Hash) (*multiset.MultiSet, uint64, error) {
 	nodeLocation := progpow.NodeLocation()
 	nodeCtx := progpow.NodeLocation().Context()
+
+	if nodeLocation.Equal(common.Location{0, 0}) {
+		err := state.AddLockedBalances(header.Number(common.ZONE_CTX), progpow.config.GenAllocs, progpow.logger)
+		if err != nil {
+			log.Global.WithFields(log.Fields{
+				"err":      err,
+				"blockNum": header.Number(common.ZONE_CTX),
+			}).Error("Unable to add state for genesis accounts")
+			return nil, 0, err
+		}
+	}
+
 	var multiSet *multiset.MultiSet
 	if chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		multiSet = multiset.New()
-		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_quai_"+nodeLocation.Name()+".json", progpow.logger)
-		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
 		internalLockupContract, err := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}].InternalAddress()
 		if err != nil {
 			return nil, 0, fmt.Errorf("Error getting internal address for lockup contract, err %s", err)
 		}
 		state.SetNonce(internalLockupContract, 1)
-		for addressString, account := range alloc {
-			addr := common.HexToAddress(addressString, nodeLocation)
-			internal, err := addr.InternalAddress()
-			if err != nil {
-				progpow.logger.WithField("err", err).Error("Provided address in genesis block is out of scope")
-				continue
-			}
-			if addr.IsInQuaiLedgerScope() {
-				state.AddBalance(internal, account.Balance)
-				state.SetCode(internal, account.Code)
-				state.SetNonce(internal, account.Nonce)
-				for key, value := range account.Storage {
-					state.SetState(internal, key, value)
-				}
-			} else {
-				progpow.logger.WithField("address", addr.String()).Error("Provided address in genesis block alloc is not in the Quai ledger scope")
-				continue
-			}
-		}
+
 		addressOutpointMap := make(map[[20]byte][]*types.OutpointAndDenomination)
-		core.AddGenesisUtxos(chain.Database(), &utxosCreate, nodeLocation, addressOutpointMap, progpow.logger)
 		if chain.Config().IndexAddressUtxos {
 			chain.WriteAddressOutpoints(addressOutpointMap)
-			progpow.logger.Info("Indexed genesis utxos")
 		}
+
 	} else {
 		multiSet = rawdb.ReadMultiSet(chain.Database(), header.ParentHash(nodeCtx))
 	}

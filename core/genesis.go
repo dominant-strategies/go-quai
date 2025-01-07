@@ -18,19 +18,17 @@ package core
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 
 	"math/big"
-	"os"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core/genallocs"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -66,10 +64,10 @@ type Genesis struct {
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
-type GenesisAlloc map[common.Address]GenesisAccount
+type GenesisAlloc map[common.Address]genallocs.GenesisAccount
 
 func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
-	m := make(map[common.UnprefixedAddress]GenesisAccount)
+	m := make(map[common.UnprefixedAddress]genallocs.GenesisAccount)
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
@@ -79,15 +77,6 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 		(*ga)[common.NewAddressFromData(&internal)] = a
 	}
 	return nil
-}
-
-// GenesisAccount is an account in the state of the genesis block.
-type GenesisAccount struct {
-	Code       []byte                      `json:"code,omitempty"`
-	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
-	Balance    *big.Int                    `json:"balance" gencodec:"required"`
-	Nonce      uint64                      `json:"nonce,omitempty"`
-	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
 }
 
 type GenesisUTXO struct {
@@ -106,7 +95,7 @@ type genesisSpecMarshaling struct {
 	Number     math.HexOrDecimal64
 	Difficulty *math.HexOrDecimal256
 	BaseFee    *math.HexOrDecimal256
-	Alloc      map[common.UnprefixedAddress]GenesisAccount
+	Alloc      map[common.UnprefixedAddress]genallocs.GenesisAccount
 }
 
 type genesisAccountMarshaling struct {
@@ -446,96 +435,5 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 		GasLimit:   0x47b760,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(1),
-	}
-}
-
-func ReadGenesisAlloc(filename string, logger *log.Logger) map[string]GenesisAccount {
-	jsonFile, err := os.Open(filename)
-	if err != nil {
-		logger.Error(err.Error())
-		return nil
-	}
-	defer jsonFile.Close()
-	// Read the file contents
-	byteValue, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		logger.Error(err.Error())
-		return nil
-	}
-
-	// Parse the JSON data
-	var data map[string]GenesisAccount
-	err = json.Unmarshal(byteValue, &data)
-	if err != nil {
-		logger.Error(err.Error())
-		return nil
-	}
-
-	// Use the parsed data
-	return data
-}
-
-func ReadGenesisQiAlloc(filename string, logger *log.Logger) map[string]GenesisUTXO {
-	jsonFile, err := os.Open(filename)
-	if err != nil {
-		logger.Error(err.Error())
-		return nil
-	}
-	defer jsonFile.Close()
-	// Read the file contents
-	byteValue, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		logger.Error(err.Error())
-		return nil
-	}
-
-	// Parse the JSON data
-	var data map[string]GenesisUTXO
-	err = json.Unmarshal(byteValue, &data)
-	if err != nil {
-		logger.Error(err.Error())
-		return nil
-	}
-
-	// Use the parsed data
-	return data
-}
-
-// WriteGenesisUtxoSet writes the genesis utxo set to the database
-func AddGenesisUtxos(db ethdb.Database, utxosCreate *[]common.Hash, nodeLocation common.Location, addressOutpointMap map[[20]byte][]*types.OutpointAndDenomination, logger *log.Logger) {
-	qiAlloc := ReadGenesisQiAlloc("genallocs/gen_alloc_qi_"+nodeLocation.Name()+".json", logger)
-	// logger.WithField("alloc", len(qiAlloc)).Info("Allocating genesis accounts")
-	for addressString, utxo := range qiAlloc {
-		addr := common.HexToAddress(addressString, nodeLocation)
-		internal, err := addr.InternalAddress()
-		if err != nil {
-			logger.Error("Provided address in genesis block is out of scope")
-		}
-
-		hash := common.HexToHash(utxo.Hash)
-
-		// check if utxo.Denomination is less than uint8
-		if utxo.Denomination > 255 {
-			logger.Error("Provided denomination is larger than uint8")
-		}
-
-		newUtxo := &types.UtxoEntry{
-			Address:      internal.Bytes(),
-			Denomination: uint8(utxo.Denomination),
-		}
-
-		if err := rawdb.CreateUTXO(db, hash, uint16(utxo.Index), newUtxo); err != nil {
-			panic(fmt.Sprintf("Failed to create genesis UTXO: %v", err))
-		}
-		*utxosCreate = append(*utxosCreate, types.UTXOHash(hash, uint16(utxo.Index), newUtxo)) // this is not exactly a proper UTXO hash but it is unique
-
-		outpointAndDenomination := &types.OutpointAndDenomination{
-			TxHash:       hash,
-			Index:        uint16(utxo.Index),
-			Denomination: uint8(utxo.Denomination),
-		}
-		addr20 := addr.Bytes20()
-		binary.BigEndian.PutUint32(addr20[16:], uint32(0))
-		addressOutpointMap[addr20] = append(addressOutpointMap[addr20], outpointAndDenomination)
 	}
 }
