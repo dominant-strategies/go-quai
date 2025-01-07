@@ -53,6 +53,7 @@ var (
 	Big199680 = big.NewInt(199680)
 	Big2e64   = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
 	Big2e256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	Big10e18  = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), big.NewInt(0))
 )
 
 func BigBitsToBits(original *big.Int) *big.Int {

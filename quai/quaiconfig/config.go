@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/genallocs"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
@@ -78,6 +79,8 @@ type Config struct {
 	// Genesis nonce used to start the network
 	GenesisNonce uint64 `toml:",omitempty"`
 	GenesisExtra []byte `toml:",omitempty"`
+	// Genesis Allocs for starting
+	GenesisAllocs []genallocs.GenesisAccount
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
@@ -182,6 +185,7 @@ func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location
 		DurationLimit:      config.DurationLimit,
 		NodeLocation:       nodeLocation,
 		GasCeil:            config.GasCeil,
+		GenAllocs:          config.GenAllocs,
 		MinDifficulty:      config.MinDifficulty,
 		WorkShareThreshold: config.WorkShareThreshold,
 	}, notify, noverify, logger)
@@ -206,6 +210,7 @@ func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location,
 		DurationLimit:      config.DurationLimit,
 		NodeLocation:       nodeLocation,
 		GasCeil:            config.GasCeil,
+		GenAllocs:          config.GenAllocs,
 		MinDifficulty:      config.MinDifficulty,
 		WorkShareThreshold: workShareThreshold,
 	}, notify, noverify, logger)
