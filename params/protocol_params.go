@@ -318,17 +318,35 @@ func SstoreClearsScheduleRefund(stateSize, contractSize *big.Int) uint64 {
 }
 
 func CalculateGasWithStateScaling(stateSize, contractSize *big.Int, baseRate uint64) uint64 {
-	var scalingFactor *big.Int
-	if stateSize.Sign() != 0 {
-		scalingFactor = common.LogBig(stateSize)
+
+	if stateSize == nil {
+		stateSize = big.NewInt(0)
 	}
-	if contractSize.Sign() != 0 {
-		logContractSize := common.LogBig(contractSize)
-		scalingFactor = new(big.Int).Add(scalingFactor, logContractSize)
+	if contractSize == nil {
+		contractSize = big.NewInt(0)
 	}
-	// If we can assume that the gas price constants is correct for level 4 trie
-	num := new(big.Int).Mul(scalingFactor, big.NewInt(int64(baseRate)))
-	den := new(big.Int).Mul(big.NewInt(4), common.Big2e64)
+
+	stateTrieLevels := big.NewInt(0)
+	contractTrieLevels := big.NewInt(0)
+	// First calculate the log2 * 2^64 of the state size and contract size and
+	// add them together
+	if stateSize.Cmp(common.Big1) > 0 {
+		stateTrieLevels = common.LogBig(stateSize)
+	}
+	if contractSize.Cmp(common.Big1) > 0 {
+		contractTrieLevels = common.LogBig(contractSize)
+	}
+
+	// Since the PMT used 32 byte hash as the key, the actual levels on a
+	// uniformly filled trie is log16(size of leaves) = log2(size of leaves)/4
+	stateTrieLevels = new(big.Int).Div(stateTrieLevels, big.NewInt(4))
+	contractTrieLevels = new(big.Int).Div(contractTrieLevels, big.NewInt(4))
+
+	totalTrieLevels := new(big.Int).Add(stateTrieLevels, contractTrieLevels)
+
+	// If we assume that the baseRate is accurate for 5 levels (1M accounts)
+	num := new(big.Int).Mul(totalTrieLevels, big.NewInt(int64(baseRate)))
+	den := new(big.Int).Mul(big.NewInt(5), common.Big2e64)
 	return new(big.Int).Div(num, den).Uint64()
 }
 

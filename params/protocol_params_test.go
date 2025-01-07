@@ -205,5 +205,56 @@ func TestOneOverKQi(t *testing.T) {
 		oneOverKQi := OneOverKqi(number)
 		require.Equal(t, expectedOneOverKQi[i], oneOverKQi.Uint64())
 	}
+}
 
+type GasTestCase struct {
+	stateSize          *big.Int
+	contractSize       *big.Int
+	baseRate           uint64
+	expectedScaledRate uint64
+}
+
+func TestCalculateGasWithStateScaling(t *testing.T) {
+	tests := []GasTestCase{{
+		stateSize:          big.NewInt(100),
+		contractSize:       big.NewInt(0),
+		baseRate:           42000,
+		expectedScaledRate: 13952,
+	}, {
+		stateSize:          big.NewInt(0),
+		contractSize:       big.NewInt(0),
+		baseRate:           42000,
+		expectedScaledRate: 0,
+	}, {
+		stateSize:          nil,
+		contractSize:       big.NewInt(0),
+		baseRate:           42000,
+		expectedScaledRate: 0,
+	}, {
+		stateSize:          nil,
+		contractSize:       nil,
+		baseRate:           42000,
+		expectedScaledRate: 0,
+	}, {
+		stateSize:          big.NewInt(1000000000),
+		contractSize:       nil,
+		baseRate:           42000,
+		expectedScaledRate: 62784,
+	}, {
+		stateSize:          nil,
+		contractSize:       big.NewInt(1000000000),
+		baseRate:           42000,
+		expectedScaledRate: 62784,
+	}, {
+		stateSize:          big.NewInt(100000),
+		contractSize:       big.NewInt(1000),
+		baseRate:           42000,
+		expectedScaledRate: 55808,
+	},
+	}
+
+	for _, test := range tests {
+		scaledGas := CalculateGasWithStateScaling(test.stateSize, test.contractSize, test.baseRate)
+		require.Equal(t, test.expectedScaledRate, scaledGas)
+	}
 }
