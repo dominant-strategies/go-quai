@@ -187,7 +187,6 @@ var (
 	// These numbers should be "equivalent" to the initial conversion rate
 	QuaiToQiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
 	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
-	OneOverKqi                      = big.NewInt(30000000) // This is the number of hashes need to get 1 Qit. 3e9 is ~$0.001 // = big.NewInt(500)
 	MaxTimeDiffBetweenBlocks int64  = 100                  // Max time difference between the blocks to 100 secs
 	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
 	ControllerKickInBlock    uint64 = 1000000000
@@ -256,6 +255,30 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 
 func MinGasLimit(number uint64) uint64 {
 	return 12000000
+}
+
+func OneOverKqi(number uint64) *big.Int {
+	// This is the number of hashes need to get 1 Qit. 2.6e9 is ~$0.001
+	baseOneOverKqi := big.NewInt(26000000)
+	// Based on the research done
+	// https://epoch.ai/blog/predicting-gpu-performance, it seems that the
+	// decrease in the transistor size and the improvements of flops from the
+	// increase in cores will double every 2.69 years and will plateau sometime
+	// after 2030. If we assume that this saturation happens after two
+	// doublings, we can multiply the base value by 4
+	doublingPeriodInBlocks := (365 * BlocksPerDay * 269) / 100
+
+	if number > 2*doublingPeriodInBlocks {
+		return new(big.Int).Mul(baseOneOverKqi, big.NewInt(4))
+	} else {
+		doublingCount := number / doublingPeriodInBlocks
+		remainingBlocks := number % doublingPeriodInBlocks
+		// 1/Kqi = 1/(2^doublingCount * baseOneOverKQi * (1 + remainingBlocks/doublingPeriodInBlocks))
+		newOneOverKqi := new(big.Int).Mul(big.NewInt(int64(doublingPeriodInBlocks+remainingBlocks)), baseOneOverKqi)
+		newOneOverKqi = new(big.Int).Mul(newOneOverKqi, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(doublingCount)), nil))
+		newOneOverKqi = new(big.Int).Div(newOneOverKqi, big.NewInt(int64(doublingPeriodInBlocks)))
+		return newOneOverKqi
+	}
 }
 
 // Gas calculation functions

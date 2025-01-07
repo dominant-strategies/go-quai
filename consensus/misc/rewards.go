@@ -93,7 +93,7 @@ func CalculateQuaiReward(header *types.WorkObject) *big.Int {
 // CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
 func CalculateQiReward(header *types.WorkObjectHeader) *big.Int {
 	diff := header.Difficulty()
-	qiReward := new(big.Int).Quo(diff, params.OneOverKqi)
+	qiReward := new(big.Int).Quo(diff, params.OneOverKqi(header.NumberU64()))
 	if qiReward.Cmp(common.Big0) == 0 {
 		qiReward = big.NewInt(1)
 	}
