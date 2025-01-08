@@ -141,6 +141,7 @@ type Backend interface {
 	TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions)
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
 	GetMinGasPrice() *big.Int
+	GetAverageGasPrice() *big.Int
 	GetPoolGasPrice() *big.Int
 	SendTxToSharingClients(tx *types.Transaction)
 

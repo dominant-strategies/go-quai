@@ -417,6 +417,9 @@ func (b *QuaiAPIBackend) SendTxToSharingClients(tx *types.Transaction) {
 func (b *QuaiAPIBackend) GetMinGasPrice() *big.Int {
 	return b.quai.core.GetMinGasPrice()
 }
+func (b *QuaiAPIBackend) GetAverageGasPrice() *big.Int {
+	return b.quai.core.GetAverageGasPrice()
+}
 
 func (b *QuaiAPIBackend) GetPoolGasPrice() *big.Int {
 	return b.quai.core.GetPoolGasPrice()

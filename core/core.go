@@ -1358,6 +1358,10 @@ func (c *Core) GetMinGasPrice() *big.Int {
 	return c.sl.txPool.GetMinGasPrice()
 }
 
+func (c *Core) GetAverageGasPrice() *big.Int {
+	return c.sl.txPool.GetAverageGasPrice()
+}
+
 // GetPoolGasPrice returns the pool gas price set by the node
 func (c *Core) GetPoolGasPrice() *big.Int {
 	return c.sl.txPool.GasPrice()
