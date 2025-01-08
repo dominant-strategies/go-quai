@@ -421,6 +421,9 @@ func (b *QuaiAPIBackend) GetRollingFeeInfo() (min, max, avg *big.Int) {
 func (b *QuaiAPIBackend) GetMinGasPrice() *big.Int {
 	return b.quai.core.GetMinGasPrice()
 }
+func (b *QuaiAPIBackend) GetAverageGasPrice() *big.Int {
+	return b.quai.core.GetAverageGasPrice()
+}
 
 func (b *QuaiAPIBackend) GetPoolGasPrice() *big.Int {
 	return b.quai.core.GetPoolGasPrice()

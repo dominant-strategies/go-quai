@@ -61,7 +61,7 @@ func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	if s.b.NodeLocation().Context() != common.ZONE_CTX {
 		return (*hexutil.Big)(big.NewInt(0)), errors.New("gasPrice call can only be made in zone chain")
 	}
-	return (*hexutil.Big)(s.b.GetMinGasPrice()), nil
+	return (*hexutil.Big)(s.b.GetAverageGasPrice()), nil
 }
 
 // MinerTip returns the gas price of the pool
