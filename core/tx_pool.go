@@ -657,6 +657,28 @@ func (pool *TxPool) GetMinGasPrice() *big.Int {
 	return baseFeeMin
 }
 
+func (pool *TxPool) GetAverageGasPrice() *big.Int {
+	currentHeader := pool.chain.CurrentBlock()
+	if currentHeader == nil {
+		return big.NewInt(0)
+	}
+	minBaseFee := pool.chain.CalcMinBaseFee(currentHeader)
+	baseFeeMax, err := pool.chain.CalcMaxBaseFee(currentHeader)
+	if err != nil {
+		return new(big.Int).Mul(minBaseFee, common.Big2)
+	}
+	if minBaseFee.Cmp(baseFeeMax) == 0 {
+		return new(big.Int).Mul(minBaseFee, common.Big2)
+	}
+	// make sure that the average base fee is atleast 2x the min base fee
+	averageBaseFee := new(big.Int).Div(baseFeeMax, big.NewInt(50))
+	if averageBaseFee.Cmp(new(big.Int).Mul(minBaseFee, common.Big2)) < 0 {
+		return new(big.Int).Mul(minBaseFee, common.Big2)
+	} else {
+		return averageBaseFee
+	}
+}
+
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (pool *TxPool) Nonce(addr common.InternalAddress) uint64 {
