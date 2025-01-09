@@ -383,8 +383,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 			qiFees.Add(qiFees, qiTxFee)
 
+			exchangeRate := primeTerminus.ExchangeRate()
 			// convert the fee to quai
-			qiTxFeeInQuai := misc.QiToQuai(parent, qiTxFee)
+			qiTxFeeInQuai := misc.QiToQuai(block, exchangeRate, block.Difficulty(), qiTxFee)
 			// get the gas price by dividing the fee by qiTxGas
 			qiGasPrice := new(big.Int).Div(qiTxFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx, qiScalingFactor, p.hc.NodeLocation()))))
 
@@ -918,13 +919,17 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("total gas used by ETXs %d is not within the range %d to %d", totalEtxGas, minimumEtxGas, maximumEtxGas)
 	}
 
+	// Since the exchange rates are only calculated on prime blocks, the
+	// prime terminus exchange rate is used
+	exchangeRate := primeTerminus.ExchangeRate()
+
 	// 50% of the fees goes to the calculation  of the averageFees generated,
 	// and this is added to the block rewards
 	halfQuaiFees := new(big.Int).Div(quaiFees, common.Big2)
 	halfQiFees := new(big.Int).Div(qiFees, common.Big2)
 
 	// convert the qi fees to quai
-	halfQiFeesInQuai := misc.QiToQuai(parent, halfQiFees)
+	halfQiFeesInQuai := misc.QiToQuai(block, exchangeRate, block.Difficulty(), halfQiFees)
 	totalFeesForCapacitor := new(big.Int).Add(halfQuaiFees, halfQiFeesInQuai)
 
 	expectedAvgFees := p.hc.ComputeAverageTxFees(parent, totalFeesForCapacitor)
@@ -932,7 +937,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid avgTxFees used (remote: %d local: %d)", block.AvgTxFees(), expectedAvgFees)
 	}
 
-	totalQiFeesInQuai := misc.QiToQuai(parent, qiFees)
+	totalQiFeesInQuai := misc.QiToQuai(block, exchangeRate, block.Difficulty(), qiFees)
 	expectedTotalFees := new(big.Int).Add(quaiFees, totalQiFeesInQuai)
 	if expectedTotalFees.Cmp(block.TotalFees()) != 0 {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid totalFees used (remote: %d local: %d)", block.TotalFees(), expectedTotalFees)
@@ -1002,9 +1007,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		// Once the total entropy is calculated, the block reward is split
 		// between the blocks, uncles and workshares proportional to the block
 		// weight
-		parentOfTargetBlock := p.hc.GetBlockByHash(targetBlock.ParentHash(common.ZONE_CTX))
-
-		blockRewardAtTargetBlock := misc.CalculateQuaiReward(parentOfTargetBlock)
+		blockRewardAtTargetBlock := misc.CalculateQuaiReward(targetBlock.Difficulty(), exchangeRate)
 		// add the fee capacitor value
 		blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
 		// add half the fees generated in the block
@@ -1027,53 +1030,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			} else {
 				originHash = common.SetBlockHashForQi(parent.Hash(), p.hc.NodeLocation())
 				// convert the quai reward value into Qi
-				shareReward = new(big.Int).Set(misc.QuaiToQi(parentOfTargetBlock, shareReward))
+				shareReward = new(big.Int).Set(misc.QuaiToQi(targetBlock, exchangeRate, targetBlock.Difficulty(), shareReward))
 			}
 			emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: share.Data()}))
-		}
-	}
-
-	updatedTokenChoiceSet, err := CalculateTokenChoicesSet(p.hc, parent, emittedEtxs)
-	if err != nil {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
-	}
-	var exchangeRate *big.Int
-	var beta0, beta1 *big.Float
-	if parent.NumberU64(common.ZONE_CTX) > params.ControllerKickInBlock {
-		exchangeRate, beta0, beta1, err = CalculateExchangeRate(p.hc, parent, updatedTokenChoiceSet)
-		if err != nil {
-			return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
-		}
-	} else {
-		exchangeRate = parent.ExchangeRate()
-		betas := rawdb.ReadBetas(p.hc.headerDb, parent.Hash())
-		beta0 = betas.Beta0()
-		beta1 = betas.Beta1()
-	}
-	err = rawdb.WriteTokenChoicesSet(batch, block.Hash(), &updatedTokenChoiceSet)
-	if err != nil {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
-	}
-	err = rawdb.WriteBetas(batch, block.Hash(), beta0, beta1)
-	if err != nil {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
-	}
-	if block.ExchangeRate().Cmp(exchangeRate) != 0 {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid exchange rate used (remote: %d local: %d)", block.ExchangeRate(), exchangeRate)
-	}
-	for _, etx := range emittedEtxs {
-		// If the etx is conversion
-		if types.IsConversionTx(etx) {
-			value := etx.Value()
-			// If to is in Qi, convert the value into Qi
-			if etx.To().IsInQiLedgerScope() {
-				value = misc.QuaiToQi(block, value)
-			}
-			// If to is in Quai, convert the value into Quai
-			if etx.To().IsInQuaiLedgerScope() {
-				value = misc.QiToQuai(block, value)
-			}
-			etx.SetValue(value)
 		}
 	}
 
@@ -1145,6 +1104,35 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 	}
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, utxoSetSize, multiSet, unlocks, nil
+}
+
+func (p *StateProcessor) GetKQuaiAndUpdateBit(parent *types.WorkObject) (*big.Int, uint8, error) {
+	// Retrieve the parent state to execute on top and start a prefetcher for
+	// the miner to speed block sealing up a bit.
+	evmRoot := parent.EVMRoot()
+	etxRoot := parent.EtxSetRoot()
+	quaiStateSize := parent.QuaiStateSize()
+	if p.hc.IsGenesisHash(parent.Hash()) {
+		evmRoot = types.EmptyRootHash
+		etxRoot = types.EmptyRootHash
+		quaiStateSize = big.NewInt(0)
+	}
+	state, err := p.StateAt(evmRoot, etxRoot, quaiStateSize)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	kQuai, err := state.GetKQuai()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	updateBit, err := state.GetUpdateBit()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return kQuai, updateBit, nil
 }
 
 // RedeemLockedQuai redeems any locked Quai for coinbase addresses at specific block depths.
@@ -1508,7 +1496,8 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		return nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
 	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), currentHeader.BaseFee())
-	txFeeInQuai := misc.QiToQuai(currentHeader, txFeeInQit)
+	exchangeRate := primeTerminusHeader.ExchangeRate()
+	txFeeInQuai := misc.QiToQuai(currentHeader, exchangeRate, currentHeader.Difficulty(), txFeeInQit)
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64())
 	}
@@ -1762,11 +1751,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		return nil, nil, nil, fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash()), nil
 	}
 	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), currentHeader.BaseFee())
-	parent := chain.GetBlockByHash(currentHeader.ParentHash(common.ZONE_CTX))
-	if parent == nil {
-		return nil, nil, nil, fmt.Errorf("parent cannot be found for the block"), nil
-	}
-	txFeeInQuai := misc.QiToQuai(parent, txFeeInQit)
+
+	exchangeRate := primeTerminusHeader.ExchangeRate()
+
+	txFeeInQuai := misc.QiToQuai(currentHeader, exchangeRate, currentHeader.Difficulty(), txFeeInQit)
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64()), nil
 	}
