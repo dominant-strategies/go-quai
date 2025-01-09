@@ -881,7 +881,7 @@ func WrapQi(statedb StateDB, ownerContract, beneficiary common.Address, sender c
 		balanceBig.Add(balanceBig, value)
 		statedb.SetState(lockupContractAddressInternal, wrappedQiKey, common.BigToHash(balanceBig))
 	}
-	statedb.Finalise(true)
+	statedb.Finalize(true)
 	log.Global.Infof("Wrapped Qi: %v -> %v, value: %v", ownerContract, beneficiary, value)
 	return nil
 }

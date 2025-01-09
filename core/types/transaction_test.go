@@ -798,6 +798,7 @@ func qiTxData() *Transaction {
 		ParentHash: &parentHash,
 		MixHash:    &mixHash,
 		WorkNonce:  &workNonce,
+		Data:       []byte{0x01},
 	}
 	tx := NewTx(inner)
 	return tx
@@ -806,7 +807,7 @@ func qiTxData() *Transaction {
 func TestQiTxHash(t *testing.T) {
 	tx := qiTxData()
 	hash := tx.Hash()
-	correctHash := common.HexToHash("0x3ab73ae4860b3db006d7a19fed6be3efe5619f53f499ef561f42c46bc12b555d")
+	correctHash := common.HexToHash("0x3ab63a9e508d743af3197a0b327f169115b7184c5d7de23a7e37816537677d94")
 	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 

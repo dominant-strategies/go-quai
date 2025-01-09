@@ -79,7 +79,7 @@ type StateDB interface {
 
 	ForEachStorage(common.InternalAddress, func(common.Hash, common.Hash) bool) error
 	UnderlyingDatabase() ethdb.KeyValueReader
-	Finalise(deleteEmptyObjects bool)
+	Finalize(deleteEmptyObjects bool)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
