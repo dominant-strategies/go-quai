@@ -1100,6 +1100,10 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 	if tx.Type() != types.ExternalTxType && tx.GasPrice().Cmp(minBaseFee) < 0 {
 		return nil, false, errors.New("gas price fee less than min base fee")
 	}
+	gasUsedForCoinbase := params.TxGas
+	if parent.NumberU64(common.ZONE_CTX) < params.TimeToStartTx {
+		gasUsedForCoinbase = uint64(0)
+	}
 	// coinbase tx
 	// 1) is a external tx type
 	// 2) do not consume any gas
@@ -1151,13 +1155,10 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 						outputIndex++
 					}
 				}
-				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
-				gasUsed := env.wo.GasUsed()
-				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
-					gasUsed += params.TxGas
-					receipt.GasUsed = params.TxGas
-				}
+				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 
+				gasUsed := env.wo.GasUsed()
+				gasUsed += gasUsedForCoinbase
 				env.wo.Header().SetGasUsed(gasUsed)
 				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 				env.txs = append(env.txs, tx)
@@ -1172,8 +1173,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				if env.state.GetCode(internal) == nil {
 					// Coinbase data is either too long or too small
 					// Coinbase reward is lost
-					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
-					env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, 0)
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
+					gasUsed := env.wo.GasUsed()
+					gasUsed += gasUsedForCoinbase
+					env.wo.Header().SetGasUsed(gasUsed)
+					env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 					env.txs = append(env.txs, tx)
 					env.receipts = append(env.receipts, receipt)
 					return []*types.Log{}, false, nil
@@ -1203,12 +1207,10 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					// If we did not delete, we are rotating the epoch and need to store it
 					env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 				}
-				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+
 				gasUsed := env.wo.GasUsed()
-				if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
-					gasUsed += params.TxGas
-					receipt.GasUsed = params.TxGas
-				}
+				gasUsed += gasUsedForCoinbase
 				env.wo.Header().SetGasUsed(gasUsed)
 				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 				env.txs = append(env.txs, tx)
@@ -1217,8 +1219,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			} else {
 				// Coinbase data is either too long or too small
 				// Coinbase reward is lost
-				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
-				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, 0)
+				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
+				gasUsed := env.wo.GasUsed()
+				gasUsed += gasUsedForCoinbase
+				env.wo.Header().SetGasUsed(gasUsed)
+				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 				env.txs = append(env.txs, tx)
 				env.receipts = append(env.receipts, receipt)
 				return []*types.Log{}, false, nil
@@ -1247,8 +1252,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			} else if len(tx.Data()) != common.AddressLength+1 && len(tx.Data()) != common.AddressLength+common.AddressLength+1 {
 				// Coinbase data is either too long or too small
 				// Coinbase reward is lost
-				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
-				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, 0)
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
+				gasUsed := env.wo.GasUsed()
+				gasUsed += gasUsedForCoinbase
+				env.wo.Header().SetGasUsed(gasUsed)
+				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 				env.txs = append(env.txs, tx)
 				env.receipts = append(env.receipts, receipt)
 				return []*types.Log{}, false, nil
@@ -1268,8 +1276,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			if env.state.GetCode(internal) == nil {
 				// Coinbase data is either too long or too small
 				// Coinbase reward is lost
-				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
-				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, 0)
+				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
+				gasUsed := env.wo.GasUsed()
+				gasUsed += gasUsedForCoinbase
+				env.wo.Header().SetGasUsed(gasUsed)
+				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 				env.txs = append(env.txs, tx)
 				env.receipts = append(env.receipts, receipt)
 				return []*types.Log{}, false, nil
@@ -1301,13 +1312,10 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				// If we did not delete, we are rotating the epoch and need to store it
 				env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 			}
-			receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+			receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 
 			gasUsed := env.wo.GasUsed()
-			if parent.NumberU64(common.ZONE_CTX) >= params.TimeToStartTx {
-				gasUsed += params.TxGas
-				receipt.GasUsed = params.TxGas
-			}
+			gasUsed += gasUsedForCoinbase
 			env.wo.Header().SetGasUsed(gasUsed)
 			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 			env.receipts = append(env.receipts, receipt)
