@@ -1343,12 +1343,7 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 		fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee().Uint64())
 	}
 
-	// Assign receipt status or post state.
-	if len(receipt.PostState) > 0 {
-		fields["root"] = hexutil.Bytes(receipt.PostState)
-	} else {
-		fields["status"] = hexutil.Uint(receipt.Status)
-	}
+	fields["status"] = hexutil.Uint(receipt.Status)
 	if receipt.Logs == nil {
 		fields["logs"] = [][]*types.Log{}
 	}

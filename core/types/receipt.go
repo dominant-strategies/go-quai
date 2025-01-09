@@ -59,7 +59,6 @@ const (
 type Receipt struct {
 	// Consensus fields: These fields are defined by the Yellow Paper
 	Type              uint8  `json:"type,omitempty"`
-	PostState         []byte `json:"root"`
 	Status            uint64 `json:"status"`
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
@@ -85,7 +84,6 @@ type Receipt struct {
 
 type receiptMarshaling struct {
 	Type              hexutil.Uint64
-	PostState         hexutil.Bytes
 	Status            hexutil.Uint64
 	CumulativeGasUsed hexutil.Uint64
 	GasUsed           hexutil.Uint64
@@ -95,7 +93,7 @@ type receiptMarshaling struct {
 
 // receiptRLP is the consensus encoding of a receipt.
 type receiptRLP struct {
-	PostStateOrStatus []byte
+	Status            []byte
 	CumulativeGasUsed uint64
 	Bloom             Bloom
 	Logs              []*Log
@@ -104,7 +102,7 @@ type receiptRLP struct {
 
 // storedReceiptRLP is the storage encoding of a receipt used in database version 4.
 type storedReceiptRLP struct {
-	PostStateOrStatus []byte
+	Status            []byte
 	CumulativeGasUsed uint64
 	TxHash            common.Hash
 	ContractAddress   common.Address
@@ -115,10 +113,9 @@ type storedReceiptRLP struct {
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 // Deprecated: create receipts using a struct literal instead.
-func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
+func NewReceipt(failed bool, cumulativeGasUsed uint64) *Receipt {
 	r := &Receipt{
 		Type:              QuaiTxType,
-		PostState:         common.CopyBytes(root),
 		CumulativeGasUsed: cumulativeGasUsed,
 	}
 	if failed {
@@ -174,37 +171,32 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 
 func (r *Receipt) setFromRLP(data receiptRLP) error {
 	r.CumulativeGasUsed, r.Bloom, r.Logs = data.CumulativeGasUsed, data.Bloom, data.Logs
-	return r.setStatus(data.PostStateOrStatus)
+	return r.setStatus(data.Status)
 }
 
-func (r *Receipt) setStatus(postStateOrStatus []byte) error {
+func (r *Receipt) setStatus(status []byte) error {
 	switch {
-	case bytes.Equal(postStateOrStatus, receiptStatusSuccessfulRLP):
+	case bytes.Equal(status, receiptStatusSuccessfulRLP):
 		r.Status = ReceiptStatusSuccessful
-	case bytes.Equal(postStateOrStatus, receiptStatusFailedRLP):
+	case bytes.Equal(status, receiptStatusFailedRLP):
 		r.Status = ReceiptStatusFailed
-	case len(postStateOrStatus) == len(common.Hash{}):
-		r.PostState = postStateOrStatus
 	default:
-		return fmt.Errorf("invalid receipt status %x", postStateOrStatus)
+		return fmt.Errorf("invalid receipt status %x", status)
 	}
 	return nil
 }
 
 func (r *Receipt) statusEncoding() []byte {
-	if len(r.PostState) == 0 {
-		if r.Status == ReceiptStatusFailed {
-			return receiptStatusFailedRLP
-		}
-		return receiptStatusSuccessfulRLP
+	if r.Status == ReceiptStatusFailed {
+		return receiptStatusFailedRLP
 	}
-	return r.PostState
+	return receiptStatusSuccessfulRLP
 }
 
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
 func (r *Receipt) Size() common.StorageSize {
-	size := common.StorageSize(unsafe.Sizeof(*r)) + common.StorageSize(len(r.PostState))
+	size := common.StorageSize(unsafe.Sizeof(*r))
 	size += common.StorageSize(len(r.Logs)) * common.StorageSize(unsafe.Sizeof(Log{}))
 	for _, log := range r.Logs {
 		size += common.StorageSize(len(log.Topics)*common.HashLength + len(log.Data))
@@ -247,7 +239,7 @@ type ReceiptForStorage Receipt
 
 func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
 	ProtoReceiptForStorage := &ProtoReceiptForStorage{
-		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
+		Status:            (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
 		TxHash:            r.TxHash.ProtoEncode(),
 		ContractAddress:   r.ContractAddress.ProtoEncode(),
@@ -273,7 +265,7 @@ func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, lo
 	if protoReceipt == nil {
 		return errors.New("protoReceipt is nil in ProtoDecode")
 	}
-	if err := (*Receipt)(r).setStatus(protoReceipt.PostStateOrStatus); err != nil {
+	if err := (*Receipt)(r).setStatus(protoReceipt.Status); err != nil {
 		return err
 	}
 	r.CumulativeGasUsed = protoReceipt.CumulativeGasUsed
@@ -310,7 +302,7 @@ func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, lo
 // into an RLP stream.
 func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 	enc := &storedReceiptRLP{
-		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
+		Status:            (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
 		Logs:              make([]*LogForStorage, len(r.Logs)),
 		OutboundEtxs:      make([]*Transaction, len(r.OutboundEtxs)),
@@ -340,7 +332,7 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	if err := rlp.DecodeBytes(blob, &stored); err != nil {
 		return err
 	}
-	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
+	if err := (*Receipt)(r).setStatus(stored.Status); err != nil {
 		return err
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed

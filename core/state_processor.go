@@ -1302,7 +1302,6 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 	*etxPLimit -= ETXPGas
 
 	// Update the state with pending changes.
-	var root []byte
 	statedb.Finalize(true)
 
 	*usedGas += result.UsedGas
@@ -1310,7 +1309,7 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	receipt := &types.Receipt{Type: tx.Type(), CumulativeGasUsed: *usedGas}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 		evm.UndoCoinbasesDeleted()

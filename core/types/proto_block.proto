@@ -140,7 +140,7 @@ message ProtoAccessTuple {
 }
 
 message ProtoReceiptForStorage {
-  bytes post_state_or_status = 1;
+  bytes status = 1;
   uint64 cumulative_gas_used = 2;
   ProtoLogsForStorage logs = 3;
   common.ProtoHash tx_hash = 4;
