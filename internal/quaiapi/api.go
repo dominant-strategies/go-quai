@@ -953,7 +953,7 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 		}
-		txs := block.TransactionsWithReceipts()
+		txs := block.Transactions()
 		transactions := make([]interface{}, len(txs))
 		var err error
 		for i, tx := range txs {
@@ -989,7 +989,7 @@ type RPCTransaction struct {
 	BlockHash         *common.Hash             `json:"blockHash"`
 	BlockNumber       *hexutil.Big             `json:"blockNumber"`
 	From              *common.MixedcaseAddress `json:"from,omitempty"`
-	Gas               hexutil.Uint64           `json:"gas,omitempty"`
+	Gas               hexutil.Uint64           `json:"gas"`
 	MinerTip          *hexutil.Big             `json:"minerTip,omitempty"`
 	GasPrice          *hexutil.Big             `json:"gasPrice,omitempty"`
 	Hash              common.Hash              `json:"hash,omitempty"`
@@ -1028,6 +1028,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			ChainID:       (*hexutil.Big)(tx.ChainId()),
 			Hash:          tx.Hash(),
 			UTXOSignature: hexutil.Bytes(sig),
+			Input:         hexutil.Bytes(tx.Data()),
 		}
 		for _, txin := range tx.TxIn() {
 			result.TxIn = append(result.TxIn, types.RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
@@ -1275,6 +1276,93 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 }
 
+// GetTransactionReceipt returns the transaction receipt for the given transaction hash.
+// Moved from PublicTransactionPoolAPI
+// eth_getTransactionReceipt
+func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, nil
+	}
+	receipts, err := s.b.GetReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	receipt := &types.Receipt{}
+	for _, r := range receipts {
+		if r.TxHash == hash {
+			receipt = r
+		}
+	}
+
+	fields := map[string]interface{}{
+		"blockHash":         blockHash,
+		"blockNumber":       hexutil.Uint64(blockNumber),
+		"transactionHash":   hash,
+		"transactionIndex":  hexutil.Uint64(index),
+		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+		"contractAddress":   nil,
+		"logs":              receipt.Logs,
+		"logsBloom":         receipt.Bloom.ToLegacyBloom(),
+		"type":              hexutil.Uint(tx.Type()),
+	}
+
+	if tx.Type() == types.QuaiTxType {
+		if to := tx.To(); to != nil {
+			fields["to"] = to.Hex()
+		}
+		if to := tx.To(); to != nil {
+			fields["to"] = to.Hex()
+		}
+		// Derive the sender.
+		bigblock := new(big.Int).SetUint64(blockNumber)
+		signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
+		from, _ := types.Sender(signer, tx)
+		fields["from"] = from.Hex()
+	}
+
+	if tx.Type() == types.ExternalTxType {
+		fields["originatingTxHash"] = tx.OriginatingTxHash()
+		fields["etxType"] = hexutil.Uint(tx.EtxType())
+	}
+
+	var outBoundEtxs []*RPCTransaction
+	for _, tx := range receipt.OutboundEtxs {
+		outBoundEtxs = append(outBoundEtxs, newRPCTransaction(tx, blockHash, blockNumber, index, big.NewInt(0), s.b.NodeLocation()))
+	}
+	if len(receipt.OutboundEtxs) > 0 {
+		fields["outboundEtxs"] = outBoundEtxs
+	}
+	// Assign the effective gas price paid
+	header, err := s.b.HeaderByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	if tx.Type() == types.QuaiTxType {
+		gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
+		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+	} else {
+		// QiTx
+		fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee().Uint64())
+	}
+
+	// Assign receipt status or post state.
+	if len(receipt.PostState) > 0 {
+		fields["root"] = hexutil.Bytes(receipt.PostState)
+	} else {
+		fields["status"] = hexutil.Uint(receipt.Status)
+	}
+	if receipt.Logs == nil {
+		fields["logs"] = [][]*types.Log{}
+	}
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if !receipt.ContractAddress.Equal(common.Zero) && !receipt.ContractAddress.Equal(common.Address{}) {
+		fields["contractAddress"] = receipt.ContractAddress.Hex()
+	}
+	return fields, nil
+}
+
 // PublicTransactionPoolAPI exposes methods for the RPC interface
 type PublicTransactionPoolAPI struct {
 	b         Backend
@@ -1402,85 +1490,6 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 	}
 	// Serialize to RLP and return
 	return tx.MarshalBinary()
-}
-
-// GetTransactionReceipt returns the transaction receipt for the given transaction hash.
-func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
-	if err != nil {
-		return nil, nil
-	}
-	if tx.Type() == types.QiTxType {
-		return nil, errors.New("QiTx does not have receipt")
-	}
-	receipts, err := s.b.GetReceipts(ctx, blockHash)
-	if err != nil {
-		return nil, err
-	}
-	receipt := &types.Receipt{}
-	for _, r := range receipts {
-		if r.TxHash == hash {
-			receipt = r
-		}
-	}
-
-	// Derive the sender.
-	bigblock := new(big.Int).SetUint64(blockNumber)
-	signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
-	from, _ := types.Sender(signer, tx)
-
-	fields := map[string]interface{}{
-		"blockHash":         blockHash,
-		"blockNumber":       hexutil.Uint64(blockNumber),
-		"transactionHash":   hash,
-		"transactionIndex":  hexutil.Uint64(index),
-		"from":              from.Hex(),
-		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
-		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
-		"contractAddress":   nil,
-		"logs":              receipt.Logs,
-		"logsBloom":         receipt.Bloom.ToLegacyBloom(),
-		"type":              hexutil.Uint(tx.Type()),
-	}
-
-	if to := tx.To(); to != nil {
-		fields["to"] = to.Hex()
-	}
-
-	if tx.Type() == types.ExternalTxType {
-		fields["originatingTxHash"] = tx.OriginatingTxHash()
-		fields["etxType"] = hexutil.Uint(tx.EtxType())
-	}
-
-	var outBoundEtxs []*RPCTransaction
-	for _, tx := range receipt.OutboundEtxs {
-		outBoundEtxs = append(outBoundEtxs, newRPCTransaction(tx, blockHash, blockNumber, index, big.NewInt(0), s.b.NodeLocation()))
-	}
-	if len(receipt.OutboundEtxs) > 0 {
-		fields["outboundEtxs"] = outBoundEtxs
-	}
-	// Assign the effective gas price paid
-	header, err := s.b.HeaderByHash(ctx, blockHash)
-	if err != nil {
-		return nil, err
-	}
-	gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
-	fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
-
-	// Assign receipt status or post state.
-	if len(receipt.PostState) > 0 {
-		fields["root"] = hexutil.Bytes(receipt.PostState)
-	} else {
-		fields["status"] = hexutil.Uint(receipt.Status)
-	}
-	if receipt.Logs == nil {
-		fields["logs"] = [][]*types.Log{}
-	}
-	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if !receipt.ContractAddress.Equal(common.Zero) && !receipt.ContractAddress.Equal(common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress.Hex()
-	}
-	return fields, nil
 }
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.

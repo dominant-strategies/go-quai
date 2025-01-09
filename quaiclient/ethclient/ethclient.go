@@ -193,8 +193,6 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 		return nil, false, err
 	} else if json == nil {
 		return nil, false, quai.NotFound
-	} else if _, r, _ := json.tx.GetEcdsaSignatureValues(); r == nil && json.tx.Type() != types.ExternalTxType {
-		return nil, false, fmt.Errorf("server returned transaction without signature")
 	}
 	if json.From != nil && json.BlockHash != nil {
 		setSenderFromServer(json.tx, *json.From, *json.BlockHash)

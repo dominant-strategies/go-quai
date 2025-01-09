@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"testing"
@@ -44,7 +45,7 @@ func woTestData() (*WorkObject, common.Hash) {
 	wo.woHeader.SetTime(uint64(1))
 	wo.woHeader.SetNonce(EncodeNonce(uint64(1)))
 	wo.woHeader.SetLock(0)
-
+	wo.woHeader.SetData([]byte{0, 1, 2, 3})
 	wo.woBody = EmptyWorkObjectBody()
 	return wo, wo.Hash()
 }
@@ -389,6 +390,19 @@ func assertUncleHash(t *testing.T, uncleNum int, expectedUncleHash common.Hash, 
 		require.NotEqual(t, expectedUncleHash, wo.Header().UncleHash(), "Uncle hashes do not create the expected root hash")
 		require.NotEqual(t, expectedWoHash, wo.Hash(), "Uncle hashes do not create the expected WorkObject hash")
 	}
+}
+
+func FuzzDataHash(f *testing.F) {
+	header, _ := woTestData()
+	f.Add(testByte)
+	f.Add(header.Data())
+	f.Fuzz(func(t *testing.T, b []byte) {
+		localHeader, hash := headerTestData()
+		if !bytes.Equal(localHeader.extra, b) {
+			localHeader.extra = b
+			require.NotEqual(t, localHeader.Hash(), hash, "Hash equal for extra \noriginal: %v, modified: %v", header.Data(), b)
+		}
+	})
 }
 
 func fuzzHash(f *testing.F, getField func(*WorkObjectHeader) common.Hash, setField func(*WorkObjectHeader, common.Hash)) {

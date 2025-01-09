@@ -191,6 +191,8 @@ var (
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
 	BaseFeeMultiplier             = big.NewInt(50)
+
+	CoinbaseEpochBlocks uint64 = 25 // Maximum number of blocks in a coinbase tranche
 )
 
 func init() {
@@ -221,7 +223,11 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 }
 
 func MinGasLimit(number uint64) uint64 {
-	return 12000000
+	if number < TimeToStartTx {
+		return 0
+	} else {
+		return 12000000
+	}
 }
 
 // Gas calculation functions
@@ -264,6 +270,8 @@ func CalculateGasWithStateScaling(stateSize, contractSize *big.Int, baseRate uin
 	var scalingFactor *big.Int
 	if stateSize.Sign() != 0 {
 		scalingFactor = common.LogBig(stateSize)
+	} else {
+		return baseRate
 	}
 	if contractSize.Sign() != 0 {
 		logContractSize := common.LogBig(contractSize)
