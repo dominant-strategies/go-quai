@@ -10,27 +10,27 @@ import (
 	"modernc.org/mathutil"
 )
 
-func CalculateReward(parent *types.WorkObject, header *types.WorkObjectHeader) *big.Int {
+func CalculateReward(header *types.WorkObjectHeader, difficulty *big.Int, exchangeRate *big.Int) *big.Int {
 	var reward *big.Int
 	if header.PrimaryCoinbase().IsInQiLedgerScope() {
-		reward = new(big.Int).Set(CalculateQiReward(parent.WorkObjectHeader()))
+		reward = new(big.Int).Set(CalculateQiReward(header, difficulty))
 	} else {
-		reward = new(big.Int).Set(CalculateQuaiReward(parent))
+		reward = new(big.Int).Set(CalculateQuaiReward(difficulty, exchangeRate))
 	}
 
 	return reward
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
-func QiToQuai(parent *types.WorkObject, qiAmt *big.Int) *big.Int {
-	quaiByQi := new(big.Int).Mul(CalculateQuaiReward(parent), qiAmt)
-	return new(big.Int).Quo(quaiByQi, CalculateQiReward(parent.WorkObjectHeader()))
+func QiToQuai(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.Int, qiAmt *big.Int) *big.Int {
+	quaiByQi := new(big.Int).Mul(CalculateQuaiReward(difficulty, exchangeRate), qiAmt)
+	return new(big.Int).Quo(quaiByQi, CalculateQiReward(block.WorkObjectHeader(), difficulty))
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
-func QuaiToQi(header *types.WorkObject, quaiAmt *big.Int) *big.Int {
-	qiByQuai := new(big.Int).Mul(CalculateQiReward(header.WorkObjectHeader()), quaiAmt)
-	return new(big.Int).Quo(qiByQuai, CalculateQuaiReward(header))
+func QuaiToQi(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.Int, quaiAmt *big.Int) *big.Int {
+	qiByQuai := new(big.Int).Mul(CalculateQiReward(block.WorkObjectHeader(), difficulty), quaiAmt)
+	return new(big.Int).Quo(qiByQuai, CalculateQuaiReward(difficulty, exchangeRate))
 }
 
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
@@ -45,12 +45,12 @@ func QuaiToQi(header *types.WorkObject, quaiAmt *big.Int) *big.Int {
 // k_quai += alpha * (x_b_star / x_d - 1) * k_quai
 // spaces = [{"K Qi": state["K Qi"], "K Quai": k_quai}, spaces[1]]
 // return spaces
-func CalculateKQuai(parent *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *big.Int {
+func CalculateKQuai(block *types.WorkObject, parentExchangeRate *big.Int, minerDifficulty *big.Int, beta0 *big.Int) *big.Int {
 	// Set kQuai to the exchange rate from the header
-	kQuai := new(big.Int).Set(parent.ExchangeRate()) // in Its
+	kQuai := new(big.Int).Set(parentExchangeRate) // in Its
 
 	// Calculate log of the difficulty
-	d2 := LogBig(parent.Difficulty())
+	d2 := LogBig(minerDifficulty)
 
 	// Multiply beta0 and d2
 	num := new(big.Int).Mul(beta0, d2)
@@ -59,7 +59,7 @@ func CalculateKQuai(parent *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *b
 	negnum := new(big.Int).Neg(num)
 
 	// Multiply beta1 and the difficulty
-	denom := new(big.Int).Mul(beta1, parent.Difficulty())
+	denom := new(big.Int).Mul(common.Big2e64, minerDifficulty)
 
 	// Divide negnum by denom
 	frac := new(big.Int).Quo(negnum, denom)
@@ -81,8 +81,8 @@ func CalculateKQuai(parent *types.WorkObject, beta0 *big.Int, beta1 *big.Int) *b
 	return final
 }
 
-func CalculateQuaiReward(header *types.WorkObject) *big.Int {
-	numerator := new(big.Int).Mul(header.ExchangeRate(), LogBig(header.Difficulty()))
+func CalculateQuaiReward(difficulty *big.Int, exchangeRate *big.Int) *big.Int {
+	numerator := new(big.Int).Mul(exchangeRate, LogBig(difficulty))
 	reward := new(big.Int).Quo(numerator, common.Big2e64)
 	if reward.Cmp(common.Big0) == 0 {
 		reward = big.NewInt(1)
@@ -91,9 +91,8 @@ func CalculateQuaiReward(header *types.WorkObject) *big.Int {
 }
 
 // CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
-func CalculateQiReward(header *types.WorkObjectHeader) *big.Int {
-	diff := header.Difficulty()
-	qiReward := new(big.Int).Quo(diff, params.OneOverKqi(header.NumberU64()))
+func CalculateQiReward(header *types.WorkObjectHeader, difficulty *big.Int) *big.Int {
+	qiReward := new(big.Int).Quo(difficulty, params.OneOverKqi(header.NumberU64()))
 	if qiReward.Cmp(common.Big0) == 0 {
 		qiReward = big.NewInt(1)
 	}

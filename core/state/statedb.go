@@ -49,6 +49,10 @@ var (
 	emptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	newestEtxKey = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // max hash
 	oldestEtxKey = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffe") // max hash - 1
+
+	// k quai key
+	kQuaiKey     = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffa")
+	updateBitKey = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffb")
 )
 
 type proofList [][]byte
@@ -1308,4 +1312,49 @@ func utxoKey(hash common.Hash, index uint16) []byte {
 	indexBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(indexBytes, index)
 	return append(indexBytes, hash.Bytes()...)
+}
+
+func (s *StateDB) UpdateKQuai(kQuai *big.Int) error {
+	if err := s.trie.TryUpdate(kQuaiKey[:], kQuai.Bytes()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *StateDB) GetKQuai() (*big.Int, error) {
+	kQuai, err := s.trie.TryGet(kQuaiKey[:])
+	if err != nil {
+		return nil, err
+	}
+	if kQuai == nil {
+		return big.NewInt(0), nil
+	}
+	return new(big.Int).SetBytes(kQuai), nil
+}
+
+func (s *StateDB) FreezeKQuai() error {
+	if err := s.trie.TryUpdate(updateBitKey[:], []byte{0}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *StateDB) UnFreezeKQuai() error {
+	if err := s.trie.TryUpdate(updateBitKey[:], []byte{1}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *StateDB) GetUpdateBit() (byte, error) {
+	updateBit, err := s.trie.TryGet(updateBitKey[:])
+	if err != nil {
+		return 0, err
+	}
+	if len(updateBit) > 0 {
+		return updateBit[0], nil
+	} else {
+		// By default the update is allowed
+		return 1, nil
+	}
 }

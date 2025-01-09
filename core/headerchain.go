@@ -53,6 +53,8 @@ type getPendingEtxs func(blockHash common.Hash, hash common.Hash, location commo
 
 type getPrimeBlock func(blockHash common.Hash) *types.WorkObject
 
+type getKQuaiAndUpdateBit func(blockHash common.Hash) (*big.Int, uint8, error)
+
 type HeaderChain struct {
 	config *params.ChainConfig
 
@@ -74,8 +76,9 @@ type HeaderChain struct {
 	headerCache   *lru.Cache[common.Hash, types.WorkObject] // Cache for the most recent block headers
 	numberCache   *lru.Cache[common.Hash, uint64]           // Cache for the most recent block numbers
 
-	fetchPEtxRollup getPendingEtxsRollup
-	fetchPEtx       getPendingEtxs
+	fetchPEtxRollup        getPendingEtxsRollup
+	fetchPEtx              getPendingEtxs
+	fetchKQuaiAndUpdateBit getKQuaiAndUpdateBit
 
 	fetchPrimeBlock getPrimeBlock
 
@@ -102,7 +105,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, primeBlockFetcher getPrimeBlock, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, primeBlockFetcher getPrimeBlock, kQuaiAndUpdateBitGetter getKQuaiAndUpdateBit, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
 
 	nodeCtx := chainConfig.Location.Context()
 
@@ -114,6 +117,7 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 		fetchPEtxRollup:        pEtxsRollupFetcher,
 		fetchPEtx:              pEtxsFetcher,
 		fetchPrimeBlock:        primeBlockFetcher,
+		fetchKQuaiAndUpdateBit: kQuaiAndUpdateBitGetter,
 		logger:                 logger,
 		currentExpansionNumber: currentExpansionNumber,
 	}
@@ -1315,11 +1319,126 @@ func (hc *HeaderChain) ComputeAverageTxFees(parent *types.WorkObject, totalTxFee
 // CalcBaseFee calculates the mininum base fee supplied by the transaction
 // to get inclusion in the next block
 func (hc *HeaderChain) CalcBaseFee(block *types.WorkObject) *big.Int {
-	// If the base fee is calculated is less than the min base fee, then set
-	// this to min base fee
-	minBaseFee := misc.QiToQuai(block, params.MinBaseFeeInQits)
-	minBaseFee = new(big.Int).Div(minBaseFee, big.NewInt(int64(params.TxGas)))
-	return minBaseFee
+	if hc.IsGenesisHash(block.Hash()) {
+		return big.NewInt(0)
+	} else {
+		var exchangeRate *big.Int
+		if hc.IsGenesisHash(block.ParentHash(common.ZONE_CTX)) {
+			exchangeRate = params.ExchangeRate
+		} else {
+			// If the base fee is calculated is less than the min base fee, then set
+			// this to min base fee
+			primeTerminus := hc.GetBlockByHash(block.PrimeTerminusHash())
+			if primeTerminus == nil {
+				return nil
+			} else {
+				exchangeRate = primeTerminus.ExchangeRate()
+			}
+		}
+		minBaseFee := misc.QiToQuai(block, exchangeRate, block.Difficulty(), params.MinBaseFeeInQits)
+		minBaseFee = new(big.Int).Div(minBaseFee, big.NewInt(int64(params.TxGas)))
+		return minBaseFee
+	}
+}
+
+// ApplyQuadraticDiscount applies the slippage based on the historical
+// converted amounts and apply the
+func (hc *HeaderChain) ApplyQuadraticDiscount(valueInt, meanInt *big.Int) *big.Float {
+	value := new(big.Float).SetInt(valueInt)
+	mean := new(big.Float).SetInt(meanInt)
+	tenTimesAverage := new(big.Float).Mul(mean, new(big.Float).SetInt64(10))
+	if value.Cmp(mean) <= 0 {
+		value = new(big.Float).Mul(value, new(big.Float).SetInt64(99))
+		value = new(big.Float).Quo(value, new(big.Float).SetInt64(100))
+		return value
+	} else if value.Cmp(tenTimesAverage) > 0 {
+		return new(big.Float).SetInt64(0)
+	} else {
+		normalizedValue := new(big.Float).Quo(value, tenTimesAverage)
+		normalizedValueSquare := new(big.Float).Mul(normalizedValue, normalizedValue)
+		normalizedValueSquareOverTwo := new(big.Float).Quo(normalizedValueSquare, new(big.Float).SetInt64(2))
+		discountedValue := new(big.Float).Sub(new(big.Float).SetInt64(1), normalizedValueSquareOverTwo)
+		// Make sure that discounted value is greater than zero as a sanity check
+		if discountedValue.Cmp(new(big.Float).SetInt64(0)) <= 0 {
+			return new(big.Float).SetInt64(0)
+		} else {
+			return discountedValue
+		}
+	}
+}
+
+// ComputeConversionFlowAmount computes a moving average conversion flow amount
+func (hc *HeaderChain) ComputeConversionFlowAmount(parent *types.WorkObject, currentBlockConversionAmount *big.Int) *big.Int {
+	prevBlockConversionFlowAmount := parent.ConversionFlowAmount()
+	newConversionFlowAmount := new(big.Int).Mul(prevBlockConversionFlowAmount, big.NewInt(99))
+	newConversionFlowAmount = new(big.Int).Add(newConversionFlowAmount, currentBlockConversionAmount)
+	newConversionFlowAmount = new(big.Int).Div(newConversionFlowAmount, big.NewInt(100))
+	return newConversionFlowAmount
+}
+
+// ComputeMinerDifficulty computes long term moving average of the block difficulty
+func (hc *HeaderChain) ComputeMinerDifficulty(parent *types.WorkObject) *big.Int {
+	// If the block is the goldenage fork 3 block directly return the block difficulty
+	if parent.NumberU64(common.PRIME_CTX) <= params.ControllerKickInBlock {
+		return parent.Difficulty()
+	}
+	newMinerDifficulty := new(big.Int).Mul(parent.MinerDifficulty(), big.NewInt(int64(params.MinerDifficultyWindow)-1))
+	newMinerDifficulty = new(big.Int).Add(newMinerDifficulty, parent.Difficulty())
+	newMinerDifficulty = new(big.Int).Div(newMinerDifficulty, big.NewInt(int64(params.MinerDifficultyWindow)))
+	return newMinerDifficulty
+}
+
+func (hc *HeaderChain) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, error) {
+	return hc.fetchKQuaiAndUpdateBit(hash)
+}
+
+// ComputeKQuaiDiscount calculates the change in the K Quai
+func (hc *HeaderChain) ComputeKQuaiDiscount(block *types.WorkObject) *big.Int {
+	if block.NumberU64(common.PRIME_CTX) <= params.ControllerKickInBlock {
+		return params.StartingKQuaiDiscount
+	}
+	// The idea is that taking the derivative of the K Quai over a 1000 block
+	// window and applying the discount on the conversion flow will offset the
+	// amount of money that can be made by arbitraging the exchange rate
+	// adjustment
+	kQuaiOld := big.NewInt(0)
+	if block.NumberU64(common.PRIME_CTX) <= 1000 {
+		kQuaiOld = params.ExchangeRate
+	} else {
+		prevBlock := hc.GetBlockByNumber(block.NumberU64(common.PRIME_CTX) - 1000)
+		kQuaiOld = prevBlock.ExchangeRate()
+	}
+	// If the discount is between -100 and 100 the discount is applied, if its
+	// more than 100 or less than -100, the whole of conversion amount is
+	// consumed
+	kQuaiDiscount := new(big.Int).Sub(kQuaiOld, block.ExchangeRate())
+	kQuaiDiscount = new(big.Int).Mul(kQuaiDiscount, big.NewInt(100))
+	kQuaiDiscount = new(big.Int).Div(kQuaiDiscount, kQuaiOld)
+	// First check is that the discount value is negative
+	// and cap the values between 0 or 100
+	if kQuaiDiscount.Cmp(big.NewInt(0)) < 0 {
+		if kQuaiDiscount.Cmp(big.NewInt(-100)) < 0 {
+			kQuaiDiscount = big.NewInt(100)
+		} else {
+			kQuaiDiscount = new(big.Int).Mul(kQuaiDiscount, big.NewInt(-1))
+		}
+	} else {
+		if kQuaiDiscount.Cmp(big.NewInt(100)) > 0 {
+			kQuaiDiscount = big.NewInt(100)
+		}
+	}
+	// Read the kQuai discount value stored for the parent
+	parent := hc.GetBlockByHash(block.ParentHash(common.PRIME_CTX))
+	if parent == nil {
+		return nil
+	}
+	kQuaiDiscountParent := parent.KQuaiDiscount()
+	// KQuaiDiscount value that is used is also a ewma with the same frequency as
+	// the exchange rate adjustment
+	newKQuaiDiscount := new(big.Int).Mul(kQuaiDiscountParent, big.NewInt(999))
+	newKQuaiDiscount = new(big.Int).Add(newKQuaiDiscount, kQuaiDiscount)
+	newKQuaiDiscount = new(big.Int).Div(newKQuaiDiscount, big.NewInt(1000))
+	return newKQuaiDiscount
 }
 
 // UpdateEtxEligibleSlices returns the updated etx eligible slices field

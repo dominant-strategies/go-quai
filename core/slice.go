@@ -14,6 +14,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -57,6 +58,7 @@ type CoreBackend interface {
 	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
+	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
 }
 
 type pEtxRetry struct {
@@ -119,7 +121,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.AddGenesisHash(genesisBlock.Hash())
 	}
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, sl.GetPrimeBlock, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger)
+	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, sl.GetPrimeBlock, sl.GetKQuaiAndUpdateBit, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -286,6 +288,207 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 				return nil, ErrSubNotSyncedToDom
 			}
 			sl.inboundEtxsCache.Add(block.Hash(), newInboundEtxs)
+		}
+	}
+
+	if nodeCtx == common.PRIME_CTX {
+		// Until the controller has kicked in, dont update any of the fields,
+		// and make sure that the fields are unchanged from the default value
+		if header.NumberU64(common.PRIME_CTX) <= params.ControllerKickInBlock {
+			if header.KQuaiDiscount().Cmp(params.StartingKQuaiDiscount) != 0 {
+				return nil, fmt.Errorf("invalid newKQuaiDiscount used (remote: %d local: %d)", block.KQuaiDiscount(), params.StartingKQuaiDiscount)
+			}
+			if header.ConversionFlowAmount().Cmp(params.StartingConversionFlowAmount) != 0 {
+				return nil, fmt.Errorf("invalid conversion flow amount used (remote: %d local: %d)", block.ConversionFlowAmount(), params.StartingConversionFlowAmount)
+			}
+			if header.ExchangeRate().Cmp(params.ExchangeRate) != 0 {
+				return nil, fmt.Errorf("invalid exchange rate used (remote: %d local: %d)", block.ExchangeRate(), params.ExchangeRate)
+			}
+		} else {
+
+			parent := sl.hc.GetBlockByHash(header.ParentHash(common.PRIME_CTX))
+			if parent == nil {
+				return nil, errors.New("parent not found")
+			}
+
+			// use the parent exchange rate
+			parentExchangeRate := parent.ExchangeRate()
+
+			// There are 6 steps to the exchange rate calculation
+			// 1. Convert the amounts using the parent exchange rate
+			// 2. Using the parent K Quai apply a discount to the converted amount
+			// 3. Calculate the new exchange rate for this block
+			// 4. Convert the amounts using this newly computed exchange rate
+			// 5. Apply the K Quai discount using the new exchange rate
+			// 6. Apply the quadratic Conversion Flow discount
+
+			///////// Step 1 //////////
+			// Read the conversion flow amount saved for the parent block hash
+			var conversionFlowAmount = parent.ConversionFlowAmount()
+
+			conversionAmountInQuai := big.NewInt(0)
+			for _, etx := range newInboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						conversionAmountInQuai = new(big.Int).Add(conversionAmountInQuai, value)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						value = misc.QiToQuai(parent, parentExchangeRate, parent.MinerDifficulty(), value)
+						conversionAmountInQuai = new(big.Int).Add(conversionAmountInQuai, value)
+					}
+				}
+			}
+
+			// compute and write the conversion flow amount based on the current block
+			currentBlockConversionFlowAmount := sl.hc.ComputeConversionFlowAmount(parent, new(big.Int).Set(conversionAmountInQuai))
+			if block.ConversionFlowAmount().Cmp(currentBlockConversionFlowAmount) != 0 {
+				return nil, fmt.Errorf("invalid conversion flow amount used (remote: %d local: %d)", block.ConversionFlowAmount(), conversionFlowAmount)
+			}
+
+			///////// Step 2 /////////
+			// Apply K Quai discount before applying the quadratic discount, conversionAmount = (1-kQuaiDiscount)*conversionAmountInHash
+			kQuaiDiscount := parent.KQuaiDiscount()
+			conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(conversionAmountInQuai, new(big.Int).Sub(big.NewInt(100), kQuaiDiscount))
+
+			originalEtxValues := make([]*big.Int, len(newInboundEtxs))
+
+			for i, etx := range newInboundEtxs {
+
+				// store the original etx values
+				originalEtxValues[i] = new(big.Int).Set(etx.Value())
+
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						value = misc.QuaiToQi(parent, parentExchangeRate, parent.MinerDifficulty(), value)
+
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, conversionAmountInQuai)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						value = misc.QiToQuai(parent, parentExchangeRate, parent.MinerDifficulty(), value)
+
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, conversionAmountInQuai)
+					}
+					etx.SetValue(value)
+				}
+			}
+
+			//////// Step 3 /////////
+			minerDifficulty := block.MinerDifficulty()
+
+			// save the actual and realized conversion amount
+			actualConversionAmountInQuai := new(big.Int).Set(conversionAmountInQuai)
+			realizedConversionAmountInQuai := new(big.Int).Set(conversionAmountAfterKQuaiDiscount)
+
+			// calculate the token choice set and write it to the disk
+			updatedTokenChoiceSet, err := CalculateTokenChoicesSet(sl.hc, block, parent, parentExchangeRate, newInboundEtxs, actualConversionAmountInQuai, realizedConversionAmountInQuai, minerDifficulty)
+			if err != nil {
+				return nil, err
+			}
+			err = rawdb.WriteTokenChoicesSet(batch, block.Hash(), &updatedTokenChoiceSet)
+			if err != nil {
+				return nil, err
+			}
+
+			// ask the zone for this k quai, need to change the hash that is used to request this info
+			storedExchangeRate, updateBit, err := sl.hc.GetKQuaiAndUpdateBit(parent.ParentHash(common.ZONE_CTX))
+			if err != nil {
+				return nil, err
+			}
+			var exchangeRate *big.Int
+			// update is paused, use the written exchange rate
+			if parent.NumberU64(common.ZONE_CTX) <= params.BlocksPerYear && updateBit == 0 {
+				exchangeRate = storedExchangeRate
+			} else {
+				exchangeRate, err = CalculateBetaFromMiningChoiceAndConversions(sl.hc, parent, parentExchangeRate, updatedTokenChoiceSet)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if block.ExchangeRate().Cmp(exchangeRate) != 0 {
+				return nil, fmt.Errorf("invalid exchange rate used (remote: %d local: %d)", block.ExchangeRate(), exchangeRate)
+			}
+
+			//////// Step 4 ////////
+			newConversionAmountInQuai := big.NewInt(0)
+			for i, etx := range newInboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					// Use the original etx values
+					value := originalEtxValues[i]
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						newConversionAmountInQuai = new(big.Int).Add(newConversionAmountInQuai, value)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						value = misc.QiToQuai(block, exchangeRate, block.Difficulty(), value)
+						newConversionAmountInQuai = new(big.Int).Add(newConversionAmountInQuai, value)
+					}
+					etx.SetValue(value)
+				}
+			}
+
+			//////// Step 5 ///////
+			newkQuaiDiscount := sl.hc.ComputeKQuaiDiscount(block)
+			if newkQuaiDiscount.Cmp(block.KQuaiDiscount()) != 0 {
+				return nil, fmt.Errorf("invalid newKQuaiDiscount used (remote: %d local: %d)", block.ExchangeRate(), exchangeRate)
+			}
+
+			newConversionAmountAfterKQuaiDiscount := new(big.Int).Mul(newConversionAmountInQuai, new(big.Int).Sub(big.NewInt(100), newkQuaiDiscount))
+			for _, etx := range newInboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, newConversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, newConversionAmountInQuai)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, newConversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, newConversionAmountInQuai)
+					}
+					etx.SetValue(value)
+				}
+			}
+
+			/////// Step 6 ////////
+			discountedConversionAmount := sl.hc.ApplyQuadraticDiscount(newConversionAmountAfterKQuaiDiscount, conversionFlowAmount)
+			discountedConversionAmountInInt, _ := discountedConversionAmount.Int64()
+			for _, etx := range newInboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, big.NewInt(discountedConversionAmountInInt))
+						value = new(big.Int).Div(value, newConversionAmountAfterKQuaiDiscount)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, big.NewInt(discountedConversionAmountInInt))
+						value = new(big.Int).Div(value, newConversionAmountAfterKQuaiDiscount)
+					}
+					etx.SetValue(value)
+				}
+			}
 		}
 	}
 
@@ -675,6 +878,21 @@ func (sl *Slice) GetSubManifest(slice common.Location, blockHash common.Hash) (t
 	return sl.subInterface[subIdx].GetManifest(blockHash)
 }
 
+func (sl *Slice) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, error) {
+	// If in zone, read it directly from the database
+	// otherwise, call the sub interface
+	if sl.NodeCtx() != common.ZONE_CTX {
+		// This only works with first expansion or when the first zone is updating the exchange rate
+		return sl.subInterface[0].GetKQuaiAndUpdateBit(hash)
+	} else {
+		block := sl.hc.GetBlockByHash(hash)
+		if block == nil {
+			return nil, 0, errors.New("block cannot be found for the hash supplied in GetKQuaiAndUpdateBit")
+		}
+		return sl.hc.bc.processor.GetKQuaiAndUpdateBit(block)
+	}
+}
+
 // SendPendingEtxsToDom shares a set of pending ETXs with your dom, so he can reference them when a coincident block is found
 func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 	return sl.domInterface.AddPendingEtxs(pEtxs)
@@ -776,7 +994,6 @@ func (sl *Slice) init() error {
 			genesisTermini.SetDomTerminiAtIndex(genesisHash, i)
 		}
 
-		rawdb.WriteBetas(sl.sliceDb, genesisHash, big.NewFloat(0.5), big.NewFloat(0.00083222))
 		newTokenChoiceSet := types.NewTokenChoiceSet()
 		rawdb.WriteTokenChoicesSet(sl.sliceDb, genesisHash, &newTokenChoiceSet)
 
@@ -916,6 +1133,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetThresholdCount(header.ThresholdCount())
 		combinedPendingHeader.Header().SetEtxEligibleSlices(header.EtxEligibleSlices())
 		combinedPendingHeader.Header().SetInterlinkRootHash(header.InterlinkRootHash())
+		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
 		combinedPendingHeader.Header().SetKQuaiDiscount(header.KQuaiDiscount())
 		combinedPendingHeader.Header().SetConversionFlowAmount(header.ConversionFlowAmount())
 		combinedPendingHeader.Header().SetMinerDifficulty(header.MinerDifficulty())
@@ -953,7 +1171,6 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetExtra(header.Extra())
 		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
 		combinedPendingHeader.Header().SetExpansionNumber(header.ExpansionNumber())
-		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
 		combinedPendingHeader.Header().SetAvgTxFees(header.AvgTxFees())
 		combinedPendingHeader.Header().SetTotalFees(header.TotalFees())
 

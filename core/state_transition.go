@@ -33,6 +33,17 @@ import (
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 var suicide = []byte("Suicide")
 
+// conversion related variables
+var (
+	kQuaiSettingAddress = common.HexToAddress("0x00201De0D8854d63121c0cfF96Ae01cD3ef62414", common.Location{0, 0})
+	updateKQuai         = []byte("update")
+	updateKQuaiLen      = len(updateKQuai)
+	freezeKQuai         = []byte("freeze")
+	freezeKQuaiLen      = len(freezeKQuai)
+	unfreezeKQuai       = []byte("unfreeze")
+	unfreezeKQuaiLen    = len(unfreezeKQuai)
+)
+
 /*
 The State Transitioning Model
 
@@ -350,6 +361,51 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber)
 	activePrecompiles := vm.ActivePrecompiles(rules, st.evm.ChainConfig().Location)
 	st.state.PrepareAccessList(msg.From(), msg.To(), activePrecompiles, msg.AccessList(), st.evm.Config.Debug)
+
+	// If the transaction is coming from kQuaiSettingAddress, it can encode information in the data and
+	// perform three things
+	// 1) Set the KQuai exchange rate so that the protocol can use it going forward
+	// from the next block
+	// 2) Freeze the KQuai exchange rate computation, once this is done, the
+	// KQuai controller stops computing until its unforzen
+	// 3) UnFreeze the KQuai exchange rate computation, once this is done, the
+	// KQuai controller, starts computing the KQuai value
+	// This address cannot do anything else
+	if msg.From().Equal(kQuaiSettingAddress) && st.evm.Context.BlockNumber.Uint64() < params.BlocksPerYear {
+		if !st.msg.IsETX() && !contractCreation && len(st.data) > updateKQuaiLen && bytes.Equal(st.data[:updateKQuaiLen], updateKQuai) {
+			kQuaiValue := new(big.Int).SetBytes(st.data[updateKQuaiLen:])
+			err := st.state.UpdateKQuai(kQuaiValue)
+			if err != nil {
+				return nil, fmt.Errorf("unable to update k quai: %v", err)
+			}
+		} else if !st.msg.IsETX() && !contractCreation && len(st.data) == freezeKQuaiLen && bytes.Equal(st.data[:freezeKQuaiLen], freezeKQuai) {
+			err := st.state.FreezeKQuai()
+			if err != nil {
+				return nil, fmt.Errorf("unable to freeze k quai: %v", err)
+			}
+		} else if !st.msg.IsETX() && !contractCreation && len(st.data) == unfreezeKQuaiLen && bytes.Equal(st.data[:unfreezeKQuaiLen], unfreezeKQuai) {
+			err := st.state.UnFreezeKQuai()
+			if err != nil {
+				return nil, fmt.Errorf("unable to un freeze k quai: %v", err)
+			}
+		} else {
+			return nil, fmt.Errorf("invalid data used: %v", st.data)
+		}
+
+		effectiveTip := st.fee()
+		return &ExecutionResult{
+			UsedGas:      st.gasUsed(),
+			UsedState:    0,
+			Err:          nil,
+			ReturnData:   []byte{},
+			Etxs:         nil,
+			QuaiFees:     new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip),
+			ContractAddr: nil,
+		}, nil
+
+	} else if msg.From().Equal(kQuaiSettingAddress) {
+		return nil, fmt.Errorf("transaction is not allowed from the kQuaiSettingAddress after the first year")
+	}
 
 	if !st.msg.IsETX() && !contractCreation && len(st.data) == 27 && bytes.Equal(st.data[:7], suicide) && st.to().Equal(st.msg.From()) {
 		// Caller requests self-destruct
