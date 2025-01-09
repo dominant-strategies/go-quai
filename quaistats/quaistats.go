@@ -1266,21 +1266,30 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 	}
 	parent, err := s.backend.(fullNodeBackend).BlockByHash(context.Background(), block.ParentHash(common.ZONE_CTX))
 	if err != nil {
+		s.backend.Logger().WithField("err", err).Error("Failed to get parent block")
+		return nil
+	}
+
+	// exhange rate
+	primeTerminus, err := s.backend.(fullNodeBackend).BlockByHash(context.Background(), block.PrimeTerminusHash())
+	if err != nil {
 		s.backend.Logger().WithField("err", err).Error("Failed to get prime terminus block")
 		return nil
 	}
 
+	exchangeRate := primeTerminus.ExchangeRate()
+
 	qiType := block.PrimaryCoinbase().IsInQiLedgerScope()
 	difficulty := block.Difficulty().String()
-	quaiPerQi := misc.QiToQuai(parent, big.NewInt(1)).String()
+	quaiPerQi := misc.QiToQuai(parent, exchangeRate, big.NewInt(1)).String()
 	var quaiReward *big.Int
 	var qiReward *big.Int
 	if qiType {
-		qiReward = misc.CalculateReward(parent, block.WorkObjectHeader())
-		quaiReward = misc.QiToQuai(parent, qiReward)
+		qiReward = misc.CalculateReward(block.WorkObjectHeader(), block.MinerDifficulty(), exchangeRate)
+		quaiReward = misc.QiToQuai(parent, exchangeRate, qiReward)
 	} else {
-		quaiReward = misc.CalculateReward(parent, block.WorkObjectHeader())
-		qiReward = misc.QuaiToQi(parent, quaiReward)
+		quaiReward = misc.CalculateReward(block.WorkObjectHeader(), block.MinerDifficulty(), exchangeRate)
+		qiReward = misc.QuaiToQi(parent, exchangeRate, quaiReward)
 	}
 
 	// Assemble and return the block stats
@@ -1298,7 +1307,7 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		QiType:       qiType,
 		UncleCount:   uncleCount,
 		WoCount:      woCount,
-		ExchangeRate: block.ExchangeRate(),
+		ExchangeRate: exchangeRate,
 		BaseFee:      block.BaseFee(),
 		GasLimit:     block.GasLimit(),
 		GasUsed:      block.GasUsed(),

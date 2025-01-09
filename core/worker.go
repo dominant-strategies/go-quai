@@ -598,20 +598,24 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			return nil, fmt.Errorf("primary coinbase is not set")
 		}
 
+		// Since the exchange rates are only calculated on prime blocks, the
+		// prime terminus exchange rate is used
+		exchangeRate := primeTerminus.ExchangeRate()
+
 		// 50% of the fees goes to the calculation  of the averageFees generated,
 		// and this is added to the block rewards
 		halfQuaiFees := new(big.Int).Div(work.quaiFees, common.Big2)
 		halfQiFees := new(big.Int).Div(work.utxoFees, common.Big2)
 
 		// convert the qi fees to quai
-		halfQiFeesInQuai := misc.QiToQuai(block, halfQiFees)
+		halfQiFeesInQuai := misc.QiToQuai(block, exchangeRate, halfQiFees)
 		totalFeesForCapacitor := new(big.Int).Add(halfQuaiFees, halfQiFeesInQuai)
 
 		expectedAvgFees := w.hc.ComputeAverageTxFees(block, totalFeesForCapacitor)
 		work.wo.Header().SetAvgTxFees(expectedAvgFees)
 
 		// Set the total fees collected in this block
-		totalQiFeesInQuai := misc.QiToQuai(block, work.utxoFees)
+		totalQiFeesInQuai := misc.QiToQuai(block, exchangeRate, work.utxoFees)
 		expectedTotalFees := new(big.Int).Add(work.quaiFees, totalQiFeesInQuai)
 		work.wo.Header().SetTotalFees(expectedTotalFees)
 		// The fees from transactions in the block is given, in the block itself
@@ -679,9 +683,8 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			// Once the total entropy is calculated, the block reward is split
 			// between the blocks, uncles and workshares proportional to the block
 			// weight
-			parentOfTargetBlock := w.hc.GetBlockByHash(targetBlock.ParentHash(common.ZONE_CTX))
 			// get the reward in quai
-			blockRewardAtTargetBlock := misc.CalculateQuaiReward(parentOfTargetBlock)
+			blockRewardAtTargetBlock := misc.CalculateQuaiReward(targetBlock.WorkObjectHeader(), targetBlock.MinerDifficulty(), exchangeRate)
 			// add the fee capacitor value
 			blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
 			// add half the fees generated in the block
@@ -704,50 +707,12 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 				} else {
 					originHash = common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation())
 					// convert the quai reward value into Qi
-					shareReward = new(big.Int).Set(misc.QuaiToQi(parentOfTargetBlock, shareReward))
+					shareReward = new(big.Int).Set(misc.QuaiToQi(targetBlock, exchangeRate, shareReward))
 				}
 				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: share.Data()}))
 			}
 		}
 
-	}
-
-	if nodeCtx == common.ZONE_CTX {
-		var exchangeRate *big.Int
-		if w.hc.IsGenesisHash(block.Hash()) {
-			exchangeRate = params.ExchangeRate
-		} else {
-			if block.NumberU64(common.ZONE_CTX) > params.ControllerKickInBlock {
-				// convert map to a slice
-				updatedTokenChoiceSet, err := CalculateTokenChoicesSet(w.hc, block, work.etxs)
-				if err != nil {
-					return nil, err
-				}
-				exchangeRate, _, _, err = CalculateExchangeRate(w.hc, block, updatedTokenChoiceSet)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				exchangeRate = block.ExchangeRate()
-			}
-		}
-		work.wo.Header().SetExchangeRate(exchangeRate)
-
-		for _, etx := range work.etxs {
-			// If the etx is conversion
-			if types.IsConversionTx(etx) {
-				value := etx.Value()
-				// If to is in Qi, convert the value into Qi
-				if etx.To().IsInQiLedgerScope() {
-					value = misc.QuaiToQi(work.wo, value)
-				}
-				// If To is in Quai, convert the value into Quai
-				if etx.To().IsInQuaiLedgerScope() {
-					value = misc.QiToQuai(work.wo, value)
-				}
-				etx.SetValue(value)
-			}
-		}
 	}
 
 	if block.NumberU64(common.ZONE_CTX) < params.TimeToStartTx {
@@ -769,6 +734,35 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	work.coinbaseLockupsDeleted = nil
 	work.coinbaseRotatedEpochs = nil
 	return newWo, nil
+}
+
+func (w *worker) GetKQuaiAndUpdateBit(parent *types.WorkObject) (*big.Int, uint8, error) {
+	// Retrieve the parent state to execute on top and start a prefetcher for
+	// the miner to speed block sealing up a bit.
+	evmRoot := parent.EVMRoot()
+	etxRoot := parent.EtxSetRoot()
+	quaiStateSize := parent.QuaiStateSize()
+	if w.hc.IsGenesisHash(parent.Hash()) {
+		evmRoot = types.EmptyRootHash
+		etxRoot = types.EmptyRootHash
+		quaiStateSize = big.NewInt(0)
+	}
+	state, err := w.hc.bc.processor.StateAt(evmRoot, etxRoot, quaiStateSize)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	kQuai, err := state.GetKQuai()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	updateBit, err := state.GetUpdateBit()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return kQuai, updateBit, nil
 }
 
 // printPendingHeaderInfo logs the pending header information
@@ -1683,6 +1677,194 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	if nodeCtx == common.REGION_CTX {
 		newWo.Header().SetRegionStateRoot(types.EmptyRootHash)
 	}
+	// compute and set the miner difficulty
+	if nodeCtx == common.PRIME_CTX {
+		minerDifficulty := w.hc.ComputeMinerDifficulty(parent)
+		newWo.Header().SetMinerDifficulty(minerDifficulty)
+	}
+
+	// If i write to the state of zone-0-0, this approach wont work in any other zone
+	if nodeCtx == common.PRIME_CTX {
+		// Until the controller has kicked in, dont update any of the fields,
+		// and make sure that the fields are unchanged from the default value
+		if newWo.NumberU64(common.PRIME_CTX) <= params.ControllerKickInBlock {
+			newWo.Header().SetKQuaiDiscount(params.StartingKQuaiDiscount)
+			newWo.Header().SetConversionFlowAmount(params.StartingConversionFlowAmount)
+			newWo.Header().SetExchangeRate(params.ExchangeRate)
+		} else {
+
+			// use the parent exchange rate
+			parentExchangeRate := parent.ExchangeRate()
+
+			// There are 6 steps to the exchange rate calculation
+			// 1. Convert the amounts using the parent exchange rate or the exchange
+			// rate set in the statedb
+			// 2. Using the parent K Quai apply a discount to the converted amount
+			// 3. Calculate the new exchange rate for this block
+			// 4. Convert the amounts using this newly computed exchange rate
+			// 5. Apply the K Quai discount using the new exchange rate
+			// 6. Apply the quadratic Conversion Flow discount
+
+			///////// Step 1 //////////
+			var conversionFlowAmount = parent.ConversionFlowAmount()
+
+			// Read inbound etxs, this needs to be calculated for the pending manifests
+			inboundEtxs := rawdb.ReadInboundEtxs(w.workerDb, parent.Hash())
+
+			// Need a variable to calculate the total hash value that is being converted
+			conversionAmountInQuai := big.NewInt(0)
+			// Calculate the total conversion amount in hash
+			for _, etx := range inboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						conversionAmountInQuai = new(big.Int).Add(conversionAmountInQuai, value)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						value = misc.QiToQuai(parent, parentExchangeRate, value)
+						conversionAmountInQuai = new(big.Int).Add(conversionAmountInQuai, value)
+					}
+				}
+			}
+
+			///////// Step 2 /////////
+			// Apply K Quai discount before applying the quadratic discount, conversionAmount = (1-kQuaiDiscount)*conversionAmountInHash
+			kQuaiDiscount := parent.KQuaiDiscount()
+			conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(conversionAmountInQuai, new(big.Int).Sub(big.NewInt(100), kQuaiDiscount))
+
+			originalEtxValues := make([]*big.Int, len(inboundEtxs))
+
+			for i, etx := range inboundEtxs {
+
+				// store the original etx values
+				originalEtxValues[i] = new(big.Int).Set(etx.Value())
+
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						value = misc.QuaiToQi(parent, parentExchangeRate, value)
+
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, conversionAmountInQuai)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						value = misc.QiToQuai(parent, parentExchangeRate, value)
+
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, conversionAmountInQuai)
+					}
+					etx.SetValue(value)
+				}
+			}
+
+			//////// Step 3 /////////
+			minerDifficulty := newWo.MinerDifficulty()
+
+			// save the actual and realized conversion amount
+			actualConversionAmountInQuai := new(big.Int).Set(conversionAmountInQuai)
+			realizedConversionAmountInQuai := new(big.Int).Set(conversionAmountAfterKQuaiDiscount)
+
+			// convert map to a slice
+			updatedTokenChoiceSet, err := CalculateTokenChoicesSet(w.hc, newWo, parent, parentExchangeRate, inboundEtxs, actualConversionAmountInQuai, realizedConversionAmountInQuai, minerDifficulty)
+			if err != nil {
+				return nil, err
+			}
+			// ask the zone for this k quai, need to change the hash that is used to request this info
+			storedExchangeRate, updateBit, err := w.hc.GetKQuaiAndUpdateBit(parent.ParentHash(common.ZONE_CTX))
+			if err != nil {
+				return nil, err
+			}
+			var exchangeRate *big.Int
+			// update is paused, use the written exchange rate
+			if newWo.NumberU64(common.ZONE_CTX) <= params.BlocksPerYear && updateBit == 0 {
+				exchangeRate = storedExchangeRate
+			} else {
+				exchangeRate, err = CalculateBetaFromMiningChoiceAndConversions(w.hc, parent, exchangeRate, updatedTokenChoiceSet)
+				if err != nil {
+					return nil, err
+				}
+			}
+			// set the calculated exchange rate
+			newWo.Header().SetExchangeRate(exchangeRate)
+
+			//////// Step 4 ////////
+			newConversionAmountInQuai := big.NewInt(0)
+			for i, etx := range inboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					// Use the original etx values
+					value := originalEtxValues[i]
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						newConversionAmountInQuai = new(big.Int).Add(newConversionAmountInQuai, value)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						value = misc.QiToQuai(newWo, exchangeRate, value)
+						newConversionAmountInQuai = new(big.Int).Add(newConversionAmountInQuai, value)
+					}
+					etx.SetValue(value)
+				}
+			}
+
+			//////// Step 5 ///////
+			newkQuaiDiscount := w.hc.ComputeKQuaiDiscount(newWo)
+			newWo.Header().SetKQuaiDiscount(newkQuaiDiscount)
+
+			newConversionAmountAfterKQuaiDiscount := new(big.Int).Mul(newConversionAmountInQuai, new(big.Int).Sub(big.NewInt(100), newkQuaiDiscount))
+			for _, etx := range inboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, newConversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, newConversionAmountInQuai)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, newConversionAmountAfterKQuaiDiscount)
+						value = new(big.Int).Div(value, newConversionAmountInQuai)
+					}
+					etx.SetValue(value)
+				}
+			}
+
+			/////// Step 6 ////////
+			discountedConversionAmount := w.hc.ApplyQuadraticDiscount(newConversionAmountAfterKQuaiDiscount, conversionFlowAmount)
+			discountedConversionAmountInInt, _ := discountedConversionAmount.Int64()
+			for _, etx := range inboundEtxs {
+				// If the etx is conversion
+				if types.IsConversionTx(etx) {
+					value := etx.Value()
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, big.NewInt(discountedConversionAmountInInt))
+						value = new(big.Int).Div(value, newConversionAmountAfterKQuaiDiscount)
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						// Apply the slip to each conversion
+						value = new(big.Int).Mul(value, big.NewInt(discountedConversionAmountInInt))
+						value = new(big.Int).Div(value, newConversionAmountAfterKQuaiDiscount)
+					}
+					etx.SetValue(value)
+				}
+			}
+		}
+	}
+
 	if nodeCtx == common.ZONE_CTX {
 		expansionNumber, err := w.hc.ComputeExpansionNumber(parent)
 		if err != nil {
@@ -1884,11 +2066,13 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 
 	pendingQiTxs := w.txPool.QiPoolPending()
 
+	exchangeRate := primeTerminus.ExchangeRate()
+
 	// Convert these pendingQiTxs fees into Quai fees
 	pendingQiTxsWithQuaiFee := make([]*types.TxWithMinerFee, 0)
 	for _, tx := range pendingQiTxs {
 		// update the fee
-		qiFeeInQuai := misc.QiToQuai(block, tx.MinerFee())
+		qiFeeInQuai := misc.QiToQuai(block, exchangeRate, tx.MinerFee())
 		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), env.qiGasScalingFactor, w.hc.NodeLocation()))))
 		minBaseFee := block.BaseFee()
 		if minerFeeInQuai.Cmp(minBaseFee) < 0 {
@@ -2219,7 +2403,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		return fmt.Errorf("tx %032x has too many ETXs to calculate required gas", tx.Hash())
 	}
 	minimumFeeInQuai := new(big.Int).Mul(big.NewInt(int64(requiredGas)), env.wo.BaseFee())
-	txFeeInQuai := misc.QiToQuai(parent, txFeeInQit)
+
+	exchangeRate := primeTerminus.ExchangeRate()
+
+	txFeeInQuai := misc.QiToQuai(parent, exchangeRate, txFeeInQit)
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 	}

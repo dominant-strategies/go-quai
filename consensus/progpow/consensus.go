@@ -399,6 +399,13 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 	}
 
+	if nodeCtx == common.PRIME_CTX {
+		expectedMinerDifficulty := chain.ComputeMinerDifficulty(parent)
+		if header.MinerDifficulty().Cmp(expectedMinerDifficulty) != 0 {
+			return fmt.Errorf("invalid miner difficulty: have %v, want %v", header.MinerDifficulty(), expectedMinerDifficulty)
+		}
+	}
+
 	if nodeCtx == common.ZONE_CTX {
 		var expectedExpansionNumber uint8
 		expectedExpansionNumber, err := chain.ComputeExpansionNumber(parent)

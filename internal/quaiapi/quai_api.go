@@ -855,7 +855,8 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 		if err != nil {
 			return 0, err
 		}
-		estimatedQiAmount := misc.QuaiToQi(header, args.Value.ToInt())
+		exchangeRate := big.NewInt(0) // TODO: get the actual value from the database
+		estimatedQiAmount := misc.QuaiToQi(header, exchangeRate, args.Value.ToInt())
 		usedGas := uint64(0)
 
 		usedGas += params.TxGas
@@ -928,7 +929,11 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*he
 		return (*hexutil.Big)(s.b.CurrentBlock().BaseFee()), nil
 	} else {
 		quaiBaseFee := s.b.CurrentBlock().BaseFee()
-		qiBaseFee := misc.QuaiToQi(header, quaiBaseFee)
+		primeTerminus := s.b.GetBlockByHash(s.b.CurrentBlock().PrimeTerminusHash())
+		if primeTerminus == nil {
+			return nil, errors.New("prime terminus not found")
+		}
+		qiBaseFee := misc.QuaiToQi(header, primeTerminus.ExchangeRate(), quaiBaseFee)
 		if qiBaseFee.Cmp(big.NewInt(0)) == 0 {
 			// Minimum base fee is 1 qit or smallest unit
 			return (*hexutil.Big)(types.Denominations[0]), nil
@@ -963,7 +968,13 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	currentBaseFee = new(big.Int).Mul(currentBaseFee, big.NewInt(120))
 	currentBaseFee = new(big.Int).Div(currentBaseFee, big.NewInt(100))
 	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), currentBaseFee)
-	feeInQi := misc.QuaiToQi(header, feeInQuai)
+
+	primeTerminus := s.b.GetBlockByHash(s.b.CurrentBlock().PrimeTerminusHash())
+	if primeTerminus == nil {
+		return nil, errors.New("cannot find prime terminus for the current block")
+	}
+	exchangeRate := primeTerminus.ExchangeRate()
+	feeInQi := misc.QuaiToQi(header, exchangeRate, feeInQuai)
 	if feeInQi.Cmp(big.NewInt(0)) == 0 {
 		// Minimum fee is 1 qit or smallest unit
 		return (*hexutil.Big)(types.Denominations[0]), nil
@@ -1277,7 +1288,12 @@ func (s *PublicBlockChainQuaiAPI) QiToQuai(ctx context.Context, qiAmount hexutil
 	} else if header == nil {
 		return nil
 	}
-	return (*hexutil.Big)(misc.QiToQuai(header, qiAmount.ToInt()))
+	primeTerminus := s.b.GetBlockByHash(header.PrimeTerminusHash())
+	if primeTerminus == nil {
+		return nil
+	} else {
+		return (*hexutil.Big)(misc.QiToQuai(header, primeTerminus.ExchangeRate(), qiAmount.ToInt()))
+	}
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
@@ -1301,7 +1317,12 @@ func (s *PublicBlockChainQuaiAPI) QuaiToQi(ctx context.Context, quaiAmount hexut
 	} else if header == nil {
 		return nil
 	}
-	return (*hexutil.Big)(misc.QuaiToQi(header, quaiAmount.ToInt()))
+	primeTerminus := s.b.GetBlockByHash(s.b.CurrentBlock().PrimeTerminusHash())
+	if primeTerminus == nil {
+		return nil
+	} else {
+		return (*hexutil.Big)(misc.QuaiToQi(header, primeTerminus.ExchangeRate(), quaiAmount.ToInt()))
+	}
 }
 
 func (s *PublicBlockChainQuaiAPI) CalcOrder(ctx context.Context, raw hexutil.Bytes) (hexutil.Uint, error) {
