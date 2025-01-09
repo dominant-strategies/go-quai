@@ -391,7 +391,7 @@ func utxoToBlockHeightKey(txHash common.Hash, index uint16) []byte {
 	return append(utxoToBlockHeightPrefix, txHash[:]...)
 }
 
-var CoinbaseLockupKeyLength = len(CoinbaseLockupPrefix) + 2*common.AddressLength + 1 + 4
+const CoinbaseLockupKeyLength = 47 //len(CoinbaseLockupPrefix) + 2*common.AddressLength + 1 + 4
 
 func CoinbaseLockupKey(ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) []byte {
 	epochBytes := make([]byte, 4)

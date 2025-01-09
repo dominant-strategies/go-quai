@@ -256,11 +256,7 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 }
 
 func MinGasLimit(number uint64) uint64 {
-	if number < TimeToStartTx {
-		return 0
-	} else {
-		return 12000000
-	}
+	return 12000000
 }
 
 func OneOverKqi(number uint64) *big.Int {

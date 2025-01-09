@@ -285,6 +285,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	coinbaseLockupEpoch := uint32((blockNumber.Uint64() / params.CoinbaseEpochBlocks) + 1) // zero epoch is an invalid state
 
+	gasUsedForCoinbase := params.TxGas
+	if parent.NumberU64(common.ZONE_CTX) < params.TimeToStartTx {
+		gasUsedForCoinbase = uint64(0)
+	}
+
 	var timeSign, timePrepare, timeQiToQuai, timeQuaiToQi, timeCoinbase, timeEtx, timeTx time.Duration
 	startTimeSenders := time.Now()
 	senders := make(map[common.Hash]*common.InternalAddress) // temporary cache for senders of internal txs
@@ -593,10 +598,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								outputIndex++
 							}
 						}
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
-						if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
-							receipt.GasUsed = params.TxGas
-						}
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					} else if len(tx.Data()) == common.AddressLength+1 || len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
 						contractAddr := common.BytesToAddress(tx.Data()[1:common.AddressLength+1], nodeLocation)
 						internal, err := contractAddr.InternalAndQuaiAddress()
@@ -607,7 +609,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
-							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 						} else {
 							var delegate common.Address
 							if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
@@ -635,15 +637,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								// If we did not delete, we are rotating the epoch and need to store it
 								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 							}
-							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
-							if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
-								receipt.GasUsed = params.TxGas
-							}
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 						}
 					} else {
 						// Coinbase data is either too long or too small
 						// Coinbase reward is lost
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					}
 					receipts = append(receipts, receipt)
 					allLogs = append(allLogs, receipt.Logs...)
@@ -654,14 +653,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					}
 					if len(tx.Data()) == 1 {
 						// Coinbase is valid, no gas used
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
-						if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
-							receipt.GasUsed = params.TxGas
-						}
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					} else if len(tx.Data()) != common.AddressLength+1 && len(tx.Data()) != common.AddressLength+common.AddressLength+1 {
 						// Coinbase data is either too long or too small
 						// Coinbase reward is lost
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					} else { // Quai coinbase lockup contract
 						// Create params for uint256 lockup, uint256 balance, address recipient
 						lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
@@ -679,7 +675,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
-							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 						} else {
 							var delegate common.Address
 							if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
@@ -708,7 +704,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								// If we did not delete, we are rotating the epoch and need to store it
 								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
 							}
-							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: 0, TxHash: tx.Hash()}
+							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 							if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
 								receipt.GasUsed = params.TxGas
 							}
