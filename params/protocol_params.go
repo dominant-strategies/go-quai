@@ -29,7 +29,7 @@ const (
 	PercentGasUsedThreshold uint64 = 90       // Percent Gas used threshold at which the gas limit adjusts
 	GenesisGasLimit         uint64 = 12000000 // Gas limit of the Genesis block.
 
-	StateCeil                 uint64 = 20000000 // Maximum the StateCeil may ever be
+	StateCeil                 uint64 = 50000000 // Maximum the StateCeil may ever be
 	StateLimitBoundDivisor    uint64 = 1024     // The bound divisor of the gas limit, used in update calculations.
 	PercentStateUsedThreshold uint64 = 90       // Percent Gas used threshold at which the gas limit adjusts
 
@@ -158,12 +158,12 @@ const (
 
 var (
 	MaxGossipsubPacketSize             = 3 << 20
-	GasCeil                     uint64 = 30000000
-	ColosseumGasCeil            uint64 = 30000000
-	GardenGasCeil               uint64 = 30000000
-	OrchardGasCeil              uint64 = 30000000
-	LighthouseGasCeil           uint64 = 30000000
-	LocalGasCeil                uint64 = 30000000
+	GasCeil                     uint64 = 50000000
+	ColosseumGasCeil            uint64 = 50000000
+	GardenGasCeil               uint64 = 50000000
+	OrchardGasCeil              uint64 = 50000000
+	LighthouseGasCeil           uint64 = 50000000
+	LocalGasCeil                uint64 = 50000000
 	DurationLimit                      = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	GardenDurationLimit                = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	OrchardDurationLimit               = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
