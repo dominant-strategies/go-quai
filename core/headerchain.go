@@ -1269,15 +1269,20 @@ func (hc *HeaderChain) CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error)
 		return nil, errors.New("parent cannot be found in the CalcMaxBaseFee")
 	}
 	parentBaseFee := parent.BaseFee()
+
+	minBaseFee := hc.CalcMinBaseFee(block)
+	blockBaseFee := block.BaseFee()
+	if blockBaseFee.Cmp(minBaseFee) < 0 {
+		blockBaseFee = new(big.Int).Set(minBaseFee)
+	}
 	// Adjust the max base fee calculation for next block using this formula,
 	// nextBlockBaseFee = blockBaseFee/OneOverBaseFeeControllerAlpha + parentBaseFee
-	baseFee := new(big.Int).Div(block.BaseFee(), params.OneOverBaseFeeControllerAlpha)
+	baseFee := new(big.Int).Div(blockBaseFee, params.OneOverBaseFeeControllerAlpha)
 	baseFee = new(big.Int).Add(baseFee, parentBaseFee)
 
 	// Make sure max base fee is less than 50x of the average base fee
 	baseFee = new(big.Int).Mul(baseFee, params.BaseFeeMultiplier)
 
-	minBaseFee := hc.CalcMinBaseFee(block)
 	if minBaseFee.Cmp(baseFee) >= 0 {
 		baseFee = minBaseFee
 	}
