@@ -419,21 +419,11 @@ func CalcGasLimit(parent *types.WorkObject, gasCeil uint64) uint64 {
 	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
 	limit := parentGasLimit
 
-	var desiredLimit uint64
-	percentGasUsed := parent.GasUsed() * 100 / parent.GasLimit()
-	if percentGasUsed > params.PercentGasUsedThreshold {
-		desiredLimit = gasCeil
-		if limit+delta > desiredLimit {
-			return desiredLimit
-		} else {
-			return limit + delta
-		}
+	//  For the first two months increment the gas limit slowly, then just
+	//  return the max gas limit
+	if parent.NumberU64(common.ZONE_CTX) < 2*params.BlocksPerMonth {
+		return limit + delta
 	} else {
-		desiredLimit = params.MinGasLimit(parent.NumberU64(common.ZONE_CTX))
-		if limit-delta/2 < desiredLimit {
-			return desiredLimit
-		} else {
-			return limit - delta/2
-		}
+		return gasCeil
 	}
 }

@@ -23,21 +23,11 @@ func CalcStateLimit(parent *types.WorkObject, stateCeil uint64) uint64 {
 
 	limit := parentStateLimit
 
-	var desiredLimit uint64
-	percentStateUsed := parent.StateUsed() * 100 / parent.StateLimit()
-	if percentStateUsed > params.PercentStateUsedThreshold {
-		desiredLimit = stateCeil
-		if limit+delta > desiredLimit {
-			return desiredLimit
-		} else {
-			return limit + delta
-		}
+	//  For the first two months increment the gas limit slowly, then just
+	//  return the max gas limit
+	if parent.NumberU64(common.ZONE_CTX) < 2*params.BlocksPerMonth {
+		return limit + delta
 	} else {
-		desiredLimit = params.MinGasLimit(parent.NumberU64(common.ZONE_CTX))
-		if limit-delta/2 < desiredLimit {
-			return desiredLimit
-		} else {
-			return limit - delta/2
-		}
+		return stateCeil
 	}
 }
