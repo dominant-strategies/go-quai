@@ -14,6 +14,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/genallocs"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -659,34 +660,23 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 	var multiSet *multiset.MultiSet
 	if chain.IsGenesisHash(header.ParentHash(nodeCtx)) {
 		multiSet = multiset.New()
-		alloc := core.ReadGenesisAlloc("genallocs/gen_alloc_quai_"+nodeLocation.Name()+".json", progpow.logger)
-		progpow.logger.WithField("alloc", len(alloc)).Info("Allocating genesis accounts")
-
-		for addressString, account := range alloc {
-			addr := common.HexToAddress(addressString, nodeLocation)
-			internal, err := addr.InternalAddress()
-			if err != nil {
-				progpow.logger.WithField("err", err).Error("Provided address in genesis block is out of scope")
-				continue
-			}
-			if addr.IsInQuaiLedgerScope() {
-				state.AddBalance(internal, account.Balance)
-				state.SetCode(internal, account.Code)
-				state.SetNonce(internal, account.Nonce)
-				for key, value := range account.Storage {
-					state.SetState(internal, key, value)
-				}
-			} else {
-				progpow.logger.WithField("address", addr.String()).Error("Provided address in genesis block alloc is not in the Quai ledger scope")
-				continue
-			}
+		alloc, err := genallocs.AllocateGenesisAccounts("genallocs/gen_alloc_quai_" + nodeLocation.Name() + ".json")
+		if err != nil {
+			log.Global.WithField("err", err).Error("Unable to allocate genesis accounts")
+			return nil, 0, err
 		}
+		err = state.AddLockedBalances(header.Number(common.ZONE_CTX), alloc)
+		if err != nil {
+			log.Global.WithField("err", err).Error("Unable to allocate genesis accounts")
+			return nil, 0, err
+		}
+		progpow.logger.WithField("alloc", len(alloc)).Info("Allocated genesis accounts")
+
 		addressOutpointMap := make(map[[20]byte][]*types.OutpointAndDenomination)
-		core.AddGenesisUtxos(chain.Database(), &utxosCreate, nodeLocation, addressOutpointMap, progpow.logger)
 		if chain.Config().IndexAddressUtxos {
 			chain.WriteAddressOutpoints(addressOutpointMap)
-			progpow.logger.Info("Indexed genesis utxos")
 		}
+
 	} else {
 		multiSet = rawdb.ReadMultiSet(chain.Database(), header.ParentHash(nodeCtx))
 	}

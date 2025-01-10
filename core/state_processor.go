@@ -869,9 +869,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 				}
 
 				lockupByte := etx.Data()[0]
-				// if lock up byte is 0, the fork change updates the lockup time
-				var lockup uint64
-				lockup = params.LockupByteToBlockDepth[lockupByte]
+				lockup := params.LockupByteToBlockDepth[lockupByte]
 				if lockup == blockDepth {
 					balance := params.CalculateCoinbaseValueWithLockup(etx.Value(), lockupByte, header.NumberU64(common.ZONE_CTX))
 
@@ -896,8 +894,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 				}
 			}
 
-			var conversionPeriodValid bool
-			conversionPeriodValid = blockDepth == params.ConversionLockPeriod
+			conversionPeriodValid := blockDepth == params.ConversionLockPeriod
 			if types.IsConversionTx(etx) && etx.To().IsInQuaiLedgerScope() && conversionPeriodValid {
 				internal, err := etx.To().InternalAddress()
 				if err != nil {
