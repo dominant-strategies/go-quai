@@ -654,7 +654,8 @@ func TestReceiptsStorage(t *testing.T) {
 
 	for testIter := 0; testIter < 500; testIter++ {
 		// Create random blockNumber.
-		var blockNumber uint64 = rand.Uint64()
+		var blockNumber = rand.Uint64()
+		var numTransactions uint64 = uint64(rand.IntN(128))
 
 		// Create random blockHash.
 		blockHash := common.BytesToHash(make([]byte, 32))
@@ -662,10 +663,9 @@ func TestReceiptsStorage(t *testing.T) {
 			blockHash[byteIdx] = byte(rand.IntN(256))
 		}
 
-		tx1 := createTransaction(1)
-		tx2 := createTransaction(2)
+		transactions := createTransactions(numTransactions)
 
-		receipts := createReceipts(types.Transactions{tx1, tx2}, blockHash, new(big.Int).SetUint64(blockNumber))
+		receipts := createReceipts(transactions, blockHash, new(big.Int).SetUint64(blockNumber))
 
 		if entry := ReadReceipts(db, blockHash, blockNumber, &params.ChainConfig{}); entry != nil {
 			t.Fatalf("Non existent receipts returned: %v", entry)
@@ -682,10 +682,10 @@ func TestReceiptsStorage(t *testing.T) {
 		}
 
 		// Write Block
-		writeBlockForReceipts(db, blockHash, blockNumber, types.Transactions{tx1, tx2})
+		writeBlockForReceipts(db, blockHash, blockNumber, transactions)
 
 		actualReceipts := ReadReceipts(db, blockHash, blockNumber, &params.ChainConfig{})
-		if len(actualReceipts) != 2 {
+		if uint64(len(actualReceipts)) != numTransactions {
 			t.Fatal("Stored receipts not found")
 		}
 
@@ -773,32 +773,36 @@ func TestAncientReceiptsStorage(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	// for testIter := 0; testIter < 500; testIter++ {
-	// var blockNum uint64 = rand.Uint64()
-	// blockHash := common.BytesToHash(make([]byte, 32))
-	// for byteIdx := range blockHash {
-	// 	blockHash[byteIdx] = byte(rand.IntN(256))
-	// }
+	for testIter := uint64(0); testIter < 500; testIter++ {
+		var numTransactions = uint64(rand.IntN(128))
+		var blockHash common.Hash = common.BytesToHash(make([]byte, 32))
+		for byteIdx := range blockHash {
+			blockHash[byteIdx] = byte(rand.IntN(256))
+		}
 
-	var blockNum uint64 = 1
-	var blockHash common.Hash = types.EmptyZoneWorkObject().Hash()
+		transactions := createTransactions(numTransactions)
+		expectedReceipts := createReceipts(transactions, blockHash, new(big.Int).SetUint64(testIter))
+		freezerDb.AppendAncient(testIter, blockHash.Bytes(), expectedReceipts.Bytes(freezerDb.Logger()))
 
-	tx1 := createTransaction(1)
-	tx2 := createTransaction(2)
-	expectedReceipts := createReceipts(types.Transactions{tx1, tx2}, blockHash, new(big.Int).SetUint64(blockNum))
-	freezerDb.AppendAncient(blockNum, blockHash.Bytes(), expectedReceipts.Bytes(freezerDb.Logger()))
+		writeBlockForReceipts(db, blockHash, testIter, transactions)
 
-	txs := types.Transactions{tx1, tx2}
-	writeBlockForReceipts(db, blockHash, blockNum, txs)
+		readReceipts := ReadReceipts(freezerDb, blockHash, testIter, &params.ChainConfig{})
 
-	readReceipts := ReadReceipts(freezerDb, blockHash, blockNum, &params.ChainConfig{})
+		if uint64(len(readReceipts)) != numTransactions {
+			t.Fatal("Stored receipts not found")
+		}
 
-	if len(readReceipts) != 2 {
-		t.Fatal("Stored receipts not found")
+		verifyReceipts(t, expectedReceipts, readReceipts)
+
 	}
+}
 
-	verifyReceipts(t, expectedReceipts, readReceipts)
-	// }
+func createTransactions(maxNonce uint64) types.Transactions {
+	transactions := types.Transactions{}
+	for txIndex := range maxNonce {
+		transactions = append(transactions, createTransaction(txIndex))
+	}
+	return transactions
 }
 
 func verifyReceipts(t *testing.T, expectedReceipts types.Receipts, actualReceipts types.Receipts) {
