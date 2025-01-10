@@ -193,7 +193,7 @@ var (
 
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
-	BaseFeeMultiplier             = big.NewInt(50)
+	BaseFeeMultiplier             = big.NewInt(10)
 
 	ConversionLockPeriod uint64 = 2 * BlocksPerWeek
 )
