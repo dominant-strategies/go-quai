@@ -77,6 +77,7 @@ type Config struct {
 
 	// Genesis nonce used to start the network
 	GenesisNonce uint64 `toml:",omitempty"`
+	GenesisExtra []byte `toml:",omitempty"`
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
