@@ -117,7 +117,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	// different expansion number is only to run experiments
 	if startingExpansionNumber > 0 {
 		var genesisErr error
-		chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.GenesisNonce, config.NodeLocation, startingExpansionNumber, logger)
+		chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.GenesisNonce, config.GenesisExtra, config.NodeLocation, startingExpansionNumber, logger)
 		if genesisErr != nil {
 			return nil, genesisErr
 		}
@@ -126,7 +126,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 			(config.NodeLocation.Region() == 0 && nodeCtx == common.REGION_CTX) ||
 			(bytes.Equal(config.NodeLocation, common.Location{0, 0}) && nodeCtx == common.ZONE_CTX) {
 			var genesisErr error
-			chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.GenesisNonce, config.NodeLocation, startingExpansionNumber, logger)
+			chainConfig, _, genesisErr = core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.GenesisNonce, config.GenesisExtra, config.NodeLocation, startingExpansionNumber, logger)
 			if genesisErr != nil {
 				return nil, genesisErr
 			}

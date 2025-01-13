@@ -161,11 +161,11 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, genesisNonce uint64, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, genesisNonce, nodeLocation, 0, logger)
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, nonce uint64, extra []byte, nodeLocation common.Location, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
+	return SetupGenesisBlockWithOverride(db, genesis, nonce, extra, nodeLocation, 0, logger)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, genesisNonce uint64, nodeLocation common.Location, startingExpansionNumber uint64, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, nonce uint64, extra []byte, nodeLocation common.Location, startingExpansionNumber uint64, logger *log.Logger) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllProgpowProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -174,7 +174,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, genesisN
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			logger.Info("Writing default main-net genesis block")
-			genesis = DefaultGenesisBlock(genesisNonce)
+			genesis = DefaultGenesisBlock(nonce, extra)
 		} else {
 			logger.Info("Writing custom genesis block")
 		}
@@ -189,7 +189,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, genesisN
 	header := rawdb.ReadHeader(db, 0, stored)
 	if _, err := state.New(header.EVMRoot(), header.EtxSetRoot(), header.QuaiStateSize(), state.NewDatabaseWithConfig(db, nil), state.NewDatabaseWithConfig(db, nil), nil, nodeLocation, logger); err != nil {
 		if genesis == nil {
-			genesis = DefaultGenesisBlock(genesisNonce)
+			genesis = DefaultGenesisBlock(nonce, extra)
 		}
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(startingExpansionNumber).Hash()
@@ -351,108 +351,88 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 
 // DefaultGenesisBlock returns the Latest default Genesis block.
 // Currently it returns the DefaultColosseumGenesisBlock.
-func DefaultGenesisBlock(genesisNonce uint64) *Genesis {
-	return DefaultColosseumGenesisBlock("progpow", genesisNonce)
+func DefaultGenesisBlock(nonce uint64, extra []byte) *Genesis {
+	return DefaultColosseumGenesisBlock("progpow", nonce, extra)
 }
 
 // DefaultColosseumGenesisBlock returns the Quai Colosseum testnet genesis block.
-func DefaultColosseumGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
-	if consensusEngine == "blake3" {
-		return &Genesis{
-			Config:     params.Blake3PowColosseumChainConfig,
-			Nonce:      genesisNonce,
-			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   12000000,
-			Difficulty: big.NewInt(2000000),
-		}
-	}
-	return &Genesis{
+func DefaultColosseumGenesisBlock(consensusEngine string, nonce uint64, extra []byte) *Genesis {
+	genesis := &Genesis{
 		Config:     params.ProgpowColosseumChainConfig,
-		Nonce:      6224362036655375007,
-		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
+		Nonce:      nonce,
+		ExtraData:  extra,
 		GasLimit:   12000000,
 		Difficulty: big.NewInt(30000000000),
 	}
+	if consensusEngine == "blake3" {
+		genesis.Config = params.Blake3PowColosseumChainConfig
+		genesis.Difficulty = big.NewInt(2000000)
+	}
+	return genesis
 }
 
 // DefaultGardenGenesisBlock returns the Garden testnet genesis block.
-func DefaultGardenGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
-	if consensusEngine == "blake3" {
-		return &Genesis{
-			Config:     params.Blake3PowGardenChainConfig,
-			Nonce:      genesisNonce,
-			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-			GasLimit:   160000000,
-			Difficulty: big.NewInt(500000),
-		}
-	}
-	return &Genesis{
+func DefaultGardenGenesisBlock(consensusEngine string, nonce uint64, extra []byte) *Genesis {
+	genesis := &Genesis{
 		Config:     params.ProgpowGardenChainConfig,
-		Nonce:      genesisNonce,
-		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353539"),
+		Nonce:      nonce,
+		ExtraData:  extra,
 		GasLimit:   12000000,
 		Difficulty: big.NewInt(300000000),
 	}
+	if consensusEngine == "blake3" {
+		genesis.Config = params.Blake3PowGardenChainConfig
+		genesis.Difficulty = big.NewInt(500000)
+	}
+	return genesis
 }
 
 // DefaultOrchardGenesisBlock returns the Orchard testnet genesis block.
-func DefaultOrchardGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
-	if consensusEngine == "blake3" {
-		return &Genesis{
-			Config:     params.Blake3PowOrchardChainConfig,
-			Nonce:      genesisNonce,
-			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fc"),
-			GasLimit:   12000000,
-			Difficulty: big.NewInt(200000),
-		}
-	}
-	return &Genesis{
+func DefaultOrchardGenesisBlock(consensusEngine string, nonce uint64, extra []byte) *Genesis {
+	genesis := &Genesis{
 		Config:     params.ProgpowOrchardChainConfig,
-		Nonce:      genesisNonce,
-		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353536"),
+		Nonce:      nonce,
+		ExtraData:  extra,
 		GasLimit:   12000000,
 		Difficulty: big.NewInt(30000000000),
 	}
+	if consensusEngine == "blake3" {
+		genesis.Config = params.Blake3PowOrchardChainConfig
+		genesis.Difficulty = big.NewInt(200000)
+	}
+	return genesis
 }
 
 // DefaultLighthouseGenesisBlock returns the Lighthouse testnet genesis block.
-func DefaultLighthouseGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
-	if consensusEngine == "blake3" {
-		return &Genesis{
-			Config:     params.Blake3PowLighthouseChainConfig,
-			Nonce:      genesisNonce,
-			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   12000000,
-			Difficulty: big.NewInt(200000),
-		}
-	}
-	return &Genesis{
+func DefaultLighthouseGenesisBlock(consensusEngine string, nonce uint64, extra []byte) *Genesis {
+	genesis := &Genesis{
 		Config:     params.ProgpowLighthouseChainConfig,
-		Nonce:      genesisNonce,
-		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353537"),
+		Nonce:      nonce,
+		ExtraData:  extra,
 		GasLimit:   12000000,
 		Difficulty: big.NewInt(200000),
 	}
+	if consensusEngine == "blake3" {
+		genesis.Config = params.Blake3PowLighthouseChainConfig
+		genesis.Difficulty = big.NewInt(200000)
+	}
+	return genesis
 }
 
 // DefaultLocalGenesisBlock returns the Local testnet genesis block.
-func DefaultLocalGenesisBlock(consensusEngine string, genesisNonce uint64) *Genesis {
-	if consensusEngine == "blake3" {
-		return &Genesis{
-			Config:     params.Blake3PowLocalChainConfig,
-			Nonce:      0,
-			ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fb"),
-			GasLimit:   12000000,
-			Difficulty: big.NewInt(500000),
-		}
-	}
-	return &Genesis{
+func DefaultLocalGenesisBlock(consensusEngine string, nonce uint64, extra []byte) *Genesis {
+	genesis := &Genesis{
 		Config:     params.ProgpowLocalChainConfig,
-		Nonce:      0,
-		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
+		Nonce:      nonce,
+		ExtraData:  extra,
 		GasLimit:   12000000,
 		Difficulty: big.NewInt(1000),
 	}
+	if consensusEngine == "blake3" {
+		genesis.Config = params.Blake3PowLocalChainConfig
+		genesis.Difficulty = big.NewInt(500000)
+	}
+	return genesis
 }
 
 // DeveloperGenesisBlock returns the 'quai --dev' genesis block.
