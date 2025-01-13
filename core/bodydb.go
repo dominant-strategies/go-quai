@@ -47,7 +47,7 @@ type BodyDb struct {
 	logger *log.Logger
 }
 
-func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
+func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
 	nodeCtx := chainConfig.Location.Context()
 
 	bc := &BodyDb{
@@ -69,7 +69,11 @@ func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chai
 
 	// only start the state processor in zone
 	if nodeCtx == common.ZONE_CTX && bc.ProcessingState() {
-		bc.processor = NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig, txLookupLimit)
+		processor, err := NewStateProcessor(chainConfig, hc, engine, vmConfig, cacheConfig, txLookupLimit)
+		if err != nil {
+			return nil, err
+		}
+		bc.processor = processor
 		vm.InitializePrecompiles(chainConfig.Location)
 	}
 

@@ -1391,6 +1391,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	}
 	if viper.IsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = viper.GetUint64(TxLookupLimitFlag.Name)
+		log.Global.WithField("lookuplimit", cfg.TxLookupLimit).Print("Txlookup limit defaults")
 	}
 	if viper.IsSet(CacheFlag.Name) || viper.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = viper.GetInt(CacheFlag.Name) * viper.GetInt(CacheTrieFlag.Name) / 100

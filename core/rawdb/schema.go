@@ -143,28 +143,21 @@ var FreezerNoSnappy = map[string]bool{
 	freezerDifficultyTable: true,
 }
 
-// LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
-// fields.
-type LegacyTxLookupEntry struct {
-	BlockHash  common.Hash
+type TxLookupEntry struct {
 	BlockIndex uint64
+	BlockHash  common.Hash
 	Index      uint64
 }
 
-func (l LegacyTxLookupEntry) ProtoEncode() (ProtoLegacyTxLookupEntry, error) {
-	blockHash := l.BlockHash.ProtoEncode()
-	return ProtoLegacyTxLookupEntry{
-		Hash:       blockHash,
+// Only the block index is encoded to save data (pursuant to database V6)
+func (l TxLookupEntry) ProtoEncode() (ProtoTxLookupEntry, error) {
+	return ProtoTxLookupEntry{
 		BlockIndex: l.BlockIndex,
-		Index:      l.Index,
 	}, nil
 }
 
-func (l *LegacyTxLookupEntry) ProtoDecode(data *ProtoLegacyTxLookupEntry) error {
-	l.BlockHash = common.Hash{}
-	l.BlockHash.ProtoDecode(data.Hash)
+func (l *TxLookupEntry) ProtoDecode(data *ProtoTxLookupEntry) error {
 	l.BlockIndex = data.BlockIndex
-	l.Index = data.Index
 	return nil
 }
 

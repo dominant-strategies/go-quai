@@ -81,7 +81,7 @@ type Core struct {
 	logger *log.Logger
 }
 
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.WorkObject) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Core, error) {
+func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.WorkObject) bool, txConfig *TxPoolConfig, txLookupLimit uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Core, error) {
 	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, currentExpansionNumber, genesisBlock, engine, cacheConfig, vmConfig, genesis, logger)
 	if err != nil {
 		return nil, err
@@ -1104,7 +1104,8 @@ func (c *Core) Snapshots() *snapshot.Tree {
 }
 
 func (c *Core) TxLookupLimit() uint64 {
-	return c.Processor().txLookupLimit
+	// return c.Processor().txLookupLimit
+	return 0
 }
 
 func (c *Core) SetExtra(extra []byte) error {
@@ -1217,7 +1218,7 @@ func (c *Core) GetVMConfig() *vm.Config {
 
 // GetTransactionLookup retrieves the lookup associate with the given transaction
 // hash from the cache or database.
-func (c *Core) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
+func (c *Core) GetTransactionLookup(hash common.Hash) *rawdb.TxLookupEntry {
 	return c.sl.hc.bc.processor.GetTransactionLookup(hash)
 }
 

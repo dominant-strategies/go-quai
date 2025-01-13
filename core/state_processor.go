@@ -116,16 +116,15 @@ type StateProcessor struct {
 	stateCache                          state.Database                          // State database to reuse between imports (contains state cache)
 	etxCache                            state.Database                          // ETX database to reuse between imports (contains ETX cache)
 	receiptsCache                       *lru.Cache[common.Hash, types.Receipts] // Cache for the most recent receipts per block
-	txLookupCache                       *lru.Cache[common.Hash, rawdb.LegacyTxLookupEntry]
+	txLookupCache                       *lru.Cache[common.Hash, rawdb.TxLookupEntry]
 	validator                           Validator // Block and state validator interface
 	prefetcher                          Prefetcher
 	vmConfig                            vm.Config
 	minFee, maxFee, avgFee, numElements *big.Int
 
-	scope         event.SubscriptionScope
-	wg            sync.WaitGroup // chain processing wait group for shutting down
-	quit          chan struct{}  // state processor quit channel
-	txLookupLimit uint64
+	scope event.SubscriptionScope
+	wg    sync.WaitGroup // chain processing wait group for shutting down
+	quit  chan struct{}  // state processor quit channel
 
 	snaps  *snapshot.Tree
 	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
@@ -134,7 +133,7 @@ type StateProcessor struct {
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig, txLookupLimit *uint64) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig, txLookupLimit uint64) (*StateProcessor, error) {
 
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
@@ -162,10 +161,16 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 	}
 	sp.validator = NewBlockValidator(config, hc, engine)
 
-	receiptsCache, _ := lru.New[common.Hash, types.Receipts](receiptsCacheLimit)
+	receiptsCache, err := lru.New[common.Hash, types.Receipts](receiptsCacheLimit)
+	if err != nil {
+		return nil, err
+	}
 	sp.receiptsCache = receiptsCache
 
-	txLookupCache, _ := lru.New[common.Hash, rawdb.LegacyTxLookupEntry](txLookupCacheLimit)
+	txLookupCache, err := lru.New[common.Hash, rawdb.TxLookupEntry](txLookupCacheLimit)
+	if err != nil {
+		return nil, err
+	}
 	sp.txLookupCache = txLookupCache
 
 	// Load any existing snapshot, regenerating it if loading failed
@@ -174,9 +179,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 		head := hc.CurrentHeader()
 		sp.snaps, _ = snapshot.New(hc.headerDb, sp.stateCache.TrieDB(), sp.cacheConfig.SnapshotLimit, head.EVMRoot(), true, false, sp.logger)
 	}
-	if txLookupLimit != nil {
-		sp.txLookupLimit = *txLookupLimit
-	}
+	// sp.txLookupLimit = txLookupLimit
 	// If periodic cache journal is required, spin it up.
 	if sp.cacheConfig.TrieCleanRejournal > 0 {
 		if sp.cacheConfig.TrieCleanRejournal < time.Minute {
@@ -203,7 +206,7 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 			etxTrieDb.SaveCachePeriodically(sp.cacheConfig.ETXTrieCleanJournal, sp.cacheConfig.TrieCleanRejournal, sp.quit)
 		}()
 	}
-	return sp
+	return sp, nil
 }
 
 type UtxosCreatedDeleted struct {
@@ -2037,7 +2040,7 @@ func (p *StateProcessor) GetReceiptsByHash(hash common.Hash) types.Receipts {
 
 // GetTransactionLookup retrieves the lookup associate with the given transaction
 // hash from the cache or database.
-func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
+func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.TxLookupEntry {
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if lookup, exist := p.txLookupCache.Get(hash); exist {
 		return &lookup
@@ -2046,7 +2049,7 @@ func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxL
 	if tx == nil {
 		return nil
 	}
-	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
+	lookup := &rawdb.TxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
 	p.txLookupCache.Add(hash, *lookup)
 	return lookup
 }
