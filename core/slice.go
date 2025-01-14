@@ -949,6 +949,7 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
 		combinedPendingHeader.Header().SetQiToQuai(header.QiToQuai())
 		combinedPendingHeader.Header().SetQuaiToQi(header.QuaiToQi())
+		combinedPendingHeader.Header().SetAvgTxFees(header.AvgTxFees())
 
 		combinedPendingHeader.Body().SetTransactions(header.Transactions())
 		combinedPendingHeader.Body().SetOutboundEtxs(header.OutboundEtxs())

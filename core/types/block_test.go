@@ -63,6 +63,7 @@ func headerTestData() (*Header, common.Hash) {
 		exchangeRate:             big.NewInt(123456789),
 		quaiToQi:                 big.NewInt(123456789),
 		qiToQuai:                 big.NewInt(123456789),
+		avgTxFees:                big.NewInt(1000000),
 	}
 
 	return header, header.Hash()
@@ -70,7 +71,7 @@ func headerTestData() (*Header, common.Hash) {
 
 func TestHeaderHash(t *testing.T) {
 	_, hash := headerTestData()
-	correctHash := common.HexToHash("0x708a539748c808aa9c7c706c2828ebe802bad88f95980fd7eda2d6c453c78847")
+	correctHash := common.HexToHash("0xc5d4357ff740716748f9712dc17aabaa75811a6dea01df2ab6fb27123ad1fbef")
 	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 
@@ -341,4 +342,10 @@ func FuzzHeaderQiToQuai(f *testing.F) {
 	fuzzHeaderBigIntHash(f,
 		func(h *Header) *big.Int { return h.qiToQuai },
 		func(h *Header, bi *big.Int) { h.qiToQuai = bi })
+}
+
+func FuzzHeaderAvgTxFees(f *testing.F) {
+	fuzzHeaderBigIntHash(f,
+		func(h *Header) *big.Int { return h.avgTxFees },
+		func(h *Header, bi *big.Int) { h.avgTxFees = bi })
 }

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -635,39 +634,17 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			return nil, fmt.Errorf("secondary coinbase is not set")
 		}
 
-		quaiCoinbase, err := work.wo.QuaiCoinbase()
-		if err != nil {
-			return nil, err
-		}
-		qiCoinbase, err := work.wo.QiCoinbase()
-		if err != nil {
-			return nil, err
-		}
-		//lockupByte := work.wo.Lock()
-		lockupData := work.wo.Data()
+		// 50% of the fees goes to the calculation  of the averageFees generated,
+		// and this is added to the block rewards
+		halfQuaiFees := new(big.Int).Div(work.quaiFees, common.Big2)
+		halfQiFees := new(big.Int).Div(work.utxoFees, common.Big2)
 
-		// If the primary coinbase belongs to a ledger and there is no fees
-		// for other ledger, there is no etxs emitted for the other ledger
-		if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), quaiCoinbase.Bytes()) {
-			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: lockupData})
-			work.etxs = append(work.etxs, coinbaseFeeEtx)
-			if work.utxoFees.Cmp(big.NewInt(0)) != 0 {
-				secondaryCoinbase := w.GetSecondaryCoinbase()
-				// TODO: Perhaps it makes more sense not to send fee rewards to the lockup contract?
-				coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: w.secondaryCoinbase, Data: lockupData})
-				work.etxs = append(work.etxs, coinbaseFeeEtx)
-			}
-		} else if bytes.Equal(work.wo.PrimaryCoinbase().Bytes(), qiCoinbase.Bytes()) {
-			primaryCoinbase := w.GetPrimaryCoinbase()
-			coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &primaryCoinbase, Gas: params.TxGas, Value: work.utxoFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQi(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: primaryCoinbase, Data: lockupData})
-			work.etxs = append(work.etxs, coinbaseFeeEtx)
-			if work.quaiFees.Cmp(big.NewInt(0)) != 0 {
-				secondaryCoinbase := w.GetSecondaryCoinbase()
-				coinbaseFeeEtx := types.NewTx(&types.ExternalTx{To: &secondaryCoinbase, Gas: params.TxGas, Value: work.quaiFees, EtxType: types.CoinbaseType, OriginatingTxHash: common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation()), ETXIndex: uint16(len(work.etxs)), Sender: secondaryCoinbase, Data: lockupData})
-				work.etxs = append(work.etxs, coinbaseFeeEtx)
-			}
-		}
+		// convert the qi fees to quai
+		halfQiFeesInQuai := misc.QiToQuai(block, halfQiFees)
+		totalFeesForCapacitor := new(big.Int).Add(halfQuaiFees, halfQiFeesInQuai)
+
+		expectedAvgFees := w.hc.ComputeAverageTxFees(block, totalFeesForCapacitor)
+		work.wo.Header().SetAvgTxFees(expectedAvgFees)
 
 		// The fees from transactions in the block is given, in the block itself
 		// go through the last WorkSharesInclusionDepth of blocks
@@ -737,6 +714,8 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 			parentOfTargetBlock := w.hc.GetBlockByHash(targetBlock.ParentHash(common.ZONE_CTX))
 			// get the reward in quai
 			blockRewardAtTargetBlock := misc.CalculateQuaiReward(parentOfTargetBlock)
+			// add the fee capacitor value
+			blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
 
 			// Add an etx for each workshare for it to be rewarded
 			for i, share := range sharesAtTargetBlockDepth {
@@ -757,7 +736,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool, txs t
 					// convert the quai reward value into Qi
 					shareReward = new(big.Int).Set(misc.QuaiToQi(parentOfTargetBlock, shareReward))
 				}
-				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: []byte{share.Lock()}}))
+				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: share.Data()}))
 			}
 		}
 

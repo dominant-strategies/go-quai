@@ -1325,6 +1325,17 @@ func (hc *HeaderChain) CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error)
 	return baseFee, nil
 }
 
+// ComputeAverageTxFees computes the ema of the half of the total fees generated in quai over past 100 blocks
+func (hc *HeaderChain) ComputeAverageTxFees(parent *types.WorkObject, totalTxFeesInQuai *big.Int) *big.Int {
+	if rawdb.IsGenesisHash(hc.headerDb, parent.Hash()) {
+		return big.NewInt(0)
+	}
+	newAvgTxFees := new(big.Int).Mul(parent.AvgTxFees(), big.NewInt(99))
+	newAvgTxFees = new(big.Int).Add(newAvgTxFees, totalTxFeesInQuai)
+	newAvgTxFees = new(big.Int).Div(newAvgTxFees, big.NewInt(100))
+	return newAvgTxFees
+}
+
 // CalcMinBaseFee calculates the mininum base fee supplied by the transaction
 // to get inclusion in the next block
 func (hc *HeaderChain) CalcMinBaseFee(block *types.WorkObject) *big.Int {
