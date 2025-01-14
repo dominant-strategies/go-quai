@@ -88,7 +88,6 @@ func NewEmptyQuaiTx() *Transaction {
 	inner := &QuaiTx{
 		ChainID:  new(big.Int),
 		Nonce:    *new(uint64),
-		MinerTip: new(big.Int),
 		GasPrice: new(big.Int),
 		Gas:      *new(uint64),
 		To:       &common.Address{},
@@ -125,7 +124,6 @@ type TxData interface {
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
-	minerTip() *big.Int
 	etxType() uint64
 	value() *big.Int
 	nonce() uint64
@@ -173,7 +171,6 @@ func (tx *Transaction) ProtoEncode() (*ProtoTransaction, error) {
 			protoTx.Data = tx.Data()
 		}
 		protoTx.ChainId = tx.ChainId().Bytes()
-		protoTx.MinerTip = tx.MinerTip().Bytes()
 		protoTx.GasPrice = tx.GasPrice().Bytes()
 		protoTx.AccessList = tx.AccessList().ProtoEncode()
 		V, R, S := tx.GetEcdsaSignatureValues()
@@ -260,9 +257,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if protoTx.Value == nil {
 			return errors.New("missing required field 'Value' in ProtoTransaction")
 		}
-		if protoTx.MinerTip == nil {
-			return errors.New("missing required field 'MinerTip' in ProtoTransaction")
-		}
 		if protoTx.GasPrice == nil {
 			return errors.New("missing required field 'GasPrice' in ProtoTransaction")
 		}
@@ -283,7 +277,6 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		}
 		quaiTx.ChainID = new(big.Int).SetBytes(protoTx.GetChainId())
 		quaiTx.Nonce = protoTx.GetNonce()
-		quaiTx.MinerTip = new(big.Int).SetBytes(protoTx.GetMinerTip())
 		quaiTx.GasPrice = new(big.Int).SetBytes(protoTx.GetGasPrice())
 		quaiTx.Gas = protoTx.GetGas()
 		if len(protoTx.GetValue()) == 0 {
@@ -459,7 +452,6 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		if tx.To() != nil {
 			protoTxSigningData.To = tx.To().Bytes()
 		}
-		protoTxSigningData.MinerTip = tx.MinerTip().Bytes()
 		protoTxSigningData.GasPrice = tx.GasPrice().Bytes()
 	case ExternalTxType:
 		return protoTxSigningData
@@ -603,9 +595,6 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 
 // GasPrice returns the gas price of the transaction.
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
-
-// MinerTip returns the minerTip per gas of the transaction.
-func (tx *Transaction) MinerTip() *big.Int { return new(big.Int).Set(tx.inner.minerTip()) }
 
 // EtxType returns the type of etx
 func (tx *Transaction) EtxType() uint64 { return tx.inner.etxType() }
@@ -953,7 +942,7 @@ func NewTxWithMinerFee(tx *Transaction, qiTxFee *big.Int, received time.Time) (*
 			received: received,
 		}, nil
 	}
-	// minerFee is now the baseFee and minerTip
+	// minerFee is now the gas price mentioned in the transaction
 	minerFee := tx.GasPrice()
 	return &TxWithMinerFee{
 		tx:       tx,
@@ -1138,7 +1127,6 @@ type Message struct {
 	amount     *big.Int
 	gasLimit   uint64
 	gasPrice   *big.Int
-	minerTip   *big.Int
 	data       []byte
 	accessList AccessList
 	isETX      bool
@@ -1148,7 +1136,7 @@ type Message struct {
 	lock       *big.Int
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, minerTip *big.Int, data []byte, accessList AccessList, isETX bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, isETX bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
@@ -1156,7 +1144,6 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		amount:     amount,
 		gasLimit:   gasLimit,
 		gasPrice:   gasPrice,
-		minerTip:   minerTip,
 		data:       data,
 		accessList: accessList,
 		isETX:      isETX,
@@ -1169,7 +1156,6 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
 		gasLimit:   tx.Gas(),
 		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		minerTip:   new(big.Int).Set(tx.MinerTip()),
 		to:         tx.To(),
 		amount:     tx.Value(),
 		data:       tx.Data(),
@@ -1195,7 +1181,6 @@ func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *c
 	msg := Message{
 		gasLimit:   tx.Gas(),
 		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		minerTip:   new(big.Int).Set(tx.MinerTip()),
 		to:         tx.To(),
 		amount:     tx.Value(),
 		data:       tx.Data(),
@@ -1240,7 +1225,6 @@ func CompareFeeBetweenTx(a, b *Transaction) int {
 func (m Message) From() common.Address      { return m.from }
 func (m Message) To() *common.Address       { return m.to }
 func (m Message) GasPrice() *big.Int        { return m.gasPrice }
-func (m Message) MinerTip() *big.Int        { return m.minerTip }
 func (m Message) Value() *big.Int           { return m.amount }
 func (m Message) Gas() uint64               { return m.gasLimit }
 func (m Message) Nonce() uint64             { return m.nonce }

@@ -107,7 +107,6 @@ func (tx *QiTx) workNonce() *BlockNonce                  { return tx.WorkNonce }
 func (tx *QiTx) accessList() AccessList                  { panic("Qi TX does not have accessList") }
 func (tx *QiTx) data() []byte                            { return tx.Data }
 func (tx *QiTx) gas() uint64                             { panic("Qi TX does not have gas") }
-func (tx *QiTx) minerTip() *big.Int                      { panic("Qi TX does not have minerTip") }
 func (tx *QiTx) gasPrice() *big.Int                      { panic("Qi TX does not have gasPrice") }
 func (tx *QiTx) value() *big.Int                         { panic("Qi TX does not have value") }
 func (tx *QiTx) nonce() uint64                           { panic("Qi TX does not have nonce") }

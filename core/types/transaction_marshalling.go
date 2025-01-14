@@ -34,7 +34,6 @@ type txJSON struct {
 	// Common transaction fields:
 	Nonce         *hexutil.Uint64          `json:"nonce"`
 	GasPrice      *hexutil.Big             `json:"gasPrice"`
-	MinerTip      *hexutil.Big             `json:"minerTip"`
 	Gas           *hexutil.Uint64          `json:"gas"`
 	Value         *hexutil.Big             `json:"value"`
 	Data          *hexutil.Bytes           `json:"input"`
@@ -87,7 +86,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.AccessList = &tx.AccessList
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MinerTip = (*hexutil.Big)(tx.MinerTip)
 		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
@@ -168,10 +166,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'nonce' in internal transaction")
 		}
 		itx.Nonce = uint64(*dec.Nonce)
-		if dec.MinerTip == nil {
-			return errors.New("missing required field 'minerTip' in internal transaction")
-		}
-		itx.MinerTip = (*big.Int)(dec.MinerTip)
 		if dec.GasPrice == nil {
 			return errors.New("missing required field 'gasPrice' in internal transaction")
 		}

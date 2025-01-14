@@ -207,7 +207,6 @@ func TestPendingTxFilter(t *testing.T) {
 			types.NewTx(&types.QuaiTx{
 				ChainID:    new(big.Int).SetUint64(1),
 				Nonce:      uint64(0),
-				MinerTip:   new(big.Int).SetUint64(0),
 				GasPrice:   new(big.Int).SetUint64(0),
 				Gas:        uint64(0),
 				To:         &to,
@@ -221,7 +220,6 @@ func TestPendingTxFilter(t *testing.T) {
 			types.NewTx(&types.QuaiTx{
 				ChainID:    new(big.Int).SetUint64(1),
 				Nonce:      uint64(1),
-				MinerTip:   new(big.Int).SetUint64(0),
 				GasPrice:   new(big.Int).SetUint64(0),
 				Gas:        uint64(0),
 				To:         &to,
@@ -235,7 +233,6 @@ func TestPendingTxFilter(t *testing.T) {
 			types.NewTx(&types.QuaiTx{
 				ChainID:    new(big.Int).SetUint64(1),
 				Nonce:      uint64(2),
-				MinerTip:   new(big.Int).SetUint64(0),
 				GasPrice:   new(big.Int).SetUint64(0),
 				Gas:        uint64(0),
 				To:         &to,
@@ -249,7 +246,6 @@ func TestPendingTxFilter(t *testing.T) {
 			types.NewTx(&types.QuaiTx{
 				ChainID:    new(big.Int).SetUint64(1),
 				Nonce:      uint64(3),
-				MinerTip:   new(big.Int).SetUint64(0),
 				GasPrice:   new(big.Int).SetUint64(0),
 				Gas:        uint64(0),
 				To:         &to,
@@ -263,7 +259,6 @@ func TestPendingTxFilter(t *testing.T) {
 			types.NewTx(&types.QuaiTx{
 				ChainID:    new(big.Int).SetUint64(1),
 				Nonce:      uint64(4),
-				MinerTip:   new(big.Int).SetUint64(0),
 				GasPrice:   new(big.Int).SetUint64(0),
 				Gas:        uint64(0),
 				To:         &to,

@@ -1659,7 +1659,7 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 				continue
 			}
 			if err := w.processQiTx(tx, env, primeTerminus, parent, firstQiTx); err != nil {
-				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") || strings.Contains(err.Error(), "combine smaller denominations") || strings.Contains(err.Error(), "uses too much gas") {
+				if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "double spends") || strings.Contains(err.Error(), "combine smaller denominations") || strings.Contains(err.Error(), "uses too much gas") || errors.Is(err, types.ErrGasLimitReached) {
 					// This is not an invalid tx, our block is just full of ETXs
 					// Alternatively, a tx double spends a cached deleted UTXO, likely replaced-by-fee
 					txs.PopNoSort()
@@ -2339,9 +2339,11 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
-		minerFee := new(big.Int).Set(block.BaseFee())
-		if tx.Type() == types.QuaiTxType {
-			minerFee.Add(minerFee, tx.MinerTip())
+		var minerFee = big.NewInt(0)
+		if tx.Type() != types.QiTxType {
+			minerFee = new(big.Int).Set(tx.GasPrice())
+		} else {
+			minerFee = new(big.Int).Set(block.BaseFee())
 		}
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}

@@ -117,7 +117,6 @@ type CallMsg struct {
 	To       *common.Address // the destination contract (nil for contract creation)
 	Gas      uint64          // if 0, the call executes with near-infinite gas
 	GasPrice *big.Int        // wei <-> gas exchange ratio
-	MinerTip *big.Int        // miner tip on top of the gas price per gas.
 	Value    *big.Int        // amount of wei sent along with the call
 	Data     []byte          // input data, usually an ABI-encoded contract method invocation
 

@@ -57,7 +57,6 @@ type StateTransition struct {
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
-	minerTip   *big.Int
 	initialGas uint64
 	value      *big.Int
 	data       []byte
@@ -66,7 +65,7 @@ type StateTransition struct {
 }
 
 func (st *StateTransition) fee() *big.Int {
-	return new(big.Int).Add(st.gasPrice, st.minerTip)
+	return st.gasPrice
 }
 
 // Message represents a message sent to a contract.
@@ -75,7 +74,6 @@ type Message interface {
 	To() *common.Address
 
 	GasPrice() *big.Int
-	MinerTip() *big.Int
 	Gas() uint64
 	Value() *big.Int
 
@@ -172,7 +170,6 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *types.GasPool) *StateTrans
 		evm:      evm,
 		msg:      msg,
 		gasPrice: msg.GasPrice(),
-		minerTip: msg.MinerTip(),
 		value:    msg.Value(),
 		data:     msg.Data(),
 		state:    evm.StateDB,
@@ -203,7 +200,7 @@ func (st *StateTransition) buyGas() error {
 	mgval = mgval.Mul(mgval, st.gasPrice)
 	balanceCheck := mgval
 	balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
-	balanceCheck = balanceCheck.Mul(balanceCheck, new(big.Int).Add(st.minerTip, st.gasPrice))
+	balanceCheck = balanceCheck.Mul(balanceCheck, st.gasPrice)
 	balanceCheck.Add(balanceCheck, st.value)
 	from, err := st.msg.From().InternalAndQuaiAddress()
 	if err != nil {
@@ -261,13 +258,9 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure that transaction gasPrice is greater than the baseFee
 	// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-	if !st.evm.Config.NoBaseFee || st.gasPrice.BitLen() > 0 || st.minerTip.BitLen() > 0 {
+	if !st.evm.Config.NoBaseFee || st.gasPrice.BitLen() > 0 {
 		if l := st.gasPrice.BitLen(); l > 256 {
 			return fmt.Errorf("%w: address %v, gasPrice bit length: %d", ErrFeeCapVeryHigh,
-				st.msg.From().Hex(), l)
-		}
-		if l := st.minerTip.BitLen(); l > 256 {
-			return fmt.Errorf("%w: address %v, minerTip bit length: %d", ErrTipVeryHigh,
 				st.msg.From().Hex(), l)
 		}
 		// This will panic if baseFee is nil, but basefee presence is verified

@@ -39,7 +39,6 @@ type TransactionArgs struct {
 	To       *common.Address `json:"to"`
 	Gas      *hexutil.Uint64 `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
-	MinerTip *hexutil.Big    `json:"minerTip"`
 	Value    *hexutil.Big    `json:"value"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 
@@ -81,19 +80,11 @@ func (arg *TransactionArgs) data() []byte {
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, db *state.StateDB) error {
 
 	head := b.CurrentHeader()
-	if args.MinerTip == nil {
-		tip := big.NewInt(0)
-		args.MinerTip = (*hexutil.Big)(tip)
-	}
 	if args.GasPrice == nil {
-		gasFeeCap := new(big.Int).Add(
-			(*big.Int)(args.MinerTip),
+		gasFeeCap := new(big.Int).Set(
 			new(big.Int).Mul(head.BaseFee(), big.NewInt(2)),
 		)
 		args.GasPrice = (*hexutil.Big)(gasFeeCap)
-	}
-	if args.GasPrice.ToInt().Cmp(args.MinerTip.ToInt()) < 0 {
-		return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.GasPrice, args.MinerTip)
 	}
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
@@ -119,7 +110,6 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, db *sta
 			From:       args.From,
 			To:         args.To,
 			GasPrice:   args.GasPrice,
-			MinerTip:   args.MinerTip,
 			Value:      args.Value,
 			Data:       args.Data,
 			AccessList: args.AccessList,
@@ -166,10 +156,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 	}
 	var (
 		gasPrice *big.Int
-		minerTip *big.Int
 	)
 	gasPrice = new(big.Int).Set(common.Big0) // Skip base fee check in state_transition.go
-	minerTip = gasPrice                      // Skip base fee check in state_transition.go
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
@@ -180,7 +168,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, no
 		accessList = *args.AccessList
 	}
 
-	msg := types.NewMessage(addr, args.To, uint64(*args.Nonce), value, gas, gasPrice, minerTip, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, uint64(*args.Nonce), value, gas, gasPrice, data, accessList, false)
 	return msg, nil
 }
 

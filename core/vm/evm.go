@@ -694,17 +694,6 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	return []byte{}, 0, 0, nil // all leftover gas goes to the ETX
 }
 
-// Emitted ETXs must include some multiple of BaseFee as miner tip, to
-// encourage processing at the destination.
-func calcEtxFeeMultiplier(fromAddr, toAddr common.Address) *big.Int {
-	confirmationCtx := fromAddr.Location().CommonDom(*toAddr.Location()).Context()
-	multiplier := big.NewInt(common.MaxRegions) //  TODO:  calculation  should be based on the current  expansion  number
-	if confirmationCtx == common.PRIME_CTX {
-		multiplier = big.NewInt(0).Mul(multiplier, big.NewInt(common.MaxZones))
-	}
-	return multiplier
-}
-
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 

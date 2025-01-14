@@ -65,14 +65,6 @@ func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	return (*hexutil.Big)(s.b.GetMinGasPrice()), nil
 }
 
-// MinerTip returns the gas price of the pool
-func (s *PublicQuaiAPI) MinerTip(ctx context.Context) *hexutil.Big {
-	if s.b.NodeLocation().Context() != common.ZONE_CTX {
-		return (*hexutil.Big)(big.NewInt(0))
-	}
-	return (*hexutil.Big)(s.b.GetPoolGasPrice())
-}
-
 // PublicBlockChainQuaiAPI provides an API to access the Quai blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainQuaiAPI struct {
@@ -1409,7 +1401,7 @@ func (s *PublicBlockChainQuaiAPI) GetTransactionReceipt(ctx context.Context, has
 		return nil, err
 	}
 	if tx.Type() == types.QuaiTxType {
-		gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
+		gasPrice := new(big.Int).Set(tx.GasPrice())
 		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
 	} else {
 		// QiTx

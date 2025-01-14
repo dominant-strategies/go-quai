@@ -732,8 +732,6 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	var feeCap *big.Int
 	if args.GasPrice != nil {
 		feeCap = args.GasPrice.ToInt()
-	} else if args.MinerTip != nil {
-		feeCap = args.MinerTip.ToInt()
 	} else {
 		feeCap = common.Big0
 	}
@@ -990,7 +988,6 @@ type RPCTransaction struct {
 	BlockNumber       *hexutil.Big             `json:"blockNumber"`
 	From              *common.MixedcaseAddress `json:"from,omitempty"`
 	Gas               hexutil.Uint64           `json:"gas"`
-	MinerTip          *hexutil.Big             `json:"minerTip,omitempty"`
 	GasPrice          *hexutil.Big             `json:"gasPrice,omitempty"`
 	Hash              common.Hash              `json:"hash,omitempty"`
 	Input             hexutil.Bytes            `json:"input"`
@@ -1062,7 +1059,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			Value:    (*hexutil.Big)(tx.Value()),
 			ChainID:  (*hexutil.Big)(tx.ChainId()),
 			GasPrice: (*hexutil.Big)(tx.GasPrice()),
-			MinerTip: (*hexutil.Big)(tx.MinerTip()),
 		}
 		if tx.To() != nil {
 			result.To = tx.To().MixedcaseAddressPtr()
@@ -1340,7 +1336,7 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 		return nil, err
 	}
 	if tx.Type() == types.QuaiTxType {
-		gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
+		gasPrice := new(big.Int).Set(tx.GasPrice())
 		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
 	} else {
 		// QiTx

@@ -22,7 +22,6 @@ func QuaiTxData() *Transaction {
 	inner := &QuaiTx{
 		ChainID:  big.NewInt(1),
 		Nonce:    1,
-		MinerTip: big.NewInt(1),
 		GasPrice: big.NewInt(1),
 		Gas:      1,
 		To:       &to,
@@ -134,7 +133,7 @@ func TestUTXOTransactionEncode(t *testing.T) {
 func TestQuaiTxHash(t *testing.T) {
 	tx := QuaiTxData()
 	hash := tx.Hash()
-	correctHash := common.HexToHash("0x6d626d68a816062adfaa789a16fd061d93ea7cda7e8b4db2acf9ca088e963ed5")
+	correctHash := common.HexToHash("0x8e508e2bfc0df3034684cbd0c154c0e9facbe108a6d0ab524ace531f91fc6155")
 	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 
@@ -280,31 +279,6 @@ func FuzzQuaiTxHashingNonce(f *testing.F) {
 			newTx := NewTx(&newInner)
 
 			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.nonce(), i)
-		}
-	})
-}
-
-func FuzzQuaiTxHashingMinerTip(f *testing.F) {
-	// Create a new transaction
-	tx := QuaiTxData()
-	hash := tx.Hash()
-	f.Add(testUInt64)
-	f.Add(tx.inner.minerTip().Uint64())
-	// Verify the hash of the transaction
-	if hash == (common.Hash{}) {
-		f.Errorf("Transaction hash is empty")
-	}
-
-	f.Fuzz(func(t *testing.T, i uint64) {
-		bi := new(big.Int).SetUint64(i)
-		if bi.Cmp(tx.inner.minerTip()) != 0 {
-			// change something in the transaction
-			newInner := *tx.inner.(*QuaiTx)
-			newInner.MinerTip = bi
-			// Create a new transaction with the modified inner transaction
-			newTx := NewTx(&newInner)
-
-			require.NotEqual(t, newTx.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", tx.inner.minerTip(), bi)
 		}
 	})
 }
@@ -540,8 +514,8 @@ func etxData() *Transaction {
 func TestEtxHash(t *testing.T) {
 	tx := etxData()
 	hash := tx.Hash()
-	correctHash := common.HexToHash("0x569200efce076a61575a3661dcb6f59e77e0407279c8db136ef9b2fa23d361ce")
-	require.Equal(t, hash, correctHash, "Hash not equal to expected hash")
+	correctHash := common.HexToHash("0x568300a9abbc999e5209f01c272e93eda5d0b3cf3a6d41132e0f6a545639e18a")
+	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 
 func FuzzEtxOriginatingTxHash(f *testing.F) {
@@ -807,7 +781,7 @@ func qiTxData() *Transaction {
 func TestQiTxHash(t *testing.T) {
 	tx := qiTxData()
 	hash := tx.Hash()
-	correctHash := common.HexToHash("0x3ab63a9e508d743af3197a0b327f169115b7184c5d7de23a7e37816537677d94")
+	correctHash := common.HexToHash("0x3af33a88f7fc439f4f0a30faec9d2cfe439bcbd802cd515100f7b4d24590e88c")
 	require.Equal(t, correctHash, hash, "Hash not equal to expected hash")
 }
 

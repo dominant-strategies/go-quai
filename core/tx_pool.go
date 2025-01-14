@@ -830,9 +830,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	if tx.GasPrice().BitLen() > 256 {
 		return ErrFeeCapVeryHigh
 	}
-	if tx.MinerTip().BitLen() > 256 {
-		return ErrTipVeryHigh
-	}
 	var internal common.InternalAddress
 	addToCache := true
 	if sender := tx.From(pool.chainconfig.Location); sender != nil { // Check tx cache first
@@ -939,7 +936,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.logger.WithFields(log.Fields{
 				"hash":     hash,
 				"gasPrice": tx.GasPrice(),
-				"minerTip": tx.MinerTip(),
 			}).Trace("Discarding underpriced transaction")
 			underpricedTxMeter.Add(1)
 			return false, ErrUnderpriced
@@ -960,7 +956,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.logger.WithFields(log.Fields{
 				"hash":     tx.Hash(),
 				"gasPrice": tx.GasPrice(),
-				"minerTip": tx.MinerTip(),
 			}).Trace("Discarding freshly underpriced transaction")
 			pendingDiscardMeter.Add(1)
 			pool.removeTx(tx.Hash(), false)
