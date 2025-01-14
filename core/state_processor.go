@@ -963,7 +963,7 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 
 	// Update the state with pending changes.
 	var root []byte
-	statedb.Finalise(true)
+	statedb.Finalize(true)
 
 	*usedGas += result.UsedGas
 	*usedState += result.UsedState
@@ -1874,7 +1874,7 @@ func (p *StateProcessor) StateAtTransaction(block *types.WorkObject, txIndex int
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
-		statedb.Finalise(true)
+		statedb.Finalize(true)
 	}
 	return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }
