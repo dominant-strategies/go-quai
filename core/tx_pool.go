@@ -218,7 +218,7 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	GlobalQueue:     20048,
 	QiPoolSize:      10024,
 	QiTxLifetime:    30 * time.Minute,
-	Lifetime:        3 * time.Hour,
+	Lifetime:        5 * time.Minute,
 	ReorgFrequency:  1 * time.Second,
 }
 
@@ -577,6 +577,18 @@ func (pool *TxPool) loop() {
 						pool.removeTx(tx.Hash(), true)
 					}
 					queuedEvictionMeter.Add(float64(len(list)))
+				}
+			}
+			for _, txList := range pool.pending {
+				txs := txList.Flatten()
+				if len(txs) == 0 {
+					continue
+				}
+				if time.Since(txs[0].Time()) > pool.config.Lifetime {
+					for _, tx := range txs {
+						pool.removeTx(tx.Hash(), true)
+					}
+					pendingDiscardMeter.Add(float64(len(txs)))
 				}
 			}
 			pool.mu.Unlock()
