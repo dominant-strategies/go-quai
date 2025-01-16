@@ -1032,6 +1032,10 @@ func (c *Core) GetMaxTxInWorkShare() uint64 {
 	return c.sl.hc.GetMaxTxInWorkShare()
 }
 
+func (c *Core) CalcBaseFee(wo *types.WorkObject) *big.Int {
+	return c.sl.hc.CalcBaseFee(wo)
+}
+
 func (c *Core) TxMiningEnabled() bool {
 	return c.workShareMining
 }
@@ -1042,10 +1046,6 @@ func (c *Core) GetWorkShareThreshold() int {
 
 func (c *Core) GetMinerEndpoints() []string {
 	return c.endpoints
-}
-
-func (c *Core) CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error) {
-	return c.sl.hc.CalcMaxBaseFee(block)
 }
 
 //--------------------//
@@ -1351,11 +1351,6 @@ func (c *Core) Nonce(addr common.Address) uint64 {
 		return 0
 	}
 	return c.sl.txPool.Nonce(internal)
-}
-
-// GetMinGasPrice returns the minimum gas price needed to be included in the current block
-func (c *Core) GetMinGasPrice() *big.Int {
-	return c.sl.txPool.GetMinGasPrice()
 }
 
 // GetPoolGasPrice returns the pool gas price set by the node

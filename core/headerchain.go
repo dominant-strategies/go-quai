@@ -1301,30 +1301,6 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) (uint16,
 	return ewma, nil
 }
 
-// CalcMaxBaseFee takes an average of the base fee over past 100 blocks
-func (hc *HeaderChain) CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error) {
-	// get the parent block
-	parent := hc.GetBlockByHash(block.ParentHash(hc.NodeCtx()))
-	if parent == nil {
-		return nil, errors.New("parent cannot be found in the CalcMaxBaseFee")
-	}
-	parentBaseFee := parent.BaseFee()
-	// Adjust the max base fee calculation for next block using this formula,
-	// nextBlockBaseFee = blockBaseFee/OneOverBaseFeeControllerAlpha + parentBaseFee
-	baseFee := new(big.Int).Div(block.BaseFee(), params.OneOverBaseFeeControllerAlpha)
-	baseFee = new(big.Int).Add(baseFee, parentBaseFee)
-
-	// Make sure max base fee is less than 50x of the average base fee
-	baseFee = new(big.Int).Mul(baseFee, params.BaseFeeMultiplier)
-
-	minBaseFee := hc.CalcMinBaseFee(block)
-	if minBaseFee.Cmp(baseFee) >= 0 {
-		baseFee = minBaseFee
-	}
-
-	return baseFee, nil
-}
-
 // ComputeAverageTxFees computes the ema of the half of the total fees generated in quai over past 100 blocks
 func (hc *HeaderChain) ComputeAverageTxFees(parent *types.WorkObject, totalTxFeesInQuai *big.Int) *big.Int {
 	if rawdb.IsGenesisHash(hc.headerDb, parent.Hash()) {
@@ -1336,9 +1312,9 @@ func (hc *HeaderChain) ComputeAverageTxFees(parent *types.WorkObject, totalTxFee
 	return newAvgTxFees
 }
 
-// CalcMinBaseFee calculates the mininum base fee supplied by the transaction
+// CalcBaseFee calculates the mininum base fee supplied by the transaction
 // to get inclusion in the next block
-func (hc *HeaderChain) CalcMinBaseFee(block *types.WorkObject) *big.Int {
+func (hc *HeaderChain) CalcBaseFee(block *types.WorkObject) *big.Int {
 	// If the base fee is calculated is less than the min base fee, then set
 	// this to min base fee
 	minBaseFee := misc.QiToQuai(block, params.MinBaseFeeInQits)

@@ -867,7 +867,7 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 	balance := interpreter.evm.StateDB.GetBalance(addr)
 	interpreter.evm.StateDB.AddBalance(beneficiaryAddr, balance)
-	refund := new(big.Int).Mul(interpreter.evm.Context.AverageBaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(interpreter.evm.Context.QuaiStateSize)))
+	refund := new(big.Int).Mul(interpreter.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(interpreter.evm.Context.QuaiStateSize)))
 	interpreter.evm.StateDB.AddBalance(beneficiaryAddr, refund)
 	interpreter.evm.StateDB.Suicide(addr)
 	return nil, nil

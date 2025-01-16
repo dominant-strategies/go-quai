@@ -343,15 +343,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	totalQiProcessTimes := make(map[string]time.Duration)
 	firstQiTx := true
 
-	nonEtxExists := false
-
 	// Calculate the min base fee from the parent
-	minBaseFee := p.hc.CalcMinBaseFee(parent)
-	// Check the min base fee, and max base fee
-	maxBaseFee, err := p.hc.CalcMaxBaseFee(parent)
-	if maxBaseFee == nil && !p.hc.IsGenesisHash(parent.Hash()) {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not calculate max base fee %s", err)
-	}
+	minBaseFee := block.BaseFee()
 
 	primeTerminus := p.hc.GetHeaderByHash(header.PrimeTerminusHash())
 	if primeTerminus == nil {
@@ -364,11 +357,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("error redeeming locked quai: %w", err)
 	}
 
-	// Set the min gas price to the lowest gas price in the transaction If that
-	// value is not the basefee mentioned in the block, the block is invalid In
-	// the case of the Qi transactions, its converted into Quai at the rate
-	// defined in the prime terminus
-	var minGasPrice *big.Int
 	for i, tx := range block.Transactions() {
 		startProcess := time.Now()
 
@@ -404,20 +392,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("qi tx has base fee less than min base fee not apply tx %d [%v]", i, tx.Hash().Hex())
 			}
 
-			// If the gas price from this qi tx is greater than the max base fee
-			// set the qi gas price to the max base fee
-			if qiGasPrice.Cmp(maxBaseFee) > 0 {
-				qiGasPrice = new(big.Int).Set(maxBaseFee)
-			}
-
-			if minGasPrice == nil {
-				minGasPrice = new(big.Int).Set(qiGasPrice)
-			} else {
-				if minGasPrice.Cmp(qiGasPrice) > 0 {
-					minGasPrice = new(big.Int).Set(qiGasPrice)
-				}
-			}
-
 			blockMinFee, blockMaxFee = calcTxStats(blockMinFee, blockMaxFee, qiTxFeeInQuai, numTxsProcessed)
 
 			totalEtxCoinbaseTime += time.Since(startEtxCoinbase)
@@ -427,8 +401,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			totalQiProcessTimes["Output Processing"] += timing["Output Processing"]
 			totalQiProcessTimes["Fee Verification"] += timing["Fee Verification"]
 			totalQiProcessTimes["Signature Check"] += timing["Signature Check"]
-
-			nonEtxExists = true
 
 			continue
 		}
@@ -874,21 +846,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("quai tx has gas price less than min base fee not apply tx %d [%v]", i, tx.Hash().Hex())
 			}
 
-			// If the gas price from this quai tx is greater than the max base fee
-			// set the quai gas price to the max base fee
-			if gasPrice.Cmp(maxBaseFee) > 0 {
-				gasPrice = new(big.Int).Set(maxBaseFee)
-			}
-
-			// update the min gas price if the gas price in the tx is less than
-			// the min gas price
-			if minGasPrice == nil {
-				minGasPrice = new(big.Int).Set(gasPrice)
-			} else {
-				if minGasPrice.Cmp(tx.GasPrice()) > 0 {
-					minGasPrice = new(big.Int).Set(gasPrice)
-				}
-			}
 			blockMinFee, blockMaxFee = calcTxStats(blockMinFee, blockMaxFee, fees, numTxsProcessed)
 			if receipt.Status == types.ReceiptStatusSuccessful {
 				for _, etx := range receipt.OutboundEtxs {
@@ -907,14 +864,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		} else {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, ErrTxTypeNotSupported
 		}
-	}
-
-	if nonEtxExists && block.BaseFee().Cmp(big.NewInt(0)) == 0 {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("block base fee is nil though non etx transactions exist")
-	}
-
-	if minGasPrice != nil && block.BaseFee().Cmp(minGasPrice) != 0 {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid base fee used (remote: %d local: %d)", block.BaseFee(), minGasPrice)
 	}
 
 	etxAvailable := false

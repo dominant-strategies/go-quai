@@ -87,7 +87,6 @@ type BlockContext struct {
 	Time            *big.Int       // Provides information for TIME
 	Difficulty      *big.Int       // Provides information for DIFFICULTY
 	BaseFee         *big.Int       // Provides information for BASEFEE
-	AverageBaseFee  *big.Int       // Average base fee for the last 100 blocks
 	QuaiStateSize   *big.Int       // Provides information for QUAISTATESIZE
 
 	// Prime Terminus information for the given block

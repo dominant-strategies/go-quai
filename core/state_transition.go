@@ -363,7 +363,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}
 		balance := st.evm.StateDB.GetBalance(fromInternal)
 		st.evm.StateDB.Suicide(fromInternal)
-		refund := new(big.Int).Mul(st.evm.Context.AverageBaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(st.evm.Context.QuaiStateSize)))
+		refund := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(st.evm.Context.QuaiStateSize)))
 		balance.Add(balance, refund)
 		st.evm.StateDB.AddBalance(beneficiary, balance)
 

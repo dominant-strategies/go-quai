@@ -418,10 +418,6 @@ func (b *QuaiAPIBackend) GetRollingFeeInfo() (min, max, avg *big.Int) {
 	return b.quai.core.GetRollingFeeInfo()
 }
 
-func (b *QuaiAPIBackend) GetMinGasPrice() *big.Int {
-	return b.quai.core.GetMinGasPrice()
-}
-
 func (b *QuaiAPIBackend) GetPoolGasPrice() *big.Int {
 	return b.quai.core.GetPoolGasPrice()
 }
@@ -747,6 +743,10 @@ func (b *QuaiAPIBackend) GeneratePendingHeader(block *types.WorkObject, fill boo
 
 func (b *QuaiAPIBackend) MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject {
 	return b.quai.core.MakeFullPendingHeader(primePh, regionPh, zonePh)
+}
+
+func (b *QuaiAPIBackend) CalcBaseFee(wo *types.WorkObject) *big.Int {
+	return b.quai.core.CalcBaseFee(wo)
 }
 
 // ///////////////////////////

@@ -62,7 +62,11 @@ func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	if s.b.NodeLocation().Context() != common.ZONE_CTX {
 		return (*hexutil.Big)(big.NewInt(0)), errors.New("gasPrice call can only be made in zone chain")
 	}
-	return (*hexutil.Big)(s.b.GetMinGasPrice()), nil
+	blockBaseFee := s.b.CalcBaseFee(s.b.CurrentHeader())
+	// increase this by 20% to get guaraneteed inclusion adjusting for the worst case difficulty adjustment
+	blockBaseFee = new(big.Int).Mul(blockBaseFee, big.NewInt(120))
+	blockBaseFee = new(big.Int).Div(blockBaseFee, big.NewInt(100))
+	return (*hexutil.Big)(blockBaseFee), nil
 }
 
 // PublicBlockChainQuaiAPI provides an API to access the Quai blockchain.
@@ -954,8 +958,11 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 	}
 
 	// Calculate the base fee
-	minGasPrice := s.b.GetMinGasPrice()
-	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), minGasPrice)
+	currentBaseFee := s.b.CurrentBlock().BaseFee()
+	// increase the base fee by 20% to account for the change in difficulty
+	currentBaseFee = new(big.Int).Mul(currentBaseFee, big.NewInt(120))
+	currentBaseFee = new(big.Int).Div(currentBaseFee, big.NewInt(100))
+	feeInQuai := new(big.Int).Mul(new(big.Int).SetUint64(uint64(gas)), currentBaseFee)
 	feeInQi := misc.QuaiToQi(header, feeInQuai)
 	if feeInQi.Cmp(big.NewInt(0)) == 0 {
 		// Minimum fee is 1 qit or smallest unit

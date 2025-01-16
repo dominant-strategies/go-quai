@@ -25,7 +25,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -58,7 +57,7 @@ type ChainContext interface {
 
 	AddToCalcOrderCache(common.Hash, int, *big.Int)
 
-	CalcMaxBaseFee(block *types.WorkObject) (*big.Int, error)
+	CalcBaseFee(*types.WorkObject) *big.Int
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
@@ -106,16 +105,6 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 		}
 	}
 	etxEligibleSlices := primeTerminusHeader.EtxEligibleSlices()
-	maxBaseFee, err := chain.CalcMaxBaseFee(parent)
-	if maxBaseFee == nil && !chain.IsGenesisHash(parent.Hash()) {
-		return vm.BlockContext{}, fmt.Errorf("could not calculate max base fee %s", err)
-	}
-	if maxBaseFee == nil {
-		maxBaseFee = big.NewInt(0)
-	}
-
-	var averageBaseFee *big.Int
-	averageBaseFee = new(big.Int).Div(maxBaseFee, params.BaseFeeMultiplier)
 
 	return vm.BlockContext{
 		CanTransfer:        CanTransfer,
@@ -130,7 +119,6 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 		CheckIfEtxEligible: chain.CheckIfEtxIsEligible,
 		EtxEligibleSlices:  etxEligibleSlices,
 		QuaiStateSize:      parent.QuaiStateSize(), // using the state size at the parent for all the gas calculations
-		AverageBaseFee:     averageBaseFee,
 	}, nil
 }
 

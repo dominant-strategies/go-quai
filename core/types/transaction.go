@@ -1091,25 +1091,6 @@ func (t *TransactionsByPriceAndNonce) PopNoSort() {
 	}
 }
 
-func (t *TransactionsByPriceAndNonce) Last(i int) *TransactionsByPriceAndNonce {
-	if t.Peek() != nil {
-		if len(t.heads) < i {
-			return nil
-		}
-		return &TransactionsByPriceAndNonce{
-			txs:    nil,
-			heads:  t.heads[len(t.heads)-i : len(t.heads)-i+1],
-			signer: t.signer,
-		}
-	} else {
-		return nil
-	}
-}
-
-func (t *TransactionsByPriceAndNonce) SetHead(txs TxByPriceAndTime) {
-	t.heads = txs
-}
-
 // Pop removes the best transaction, *not* replacing it with the next one from
 // the same account. This should be used when a transaction cannot be executed
 // and hence all subsequent ones should be discarded from the same account.
