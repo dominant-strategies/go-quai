@@ -47,6 +47,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		QuaiToQi 						*hexutil.Big 			`json:"quaiToQi" 					gencodec:"required"`
 		QiToQuai 						*hexutil.Big 			`json:"qiToQuai" 					gencodec:"required"`
 		AvgTxFees 						*hexutil.Big 			`json:"avgTxFees" 					gencodec:"required"`
+		TotalFees                       *hexutil.Big            `json:"totalFees"                   gencodec:"required"`
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
@@ -92,6 +93,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.QuaiToQi = (*hexutil.Big)(h.QuaiToQi())
 	enc.QiToQuai = (*hexutil.Big)(h.QiToQuai())
 	enc.AvgTxFees = (*hexutil.Big)(h.AvgTxFees())
+	enc.TotalFees = (*hexutil.Big)(h.TotalFees())
 	raw, err := json.Marshal(&enc)
 	return raw, err
 }
@@ -132,6 +134,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		QuaiToQi 						*hexutil.Big 			`json:"quaiToQi" 					gencodec:"required"`
 		QiToQuai 						*hexutil.Big 			`json:"qiToQuai" 					gencodec:"required"`
 		AvgTxFees 						*hexutil.Big 			`json:"avgTxFees" 					gencodec:"required"`
+		TotalFees                       *hexutil.Big            `json:"totalFees"                   gencodec:"required"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -232,6 +235,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.AvgTxFees == nil {
 		return errors.New("missing required field 'avgTxFees' for Header")
 	}
+	if dec.TotalFees == nil {
+		return errors.New("missing required field 'totalFees' for Header")
+	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
@@ -295,6 +301,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetQuaiToQi((*big.Int)(dec.QuaiToQi))
 	h.SetQiToQuai((*big.Int)(dec.QiToQuai))
 	h.SetAvgTxFees((*big.Int)(dec.AvgTxFees))
+	h.SetTotalFees((*big.Int)(dec.TotalFees))
 	return nil
 }
 

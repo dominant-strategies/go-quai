@@ -122,6 +122,7 @@ type Header struct {
 	quaiToQi                 *big.Int       `json:"quaiToQi"			  gencodec:"required"`
 	qiToQuai                 *big.Int       `json:"qiToQuai"			  gencodec:"required"`
 	avgTxFees                *big.Int       `json:"avgTxFees"             gencodec:"required"`
+	totalFees                *big.Int       `json:"totalFees"             gencodec:"required"`
 
 	// caches
 	hash     atomic.Value
@@ -161,6 +162,7 @@ func EmptyHeader() *Header {
 	h.quaiToQi = big.NewInt(0)
 	h.qiToQuai = big.NewInt(0)
 	h.avgTxFees = big.NewInt(0)
+	h.totalFees = big.NewInt(0)
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
@@ -235,6 +237,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	quaiToQi := h.quaiToQi.Bytes()
 	qiToQuai := h.qiToQuai.Bytes()
 	avgTxFees := h.avgTxFees.Bytes()
+	totalFees := h.totalFees.Bytes()
 
 	protoHeader := &ProtoHeader{
 		UncleHash:         &uncleHash,
@@ -264,6 +267,7 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 		QuaiToQi:          quaiToQi,
 		QiToQuai:          qiToQuai,
 		AvgTxFees:         avgTxFees,
+		TotalFees:         totalFees,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -374,6 +378,9 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.AvgTxFees == nil {
 		return errors.New("missing required field 'AvgTxFees' in Header")
 	}
+	if protoHeader.TotalFees == nil {
+		return errors.New("missing required field 'TotalFees' in Header")
+	}
 
 	// Initialize the array fields before setting
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
@@ -421,6 +428,7 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.SetQuaiToQi(new(big.Int).SetBytes(protoHeader.GetQuaiToQi()))
 	h.SetQiToQuai(new(big.Int).SetBytes(protoHeader.GetQiToQuai()))
 	h.SetAvgTxFees(new(big.Int).SetBytes(protoHeader.GetAvgTxFees()))
+	h.SetTotalFees(new(big.Int).SetBytes(protoHeader.GetTotalFees()))
 
 	return nil
 }
@@ -464,6 +472,7 @@ func (h *Header) RPCMarshalHeader() map[string]interface{} {
 		"quaiToQi":          (*hexutil.Big)(h.QuaiToQi()),
 		"qiToQuai":          (*hexutil.Big)(h.QiToQuai()),
 		"avgTxFees":         (*hexutil.Big)(h.AvgTxFees()),
+		"totalFees":         (*hexutil.Big)(h.TotalFees()),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth-1)
@@ -580,6 +589,7 @@ func (h *Header) ExchangeRate() *big.Int { return h.exchangeRate }
 func (h *Header) QuaiToQi() *big.Int     { return h.quaiToQi }
 func (h *Header) QiToQuai() *big.Int     { return h.qiToQuai }
 func (h *Header) AvgTxFees() *big.Int    { return h.avgTxFees }
+func (h *Header) TotalFees() *big.Int    { return h.totalFees }
 
 func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -756,6 +766,12 @@ func (h *Header) SetAvgTxFees(val *big.Int) {
 	h.avgTxFees = new(big.Int).Set(val)
 }
 
+func (h *Header) SetTotalFees(val *big.Int) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.totalFees = new(big.Int).Set(val)
+}
+
 // Array accessors
 func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
 func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
@@ -788,6 +804,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 	quaiToQi := h.quaiToQi.Bytes()
 	qiToQuai := h.qiToQuai.Bytes()
 	avgTxFees := h.avgTxFees.Bytes()
+	totalFees := h.totalFees.Bytes()
 
 	protoSealData := &ProtoHeader{
 		UncleHash:         &uncleHash,
@@ -817,6 +834,7 @@ func (h *Header) SealEncode() *ProtoHeader {
 		QuaiToQi:          quaiToQi,
 		QiToQuai:          qiToQuai,
 		AvgTxFees:         avgTxFees,
+		TotalFees:         totalFees,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -1005,6 +1023,7 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetQuaiToQi(h.QuaiToQi())
 	cpy.SetQiToQuai(h.QiToQuai())
 	cpy.SetAvgTxFees(h.AvgTxFees())
+	cpy.SetTotalFees(h.TotalFees())
 	return &cpy
 }
 

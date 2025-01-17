@@ -425,6 +425,10 @@ func (wo *WorkObject) AvgTxFees() *big.Int {
 	return wo.Header().AvgTxFees()
 }
 
+func (wo *WorkObject) TotalFees() *big.Int {
+	return wo.Header().TotalFees()
+}
+
 func (wo *WorkObject) QiTransactions() []*Transaction {
 	qiTxs := make([]*Transaction, 0)
 	for _, t := range wo.Transactions() {

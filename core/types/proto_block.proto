@@ -43,6 +43,7 @@ message ProtoHeader {
   optional bytes quai_to_qi = 35;
   optional bytes qi_to_quai = 36;
   optional bytes avg_tx_fees = 37;
+  optional bytes total_fees = 38;
 }
 
 message ProtoTransaction {

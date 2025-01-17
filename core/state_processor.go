@@ -234,7 +234,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		nodeLocation             = p.hc.NodeLocation()
 		nodeCtx                  = p.hc.NodeCtx()
 		blockNumber              = block.Number(nodeCtx)
-		parentHash               = block.ParentHash(nodeCtx)
 		allLogs                  []*types.Log
 		gp                       = new(types.GasPool).AddGas(block.GasLimit())
 		numTxsProcessed          = big.NewInt(0)
@@ -902,6 +901,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid avgTxFees used (remote: %d local: %d)", block.AvgTxFees(), expectedAvgFees)
 	}
 
+	totalQiFeesInQuai := misc.QiToQuai(parent, qiFees)
+	expectedTotalFees := new(big.Int).Add(quaiFees, totalQiFeesInQuai)
+	if expectedTotalFees.Cmp(block.TotalFees()) != 0 {
+		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid totalFees used (remote: %d local: %d)", block.TotalFees(), expectedTotalFees)
+	}
 	// The fees from transactions in the block is given, in the block itself
 	// go through the last WorkSharesInclusionDepth of blocks
 	if block.NumberU64(common.ZONE_CTX) > uint64(params.WorkSharesInclusionDepth) {
@@ -972,6 +976,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		blockRewardAtTargetBlock := misc.CalculateQuaiReward(parentOfTargetBlock)
 		// add the fee capacitor value
 		blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
+		// add half the fees generated in the block
+		blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, new(big.Int).Div(targetBlock.TotalFees(), common.Big2))
 
 		// Add an etx for each workshare for it to be rewarded
 		for i, share := range sharesAtTargetBlockDepth {

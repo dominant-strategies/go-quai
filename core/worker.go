@@ -641,6 +641,10 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		expectedAvgFees := w.hc.ComputeAverageTxFees(block, totalFeesForCapacitor)
 		work.wo.Header().SetAvgTxFees(expectedAvgFees)
 
+		// Set the total fees collected in this block
+		totalQiFeesInQuai := misc.QiToQuai(block, work.utxoFees)
+		expectedTotalFees := new(big.Int).Add(work.quaiFees, totalQiFeesInQuai)
+		work.wo.Header().SetTotalFees(expectedTotalFees)
 		// The fees from transactions in the block is given, in the block itself
 		// go through the last WorkSharesInclusionDepth of blocks
 		if work.wo.NumberU64(common.ZONE_CTX) > uint64(params.WorkSharesInclusionDepth) {
@@ -711,6 +715,8 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			blockRewardAtTargetBlock := misc.CalculateQuaiReward(parentOfTargetBlock)
 			// add the fee capacitor value
 			blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
+			// add half the fees generated in the block
+			blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, new(big.Int).Div(targetBlock.TotalFees(), common.Big2))
 
 			// Add an etx for each workshare for it to be rewarded
 			for i, share := range sharesAtTargetBlockDepth {
