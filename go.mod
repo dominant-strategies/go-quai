@@ -1,6 +1,6 @@
 module github.com/dominant-strategies/go-quai
 
-go 1.23.1
+go 1.23.2
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
@@ -11,7 +11,7 @@ require (
 	github.com/deckarep/golang-set v1.8.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/dominant-strategies/bn256 v0.0.0-20220930122411-fbf930a7493d
+	github.com/dominant-strategies/bn256 v0.0.0-20250117181620-a3c0ff77c445
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/golang/snappy v0.0.4
 	github.com/google/gofuzz v1.2.0
@@ -37,7 +37,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.23.12
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.10.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	go.uber.org/mock v0.3.0
 	golang.org/x/crypto v0.18.0
@@ -188,6 +188,6 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.17.0
-	golang.org/x/sys v0.18.0
+	golang.org/x/sys v0.29.0
 	gonum.org/v1/plot v0.14.0
 )
