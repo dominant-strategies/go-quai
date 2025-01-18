@@ -550,7 +550,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if err != nil {
 		return nil, err
 	}
-	if addressOk, slotOk := interpreter.evm.StateDB.SlotInAccessList(addr.Bytes20(), hash); !addressOk || !slotOk {
+	if addressOk := interpreter.evm.StateDB.AddressInAccessList(addr.Bytes20()); !addressOk {
 		return nil, ErrInvalidAccessList
 	}
 	val := interpreter.evm.StateDB.GetState(addr, hash)
@@ -565,7 +565,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	if err != nil {
 		return nil, err
 	}
-	if addressOk, slotOk := interpreter.evm.StateDB.SlotInAccessList(addr.Bytes20(), common.Hash(loc.Bytes32())); !addressOk || !slotOk {
+	if addressOk := interpreter.evm.StateDB.AddressInAccessList(addr.Bytes20()); !addressOk {
 		return nil, ErrInvalidAccessList
 	}
 	interpreter.evm.StateDB.SetState(addr,
