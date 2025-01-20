@@ -1,0 +1,58 @@
+name: Nightly Job
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs nightly at midnight UTC
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  nightly-run:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version and generate random UID
+        id: versioning
+        run: |
+          VERSION=$(cat VERSION)
+          UID=$(shuf -i 100000-999999 -n 1)
+          FULL_VERSION="${VERSION}.${UID}"
+          echo "Generated version: $FULL_VERSION"
+          echo "IMAGE_TAG=$FULL_VERSION" >> $GITHUB_ENV
+
+      - name: Authenticate with Google Cloud
+        run: |
+          echo '${{ secrets.ANTITHESIS_SERVICE_ACCOUNT_KEY }}' | jq '.' > /tmp/key.json
+          gcloud auth activate-service-account --key-file=/tmp/key.json
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: us-central1-docker.pkg.dev/molten-verve-216720/dominant-repository/go-quai:${{ env.IMAGE_TAG }}
+          cache-from: type=registry
+          cache-to: type=inline
+
+      - name: Run Antithesis Test
+        uses: antithesishq/antithesis-trigger-action@v0.6
+        with:
+          notebook_name: dominant
+          tenant: dominant
+          username: ${{ secrets.ANTITHESIS_USER_NAME }}
+          password: ${{ secrets.ANTITHESIS_PASSWORD }}
+          github_token: ${{ secrets.GH_PAT }}
+          images: "go-quai:${{ env.IMAGE_TAG }};quai-cpu-miner:0.1.0-test.12;quai-workload:0.1.0-pre.38;quai-statistics-backend:v2.31.0-pre.8;elasticsearch:8.8.0;logstash:8.8.0;kibana:8.8.0;redis:6.2-alpine"
+          config_image: "qc-config:0.1.0-single.6"
+          description: "nightly go-quai test"
+          email_recipients: ${{ secrets.ANTITHESIS_EMAILS }}"
+          additional_parameters: |-
+            custom.duration=1
