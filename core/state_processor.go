@@ -342,6 +342,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	totalQiProcessTimes := make(map[string]time.Duration)
 	firstQiTx := true
 
+	prevNonEtxGasPrice := big.NewInt(0)
 	// Calculate the min base fee from the parent
 	minBaseFee := block.BaseFee()
 
@@ -390,6 +391,16 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if qiGasPrice.Cmp(minBaseFee) < 0 {
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("qi tx has base fee less than min base fee not apply tx %d [%v]", i, tx.Hash().Hex())
 			}
+
+			// If the previous transaction is non etx type and has less gas
+			// price than the current transaction, reject the block
+			if i > 0 && block.Transactions()[i-1].Type() != types.ExternalTxType {
+				if qiGasPrice.Cmp(prevNonEtxGasPrice) > 0 {
+					return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("tx has gas price less then previous transaction not apply tx %d [%v]", i, tx.Hash().Hex())
+				}
+			}
+			// Set the prevNonEtxGasPrice after the check
+			prevNonEtxGasPrice = new(big.Int).Set(qiGasPrice)
 
 			blockMinFee, blockMaxFee = calcTxStats(blockMinFee, blockMaxFee, qiTxFeeInQuai, numTxsProcessed)
 
@@ -844,6 +855,16 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if gasPrice.Cmp(minBaseFee) < 0 {
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("quai tx has gas price less than min base fee not apply tx %d [%v]", i, tx.Hash().Hex())
 			}
+
+			// If the previous transaction is non etx type and has less gas
+			// price than the current transaction, reject the block
+			if i > 0 && block.Transactions()[i-1].Type() != types.ExternalTxType {
+				if gasPrice.Cmp(prevNonEtxGasPrice) > 0 {
+					return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("tx has gas price less then previous transaction not apply tx %d [%v]", i, tx.Hash().Hex())
+				}
+			}
+			// Set the prevNonEtxGasPrice after the check
+			prevNonEtxGasPrice = new(big.Int).Set(gasPrice)
 
 			blockMinFee, blockMaxFee = calcTxStats(blockMinFee, blockMaxFee, fees, numTxsProcessed)
 			if receipt.Status == types.ReceiptStatusSuccessful {
