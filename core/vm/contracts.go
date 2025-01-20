@@ -26,10 +26,15 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/math"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/crypto/blake2b"
 	"github.com/dominant-strategies/go-quai/crypto/bn256"
+	"github.com/dominant-strategies/go-quai/ethdb"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/holiman/uint256"
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
@@ -44,8 +49,9 @@ type PrecompiledContract interface {
 }
 
 var (
-	PrecompiledContracts map[common.AddressBytes]PrecompiledContract = make(map[common.AddressBytes]PrecompiledContract)
-	PrecompiledAddresses map[string][]common.Address                 = make(map[string][]common.Address)
+	PrecompiledContracts    map[common.AddressBytes]PrecompiledContract = make(map[common.AddressBytes]PrecompiledContract)
+	PrecompiledAddresses    map[string][]common.Address                 = make(map[string][]common.Address)
+	LockupContractAddresses map[[2]byte]common.Address                  = make(map[[2]byte]common.Address) // LockupContractAddress is not of type PrecompiledContract
 )
 
 func InitializePrecompiles(nodeLocation common.Location) {
@@ -58,6 +64,7 @@ func InitializePrecompiles(nodeLocation common.Location) {
 	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000007", nodeLocation.BytePrefix()))] = &bn256ScalarMul{}
 	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000008", nodeLocation.BytePrefix()))] = &bn256Pairing{}
 	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000009", nodeLocation.BytePrefix()))] = &blake2F{}
+	LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}] = common.HexToAddress(fmt.Sprintf("0x%02x0000000000000000000000000000000000000A", nodeLocation.BytePrefix()), nodeLocation)
 
 	for address, _ := range PrecompiledContracts {
 		if address.Location().Equal(nodeLocation) {
@@ -67,7 +74,7 @@ func InitializePrecompiles(nodeLocation common.Location) {
 	}
 }
 
-// ActivePrecompiles returns the precompiles enabled with the current configuration.
+// ActivePrecompiles returns the precompiles enabled with the current configuration, except the Lockup Contract.
 func ActivePrecompiles(rules params.Rules, nodeLocation common.Location) []common.Address {
 	return PrecompiledAddresses[nodeLocation.Name()]
 }
@@ -497,4 +504,473 @@ func intToByteArray20(n uint8) [20]byte {
 
 func RequiredGas(input []byte) uint64 {
 	return 0
+}
+
+// RunLockupContract is an API that ties together the Lockup Contract with the EVM.
+// The requested function is determined by input length. Contracts should ensure that their input is tightly packed
+// with abi.encodePacked.
+func RunLockupContract(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) ([]byte, error) {
+	if evm.interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	switch len(input) {
+	case 60:
+		if err := UnwrapQi(evm, ownerContract, gas, input); err != nil {
+			return nil, err
+		} else {
+			return []byte{1}, nil
+		}
+	case 20:
+		ret, err := ClaimQiDeposit(evm, ownerContract, gas, input)
+		if err != nil {
+			return nil, err
+		} else {
+			return ret, nil
+		}
+	case 53:
+		if err := ClaimCoinbaseLockup(evm, ownerContract, gas, input); err != nil {
+			return nil, err
+		} else {
+			return []byte{1}, nil
+		}
+	case 25:
+		ret, err := GetLockupData(evm, ownerContract, input)
+		if err != nil {
+			return nil, err
+		} else {
+			return ret, nil
+		}
+	case 21:
+		ret, err := GetLatestLockupData(evm, ownerContract, input)
+		if err != nil {
+			return nil, err
+		} else {
+			return ret, nil
+		}
+	default:
+		return nil, ErrExecutionReverted
+	}
+}
+
+func GetLockupData(evm *EVM, ownerContract common.Address, input []byte) ([]byte, error) {
+	if len(input) != 25 {
+		return nil, errors.New("input length is not 25 bytes")
+	}
+	// Extract beneficiaryMiner
+	beneficiaryMiner := common.BytesToAddress(input[:20], evm.chainConfig.Location)
+	// Extract lockupByte
+	lockupByte := input[20]
+
+	// Extract epoch
+	epoch := binary.BigEndian.Uint32(input[21:25])
+	_, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	_, err = beneficiaryMiner.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	balance, trancheUnlockHeight, elements, delegate := rawdb.ReadCoinbaseLockup(evm.StateDB.UnderlyingDatabase(), evm.Batch, ownerContract, beneficiaryMiner, lockupByte, epoch)
+
+	return ABIEncodeLockupData(trancheUnlockHeight, balance, elements, delegate)
+}
+
+func GetLatestLockupData(evm *EVM, ownerContract common.Address, input []byte) ([]byte, error) {
+	if len(input) != 21 {
+		return nil, errors.New("input length is not 21 bytes")
+	}
+	// Extract beneficiaryMiner
+	beneficiaryMiner := common.BytesToAddress(input[:20], evm.chainConfig.Location)
+	// Extract lockupByte
+	lockupByte := input[20]
+	currentEpoch := uint32((evm.Context.BlockNumber.Uint64() / params.CoinbaseEpochBlocks) + 1) // zero epoch is an invalid state
+	balance, trancheUnlockHeight, elements, delegate := rawdb.ReadCoinbaseLockup(evm.StateDB.UnderlyingDatabase(), evm.Batch, ownerContract, beneficiaryMiner, lockupByte, currentEpoch)
+	return ABIEncodeLockupData(trancheUnlockHeight, balance, elements, delegate)
+}
+
+func ABIEncodeLockupData(trancheUnlockHeight uint32, balance *big.Int, elements uint16, delegate common.Address) ([]byte, error) {
+	// Create a buffer for the result
+	encoded := make([]byte, 0, 128) // 32 bytes for each value
+
+	// Encode trancheUnlockHeight (uint32, right-aligned to 32 bytes)
+	trancheBytes := make([]byte, 32)
+	binary.BigEndian.PutUint32(trancheBytes[28:], trancheUnlockHeight) // Right-align
+	encoded = append(encoded, trancheBytes...)
+	// Encode balance (32 bytes)
+	balanceBytes, overflow := uint256.FromBig(balance)
+	if overflow {
+		return nil, fmt.Errorf("balance is too large to encode: %v", balance)
+	}
+	temp := balanceBytes.Bytes32()
+	encoded = append(encoded, temp[:]...)
+
+	// Encode elements (uint16, right-aligned to 32 bytes)
+	elementsBytes := make([]byte, 32)
+	binary.BigEndian.PutUint16(elementsBytes[30:], elements) // Right-align
+	encoded = append(encoded, elementsBytes...)
+
+	// Encode delegate (20 bytes, right-aligned to 32 bytes)
+	delegateBytes := delegate.Bytes()
+	encoded = append(encoded, common.LeftPadBytes(delegateBytes, 32)...)
+
+	return encoded, nil
+}
+
+func GetAllLockupData(db ethdb.Database, ownerContract, beneficiaryMiner common.Address, location common.Location, logger *log.Logger) (map[string]map[string][]interface{}, error) {
+	prefix := append(rawdb.CoinbaseLockupPrefix, ownerContract.Bytes()...)
+	prefix = append(prefix, beneficiaryMiner.Bytes()...)
+	it := db.NewIterator(prefix, nil)
+	batch := db.NewBatch()
+	defer it.Release()
+	epochToLockupByteToLockupMap := make(map[string]map[string][]interface{})
+	for it.Next() {
+		key := it.Key()
+		if len(key) != rawdb.CoinbaseLockupKeyLength {
+			continue
+		}
+		_, _, lockupByte, epoch, err := rawdb.ReverseCoinbaseLockupKey(key, location)
+		if err != nil {
+			return nil, err
+		}
+		balance, trancheUnlockHeight, elements, delegate := rawdb.ReadCoinbaseLockup(db, batch, ownerContract, beneficiaryMiner, lockupByte, epoch)
+		if trancheUnlockHeight == 0 {
+			logger.Errorf("lockup is empty: ownerContract=%v, beneficiaryMiner=%v, lockupByte=%v, epoch=%v", ownerContract, beneficiaryMiner, lockupByte, epoch)
+		}
+		jsonLockup := map[string]interface{}{
+			"balance":             balance,
+			"trancheUnlockHeight": trancheUnlockHeight,
+			"elements":            elements,
+			"delegate":            delegate,
+		}
+		if _, ok := epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)]; !ok {
+			epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)] = make(map[string][]interface{})
+		}
+		epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)][fmt.Sprintf("%d", lockupByte)] = append(epochToLockupByteToLockupMap[fmt.Sprintf("%d", epoch)][fmt.Sprintf("%d", lockupByte)], jsonLockup)
+	}
+	return epochToLockupByteToLockupMap, nil
+}
+
+func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) error { // Ensure msg.sender is ownerContract
+	// Input should be tightly packed 53 bytes
+	if len(input) != 53 {
+		return errors.New("input length is not 33 bytes")
+	}
+
+	// Extract beneficiaryMiner
+	beneficiaryMiner := common.BytesToAddress(input[:20], evm.chainConfig.Location)
+	// Extract to address
+	to := common.BytesToAddress(input[20:40], evm.chainConfig.Location)
+	// Extract lockupByte
+	lockupByte := input[40]
+
+	// Extract epoch
+	epoch := binary.BigEndian.Uint32(input[41:45])
+
+	// Extract etxGasLimit
+	etxGasLimit := binary.BigEndian.Uint64(input[45:53])
+
+	if *gas < etxGasLimit {
+		return ErrOutOfGas
+	}
+	*gas -= etxGasLimit
+
+	_, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	_, err = beneficiaryMiner.InternalAddress()
+	if err != nil {
+		return err
+	}
+	latestEpoch := uint32((evm.Context.BlockNumber.Uint64() / params.CoinbaseEpochBlocks) + 1)
+	if epoch >= latestEpoch {
+		return fmt.Errorf("epoch is not less than the latest epoch: %d >= %d", epoch, latestEpoch)
+	}
+	if beneficiaryMiner.IsInQiLedgerScope() && to.IsInQuaiLedgerScope() || beneficiaryMiner.IsInQuaiLedgerScope() && to.IsInQiLedgerScope() {
+		return errors.New("beneficiaryMiner and to cannot be in different ledgers")
+	}
+
+	balance, trancheUnlockHeight, elements, delegate := rawdb.ReadCoinbaseLockup(evm.StateDB.UnderlyingDatabase(), evm.Batch, ownerContract, beneficiaryMiner, lockupByte, epoch)
+	if trancheUnlockHeight == 0 {
+		return errors.New("no lockup to claim")
+	}
+	if trancheUnlockHeight > uint32(evm.Context.BlockNumber.Uint64()) {
+		return errors.New("tranche is not unlocked yet")
+	}
+	if elements == 0 {
+		return errors.New("no lockup to claim")
+	}
+	deletedCoinbaseLockupHash := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, delegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
+	coinbaseLockupKey := rawdb.DeleteCoinbaseLockup(evm.Batch, ownerContract, beneficiaryMiner, lockupByte, epoch)
+
+	evm.ETXCacheLock.RLock()
+	index := len(evm.ETXCache)
+	evm.ETXCacheLock.RUnlock()
+	if index > math.MaxUint16 {
+		return fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
+	}
+
+	externalTx := types.ExternalTx{Value: balance, To: &to, Sender: ownerContract, EtxType: uint64(types.CoinbaseLockupType), OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit}
+
+	evm.ETXCacheLock.Lock()
+	evm.ETXCache = append(evm.ETXCache, types.NewTx(&externalTx))
+	evm.CoinbaseDeletedHashes = append(evm.CoinbaseDeletedHashes, &deletedCoinbaseLockupHash)
+	if err := rawdb.WriteCoinbaseLockupToMap(evm.CoinbasesDeleted, coinbaseLockupKey, balance, trancheUnlockHeight, elements, delegate); err != nil {
+		evm.ETXCacheLock.Unlock()
+		return err
+	}
+	evm.ETXCacheLock.Unlock()
+	return nil
+}
+
+// AddNewLock adds a new locked balance to the lockup contract
+func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address, beneficiaryMiner common.Address, delegate common.Address, sender common.InternalAddress, lockupByte byte, unlockHeight uint64, epoch uint32, value *big.Int, location common.Location, log_ bool) ([]byte, []byte, *common.Hash, *common.Hash, error) {
+	_, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	_, err = beneficiaryMiner.InternalAddress()
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if sender != common.OneInternal(location) {
+		return nil, nil, nil, nil, errors.New("sender is not the correct internal address")
+	}
+	if value.Sign() == -1 || value.Sign() == 0 {
+		return nil, nil, nil, nil, errors.New("value is invalid")
+	}
+	balance, trancheUnlockHeight, elements, oldDelegate := rawdb.ReadCoinbaseLockup(statedb.UnderlyingDatabase(), batch, ownerContract, beneficiaryMiner, lockupByte, epoch) // delegate can be changed every update if the miner chooses
+
+	oldCoinbaseLockupHash_ := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, oldDelegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
+	oldCoinbaseLockupHashPtr := &oldCoinbaseLockupHash_
+	oldKey := rawdb.CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch)
+	if trancheUnlockHeight != 0 && unlockHeight < uint64(trancheUnlockHeight) {
+		return nil, nil, nil, nil, errors.New("new unlock height is less than the current tranche unlock height, math is broken")
+	}
+	if epoch == 0 && trancheUnlockHeight != 0 {
+		return nil, nil, nil, nil, errors.New("epoch is 0 but trancheUnlockHeight is not")
+	}
+
+	if trancheUnlockHeight == 0 {
+		// New epoch: create new lockup tranche, don't change previous one
+		if epoch+1 > math.MaxUint32 {
+			return nil, nil, nil, nil, errors.New("epoch overflow")
+		}
+		elements = 0
+		balance = new(big.Int)
+		trancheUnlockHeight = uint32(unlockHeight) // TODO: ensure overflow is acceptable here
+		oldCoinbaseLockupHashPtr = nil
+		oldKey = nil
+		if log_ {
+			log.Global.Info("Rotated epoch: ", " owner: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch)
+		}
+	}
+
+	elements++
+	balance.Add(balance, value)
+
+	newKey, err := rawdb.WriteCoinbaseLockup(batch, ownerContract, beneficiaryMiner, lockupByte, epoch, balance, trancheUnlockHeight, elements, delegate)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	// Cut off prefix from keys
+	newKey = newKey[len(rawdb.CoinbaseLockupPrefix):]
+
+	newCoinbaseLockupHash := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, delegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
+	if log_ {
+		log.Global.Info("Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte)
+	}
+	return oldKey, newKey, oldCoinbaseLockupHashPtr, &newCoinbaseLockupHash, nil
+}
+
+// UnwrapQi is called by a smart contract that owns wrapped Qi to unwrap it for real Qi UTXOs
+// It deducts the requested Qi balance from the contract's balance and creates an external transaction to the beneficiary
+// It is the responsibility of the contract to ensure solvency in its underyling wrapped Qi balance
+func UnwrapQi(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) error {
+	// input is tightly packed 20 bytes for Qi beneficiary, 32 bytes for value and 8 bytes for etxGasLimit
+	if len(input) != 60 {
+		return errors.New("input length is not 36 bytes")
+	}
+	beneficiaryQi := common.BytesToAddress(input[:20], evm.chainConfig.Location)
+	value := new(big.Int).SetBytes(input[20:52])
+	etxGasLimit := binary.BigEndian.Uint64(input[52:60])
+
+	if *gas < etxGasLimit {
+		return ErrOutOfGas
+	}
+	*gas -= etxGasLimit
+
+	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+
+	_, err = beneficiaryQi.InternalAndQiAddress()
+	if err != nil {
+		return err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	ownerContractHash := common.BytesToHash(ownerContractInternal[:])
+
+	balanceHash := evm.StateDB.GetState(lockupContractAddressInternal, ownerContractHash)
+	if balanceHash == (common.Hash{}) {
+		return errors.New("no wrapped Qi balance in contract to unwrap")
+	}
+	balanceBig := balanceHash.Big()
+	if balanceBig.Cmp(value) == -1 {
+		return fmt.Errorf("not enough wrapped Qi to unwrap: have %v want %v", balanceBig, value)
+	}
+	balanceBig.Sub(balanceBig, value)
+	evm.StateDB.SetState(lockupContractAddressInternal, ownerContractHash, common.BigToHash(balanceBig))
+
+	evm.ETXCacheLock.RLock()
+	index := len(evm.ETXCache)
+	evm.ETXCacheLock.RUnlock()
+	if index > math.MaxUint16 {
+		return fmt.Errorf("CreateETX overflow error: too many ETXs in cache")
+	}
+
+	externalTx := types.ExternalTx{Value: value, To: &beneficiaryQi, Sender: ownerContract, EtxType: uint64(types.CoinbaseLockupType), OriginatingTxHash: evm.Hash, ETXIndex: uint16(index), Gas: etxGasLimit}
+	log.Global.Infof("Unwrapped Qi: %v -> %v, value: %v", ownerContract, beneficiaryQi, value)
+	evm.ETXCacheLock.Lock()
+	evm.ETXCache = append(evm.ETXCache, types.NewTx(&externalTx))
+	evm.ETXCacheLock.Unlock()
+	return nil
+}
+
+// WrapQi is called by the state processor to process an inbound Qi wrapping ETX
+// It stores the wrapped Qi balance in the lockup contract keyed with the contract address and provided Quai beneficiary address
+// To accept the deposit, the smart contract must call the ClaimQiDeposit function on the precompile
+func WrapQi(statedb StateDB, ownerContract, beneficiary common.Address, sender common.InternalAddress, value *big.Int, location common.Location) error {
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	beneficiaryInternal, err := beneficiary.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	if sender != common.OneInternal(location) {
+		return errors.New("sender is not the correct internal address")
+	}
+	lockupContractAddress := LockupContractAddresses[[2]byte{location[0], location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+
+	if value.Sign() == -1 {
+		return errors.New("negative value")
+	}
+	if value.Sign() == 0 {
+		return nil
+	}
+	wrappedQiKey := common.Hash{}
+	copy(wrappedQiKey[:16], ownerContractInternal[:16])
+	copy(wrappedQiKey[16:], beneficiaryInternal[:16])
+	balanceHash := statedb.GetState(lockupContractAddressInternal, wrappedQiKey)
+	if (balanceHash == common.Hash{}) {
+		statedb.SetState(lockupContractAddressInternal, wrappedQiKey, common.BigToHash(value))
+	} else {
+		balanceBig := balanceHash.Big()
+		balanceBig.Add(balanceBig, value)
+		statedb.SetState(lockupContractAddressInternal, wrappedQiKey, common.BigToHash(balanceBig))
+	}
+	statedb.Finalize(true)
+	log.Global.Infof("Wrapped Qi: %v -> %v, value: %v", ownerContract, beneficiary, value)
+	return nil
+}
+
+// ClaimQiDeposit is called by the owner smart contract to claim a wrapped Qi deposit
+// It adds the wrapped Qi balance to the smart contract's Wrapped Qi balance
+// The contract should then mint the equivalent amount of Wrapped Qi tokens to the Quai beneficiary
+func ClaimQiDeposit(evm *EVM, ownerContract common.Address, gas *uint64, input []byte) ([]byte, error) {
+	// input is tightly packed 20 bytes for Quai owner
+	if len(input) != 20 {
+		return nil, errors.New("input length is not 20 bytes")
+	}
+	quaiOwner := common.BytesToAddress(input, evm.chainConfig.Location)
+	lockupContractAddress := LockupContractAddresses[[2]byte{evm.chainConfig.Location[0], evm.chainConfig.Location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerQuaiInternal, err := quaiOwner.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	wrappedQiKey := common.Hash{}
+	copy(wrappedQiKey[:16], ownerContractInternal[:16])
+	copy(wrappedQiKey[16:], ownerQuaiInternal[:16])
+	balanceHash := evm.StateDB.GetState(lockupContractAddressInternal, wrappedQiKey)
+	if balanceHash == (common.Hash{}) {
+		return nil, errors.New("no wrapped Qi balance to claim")
+	}
+	evm.StateDB.SetState(lockupContractAddressInternal, wrappedQiKey, common.Hash{})
+
+	ownerContractHash := common.BytesToHash(ownerContractInternal[:])
+	ownerContractBalanceHash := evm.StateDB.GetState(lockupContractAddressInternal, ownerContractHash)
+	if ownerContractBalanceHash == (common.Hash{}) {
+		evm.StateDB.SetState(lockupContractAddressInternal, ownerContractHash, balanceHash)
+	} else {
+		ownerContractBalance := ownerContractBalanceHash.Big()
+		ownerContractBalance.Add(ownerContractBalance, balanceHash.Big())
+		evm.StateDB.SetState(lockupContractAddressInternal, ownerContractHash, common.BigToHash(ownerContractBalance))
+	}
+	log.Global.Infof("Claimed Qi Deposit: %v -> %v, value: %v", ownerContract, quaiOwner, balanceHash.Big().String())
+	return balanceHash[:], nil
+}
+
+func GetWrappedQiDeposit(statedb StateDB, ownerContract, quaiOwner common.Address, location common.Location) (*big.Int, error) {
+	lockupContractAddress := LockupContractAddresses[[2]byte{location[0], location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerQuaiInternal, err := quaiOwner.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	wrappedQiKey := common.Hash{}
+	copy(wrappedQiKey[:16], ownerContractInternal[:16])
+	copy(wrappedQiKey[16:], ownerQuaiInternal[:16])
+	balanceHash := statedb.GetState(lockupContractAddressInternal, wrappedQiKey)
+	if balanceHash == (common.Hash{}) {
+		return nil, errors.New("no wrapped Qi balance")
+	}
+	return balanceHash.Big(), nil
+}
+
+func GetWrappedQiContractBalance(statedb StateDB, ownerContract common.Address, location common.Location) (*big.Int, error) {
+	lockupContractAddress := LockupContractAddresses[[2]byte{location[0], location[1]}]
+	lockupContractAddressInternal, err := lockupContractAddress.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerContractInternal, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	ownerContractHash := common.BytesToHash(ownerContractInternal[:])
+
+	balanceHash := statedb.GetState(lockupContractAddressInternal, ownerContractHash)
+	if balanceHash == (common.Hash{}) {
+		return nil, errors.New("no wrapped Qi balance")
+	}
+	return balanceHash.Big(), nil
 }

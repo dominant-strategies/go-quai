@@ -32,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/rlp"
@@ -48,7 +49,6 @@ var (
 	emptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	newestEtxKey = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // max hash
 	oldestEtxKey = common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffe") // max hash - 1
-
 )
 
 type proofList [][]byte
@@ -420,6 +420,10 @@ func (s *StateDB) Database() Database {
 
 func (s *StateDB) ETXDatabase() Database {
 	return s.etxDb
+}
+
+func (s *StateDB) UnderlyingDatabase() ethdb.KeyValueReader {
+	return s.db.TrieDB().DiskDB()
 }
 
 // StorageTrie returns the storage trie of an account.
@@ -898,7 +902,7 @@ func (s *StateDB) Copy() *StateDB {
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
-		// In the Finalise-method, there is a case where an object is in the journal but not
+		// In the Finalize-method, there is a case where an object is in the journal but not
 		// in the stateObjects: OOG after touch on ripeMD. Thus, we need to check for
 		// nil
 		if object, exist := s.stateObjects[addr]; exist {
@@ -1014,10 +1018,10 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-// Finalise finalises the state by removing the s destructed objects and clears
-// the journal as well as the refunds. Finalise, however, will not push any updates
+// Finalize finalises the state by removing the s destructed objects and clears
+// the journal as well as the refunds. Finalize, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+func (s *StateDB) Finalize(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
@@ -1043,7 +1047,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
 			}
 		} else {
-			obj.finalise(true) // Prefetch slots in the background
+			obj.finalize(true) // Prefetch slots in the background
 		}
 		s.stateObjectsPending[addr] = struct{}{}
 		s.stateObjectsDirty[addr] = struct{}{}
@@ -1064,8 +1068,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	// Finalise all the dirty storage states and write them into the tries
-	s.Finalise(deleteEmptyObjects)
+	// Finalize all the dirty storage states and write them into the tries
+	s.Finalize(deleteEmptyObjects)
 
 	// If there was a trie prefetcher operating, it gets aborted and irrevocably
 	// modified after we start retrieving tries. Remove it from the statedb after

@@ -711,7 +711,7 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *para
 		}).Error("Missing body but have receipt")
 		return nil
 	}
-	if err := receipts.DeriveFields(config, hash, number, body.TransactionsWithReceipts()); err != nil {
+	if err := receipts.DeriveFields(config, hash, number, body.Transactions()); err != nil {
 		db.Logger().WithFields(log.Fields{
 			"hash":   hash,
 			"number": number,
@@ -1597,6 +1597,77 @@ func DeleteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	}
 }
 
+func WriteCreatedCoinbaseLockupKeys(db ethdb.KeyValueWriter, blockHash common.Hash, keys [][]byte) error {
+	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(keys))}
+	protoKeys.Keys = append(protoKeys.Keys, keys...)
+
+	data, err := proto.Marshal(protoKeys)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(createdCoinbaseLockupsKey(blockHash), data)
+}
+
+func ReadCreatedCoinbaseLockupKeys(db ethdb.Reader, blockHash common.Hash) ([][]byte, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(createdCoinbaseLockupsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeys := new(types.ProtoKeys)
+	if err := proto.Unmarshal(data, protoKeys); err != nil {
+		return nil, err
+	}
+	return protoKeys.Keys, nil
+}
+
+func DeleteCreatedCoinbaseLockupKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(createdCoinbaseLockupsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete created coinbase lockup keys")
+	}
+}
+
+func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash, deletedLockups map[[CoinbaseLockupKeyLength]byte][]byte) error {
+	protoKeysAndValues := &types.ProtoKeysAndValues{KeysAndValues: make([]*types.ProtoKeyValue, 0, len(deletedLockups))}
+	for key, value := range deletedLockups {
+		protoKeysAndValues.KeysAndValues = append(protoKeysAndValues.KeysAndValues, &types.ProtoKeyValue{
+			Key:   key[:],
+			Value: value,
+		})
+	}
+	data, err := proto.Marshal(protoKeysAndValues)
+	if err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to rlp encode utxo")
+	}
+	return db.Put(deletedCoinbaseLockupsKey(blockHash), data)
+}
+
+func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[CoinbaseLockupKeyLength]byte][]byte, error) {
+	// Try to look up the data in leveldb.
+	data, _ := db.Get(deletedCoinbaseLockupsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil
+	}
+	protoKeysAndValues := new(types.ProtoKeysAndValues)
+	if err := proto.Unmarshal(data, protoKeysAndValues); err != nil {
+		return nil, err
+	}
+	deletedLockups := make(map[[CoinbaseLockupKeyLength]byte][]byte)
+	for _, keyValue := range protoKeysAndValues.KeysAndValues {
+		if len(keyValue.Key) != 47 {
+			return nil, fmt.Errorf("invalid key length %d", len(keyValue.Key))
+		}
+		deletedLockups[[CoinbaseLockupKeyLength]byte(keyValue.Key)] = keyValue.Value
+	}
+	return deletedLockups, nil
+}
+
+func DeleteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(deletedCoinbaseLockupsKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete deleted coinbase lockups")
+	}
+}
+
 func ReadUTXOSetSize(db ethdb.Reader, blockHash common.Hash) uint64 {
 	data, _ := db.Get(utxoSetSizeKey(blockHash))
 	if len(data) == 0 {
@@ -1748,4 +1819,85 @@ func DeleteUtxoToBlockHeight(db ethdb.KeyValueWriter, txHash common.Hash, index 
 	if err := db.Delete(utxoToBlockHeightKey(txHash, index)); err != nil {
 		db.Logger().WithField("err", err).Fatal("Failed to delete utxo to block height")
 	}
+}
+
+func ReadCoinbaseLockup(db ethdb.KeyValueReader, batch ethdb.Batch, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) (*big.Int, uint32, uint16, common.Address) {
+	deleted, data := batch.GetPending(CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch))
+	if deleted {
+		return new(big.Int), 0, 0, common.Zero
+	} else if data != nil {
+		amount := new(big.Int).SetBytes(data[:32])
+		blockHeight := binary.BigEndian.Uint32(data[32:36])
+		elements := binary.BigEndian.Uint16(data[36:38])
+		var delegate common.Address
+		if len(data) == 58 {
+			delegate = common.BytesToAddress(data[38:], db.Location())
+		} else {
+			delegate = common.Zero
+		}
+		return amount, blockHeight, elements, delegate
+	}
+	// If the data is not in the batch, try to look up the data in leveldb
+	data, _ = db.Get(CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch))
+	if len(data) == 0 {
+		return new(big.Int), 0, 0, common.Zero
+	}
+	amount := new(big.Int).SetBytes(data[:32])
+	blockHeight := binary.BigEndian.Uint32(data[32:36])
+	elements := binary.BigEndian.Uint16(data[36:38])
+	var delegate common.Address
+	if len(data) == 58 {
+		delegate = common.BytesToAddress(data[38:], db.Location())
+	} else {
+		delegate = common.Zero
+	}
+	return amount, blockHeight, elements, delegate
+}
+
+func WriteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32, amount *big.Int, blockHeight uint32, elements uint16, delegate common.Address) ([]byte, error) {
+	data := make([]byte, 38)
+	amountBytes := amount.Bytes()
+	if len(amountBytes) > 32 {
+		return nil, fmt.Errorf("amount is too large")
+	}
+	// Right-align amountBytes in data[:32]
+	copy(data[32-len(amountBytes):32], amountBytes)
+	binary.BigEndian.PutUint32(data[32:36], blockHeight)
+	binary.BigEndian.PutUint16(data[36:38], elements)
+	if !delegate.Equal(common.Zero) {
+		data = append(data, delegate.Bytes()...)
+	}
+	key := CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch)
+	if err := db.Put(key, data); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to store coinbase lockup")
+	}
+	return key, nil
+}
+
+func WriteCoinbaseLockupToMap(coinbaseMap map[[CoinbaseLockupKeyLength]byte][]byte, key [CoinbaseLockupKeyLength]byte, amount *big.Int, blockHeight uint32, elements uint16, delegate common.Address) error {
+	data := make([]byte, 38)
+	amountBytes := amount.Bytes()
+	if len(amountBytes) > 32 {
+		return fmt.Errorf("amount is too large")
+	}
+	// Right-align amountBytes in data[:32]
+	copy(data[32-len(amountBytes):32], amountBytes)
+	binary.BigEndian.PutUint32(data[32:36], blockHeight)
+	binary.BigEndian.PutUint16(data[36:38], elements)
+	if !delegate.Equal(common.Zero) {
+		data = append(data, delegate.Bytes()...)
+	}
+	coinbaseMap[[CoinbaseLockupKeyLength]byte(key)] = data
+	return nil
+}
+
+func DeleteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) [CoinbaseLockupKeyLength]byte {
+	key := CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch)
+	if err := db.Delete(key); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete coinbase lockup")
+	}
+	if len(key) != 47 {
+		db.Logger().Fatal("CoinbaseLockupKey is not 47 bytes")
+	}
+	return [CoinbaseLockupKeyLength]byte(key)
 }

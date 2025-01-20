@@ -121,6 +121,9 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 				PubKey: &pubKey,
 			})
 		}
+		if tx.Data != nil {
+			enc.Data = (*hexutil.Bytes)(&tx.Data)
+		}
 		for _, out := range tx.TxOut {
 			denom := uint64(out.Denomination)
 			address := hexutil.Bytes(out.Address)
@@ -275,7 +278,9 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				Lock:         (*big.Int)(out.Lock),
 			})
 		}
-
+		if dec.Data != nil {
+			qiTx.Data = *dec.Data
+		}
 		sig, err := schnorr.ParseSignature(*dec.UTXOSignature)
 		if err != nil {
 			return err

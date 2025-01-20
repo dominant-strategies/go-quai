@@ -30,6 +30,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
@@ -269,6 +270,35 @@ func (s *PublicBlockChainQuaiAPI) GetLockupsByAddressAndRange(ctx context.Contex
 		jsonLockups = append(jsonLockups, jsonLockup)
 	}
 	return jsonLockups, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) GetLockupsForContractAndMiner(ctx context.Context, ownerContract, beneficiaryMiner common.Address) (map[string]map[string][]interface{}, error) {
+	_, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	_, err = beneficiaryMiner.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	return vm.GetAllLockupData(s.b.Database(), ownerContract, beneficiaryMiner, s.b.NodeLocation(), s.b.Logger())
+}
+
+func (s *PublicBlockChainQuaiAPI) GetWrappedQiDeposit(ctx context.Context, ownerContract, beneficiaryMiner common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	_, err := ownerContract.InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	_, err = beneficiaryMiner.InternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	balance, err := vm.GetWrappedQiDeposit(state, ownerContract, beneficiaryMiner, s.b.NodeLocation())
+	return (*hexutil.Big)(balance), err
 }
 
 func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) (map[string][]interface{}, error) {
@@ -1228,7 +1258,7 @@ func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() hexutil.Uint {
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
-func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, qiAmount hexutil.Big) *hexutil.Big {
+func (s *PublicBlockChainQuaiAPI) QiToQuai(ctx context.Context, qiAmount hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) *hexutil.Big {
 	var header *types.WorkObject
 	var err error
 	if blockNr, ok := blockNrOrHash.Number(); ok {
@@ -1252,7 +1282,7 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHa
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
-func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, quaiAmount hexutil.Big) *hexutil.Big {
+func (s *PublicBlockChainQuaiAPI) QuaiToQi(ctx context.Context, quaiAmount hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) *hexutil.Big {
 	var header *types.WorkObject
 	var err error
 	if blockNr, ok := blockNrOrHash.Number(); ok {
@@ -1315,4 +1345,89 @@ func (s *PublicBlockChainQuaiAPI) SetWorkShareP2PThreshold(ctx context.Context, 
 	s.b.SetWorkShareP2PThreshold(int(threshold))
 
 	return nil
+}
+
+// GetTransactionReceipt returns the transaction receipt for the given transaction hash.
+// Moved from PublicTransactionPoolAPI
+// quai_getTransactionReceipt
+func (s *PublicBlockChainQuaiAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, nil
+	}
+	receipts, err := s.b.GetReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	receipt := &types.Receipt{}
+	for _, r := range receipts {
+		if r.TxHash == hash {
+			receipt = r
+		}
+	}
+
+	fields := map[string]interface{}{
+		"blockHash":         blockHash,
+		"blockNumber":       hexutil.Uint64(blockNumber),
+		"transactionHash":   hash,
+		"transactionIndex":  hexutil.Uint64(index),
+		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+		"contractAddress":   nil,
+		"logs":              receipt.Logs,
+		"logsBloom":         receipt.Bloom,
+		"type":              hexutil.Uint(tx.Type()),
+	}
+
+	if tx.Type() == types.QuaiTxType {
+		if to := tx.To(); to != nil {
+			fields["to"] = to.Hex()
+		}
+		// Derive the sender.
+		bigblock := new(big.Int).SetUint64(blockNumber)
+		signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
+		from, _ := types.Sender(signer, tx)
+		fields["from"] = from.Hex()
+
+	}
+
+	if tx.Type() == types.ExternalTxType {
+		fields["originatingTxHash"] = tx.OriginatingTxHash()
+		fields["etxType"] = hexutil.Uint(tx.EtxType())
+	}
+
+	var outBoundEtxs []*RPCTransaction
+	for _, tx := range receipt.OutboundEtxs {
+		outBoundEtxs = append(outBoundEtxs, newRPCTransaction(tx, blockHash, blockNumber, index, big.NewInt(0), s.b.NodeLocation()))
+	}
+	if len(receipt.OutboundEtxs) > 0 {
+		fields["outboundEtxs"] = outBoundEtxs
+	}
+	// Assign the effective gas price paid
+	header, err := s.b.HeaderByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	if tx.Type() == types.QuaiTxType {
+		gasPrice := new(big.Int).Add(header.BaseFee(), tx.MinerTip())
+		fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+	} else {
+		// QiTx
+		fields["effectiveGasPrice"] = hexutil.Uint64(header.BaseFee().Uint64())
+	}
+
+	// Assign receipt status or post state.
+	if len(receipt.PostState) > 0 {
+		fields["root"] = hexutil.Bytes(receipt.PostState)
+	} else {
+		fields["status"] = hexutil.Uint(receipt.Status)
+	}
+	if receipt.Logs == nil {
+		fields["logs"] = [][]*types.Log{}
+	}
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if !receipt.ContractAddress.Equal(common.Zero) && !receipt.ContractAddress.Equal(common.Address{}) {
+		fields["contractAddress"] = receipt.ContractAddress.Hex()
+	}
+	return fields, nil
 }

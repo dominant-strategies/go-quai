@@ -14,6 +14,7 @@ type QiTx struct {
 	TxOut   TxOuts   `json:"txOuts"`
 
 	Signature *schnorr.Signature
+	Data      []byte // Data is currently only used for wrapping Qi in the EVM
 
 	// Work fields
 	ParentHash *common.Hash
@@ -35,6 +36,7 @@ func (tx *QiTx) copy() TxData {
 		ParentHash: tx.ParentHash,
 		MixHash:    tx.MixHash,
 		WorkNonce:  tx.WorkNonce,
+		Data:       common.CopyBytes(tx.Data),
 	}
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
@@ -103,7 +105,7 @@ func (tx *QiTx) parentHash() *common.Hash                { return tx.ParentHash 
 func (tx *QiTx) mixHash() *common.Hash                   { return tx.MixHash }
 func (tx *QiTx) workNonce() *BlockNonce                  { return tx.WorkNonce }
 func (tx *QiTx) accessList() AccessList                  { panic("Qi TX does not have accessList") }
-func (tx *QiTx) data() []byte                            { panic("Qi TX does not have data") }
+func (tx *QiTx) data() []byte                            { return tx.Data }
 func (tx *QiTx) gas() uint64                             { panic("Qi TX does not have gas") }
 func (tx *QiTx) minerTip() *big.Int                      { panic("Qi TX does not have minerTip") }
 func (tx *QiTx) gasPrice() *big.Int                      { panic("Qi TX does not have gasPrice") }

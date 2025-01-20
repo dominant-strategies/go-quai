@@ -113,7 +113,10 @@ var (
 	configPrefix   = []byte("quai-config-") // config prefix for the db
 
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
-	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
+	BloomBitsIndexPrefix         = []byte("iB")  // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
+	CoinbaseLockupPrefix         = []byte("cl")  // coinbaseLockupPrefix + ownerContract + beneficiaryMiner + lockupByte + epoch -> lockup
+	createdCoinbaseLockupsPrefix = []byte("ccl") // createdCoinbaseLockupsPrefix + hash -> [][]byte
+	deletedCoinbaseLockupsPrefix = []byte("dcl") // deletedCoinbaseLockupsPrefix + hash -> [][]byte
 )
 
 const (
@@ -386,4 +389,59 @@ func utxoToBlockHeightKey(txHash common.Hash, index uint16) []byte {
 	txHash[common.HashLength-1] = indexBytes[0]
 	txHash[common.HashLength-2] = indexBytes[1]
 	return append(utxoToBlockHeightPrefix, txHash[:]...)
+}
+
+const CoinbaseLockupKeyLength = 47 //len(CoinbaseLockupPrefix) + 2*common.AddressLength + 1 + 4
+
+func CoinbaseLockupKey(ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) []byte {
+	epochBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(epochBytes, epoch)
+	ownerBytes := ownerContract.Bytes()
+	beneficiaryBytes := beneficiaryMiner.Bytes()
+	combined := append(ownerBytes, beneficiaryBytes...)
+	combined = append(combined, lockupByte)
+	combined = append(combined, epochBytes...)
+	return append(CoinbaseLockupPrefix, combined...)
+}
+
+func createdCoinbaseLockupsKey(hash common.Hash) []byte {
+	return append(createdCoinbaseLockupsPrefix, hash.Bytes()...)
+}
+
+func deletedCoinbaseLockupsKey(hash common.Hash) []byte {
+	return append(deletedCoinbaseLockupsPrefix, hash.Bytes()...)
+}
+
+func ReverseCoinbaseLockupKey(data []byte, location common.Location) (common.Address, common.Address, byte, uint32, error) {
+
+	epochLength := 4 // Length of the epoch in bytes
+	prefixLength := len(CoinbaseLockupPrefix)
+
+	// Ensure the data is long enough to contain all components
+	if len(data) != CoinbaseLockupKeyLength {
+		return common.Address{}, common.Address{}, 0, 0, fmt.Errorf("key is wrong length to parse")
+	}
+
+	// Check and remove the prefix
+	if !bytes.HasPrefix(data, CoinbaseLockupPrefix) {
+		return common.Address{}, common.Address{}, 0, 0, fmt.Errorf("key does not have the correct prefix")
+	}
+	data = data[prefixLength:] // Remove the prefix
+
+	// Extract the owner contract address
+	ownerContract := common.BytesToAddress(data[:common.AddressLength], location)
+	data = data[common.AddressLength:] // Advance the slice
+
+	// Extract the beneficiary miner address
+	beneficiaryMiner := common.BytesToAddress(data[:common.AddressLength], location)
+	data = data[common.AddressLength:] // Advance the slice
+
+	// Extract the lockup byte
+	lockupByte := data[0]
+	data = data[1:] // Advance the slice
+
+	// Extract the epoch
+	epoch := binary.BigEndian.Uint32(data[:epochLength])
+
+	return ownerContract, beneficiaryMiner, lockupByte, epoch, nil
 }
