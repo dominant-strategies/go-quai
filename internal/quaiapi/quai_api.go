@@ -1258,7 +1258,7 @@ func (s *PublicBlockChainQuaiAPI) GetProtocolExpansionNumber() hexutil.Uint {
 }
 
 // Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
-func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, qiAmount hexutil.Big) *hexutil.Big {
+func (s *PublicBlockChainQuaiAPI) QiToQuai(ctx context.Context, qiAmount hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) *hexutil.Big {
 	var header *types.WorkObject
 	var err error
 	if blockNr, ok := blockNrOrHash.Number(); ok {
@@ -1282,7 +1282,7 @@ func (s *PublicBlockChainQuaiAPI) QiRateAtBlock(ctx context.Context, blockNrOrHa
 }
 
 // Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
-func (s *PublicBlockChainQuaiAPI) QuaiRateAtBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, quaiAmount hexutil.Big) *hexutil.Big {
+func (s *PublicBlockChainQuaiAPI) QuaiToQi(ctx context.Context, quaiAmount hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) *hexutil.Big {
 	var header *types.WorkObject
 	var err error
 	if blockNr, ok := blockNrOrHash.Number(); ok {
