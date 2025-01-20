@@ -49,7 +49,6 @@ jobs:
           tenant: dominant
           username: ${{ secrets.ANTITHESIS_USER_NAME }}
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
-          github_token: ${{ secrets.GH_PAT }}
           images: "go-quai:${{ env.IMAGE_TAG }};quai-cpu-miner:0.1.0-test.12;quai-workload:0.1.0-pre.38;quai-statistics-backend:v2.31.0-pre.8;elasticsearch:8.8.0;logstash:8.8.0;kibana:8.8.0;redis:6.2-alpine"
           config_image: "qc-config:0.1.0-single.6"
           description: "nightly go-quai test"
