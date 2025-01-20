@@ -1086,7 +1086,7 @@ func (wh *WorkObjectHeader) RPCMarshalWorkObjectHeader() map[string]interface{} 
 		"mixHash":             wh.MixHash(),
 		"lock":                hexutil.Uint64(wh.Lock()),
 		"primaryCoinbase":     wh.PrimaryCoinbase().Hex(),
-		"data":                wh.Data(),
+		"data":                hexutil.Bytes(wh.Data()),
 	}
 	return result
 }
