@@ -108,6 +108,7 @@ var NodeFlags = []Flag{
 	InsecureUnlockAllowedFlag,
 	QuaiCoinbaseFlag,
 	QiCoinbaseFlag,
+	LockupContractAddressFlag,
 	MinerPreferenceFlag,
 	CoinbaseLockupFlag,
 	EnvironmentFlag,
@@ -528,6 +529,12 @@ var (
 		Name:  c_NodeFlagPrefix + "qi-coinbases",
 		Value: "",
 		Usage: "Input TOML string or path to TOML file" + generateEnvDoc(c_NodeFlagPrefix+"qi-coinbase"),
+	}
+
+	LockupContractAddressFlag = Flag{
+		Name:  c_NodeFlagPrefix + "lockup-contract-address",
+		Value: "",
+		Usage: "Address of the lockup smart contract to send coinbase rewards to" + generateEnvDoc(c_NodeFlagPrefix+"lockup-contract-address"),
 	}
 
 	MinerPreferenceFlag = Flag{
@@ -1018,7 +1025,18 @@ func setCoinbase(cfg *quaiconfig.Config) {
 	if !ok {
 		log.Global.Fatal("Missing Qi coinbase for this location")
 	}
-
+	coinbaseLockupContractAddress := viper.GetString(LockupContractAddressFlag.Name)
+	if coinbaseLockupContractAddress != "" {
+		if !common.IsHexAddress(coinbaseLockupContractAddress) {
+			log.Global.Fatalf("invalid coinbase lockup address: %s", coinbaseLockupContractAddress)
+		}
+		lockupContractAddress := common.HexToAddress(coinbaseLockupContractAddress, cfg.NodeLocation)
+		_, err := lockupContractAddress.InternalAddress()
+		if err != nil {
+			log.Global.Fatalf("invalid coinbase lockup address: %s", coinbaseLockupContractAddress)
+		}
+		cfg.Miner.LockupContractAddress = &lockupContractAddress
+	}
 	cfg.Miner.QuaiCoinbase = quaiCoinbase
 	cfg.Miner.QiCoinbase = qiCoinbase
 }

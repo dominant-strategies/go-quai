@@ -197,7 +197,7 @@ var (
 	BaseFeeMultiplier             = big.NewInt(50)
 
 	ConversionLockPeriod uint64 = 2 * BlocksPerWeek
-	CoinbaseEpochBlocks  uint64 = 100 // Maximum number of blocks in a coinbase tranche
+	CoinbaseEpochBlocks  uint64 = 1000 // Maximum number of blocks in a coinbase tranche TODO: change this
 )
 
 func init() {
