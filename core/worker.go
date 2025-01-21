@@ -54,8 +54,6 @@ const (
 	c_uncleCacheSize = 100
 )
 
-var defaultLockupContractAddress = common.HexToAddress("0x006FCb6be37093D4d049D23A9A155010Fb0C8e65", common.Location{0, 0})
-
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
 type environment struct {
@@ -108,21 +106,22 @@ func (env *environment) unclelist() []*types.WorkObjectHeader {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	QuaiCoinbase       common.Address `toml:",omitempty"` // Public address for Quai mining rewards
-	QiCoinbase         common.Address `toml:",omitempty"` // Public address for Qi mining rewards
-	CoinbaseLockup     uint8          `toml:",omitempty"` // Lockup byte the determines number of blocks before mining rewards can be spent
-	MinerPreference    float64        // Determines the relative preference of Qi or Quai [0, 1] respectively
-	Notify             []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
-	NotifyFull         bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
-	ExtraData          hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor           uint64         // Target gas floor for mined blocks.
-	GasCeil            uint64         // Target gas ceiling for mined blocks.
-	GasPrice           *big.Int       // Minimum gas price for mining a transaction
-	Recommit           time.Duration  // The time interval for miner to re-create mining work.
-	Noverify           bool           // Disable remote mining solution verification(only useful in ethash).
-	WorkShareMining    bool           // Whether to mine work shares from raw transactions.
-	WorkShareThreshold int            // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
-	Endpoints          []string       // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
+	QuaiCoinbase          common.Address  `toml:",omitempty"` // Public address for Quai mining rewards
+	QiCoinbase            common.Address  `toml:",omitempty"` // Public address for Qi mining rewards
+	CoinbaseLockup        uint8           `toml:",omitempty"` // Lockup byte the determines number of blocks before mining rewards can be spent
+	LockupContractAddress *common.Address `toml:",omitempty"` // Address of the lockup contract to use for coinbase rewards
+	MinerPreference       float64         // Determines the relative preference of Qi or Quai [0, 1] respectively
+	Notify                []string        `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
+	NotifyFull            bool            `toml:",omitempty"` // Notify with pending block headers instead of work packages
+	ExtraData             hexutil.Bytes   `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor              uint64          // Target gas floor for mined blocks.
+	GasCeil               uint64          // Target gas ceiling for mined blocks.
+	GasPrice              *big.Int        // Minimum gas price for mining a transaction
+	Recommit              time.Duration   // The time interval for miner to re-create mining work.
+	Noverify              bool            // Disable remote mining solution verification(only useful in ethash).
+	WorkShareMining       bool            // Whether to mine work shares from raw transactions.
+	WorkShareThreshold    int             // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
+	Endpoints             []string        // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
 }
 
 type transactionOrderingInfo struct {
@@ -163,14 +162,15 @@ type worker struct {
 	uncles  *lru.Cache[common.Hash, types.WorkObjectHeader]
 	uncleMu sync.RWMutex
 
-	mu                sync.RWMutex // The lock used to protect the coinbase and extra fields
-	quaiCoinbase      common.Address
-	qiCoinbase        common.Address
-	primaryCoinbase   common.Address
-	secondaryCoinbase common.Address
-	coinbaseLockup    uint8
-	minerPreference   float64
-	extra             []byte
+	mu                    sync.RWMutex // The lock used to protect the coinbase and extra fields
+	quaiCoinbase          common.Address
+	qiCoinbase            common.Address
+	primaryCoinbase       common.Address
+	secondaryCoinbase     common.Address
+	lockupContractAddress *common.Address // Address of the lockup contract to use for coinbase rewards
+	coinbaseLockup        uint8
+	minerPreference       float64
+	extra                 []byte
 
 	workerDb ethdb.Database
 
@@ -236,6 +236,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		txPool:                         txPool,
 		quaiCoinbase:                   config.QuaiCoinbase,
 		qiCoinbase:                     config.QiCoinbase,
+		lockupContractAddress:          config.LockupContractAddress,
 		isLocalBlock:                   isLocalBlock,
 		workerDb:                       db,
 		chainSideCh:                    make(chan ChainSideEvent, chainSideChanSize),
@@ -250,6 +251,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	if worker.coinbaseLockup > uint8(len(params.LockupByteToBlockDepth))-1 {
 		logger.Errorf("Invalid coinbase lockup value %d, using default value %d", worker.coinbaseLockup, params.DefaultCoinbaseLockup)
 		worker.coinbaseLockup = params.DefaultCoinbaseLockup
+	}
+	if worker.lockupContractAddress != nil {
+		logger.Infof("Using lockup contract address %s", worker.lockupContractAddress.String())
 	}
 	// initialize a uncle cache
 	uncles, _ := lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
@@ -1762,9 +1766,11 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		newWo.WorkObjectHeader().SetLock(w.GetLockupByte())
 	}
 
-	data := make([]byte, 0, 21)
+	data := make([]byte, 0, 1)
 	data = append(data, w.GetLockupByte())
-	data = append(data, defaultLockupContractAddress.Bytes()...)
+	if w.lockupContractAddress != nil {
+		data = append(data, w.lockupContractAddress.Bytes()...)
+	}
 	newWo.WorkObjectHeader().SetData(data)
 	newWo.SetParentHash(wo.Hash(), nodeCtx)
 	if w.hc.IsGenesisHash(parent.Hash()) {
