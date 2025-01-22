@@ -638,7 +638,7 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 		return []byte{}, 0, 0, fmt.Errorf("%x is in chain scope, but CreateETX was called", toAddr)
 	}
 	conversion := false
-	if toAddr.IsInQiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
+	if toAddr.IsInQiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) { // Quai->Qi Conversion
 		conversion = true
 	}
 	if toAddr.IsInQiLedgerScope() && !common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {

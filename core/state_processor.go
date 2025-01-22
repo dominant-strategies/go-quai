@@ -321,11 +321,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	time3 := common.PrettyDuration(time.Since(start))
 
 	// Iterate over and process the individual transactions.
-	etxRLimit := len(parent.Transactions()) / params.ETXRegionMaxFraction
+	etxRLimit := (uint64(len(parent.Transactions())) * params.TxGas) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
 		etxRLimit = params.ETXRLimitMin
 	}
-	etxPLimit := len(parent.Transactions()) / params.ETXPrimeMaxFraction
+	etxPLimit := (uint64(len(parent.Transactions())) * params.TxGas) / params.ETXPrimeMaxFraction
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
@@ -1209,7 +1209,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 	return unlocks, nil
 }
 
-func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *int, logger *log.Logger) (*types.Receipt, *big.Int, error) {
+func applyTransaction(msg types.Message, parent *types.WorkObject, config *params.ChainConfig, bc ChainContext, gp *types.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, usedState *uint64, evm *vm.EVM, etxRLimit, etxPLimit *uint64, logger *log.Logger) (*types.Receipt, *big.Int, error) {
 	nodeLocation := config.Location
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
@@ -1221,26 +1221,26 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 		return nil, nil, err
 	}
 
-	var ETXRCount int
-	var ETXPCount int
+	var ETXRGas uint64
+	var ETXPGas uint64
 	for _, tx := range result.Etxs {
 		// Count which ETXs are cross-region
 		if tx.To().Location().CommonDom(nodeLocation).Context() == common.REGION_CTX {
-			ETXRCount++
+			ETXRGas += tx.Gas()
 		}
 		// Count which ETXs are cross-prime
 		if tx.To().Location().CommonDom(nodeLocation).Context() == common.PRIME_CTX {
-			ETXPCount++
+			ETXPGas += tx.Gas()
 		}
 	}
-	if ETXRCount > *etxRLimit {
-		return nil, nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXRCount, *etxRLimit)
+	if ETXRGas > *etxRLimit {
+		return nil, nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash(), ETXRGas, *etxRLimit)
 	}
-	if ETXPCount > *etxPLimit {
-		return nil, nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash(), ETXPCount, *etxPLimit)
+	if ETXPGas > *etxPLimit {
+		return nil, nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash(), ETXPGas, *etxPLimit)
 	}
-	*etxRLimit -= ETXRCount
-	*etxPLimit -= ETXPCount
+	*etxRLimit -= ETXRGas
+	*etxPLimit -= ETXPGas
 
 	// Update the state with pending changes.
 	var root []byte
@@ -1339,7 +1339,7 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 
 }
 
-func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit int) (*big.Int, error) {
+func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit uint64) (*big.Int, error) {
 
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx, qiScalingFactor)
 	usedGas := intrinsicGas
@@ -1350,8 +1350,8 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		return nil, fmt.Errorf("could not find prime terminus header %032x", primeTerminusHash)
 	}
 
-	var ETXRCount int
-	var ETXPCount int
+	var ETXRGas uint64
+	var ETXPGas uint64
 	numEtxs := uint64(0)
 	totalQitOut := big.NewInt(0)
 	totalConvertQitOut := big.NewInt(0)
@@ -1400,7 +1400,7 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			delete(addresses, toAddr.Bytes20())
 			continue
-		} else if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) != 0 { // Quai->Qi wrapping
+		} else if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) != 0 { // Qi wrapping
 			ownerContract := common.BytesToAddress(tx.Data(), location)
 			if _, err := ownerContract.InternalAndQuaiAddress(); err != nil {
 				return nil, err
@@ -1415,17 +1415,17 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
 			// Cross-region?
 			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
-				ETXRCount++
+				ETXRGas += params.TxGas
 			}
 			// Cross-prime?
 			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
-				ETXPCount++
+				ETXPGas += params.TxGas
 			}
-			if ETXRCount > etxRLimit {
-				return nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit)
+			if ETXRGas > etxRLimit {
+				return nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXRGas, etxRLimit)
 			}
-			if ETXPCount > etxPLimit {
-				return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+			if ETXPGas > etxPLimit {
+				return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit)
 			}
 			primeTerminusHash := currentHeader.PrimeTerminusHash()
 			primeTerminusHeader := chain.GetHeaderByHash(primeTerminusHash)
@@ -1481,9 +1481,9 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 			return nil, fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 		}
-		ETXPCount++
-		if ETXPCount > etxPLimit {
-			return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit)
+		ETXPGas += params.QiToQuaiConversionGas
+		if ETXPGas > etxPLimit {
+			return nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit)
 		}
 		usedGas += params.ETXGas
 
@@ -1515,7 +1515,7 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 	return txFee, nil
 }
 
-func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit *int, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, []*types.ExternalTx, *types.Receipt, error, map[string]time.Duration) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit *uint64, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, []*types.ExternalTx, *types.Receipt, error, map[string]time.Duration) {
 	var elapsedTime time.Duration
 	stepTimings := make(map[string]time.Duration)
 	prevUsedGas := *usedGas
@@ -1601,8 +1601,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 
 	// Start timing for output processing
 	stepStart = time.Now()
-	var ETXRCount int
-	var ETXPCount int
+	var ETXRGas uint64
+	var ETXPGas uint64 // Gas used for cross-region and cross-prime ETXs
 	etxs := make([]*types.ExternalTx, 0)
 	outputs := make(map[uint]uint64)
 	totalQitOut := big.NewInt(0)
@@ -1658,17 +1658,17 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		if !toAddr.Location().Equal(location) { // This output creates an ETX
 			// Cross-region?
 			if toAddr.Location().CommonDom(location).Context() == common.REGION_CTX {
-				ETXRCount++
+				ETXRGas += params.TxGas
 			}
 			// Cross-prime?
 			if toAddr.Location().CommonDom(location).Context() == common.PRIME_CTX {
-				ETXPCount++
+				ETXPGas += params.TxGas
 			}
-			if ETXRCount > *etxRLimit {
-				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXRCount, etxRLimit), nil
+			if ETXRGas > *etxRLimit {
+				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-region ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXRGas, etxRLimit), nil
 			}
-			if ETXPCount > *etxPLimit {
-				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
+			if ETXPGas > *etxPLimit {
+				return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit), nil
 			}
 			if !toAddr.IsInQiLedgerScope() {
 				return nil, nil, nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
@@ -1744,9 +1744,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 			return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee * gas: %d, have %d want %d", tx.Hash(), requiredGas, txFeeInQit.Uint64(), minimumFeeInQuai.Uint64()), nil
 		}
-		ETXPCount++
-		if ETXPCount > *etxPLimit {
-			return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. emitted: %d, limit: %d", tx.Hash().Hex(), ETXPCount, etxPLimit), nil
+		ETXPGas += params.QiToQuaiConversionGas // Conversion/wrapping ETXs technically go through Prime
+		if ETXPGas > *etxPLimit {
+			return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit), nil
 		}
 		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: uint64(etxType), OriginatingTxHash: tx.Hash(), Gas: 0, Data: data} // Value is in Qits not Denomination
 		*usedGas += params.ETXGas
@@ -1786,8 +1786,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		}
 	}
 
-	*etxRLimit -= ETXRCount
-	*etxPLimit -= ETXPCount
+	*etxRLimit -= ETXRGas
+	*etxPLimit -= ETXPGas
 	elapsedTime = time.Since(stepStart)
 	stepTimings["Signature Check"] = elapsedTime
 	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: *usedGas - prevUsedGas, TxHash: tx.Hash()}
@@ -1898,7 +1898,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, parentOrder int, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, usedState *uint64, cfg vm.Config, etxRLimit, etxPLimit *int, batch ethdb.Batch, logger *log.Logger) (*types.Receipt, *big.Int, error) {
+func ApplyTransaction(config *params.ChainConfig, parent *types.WorkObject, parentOrder int, bc ChainContext, author *common.Address, gp *types.GasPool, statedb *state.StateDB, header *types.WorkObject, tx *types.Transaction, usedGas *uint64, usedState *uint64, cfg vm.Config, etxRLimit, etxPLimit *uint64, batch ethdb.Batch, logger *log.Logger) (*types.Receipt, *big.Int, error) {
 	nodeCtx := config.Location.Context()
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number(nodeCtx)), header.BaseFee())
 	if err != nil {

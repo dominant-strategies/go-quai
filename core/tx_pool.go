@@ -1280,11 +1280,11 @@ var feesErrs uint64
 func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 	errs := make([]error, 0)
 	currentBlock := pool.chain.CurrentBlock()
-	etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
+	etxRLimit := (uint64(len(currentBlock.Transactions())) * params.TxGas) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
 		etxRLimit = params.ETXRLimitMin
 	}
-	etxPLimit := len(currentBlock.Transactions()) / params.ETXPrimeMaxFraction
+	etxPLimit := (uint64(len(currentBlock.Transactions())) * params.TxGas) / params.ETXPrimeMaxFraction
 	if etxPLimit < params.ETXPLimitMin {
 		etxPLimit = params.ETXPLimitMin
 	}
@@ -1369,11 +1369,11 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 			} else {
 				pool.logger.Debugf("Fee is nil or doesn't exist in cache for tx %s", tx.Hash().String())
 			}
-			etxRLimit := len(currentBlock.Transactions()) / params.ETXRegionMaxFraction
+			etxRLimit := (uint64(len(currentBlock.Transactions())) * params.TxGas) / params.ETXRegionMaxFraction
 			if etxRLimit < params.ETXRLimitMin {
 				etxRLimit = params.ETXRLimitMin
 			}
-			etxPLimit := len(currentBlock.Transactions()) / params.ETXPrimeMaxFraction
+			etxPLimit := (uint64(len(currentBlock.Transactions())) * params.TxGas) / params.ETXPrimeMaxFraction
 			if etxPLimit < params.ETXPLimitMin {
 				etxPLimit = params.ETXPLimitMin
 			}
