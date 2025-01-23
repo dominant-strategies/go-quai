@@ -916,6 +916,14 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetThresholdCount(header.ThresholdCount())
 		combinedPendingHeader.Header().SetEtxEligibleSlices(header.EtxEligibleSlices())
 		combinedPendingHeader.Header().SetInterlinkRootHash(header.InterlinkRootHash())
+		combinedPendingHeader.Header().SetKQuaiDiscount(header.KQuaiDiscount())
+		combinedPendingHeader.Header().SetConversionFlowAmount(header.ConversionFlowAmount())
+		combinedPendingHeader.Header().SetMinerDifficulty(header.MinerDifficulty())
+		combinedPendingHeader.Header().SetPrimeStateRoot(header.PrimeStateRoot())
+	}
+
+	if index == common.REGION_CTX {
+		combinedPendingHeader.Header().SetRegionStateRoot(header.RegionStateRoot())
 	}
 
 	if inSlice {

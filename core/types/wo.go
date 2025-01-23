@@ -387,6 +387,26 @@ func (wo *WorkObject) TotalFees() *big.Int {
 	return wo.Header().TotalFees()
 }
 
+func (wo *WorkObject) KQuaiDiscount() *big.Int {
+	return wo.Header().KQuaiDiscount()
+}
+
+func (wo *WorkObject) ConversionFlowAmount() *big.Int {
+	return wo.Header().ConversionFlowAmount()
+}
+
+func (wo *WorkObject) MinerDifficulty() *big.Int {
+	return wo.Header().MinerDifficulty()
+}
+
+func (wo *WorkObject) PrimeStateRoot() common.Hash {
+	return wo.Header().PrimeStateRoot()
+}
+
+func (wo *WorkObject) RegionStateRoot() common.Hash {
+	return wo.Header().RegionStateRoot()
+}
+
 func (wo *WorkObject) QiTransactions() []*Transaction {
 	qiTxs := make([]*Transaction, 0)
 	for _, t := range wo.Transactions() {
