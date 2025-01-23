@@ -61,8 +61,6 @@ func headerTestData() (*Header, common.Hash) {
 		stateLimit:               1234567,
 		stateUsed:                1234567,
 		exchangeRate:             big.NewInt(123456789),
-		quaiToQi:                 big.NewInt(123456789),
-		qiToQuai:                 big.NewInt(123456789),
 		avgTxFees:                big.NewInt(1000000),
 		totalFees:                big.NewInt(1432323123),
 	}
@@ -331,18 +329,6 @@ func FuzzHeaderExchangeRate(f *testing.F) {
 	fuzzHeaderBigIntHash(f,
 		func(h *Header) *big.Int { return h.exchangeRate },
 		func(h *Header, bi *big.Int) { h.exchangeRate = bi })
-}
-
-func FuzzHeaderQuaiToQi(f *testing.F) {
-	fuzzHeaderBigIntHash(f,
-		func(h *Header) *big.Int { return h.quaiToQi },
-		func(h *Header, bi *big.Int) { h.quaiToQi = bi })
-}
-
-func FuzzHeaderQiToQuai(f *testing.F) {
-	fuzzHeaderBigIntHash(f,
-		func(h *Header) *big.Int { return h.qiToQuai },
-		func(h *Header, bi *big.Int) { h.qiToQuai = bi })
 }
 
 func FuzzHeaderAvgTxFees(f *testing.F) {
