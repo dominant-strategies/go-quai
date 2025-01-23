@@ -45,6 +45,11 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ExchangeRate					*hexutil.Big			`json:"exchangeRate"				gencodec:"required"`
 		AvgTxFees 						*hexutil.Big 			`json:"avgTxFees" 					gencodec:"required"`
 		TotalFees                       *hexutil.Big            `json:"totalFees"                   gencodec:"required"`
+		KQuaiDiscount                   *hexutil.Big            `json:"kQuaiDiscount"				gencodec:"required"`
+		ConversionFlowAmount            *hexutil.Big            `json:"conversionFlowAmount"        gencodec:"required"`
+		MinerDifficulty                 *hexutil.Big            `json:"minerDifficulty"             gencodec:"required"`
+		PrimeStateRoot                  common.Hash             `json:"primeStateRoot"              gencodec:"required"`
+		RegionStateRoot                 common.Hash             `json:"regionStateRoot"             gencodec:"required"`
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
@@ -88,6 +93,11 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.ExchangeRate = (*hexutil.Big)(h.ExchangeRate())
 	enc.AvgTxFees = (*hexutil.Big)(h.AvgTxFees())
 	enc.TotalFees = (*hexutil.Big)(h.TotalFees())
+	enc.KQuaiDiscount = (*hexutil.Big)(h.KQuaiDiscount())
+	enc.ConversionFlowAmount = (*hexutil.Big)(h.ConversionFlowAmount())
+	enc.MinerDifficulty = (*hexutil.Big)(h.MinerDifficulty())
+	enc.PrimeStateRoot = h.PrimeStateRoot()
+	enc.RegionStateRoot = h.RegionStateRoot()
 	raw, err := json.Marshal(&enc)
 	return raw, err
 }
@@ -126,6 +136,11 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		ExchangeRate					*hexutil.Big			`json:"exchangeRate"				gencodec:"required"`
 		AvgTxFees 						*hexutil.Big 			`json:"avgTxFees" 					gencodec:"required"`
 		TotalFees                       *hexutil.Big            `json:"totalFees"                   gencodec:"required"`
+		KQuaiDiscount                   *hexutil.Big            `json:"kQuaiDiscount"				gencodec:"required"`
+		ConversionFlowAmount            *hexutil.Big            `json:"conversionFlowAmount"        gencodec:"required"`
+		MinerDifficulty                 *hexutil.Big            `json:"minerDifficulty"             gencodec:"required"`
+		PrimeStateRoot                  *common.Hash             `json:"primeStateRoot"              gencodec:"required"`
+		RegionStateRoot                 *common.Hash             `json:"regionStateRoot"             gencodec:"required"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -220,6 +235,21 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.TotalFees == nil {
 		return errors.New("missing required field 'totalFees' for Header")
 	}
+	if dec.KQuaiDiscount == nil {
+		return errors.New("missing required field 'kQuaiDiscount' for Header")
+	}
+	if dec.ConversionFlowAmount == nil {
+		return errors.New("missing required field 'conversionFlowAmount' for Header")
+	}
+	if dec.MinerDifficulty == nil {
+		return errors.New("missing required field 'minerDifficulty' for Header")
+	}
+	if dec.PrimeStateRoot == nil {
+		return errors.New("missing required field 'primeStateRoot' for Header")
+	}
+	if dec.RegionStateRoot == nil {
+		return errors.New("missing required field 'regionStateRoot' for Header")
+	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
 	h.manifestHash = make([]common.Hash, common.HierarchyDepth)
@@ -277,6 +307,11 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetExchangeRate((*big.Int)(dec.ExchangeRate))
 	h.SetAvgTxFees((*big.Int)(dec.AvgTxFees))
 	h.SetTotalFees((*big.Int)(dec.TotalFees))
+	h.SetKQuaiDiscount((*big.Int)(dec.KQuaiDiscount))
+	h.SetConversionFlowAmount((*big.Int)(dec.ConversionFlowAmount))
+	h.SetMinerDifficulty((*big.Int)(dec.MinerDifficulty))
+	h.SetPrimeStateRoot(*dec.PrimeStateRoot)
+	h.SetRegionStateRoot(*dec.RegionStateRoot)
 	return nil
 }
 
