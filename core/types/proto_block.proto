@@ -41,6 +41,11 @@ message ProtoHeader {
   optional bytes exchange_rate = 33;
   optional bytes avg_tx_fees = 35;
   optional bytes total_fees = 36;
+  optional bytes k_quai_discount = 37;
+  optional bytes conversion_flow_amount = 38;
+  optional bytes miner_difficulty = 39;
+  optional common.ProtoHash prime_state_root = 40;
+  optional common.ProtoHash region_state_root = 41;
 }
 
 message ProtoTransaction {
