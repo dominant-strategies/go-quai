@@ -944,11 +944,8 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.Header().SetGasUsed(header.GasUsed())
 		combinedPendingHeader.Header().SetExtra(header.Extra())
 		combinedPendingHeader.Header().SetPrimeTerminusHash(header.PrimeTerminusHash())
-		combinedPendingHeader.Header().SetSecondaryCoinbase(header.SecondaryCoinbase())
 		combinedPendingHeader.Header().SetExpansionNumber(header.ExpansionNumber())
 		combinedPendingHeader.Header().SetExchangeRate(header.ExchangeRate())
-		combinedPendingHeader.Header().SetQiToQuai(header.QiToQuai())
-		combinedPendingHeader.Header().SetQuaiToQi(header.QuaiToQi())
 		combinedPendingHeader.Header().SetAvgTxFees(header.AvgTxFees())
 		combinedPendingHeader.Header().SetTotalFees(header.TotalFees())
 
@@ -1053,7 +1050,6 @@ func (sl *Slice) NewGenesisPendingHeader(domPendingHeader *types.WorkObject, dom
 
 		if nodeCtx != common.ZONE_CTX {
 			localPendingHeader.WorkObjectHeader().SetPrimaryCoinbase(common.Zero)
-			localPendingHeader.Body().Header().SetSecondaryCoinbase(common.Zero)
 		}
 
 		if nodeCtx == common.PRIME_CTX {
