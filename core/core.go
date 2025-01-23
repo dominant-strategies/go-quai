@@ -642,7 +642,6 @@ func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, do
 	nodeCtx := c.NodeCtx()
 	// Set the coinbase into the right interface before calling append in the sub
 	header.WorkObjectHeader().SetPrimaryCoinbase(common.BytesToAddress(header.PrimaryCoinbase().Bytes(), c.NodeLocation()))
-	header.Body().Header().SetSecondaryCoinbase(common.BytesToAddress(header.SecondaryCoinbase().Bytes(), c.NodeLocation()))
 	newPendingEtxs, err := c.sl.Append(header, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
@@ -1160,10 +1159,6 @@ func (c *Core) PendingBlockAndReceipts() (*types.WorkObject, types.Receipts) {
 
 func (c *Core) SetPrimaryCoinbase(addr common.Address) {
 	c.sl.miner.SetPrimaryCoinbase(addr)
-}
-
-func (c *Core) SetSecondaryCoinbase(addr common.Address) {
-	c.sl.miner.SetSecondaryCoinbase(addr)
 }
 
 func (c *Core) SetLockupByte(lockupByte uint8) {

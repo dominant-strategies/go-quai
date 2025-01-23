@@ -65,7 +65,6 @@ type environment struct {
 	tcount                  int            // tx count in cycle
 	gasPool                 *types.GasPool // available gas used to pack transactions
 	primaryCoinbase         common.Address
-	secondaryCoinbase       common.Address
 	etxRLimit               uint64 // Remaining number of cross-region ETXs that can be included
 	etxPLimit               uint64 // Remaining number of cross-prime ETXs that can be included
 	parentOrder             *int
@@ -164,7 +163,6 @@ type worker struct {
 	quaiCoinbase          common.Address
 	qiCoinbase            common.Address
 	primaryCoinbase       common.Address
-	secondaryCoinbase     common.Address
 	lockupContractAddress *common.Address // Address of the lockup contract to use for coinbase rewards
 	coinbaseLockup        uint8
 	minerPreference       float64
@@ -297,11 +295,9 @@ func (w *worker) pickCoinbases() {
 	if rand.Float64() > w.minerPreference {
 		// if MinerPreference < 0.5, bias is towards Quai
 		w.primaryCoinbase = w.quaiCoinbase
-		w.secondaryCoinbase = w.qiCoinbase
 	} else {
 		// if MinerPreference > 0.5, bias is towards Qi
 		w.primaryCoinbase = w.qiCoinbase
-		w.secondaryCoinbase = w.quaiCoinbase
 	}
 }
 
@@ -312,25 +308,11 @@ func (w *worker) setPrimaryCoinbase(addr common.Address) {
 	w.primaryCoinbase = addr
 }
 
-// setSecondaryCoinbase sets the coinbase used to initialize the block secondary coinbase field.
-func (w *worker) setSecondaryCoinbase(addr common.Address) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.secondaryCoinbase = addr
-}
-
 func (w *worker) GetPrimaryCoinbase() common.Address {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
 	return w.primaryCoinbase
-}
-
-func (w *worker) GetSecondaryCoinbase() common.Address {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
-	return w.secondaryCoinbase
 }
 
 func (w *worker) SetMinerPreference(preference float64) {
@@ -570,18 +552,9 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		w.setPrimaryCoinbase(common.Zero)
 	}
 
-	// Set the secondary coinbase if the worker is running or it's required
-	if w.hc.NodeCtx() == common.ZONE_CTX && w.GetPrimaryCoinbase().Equal(common.Address{}) && w.hc.ProcessingState() {
-		w.logger.Warn("Refusing to mine without primaryCoinbase")
-		return nil, errors.New("etherbase not found")
-	} else if w.GetPrimaryCoinbase().Equal(common.Address{}) {
-		w.setPrimaryCoinbase(common.Zero)
-	}
-
 	work, err := w.prepareWork(&generateParams{
-		timestamp:         uint64(timestamp),
-		primaryCoinbase:   w.GetPrimaryCoinbase(),
-		secondaryCoinbase: w.GetSecondaryCoinbase(),
+		timestamp:       uint64(timestamp),
+		primaryCoinbase: w.GetPrimaryCoinbase(),
 	}, block)
 	if err != nil {
 		return nil, err
@@ -626,10 +599,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 
 		if (w.GetPrimaryCoinbase() == common.Address{}) {
 			return nil, fmt.Errorf("primary coinbase is not set")
-		}
-
-		if (w.GetSecondaryCoinbase() == common.Address{}) {
-			return nil, fmt.Errorf("secondary coinbase is not set")
 		}
 
 		// 50% of the fees goes to the calculation  of the averageFees generated,
@@ -850,7 +819,7 @@ func (w *worker) eventExitLoop() {
 }
 
 // makeEnv creates a new environment for the sealing block.
-func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject, primaryCoinbase, secondaryCoinbase common.Address) (*environment, error) {
+func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject, primaryCoinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
 	evmRoot := parent.EVMRoot()
@@ -882,7 +851,6 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 		state:                  state,
 		batch:                  w.workerDb.NewBatch(),
 		primaryCoinbase:        primaryCoinbase,
-		secondaryCoinbase:      secondaryCoinbase,
 		ancestors:              mapset.NewSet(),
 		family:                 mapset.NewSet(),
 		wo:                     proposedWo,
@@ -1610,10 +1578,9 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp         uint64         // The timstamp for sealing task
-	forceTime         bool           // Flag whether the given timestamp is immutable or not
-	primaryCoinbase   common.Address // The fee recipient address for including transaction
-	secondaryCoinbase common.Address
+	timestamp       uint64         // The timstamp for sealing task
+	forceTime       bool           // Flag whether the given timestamp is immutable or not
+	primaryCoinbase common.Address // The fee recipient address for including transaction
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -1781,16 +1748,6 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		newWo.Header().SetInterlinkRootHash(interlinkRootHash)
 	}
 
-	// Calculate the new Qi/Quai exchange rate
-	if nodeCtx == common.ZONE_CTX {
-		// Update the exchange rate
-		qiToQuai := new(big.Int).Set(parent.Header().QiToQuai())
-		quaiToQi := new(big.Int).Set(parent.Header().QuaiToQi())
-
-		newWo.Header().SetQiToQuai(qiToQuai)
-		newWo.Header().SetQuaiToQi(quaiToQi)
-	}
-
 	// Calculate the base fee for the block and set it
 	if nodeCtx == common.ZONE_CTX {
 		baseFee := w.hc.CalcBaseFee(parent)
@@ -1809,11 +1766,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 				w.logger.Error("Refusing to mine with Qi primary coinbase before controller kick in block")
 				return nil, errors.New("refusing to mine with Qi primary coinbase before controller kick in block")
 			}
-			if w.GetSecondaryCoinbase().Equal(common.Zero) {
-				w.logger.Error("Refusing to mine without secondary coinbase")
-				return nil, errors.New("refusing to mine without secondary coinbase")
-			}
-			newWo.SetCoinbases(w.GetPrimaryCoinbase(), w.GetSecondaryCoinbase())
+			newWo.WorkObjectHeader().SetPrimaryCoinbase(w.GetPrimaryCoinbase())
 		}
 
 		// Get the latest transactions to be broadcasted from the pool
@@ -1839,7 +1792,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase(), newWo.Data())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
-		env, err := w.makeEnv(parent, proposedWo, w.GetPrimaryCoinbase(), w.GetSecondaryCoinbase())
+		env, err := w.makeEnv(parent, proposedWo, w.GetPrimaryCoinbase())
 		if err != nil {
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
 			return nil, err

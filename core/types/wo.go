@@ -204,40 +204,6 @@ func (wo *WorkObject) Data() []byte {
 	return wo.WorkObjectHeader().Data()
 }
 
-func (wo *WorkObject) QuaiCoinbase() (common.Address, error) {
-	// check if the primary coinbase is in Quai ledger
-	quai := wo.PrimaryCoinbase().IsInQuaiLedgerScope()
-	if quai {
-		return wo.PrimaryCoinbase(), nil
-	} else {
-		quai = wo.SecondaryCoinbase().IsInQuaiLedgerScope()
-		if quai {
-			return wo.SecondaryCoinbase(), nil
-		} else {
-			return common.Address{}, errors.New("block doesnt have a quai coinbase")
-		}
-	}
-}
-
-func (wo *WorkObject) QiCoinbase() (common.Address, error) {
-	// check if the primary coinbase is in Qi ledger
-	qi := wo.PrimaryCoinbase().IsInQiLedgerScope()
-	if qi {
-		return wo.PrimaryCoinbase(), nil
-	} else {
-		qi = wo.SecondaryCoinbase().IsInQiLedgerScope()
-		if qi {
-			return wo.SecondaryCoinbase(), nil
-		} else {
-			return common.Address{}, errors.New("block doesnt have a qi coinbase")
-		}
-	}
-}
-
-func (wo *WorkObject) SecondaryCoinbase() common.Address {
-	return wo.Body().Header().SecondaryCoinbase()
-}
-
 func (wo *WorkObject) MixHash() common.Hash {
 	return wo.WorkObjectHeader().MixHash()
 }
@@ -413,14 +379,6 @@ func (wo *WorkObject) ExchangeRate() *big.Int {
 	return wo.Header().ExchangeRate()
 }
 
-func (wo *WorkObject) QuaiToQi() *big.Int {
-	return wo.Header().QuaiToQi()
-}
-
-func (wo *WorkObject) QiToQuai() *big.Int {
-	return wo.Header().QiToQuai()
-}
-
 func (wo *WorkObject) AvgTxFees() *big.Int {
 	return wo.Header().AvgTxFees()
 }
@@ -533,11 +491,6 @@ func (wo *WorkObject) SetNumber(val *big.Int, nodeCtx int) {
 	} else {
 		wo.Body().Header().SetNumber(val, nodeCtx)
 	}
-}
-
-func (wo *WorkObject) SetCoinbases(primary common.Address, secondary common.Address) {
-	wo.WorkObjectHeader().SetPrimaryCoinbase(primary)
-	wo.Header().SetSecondaryCoinbase(secondary)
 }
 
 ////////////////////////////////////////////////////////////
