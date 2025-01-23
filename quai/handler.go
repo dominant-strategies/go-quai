@@ -202,7 +202,7 @@ func (h *handler) checkNextPrimeBlock() {
 					// the prime block on this try already existed in the database
 					if err := h.GetNextPrimeBlock(syncHeight); err != nil {
 						// If i > 2 * protocol.C_NumPrimeBlocksToDownload that
-						// means the blocks that the node wanted has alreay been
+						// means the blocks that the node wanted has already been
 						// downloaded otherwise, download next 2 *
 						// protocol.C_NumPrimeBlocksToDownload
 						if i < 2*protocol.C_NumPrimeBlocksToDownload {
@@ -243,10 +243,10 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 				return nil
 			}
 			workObject := wo.WorkObject
-			// Check that all the prime blocks form a continous chain of blocks
+			// Check that all the prime blocks form a continuous chain of blocks
 			if i != 0 {
 				if workObject.ParentHash(common.PRIME_CTX) != parent.Hash() {
-					h.logger.Error("downloaded non continous chain of prime blocks")
+					h.logger.Error("downloaded non continuous chain of prime blocks")
 					return nil
 				}
 			}
