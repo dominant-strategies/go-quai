@@ -61,7 +61,7 @@ curl -X POST http://127.0.0.1:8080/nodepeers
 
   <img src="image-1.png" alt="Image description" width="600" height="auto">
 
-2. Then from another machine join the same chatroom boostrapping the node (`-b` flag) with an "advertised listening address" of the first node.
+2. Then from another machine join the same chatroom bootstrapping the node (`-b` flag) with an "advertised listening address" of the first node.
    - Note: listening addresses can be found in the file `node.info` in the root of the project.
 
   ```bash
