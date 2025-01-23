@@ -43,7 +43,7 @@ type ConsensusAPI interface {
 	// SetCurrentExpansionNumber sets the current expansion number for the given location
 	SetCurrentExpansionNumber(uint8)
 
-	// SetSubInteface sets the sub interface for the given location
+	// SetSubInterface sets the sub interface for the given location
 	SetSubInterface(chain.CoreBackend, common.Location, common.Location)
 
 	// SetDomInterface sets the dom interface for the given location
