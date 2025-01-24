@@ -39,14 +39,13 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: us-central1-docker.pkg.dev/molten-verve-216720/dominant-repository/go-quai:${{ env.IMAGE_TAG }}
-          cache-from: type=registry
           cache-to: type=inline
 
       - name: Run Antithesis Test
         uses: antithesishq/antithesis-trigger-action@v0.6
         with:
           notebook_name: dominant
-          tenant: dominant
+          tenant: dominantstrategies
           username: ${{ secrets.ANTITHESIS_USER_NAME }}
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
           github_token: ${{ secrets.GH_PAT_ANTITHESIS }}
