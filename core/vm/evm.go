@@ -90,7 +90,8 @@ type BlockContext struct {
 	QuaiStateSize   *big.Int       // Provides information for QUAISTATESIZE
 
 	// Prime Terminus information for the given block
-	EtxEligibleSlices common.Hash
+	EtxEligibleSlices   common.Hash
+	PrimeTerminusNumber uint64
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -638,6 +639,9 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	}
 	conversion := false
 	if toAddr.IsInQiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) { // Quai->Qi Conversion
+		if evm.Context.PrimeTerminusNumber < params.ControllerKickInBlock {
+			return []byte{}, 0, 0, fmt.Errorf("CreateETX conversion error: Quai->Qi conversion is not allowed before block %d", params.ControllerKickInBlock)
+		}
 		conversion = true
 	}
 	if toAddr.IsInQiLedgerScope() && !common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {

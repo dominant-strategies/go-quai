@@ -542,6 +542,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase lockup byte %d is out of range", lockupByte)
 				}
 				if tx.To().IsInQiLedgerScope() { // Qi coinbase
+					if block.PrimeTerminusNumber().Uint64() < params.ControllerKickInBlock { // parent must be controller kick in block
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
+						receipts = append(receipts, receipt)
+						allLogs = append(allLogs, receipt.Logs...)
+						continue
+					}
 					_, err := tx.To().InternalAndQiAddress()
 					if err != nil {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
@@ -707,6 +713,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				continue
 			} else if !types.IsCoinBaseTx(tx) && etx.To().IsInQiLedgerScope() {
 				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Quai->Qi Conversion
+					if block.PrimeTerminusNumber().Uint64() < params.ControllerKickInBlock {
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: 0, TxHash: tx.Hash()}
+						receipts = append(receipts, receipt)
+						allLogs = append(allLogs, receipt.Logs...)
+						continue
+					}
 					var lockup *big.Int
 					lockup = new(big.Int).SetUint64(params.ConversionLockPeriod)
 					lock := new(big.Int).Add(block.Number(nodeCtx), lockup)
