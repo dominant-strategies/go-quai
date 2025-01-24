@@ -391,6 +391,18 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 	}
 
+	if nodeCtx == common.PRIME_CTX {
+		if header.PrimeStateRoot() != types.EmptyRootHash {
+			return fmt.Errorf("invalid prime state root: have %v, want %v", header.PrimeStateRoot(), types.EmptyRootHash)
+		}
+	}
+
+	if nodeCtx == common.REGION_CTX {
+		if header.RegionStateRoot() != types.EmptyRootHash {
+			return fmt.Errorf("invalid region state root: have %v, want %v", header.RegionStateRoot(), types.EmptyRootHash)
+		}
+	}
+
 	if nodeCtx == common.ZONE_CTX {
 		var expectedExpansionNumber uint8
 		expectedExpansionNumber, err := chain.ComputeExpansionNumber(parent)
