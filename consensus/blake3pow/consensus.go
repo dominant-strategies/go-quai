@@ -752,7 +752,7 @@ func TrimBlock(chain consensus.ChainHeaderReader, batch ethdb.Batch, denominatio
 		}
 		// Only the coinbase and conversion txs are allowed to have lockups that
 		// is non zero
-		if utxo.Lock.Sign() == 0 {
+		if utxo.Lock.Sign() != 0 {
 			continue
 		}
 		txHash, index, err := rawdb.ReverseUtxoKey(key)
