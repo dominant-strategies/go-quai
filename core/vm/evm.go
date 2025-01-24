@@ -638,6 +638,9 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	}
 	conversion := false
 	if toAddr.IsInQiLedgerScope() && common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) { // Quai->Qi Conversion
+		if evm.Context.BlockNumber.Cmp(new(big.Int).SetUint64(params.ControllerKickInBlock)) < 0 {
+			return []byte{}, 0, 0, fmt.Errorf("CreateETX conversion error: Quai->Qi conversion is not allowed before block %d", params.ControllerKickInBlock)
+		}
 		conversion = true
 	}
 	if toAddr.IsInQiLedgerScope() && !common.IsInChainScope(toAddr.Bytes(), evm.chainConfig.Location) {
