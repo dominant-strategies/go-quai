@@ -14,12 +14,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Read version and generate random UID
+      - name: Read version and generate commit hash
         id: versioning
         run: |
           VERSION=$(cat VERSION)
-          UID=$(shuf -i 100000-999999 -n 1)
-          FULL_VERSION="${VERSION}.${UID}"
+          COMMIT_HASH=$(git rev-parse --short HEAD)  # Get short commit hash
+          FULL_VERSION="${VERSION}-${COMMIT_HASH}"
           echo "Generated version: $FULL_VERSION"
           echo "IMAGE_TAG=$FULL_VERSION" >> $GITHUB_ENV
 
@@ -49,7 +49,8 @@ jobs:
           tenant: dominant
           username: ${{ secrets.ANTITHESIS_USER_NAME }}
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
-          images: "go-quai:${{ env.IMAGE_TAG }};quai-cpu-miner:0.1.0-test.12;quai-workload:0.1.0-pre.38;quai-statistics-backend:v2.31.0-pre.8;elasticsearch:8.8.0;logstash:8.8.0;kibana:8.8.0;redis:6.2-alpine"
+          github_token: ${{ secrets.GH_PAT_ANTITHESIS }}
+          images: "go-quai:${{ env.IMAGE_TAG }};quai-cpu-miner:latest;quai-workload:latest;quai-statistics-backend:latest;elasticsearch:8.8.0;logstash:8.8.0;kibana:8.8.0;redis:6.2-alpine"
           config_image: "qc-config:0.1.0-single.6"
           description: "nightly go-quai test"
           email_recipients: ${{ secrets.ANTITHESIS_EMAILS }}"
