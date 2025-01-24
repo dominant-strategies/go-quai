@@ -216,6 +216,9 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		if ancestors[uncle.ParentHash()] == nil || (!workShare && (uncle.ParentHash() == block.ParentHash(nodeCtx))) {
 			return consensus.ErrDanglingUncle
 		}
+		if uncle.PrimaryCoinbase().IsInQiLedgerScope() && block.PrimeTerminusNumber().Uint64() < params.ControllerKickInBlock {
+			return fmt.Errorf("uncle inclusion is not allowed before block %v", params.ControllerKickInBlock)
+		}
 
 		// make sure that the work can be computed
 		_, err = blake3pow.ComputePowHash(uncle)
@@ -398,6 +401,9 @@ func (blake3pow *Blake3pow) verifyHeader(chain consensus.ChainHeaderReader, head
 		}
 		if header.ExpansionNumber() != expectedExpansionNumber {
 			return fmt.Errorf("invalid expansion number: have %v, want %v", header.ExpansionNumber(), expectedExpansionNumber)
+		}
+		if header.PrimaryCoinbase().IsInQiLedgerScope() && header.PrimeTerminusNumber().Uint64() < params.ControllerKickInBlock {
+			return fmt.Errorf("Qi coinbase is not allowed before block %v", params.ControllerKickInBlock)
 		}
 	}
 

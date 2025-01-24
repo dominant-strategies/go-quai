@@ -107,18 +107,19 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 	etxEligibleSlices := primeTerminusHeader.EtxEligibleSlices()
 
 	return vm.BlockContext{
-		CanTransfer:        CanTransfer,
-		Transfer:           Transfer,
-		GetHash:            GetHashFn(header, chain),
-		PrimaryCoinbase:    beneficiary,
-		BlockNumber:        new(big.Int).Set(header.Number(chain.NodeCtx())),
-		Time:               new(big.Int).SetUint64(timestamp),
-		Difficulty:         new(big.Int).Set(header.Difficulty()),
-		BaseFee:            baseFee,
-		GasLimit:           header.GasLimit(),
-		CheckIfEtxEligible: chain.CheckIfEtxIsEligible,
-		EtxEligibleSlices:  etxEligibleSlices,
-		QuaiStateSize:      parent.QuaiStateSize(), // using the state size at the parent for all the gas calculations
+		CanTransfer:         CanTransfer,
+		Transfer:            Transfer,
+		GetHash:             GetHashFn(header, chain),
+		PrimaryCoinbase:     beneficiary,
+		BlockNumber:         new(big.Int).Set(header.Number(chain.NodeCtx())),
+		Time:                new(big.Int).SetUint64(timestamp),
+		Difficulty:          new(big.Int).Set(header.Difficulty()),
+		BaseFee:             baseFee,
+		GasLimit:            header.GasLimit(),
+		CheckIfEtxEligible:  chain.CheckIfEtxIsEligible,
+		EtxEligibleSlices:   etxEligibleSlices,
+		PrimeTerminusNumber: header.PrimeTerminusNumber().Uint64(),
+		QuaiStateSize:       parent.QuaiStateSize(), // using the state size at the parent for all the gas calculations
 	}, nil
 }
 

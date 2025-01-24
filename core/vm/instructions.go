@@ -17,12 +17,12 @@
 package vm
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/holiman/uint256"
@@ -889,13 +889,13 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	if common.IsInChainScope(toAddr.Bytes(), interpreter.evm.chainConfig.Location) {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x is in chain scope, but opETX was called\n", toAddr)
+		log.Global.Errorf("%x is in chain scope, but opETX was called\n", toAddr)
 		return nil, nil // following opCall protocol
 	}
 	sender := scope.Contract.self.Address()
 	internalSender, err := sender.InternalAndQuaiAddress()
 	if err != nil {
-		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		log.Global.Errorf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil
 	}
 
@@ -908,14 +908,14 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
+		log.Global.Errorf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
 		return nil, nil
 	}
 
 	if etxGasLimit.CmpUint64(math.MaxUint64) == 1 {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x opETX error: gas limit %d is greater than maximum %d\n", scope.Contract.self.Address(), etxGasLimit, math.MaxInt64)
+		log.Global.Errorf("%x opETX error: gas limit %d is greater than maximum %d\n", scope.Contract.self.Address(), etxGasLimit, math.MaxInt64)
 		return nil, nil
 	}
 
@@ -923,7 +923,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	if etxGasLimit.Uint64() < params.TxGas {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x opETX error: gas limit %d is less than minimum %d\n", scope.Contract.self.Address(), etxGasLimit, params.TxGas)
+		log.Global.Errorf("%x opETX error: gas limit %d is less than minimum %d\n", scope.Contract.self.Address(), etxGasLimit, params.TxGas)
 		return nil, nil
 	}
 
@@ -938,7 +938,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	if err != nil && accessListSize.Sign() != 0 {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
+		log.Global.Errorf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil // following opCall protocol
 	}
 
@@ -948,7 +948,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	if index > math.MaxUint16 {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Println("opETX overflow error: too many ETXs in cache")
+		log.Global.Error("opETX overflow error: too many ETXs in cache")
 		return nil, nil
 	}
 
@@ -958,7 +958,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 	// check if the etx is eligible to be sent to the to location
 	if !interpreter.evm.Context.CheckIfEtxEligible(interpreter.evm.Context.EtxEligibleSlices, *etx.To().Location()) {
-		fmt.Println("opETX error: ETX is not eligible to be sent to", etx.To())
+		log.Global.Error("opETX error: ETX is not eligible to be sent to ", etx.To())
 		return nil, nil
 	}
 	interpreter.evm.ETXCacheLock.Lock()
@@ -987,23 +987,29 @@ func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if !common.IsInChainScope(toAddr.Bytes(), interpreter.evm.chainConfig.Location) {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x is not in chain scope, but opConvert was called\n", toAddr)
+		log.Global.Errorf("%x is not in chain scope, but opConvert was called\n", toAddr)
 		return nil, nil // following opCall protocol
 	} else if !toAddr.IsInQiLedgerScope() {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x is not in Qi ledger scope, but opConvert was called\n", toAddr)
+		log.Global.Errorf("%x is not in Qi ledger scope, but opConvert was called\n", toAddr)
 		return nil, nil // following opCall protocol
 	} else if bigValue.Cmp(params.MinQuaiConversionAmount) < 0 {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x cannot convert less than %d\n", scope.Contract.self.Address(), params.MinQuaiConversionAmount.Uint64())
+		log.Global.Errorf("%x cannot convert less than %d\n", scope.Contract.self.Address(), params.MinQuaiConversionAmount.Uint64())
 		return nil, nil // following opCall protocol
+	}
+	if interpreter.evm.Context.PrimeTerminusNumber < params.ControllerKickInBlock {
+		temp.Clear()
+		stack.push(&temp)
+		log.Global.Errorf("%x opConvert error: not after controller kick in block\n", scope.Contract.self.Address())
+		return nil, nil
 	}
 	sender := scope.Contract.self.Address()
 	internalSender, err := sender.InternalAndQuaiAddress()
 	if err != nil {
-		fmt.Printf("%x opConvert error: %s\n", scope.Contract.self.Address(), err.Error())
+		log.Global.Errorf("%x opConvert error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil
 	}
 
@@ -1016,7 +1022,7 @@ func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if total.Sign() == 0 || !interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.self.Address(), total.ToBig()) {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
+		log.Global.Errorf("%x cannot transfer %d\n", scope.Contract.self.Address(), total.Uint64())
 		return nil, nil
 	}
 
@@ -1024,7 +1030,7 @@ func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if etxGasLimit.Uint64() < params.TxGas {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Printf("%x opETX error: gas limit %d is less than minimum %d\n", scope.Contract.self.Address(), etxGasLimit, params.TxGas)
+		log.Global.Errorf("%x opConvert error: gas limit %d is less than minimum %d\n", scope.Contract.self.Address(), etxGasLimit, params.TxGas)
 		return nil, nil
 	}
 
@@ -1036,7 +1042,7 @@ func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if index > math.MaxUint16 {
 		temp.Clear()
 		stack.push(&temp)
-		fmt.Println("opConvert overflow error: too many ETXs in cache")
+		log.Global.Error("opConvert overflow error: too many ETXs in cache")
 		return nil, nil
 	}
 
