@@ -835,7 +835,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				}
 				receipts = append(receipts, receipt)
 				allLogs = append(allLogs, receipt.Logs...)
-				i++
 			}
 		} else if tx.Type() == types.QuaiTxType { // Regular Quai tx
 			startTimeTx := time.Now()
@@ -880,7 +879,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 			receipts = append(receipts, receipt)
 			allLogs = append(allLogs, receipt.Logs...)
-			i++
 		} else {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, ErrTxTypeNotSupported
 		}
