@@ -1677,6 +1677,12 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 	}
 
+	if nodeCtx == common.PRIME_CTX {
+		newWo.Header().SetPrimeStateRoot(types.EmptyRootHash)
+	}
+	if nodeCtx == common.REGION_CTX {
+		newWo.Header().SetRegionStateRoot(types.EmptyRootHash)
+	}
 	if nodeCtx == common.ZONE_CTX {
 		expansionNumber, err := w.hc.ComputeExpansionNumber(parent)
 		if err != nil {
