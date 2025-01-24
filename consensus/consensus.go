@@ -97,6 +97,8 @@ type ChainHeaderReader interface {
 	WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error)
 	Database() ethdb.Database
 
+	ComputeMinerDifficulty(parent *types.WorkObject) *big.Int
+
 	BlockReader
 }
 

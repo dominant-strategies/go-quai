@@ -89,40 +89,42 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 
 // Header represents a block header in the Quai blockchain.
 type Header struct {
-	parentHash               []common.Hash  `json:"parentHash"            gencodec:"required"`
-	uncleHash                common.Hash    `json:"uncleHash"             gencodec:"required"`
-	evmRoot                  common.Hash    `json:"evmRoot"               gencodec:"required"`
-	utxoRoot                 common.Hash    `json:"utxoRoot"              gencodec:"required"`
-	txHash                   common.Hash    `json:"transactionsRoot"      gencodec:"required"`
-	outboundEtxHash          common.Hash    `json:"outboundEtxsRoot"      gencodec:"required"`
-	etxSetRoot               common.Hash    `json:"etxSetRoot"            gencodec:"required"`
-	etxRollupHash            common.Hash    `json:"extRollupRoot"         gencodec:"required"`
-	quaiStateSize            *big.Int       `json:"quaiStateSize"         gencodec:"required"`
-	manifestHash             []common.Hash  `json:"manifestHash"          gencodec:"required"`
-	receiptHash              common.Hash    `json:"receiptsRoot"          gencodec:"required"`
-	parentEntropy            []*big.Int     `json:"parentEntropy"         gencodec:"required"`
-	parentDeltaEntropy       []*big.Int     `json:"parentDeltaEntropy"    gencodec:"required"`
-	parentUncledDeltaEntropy []*big.Int     `json:"parentUncledDeltaEntropy" gencodec:"required"`
-	efficiencyScore          uint16         `json:"efficiencyScore"       gencodec:"required"`
-	thresholdCount           uint16         `json:"thresholdCount"        gencodec:"required"`
-	expansionNumber          uint8          `json:"expansionNumber"       gencodec:"required"`
-	etxEligibleSlices        common.Hash    `json:"etxEligibleSlices"     gencodec:"required"`
-	primeTerminusHash        common.Hash    `json:"primeTerminusHash"     gencodec:"required"`
-	interlinkRootHash        common.Hash    `json:"interlinkRootHash"     gencodec:"required"`
-	uncledEntropy            *big.Int       `json:"uncledLogS"            gencodec:"required"`
-	number                   []*big.Int     `json:"number"                gencodec:"required"`
-	gasLimit                 uint64         `json:"gasLimit"              gencodec:"required"`
-	gasUsed                  uint64         `json:"gasUsed"               gencodec:"required"`
-	baseFee                  *big.Int       `json:"baseFeePerGas"         gencodec:"required"`
-	extra                    []byte         `json:"extraData"             gencodec:"required"`
-	stateLimit               uint64         `json:"stateLimit" 			  gencodec:"required"`
-	stateUsed                uint64         `json:"stateUsed"             gencodec:"required"`
-	secondaryCoinbase        common.Address `json:secondaryCoinbase       gencodec:"required"`
-	exchangeRate             *big.Int       `json:"exchangeRate"		  gencodec:"required"`
-	quaiToQi                 *big.Int       `json:"quaiToQi"			  gencodec:"required"`
-	qiToQuai                 *big.Int       `json:"qiToQuai"			  gencodec:"required"`
-	avgTxFees                *big.Int       `json:"avgTxFees"             gencodec:"required"`
-	totalFees                *big.Int       `json:"totalFees"             gencodec:"required"`
+	parentHash               []common.Hash `json:"parentHash"            gencodec:"required"`
+	uncleHash                common.Hash   `json:"uncleHash"             gencodec:"required"`
+	evmRoot                  common.Hash   `json:"evmRoot"               gencodec:"required"`
+	utxoRoot                 common.Hash   `json:"utxoRoot"              gencodec:"required"`
+	txHash                   common.Hash   `json:"transactionsRoot"      gencodec:"required"`
+	outboundEtxHash          common.Hash   `json:"outboundEtxsRoot"      gencodec:"required"`
+	etxSetRoot               common.Hash   `json:"etxSetRoot"            gencodec:"required"`
+	etxRollupHash            common.Hash   `json:"extRollupRoot"         gencodec:"required"`
+	quaiStateSize            *big.Int      `json:"quaiStateSize"         gencodec:"required"`
+	manifestHash             []common.Hash `json:"manifestHash"          gencodec:"required"`
+	receiptHash              common.Hash   `json:"receiptsRoot"          gencodec:"required"`
+	parentEntropy            []*big.Int    `json:"parentEntropy"         gencodec:"required"`
+	parentDeltaEntropy       []*big.Int    `json:"parentDeltaEntropy"    gencodec:"required"`
+	parentUncledDeltaEntropy []*big.Int    `json:"parentUncledDeltaEntropy" gencodec:"required"`
+	efficiencyScore          uint16        `json:"efficiencyScore"       gencodec:"required"`
+	thresholdCount           uint16        `json:"thresholdCount"        gencodec:"required"`
+	expansionNumber          uint8         `json:"expansionNumber"       gencodec:"required"`
+	etxEligibleSlices        common.Hash   `json:"etxEligibleSlices"     gencodec:"required"`
+	primeTerminusHash        common.Hash   `json:"primeTerminusHash"     gencodec:"required"`
+	interlinkRootHash        common.Hash   `json:"interlinkRootHash"     gencodec:"required"`
+	uncledEntropy            *big.Int      `json:"uncledLogS"            gencodec:"required"`
+	number                   []*big.Int    `json:"number"                gencodec:"required"`
+	gasLimit                 uint64        `json:"gasLimit"              gencodec:"required"`
+	gasUsed                  uint64        `json:"gasUsed"               gencodec:"required"`
+	baseFee                  *big.Int      `json:"baseFeePerGas"         gencodec:"required"`
+	extra                    []byte        `json:"extraData"             gencodec:"required"`
+	stateLimit               uint64        `json:"stateLimit" 			  gencodec:"required"`
+	stateUsed                uint64        `json:"stateUsed"             gencodec:"required"`
+	exchangeRate             *big.Int      `json:"exchangeRate"		  gencodec:"required"`
+	avgTxFees                *big.Int      `json:"avgTxFees"             gencodec:"required"`
+	totalFees                *big.Int      `json:"totalFees"             gencodec:"required"`
+	kQuaiDiscount            *big.Int      `json:"kQuaiDiscount" gencodec:"required"`
+	conversionFlowAmount     *big.Int      `json:"conversionFlowAmount" gencodec:"required"`
+	minerDifficulty          *big.Int      `json:"minerDifficulty" gencodec:"required"`
+	primeStateRoot           common.Hash   `json:"primeStateRoot" gencodec:"required"`
+	regionStateRoot          common.Hash   `json:"regionStateRoot" gencodec:"required"`
 
 	// caches
 	hash     atomic.Value
@@ -157,12 +159,14 @@ func EmptyHeader() *Header {
 	h.etxEligibleSlices = EmptyHash
 	h.primeTerminusHash = EmptyRootHash
 	h.interlinkRootHash = EmptyRootHash
-	h.secondaryCoinbase = common.Address{}
 	h.exchangeRate = big.NewInt(0)
-	h.quaiToQi = big.NewInt(0)
-	h.qiToQuai = big.NewInt(0)
 	h.avgTxFees = big.NewInt(0)
 	h.totalFees = big.NewInt(0)
+	h.kQuaiDiscount = big.NewInt(0)
+	h.conversionFlowAmount = big.NewInt(0)
+	h.minerDifficulty = big.NewInt(0)
+	h.primeStateRoot = EmptyRootHash
+	h.regionStateRoot = EmptyRootHash
 
 	for i := 0; i < common.HierarchyDepth; i++ {
 		h.manifestHash[i] = EmptyRootHash
@@ -234,40 +238,45 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 	thresholdCount := uint64(h.ThresholdCount())
 	expansionNumber := uint64(h.ExpansionNumber())
 	exchangeRate := h.exchangeRate.Bytes()
-	quaiToQi := h.quaiToQi.Bytes()
-	qiToQuai := h.qiToQuai.Bytes()
 	avgTxFees := h.avgTxFees.Bytes()
 	totalFees := h.totalFees.Bytes()
+	kquaiDiscount := h.kQuaiDiscount.Bytes()
+	conversionFlowAmount := h.conversionFlowAmount.Bytes()
+	minerDifficulty := h.minerDifficulty.Bytes()
+	primeStateRoot := common.ProtoHash{Value: h.PrimeStateRoot().Bytes()}
+	regionStateRoot := common.ProtoHash{Value: h.RegionStateRoot().Bytes()}
 
 	protoHeader := &ProtoHeader{
-		UncleHash:         &uncleHash,
-		EvmRoot:           &evmRoot,
-		UtxoRoot:          &utxoRoot,
-		TxHash:            &txHash,
-		OutboundEtxHash:   &outboundEtxhash,
-		EtxSetRoot:        &etxSetRoot,
-		QuaiStateSize:     h.QuaiStateSize().Bytes(),
-		EtxRollupHash:     &etxRollupHash,
-		ReceiptHash:       &receiptHash,
-		PrimeTerminusHash: &primeTerminusHash,
-		InterlinkRootHash: &interlinkRootHash,
-		EtxEligibleSlices: &etxEligibleSlices,
-		UncledEntropy:     h.UncledEntropy().Bytes(),
-		SecondaryCoinbase: h.SecondaryCoinbase().Bytes(),
-		GasLimit:          &gasLimit,
-		GasUsed:           &gasUsed,
-		EfficiencyScore:   &efficiencyScore,
-		ThresholdCount:    &thresholdCount,
-		ExpansionNumber:   &expansionNumber,
-		BaseFee:           h.BaseFee().Bytes(),
-		StateLimit:        &stateLimit,
-		StateUsed:         &stateUsed,
-		Extra:             h.Extra(),
-		ExchangeRate:      exchangeRate,
-		QuaiToQi:          quaiToQi,
-		QiToQuai:          qiToQuai,
-		AvgTxFees:         avgTxFees,
-		TotalFees:         totalFees,
+		UncleHash:            &uncleHash,
+		EvmRoot:              &evmRoot,
+		UtxoRoot:             &utxoRoot,
+		TxHash:               &txHash,
+		OutboundEtxHash:      &outboundEtxhash,
+		EtxSetRoot:           &etxSetRoot,
+		QuaiStateSize:        h.QuaiStateSize().Bytes(),
+		EtxRollupHash:        &etxRollupHash,
+		ReceiptHash:          &receiptHash,
+		PrimeTerminusHash:    &primeTerminusHash,
+		InterlinkRootHash:    &interlinkRootHash,
+		EtxEligibleSlices:    &etxEligibleSlices,
+		UncledEntropy:        h.UncledEntropy().Bytes(),
+		GasLimit:             &gasLimit,
+		GasUsed:              &gasUsed,
+		EfficiencyScore:      &efficiencyScore,
+		ThresholdCount:       &thresholdCount,
+		ExpansionNumber:      &expansionNumber,
+		BaseFee:              h.BaseFee().Bytes(),
+		StateLimit:           &stateLimit,
+		StateUsed:            &stateUsed,
+		Extra:                h.Extra(),
+		ExchangeRate:         exchangeRate,
+		AvgTxFees:            avgTxFees,
+		TotalFees:            totalFees,
+		KQuaiDiscount:        kquaiDiscount,
+		ConversionFlowAmount: conversionFlowAmount,
+		MinerDifficulty:      minerDifficulty,
+		PrimeStateRoot:       &primeStateRoot,
+		RegionStateRoot:      &regionStateRoot,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -363,23 +372,29 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	if protoHeader.QuaiStateSize == nil {
 		return errors.New("missing required field 'QuaiStateSize' in Header")
 	}
-	if protoHeader.SecondaryCoinbase == nil {
-		return errors.New("missing required field 'secondaryCoinbase' in Header")
-	}
 	if protoHeader.ExchangeRate == nil {
 		return errors.New("missing required field 'ExchangeRate' in Header")
-	}
-	if protoHeader.QuaiToQi == nil {
-		return errors.New("missing required field 'QuaiToQi' in Header")
-	}
-	if protoHeader.QiToQuai == nil {
-		return errors.New("missing required field 'QiToQuai' in Header")
 	}
 	if protoHeader.AvgTxFees == nil {
 		return errors.New("missing required field 'AvgTxFees' in Header")
 	}
 	if protoHeader.TotalFees == nil {
 		return errors.New("missing required field 'TotalFees' in Header")
+	}
+	if protoHeader.KQuaiDiscount == nil {
+		return errors.New("missing required field 'KQuaiDiscount' in Header")
+	}
+	if protoHeader.ConversionFlowAmount == nil {
+		return errors.New("missing required field 'ConversionFlowAmount' in Header")
+	}
+	if protoHeader.MinerDifficulty == nil {
+		return errors.New("missing required field 'MinerDifficulty' in Header")
+	}
+	if protoHeader.PrimeStateRoot == nil {
+		return errors.New("missing required field 'PrimeStateRoot' in Header")
+	}
+	if protoHeader.RegionStateRoot == nil {
+		return errors.New("missing required field 'RegionStateRoot' in Header")
 	}
 
 	// Initialize the array fields before setting
@@ -423,12 +438,14 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	h.SetThresholdCount(uint16(protoHeader.GetThresholdCount()))
 	h.SetExpansionNumber(uint8(protoHeader.GetExpansionNumber()))
 	h.SetEtxEligibleSlices(common.BytesToHash(protoHeader.GetEtxEligibleSlices().GetValue()))
-	h.SetSecondaryCoinbase(common.BytesToAddress(protoHeader.GetSecondaryCoinbase(), location))
 	h.SetExchangeRate(new(big.Int).SetBytes(protoHeader.GetExchangeRate()))
-	h.SetQuaiToQi(new(big.Int).SetBytes(protoHeader.GetQuaiToQi()))
-	h.SetQiToQuai(new(big.Int).SetBytes(protoHeader.GetQiToQuai()))
 	h.SetAvgTxFees(new(big.Int).SetBytes(protoHeader.GetAvgTxFees()))
 	h.SetTotalFees(new(big.Int).SetBytes(protoHeader.GetTotalFees()))
+	h.SetKQuaiDiscount(new(big.Int).SetBytes(protoHeader.GetKQuaiDiscount()))
+	h.SetConversionFlowAmount(new(big.Int).SetBytes(protoHeader.GetConversionFlowAmount()))
+	h.SetMinerDifficulty(new(big.Int).SetBytes(protoHeader.GetMinerDifficulty()))
+	h.SetPrimeStateRoot(common.BytesToHash(protoHeader.GetPrimeStateRoot().GetValue()))
+	h.SetRegionStateRoot(common.BytesToHash(protoHeader.GetRegionStateRoot().GetValue()))
 
 	return nil
 }
@@ -443,36 +460,38 @@ func uint64ToByteArr(val uint64) [8]byte {
 // RPCMarshalHeader converts the given header to the RPC output .
 func (h *Header) RPCMarshalHeader() map[string]interface{} {
 	result := map[string]interface{}{
-		"parentHash":        h.ParentHashArray(),
-		"uncledEntropy":     (*hexutil.Big)(h.UncledEntropy()),
-		"uncleHash":         h.UncleHash(),
-		"quaiStateSize":     (*hexutil.Big)(h.QuaiStateSize()),
-		"evmRoot":           h.EVMRoot(),
-		"utxoRoot":          h.UTXORoot(),
-		"extraData":         hexutil.Bytes(h.Extra()),
-		"size":              hexutil.Uint64(h.Size()),
-		"transactionsRoot":  h.TxHash(),
-		"receiptsRoot":      h.ReceiptHash(),
-		"outboundEtxsRoot":  h.OutboundEtxHash(),
-		"etxSetRoot":        h.EtxSetRoot(),
-		"etxRollupRoot":     h.EtxRollupHash(),
-		"primeTerminusHash": h.PrimeTerminusHash(),
-		"interlinkRootHash": h.InterlinkRootHash(),
-		"manifestHash":      h.ManifestHashArray(),
-		"gasLimit":          hexutil.Uint(h.GasLimit()),
-		"gasUsed":           hexutil.Uint(h.GasUsed()),
-		"efficiencyScore":   hexutil.Uint64(h.EfficiencyScore()),
-		"thresholdCount":    hexutil.Uint64(h.ThresholdCount()),
-		"expansionNumber":   hexutil.Uint64(h.ExpansionNumber()),
-		"etxEligibleSlices": h.EtxEligibleSlices(),
-		"stateLimit":        hexutil.Uint64(h.StateLimit()),
-		"stateUsed":         hexutil.Uint64(h.StateUsed()),
-		"secondaryCoinbase": h.SecondaryCoinbase().Hex(),
-		"exchangeRate":      (*hexutil.Big)(h.ExchangeRate()),
-		"quaiToQi":          (*hexutil.Big)(h.QuaiToQi()),
-		"qiToQuai":          (*hexutil.Big)(h.QiToQuai()),
-		"avgTxFees":         (*hexutil.Big)(h.AvgTxFees()),
-		"totalFees":         (*hexutil.Big)(h.TotalFees()),
+		"parentHash":           h.ParentHashArray(),
+		"uncledEntropy":        (*hexutil.Big)(h.UncledEntropy()),
+		"uncleHash":            h.UncleHash(),
+		"quaiStateSize":        (*hexutil.Big)(h.QuaiStateSize()),
+		"evmRoot":              h.EVMRoot(),
+		"utxoRoot":             h.UTXORoot(),
+		"extraData":            hexutil.Bytes(h.Extra()),
+		"size":                 hexutil.Uint64(h.Size()),
+		"transactionsRoot":     h.TxHash(),
+		"receiptsRoot":         h.ReceiptHash(),
+		"outboundEtxsRoot":     h.OutboundEtxHash(),
+		"etxSetRoot":           h.EtxSetRoot(),
+		"etxRollupRoot":        h.EtxRollupHash(),
+		"primeTerminusHash":    h.PrimeTerminusHash(),
+		"interlinkRootHash":    h.InterlinkRootHash(),
+		"manifestHash":         h.ManifestHashArray(),
+		"gasLimit":             hexutil.Uint(h.GasLimit()),
+		"gasUsed":              hexutil.Uint(h.GasUsed()),
+		"efficiencyScore":      hexutil.Uint64(h.EfficiencyScore()),
+		"thresholdCount":       hexutil.Uint64(h.ThresholdCount()),
+		"expansionNumber":      hexutil.Uint64(h.ExpansionNumber()),
+		"etxEligibleSlices":    h.EtxEligibleSlices(),
+		"stateLimit":           hexutil.Uint64(h.StateLimit()),
+		"stateUsed":            hexutil.Uint64(h.StateUsed()),
+		"exchangeRate":         (*hexutil.Big)(h.ExchangeRate()),
+		"avgTxFees":            (*hexutil.Big)(h.AvgTxFees()),
+		"totalFees":            (*hexutil.Big)(h.TotalFees()),
+		"kQuaiDiscount":        (*hexutil.Big)(h.KQuaiDiscount()),
+		"conversionFlowAmount": (*hexutil.Big)(h.ConversionFlowAmount()),
+		"minerDifficulty":      (*hexutil.Big)(h.MinerDifficulty()),
+		"primeStateRoot":       h.PrimeStateRoot(),
+		"regionStateRoot":      h.RegionStateRoot(),
 	}
 
 	number := make([]*hexutil.Big, common.HierarchyDepth-1)
@@ -582,14 +601,14 @@ func (h *Header) StateUsed() uint64 {
 func (h *Header) Extra() []byte                  { return common.CopyBytes(h.extra) }
 func (h *Header) PrimeTerminusHash() common.Hash { return h.primeTerminusHash }
 func (h *Header) InterlinkRootHash() common.Hash { return h.interlinkRootHash }
-func (h *Header) SecondaryCoinbase() common.Address {
-	return h.secondaryCoinbase
-}
-func (h *Header) ExchangeRate() *big.Int { return h.exchangeRate }
-func (h *Header) QuaiToQi() *big.Int     { return h.quaiToQi }
-func (h *Header) QiToQuai() *big.Int     { return h.qiToQuai }
-func (h *Header) AvgTxFees() *big.Int    { return h.avgTxFees }
-func (h *Header) TotalFees() *big.Int    { return h.totalFees }
+func (h *Header) ExchangeRate() *big.Int         { return h.exchangeRate }
+func (h *Header) AvgTxFees() *big.Int            { return h.avgTxFees }
+func (h *Header) TotalFees() *big.Int            { return h.totalFees }
+func (h *Header) KQuaiDiscount() *big.Int        { return h.kQuaiDiscount }
+func (h *Header) ConversionFlowAmount() *big.Int { return h.conversionFlowAmount }
+func (h *Header) MinerDifficulty() *big.Int      { return h.minerDifficulty }
+func (h *Header) PrimeStateRoot() common.Hash    { return h.primeStateRoot }
+func (h *Header) RegionStateRoot() common.Hash   { return h.regionStateRoot }
 
 func (h *Header) SetParentHash(val common.Hash, nodeCtx int) {
 	h.hash = atomic.Value{}     // clear hash cache
@@ -736,28 +755,11 @@ func (h *Header) SetExtra(val []byte) {
 	h.extra = make([]byte, len(val))
 	copy(h.extra, val)
 }
-func (h *Header) SetSecondaryCoinbase(val common.Address) {
-	h.hash = atomic.Value{}
-	h.sealHash = atomic.Value{}
-	h.secondaryCoinbase = val
-}
 
 func (h *Header) SetExchangeRate(val *big.Int) {
 	h.hash = atomic.Value{}
 	h.sealHash = atomic.Value{}
 	h.exchangeRate = new(big.Int).Set(val)
-}
-
-func (h *Header) SetQuaiToQi(val *big.Int) {
-	h.hash = atomic.Value{}
-	h.sealHash = atomic.Value{}
-	h.quaiToQi = new(big.Int).Set(val)
-}
-
-func (h *Header) SetQiToQuai(val *big.Int) {
-	h.hash = atomic.Value{}
-	h.sealHash = atomic.Value{}
-	h.qiToQuai = new(big.Int).Set(val)
 }
 
 func (h *Header) SetAvgTxFees(val *big.Int) {
@@ -770,6 +772,36 @@ func (h *Header) SetTotalFees(val *big.Int) {
 	h.hash = atomic.Value{}
 	h.sealHash = atomic.Value{}
 	h.totalFees = new(big.Int).Set(val)
+}
+
+func (h *Header) SetKQuaiDiscount(val *big.Int) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.kQuaiDiscount = new(big.Int).Set(val)
+}
+
+func (h *Header) SetConversionFlowAmount(val *big.Int) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.conversionFlowAmount = new(big.Int).Set(val)
+}
+
+func (h *Header) SetMinerDifficulty(val *big.Int) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.minerDifficulty = new(big.Int).Set(val)
+}
+
+func (h *Header) SetPrimeStateRoot(val common.Hash) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.primeStateRoot = val
+}
+
+func (h *Header) SetRegionStateRoot(val common.Hash) {
+	h.hash = atomic.Value{}
+	h.sealHash = atomic.Value{}
+	h.regionStateRoot = val
 }
 
 // Array accessors
@@ -801,40 +833,45 @@ func (h *Header) SealEncode() *ProtoHeader {
 	stateLimit := h.StateLimit()
 	stateUsed := h.StateUsed()
 	exchangeRate := h.exchangeRate.Bytes()
-	quaiToQi := h.quaiToQi.Bytes()
-	qiToQuai := h.qiToQuai.Bytes()
 	avgTxFees := h.avgTxFees.Bytes()
 	totalFees := h.totalFees.Bytes()
+	kQuaiDiscount := h.kQuaiDiscount.Bytes()
+	conversionFlowAmount := h.conversionFlowAmount.Bytes()
+	minerDifficulty := h.minerDifficulty.Bytes()
+	primeStateRoot := common.ProtoHash{Value: h.PrimeStateRoot().Bytes()}
+	regionStateRoot := common.ProtoHash{Value: h.RegionStateRoot().Bytes()}
 
 	protoSealData := &ProtoHeader{
-		UncleHash:         &uncleHash,
-		EvmRoot:           &evmRoot,
-		UtxoRoot:          &utxoRoot,
-		TxHash:            &txHash,
-		OutboundEtxHash:   &outboundEtxhash,
-		EtxSetRoot:        &etxSetRoot,
-		EtxRollupHash:     &etxRollupHash,
-		ReceiptHash:       &receiptHash,
-		GasLimit:          &gasLimit,
-		GasUsed:           &gasUsed,
-		QuaiStateSize:     h.QuaiStateSize().Bytes(),
-		BaseFee:           h.BaseFee().Bytes(),
-		StateLimit:        &stateLimit,
-		StateUsed:         &stateUsed,
-		UncledEntropy:     h.UncledEntropy().Bytes(),
-		PrimeTerminusHash: &primeTerminusHash,
-		InterlinkRootHash: &interlinkRootHash,
-		EtxEligibleSlices: &etxEligibleSlices,
-		EfficiencyScore:   &efficiencyScore,
-		ThresholdCount:    &thresholdCount,
-		ExpansionNumber:   &expansionNumber,
-		Extra:             h.Extra(),
-		SecondaryCoinbase: h.SecondaryCoinbase().Bytes(),
-		ExchangeRate:      exchangeRate,
-		QuaiToQi:          quaiToQi,
-		QiToQuai:          qiToQuai,
-		AvgTxFees:         avgTxFees,
-		TotalFees:         totalFees,
+		UncleHash:            &uncleHash,
+		EvmRoot:              &evmRoot,
+		UtxoRoot:             &utxoRoot,
+		TxHash:               &txHash,
+		OutboundEtxHash:      &outboundEtxhash,
+		EtxSetRoot:           &etxSetRoot,
+		EtxRollupHash:        &etxRollupHash,
+		ReceiptHash:          &receiptHash,
+		GasLimit:             &gasLimit,
+		GasUsed:              &gasUsed,
+		QuaiStateSize:        h.QuaiStateSize().Bytes(),
+		BaseFee:              h.BaseFee().Bytes(),
+		StateLimit:           &stateLimit,
+		StateUsed:            &stateUsed,
+		UncledEntropy:        h.UncledEntropy().Bytes(),
+		PrimeTerminusHash:    &primeTerminusHash,
+		InterlinkRootHash:    &interlinkRootHash,
+		EtxEligibleSlices:    &etxEligibleSlices,
+		EfficiencyScore:      &efficiencyScore,
+		ThresholdCount:       &thresholdCount,
+		ExpansionNumber:      &expansionNumber,
+		Extra:                h.Extra(),
+		ExchangeRate:         exchangeRate,
+		AvgTxFees:            avgTxFees,
+		TotalFees:            totalFees,
+		KQuaiDiscount:        kQuaiDiscount,
+		ConversionFlowAmount: conversionFlowAmount,
+		MinerDifficulty:      minerDifficulty,
+		PrimeStateRoot:       &primeStateRoot,
+		RegionStateRoot:      &regionStateRoot,
 	}
 
 	for i := 0; i < common.HierarchyDepth; i++ {
@@ -1020,10 +1057,13 @@ func CopyHeader(h *Header) *Header {
 	cpy.SetStateLimit(h.StateLimit())
 	cpy.SetStateUsed(h.StateUsed())
 	cpy.SetExchangeRate(h.ExchangeRate())
-	cpy.SetQuaiToQi(h.QuaiToQi())
-	cpy.SetQiToQuai(h.QiToQuai())
 	cpy.SetAvgTxFees(h.AvgTxFees())
 	cpy.SetTotalFees(h.TotalFees())
+	cpy.SetKQuaiDiscount(h.KQuaiDiscount())
+	cpy.SetConversionFlowAmount(h.ConversionFlowAmount())
+	cpy.SetMinerDifficulty(h.MinerDifficulty())
+	cpy.SetPrimeStateRoot(h.PrimeStateRoot())
+	cpy.SetRegionStateRoot(h.RegionStateRoot())
 	return &cpy
 }
 

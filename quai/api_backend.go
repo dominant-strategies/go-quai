@@ -749,6 +749,14 @@ func (b *QuaiAPIBackend) CalcBaseFee(wo *types.WorkObject) *big.Int {
 	return b.quai.core.CalcBaseFee(wo)
 }
 
+func (b *QuaiAPIBackend) GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error) {
+	return b.quai.core.GetKQuaiAndUpdateBit(blockHash)
+}
+
+func (b *QuaiAPIBackend) ComputeMinerDifficulty(parent *types.WorkObject) *big.Int {
+	return b.quai.core.ComputeMinerDifficulty(parent)
+}
+
 // ///////////////////////////
 // /////// P2P ///////////////
 // ///////////////////////////

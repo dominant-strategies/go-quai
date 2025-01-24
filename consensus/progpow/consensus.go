@@ -387,6 +387,25 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		}
 	}
 
+	if nodeCtx == common.PRIME_CTX {
+		if header.PrimeStateRoot() != types.EmptyRootHash {
+			return fmt.Errorf("invalid prime state root: have %v, want %v", header.PrimeStateRoot(), types.EmptyRootHash)
+		}
+	}
+
+	if nodeCtx == common.REGION_CTX {
+		if header.RegionStateRoot() != types.EmptyRootHash {
+			return fmt.Errorf("invalid region state root: have %v, want %v", header.RegionStateRoot(), types.EmptyRootHash)
+		}
+	}
+
+	if nodeCtx == common.PRIME_CTX {
+		expectedMinerDifficulty := chain.ComputeMinerDifficulty(parent)
+		if header.MinerDifficulty().Cmp(expectedMinerDifficulty) != 0 {
+			return fmt.Errorf("invalid miner difficulty: have %v, want %v", header.MinerDifficulty(), expectedMinerDifficulty)
+		}
+	}
+
 	if nodeCtx == common.ZONE_CTX {
 		var expectedExpansionNumber uint8
 		expectedExpansionNumber, err := chain.ComputeExpansionNumber(parent)
@@ -404,22 +423,6 @@ func (progpow *Progpow) verifyHeader(chain consensus.ChainHeaderReader, header, 
 		_, err := header.PrimaryCoinbase().InternalAddress()
 		if err != nil {
 			return fmt.Errorf("out-of-scope primary coinbase in the header: %v location: %v nodeLocation: %v, err %s", header.PrimaryCoinbase(), header.Location(), progpow.config.NodeLocation, err)
-		}
-		_, err = header.SecondaryCoinbase().InternalAddress()
-		if err != nil {
-			return fmt.Errorf("out-of-scope secondary coinbase in the header: %v location: %v nodeLocation: %v, err %s", header.SecondaryCoinbase(), header.Location(), progpow.config.NodeLocation, err)
-		}
-
-		// One of the coinbases has to be Quai and the other one has to be Qi
-		quaiAddress := header.PrimaryCoinbase().IsInQuaiLedgerScope()
-		if quaiAddress {
-			if !header.SecondaryCoinbase().IsInQiLedgerScope() {
-				return fmt.Errorf("primary coinbase: %v is in quai ledger but secondary coinbase: %v is not in Qi ledger", header.PrimaryCoinbase(), header.SecondaryCoinbase())
-			}
-		} else {
-			if !header.SecondaryCoinbase().IsInQuaiLedgerScope() {
-				return fmt.Errorf("primary coinbase: %v is in qi ledger but secondary coinbase: %v is not in Quai ledger", header.PrimaryCoinbase(), header.SecondaryCoinbase())
-			}
 		}
 		if header.NumberU64(common.ZONE_CTX) < 2*params.BlocksPerMonth && header.Lock() != 0 {
 			return fmt.Errorf("header lock byte: %v is not valid: it has to be %v for the first two months", header.Lock(), 0)
