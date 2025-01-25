@@ -68,7 +68,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if viper.IsSet(utils.PprofFlag.Name) {
+	if viper.GetBool(utils.PprofFlag.Name) {
 		EnablePprof()
 	}
 

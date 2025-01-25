@@ -5,4 +5,4 @@ global:
 scrape_configs:
   - job_name: 'go-quai'
     static_configs:
-    - targets: [localhost:2112]
+    - targets: [localhost:6060]
