@@ -377,7 +377,7 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			}
 
 			if len(block.WorkObject.Transactions()) > int(backend.GetMaxTxInWorkShare()) {
-				backend.Logger().Error("workshare contains more transactions than allowed")
+				backend.Logger().Errorf("workshare contains more transactions than allowed. Max allowed: %d, actual: %d", backend.GetMaxTxInWorkShare(), len(block.WorkObject.Transactions()))
 				return pubsub.ValidationReject
 			}
 
