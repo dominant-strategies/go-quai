@@ -1528,7 +1528,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	}
 
 	if nodeLocation.Equal(common.Location{0, 0}) {
-		cfg.GenesisAllocs, err = genallocs.AllocateGenesisAccounts("genallocs/gen_alloc_quai_" + nodeLocation.Name() + ".json")
+		cfg.GenesisAllocs, err = genallocs.AllocateGenesisAccounts("genallocs/gen_alloc_quai.json")
 		if err != nil {
 			log.Global.WithField("err", err).Fatal("Unable to allocate genesis accounts")
 		}
