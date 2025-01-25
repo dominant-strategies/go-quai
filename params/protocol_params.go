@@ -258,7 +258,7 @@ func RegionEntropyTarget(expansionNum uint8) *big.Int {
 }
 
 func MinGasLimit(number uint64) uint64 {
-	return 12000000
+	return 50000000
 }
 
 func OneOverKqi(number uint64) *big.Int {
