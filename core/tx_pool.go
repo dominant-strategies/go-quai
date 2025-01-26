@@ -104,10 +104,11 @@ var (
 )
 
 var (
-	evictionInterval          = time.Minute      // Time interval to check for evictable transactions
-	statsReportInterval       = 1 * time.Minute  // Time interval to report transaction pool stats
-	qiExpirationCheckInterval = 10 * time.Minute // Time interval to check for expired Qi transactions
-	qiExpirationCheckDivisor  = 5                // Check 1/nth of the pool for expired Qi transactions every interval
+	evictionInterval          = time.Minute            // Time interval to check for evictable transactions
+	statsReportInterval       = 1 * time.Minute        // Time interval to report transaction pool stats
+	qiExpirationCheckInterval = 10 * time.Minute       // Time interval to check for expired Qi transactions
+	qiExpirationCheckDivisor  = 5                      // Check 1/nth of the pool for expired Qi transactions every interval
+	txSharingPoolTimeout      = 200 * time.Millisecond // Time to exit the tx sharing call with client
 )
 
 var (
@@ -1616,10 +1617,14 @@ func (pool *TxPool) txListenerLoop() {
 			// send to all pool sharing clients
 			for _, client := range pool.poolSharingClients {
 				if client != nil {
-					err := client.SendTransactionToPoolSharingClient(context.Background(), tx)
-					if err != nil {
-						pool.logger.WithField("err", err).Error("Error sending transaction to pool sharing client")
-					}
+					go func(*quaiclient.Client, *types.Transaction) {
+						ctx, cancel := context.WithTimeout(context.Background(), txSharingPoolTimeout)
+						defer cancel()
+						err := client.SendTransactionToPoolSharingClient(ctx, tx)
+						if err != nil {
+							pool.logger.WithField("err", err).Error("Error sending transaction to pool sharing client")
+						}
+					}(client, tx)
 				}
 			}
 		case <-pool.reorgShutdownCh:
