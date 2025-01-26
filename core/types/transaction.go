@@ -59,7 +59,7 @@ const (
 )
 
 const (
-	c_MaxTxForSorting = 1500
+	c_MaxTxForSorting = 3000
 )
 
 // Transaction can be a Quai, Qi, or External transaction.
