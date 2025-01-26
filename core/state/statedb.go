@@ -163,6 +163,9 @@ type StateDB struct {
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
+
+	SupplyAdded   *big.Int
+	SupplyRemoved *big.Int
 }
 
 // New creates a new state from a given trie.
@@ -194,6 +197,8 @@ func New(root common.Hash, etxRoot common.Hash, quaiStateSize *big.Int, db Datab
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
 		nodeLocation:        nodeLocation,
+		SupplyAdded:         big.NewInt(0),
+		SupplyRemoved:       big.NewInt(0),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -467,6 +472,7 @@ func (s *StateDB) AddBalance(addr common.InternalAddress, amount *big.Int) {
 	if stateObject != nil {
 		stateObject.AddBalance(amount, s.nodeLocation)
 	}
+	s.SupplyAdded.Add(s.SupplyAdded, amount)
 }
 
 // SubBalance subtracts amount from the account associated with addr.
@@ -475,6 +481,7 @@ func (s *StateDB) SubBalance(addr common.InternalAddress, amount *big.Int) {
 	if stateObject != nil {
 		stateObject.SubBalance(amount)
 	}
+	s.SupplyRemoved.Add(s.SupplyRemoved, amount)
 }
 
 func (s *StateDB) SetBalance(addr common.InternalAddress, amount *big.Int) {
@@ -903,6 +910,8 @@ func (s *StateDB) Copy() *StateDB {
 		hasher:              crypto.NewKeccakState(),
 		nodeLocation:        s.nodeLocation,
 		logger:              s.logger,
+		SupplyAdded:         new(big.Int).Set(s.SupplyAdded),
+		SupplyRemoved:       new(big.Int).Set(s.SupplyRemoved),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {

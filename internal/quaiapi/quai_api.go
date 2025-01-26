@@ -297,6 +297,25 @@ func (s *PublicBlockChainQuaiAPI) GetWrappedQiDeposit(ctx context.Context, owner
 	return (*hexutil.Big)(balance), err
 }
 
+func (s *PublicBlockChainQuaiAPI) GetSupplyAnalyticsForBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (map[string]interface{}, error) {
+	header, err := s.b.HeaderByNumberOrHash(ctx, blockNrOrHash)
+	if header == nil || err != nil {
+		return nil, err
+	}
+	supplyAddedQuai, supplyRemovedQuai, totalSupplyQuai, supplyAddedQi, supplyRemovedQi, totalSupplyQi, err := rawdb.ReadSupplyAnalyticsForBlock(s.b.Database(), header.Hash())
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"quaiSupplyAdded":   (*hexutil.Big)(supplyAddedQuai),
+		"quaiSupplyRemoved": (*hexutil.Big)(supplyRemovedQuai),
+		"quaiSupplyTotal":   (*hexutil.Big)(totalSupplyQuai),
+		"qiSupplyAdded":     (*hexutil.Big)(supplyAddedQi),
+		"qiSupplyRemoved":   (*hexutil.Big)(supplyRemovedQi),
+		"qiSupplyTotal":     (*hexutil.Big)(totalSupplyQi),
+	}, nil
+}
+
 func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) (map[string][]interface{}, error) {
 	if start > end {
 		return nil, fmt.Errorf("start is greater than end")

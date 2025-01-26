@@ -265,3 +265,12 @@ message ProtoLockup {
 message ProtoLockups {
   repeated ProtoLockup lockups = 1;
 }
+
+message ProtoSupplyAnalytics {
+  bytes supply_added_quai = 1;
+  bytes supply_removed_quai = 2;
+  bytes supply_added_qi = 3;
+  bytes supply_removed_qi = 4;
+  bytes total_supply_quai = 5;
+  bytes total_supply_qi = 6;
+}

@@ -529,6 +529,8 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			for _, key := range utxoKeys {
 				if len(key) == rawdb.UtxoKeyWithDenominationLength {
 					key = key[:rawdb.UtxoKeyLength] // The last byte of the key is the denomination (but only in CreatedUTXOKeys)
+				} else {
+					hc.logger.Errorf("invalid created utxo key length: %d", len(key))
 				}
 				batch.Delete(key)
 			}
