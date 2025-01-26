@@ -1616,10 +1616,14 @@ func (pool *TxPool) txListenerLoop() {
 			// send to all pool sharing clients
 			for _, client := range pool.poolSharingClients {
 				if client != nil {
-					err := client.SendTransactionToPoolSharingClient(context.Background(), tx)
-					if err != nil {
-						pool.logger.WithField("err", err).Error("Error sending transaction to pool sharing client")
-					}
+					go func(*quaiclient.Client, *types.Transaction) {
+						ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+						defer cancel()
+						err := client.SendTransactionToPoolSharingClient(ctx, tx)
+						if err != nil {
+							pool.logger.WithField("err", err).Error("Error sending transaction to pool sharing client")
+						}
+					}(client, tx)
 				}
 			}
 		case <-pool.reorgShutdownCh:
