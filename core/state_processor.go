@@ -267,6 +267,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if err != nil {
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, 0, nil, nil, err
 	}
+	supplyAddedQi, supplyRemovedQi := big.NewInt(0), big.NewInt(0)
 	utxosCreatedDeleted := new(UtxosCreatedDeleted) // utxos created and deleted in this block
 	utxosCreatedDeleted.CoinbaseLockupsCreatedHashes = make(map[string]common.Hash)
 	utxosCreatedDeleted.CoinbaseLockupsDeletedHashes = make(map[string]common.Hash)
@@ -366,7 +367,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if _, ok := senders[tx.Hash()]; ok {
 				checkSig = false
 			}
-			qiTxFee, etxs, receipt, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, qiScalingFactor, &etxRLimit, &etxPLimit, utxosCreatedDeleted)
+			qiTxFee, etxs, receipt, err, timing := ProcessQiTx(tx, p.hc, checkSig, firstQiTx, header, batch, p.hc.headerDb, gp, usedGas, p.hc.pool.signer, p.hc.NodeLocation(), *p.config.ChainID, qiScalingFactor, &etxRLimit, &etxPLimit, utxosCreatedDeleted, supplyAddedQi, supplyRemovedQi)
 			if err != nil {
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 			}
@@ -477,6 +478,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
 								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 							}
+							supplyAddedQi.Add(supplyAddedQi, types.Denominations[uint8(denomination)])
+
 							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
 							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
 							p.logger.Debugf("Emitting Qi for coinbase lockup tx %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, 0)
@@ -572,6 +575,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
 									return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 								}
+								supplyAddedQi.Add(supplyAddedQi, types.Denominations[uint8(denomination)])
+
 								utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
 								utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
 								p.logger.Debugf("Creating UTXO for coinbase %032x with denomination %d index %d\n", tx.Hash(), denomination, outputIndex)
@@ -755,6 +760,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
 								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 							}
+							supplyAddedQi.Add(supplyAddedQi, types.Denominations[uint8(denomination)])
+
 							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
 							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
 							p.logger.Debugf("Converting Quai to Qi %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, lock)
@@ -781,6 +788,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					if err := rawdb.CreateUTXO(batch, etx.OriginatingTxHash(), etx.ETXIndex(), utxo); err != nil {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 					}
+					supplyAddedQi.Add(supplyAddedQi, types.Denominations[utxo.Denomination])
+
 					utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.OriginatingTxHash(), etx.ETXIndex(), utxo))
 					utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.OriginatingTxHash(), etx.ETXIndex(), utxo.Denomination))
 					// This Qi ETX should cost more gas
@@ -1072,7 +1081,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	time4 := common.PrettyDuration(time.Since(start))
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	multiSet, utxoSetSize, err := p.engine.Finalize(p.hc, batch, block, statedb, false, parentUtxoSetSize, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes)
+	multiSet, utxoSetSize, err := p.engine.Finalize(p.hc, batch, block, statedb, false, parentUtxoSetSize, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes, supplyRemovedQi)
 	if err != nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 	}
@@ -1131,6 +1140,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	}
 	if err := rawdb.WriteDeletedCoinbaseLockups(batch, blockHash, utxosCreatedDeleted.CoinbaseLockupsDeleted); err != nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+	}
+	if err := rawdb.WriteSupplyAnalyticsForBlock(batch, p.hc.headerDb, blockHash, statedb.SupplyAdded, statedb.SupplyRemoved, supplyAddedQi, supplyRemovedQi); err != nil {
+		p.logger.Errorf("failed to write supply analytics for block %x: %v", blockHash, err)
 	}
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, utxoSetSize, multiSet, unlocks, nil
 }
@@ -1549,7 +1561,7 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 	return txFee, nil
 }
 
-func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit *uint64, utxosCreatedDeleted *UtxosCreatedDeleted) (*big.Int, []*types.ExternalTx, *types.Receipt, error, map[string]time.Duration) {
+func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFirstQiTx bool, currentHeader *types.WorkObject, batch ethdb.Batch, db ethdb.Reader, gp *types.GasPool, usedGas *uint64, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit *uint64, utxosCreatedDeleted *UtxosCreatedDeleted, supplyAddedQi, supplyRemovedQi *big.Int) (*big.Int, []*types.ExternalTx, *types.Receipt, error, map[string]time.Duration) {
 	var elapsedTime time.Duration
 	stepTimings := make(map[string]time.Duration)
 	prevUsedGas := *usedGas
@@ -1621,6 +1633,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		inputs[uint(denomination)]++
 
 		rawdb.DeleteUTXO(batch, txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		supplyRemovedQi.Add(supplyRemovedQi, types.Denominations[denomination])
+
 		utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, types.UTXOHash(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo))
 		utxosCreatedDeleted.UtxosDeleted = append(utxosCreatedDeleted.UtxosDeleted, &types.SpentUtxoEntry{OutPoint: txIn.PreviousOutPoint, UtxoEntry: utxo})
 	}
@@ -1724,6 +1738,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 			if err := rawdb.CreateUTXO(batch, tx.Hash(), uint16(txOutIdx), utxo); err != nil {
 				return nil, nil, nil, err, nil
 			}
+			supplyAddedQi.Add(supplyAddedQi, types.Denominations[utxo.Denomination])
+
 			utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(tx.Hash(), uint16(txOutIdx), utxo))
 			utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(tx.Hash(), uint16(txOutIdx), utxo.Denomination))
 		}
