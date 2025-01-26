@@ -116,6 +116,7 @@ var (
 	CoinbaseLockupPrefix         = []byte("cl")  // coinbaseLockupPrefix + ownerContract + beneficiaryMiner + lockupByte + epoch -> lockup
 	createdCoinbaseLockupsPrefix = []byte("ccl") // createdCoinbaseLockupsPrefix + hash -> [][]byte
 	deletedCoinbaseLockupsPrefix = []byte("dcl") // deletedCoinbaseLockupsPrefix + hash -> [][]byte
+	supplyAnalyticsPrefix        = []byte("sa")  // supplyAnalyticsKey + hash -> SupplyAnalytics
 )
 
 const (
@@ -384,6 +385,10 @@ func utxoToBlockHeightKey(txHash common.Hash, index uint16) []byte {
 	txHash[common.HashLength-1] = indexBytes[0]
 	txHash[common.HashLength-2] = indexBytes[1]
 	return append(utxoToBlockHeightPrefix, txHash[:]...)
+}
+
+func supplyAnalyticsKey(hash common.Hash) []byte {
+	return append(supplyAnalyticsPrefix, hash.Bytes()...)
 }
 
 const CoinbaseLockupKeyLength = 47 //len(CoinbaseLockupPrefix) + 2*common.AddressLength + 1 + 4

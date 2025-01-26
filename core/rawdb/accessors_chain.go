@@ -1882,3 +1882,50 @@ func DeleteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address,
 	}
 	return [CoinbaseLockupKeyLength]byte(key)
 }
+
+func WriteSupplyAnalyticsForBlock(db ethdb.KeyValueWriter, readDb ethdb.Reader, blockHash common.Hash, parentHash common.Hash, supplyAddedQuai, supplyRemovedQuai, supplyAddedQi, supplyRemovedQi *big.Int) error {
+	supplyDeltaQuai := new(big.Int).Sub(supplyAddedQuai, supplyRemovedQuai)
+	supplyDeltaQi := new(big.Int).Sub(supplyAddedQi, supplyRemovedQi)
+
+	_, _, totalSupplyQuai, _, _, totalSupplyQi, err := ReadSupplyAnalyticsForBlock(readDb, parentHash)
+	if err != nil {
+		db.Logger().WithField("err", err).Error("Failed to read total supply")
+		return err
+	}
+
+	totalSupplyQuai.Add(totalSupplyQuai, supplyDeltaQuai)
+
+	totalSupplyQi.Add(totalSupplyQi, supplyDeltaQi)
+
+	protoSupplyAnalytics := &types.ProtoSupplyAnalytics{
+		SupplyAddedQuai:   supplyAddedQuai.Bytes(),
+		SupplyRemovedQuai: supplyRemovedQuai.Bytes(),
+		SupplyAddedQi:     supplyAddedQi.Bytes(),
+		SupplyRemovedQi:   supplyRemovedQi.Bytes(),
+		TotalSupplyQuai:   totalSupplyQuai.Bytes(),
+		TotalSupplyQi:     totalSupplyQi.Bytes(),
+	}
+	data, err := proto.Marshal(protoSupplyAnalytics)
+	if err != nil {
+		return err
+	}
+	return db.Put(supplyAnalyticsKey(blockHash), data)
+}
+
+func ReadSupplyAnalyticsForBlock(db ethdb.Reader, blockHash common.Hash) (*big.Int, *big.Int, *big.Int, *big.Int, *big.Int, *big.Int, error) {
+	data, _ := db.Get(supplyAnalyticsKey(blockHash))
+	if len(data) == 0 {
+		return big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil
+	}
+	protoSupplyAnalytics := new(types.ProtoSupplyAnalytics)
+	if err := proto.Unmarshal(data, protoSupplyAnalytics); err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	supplyAddedQuai := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyAddedQuai)
+	supplyRemovedQuai := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyRemovedQuai)
+	totalSupplyQuai := new(big.Int).SetBytes(protoSupplyAnalytics.TotalSupplyQuai)
+	supplyAddedQi := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyAddedQi)
+	supplyRemovedQi := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyRemovedQi)
+	totalSupplyQi := new(big.Int).SetBytes(protoSupplyAnalytics.TotalSupplyQi)
+	return supplyAddedQuai, supplyRemovedQuai, totalSupplyQuai, supplyAddedQi, supplyRemovedQi, totalSupplyQi, nil
+}
