@@ -38,6 +38,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
+	"github.com/dominant-strategies/go-quai/ethdb"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/shirou/gopsutil/cpu"
@@ -49,6 +50,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -100,6 +102,7 @@ type backend interface {
 	NodeCtx() int
 	NodeLocation() common.Location
 	Logger() *log.Logger
+	Database() ethdb.Database
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -1006,25 +1009,31 @@ type blockTransactionStats struct {
 
 // Trusted Only
 type blockDetailStats struct {
-	Timestamp    *big.Int `json:"timestamp"`
-	ZoneHeight   uint64   `json:"zoneHeight"`
-	RegionHeight uint64   `json:"regionHeight"`
-	PrimeHeight  uint64   `json:"primeHeight"`
-	Chain        string   `json:"chain"`
-	Entropy      string   `json:"entropy"`
-	Difficulty   string   `json:"difficulty"`
-	QuaiPerQi    string   `json:"quaiPerQi"`
-	QuaiReward   string   `json:"quaiReward"`
-	QiReward     string   `json:"qiReward"`
-	QiType       bool     `json:"qiType"`
-	UncleCount   uint64   `json:"uncleCount"`
-	WoCount      uint64   `json:"woCount"`
-	ExchangeRate *big.Int `json:"exchangeRate"`
-	BaseFee      *big.Int `json:"baseFee"`
-	GasLimit     uint64   `json:"gasLimit"`
-	GasUsed      uint64   `json:"gasUsed"`
-	StateLimit   uint64   `json:"stateLimit"`
-	StateUsed    uint64   `json:"stateUsed"`
+	Timestamp         *big.Int `json:"timestamp"`
+	ZoneHeight        uint64   `json:"zoneHeight"`
+	RegionHeight      uint64   `json:"regionHeight"`
+	PrimeHeight       uint64   `json:"primeHeight"`
+	Chain             string   `json:"chain"`
+	Entropy           string   `json:"entropy"`
+	Difficulty        string   `json:"difficulty"`
+	QuaiPerQi         string   `json:"quaiPerQi"`
+	QuaiReward        string   `json:"quaiReward"`
+	QiReward          string   `json:"qiReward"`
+	QiType            bool     `json:"qiType"`
+	UncleCount        uint64   `json:"uncleCount"`
+	WoCount           uint64   `json:"woCount"`
+	ExchangeRate      *big.Int `json:"exchangeRate"`
+	BaseFee           *big.Int `json:"baseFee"`
+	GasLimit          uint64   `json:"gasLimit"`
+	GasUsed           uint64   `json:"gasUsed"`
+	StateLimit        uint64   `json:"stateLimit"`
+	StateUsed         uint64   `json:"stateUsed"`
+	QuaiSupplyAdded   *big.Int `json:"quaiSupplyAdded"`
+	QuaiSupplyRemoved *big.Int `json:"quaiSupplyRemoved"`
+	QuaiSupplyTotal   *big.Int `json:"quaiSupplyTotal"`
+	QiSupplyAdded     *big.Int `json:"qiSupplyAdded"`
+	QiSupplyRemoved   *big.Int `json:"qiSupplyRemoved"`
+	QiSupplyTotal     *big.Int `json:"qiSupplyTotal"`
 }
 
 // Everyone sends every block
@@ -1286,28 +1295,38 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		quaiReward = misc.CalculateReward(block.WorkObjectHeader(), block.Difficulty(), exchangeRate)
 		qiReward = misc.QuaiToQi(block, exchangeRate, block.Difficulty(), quaiReward)
 	}
+	supplyAddedQuai, supplyRemovedQuai, totalSupplyQuai, supplyAddedQi, supplyRemovedQi, totalSupplyQi, err := rawdb.ReadSupplyAnalyticsForBlock(s.backend.Database(), block.Hash())
+	if err != nil {
+		s.backend.Logger().WithField("err", err).Error("Failed to get supply analytics")
+	}
 
 	// Assemble and return the block stats
 	return &blockDetailStats{
-		Timestamp:    new(big.Int).SetUint64(block.Time()),
-		ZoneHeight:   block.NumberU64(2),
-		RegionHeight: block.NumberU64(1),
-		PrimeHeight:  block.NumberU64(0),
-		Chain:        s.backend.NodeLocation().Name(),
-		Entropy:      common.BigBitsToBits(s.backend.TotalLogEntropy(block)).String(),
-		Difficulty:   difficulty,
-		QuaiPerQi:    quaiPerQi,
-		QuaiReward:   quaiReward.String(),
-		QiReward:     qiReward.String(),
-		QiType:       qiType,
-		UncleCount:   uncleCount,
-		WoCount:      woCount,
-		ExchangeRate: exchangeRate,
-		BaseFee:      block.BaseFee(),
-		GasLimit:     block.GasLimit(),
-		GasUsed:      block.GasUsed(),
-		StateLimit:   block.StateLimit(),
-		StateUsed:    block.StateUsed(),
+		Timestamp:         new(big.Int).SetUint64(block.Time()),
+		ZoneHeight:        block.NumberU64(2),
+		RegionHeight:      block.NumberU64(1),
+		PrimeHeight:       block.NumberU64(0),
+		Chain:             s.backend.NodeLocation().Name(),
+		Entropy:           common.BigBitsToBits(s.backend.TotalLogEntropy(block)).String(),
+		Difficulty:        difficulty,
+		QuaiPerQi:         quaiPerQi,
+		QuaiReward:        quaiReward.String(),
+		QiReward:          qiReward.String(),
+		QiType:            qiType,
+		UncleCount:        uncleCount,
+		WoCount:           woCount,
+		ExchangeRate:      exchangeRate,
+		BaseFee:           block.BaseFee(),
+		GasLimit:          block.GasLimit(),
+		GasUsed:           block.GasUsed(),
+		StateLimit:        block.StateLimit(),
+		StateUsed:         block.StateUsed(),
+		QuaiSupplyAdded:   supplyAddedQuai,
+		QuaiSupplyRemoved: supplyRemovedQuai,
+		QuaiSupplyTotal:   totalSupplyQuai,
+		QiSupplyAdded:     supplyAddedQi,
+		QiSupplyRemoved:   supplyRemovedQi,
+		QiSupplyTotal:     totalSupplyQi,
 	}
 }
 
