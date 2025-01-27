@@ -65,7 +65,7 @@ curl -X POST http://127.0.0.1:8080/nodepeers
    - Note: listening addresses can be found in the file `node.info` in the root of the project.
 
   ```bash
-  go run main.go chat --nickname=ec2 --chatroom=quai -b '/ip4/181.95.42.32/tcp/4001/p2p/12D3KooWAsSneYwJ2RV93FpYZUpdXmZLz6FJZNUNddMcmrdhg7vx'
+  go run main.go chat --nickname=ec2 --chatroom=quai -b '/ip4/181.95.42.32/tcp/4002/p2p/12D3KooWAsSneYwJ2RV93FpYZUpdXmZLz6FJZNUNddMcmrdhg7vx'
   ```
 
   Another UI will open where you can chat with the first node:

@@ -29,7 +29,7 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "starts a go-quai p2p node",
 	Long: `starts the go-quai daemon. The daemon will start a libp2p node and a http API.
-By default the node will bootstrap to the public bootstrap nodes and port 4001. 
+By default the node will bootstrap to the public bootstrap nodes and port 4002. 
 To bootstrap to a private node, use the --bootstrap flag.`,
 	RunE:                       runStart,
 	SilenceUsage:               true,

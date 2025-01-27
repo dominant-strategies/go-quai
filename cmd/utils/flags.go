@@ -237,7 +237,7 @@ var (
 	P2PPortFlag = Flag{
 		Name:         c_NodeFlagPrefix + "port",
 		Abbreviation: "p",
-		Value:        "4001",
+		Value:        "4002",
 		Usage:        "p2p port to listen on" + generateEnvDoc(c_NodeFlagPrefix+"port"),
 	}
 

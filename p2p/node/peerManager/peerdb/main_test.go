@@ -61,8 +61,8 @@ func createPeers(t *testing.T, count int) []*PeerInfo {
 
 	// addresses, entropy and protected are placeholders
 	addrs := []multiaddr.Multiaddr{
-		multiaddr.StringCast("/ip4/127.0.0.1/tcp/4001"),
-		multiaddr.StringCast("/ip4/172.17.0.1/udp/4001/quic"),
+		multiaddr.StringCast("/ip4/127.0.0.1/tcp/4002"),
+		multiaddr.StringCast("/ip4/172.17.0.1/udp/4002/quic"),
 	}
 	entropy := uint64(123456)
 	protected := false
