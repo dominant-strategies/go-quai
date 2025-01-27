@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"runtime/debug"
 	"sync"
@@ -1506,10 +1505,7 @@ func (hc *HeaderChain) WriteAddressOutpoints(outpoints map[[20]byte][]*types.Out
 }
 
 func (hc *HeaderChain) GetMaxTxInWorkShare() uint64 {
-	currentGasLimit := hc.CurrentHeader().GasLimit()
-	maxEoaInBlock := currentGasLimit / params.TxGas
-	// (maxEoaInBlock*2)/(2^bits)
-	return (maxEoaInBlock * 2) / uint64(math.Pow(2, float64(params.WorkSharesThresholdDiff)))
+	return params.MaxTxInWorkShare
 }
 
 func (hc *HeaderChain) Database() ethdb.Database {
