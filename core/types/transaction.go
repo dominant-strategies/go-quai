@@ -992,7 +992,7 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, qiTxs []*TxWithMinerFee, txs map[common.AddressBytes]Transactions, sortTx bool) *TransactionsByPriceAndNonce {
+func NewTransactionsByPriceAndNonce(signer Signer, qiTxs []*TxWithMinerFee, txs map[common.AddressBytes]Transactions) *TransactionsByPriceAndNonce {
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByPriceAndTime, 0, len(txs))
 
@@ -1024,12 +1024,10 @@ func NewTransactionsByPriceAndNonce(signer Signer, qiTxs []*TxWithMinerFee, txs 
 		}
 	}
 
-	if sortTx {
-		// Sort Eligible Transactions by Gas Used in Descending Order
-		sort.Slice(heads, func(i, j int) bool {
-			return heads[i].MinerFee().Cmp(heads[j].MinerFee()) > 0
-		})
-	}
+	// Sort Eligible Transactions by Gas Used in Descending Order
+	sort.Slice(heads, func(i, j int) bool {
+		return heads[i].MinerFee().Cmp(heads[j].MinerFee()) > 0
+	})
 
 	// Assemble and return the transaction set
 	return &TransactionsByPriceAndNonce{
@@ -1062,24 +1060,15 @@ func (t *TransactionsByPriceAndNonce) GetFee() *big.Int {
 }
 
 // Shift replaces the current best head with the next one from the same account.
-func (t *TransactionsByPriceAndNonce) Shift(acc common.AddressBytes, sort bool) {
+func (t *TransactionsByPriceAndNonce) Shift(acc common.AddressBytes) {
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
 		if wrapped, err := NewTxWithMinerFee(txs[0], nil, time.Time{}); err == nil {
 			t.heads[0], t.txs[acc] = wrapped, txs[1:]
-			if sort {
-				heap.Fix(&t.heads, 0)
-			}
+			heap.Fix(&t.heads, 0)
 			return
 		}
 	}
-	if sort {
-		heap.Pop(&t.heads)
-	} else if len(t.heads) > 1 {
-		t.heads = t.heads[1:]
-	} else {
-		t.heads = make(TxByPriceAndTime, 0)
-	}
-
+	heap.Pop(&t.heads)
 }
 
 // Pop the first transaction without sorting
