@@ -1504,7 +1504,7 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 				"sender": from,
 				"nonce":  tx.Nonce(),
 			}).Trace("Skipping transaction with low nonce")
-			txs.Shift(from.Bytes20(), false)
+			txs.PopNoSort()
 
 		case errors.Is(err, ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
@@ -1546,7 +1546,7 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 				"sender": from,
 				"err":    err,
 			}).Trace("Transaction failed, account skipped")
-			txs.Shift(from.Bytes20(), false)
+			txs.PopNoSort()
 		}
 	}
 	if len(qiTxsToRemove) > 0 {
@@ -2114,7 +2114,7 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 	}
 
 	if len(pending) > 0 || len(pendingQiTxsWithQuaiFee) > 0 || etxs {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxsWithQuaiFee, pending, true)
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxsWithQuaiFee, pending)
 		return w.commitTransactions(env, primeTerminus, block, txs)
 	}
 	return nil
