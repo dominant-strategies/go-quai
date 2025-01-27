@@ -57,9 +57,6 @@ var (
 // block number.
 func cacheSize(block uint64) uint64 {
 	epoch := int(block / C_epochLength)
-	if epoch < maxCachedEpoch {
-		return cacheSizes[epoch]
-	}
 	return calcCacheSize(epoch)
 }
 
@@ -78,9 +75,6 @@ func calcCacheSize(epoch int) uint64 {
 // block number.
 func datasetSize(block uint64) uint64 {
 	epoch := int(block / C_epochLength)
-	if epoch < maxCachedEpoch {
-		return datasetSizes[epoch]
-	}
 	return calcDatasetSize(epoch)
 }
 
