@@ -271,6 +271,9 @@ func (c *Core) procAppendQueue() {
 func (c *Core) EntropyWindow() *big.Int {
 	var err error
 	currentHeader := c.CurrentHeader()
+	if c.IsGenesisHash(currentHeader.Hash()) {
+		return nil
+	}
 	powhash, exists := c.sl.hc.powHashCache.Peek(currentHeader.Hash())
 	if !exists {
 		powhash, err = c.engine.VerifySeal(currentHeader.WorkObjectHeader())
