@@ -201,7 +201,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		progpowConfig.GenAllocs = config.GenesisAllocs
 		quai.engine = quaiconfig.CreateProgpowConsensusEngine(stack, config.NodeLocation, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, logger)
 	}
-	logger.WithField("config", config).Info("Initialized chain configuration")
+	logger.WithField("config", config).Trace("Initialized chain configuration")
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"

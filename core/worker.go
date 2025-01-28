@@ -712,6 +712,9 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 					// convert the quai reward value into Qi
 					shareReward = new(big.Int).Set(misc.QuaiToQi(targetBlock, exchangeRate, targetBlock.Difficulty(), shareReward))
 				}
+				if shareReward.Sign() == 0 {
+					shareReward = big.NewInt(1)
+				}
 				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: share.Data()}))
 			}
 		}
@@ -720,6 +723,13 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 
 	if block.NumberU64(common.ZONE_CTX) < params.TimeToStartTx {
 		work.wo.Header().SetGasUsed(0)
+	}
+
+	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
+		work.batch.Reset()
+		for _, hash := range work.coinbaseLockupsCreated {
+			work.utxosCreate = append(work.utxosCreate, hash)
+		}
 	}
 
 	// Create a local environment copy, avoid the data race with snapshot state.
@@ -1024,7 +1034,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				} else {
 					delegate = common.Zero
 				}
-				oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, value, w.chainConfig.Location, false)
+				oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, value, w.chainConfig.Location, true)
 				if err != nil || newCoinbaseLockupHash == nil {
 					return nil, false, fmt.Errorf("could not add new lock: %w", err)
 				}
@@ -1129,7 +1139,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 			reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, env.wo.NumberU64(common.ZONE_CTX))
 			// Add the lockup owned by the smart contract with the miner as beneficiary
-			oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, reward, w.chainConfig.Location, false)
+			oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, reward, w.chainConfig.Location, true)
 			if err != nil || newCoinbaseLockupHash == nil {
 				return nil, false, fmt.Errorf("could not add new lock: %w", err)
 			}

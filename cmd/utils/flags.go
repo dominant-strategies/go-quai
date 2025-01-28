@@ -1577,6 +1577,8 @@ func GetGenesisNonce() (uint64, []byte) {
 		nonceBytes = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	}
 	nonce := binary.BigEndian.Uint64(nonceBytes[:8])
+	log.Global.Infof("Nonce: %d", nonce)
+	log.Global.Infof("NonceBytes: %x", nonceBytes)
 	return nonce, nonceBytes[8:]
 }
 

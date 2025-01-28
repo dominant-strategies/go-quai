@@ -209,7 +209,7 @@ var (
 	BaseFeeMultiplier             = big.NewInt(50)
 
 	ConversionLockPeriod uint64 = 10
-	CoinbaseEpochBlocks  uint64 = 1000 // Maximum number of blocks in a coinbase tranche TODO: change this
+	CoinbaseEpochBlocks  uint64 = 100 // Maximum number of blocks in a coinbase tranche TODO: change this
 
 	StartingKQuaiDiscount               = big.NewInt(100)
 	StartingConversionFlowAmount        = big.NewInt(100000000000) // TODO: this amount has to be calculated based on the exchange rate
