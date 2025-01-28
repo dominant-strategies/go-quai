@@ -1269,11 +1269,11 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) (uint16,
 
 	// Take the ratio of deltaEntropy to the uncledDeltaEntropy in percentage
 	efficiencyScore := uncledDeltaEntropy.Mul(uncledDeltaEntropy, big.NewInt(100))
-	if deltaEntropy.Cmp(common.Big0) == 0 {
-		hc.logger.Error(errInvalidEfficiencyScore)
-		return 0, errInvalidEfficiencyScore
+	if deltaEntropy.Cmp(common.Big0) == 0 && hc.IsGenesisHash(parent.ParentHash(common.PRIME_CTX)) {
+		efficiencyScore = common.Big0
+	} else {
+		efficiencyScore.Div(efficiencyScore, deltaEntropy)
 	}
-	efficiencyScore.Div(efficiencyScore, deltaEntropy)
 
 	// Calculate the exponential moving average
 	ewma := (uint16(efficiencyScore.Uint64()) + parent.EfficiencyScore()*params.TREE_EXPANSION_FILTER_ALPHA) / 10
