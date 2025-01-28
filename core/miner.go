@@ -130,10 +130,6 @@ func (miner *Miner) SetPrimaryCoinbase(addr common.Address) {
 	miner.worker.setPrimaryCoinbase(addr)
 }
 
-func (miner *Miner) SetSecondaryCoinbase(addr common.Address) {
-	miner.worker.setSecondaryCoinbase(addr)
-}
-
 // SetGasCeil sets the gaslimit to strive for when mining blocks.
 func (miner *Miner) SetGasCeil(ceil uint64) {
 	miner.worker.setGasCeil(ceil)

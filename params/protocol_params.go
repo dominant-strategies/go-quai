@@ -168,7 +168,7 @@ var (
 	OrchardDurationLimit               = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LighthouseDurationLimit            = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit                 = big.NewInt(1) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeToStartTx               uint64 = 5 * BlocksPerDay
+	TimeToStartTx               uint64 = 6 * BlocksPerDay
 	BlocksPerDay                uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 5 second block time
 	BlocksPerWeek               uint64 = 7 * BlocksPerDay
 	BlocksPerMonth              uint64 = 30 * BlocksPerDay
@@ -189,7 +189,7 @@ var (
 	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
 	MaxTimeDiffBetweenBlocks int64  = 100                  // Max time difference between the blocks to 100 secs
 	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
-	ControllerKickInBlock    uint64 = 1000000000
+	ControllerKickInBlock    uint64 = 161000
 
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
@@ -197,6 +197,10 @@ var (
 
 	ConversionLockPeriod uint64 = 2 * BlocksPerWeek
 	CoinbaseEpochBlocks  uint64 = 1000 // Maximum number of blocks in a coinbase tranche TODO: change this
+
+	StartingKQuaiDiscount               = big.NewInt(100)
+	StartingConversionFlowAmount        = big.NewInt(100000000000) // TODO: this amount has to be calculated based on the exchange rate
+	MinerDifficultyWindow        uint64 = 1000
 )
 
 func init() {

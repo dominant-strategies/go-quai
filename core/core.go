@@ -642,7 +642,6 @@ func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, do
 	nodeCtx := c.NodeCtx()
 	// Set the coinbase into the right interface before calling append in the sub
 	header.WorkObjectHeader().SetPrimaryCoinbase(common.BytesToAddress(header.PrimaryCoinbase().Bytes(), c.NodeLocation()))
-	header.Body().Header().SetSecondaryCoinbase(common.BytesToAddress(header.SecondaryCoinbase().Bytes(), c.NodeLocation()))
 	newPendingEtxs, err := c.sl.Append(header, domTerminus, domOrigin, newInboundEtxs)
 	if err != nil {
 		if err.Error() == ErrBodyNotFound.Error() || err.Error() == consensus.ErrUnknownAncestor.Error() || err.Error() == ErrSubNotSyncedToDom.Error() {
@@ -903,6 +902,10 @@ func (c *Core) ComputeExpansionNumber(parent *types.WorkObject) (uint8, error) {
 	return c.sl.hc.ComputeExpansionNumber(parent)
 }
 
+func (c *Core) ComputeMinerDifficulty(parent *types.WorkObject) *big.Int {
+	return c.sl.hc.ComputeMinerDifficulty(parent)
+}
+
 // CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
 func (c *Core) CurrentLogEntropy() *big.Int {
 	return c.engine.TotalLogEntropy(c, c.sl.hc.CurrentHeader())
@@ -1036,6 +1039,10 @@ func (c *Core) CalcBaseFee(wo *types.WorkObject) *big.Int {
 	return c.sl.hc.CalcBaseFee(wo)
 }
 
+func (c *Core) GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error) {
+	return c.sl.hc.GetKQuaiAndUpdateBit(blockHash)
+}
+
 func (c *Core) TxMiningEnabled() bool {
 	return c.workShareMining
 }
@@ -1160,10 +1167,6 @@ func (c *Core) PendingBlockAndReceipts() (*types.WorkObject, types.Receipts) {
 
 func (c *Core) SetPrimaryCoinbase(addr common.Address) {
 	c.sl.miner.SetPrimaryCoinbase(addr)
-}
-
-func (c *Core) SetSecondaryCoinbase(addr common.Address) {
-	c.sl.miner.SetSecondaryCoinbase(addr)
 }
 
 func (c *Core) SetLockupByte(lockupByte uint8) {
@@ -1383,7 +1386,7 @@ func (c *Core) GetRollingFeeInfo() (min, max, avg *big.Int) {
 }
 
 func (c *Core) SuggestFinalityDepth(qiValue *big.Int, correlatedRisk *big.Int) *big.Int {
-	qiRewardPerBlock := misc.CalculateQiReward(c.CurrentHeader().WorkObjectHeader())
+	qiRewardPerBlock := misc.CalculateQiReward(c.CurrentHeader().WorkObjectHeader(), c.CurrentHeader().Difficulty())
 
 	// Finality qiValue * correlatedRisk / qiRewardPerBlock
 	finalityDepth := new(big.Int).Div(new(big.Int).Mul(qiValue, correlatedRisk), qiRewardPerBlock)

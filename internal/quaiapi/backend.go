@@ -114,6 +114,7 @@ type Backend interface {
 	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
+	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
 	consensus.ChainHeaderReader
 	TxMiningEnabled() bool
 	GetWorkShareThreshold() int

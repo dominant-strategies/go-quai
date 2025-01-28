@@ -42,12 +42,14 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		StateLimit     					hexutil.Uint64   		`json:"stateLimit"      			gencodec:"required"`
 		StateUsed                       hexutil.Uint64          `json:"stateUsed"                   gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
-		SecondaryCoinbase               string `json:"secondaryCoinbase"           gencodec:"required"`
 		ExchangeRate					*hexutil.Big			`json:"exchangeRate"				gencodec:"required"`
-		QuaiToQi 						*hexutil.Big 			`json:"quaiToQi" 					gencodec:"required"`
-		QiToQuai 						*hexutil.Big 			`json:"qiToQuai" 					gencodec:"required"`
 		AvgTxFees 						*hexutil.Big 			`json:"avgTxFees" 					gencodec:"required"`
 		TotalFees                       *hexutil.Big            `json:"totalFees"                   gencodec:"required"`
+		KQuaiDiscount                   *hexutil.Big            `json:"kQuaiDiscount"				gencodec:"required"`
+		ConversionFlowAmount            *hexutil.Big            `json:"conversionFlowAmount"        gencodec:"required"`
+		MinerDifficulty                 *hexutil.Big            `json:"minerDifficulty"             gencodec:"required"`
+		PrimeStateRoot                  common.Hash             `json:"primeStateRoot"              gencodec:"required"`
+		RegionStateRoot                 common.Hash             `json:"regionStateRoot"             gencodec:"required"`
 	}
 	// Initialize the enc struct
 	enc.ParentEntropy = make([]*hexutil.Big, common.HierarchyDepth)
@@ -88,12 +90,14 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.StateLimit = hexutil.Uint64(h.StateLimit())
 	enc.StateUsed = hexutil.Uint64(h.StateUsed())
 	enc.Extra = hexutil.Bytes(h.Extra())
-	enc.SecondaryCoinbase = h.SecondaryCoinbase().Hex()
 	enc.ExchangeRate = (*hexutil.Big)(h.ExchangeRate())
-	enc.QuaiToQi = (*hexutil.Big)(h.QuaiToQi())
-	enc.QiToQuai = (*hexutil.Big)(h.QiToQuai())
 	enc.AvgTxFees = (*hexutil.Big)(h.AvgTxFees())
 	enc.TotalFees = (*hexutil.Big)(h.TotalFees())
+	enc.KQuaiDiscount = (*hexutil.Big)(h.KQuaiDiscount())
+	enc.ConversionFlowAmount = (*hexutil.Big)(h.ConversionFlowAmount())
+	enc.MinerDifficulty = (*hexutil.Big)(h.MinerDifficulty())
+	enc.PrimeStateRoot = h.PrimeStateRoot()
+	enc.RegionStateRoot = h.RegionStateRoot()
 	raw, err := json.Marshal(&enc)
 	return raw, err
 }
@@ -129,12 +133,14 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		StateLimit                      *hexutil.Uint64         `json:"stateLimit"                  gencodec:"required"`
 		StateUsed                       *hexutil.Uint64         `json:"stateUsed"                   gencodec:"required"`
 		Extra       					hexutil.Bytes  		 	`json:"extraData"          			gencodec:"required"`
-		SecondaryCoinbase               string `json:"secondaryCoinbase"           gencodec:"required"`
 		ExchangeRate					*hexutil.Big			`json:"exchangeRate"				gencodec:"required"`
-		QuaiToQi 						*hexutil.Big 			`json:"quaiToQi" 					gencodec:"required"`
-		QiToQuai 						*hexutil.Big 			`json:"qiToQuai" 					gencodec:"required"`
 		AvgTxFees 						*hexutil.Big 			`json:"avgTxFees" 					gencodec:"required"`
 		TotalFees                       *hexutil.Big            `json:"totalFees"                   gencodec:"required"`
+		KQuaiDiscount                   *hexutil.Big            `json:"kQuaiDiscount"				gencodec:"required"`
+		ConversionFlowAmount            *hexutil.Big            `json:"conversionFlowAmount"        gencodec:"required"`
+		MinerDifficulty                 *hexutil.Big            `json:"minerDifficulty"             gencodec:"required"`
+		PrimeStateRoot                  *common.Hash             `json:"primeStateRoot"              gencodec:"required"`
+		RegionStateRoot                 *common.Hash             `json:"regionStateRoot"             gencodec:"required"`
 	}
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -220,23 +226,29 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.QuaiStateSize == nil {
 		return errors.New("missing required field 'quaiStateSize' for Header")
 	}
-	if len(dec.SecondaryCoinbase) == 0 {
-		return errors.New("missing required field 'secondaryCoinbase' for Header")
-	}
 	if dec.ExchangeRate == nil {
 		return errors.New("missing required field 'exchangeRate' for Header")
-	}
-	if dec.QuaiToQi == nil {
-		return errors.New("missing required field 'quaiToQi' for Header")
-	}
-	if dec.QiToQuai == nil {
-		return errors.New("missing required field 'qiToQuai' for Header")
 	}
 	if dec.AvgTxFees == nil {
 		return errors.New("missing required field 'avgTxFees' for Header")
 	}
 	if dec.TotalFees == nil {
 		return errors.New("missing required field 'totalFees' for Header")
+	}
+	if dec.KQuaiDiscount == nil {
+		return errors.New("missing required field 'kQuaiDiscount' for Header")
+	}
+	if dec.ConversionFlowAmount == nil {
+		return errors.New("missing required field 'conversionFlowAmount' for Header")
+	}
+	if dec.MinerDifficulty == nil {
+		return errors.New("missing required field 'minerDifficulty' for Header")
+	}
+	if dec.PrimeStateRoot == nil {
+		return errors.New("missing required field 'primeStateRoot' for Header")
+	}
+	if dec.RegionStateRoot == nil {
+		return errors.New("missing required field 'regionStateRoot' for Header")
 	}
 	// Initialize the header
 	h.parentHash = make([]common.Hash, common.HierarchyDepth-1)
@@ -292,16 +304,14 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	h.SetStateLimit(uint64(*dec.StateLimit))
 	h.SetStateUsed(uint64(*dec.StateUsed))
 	h.SetExtra(dec.Extra)
-	coinbaseAddr, err := common.NewMixedcaseAddressFromString(dec.SecondaryCoinbase, common.Location{0,0})
-	if err != nil {
-		return err
-	}
-	h.SetSecondaryCoinbase(coinbaseAddr.Address())
 	h.SetExchangeRate((*big.Int)(dec.ExchangeRate))
-	h.SetQuaiToQi((*big.Int)(dec.QuaiToQi))
-	h.SetQiToQuai((*big.Int)(dec.QiToQuai))
 	h.SetAvgTxFees((*big.Int)(dec.AvgTxFees))
 	h.SetTotalFees((*big.Int)(dec.TotalFees))
+	h.SetKQuaiDiscount((*big.Int)(dec.KQuaiDiscount))
+	h.SetConversionFlowAmount((*big.Int)(dec.ConversionFlowAmount))
+	h.SetMinerDifficulty((*big.Int)(dec.MinerDifficulty))
+	h.SetPrimeStateRoot(*dec.PrimeStateRoot)
+	h.SetRegionStateRoot(*dec.RegionStateRoot)
 	return nil
 }
 
