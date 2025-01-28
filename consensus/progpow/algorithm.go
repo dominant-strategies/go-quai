@@ -51,7 +51,7 @@ const (
 )
 
 var (
-	C_epochLength = params.BlocksPerDay * 30 / 4 // 30 days worth of prime blocks
+	C_epochLength = params.BlocksPerMonth * 3 / 4 // 90 days worth of prime blocks
 )
 
 // cacheSize returns the size of the ethash verification cache that belongs to a certain
