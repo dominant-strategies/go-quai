@@ -423,10 +423,10 @@ func DefaultLighthouseGenesisBlock(consensusEngine string, nonce uint64, extra [
 func DefaultLocalGenesisBlock(consensusEngine string, nonce uint64, extra []byte) *Genesis {
 	genesis := &Genesis{
 		Config:     params.ProgpowLocalChainConfig,
-		Nonce:      nonce,
-		ExtraData:  extra,
+		Nonce:      0,
+		ExtraData:  []byte{},
 		GasLimit:   12000000,
-		Difficulty: big.NewInt(1000),
+		Difficulty: big.NewInt(2000),
 	}
 	if consensusEngine == "blake3" {
 		genesis.Config = params.Blake3PowLocalChainConfig

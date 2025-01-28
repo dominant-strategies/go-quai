@@ -1586,7 +1586,7 @@ func MakeGenesis() *core.Genesis {
 	case params.LighthouseName:
 		genesis = core.DefaultLighthouseGenesisBlock(consensusEngine, nonce, extra)
 	case params.LocalName:
-		genesis = core.DefaultLocalGenesisBlock(consensusEngine, nonce, extra)
+		genesis = core.DefaultLocalGenesisBlock(consensusEngine, 0, []byte{})
 	case params.DevName:
 		Fatalf("Developer chains are ephemeral")
 	default:
