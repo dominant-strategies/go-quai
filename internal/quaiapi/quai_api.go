@@ -1209,13 +1209,17 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShar
 		}
 		if pendingBlockBody == nil {
 			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
-			return nil
+			return err
 		}
 		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
 		shareView := wo.ConvertToWorkObjectShareView(txs)
 		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
 		if err != nil {
-			s.b.Logger().WithField("err", err).Error("Error broadcasting work share")
+			s.b.Logger().WithFields(log.Fields{
+				"hash": shareView.Hash(),
+				"err":  err,
+			}).Error("Error broadcasting work share")
+			return err
 		}
 		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
 		s.b.Logger().WithFields(log.Fields{"tx count": len(txs)}).Info("Broadcasted workshares with txs")
