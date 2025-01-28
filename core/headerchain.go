@@ -498,6 +498,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		}
 	}
 	var prevHashStack []*types.WorkObject
+	supplyAddedQi, supplyRemovedQi := big.NewInt(0), big.NewInt(0) // used to track Qi supply changes in reorg
 	for {
 		if prevHeader.Hash() == commonHeader.Hash() {
 			break
@@ -517,6 +518,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			sutxos = append(sutxos, trimmedUtxos...)
 			for _, sutxo := range sutxos {
 				rawdb.CreateUTXO(hc.headerDb, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
+				supplyAddedQi.Add(supplyAddedQi, types.Denominations[sutxo.Denomination])
 			}
 			utxoKeys, err := rawdb.ReadCreatedUTXOKeys(hc.headerDb, prevHeader.Hash())
 			if err != nil {
@@ -524,7 +526,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			}
 			for _, key := range utxoKeys {
 				if len(key) == rawdb.UtxoKeyWithDenominationLength {
+					supplyRemovedQi.Add(supplyRemovedQi, types.Denominations[key[rawdb.UtxoKeyWithDenominationLength-1]])
 					key = key[:rawdb.UtxoKeyLength] // The last byte of the key is the denomination (but only in CreatedUTXOKeys)
+				} else {
+					hc.logger.Errorf("invalid created utxo key length: %d", len(key))
 				}
 				hc.headerDb.Delete(key)
 			}
@@ -557,6 +562,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		if hc.IsGenesisHash(prevHeader.Hash()) {
 			break
 		}
+	}
+	if nodeCtx == common.ZONE_CTX && hc.ProcessingState() {
+		rawdb.WriteQiSupplyWithDeltas(hc.headerDb, new(big.Int).Sub(supplyAddedQi, supplyRemovedQi))
+		supplyAddedQi, supplyRemovedQi = big.NewInt(0), big.NewInt(0)
 	}
 
 	hc.logger.WithFields(log.Fields{
@@ -604,12 +613,19 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 						sutxos = append(sutxos, trimmedUtxos...)
 						for _, sutxo := range sutxos {
 							rawdb.CreateUTXO(hc.headerDb, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
+							supplyAddedQi.Add(supplyAddedQi, types.Denominations[sutxo.Denomination])
 						}
 						utxoKeys, err := rawdb.ReadCreatedUTXOKeys(hc.headerDb, hashStack[j].Hash())
 						if err != nil {
 							return err
 						}
 						for _, key := range utxoKeys {
+							if len(key) == rawdb.UtxoKeyWithDenominationLength {
+								supplyRemovedQi.Add(supplyRemovedQi, types.Denominations[key[rawdb.UtxoKeyWithDenominationLength-1]])
+								key = key[:rawdb.UtxoKeyLength] // The last byte of the key is the denomination (but only in CreatedUTXOKeys)
+							} else {
+								hc.logger.Errorf("invalid created utxo key length: %d", len(key))
+							}
 							hc.headerDb.Delete(key)
 						}
 						createdCoinbaseKeys, err := rawdb.ReadCreatedCoinbaseLockupKeys(hc.headerDb, prevHeader.Hash())
@@ -685,6 +701,10 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			}
 			hc.chainSideFeed.Send(ChainSideEvent{Blocks: blocks})
 		}()
+		if supplyAddedQi.Sign() != 0 || supplyRemovedQi.Sign() != 0 {
+			// This should only be called if appending the new chain failed above
+			rawdb.WriteQiSupplyWithDeltas(hc.headerDb, new(big.Int).Sub(supplyAddedQi, supplyRemovedQi))
+		}
 	}
 
 	return nil
