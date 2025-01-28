@@ -118,7 +118,11 @@ func defaultNodeConfig() node.Config {
 func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, logger *log.Logger) (*node.Node, quaiapi.Backend) {
 	stack, cfg := makeConfigNode(slicesRunning, nodeLocation, currentExpansionNumber, logger)
 	startingExpansionNumber := viper.GetUint64(StartingExpansionNumberFlag.Name)
-	backend, _ := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), currentExpansionNumber, startingExpansionNumber, genesisBlock, logger)
+	backend, err := RegisterQuaiService(stack, p2p, cfg.Quai, cfg.Node.NodeLocation.Context(), currentExpansionNumber, startingExpansionNumber, genesisBlock, logger)
+	if err != nil {
+		log.Global.WithField("err", err).Error("Unable to create full node")
+		return nil, nil
+	}
 	sendfullstats := viper.GetBool(SendFullStatsFlag.Name)
 	// Add the Quai Stats daemon if requested.
 	if cfg.Quaistats.URL != "" && backend.ProcessingState() {
