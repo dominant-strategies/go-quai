@@ -551,6 +551,22 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.engine.TotalLogEntropy(sl.hc, block)})
 	}
 
+	if sl.NodeCtx() == common.ZONE_CTX && sl.ProcessingState() {
+		// Every Block that got removed from the canonical hash db is sent in the side feed to be
+		// recorded as uncles
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					sl.logger.WithFields(log.Fields{
+						"error":      r,
+						"stacktrace": string(debug.Stack()),
+					}).Fatal("Go-Quai Panicked")
+				}
+			}()
+			sl.hc.chainSideFeed.Send(ChainSideEvent{Blocks: []*types.WorkObject{block}})
+		}()
+	}
+
 	time8 := common.PrettyDuration(time.Since(start))
 	// If efficiency score changed on this block compared to the parent block
 	// we trigger the expansion using the expansion feed
