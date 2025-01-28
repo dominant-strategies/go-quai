@@ -202,7 +202,7 @@ var (
 	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
 	MaxTimeDiffBetweenBlocks int64  = 100                  // Max time difference between the blocks to 100 secs
 	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
-	ControllerKickInBlock    uint64 = 1000000000
+	ControllerKickInBlock    uint64 = 161000
 
 	MinBaseFeeInQits              = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha = big.NewInt(100)
