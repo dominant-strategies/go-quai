@@ -113,12 +113,6 @@ func (api *PrivateMinerAPI) SetPrimaryCoinbase(primaryCoinbase common.Address) b
 	return true
 }
 
-// SetSecondaryCoinbase sets the secondary coinbase of the miner
-func (api *PrivateMinerAPI) SetSecondaryCoinbase(secondaryCoinbase common.Address) bool {
-	api.e.Core().SetSecondaryCoinbase(secondaryCoinbase)
-	return true
-}
-
 func (api *PrivateMinerAPI) SetLockupByte(lockupByte hexutil.Uint64) (bool, error) {
 	if uint8(lockupByte) > uint8(len(params.LockupByteToBlockDepth)-1) {
 		return false, fmt.Errorf("lockup byte %d out of range", lockupByte)

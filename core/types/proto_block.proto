@@ -38,12 +38,14 @@ message ProtoHeader {
   optional uint64 state_limit = 30;
   optional uint64 state_used = 31;
   optional bytes quai_state_size = 32;
-  optional bytes secondary_coinbase = 33;
-  optional bytes exchange_rate = 34;
-  optional bytes quai_to_qi = 35;
-  optional bytes qi_to_quai = 36;
-  optional bytes avg_tx_fees = 37;
-  optional bytes total_fees = 38;
+  optional bytes exchange_rate = 33;
+  optional bytes avg_tx_fees = 35;
+  optional bytes total_fees = 36;
+  optional bytes k_quai_discount = 37;
+  optional bytes conversion_flow_amount = 38;
+  optional bytes miner_difficulty = 39;
+  optional common.ProtoHash prime_state_root = 40;
+  optional common.ProtoHash region_state_root = 41;
 }
 
 message ProtoTransaction {
