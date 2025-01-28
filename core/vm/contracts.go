@@ -719,7 +719,7 @@ func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address
 		return nil, nil, nil, nil, errors.New("sender is not the correct internal address")
 	}
 	if value.Sign() == -1 || value.Sign() == 0 {
-		return nil, nil, nil, nil, errors.New("value is invalid")
+		return nil, nil, nil, nil, fmt.Errorf("value is not positive: %v", value.String())
 	}
 	balance, trancheUnlockHeight, elements, oldDelegate := rawdb.ReadCoinbaseLockup(statedb.UnderlyingDatabase(), batch, ownerContract, beneficiaryMiner, lockupByte, epoch) // delegate can be changed every update if the miner chooses
 
