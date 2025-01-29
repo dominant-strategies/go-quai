@@ -392,6 +392,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, fmt.Errorf("invalid data used: %v", st.data)
 		}
 
+		from, err := msg.From().InternalAddress()
+		if err != nil {
+			return nil, err
+		}
+		st.state.SetNonce(from, st.state.GetNonce(from)+1)
+
 		effectiveTip := st.fee()
 		return &ExecutionResult{
 			UsedGas:      st.gasUsed(),
