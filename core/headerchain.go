@@ -1269,9 +1269,12 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) (uint16,
 
 	// Take the ratio of deltaEntropy to the uncledDeltaEntropy in percentage
 	efficiencyScore := uncledDeltaEntropy.Mul(uncledDeltaEntropy, big.NewInt(100))
-	if deltaEntropy.Cmp(common.Big0) == 0 && hc.IsGenesisHash(parent.ParentHash(common.PRIME_CTX)) {
+	if hc.IsGenesisHash(parent.ParentHash(common.PRIME_CTX)) {
 		efficiencyScore = common.Big0
 	} else {
+		if efficiencyScore.Cmp(common.Big0) == 0 {
+			return parent.EfficiencyScore(), nil
+		}
 		efficiencyScore.Div(efficiencyScore, deltaEntropy)
 	}
 
