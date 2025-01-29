@@ -1016,7 +1016,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				if err != nil {
 					return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 				}
-				if env.state.GetCode(internal) == nil {
+				if env.state.GetCode(internal) == nil || true {
 					// Coinbase data is either too long or too small
 					// Coinbase reward is lost
 					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
@@ -1119,7 +1119,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 			}
 
-			if env.state.GetCode(internal) == nil {
+			if env.state.GetCode(internal) == nil || true {
 				// Coinbase data is either too long or too small
 				// Coinbase reward is lost
 				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}

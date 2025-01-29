@@ -593,7 +593,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if err != nil {
 							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid contract: %w", tx.Hash(), err)
 						}
-						if statedb.GetCode(internal) == nil {
+						if statedb.GetCode(internal) == nil || true {
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
@@ -659,7 +659,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if err != nil {
 							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 						}
-						if statedb.GetCode(internal) == nil {
+						if statedb.GetCode(internal) == nil || true {
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
