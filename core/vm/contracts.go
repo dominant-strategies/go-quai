@@ -35,6 +35,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
+	"github.com/sirupsen/logrus"
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
@@ -706,7 +707,7 @@ func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, gas *uint64, in
 }
 
 // AddNewLock adds a new locked balance to the lockup contract
-func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address, beneficiaryMiner common.Address, delegate common.Address, sender common.InternalAddress, lockupByte byte, unlockHeight uint64, epoch uint32, value *big.Int, location common.Location, log_ bool) (bool, []byte, []byte, common.Hash, common.Hash, error) {
+func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address, beneficiaryMiner common.Address, delegate common.Address, sender common.InternalAddress, lockupByte byte, unlockHeight uint64, epoch uint32, value *big.Int, location common.Location, logger *logrus.Logger, parentHash common.Hash, log_ bool) (bool, []byte, []byte, common.Hash, common.Hash, error) {
 	_, err := ownerContract.InternalAndQuaiAddress()
 	if err != nil {
 		return false, nil, nil, common.Hash{}, common.Hash{}, err
@@ -730,6 +731,7 @@ func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address
 	if epoch == 0 && trancheUnlockHeight != 0 {
 		return false, nil, nil, common.Hash{}, common.Hash{}, errors.New("epoch is 0 but trancheUnlockHeight is not")
 	}
+
 	deleted := true
 	var oldLockupData []byte
 	if trancheUnlockHeight == 0 {
@@ -737,12 +739,15 @@ func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address
 		if epoch+1 > math.MaxUint32 {
 			return false, nil, nil, common.Hash{}, common.Hash{}, errors.New("epoch overflow")
 		}
+		epochUnlockHeight := unlockHeight - unlockHeight%params.CoinbaseEpochBlocks
 		elements = 0
 		balance = new(big.Int)
-		trancheUnlockHeight = uint32(unlockHeight) // TODO: ensure overflow is acceptable here
+		trancheUnlockHeight = uint32(epochUnlockHeight) // TODO: ensure overflow is acceptable here
 		oldCoinbaseLockupHash = common.Hash{}
 		if log_ {
-			log.Global.Info("Rotated epoch: ", " owner: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch)
+			logger.Info("State processor Rotated epoch: ", " owner: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " blockHash: ", parentHash)
+		} else {
+			logger.Info("Worker Rotated epoch: ", " owner: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " blockHash: ", parentHash)
 		}
 		deleted = false
 	} else {
@@ -759,12 +764,12 @@ func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address
 	if err != nil {
 		return false, nil, nil, common.Hash{}, common.Hash{}, err
 	}
-	// Cut off prefix from keys
-	key = key[len(rawdb.CoinbaseLockupPrefix):]
 
 	newCoinbaseLockupHash := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, delegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
 	if log_ {
-		log.Global.Info("Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte)
+		logger.Info("Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte, " blockHash: ", parentHash)
+	} else {
+		logger.Info("Worker Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte, " blockHash: ", parentHash)
 	}
 	return deleted, oldLockupData, key, oldCoinbaseLockupHash, newCoinbaseLockupHash, nil
 }
