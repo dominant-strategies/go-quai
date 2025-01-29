@@ -599,7 +599,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							} else {
 								delegate = common.Zero
 							}
-							delete, oldLockupData, coinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, value, nodeLocation, true)
+							delete, oldLockupData, coinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, value, nodeLocation, p.logger, block.ParentHash(common.ZONE_CTX), true)
 							if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
 								return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not add new lock: %w", err)
 							}
@@ -659,7 +659,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							}
 							reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
 							// Add the lockup owned by the smart contract with the miner as beneficiary
-							delete, oldLockupData, coinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, reward, nodeLocation, true)
+							delete, oldLockupData, coinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, reward, nodeLocation, p.logger, block.ParentHash(common.ZONE_CTX), true)
 							if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
 								return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not add new lock: %w", err)
 							}
