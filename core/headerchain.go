@@ -538,6 +538,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 				if len(key) != rawdb.CoinbaseLockupKeyLength-len(rawdb.CoinbaseLockupPrefix) { // createdCoinbaseKeys are stored without the prefix
 					return fmt.Errorf("invalid created coinbase key length: %d", len(key))
 				}
+				key = append(rawdb.CoinbaseLockupPrefix, key...)
 				hc.headerDb.Delete(key)
 			}
 			deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, prevHeader.Hash())
@@ -622,6 +623,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 							if len(key) != rawdb.CoinbaseLockupKeyLength-len(rawdb.CoinbaseLockupPrefix) {
 								return fmt.Errorf("invalid created coinbase key length: %d", len(key))
 							}
+							key = append(rawdb.CoinbaseLockupPrefix, key...)
 							hc.headerDb.Delete(key)
 						}
 						deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, hashStack[j].Hash())
