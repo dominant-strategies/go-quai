@@ -643,9 +643,11 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, targetBlock.WorkObjectHeader())
 			entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
-			for i := 0; i <= params.WorkSharesInclusionDepth; i++ {
+			for i := 0; i < params.WorkSharesInclusionDepth; i++ {
 				blockAtHeight := w.hc.GetBlockByNumber(targetBlockNumber + uint64(i))
-
+				if blockAtHeight == nil {
+					return nil, fmt.Errorf("block at height %d not found, block height %d", targetBlockNumber+uint64(i), work.wo.NumberU64(common.ZONE_CTX))
+				}
 				var uncles []*types.WorkObjectHeader
 				if i == params.WorkSharesInclusionDepth {
 					uncles = work.wo.Uncles()

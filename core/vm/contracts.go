@@ -767,7 +767,7 @@ func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address
 
 	newCoinbaseLockupHash := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, delegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
 	if log_ {
-		logger.Info("Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte, " blockHash: ", parentHash)
+		logger.Info("State processor Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte, " blockHash: ", parentHash)
 	} else {
 		logger.Info("Worker Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte, " blockHash: ", parentHash)
 	}
