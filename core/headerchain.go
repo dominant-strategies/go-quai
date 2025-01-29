@@ -599,7 +599,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 						if err != nil {
 							return err
 						}
-						trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(hc.headerDb, prevHeader.Hash())
+						trimmedUtxos, err := rawdb.ReadTrimmedUTXOs(hc.headerDb, hashStack[j].Hash())
 						if err != nil {
 							return err
 						}
@@ -614,7 +614,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 						for _, key := range utxoKeys {
 							hc.headerDb.Delete(key)
 						}
-						createdCoinbaseKeys, err := rawdb.ReadCreatedCoinbaseLockupKeys(hc.headerDb, prevHeader.Hash())
+						createdCoinbaseKeys, err := rawdb.ReadCreatedCoinbaseLockupKeys(hc.headerDb, hashStack[j].Hash())
 						if err != nil {
 							return err
 						}
@@ -624,7 +624,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 							}
 							hc.headerDb.Delete(key)
 						}
-						deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, prevHeader.Hash())
+						deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, hashStack[j].Hash())
 						if err != nil {
 							return err
 						}
@@ -649,7 +649,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 							hc.logger.WithFields(log.Fields{
 								"error": err,
 								"block": block.Hash(),
-							}).Error("Error appending block during reorg")
+							}).Error("Error appending block during reapply reorg")
 							return err
 						}
 					}
