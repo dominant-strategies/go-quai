@@ -80,8 +80,6 @@ type environment struct {
 	uncles                  map[common.Hash]*types.WorkObjectHeader
 	utxosCreate             []common.Hash
 	utxosDelete             []common.Hash
-	coinbaseLockupsCreated  map[string]common.Hash
-	coinbaseLockupsDeleted  map[string]common.Hash
 	coinbaseRotatedEpochs   map[string]struct{}
 	parentStateSize         *big.Int
 	quaiCoinbaseEtxs        map[[21]byte]*big.Int
@@ -727,9 +725,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		work.batch.Reset()
-		for _, hash := range work.coinbaseLockupsCreated {
-			work.utxosCreate = append(work.utxosCreate, hash)
-		}
 	}
 
 	// Create a local environment copy, avoid the data race with snapshot state.
@@ -743,8 +738,6 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	w.printPendingHeaderInfo(work, newWo, start)
 	work.utxosCreate = nil
 	work.utxosDelete = nil
-	work.coinbaseLockupsCreated = nil
-	work.coinbaseLockupsDeleted = nil
 	work.coinbaseRotatedEpochs = nil
 	return newWo, nil
 }
@@ -851,24 +844,22 @@ func (w *worker) makeEnv(parent *types.WorkObject, proposedWo *types.WorkObject,
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:                 types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
-		state:                  state,
-		batch:                  w.workerDb.NewBatch(),
-		primaryCoinbase:        primaryCoinbase,
-		ancestors:              mapset.NewSet(),
-		family:                 mapset.NewSet(),
-		wo:                     proposedWo,
-		uncles:                 make(map[common.Hash]*types.WorkObjectHeader),
-		etxRLimit:              etxRLimit,
-		etxPLimit:              etxPLimit,
-		parentStateSize:        quaiStateSize,
-		quaiCoinbaseEtxs:       make(map[[21]byte]*big.Int),
-		deletedUtxos:           make(map[common.Hash]struct{}),
-		qiGasScalingFactor:     math.Log(float64(utxoSetSize)),
-		utxoSetSize:            utxoSetSize,
-		coinbaseLockupsCreated: make(map[string]common.Hash),
-		coinbaseLockupsDeleted: make(map[string]common.Hash),
-		coinbaseRotatedEpochs:  make(map[string]struct{}),
+		signer:                types.MakeSigner(w.chainConfig, proposedWo.Number(w.hc.NodeCtx())),
+		state:                 state,
+		batch:                 w.workerDb.NewBatch(),
+		primaryCoinbase:       primaryCoinbase,
+		ancestors:             mapset.NewSet(),
+		family:                mapset.NewSet(),
+		wo:                    proposedWo,
+		uncles:                make(map[common.Hash]*types.WorkObjectHeader),
+		etxRLimit:             etxRLimit,
+		etxPLimit:             etxPLimit,
+		parentStateSize:       quaiStateSize,
+		quaiCoinbaseEtxs:      make(map[[21]byte]*big.Int),
+		deletedUtxos:          make(map[common.Hash]struct{}),
+		qiGasScalingFactor:    math.Log(float64(utxoSetSize)),
+		utxoSetSize:           utxoSetSize,
+		coinbaseRotatedEpochs: make(map[string]struct{}),
 	}
 	coinbaseLockupEpoch := uint32((proposedWo.NumberU64(common.ZONE_CTX) / params.CoinbaseEpochBlocks) + 1) // zero epoch is an invalid state
 
@@ -1034,24 +1025,15 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				} else {
 					delegate = common.Zero
 				}
-				oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, value, w.chainConfig.Location, true)
-				if err != nil || newCoinbaseLockupHash == nil {
+				delete, _, _, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, value, w.chainConfig.Location, true)
+				if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
 					return nil, false, fmt.Errorf("could not add new lock: %w", err)
 				}
 				// Store the new lockup key every time
-				env.coinbaseLockupsCreated[string(newCoinbaseLockupKey)] = *newCoinbaseLockupHash
+				env.utxosCreate = append(env.utxosCreate, newCoinbaseLockupHash)
 
-				if oldCoinbaseLockupHash != nil {
-					// We deleted (updated) the old lockup, write it to deleted list but only the first time
-					if _, exists := env.coinbaseLockupsDeleted[string(oldCoinbaseLockupKey)]; !exists {
-						if _, exists := env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)]; !exists {
-							env.coinbaseLockupsDeleted[string(oldCoinbaseLockupKey)] = *oldCoinbaseLockupHash
-							env.utxosDelete = append(env.utxosDelete, *oldCoinbaseLockupHash)
-						}
-					}
-				} else {
-					// If we did not delete, we are rotating the epoch and need to store it
-					env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
+				if delete {
+					env.utxosDelete = append(env.utxosDelete, oldCoinbaseLockupHash)
 				}
 				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 
@@ -1139,24 +1121,15 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 			reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, env.wo.NumberU64(common.ZONE_CTX))
 			// Add the lockup owned by the smart contract with the miner as beneficiary
-			oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, reward, w.chainConfig.Location, true)
-			if err != nil || newCoinbaseLockupHash == nil {
+			delete, _, _, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, reward, w.chainConfig.Location, true)
+			if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
 				return nil, false, fmt.Errorf("could not add new lock: %w", err)
 			}
 			// Store the new lockup key every time
-			env.coinbaseLockupsCreated[string(newCoinbaseLockupKey)] = *newCoinbaseLockupHash
+			env.utxosCreate = append(env.utxosCreate, newCoinbaseLockupHash)
 
-			if oldCoinbaseLockupHash != nil {
-				// We deleted (updated) the old lockup, write it to deleted list but only the first time
-				if _, exists := env.coinbaseLockupsDeleted[string(oldCoinbaseLockupKey)]; !exists {
-					if _, exists := env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)]; !exists {
-						env.coinbaseLockupsDeleted[string(oldCoinbaseLockupKey)] = *oldCoinbaseLockupHash
-						env.utxosDelete = append(env.utxosDelete, *oldCoinbaseLockupHash)
-					}
-				}
-			} else {
-				// If we did not delete, we are rotating the epoch and need to store it
-				env.coinbaseRotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
+			if delete {
+				env.utxosDelete = append(env.utxosDelete, oldCoinbaseLockupHash)
 			}
 			receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 

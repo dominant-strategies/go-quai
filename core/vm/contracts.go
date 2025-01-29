@@ -706,63 +706,67 @@ func ClaimCoinbaseLockup(evm *EVM, ownerContract common.Address, gas *uint64, in
 }
 
 // AddNewLock adds a new locked balance to the lockup contract
-func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address, beneficiaryMiner common.Address, delegate common.Address, sender common.InternalAddress, lockupByte byte, unlockHeight uint64, epoch uint32, value *big.Int, location common.Location, log_ bool) ([]byte, []byte, *common.Hash, *common.Hash, error) {
+func AddNewLock(statedb StateDB, batch ethdb.Batch, ownerContract common.Address, beneficiaryMiner common.Address, delegate common.Address, sender common.InternalAddress, lockupByte byte, unlockHeight uint64, epoch uint32, value *big.Int, location common.Location, log_ bool) (bool, []byte, []byte, common.Hash, common.Hash, error) {
 	_, err := ownerContract.InternalAndQuaiAddress()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return false, nil, nil, common.Hash{}, common.Hash{}, err
 	}
 	_, err = beneficiaryMiner.InternalAddress()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return false, nil, nil, common.Hash{}, common.Hash{}, err
 	}
 	if sender != common.OneInternal(location) {
-		return nil, nil, nil, nil, errors.New("sender is not the correct internal address")
+		return false, nil, nil, common.Hash{}, common.Hash{}, errors.New("sender is not the correct internal address")
 	}
 	if value.Sign() == -1 || value.Sign() == 0 {
-		return nil, nil, nil, nil, fmt.Errorf("value is not positive: %v", value.String())
+		return false, nil, nil, common.Hash{}, common.Hash{}, fmt.Errorf("value is not positive: %v", value.String())
 	}
 	balance, trancheUnlockHeight, elements, oldDelegate := rawdb.ReadCoinbaseLockup(statedb.UnderlyingDatabase(), batch, ownerContract, beneficiaryMiner, lockupByte, epoch) // delegate can be changed every update if the miner chooses
 
-	oldCoinbaseLockupHash_ := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, oldDelegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
-	oldCoinbaseLockupHashPtr := &oldCoinbaseLockupHash_
-	oldKey := rawdb.CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch)
+	oldCoinbaseLockupHash := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, oldDelegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
 	if trancheUnlockHeight != 0 && unlockHeight < uint64(trancheUnlockHeight) {
-		return nil, nil, nil, nil, errors.New("new unlock height is less than the current tranche unlock height, math is broken")
+		return false, nil, nil, common.Hash{}, common.Hash{}, errors.New("new unlock height is less than the current tranche unlock height, math is broken")
 	}
 	if epoch == 0 && trancheUnlockHeight != 0 {
-		return nil, nil, nil, nil, errors.New("epoch is 0 but trancheUnlockHeight is not")
+		return false, nil, nil, common.Hash{}, common.Hash{}, errors.New("epoch is 0 but trancheUnlockHeight is not")
 	}
-
+	deleted := true
+	var oldLockupData []byte
 	if trancheUnlockHeight == 0 {
 		// New epoch: create new lockup tranche, don't change previous one
 		if epoch+1 > math.MaxUint32 {
-			return nil, nil, nil, nil, errors.New("epoch overflow")
+			return false, nil, nil, common.Hash{}, common.Hash{}, errors.New("epoch overflow")
 		}
 		elements = 0
 		balance = new(big.Int)
 		trancheUnlockHeight = uint32(unlockHeight) // TODO: ensure overflow is acceptable here
-		oldCoinbaseLockupHashPtr = nil
-		oldKey = nil
+		oldCoinbaseLockupHash = common.Hash{}
 		if log_ {
 			log.Global.Info("Rotated epoch: ", " owner: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch)
+		}
+		deleted = false
+	} else {
+		oldLockupData, err = rawdb.WriteCoinbaseLockupToSlice(balance, trancheUnlockHeight, elements, delegate)
+		if err != nil {
+			return false, nil, nil, common.Hash{}, common.Hash{}, err
 		}
 	}
 
 	elements++
 	balance.Add(balance, value)
 
-	newKey, err := rawdb.WriteCoinbaseLockup(batch, ownerContract, beneficiaryMiner, lockupByte, epoch, balance, trancheUnlockHeight, elements, delegate)
+	key, err := rawdb.WriteCoinbaseLockup(batch, ownerContract, beneficiaryMiner, lockupByte, epoch, balance, trancheUnlockHeight, elements, delegate)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return false, nil, nil, common.Hash{}, common.Hash{}, err
 	}
 	// Cut off prefix from keys
-	newKey = newKey[len(rawdb.CoinbaseLockupPrefix):]
+	key = key[len(rawdb.CoinbaseLockupPrefix):]
 
 	newCoinbaseLockupHash := types.CoinbaseLockupHash(ownerContract, beneficiaryMiner, delegate, lockupByte, epoch, balance, trancheUnlockHeight, elements)
 	if log_ {
 		log.Global.Info("Added new lockup: ", " contract: ", ownerContract, " miner: ", beneficiaryMiner, " epoch: ", epoch, " balance: ", balance.String(), " value: ", value.String(), " trancheUnlockHeight: ", trancheUnlockHeight, " elements: ", elements, " lockupByte: ", lockupByte)
 	}
-	return oldKey, newKey, oldCoinbaseLockupHashPtr, &newCoinbaseLockupHash, nil
+	return deleted, oldLockupData, key, oldCoinbaseLockupHash, newCoinbaseLockupHash, nil
 }
 
 // UnwrapQi is called by a smart contract that owns wrapped Qi to unwrap it for real Qi UTXOs
