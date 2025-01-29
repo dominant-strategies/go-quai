@@ -89,7 +89,7 @@ func ProcRequestRate(peerId peer.ID, inbound bool) error {
 
 // Splits a protocol version into its name, major, minor, and patch values
 func splitVersion(version libp2pprotocol.ID) (string, int, int, int) {
-	split := strings.Split(string(ProtocolVersion), "/")
+	split := strings.Split(string(version), "/")
 	if len(split) != 3 {
 		return "", -1, -1, -1
 	}
@@ -115,7 +115,7 @@ func splitVersion(version libp2pprotocol.ID) (string, int, int, int) {
 
 // Compares two protocol versions and returns true if they are compatible
 func isPeerVersionCompatible(theirVersion libp2pprotocol.ID, node QuaiP2PNode) bool {
-	ourName, ourMajor, ourMinor, ourPatch := splitVersion(ProtocolVersion)
+	ourName, ourMajor, ourMinor, ourPatch := splitVersion(ClientVersion)
 	if ourName == "" || ourMajor < 0 || ourMinor < 0 || ourPatch < 0 {
 		return false
 	}
@@ -131,7 +131,7 @@ func isPeerVersionCompatible(theirVersion libp2pprotocol.ID, node QuaiP2PNode) b
 		return false
 	}
 	// If they are exactly one version behind, they may be compatible if the grace period has not expired
-	if theirMajor == ourMajor-1 && ProtocolGraceHeight >= node.GetHeight(common.Location{}) {
+	if theirMajor == ourMajor-1 && node.GetHeight(common.Location{}) >= ProtocolGraceHeight {
 		return false
 	}
 	return true
