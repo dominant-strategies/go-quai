@@ -1565,7 +1565,8 @@ func MakeChainDatabase(stack *node.Node, readonly bool) ethdb.Database {
 
 func GetGenesisNonce() (uint64, []byte) {
 	nonceBytes := common.FromHex(viper.GetString(GenesisNonce.Name))
-	if len(nonceBytes) == 0 {
+	if len(nonceBytes) < 8 {
+		log.Global.Error("Genesis nonce is too short, using default")
 		nonceBytes = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	}
 	nonce := binary.BigEndian.Uint64(nonceBytes[:8])

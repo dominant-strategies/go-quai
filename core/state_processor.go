@@ -945,8 +945,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, targetBlock.WorkObjectHeader())
 		entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
-		for i := 0; i <= params.WorkSharesInclusionDepth; i++ {
+		for i := 0; i < params.WorkSharesInclusionDepth; i++ {
 			blockAtHeight := p.hc.GetBlockByNumber(targetBlockNumber + uint64(i))
+			if blockAtHeight == nil {
+				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("cannot find block at height %d, current height %, current hash %s", targetBlockNumber+uint64(i), block.NumberU64(common.ZONE_CTX), block.Hash().Hex())
+			}
 
 			var uncles []*types.WorkObjectHeader
 			if i == params.WorkSharesInclusionDepth {
