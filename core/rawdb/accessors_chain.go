@@ -1607,7 +1607,7 @@ func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash,
 	return db.Put(deletedCoinbaseLockupsKey(blockHash), data)
 }
 
-func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[CoinbaseLockupKeyLength]byte][]byte, error) {
+func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) ([]*DeletedCoinbaseLockup, error) {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(deletedCoinbaseLockupsKey(blockHash))
 	if len(data) == 0 {
@@ -1617,12 +1617,12 @@ func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[Co
 	if err := proto.Unmarshal(data, protoKeysAndValues); err != nil {
 		return nil, err
 	}
-	deletedLockups := make(map[[CoinbaseLockupKeyLength]byte][]byte)
+	deletedLockups := make([]*DeletedCoinbaseLockup, 0, len(protoKeysAndValues.KeysAndValues))
 	for _, keyValue := range protoKeysAndValues.KeysAndValues {
-		if len(keyValue.Key) != 47 {
+		if len(keyValue.Key) != CoinbaseLockupKeyLength {
 			return nil, fmt.Errorf("invalid key length %d", len(keyValue.Key))
 		}
-		deletedLockups[[CoinbaseLockupKeyLength]byte(keyValue.Key)] = keyValue.Value
+		deletedLockups = append(deletedLockups, &DeletedCoinbaseLockup{Key: keyValue.Key, Value: keyValue.Value})
 	}
 	return deletedLockups, nil
 }

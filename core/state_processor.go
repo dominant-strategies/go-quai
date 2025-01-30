@@ -665,11 +665,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							}
 							// Store the new lockup key every time
 							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, newCoinbaseLockupHash)
-							utxosCreatedDeleted.CoinbaseLockupsCreatedKeys = append(utxosCreatedDeleted.CoinbaseLockupsCreatedKeys, coinbaseLockupKey)
 
 							if delete {
 								utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, oldCoinbaseLockupHash)
 								utxosCreatedDeleted.CoinbaseLockupsDeleted = append(utxosCreatedDeleted.CoinbaseLockupsDeleted, rawdb.DeletedCoinbaseLockup{Key: coinbaseLockupKey, Value: oldLockupData})
+							} else {
+								// We didn't delete a previous state, therefore we are creating a new state and must store it
+								utxosCreatedDeleted.CoinbaseLockupsCreatedKeys = append(utxosCreatedDeleted.CoinbaseLockupsCreatedKeys, coinbaseLockupKey)
 							}
 							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 							if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
