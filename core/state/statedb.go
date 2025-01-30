@@ -1315,14 +1315,14 @@ func utxoKey(hash common.Hash, index uint16) []byte {
 }
 
 func (s *StateDB) UpdateKQuai(kQuai *big.Int) error {
-	if err := s.trie.TryUpdate(kQuaiKey[:], kQuai.Bytes()); err != nil {
+	if err := s.etxTrie.TryUpdate(kQuaiKey[:], kQuai.Bytes()); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *StateDB) GetKQuai() (*big.Int, error) {
-	kQuai, err := s.trie.TryGet(kQuaiKey[:])
+	kQuai, err := s.etxTrie.TryGet(kQuaiKey[:])
 	if err != nil {
 		return nil, err
 	}
@@ -1333,21 +1333,21 @@ func (s *StateDB) GetKQuai() (*big.Int, error) {
 }
 
 func (s *StateDB) FreezeKQuai() error {
-	if err := s.trie.TryUpdate(updateBitKey[:], []byte{0}); err != nil {
+	if err := s.etxTrie.TryUpdate(updateBitKey[:], []byte{0}); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *StateDB) UnFreezeKQuai() error {
-	if err := s.trie.TryUpdate(updateBitKey[:], []byte{1}); err != nil {
+	if err := s.etxTrie.TryUpdate(updateBitKey[:], []byte{1}); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *StateDB) GetUpdateBit() (byte, error) {
-	updateBit, err := s.trie.TryGet(updateBitKey[:])
+	updateBit, err := s.etxTrie.TryGet(updateBitKey[:])
 	if err != nil {
 		return 0, err
 	}
