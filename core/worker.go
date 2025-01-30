@@ -625,8 +625,20 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 
 			targetBlockNumber := work.wo.NumberU64(common.ZONE_CTX) - uint64(params.WorkSharesInclusionDepth)
 
-			targetBlock := w.hc.GetBlockByNumber(targetBlockNumber)
-
+			targetBlocks := make([]*types.WorkObject, 0, params.WorkSharesInclusionDepth)
+			blockCopy := work.wo
+			for i := 0; i < params.WorkSharesInclusionDepth; i++ {
+				targetBlock := w.hc.GetBlockByHash(blockCopy.ParentHash(nodeCtx))
+				if targetBlock == nil {
+					return nil, fmt.Errorf("target block not found, block hash %v", work.wo.ParentHash(nodeCtx))
+				}
+				targetBlocks = append(targetBlocks, targetBlock)
+				blockCopy = targetBlock
+			}
+			targetBlock := targetBlocks[params.WorkSharesInclusionDepth-1]
+			if targetBlock.NumberU64(common.ZONE_CTX) != targetBlockNumber {
+				return nil, fmt.Errorf("target block number %v does not match the target block number %v", targetBlock.NumberU64(common.ZONE_CTX), targetBlockNumber)
+			}
 			totalEntropy := big.NewInt(0)
 			powHash, err := w.engine.ComputePowHash(targetBlock.WorkObjectHeader())
 			if err != nil {
@@ -644,10 +656,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
 			for i := 0; i < params.WorkSharesInclusionDepth; i++ {
-				blockAtHeight := w.hc.GetBlockByNumber(targetBlockNumber + uint64(i))
-				if blockAtHeight == nil {
-					return nil, fmt.Errorf("block at height %d not found, block height %d", targetBlockNumber+uint64(i), work.wo.NumberU64(common.ZONE_CTX))
-				}
+				blockAtHeight := targetBlocks[i]
 				var uncles []*types.WorkObjectHeader
 				if i == params.WorkSharesInclusionDepth {
 					uncles = work.wo.Uncles()
@@ -1009,7 +1018,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				if err != nil {
 					return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 				}
-				if env.state.GetCode(internal) == nil || true {
+				if env.state.GetCode(internal) == nil {
 					// Coinbase data is either too long or too small
 					// Coinbase reward is lost
 					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
@@ -1103,7 +1112,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 			}
 
-			if env.state.GetCode(internal) == nil || true {
+			if env.state.GetCode(internal) == nil {
 				// Coinbase data is either too long or too small
 				// Coinbase reward is lost
 				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}

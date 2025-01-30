@@ -587,7 +587,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if err != nil {
 							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid contract: %w", tx.Hash(), err)
 						}
-						if statedb.GetCode(internal) == nil || true {
+						if statedb.GetCode(internal) == nil {
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
@@ -645,7 +645,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if err != nil {
 							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 						}
-						if statedb.GetCode(internal) == nil || true {
+						if statedb.GetCode(internal) == nil {
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
@@ -927,7 +927,20 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 		targetBlockNumber := block.NumberU64(common.ZONE_CTX) - uint64(params.WorkSharesInclusionDepth)
 
-		targetBlock := p.hc.GetBlockByNumber(targetBlockNumber)
+		targetBlocks := make([]*types.WorkObject, 0, params.WorkSharesInclusionDepth)
+		blockCopy := block
+		for i := 0; i < params.WorkSharesInclusionDepth; i++ {
+			targetBlock := p.hc.GetBlockByHash(blockCopy.ParentHash(nodeCtx))
+			if targetBlock == nil {
+				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("cannot find target block %s", block.ParentHash(nodeCtx).Hex())
+			}
+			targetBlocks = append(targetBlocks, targetBlock)
+			blockCopy = targetBlock
+		}
+		targetBlock := targetBlocks[params.WorkSharesInclusionDepth-1]
+		if targetBlock.NumberU64(common.ZONE_CTX) != targetBlockNumber {
+			return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("target block number %d does not match the target block number %d", targetBlock.NumberU64(common.ZONE_CTX), targetBlockNumber)
+		}
 
 		totalEntropy := big.NewInt(0)
 		powHash, err := p.engine.ComputePowHash(targetBlock.WorkObjectHeader())
@@ -946,10 +959,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
 		for i := 0; i < params.WorkSharesInclusionDepth; i++ {
-			blockAtHeight := p.hc.GetBlockByNumber(targetBlockNumber + uint64(i))
-			if blockAtHeight == nil {
-				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("cannot find block at height %d, current height %, current hash %s", targetBlockNumber+uint64(i), block.NumberU64(common.ZONE_CTX), block.Hash().Hex())
-			}
+			blockAtHeight := targetBlocks[i]
 
 			var uncles []*types.WorkObjectHeader
 			if i == params.WorkSharesInclusionDepth {

@@ -553,8 +553,12 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 				batch.Put(key[:], coinbase)
 			}
 		}
-
+		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
+		if prevHeader == nil {
+			return errors.New("Could not find previously canonical header during reorg")
+		}
 		rawdb.WriteHeadBlockHash(batch, prevHeader.Hash())
+		rawdb.WriteCanonicalHash(batch, prevHeader.Hash(), prevHeader.NumberU64(hc.NodeCtx()))
 		if err := batch.Write(); err != nil {
 			return err
 		}
@@ -563,11 +567,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			"Number": prevHeader.NumberArray(),
 		}).Info("Setting the current header")
 		hc.currentHeader.Store(prevHeader)
-
-		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
-		if prevHeader == nil {
-			return errors.New("Could not find previously canonical header during reorg")
-		}
 		// genesis check to not delete the genesis block
 		if hc.IsGenesisHash(prevHeader.Hash()) {
 			break
