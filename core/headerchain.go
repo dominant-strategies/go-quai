@@ -532,26 +532,35 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 				}
 				batch.Delete(key)
 			}
+
+			deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, prevHeader.Hash())
+			if err != nil {
+				return err
+			}
+			coinbaseDeletedHashes := 0
+			for i := len(deletedCoinbases) - 1; i >= 0; i-- { // Reapply the deleted states in reverse order to get to the original state by the end
+				key := deletedCoinbases[i].Key
+				data := deletedCoinbases[i].Value
+				if len(key) != rawdb.CoinbaseLockupKeyLength {
+					return fmt.Errorf("invalid deleted coinbase key length: %d", len(key))
+				}
+				batch.Put(key[:], data)
+				coinbaseDeletedHashes++
+			}
+			hc.logger.Infof("Restored %d deleted coinbase lockups", coinbaseDeletedHashes)
 			createdCoinbaseKeys, err := rawdb.ReadCreatedCoinbaseLockupKeys(hc.headerDb, prevHeader.Hash())
 			if err != nil {
 				return err
 			}
+			coinbaseCreatedHashes := 0
 			for _, key := range createdCoinbaseKeys {
 				if len(key) != rawdb.CoinbaseLockupKeyLength {
 					return fmt.Errorf("invalid created coinbase key length: %d", len(key))
 				}
 				batch.Delete(key)
+				coinbaseCreatedHashes++
 			}
-			deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, prevHeader.Hash())
-			if err != nil {
-				return err
-			}
-			for key, coinbase := range deletedCoinbases {
-				if len(key) != rawdb.CoinbaseLockupKeyLength {
-					return fmt.Errorf("invalid deleted coinbase key length: %d", len(key))
-				}
-				batch.Put(key[:], coinbase)
-			}
+			hc.logger.Infof("Deleted %d created coinbase lockups", coinbaseCreatedHashes)
 		}
 		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
 		if prevHeader == nil {
