@@ -1587,12 +1587,17 @@ func DeleteCreatedCoinbaseLockupKeys(db ethdb.KeyValueWriter, blockHash common.H
 	}
 }
 
-func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash, deletedLockups map[[CoinbaseLockupKeyLength]byte][]byte) error {
+type DeletedCoinbaseLockup struct {
+	Key   []byte
+	Value []byte
+}
+
+func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash, deletedLockups []DeletedCoinbaseLockup) error {
 	protoKeysAndValues := &types.ProtoKeysAndValues{KeysAndValues: make([]*types.ProtoKeyValue, 0, len(deletedLockups))}
-	for key, value := range deletedLockups {
+	for _, lockup := range deletedLockups {
 		protoKeysAndValues.KeysAndValues = append(protoKeysAndValues.KeysAndValues, &types.ProtoKeyValue{
-			Key:   key[:],
-			Value: value,
+			Key:   lockup.Key,
+			Value: lockup.Value,
 		})
 	}
 	data, err := proto.Marshal(protoKeysAndValues)
@@ -1602,7 +1607,7 @@ func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash,
 	return db.Put(deletedCoinbaseLockupsKey(blockHash), data)
 }
 
-func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[CoinbaseLockupKeyLength]byte][]byte, error) {
+func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) ([]*DeletedCoinbaseLockup, error) {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(deletedCoinbaseLockupsKey(blockHash))
 	if len(data) == 0 {
@@ -1612,12 +1617,12 @@ func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[Co
 	if err := proto.Unmarshal(data, protoKeysAndValues); err != nil {
 		return nil, err
 	}
-	deletedLockups := make(map[[CoinbaseLockupKeyLength]byte][]byte)
+	deletedLockups := make([]*DeletedCoinbaseLockup, 0, len(protoKeysAndValues.KeysAndValues))
 	for _, keyValue := range protoKeysAndValues.KeysAndValues {
-		if len(keyValue.Key) != 47 {
+		if len(keyValue.Key) != CoinbaseLockupKeyLength {
 			return nil, fmt.Errorf("invalid key length %d", len(keyValue.Key))
 		}
-		deletedLockups[[CoinbaseLockupKeyLength]byte(keyValue.Key)] = keyValue.Value
+		deletedLockups = append(deletedLockups, &DeletedCoinbaseLockup{Key: keyValue.Key, Value: keyValue.Value})
 	}
 	return deletedLockups, nil
 }
@@ -1851,6 +1856,22 @@ func WriteCoinbaseLockupToMap(coinbaseMap map[[CoinbaseLockupKeyLength]byte][]by
 	return nil
 }
 
+func WriteCoinbaseLockupToSlice(amount *big.Int, blockHeight uint32, elements uint16, delegate common.Address) ([]byte, error) {
+	data := make([]byte, 38)
+	amountBytes := amount.Bytes()
+	if len(amountBytes) > 32 {
+		return nil, fmt.Errorf("amount is too large")
+	}
+	// Right-align amountBytes in data[:32]
+	copy(data[32-len(amountBytes):32], amountBytes)
+	binary.BigEndian.PutUint32(data[32:36], blockHeight)
+	binary.BigEndian.PutUint16(data[36:38], elements)
+	if !delegate.Equal(common.Zero) {
+		data = append(data, delegate.Bytes()...)
+	}
+	return data, nil
+}
+
 func DeleteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) [CoinbaseLockupKeyLength]byte {
 	key := CoinbaseLockupKey(ownerContract, beneficiaryMiner, lockupByte, epoch)
 	if err := db.Delete(key); err != nil {
@@ -1860,4 +1881,88 @@ func DeleteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address,
 		db.Logger().Fatal("CoinbaseLockupKey is not 47 bytes")
 	}
 	return [CoinbaseLockupKeyLength]byte(key)
+}
+
+func WriteSupplyAnalyticsForBlock(db ethdb.KeyValueWriter, readDb ethdb.Reader, blockHash common.Hash, supplyAddedQuai, supplyRemovedQuai, supplyAddedQi, supplyRemovedQi *big.Int) error {
+	supplyDeltaQuai := new(big.Int).Sub(supplyAddedQuai, supplyRemovedQuai)
+	supplyDeltaQi := new(big.Int).Sub(supplyAddedQi, supplyRemovedQi)
+
+	totalSupplyQuai, totalSupplyQi, err := ReadTotalSupply(readDb)
+	if err != nil {
+		db.Logger().WithField("err", err).Error("Failed to read total supply")
+		return err
+	}
+	totalSupplyQuai.Add(totalSupplyQuai, supplyDeltaQuai)
+	totalSupplyQi.Add(totalSupplyQi, supplyDeltaQi)
+	if err := WriteTotalSupply(db, totalSupplyQuai, totalSupplyQi); err != nil {
+		db.Logger().WithField("err", err).Error("Failed to write total supply")
+	}
+	protoSupplyAnalytics := &types.ProtoSupplyAnalytics{
+		SupplyAddedQuai:   supplyAddedQuai.Bytes(),
+		SupplyRemovedQuai: supplyRemovedQuai.Bytes(),
+		SupplyAddedQi:     supplyAddedQi.Bytes(),
+		SupplyRemovedQi:   supplyRemovedQi.Bytes(),
+		TotalSupplyQuai:   totalSupplyQuai.Bytes(),
+		TotalSupplyQi:     totalSupplyQi.Bytes(),
+	}
+	data, err := proto.Marshal(protoSupplyAnalytics)
+	if err != nil {
+		return err
+	}
+	return db.Put(supplyAnalyticsKey(blockHash), data)
+}
+
+func ReadSupplyAnalyticsForBlock(db ethdb.Reader, blockHash common.Hash) (*big.Int, *big.Int, *big.Int, *big.Int, *big.Int, *big.Int, error) {
+	data, _ := db.Get(supplyAnalyticsKey(blockHash))
+	if len(data) == 0 {
+		return nil, nil, nil, nil, nil, nil, nil
+	}
+	protoSupplyAnalytics := new(types.ProtoSupplyAnalytics)
+	if err := proto.Unmarshal(data, protoSupplyAnalytics); err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	supplyAddedQuai := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyAddedQuai)
+	supplyRemovedQuai := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyRemovedQuai)
+	totalSupplyQuai := new(big.Int).SetBytes(protoSupplyAnalytics.TotalSupplyQuai)
+	supplyAddedQi := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyAddedQi)
+	supplyRemovedQi := new(big.Int).SetBytes(protoSupplyAnalytics.SupplyRemovedQi)
+	totalSupplyQi := new(big.Int).SetBytes(protoSupplyAnalytics.TotalSupplyQi)
+	return supplyAddedQuai, supplyRemovedQuai, totalSupplyQuai, supplyAddedQi, supplyRemovedQi, totalSupplyQi, nil
+}
+
+func WriteQiSupplyWithDeltas(db ethdb.Database, supplyDeltaQi *big.Int) error {
+	totalSupplyQuai, totalSupplyQi, err := ReadTotalSupply(db)
+	if err != nil {
+		db.Logger().WithField("err", err).Error("Failed to read total supply")
+		return err
+	}
+	totalSupplyQi.Add(totalSupplyQi, supplyDeltaQi)
+	return WriteTotalSupply(db, totalSupplyQuai, totalSupplyQi)
+}
+
+func WriteTotalSupply(db ethdb.KeyValueWriter, totalSupplyQuai, totalSupplyQi *big.Int) error {
+	totalSupplyQuaiBytes := make([]byte, 32)
+	totalSupplyQiBytes := make([]byte, 32)
+	if totalSupplyQuai != nil {
+		totalSupplyQuaiBytes = totalSupplyQuai.FillBytes(totalSupplyQuaiBytes)
+	}
+	if totalSupplyQi != nil {
+		totalSupplyQiBytes = totalSupplyQi.FillBytes(totalSupplyQiBytes)
+	}
+	data := append(totalSupplyQuaiBytes, totalSupplyQiBytes...)
+	return db.Put(totalSupplyAnalyticsKey, data)
+}
+
+// ReadTotalSupply returns the total Quai and Qi supply from the point of view of the canonical head
+func ReadTotalSupply(db ethdb.Reader) (*big.Int, *big.Int, error) {
+	data, _ := db.Get(totalSupplyAnalyticsKey)
+	if len(data) == 0 {
+		return big.NewInt(0), big.NewInt(0), nil
+	}
+	if len(data) != 64 {
+		return nil, nil, fmt.Errorf("invalid total supply data length")
+	}
+	totalSupplyQuai := new(big.Int).SetBytes(data[:32])
+	totalSupplyQi := new(big.Int).SetBytes(data[32:64])
+	return totalSupplyQuai, totalSupplyQi, nil
 }

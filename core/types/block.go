@@ -41,6 +41,7 @@ const (
 
 var (
 	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyMuHash    = common.HexToHash("544eb3142c000f0ad2c76ac41f4222abbababed830eeafee4b6dc56b52d5cac0")
 	EmptyUncleHash = RlpHash([]*Header(nil))
 	EmptyBodyHash  = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
 	EmptyHash      = common.Hash{}
@@ -142,7 +143,7 @@ func EmptyHeader() *Header {
 	h.number = make([]*big.Int, common.HierarchyDepth-1)
 	h.uncledEntropy = big.NewInt(0)
 	h.evmRoot = EmptyRootHash
-	h.utxoRoot = EmptyRootHash
+	h.utxoRoot = EmptyMuHash
 	h.quaiStateSize = big.NewInt(0)
 	h.txHash = EmptyRootHash
 	h.outboundEtxHash = EmptyRootHash
