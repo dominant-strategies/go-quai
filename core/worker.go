@@ -655,13 +655,13 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, targetBlock.WorkObjectHeader())
 			entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
-			for i := 0; i < params.WorkSharesInclusionDepth; i++ {
-				blockAtHeight := targetBlocks[i]
+			for i := 0; i <= params.WorkSharesInclusionDepth; i++ {
+
 				var uncles []*types.WorkObjectHeader
 				if i == params.WorkSharesInclusionDepth {
 					uncles = work.wo.Uncles()
 				} else {
-					uncles = blockAtHeight.Uncles()
+					uncles = targetBlocks[i].Uncles()
 				}
 
 				for _, uncle := range uncles {
@@ -1018,7 +1018,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				if err != nil {
 					return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 				}
-				if env.state.GetCode(internal) == nil {
+				if env.state.GetCode(internal) == nil || env.wo.NumberU64(common.ZONE_CTX) < params.CoinbaseLockupPrecompileKickInHeight {
 					// Coinbase data is either too long or too small
 					// Coinbase reward is lost
 					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
@@ -1112,7 +1112,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 			}
 
-			if env.state.GetCode(internal) == nil {
+			if env.state.GetCode(internal) == nil || env.wo.NumberU64(common.ZONE_CTX) < params.CoinbaseLockupPrecompileKickInHeight {
 				// Coinbase data is either too long or too small
 				// Coinbase reward is lost
 				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
