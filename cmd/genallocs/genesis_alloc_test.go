@@ -95,7 +95,7 @@ type expectedAllocValues struct {
 	account     *GenesisAccount
 	cliffAmount *big.Int
 	cliffBlock  uint64
-	numUnlocks  int
+	numUnlocks  uint64
 }
 
 func calcExpectedValues(account *GenesisAccount) expectedAllocValues {
@@ -111,7 +111,8 @@ func calcExpectedValues(account *GenesisAccount) expectedAllocValues {
 
 	cliffIndex := unlockSchedule.lumpSumMonth * params.BlocksPerMonth
 
-	numUnlocks := unlockSchedule.unlockDuration * 12
+	// Number of unlocks is vested balance amount divided by amount per unlock.
+	numUnlocks := new(big.Int).Div(account.VestedBalance, )
 	numUnlocks = numUnlocks + 1 // Include cliff index.
 
 	return expectedAllocValues{
@@ -135,7 +136,7 @@ func TestCalculatingGenallocs(t *testing.T) {
 		unlockSchedule := unlockSchedules[expectedAlloc.UnlockSchedule]
 
 		// Verify the correct number of unlocks are allocated.
-		require.Equal(t, expectedAllocValues.numUnlocks, actualAlloc.BalanceSchedule.Len())
+		require.Equal(t, expectedAllocValues.numUnlocks, uint64(actualAlloc.BalanceSchedule.Len()))
 
 		totalAdded := new(big.Int)
 		// for blockNum, actualUnlock := range actualAlloc.BalanceSchedule.Oldest() {

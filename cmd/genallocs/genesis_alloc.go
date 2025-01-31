@@ -25,7 +25,7 @@ type GenesisAccount struct {
 // Some unlockSchedules have a lumpSum payment, some at TGE, some at 1 year.
 // All unlockSchedules begin regular unlocks after 1 year.
 type unlockSchedule struct {
-	unlockDuration    int    // Total unlocking duration in years. The first year cliff is not part of unlocking.
+	unlockDuration    uint64 // Total unlocking duration in years. The first year cliff is not part of unlocking.
 	lumpSumPercentage uint64 // One-time percentage unlocked.
 	lumpSumMonth      uint64 // Number of months before lump sum payment.
 	unlockMonthStart  uint64 // Month of first regular unlock.
@@ -35,7 +35,6 @@ var unlockSchedules = [4]unlockSchedule{
 	{
 		// schedule0
 		// Immediate unlock: 100% @ Month 0
-		unlockDuration:    0,
 		lumpSumPercentage: 100,
 		lumpSumMonth:      0,
 	},
@@ -120,7 +119,7 @@ func (account *GenesisAccount) calculateLockedBalances() {
 
 	// Calculate total lump sum payment.
 	lumpSumPercentage := new(big.Int).SetUint64(unlockSchedule.lumpSumPercentage)
-	lumpSumAmount := new(big.Int).Mul(account.TotalBalance, lumpSumPercentage)
+	lumpSumAmount := lumpSumPercentage.Mul(account.TotalBalance, lumpSumPercentage)
 	lumpSumAmount.Div(lumpSumAmount, common.Big100) // Divide back by 100 to undo percentage.
 
 	// Verify that lumpSum payment is not more than the total vested allocation.
@@ -136,16 +135,19 @@ func (account *GenesisAccount) calculateLockedBalances() {
 	totalDistributed.Add(totalDistributed, lumpSumAmount)
 
 	if unlockSchedule.unlockDuration != 0 {
-		// Calculate number of unlocks.
-		numUnlocks := uint64((unlockSchedule.unlockDuration) * 12) // Total months that unlock.
+		// 1. Divide the total allocation by the unlock period.
+		remainingBalance := new(big.Int).Sub(account.TotalBalance, lumpSumAmount)
+		remainingBalance.Div(remainingBalance, new(big.Int).SetUint64(unlockSchedule.unlockDuration))
 
-		// Calculate amount per unlock.
-		quaiPerUnlock := new(big.Int).Sub(account.VestedBalance, lumpSumAmount)
-		quaiPerUnlock.Div(quaiPerUnlock, new(big.Int).SetUint64(numUnlocks))
+		// Calculate the number of unlocks based on the remaining vested Quai not allocated at the cliff.
+		quaiPerUnlock := remainingBalance.Div(remainingBalance, new(big.Int).SetUint64(unlockSchedule.unlockDuration))
 
+		// 2. Continue unlocking this amount each month until the vested amount is reached.
+		// Divide the vested balance amount, by amount per unlock, to figure out how many unlocks must be unlocked.
+		numUnlocks := new(big.Int).Div(account.VestedBalance, quaiPerUnlock)
 		// Calculate start and end indices (inclusive).
 		var firstUnlockIndex uint64 = unlockSchedule.unlockMonthStart
-		var lastUnlockIndex uint64 = firstUnlockIndex + numUnlocks - 1
+		var lastUnlockIndex uint64 = firstUnlockIndex + numUnlocks.Uint64()
 
 		// Calculate the unlock at each block height.
 		for unlockIndex := firstUnlockIndex; unlockIndex <= lastUnlockIndex; unlockIndex++ {
@@ -154,9 +156,8 @@ func (account *GenesisAccount) calculateLockedBalances() {
 		}
 
 		// Calculate total added vs expected total. Add rounding balance to final unlock.
-		roundingDifference := new(big.Int).Sub(account.TotalBalance, totalDistributed)
+		roundingDifference := new(big.Int).Sub(account.VestedBalance, totalDistributed)
 		lastUnlockBlock := lastUnlockIndex * params.BlocksPerMonth
 		account.BalanceSchedule.Set(lastUnlockBlock, new(big.Int).Add(quaiPerUnlock, roundingDifference))
 	}
-
 }
