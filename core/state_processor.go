@@ -960,7 +960,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, targetBlock.WorkObjectHeader())
 		entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
-		for i := 0; i < params.WorkSharesInclusionDepth; i++ {
+		for i := 0; i <= params.WorkSharesInclusionDepth; i++ {
 			blockAtHeight := targetBlocks[i]
 
 			var uncles []*types.WorkObjectHeader
