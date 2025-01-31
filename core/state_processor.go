@@ -207,14 +207,12 @@ func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine conse
 }
 
 type UtxosCreatedDeleted struct {
-	UtxosCreatedKeys             [][]byte
-	UtxosCreatedHashes           []common.Hash
-	UtxosDeleted                 []*types.SpentUtxoEntry
-	UtxosDeletedHashes           []common.Hash
-	CoinbaseLockupsCreatedHashes map[string]common.Hash
-	CoinbaseLockupsDeletedHashes map[string]common.Hash
-	CoinbaseLockupsDeleted       map[[47]byte][]byte
-	RotatedEpochs                map[string]struct{}
+	UtxosCreatedKeys           [][]byte
+	UtxosCreatedHashes         []common.Hash
+	UtxosDeleted               []*types.SpentUtxoEntry
+	UtxosDeletedHashes         []common.Hash
+	CoinbaseLockupsCreatedKeys [][]byte
+	CoinbaseLockupsDeleted     []rawdb.DeletedCoinbaseLockup
 }
 
 // Process processes the state changes according to the Quai rules by running
@@ -268,10 +266,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		return types.Receipts{}, []*types.Transaction{}, []*types.Log{}, nil, 0, 0, 0, nil, nil, err
 	}
 	utxosCreatedDeleted := new(UtxosCreatedDeleted) // utxos created and deleted in this block
-	utxosCreatedDeleted.CoinbaseLockupsCreatedHashes = make(map[string]common.Hash)
-	utxosCreatedDeleted.CoinbaseLockupsDeletedHashes = make(map[string]common.Hash)
-	utxosCreatedDeleted.CoinbaseLockupsDeleted = make(map[[47]byte][]byte)
-	utxosCreatedDeleted.RotatedEpochs = make(map[string]struct{})
 	// Apply the previous inbound ETXs to the ETX set state
 	prevInboundEtxs := rawdb.ReadInboundEtxs(p.hc.bc.db, header.ParentHash(nodeCtx))
 	if len(prevInboundEtxs) > 0 {
@@ -593,7 +587,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if err != nil {
 							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid contract: %w", tx.Hash(), err)
 						}
-						if statedb.GetCode(internal) == nil || true {
+						if statedb.GetCode(internal) == nil || block.NumberU64(common.ZONE_CTX) < params.CoinbaseLockupPrecompileKickInHeight {
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
@@ -605,25 +599,17 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							} else {
 								delegate = common.Zero
 							}
-							oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, value, nodeLocation, true)
-							if err != nil || newCoinbaseLockupHash == nil {
+							delete, oldLockupData, coinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, value, nodeLocation, p.logger, block.ParentHash(common.ZONE_CTX), true)
+							if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
 								return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not add new lock: %w", err)
 							}
 							// Store the new lockup key every time
-							utxosCreatedDeleted.CoinbaseLockupsCreatedHashes[string(newCoinbaseLockupKey)] = *newCoinbaseLockupHash
+							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, newCoinbaseLockupHash)
+							utxosCreatedDeleted.CoinbaseLockupsCreatedKeys = append(utxosCreatedDeleted.CoinbaseLockupsCreatedKeys, coinbaseLockupKey)
 
-							if oldCoinbaseLockupHash != nil {
-								// We deleted (updated) the old lockup, write it to deleted list but only the first time
-								if _, exists := utxosCreatedDeleted.CoinbaseLockupsDeletedHashes[string(oldCoinbaseLockupKey)]; !exists {
-									if _, exists := utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)]; !exists {
-										// We only want to add a delete if we have not rotated the epoch (we haven't created a new lock) because otherwise there is nothing to delete
-										utxosCreatedDeleted.CoinbaseLockupsDeletedHashes[string(oldCoinbaseLockupKey)] = *oldCoinbaseLockupHash
-										utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, *oldCoinbaseLockupHash)
-									}
-								}
-							} else {
-								// If we did not delete, we are rotating the epoch and need to store it
-								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
+							if delete {
+								utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, oldCoinbaseLockupHash)
+								utxosCreatedDeleted.CoinbaseLockupsDeleted = append(utxosCreatedDeleted.CoinbaseLockupsDeleted, rawdb.DeletedCoinbaseLockup{Key: coinbaseLockupKey, Value: oldLockupData})
 							}
 							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
 						}
@@ -659,7 +645,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						if err != nil {
 							return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 						}
-						if statedb.GetCode(internal) == nil || true {
+						if statedb.GetCode(internal) == nil || block.NumberU64(common.ZONE_CTX) < params.CoinbaseLockupPrecompileKickInHeight {
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
@@ -673,24 +659,19 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							}
 							reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
 							// Add the lockup owned by the smart contract with the miner as beneficiary
-							oldCoinbaseLockupKey, newCoinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, reward, nodeLocation, true)
-							if err != nil || newCoinbaseLockupHash == nil {
+							delete, oldLockupData, coinbaseLockupKey, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(statedb, batch, contractAddr, *etx.To(), delegate, common.OneInternal(nodeLocation), lockupByte, lockup.Uint64(), coinbaseLockupEpoch, reward, nodeLocation, p.logger, block.ParentHash(common.ZONE_CTX), true)
+							if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
 								return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("could not add new lock: %w", err)
 							}
 							// Store the new lockup key every time
-							utxosCreatedDeleted.CoinbaseLockupsCreatedHashes[string(newCoinbaseLockupKey)] = *newCoinbaseLockupHash
+							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, newCoinbaseLockupHash)
 
-							if oldCoinbaseLockupHash != nil {
-								// We deleted (updated) the old lockup, write it to deleted list but only the first time
-								if _, exists := utxosCreatedDeleted.CoinbaseLockupsDeletedHashes[string(oldCoinbaseLockupKey)]; !exists {
-									if _, exists := utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)]; !exists { // Don't register deletes for any rotated epochs
-										utxosCreatedDeleted.CoinbaseLockupsDeletedHashes[string(oldCoinbaseLockupKey)] = *oldCoinbaseLockupHash
-										utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, *oldCoinbaseLockupHash)
-									}
-								}
+							if delete {
+								utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, oldCoinbaseLockupHash)
+								utxosCreatedDeleted.CoinbaseLockupsDeleted = append(utxosCreatedDeleted.CoinbaseLockupsDeleted, rawdb.DeletedCoinbaseLockup{Key: coinbaseLockupKey, Value: oldLockupData})
 							} else {
-								// If we did not delete, we are rotating the epoch and need to store it
-								utxosCreatedDeleted.RotatedEpochs[string(newCoinbaseLockupKey)] = struct{}{}
+								// We didn't delete a previous state, therefore we are creating a new state and must store it
+								utxosCreatedDeleted.CoinbaseLockupsCreatedKeys = append(utxosCreatedDeleted.CoinbaseLockupsCreatedKeys, coinbaseLockupKey)
 							}
 							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 							if block.NumberU64(common.ZONE_CTX) > params.TimeToStartTx {
@@ -843,7 +824,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, *hash)
 					}
 					for key, lockup := range receipt.CoinbaseLockupsDeleted {
-						utxosCreatedDeleted.CoinbaseLockupsDeleted[key] = lockup
+						utxosCreatedDeleted.CoinbaseLockupsDeleted = append(utxosCreatedDeleted.CoinbaseLockupsDeleted, rawdb.DeletedCoinbaseLockup{Key: key[:], Value: lockup})
 					}
 				}
 				receipts = append(receipts, receipt)
@@ -887,7 +868,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					utxosCreatedDeleted.UtxosDeletedHashes = append(utxosCreatedDeleted.UtxosDeletedHashes, *hash)
 				}
 				for key, lockup := range receipt.CoinbaseLockupsDeleted {
-					utxosCreatedDeleted.CoinbaseLockupsDeleted[key] = lockup
+					utxosCreatedDeleted.CoinbaseLockupsDeleted = append(utxosCreatedDeleted.CoinbaseLockupsDeleted, rawdb.DeletedCoinbaseLockup{Key: key[:], Value: lockup})
 				}
 			}
 			receipts = append(receipts, receipt)
@@ -948,7 +929,20 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 		targetBlockNumber := block.NumberU64(common.ZONE_CTX) - uint64(params.WorkSharesInclusionDepth)
 
-		targetBlock := p.hc.GetBlockByNumber(targetBlockNumber)
+		targetBlocks := make([]*types.WorkObject, 0, params.WorkSharesInclusionDepth)
+		blockCopy := block
+		for i := 0; i < params.WorkSharesInclusionDepth; i++ {
+			targetBlock := p.hc.GetBlockByHash(blockCopy.ParentHash(nodeCtx))
+			if targetBlock == nil {
+				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("cannot find target block %s", block.ParentHash(nodeCtx).Hex())
+			}
+			targetBlocks = append(targetBlocks, targetBlock)
+			blockCopy = targetBlock
+		}
+		targetBlock := targetBlocks[params.WorkSharesInclusionDepth-1]
+		if targetBlock.NumberU64(common.ZONE_CTX) != targetBlockNumber {
+			return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("target block number %d does not match the target block number %d", targetBlock.NumberU64(common.ZONE_CTX), targetBlockNumber)
+		}
 
 		totalEntropy := big.NewInt(0)
 		powHash, err := p.engine.ComputePowHash(targetBlock.WorkObjectHeader())
@@ -967,7 +961,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
 		for i := 0; i <= params.WorkSharesInclusionDepth; i++ {
-			blockAtHeight := p.hc.GetBlockByNumber(targetBlockNumber + uint64(i))
+			blockAtHeight := targetBlocks[i]
 
 			var uncles []*types.WorkObjectHeader
 			if i == params.WorkSharesInclusionDepth {
@@ -1032,16 +1026,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				// convert the quai reward value into Qi
 				shareReward = new(big.Int).Set(misc.QuaiToQi(targetBlock, exchangeRate, targetBlock.Difficulty(), shareReward))
 			}
-			if shareReward.Sign() == 0 {
+			if shareReward.Cmp(common.Big0) == 0 {
 				shareReward = big.NewInt(1)
 			}
 			emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: share.Data()}))
 		}
-	}
-
-	for _, hash := range utxosCreatedDeleted.CoinbaseLockupsCreatedHashes {
-		// Update the created hash list with the latest new elements (instead of intermediate ones)
-		utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, hash)
 	}
 
 	time4 := common.PrettyDuration(time.Since(start))
@@ -1096,11 +1085,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	if err := rawdb.WriteCreatedUTXOKeys(batch, blockHash, utxosCreatedDeleted.UtxosCreatedKeys); err != nil { // Could do this in Apply instead
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 	}
-	coinbaseLockupsCreatedKeys := make([][]byte, 0, len(utxosCreatedDeleted.CoinbaseLockupsCreatedHashes))
-	for key, _ := range utxosCreatedDeleted.CoinbaseLockupsCreatedHashes {
-		coinbaseLockupsCreatedKeys = append(coinbaseLockupsCreatedKeys, []byte(key))
-	}
-	if err := rawdb.WriteCreatedCoinbaseLockupKeys(batch, blockHash, coinbaseLockupsCreatedKeys); err != nil {
+	if err := rawdb.WriteCreatedCoinbaseLockupKeys(batch, blockHash, utxosCreatedDeleted.CoinbaseLockupsCreatedKeys); err != nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 	}
 	if err := rawdb.WriteDeletedCoinbaseLockups(batch, blockHash, utxosCreatedDeleted.CoinbaseLockupsDeleted); err != nil {

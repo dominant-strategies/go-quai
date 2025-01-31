@@ -198,15 +198,15 @@ var (
 	}
 	ExchangeRate = big.NewInt(86196385918997143) // This is the initial exchange rate in Qi per Quai in Its/Qit.
 	// These numbers should be "equivalent" to the initial conversion rate
-	QuaiToQiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
-	QiToQuaiConversionBase          = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
-	MaxTimeDiffBetweenBlocks int64  = 100                  // Max time difference between the blocks to 100 secs
-	OneOverAlpha                    = big.NewInt(200)      // The alpha value for the quai to qi conversion
-	ControllerKickInBlock    uint64 = 161000
-
-	MinBaseFeeInQits              = big.NewInt(5)
-	OneOverBaseFeeControllerAlpha = big.NewInt(100)
-	BaseFeeMultiplier             = big.NewInt(50)
+	QuaiToQiConversionBase                      = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
+	QiToQuaiConversionBase                      = big.NewInt(10000000) // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
+	MaxTimeDiffBetweenBlocks             int64  = 100                  // Max time difference between the blocks to 100 secs
+	OneOverAlpha                                = big.NewInt(200)      // The alpha value for the quai to qi conversion
+	ControllerKickInBlock                uint64 = 161000
+	CoinbaseLockupPrecompileKickInHeight        = BlocksPerMonth // The height at which the coinbase lockup precompile is enabled
+	MinBaseFeeInQits                            = big.NewInt(5)
+	OneOverBaseFeeControllerAlpha               = big.NewInt(100)
+	BaseFeeMultiplier                           = big.NewInt(50)
 
 	ConversionLockPeriod uint64 = BlocksPerDay
 	CoinbaseEpochBlocks  uint64 = 100 // Maximum number of blocks in a coinbase tranche TODO: change this

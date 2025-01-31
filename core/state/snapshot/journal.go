@@ -206,6 +206,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 			accounts: generator.Accounts,
 			slots:    generator.Slots,
 			storage:  common.StorageSize(generator.Storage),
+			logger:   diskdb.Logger(),
 		})
 	}
 	return snapshot, false, nil

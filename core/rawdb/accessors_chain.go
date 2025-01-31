@@ -1587,12 +1587,17 @@ func DeleteCreatedCoinbaseLockupKeys(db ethdb.KeyValueWriter, blockHash common.H
 	}
 }
 
-func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash, deletedLockups map[[CoinbaseLockupKeyLength]byte][]byte) error {
+type DeletedCoinbaseLockup struct {
+	Key   []byte
+	Value []byte
+}
+
+func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash, deletedLockups []DeletedCoinbaseLockup) error {
 	protoKeysAndValues := &types.ProtoKeysAndValues{KeysAndValues: make([]*types.ProtoKeyValue, 0, len(deletedLockups))}
-	for key, value := range deletedLockups {
+	for _, lockup := range deletedLockups {
 		protoKeysAndValues.KeysAndValues = append(protoKeysAndValues.KeysAndValues, &types.ProtoKeyValue{
-			Key:   key[:],
-			Value: value,
+			Key:   lockup.Key,
+			Value: lockup.Value,
 		})
 	}
 	data, err := proto.Marshal(protoKeysAndValues)
@@ -1602,7 +1607,7 @@ func WriteDeletedCoinbaseLockups(db ethdb.KeyValueWriter, blockHash common.Hash,
 	return db.Put(deletedCoinbaseLockupsKey(blockHash), data)
 }
 
-func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[CoinbaseLockupKeyLength]byte][]byte, error) {
+func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) ([]*DeletedCoinbaseLockup, error) {
 	// Try to look up the data in leveldb.
 	data, _ := db.Get(deletedCoinbaseLockupsKey(blockHash))
 	if len(data) == 0 {
@@ -1612,12 +1617,12 @@ func ReadDeletedCoinbaseLockups(db ethdb.Reader, blockHash common.Hash) (map[[Co
 	if err := proto.Unmarshal(data, protoKeysAndValues); err != nil {
 		return nil, err
 	}
-	deletedLockups := make(map[[CoinbaseLockupKeyLength]byte][]byte)
+	deletedLockups := make([]*DeletedCoinbaseLockup, 0, len(protoKeysAndValues.KeysAndValues))
 	for _, keyValue := range protoKeysAndValues.KeysAndValues {
-		if len(keyValue.Key) != 47 {
+		if len(keyValue.Key) != CoinbaseLockupKeyLength {
 			return nil, fmt.Errorf("invalid key length %d", len(keyValue.Key))
 		}
-		deletedLockups[[CoinbaseLockupKeyLength]byte(keyValue.Key)] = keyValue.Value
+		deletedLockups = append(deletedLockups, &DeletedCoinbaseLockup{Key: keyValue.Key, Value: keyValue.Value})
 	}
 	return deletedLockups, nil
 }
@@ -1849,6 +1854,22 @@ func WriteCoinbaseLockupToMap(coinbaseMap map[[CoinbaseLockupKeyLength]byte][]by
 	}
 	coinbaseMap[[CoinbaseLockupKeyLength]byte(key)] = data
 	return nil
+}
+
+func WriteCoinbaseLockupToSlice(amount *big.Int, blockHeight uint32, elements uint16, delegate common.Address) ([]byte, error) {
+	data := make([]byte, 38)
+	amountBytes := amount.Bytes()
+	if len(amountBytes) > 32 {
+		return nil, fmt.Errorf("amount is too large")
+	}
+	// Right-align amountBytes in data[:32]
+	copy(data[32-len(amountBytes):32], amountBytes)
+	binary.BigEndian.PutUint32(data[32:36], blockHeight)
+	binary.BigEndian.PutUint16(data[36:38], elements)
+	if !delegate.Equal(common.Zero) {
+		data = append(data, delegate.Bytes()...)
+	}
+	return data, nil
 }
 
 func DeleteCoinbaseLockup(db ethdb.KeyValueWriter, ownerContract common.Address, beneficiaryMiner common.Address, lockupByte byte, epoch uint32) [CoinbaseLockupKeyLength]byte {
