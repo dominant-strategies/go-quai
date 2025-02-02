@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 
+	"github.com/dominant-strategies/go-quai/cmd/genallocs"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/constants"
 	"github.com/dominant-strategies/go-quai/common/fdlimit"
@@ -1523,6 +1524,13 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		}
 		if !viper.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
+		}
+	}
+
+	if nodeLocation.Equal(common.Location{0, 0}) {
+		cfg.GenesisAllocs, err = genallocs.VerifyGenesisAllocs("cmd/genallocs/genesis_alloc.json", cfg.GenesisExtra)
+		if err != nil {
+			log.Global.WithField("err", err).Fatal("Unable to allocate genesis accounts")
 		}
 	}
 

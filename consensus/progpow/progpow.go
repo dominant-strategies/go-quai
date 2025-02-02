@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dominant-strategies/go-quai/cmd/genallocs"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	mmap "github.com/edsrzf/mmap-go"
@@ -155,6 +156,7 @@ type Config struct {
 	DurationLimit  *big.Int
 	GasCeil        uint64
 	MinDifficulty  *big.Int
+	GenAllocs      []genallocs.GenesisAccount
 
 	NodeLocation common.Location
 

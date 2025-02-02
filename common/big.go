@@ -53,6 +53,7 @@ var (
 	Big199680 = big.NewInt(199680)
 	Big2e64   = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
 	Big2e256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	Big10e18  = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), big.NewInt(0))
 )
 
 func BigBitsToBits(original *big.Int) *big.Int {
@@ -118,6 +119,7 @@ func SanityCheck(quitCh chan struct{}) {
 	big199680 := big.NewInt(199680)
 	big2e64 := new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
 	big2e256 := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	big10e18 := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), big.NewInt(0))
 
 	go func(quitCh chan struct{}) {
 		for {
@@ -146,7 +148,8 @@ func SanityCheck(quitCh chan struct{}) {
 				Big3072 == nil || big3072.Cmp(Big3072) != 0 ||
 				Big199680 == nil || big199680.Cmp(Big199680) != 0 ||
 				Big2e64 == nil || big2e64.Cmp(Big2e64) != 0 ||
-				Big2e256 == nil || big2e256.Cmp(Big2e256) != 0 {
+				Big2e256 == nil || big2e256.Cmp(Big2e256) != 0 ||
+				Big10e18 == nil || big10e18.Cmp(Big10e18) != 0 {
 				// Send a message to quitCh to abort.
 				log.Global.Error("A common value has mutated, exiting now")
 				quitCh <- struct{}{}
