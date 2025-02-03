@@ -541,6 +541,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				}
 				if tx.To().IsInQiLedgerScope() { // Qi coinbase
 					if block.PrimeTerminusNumber().Uint64() < params.ControllerKickInBlock { // parent must be controller kick in block
+						p.logger.Errorf("Qi coinbase tx %x is not allowed before controller kick in block %d", tx.Hash(), params.ControllerKickInBlock)
 						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 						receipts = append(receipts, receipt)
 						allLogs = append(allLogs, receipt.Logs...)
@@ -598,6 +599,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
+							p.logger.Errorf("Coinbase tx %x has no code at contract address %x", tx.Hash(), contractAddr)
 							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 						} else {
 							var delegate common.Address
@@ -623,6 +625,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					} else {
 						// Coinbase data is either too long or too small
 						// Coinbase reward is lost
+						p.logger.Errorf("Coinbase tx %x has invalid data length %d", tx.Hash(), len(tx.Data()))
 						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					}
 					receipts = append(receipts, receipt)
@@ -652,6 +655,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							// No code at contract address
 							// Coinbase reward is lost
 							// Justification: We should not store a coinbase lockup that can never be claimed
+							p.logger.Errorf("Coinbase tx %x has no code at contract address %x", tx.Hash(), contractAddr)
 							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 						} else {
 							var delegate common.Address
@@ -684,6 +688,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					} else {
 						// Coinbase data is either too long or too small
 						// Coinbase reward is lost
+						p.logger.Errorf("Coinbase tx %x has invalid data length %d", tx.Hash(), len(tx.Data()))
 						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					}
 					receipts = append(receipts, receipt)
