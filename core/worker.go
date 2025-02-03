@@ -724,7 +724,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 				if shareReward.Cmp(common.Big0) == 0 {
 					shareReward = big.NewInt(1)
 				}
-				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: share.Data()}))
+				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: append(share.Data(), share.Hash().Bytes()...)}))
 			}
 		}
 
@@ -983,7 +983,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 			lockup.Add(lockup, env.wo.Number(w.hc.NodeCtx()))
 			value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, env.wo.NumberU64(common.ZONE_CTX))
-			if len(tx.Data()) == 1 {
+			if len(tx.Data()) == 1+common.HashLength {
+				// Coinbase has no extra data or hash workshare hash as extra data
+				// Coinbase is valid
 				denominations := misc.FindMinDenominations(value)
 				outputIndex := uint16(0)
 				// Iterate over the denominations in descending order
@@ -1012,7 +1014,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				env.txs = append(env.txs, tx)
 				env.receipts = append(env.receipts, receipt)
 				return receipt.Logs, true, nil
-			} else if len(tx.Data()) == common.AddressLength+1 || len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
+			} else if len(tx.Data()) == 1+common.AddressLength+common.HashLength || len(tx.Data()) == 1+common.AddressLength+common.AddressLength+common.HashLength { // 1 byte for lockup, 20 bytes for recipient, 20 bytes for delegate (optional), 32 bytes for workshare hash
 				contractAddr := common.BytesToAddress(tx.Data()[1:common.AddressLength+1], w.chainConfig.Location)
 				internal, err := contractAddr.InternalAndQuaiAddress()
 				if err != nil {
@@ -1031,8 +1033,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					return []*types.Log{}, false, nil
 				}
 				var delegate common.Address
-				if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
-					delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:], w.chainConfig.Location)
+				if len(tx.Data()) == common.AddressLength+common.AddressLength+common.HashLength+1 {
+					delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:common.AddressLength+common.AddressLength+1], w.chainConfig.Location)
 				} else {
 					delegate = common.Zero
 				}
@@ -1074,8 +1076,8 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 			}
 			var receipt *types.Receipt
-			if len(tx.Data()) == 1 {
-				// Coinbase has no extra data
+			if len(tx.Data()) == 1+common.HashLength {
+				// Coinbase has no extra data or hash workshare hash as extra data
 				// Coinbase is valid
 				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 				gasUsed := env.wo.GasUsed()
@@ -1088,7 +1090,60 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				env.txs = append(env.txs, tx)
 				env.receipts = append(env.receipts, receipt)
 				return []*types.Log{}, false, nil
-			} else if len(tx.Data()) != common.AddressLength+1 && len(tx.Data()) != common.AddressLength+common.AddressLength+1 {
+			} else if len(tx.Data()) == 1+common.AddressLength+common.HashLength || len(tx.Data()) == 1+common.AddressLength+common.AddressLength+common.HashLength {
+				// Create params for uint256 lockup, uint256 balance, address recipient
+				lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
+				if lockup.Uint64() < params.ConversionLockPeriod {
+					return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
+				}
+				lockup.Add(lockup, env.wo.Number(w.hc.NodeCtx()))
+				contractAddr := common.BytesToAddress(tx.Data()[1:common.AddressLength+1], w.chainConfig.Location)
+				internal, err := contractAddr.InternalAndQuaiAddress()
+				if err != nil {
+					return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
+				}
+
+				if env.state.GetCode(internal) == nil || env.wo.NumberU64(common.ZONE_CTX) < params.CoinbaseLockupPrecompileKickInHeight {
+					// Coinbase data is either too long or too small
+					// Coinbase reward is lost
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
+					gasUsed := env.wo.GasUsed()
+					gasUsed += gasUsedForCoinbase
+					env.wo.Header().SetGasUsed(gasUsed)
+					env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+					env.txs = append(env.txs, tx)
+					env.receipts = append(env.receipts, receipt)
+					return []*types.Log{}, false, nil
+				}
+				var delegate common.Address
+				if len(tx.Data()) == common.AddressLength+common.AddressLength+common.HashLength+1 {
+					delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:common.AddressLength+common.AddressLength+1], w.chainConfig.Location)
+				} else {
+					delegate = common.Zero
+				}
+				reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, env.wo.NumberU64(common.ZONE_CTX))
+				// Add the lockup owned by the smart contract with the miner as beneficiary
+				delete, _, _, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, reward, w.chainConfig.Location, w.logger, parent.ParentHash(common.ZONE_CTX), false)
+				if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
+					return nil, false, fmt.Errorf("could not add new lock: %w", err)
+				}
+				// Store the new lockup key every time
+				env.utxosCreate = append(env.utxosCreate, newCoinbaseLockupHash)
+
+				if delete {
+					env.utxosDelete = append(env.utxosDelete, oldCoinbaseLockupHash)
+				}
+				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
+
+				gasUsed := env.wo.GasUsed()
+				gasUsed += gasUsedForCoinbase
+				env.wo.Header().SetGasUsed(gasUsed)
+				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+				env.receipts = append(env.receipts, receipt)
+				env.txs = append(env.txs, tx)
+
+				return receipt.Logs, true, nil
+			} else {
 				// Coinbase data is either too long or too small
 				// Coinbase reward is lost
 				receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
@@ -1100,58 +1155,6 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				env.receipts = append(env.receipts, receipt)
 				return []*types.Log{}, false, nil
 			}
-			// Create params for uint256 lockup, uint256 balance, address recipient
-			lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
-			if lockup.Uint64() < params.ConversionLockPeriod {
-				return nil, false, fmt.Errorf("coinbase lockup period is less than the minimum lockup period of %d blocks", params.ConversionLockPeriod)
-			}
-			lockup.Add(lockup, env.wo.Number(w.hc.NodeCtx()))
-			contractAddr := common.BytesToAddress(tx.Data()[1:], w.chainConfig.Location)
-			internal, err := contractAddr.InternalAndQuaiAddress()
-			if err != nil {
-				return nil, false, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
-			}
-
-			if env.state.GetCode(internal) == nil || env.wo.NumberU64(common.ZONE_CTX) < params.CoinbaseLockupPrecompileKickInHeight {
-				// Coinbase data is either too long or too small
-				// Coinbase reward is lost
-				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
-				gasUsed := env.wo.GasUsed()
-				gasUsed += gasUsedForCoinbase
-				env.wo.Header().SetGasUsed(gasUsed)
-				env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
-				env.txs = append(env.txs, tx)
-				env.receipts = append(env.receipts, receipt)
-				return []*types.Log{}, false, nil
-			}
-			var delegate common.Address
-			if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
-				delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:], w.chainConfig.Location)
-			} else {
-				delegate = common.Zero
-			}
-			reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, env.wo.NumberU64(common.ZONE_CTX))
-			// Add the lockup owned by the smart contract with the miner as beneficiary
-			delete, _, _, oldCoinbaseLockupHash, newCoinbaseLockupHash, err := vm.AddNewLock(env.state, env.batch, contractAddr, *tx.To(), delegate, common.OneInternal(w.chainConfig.Location), lockupByte, lockup.Uint64(), env.coinbaseLatestEpoch, reward, w.chainConfig.Location, w.logger, parent.ParentHash(common.ZONE_CTX), false)
-			if err != nil || newCoinbaseLockupHash == (common.Hash{}) {
-				return nil, false, fmt.Errorf("could not add new lock: %w", err)
-			}
-			// Store the new lockup key every time
-			env.utxosCreate = append(env.utxosCreate, newCoinbaseLockupHash)
-
-			if delete {
-				env.utxosDelete = append(env.utxosDelete, oldCoinbaseLockupHash)
-			}
-			receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()} // todo: consider adding the reward to the receipt in a log
-
-			gasUsed := env.wo.GasUsed()
-			gasUsed += gasUsedForCoinbase
-			env.wo.Header().SetGasUsed(gasUsed)
-			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
-			env.receipts = append(env.receipts, receipt)
-			env.txs = append(env.txs, tx)
-
-			return receipt.Logs, true, nil
 		}
 	}
 	if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {

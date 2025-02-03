@@ -557,7 +557,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					}
 					lockup.Add(lockup, blockNumber)
 					value := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
-					if len(tx.Data()) == 1 {
+					if len(tx.Data()) == 1+common.HashLength {
+						// Coinbase has no extra data or hash workshare hash as extra data
+						// Coinbase is valid
 						denominations := misc.FindMinDenominations(value)
 						outputIndex := uint16(0)
 						// Iterate over the denominations in descending order
@@ -586,7 +588,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							}
 						}
 						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
-					} else if len(tx.Data()) == common.AddressLength+1 || len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
+					} else if len(tx.Data()) == 1+common.AddressLength+common.HashLength || len(tx.Data()) == 1+common.AddressLength+common.AddressLength+common.HashLength { // 1 byte for lockup, 20 bytes for recipient, 20 bytes for delegate (optional), 32 bytes for workshare hash
 						contractAddr := common.BytesToAddress(tx.Data()[1:common.AddressLength+1], nodeLocation)
 						internal, err := contractAddr.InternalAndQuaiAddress()
 						if err != nil {
@@ -599,8 +601,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 						} else {
 							var delegate common.Address
-							if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
-								delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:], nodeLocation)
+							if len(tx.Data()) == common.AddressLength+common.AddressLength+common.HashLength+1 {
+								delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:common.AddressLength+common.AddressLength+1], nodeLocation)
 							} else {
 								delegate = common.Zero
 							}
@@ -630,14 +632,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					if err != nil {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("coinbase tx %x has invalid recipient: %w", tx.Hash(), err)
 					}
-					if len(tx.Data()) == 1 {
+					if len(tx.Data()) == 1+common.HashLength {
 						// Coinbase is valid, no gas used
 						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
-					} else if len(tx.Data()) != common.AddressLength+1 && len(tx.Data()) != common.AddressLength+common.AddressLength+1 {
-						// Coinbase data is either too long or too small
-						// Coinbase reward is lost
-						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
-					} else { // Quai coinbase lockup contract
+					} else if len(tx.Data()) == 1+common.AddressLength+common.HashLength || len(tx.Data()) == 1+common.AddressLength+common.AddressLength+common.HashLength { // Quai coinbase lockup contract
 						// Create params for uint256 lockup, uint256 balance, address recipient
 						lockup := new(big.Int).SetUint64(params.LockupByteToBlockDepth[lockupByte])
 						if lockup.Uint64() < params.ConversionLockPeriod {
@@ -657,8 +655,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 						} else {
 							var delegate common.Address
-							if len(tx.Data()) == common.AddressLength+common.AddressLength+1 {
-								delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:], nodeLocation)
+							if len(tx.Data()) == common.AddressLength+common.AddressLength+common.HashLength+1 {
+								delegate = common.BytesToAddress(tx.Data()[common.AddressLength+1:common.AddressLength+common.AddressLength+1], nodeLocation)
 							} else {
 								delegate = common.Zero
 							}
@@ -683,6 +681,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 								receipt.GasUsed = params.TxGas
 							}
 						}
+					} else {
+						// Coinbase data is either too long or too small
+						// Coinbase reward is lost
+						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					}
 					receipts = append(receipts, receipt)
 					allLogs = append(allLogs, receipt.Logs...)
@@ -1037,7 +1039,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			if shareReward.Cmp(common.Big0) == 0 {
 				shareReward = big.NewInt(1)
 			}
-			emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: share.Data()}))
+			emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: append(share.Data(), share.Hash().Bytes()...)}))
 		}
 	}
 
