@@ -52,6 +52,7 @@ type Genesis struct {
 	Difficulty *big.Int            `json:"difficulty"`
 	Mixhash    common.Hash         `json:"mixHash"`
 	Coinbase   common.Address      `json:"coinbase"`
+	AllocHash  common.Hash         `json:"allocHash"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -237,7 +238,7 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 	wo.WorkObjectHeader().SetTime(g.Timestamp)
 	wo.WorkObjectHeader().SetLock(0)
 	wo.WorkObjectHeader().SetPrimaryCoinbase(common.Zero)
-	wo.Header().SetExtra(g.ExtraData)
+	wo.Header().SetExtra(append(g.ExtraData, g.AllocHash.Bytes()...))
 	wo.Header().SetGasLimit(g.GasLimit)
 	wo.Header().SetGasUsed(0)
 	wo.Header().SetExpansionNumber(uint8(startingExpansionNumber))
@@ -267,6 +268,9 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 		wo.SetNumber(big.NewInt(0), i)
 		wo.SetParentHash(common.Hash{}, i)
 	}
+	
+	wo.WorkObjectHeader().SetHeaderHash(wo.Header().Hash())
+
 	return wo
 }
 

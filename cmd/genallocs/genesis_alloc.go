@@ -93,7 +93,7 @@ func GenerateGenesisUnlocks(filename string) ([]GenesisAccount, error) {
 }
 
 // Performs verification tasks on provided unlock info.
-func VerifyGenesisAllocs(filename string, expectedHash []byte) ([]GenesisAccount, error) {
+func VerifyGenesisAllocs(filename string, expectedHash common.Hash) ([]GenesisAccount, error) {
 	// Open the JSON file
 	path := filepath.Clean(filename)
 	file, err := os.Open(path)
@@ -109,7 +109,7 @@ func VerifyGenesisAllocs(filename string, expectedHash []byte) ([]GenesisAccount
 		return nil, err
 	}
 	hash := hasher.Sum(nil)
-	if !bytes.Equal(expectedHash, hash) {
+	if !bytes.Equal(hash, expectedHash.Bytes()) {
 		return nil, errors.New("invalid genesis unlocks")
 	}
 
