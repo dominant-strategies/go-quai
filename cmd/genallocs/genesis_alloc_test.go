@@ -22,15 +22,21 @@ const (
 		},
 		{
 			"unlockSchedule": 2,
-			"address": "0x0000000000000000000000000000000000000001",
+			"address": "0x0000000000000000000000000000000000000002",
 			"award": 500000000000000000000000,
 			"vested": 500000000000000000000000
 		},
 		{
 			"unlockSchedule": 3,
-			"address": "0x0000000000000000000000000000000000000002",
+			"address": "0x0000000000000000000000000000000000000003",
 			"award": 7000000000000000000000000,
 			"vested": 7000000000000000000000000
+		},
+		{
+			"unlockSchedule": 3,
+			"address": "0x0000000000000000000000000000000000000003",
+			"award": 4000000000000000000000000,
+			"vested": 1000000000000000000000000
 		},
 		{
 			"unlockSchedule": 3,
@@ -42,7 +48,7 @@ const (
 )
 
 var (
-	expectedAllocs = [4]*GenesisAccount{
+	expectedAllocs = [5]*GenesisAccount{
 		{
 			UnlockSchedule:  1,
 			Address:         common.HexToAddress("0x0000000000000000000000000000000000000001", common.Location{0, 0}),
@@ -53,7 +59,7 @@ var (
 
 		{
 			UnlockSchedule:  2,
-			Address:         common.HexToAddress("0x0000000000000000000000000000000000000001", common.Location{0, 0}),
+			Address:         common.HexToAddress("0x0000000000000000000000000000000000000002", common.Location{0, 0}),
 			Award:           new(big.Int).Mul(big.NewInt(500000), common.Big10e18),
 			Vested:          new(big.Int).Mul(big.NewInt(500000), common.Big10e18),
 			BalanceSchedule: &orderedmap.OrderedMap[uint64, *big.Int]{},
@@ -61,9 +67,17 @@ var (
 
 		{
 			UnlockSchedule:  3,
-			Address:         common.HexToAddress("0x0000000000000000000000000000000000000002", common.Location{0, 0}),
+			Address:         common.HexToAddress("0x0000000000000000000000000000000000000003", common.Location{0, 0}),
 			Award:           new(big.Int).Mul(big.NewInt(7000000), common.Big10e18),
 			Vested:          new(big.Int).Mul(big.NewInt(7000000), common.Big10e18),
+			BalanceSchedule: &orderedmap.OrderedMap[uint64, *big.Int]{},
+		},
+
+		{
+			UnlockSchedule:  3,
+			Address:         common.HexToAddress("0x0000000000000000000000000000000000000003", common.Location{0, 0}),
+			Award:           new(big.Int).Mul(big.NewInt(4000000), common.Big10e18),
+			Vested:          new(big.Int).Mul(big.NewInt(1000000), common.Big10e18),
 			BalanceSchedule: &orderedmap.OrderedMap[uint64, *big.Int]{},
 		},
 
@@ -151,7 +165,6 @@ func TestCalculatingGenallocs(t *testing.T) {
 		require.Equal(t, expectedAllocValues.numUnlocks, uint64(actualAlloc.BalanceSchedule.Len()))
 
 		totalAdded := new(big.Int)
-		// for blockNum, actualUnlock := range actualAlloc.BalanceSchedule.Oldest() {
 		for actualUnlock := actualAlloc.BalanceSchedule.Oldest(); actualUnlock != nil; actualUnlock = actualUnlock.Next() {
 			blockNum := actualUnlock.Key
 			// There should never be unlocks after month 0, before month 12.

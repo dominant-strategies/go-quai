@@ -1529,7 +1529,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 
 	cfg.Genesis.AllocHash = params.AllocHash
 	if nodeLocation.Equal(common.Location{0, 0}) {
-		cfg.GenesisAllocs, err = genallocs.VerifyGenesisAllocs("cmd/genallocs/testnet_genesis_alloc.json", cfg.Genesis.AllocHash)
+		cfg.GenesisAllocs, err = genallocs.VerifyGenesisAllocs("cmd/genallocs/genesis_alloc.json", cfg.Genesis.AllocHash)
 		if err != nil {
 			log.Global.WithField("err", err).Fatal("Unable to allocate genesis accounts")
 		}

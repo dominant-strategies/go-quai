@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"lukechampine.com/blake3"
@@ -186,6 +187,10 @@ func (account *GenesisAccount) calculateLockedBalances() {
 		// Calculate total added vs expected total. Add rounding balance to final unlock.
 		roundingDifference := new(big.Int).Sub(account.Vested, totalDistributed)
 		lastUnlockBlock := lastUnlockIndex * params.BlocksPerMonth
-		account.BalanceSchedule.Set(lastUnlockBlock, new(big.Int).Add(quaiPerUnlock, roundingDifference))
+		finalUnlockAmount, ok := account.BalanceSchedule.Get(lastUnlockBlock)
+		if !ok {
+			log.Global.WithField("lastUnlockBlock", lastUnlockBlock).Fatal("Issue generating balance schedule")
+		}
+		account.BalanceSchedule.Set(lastUnlockBlock, new(big.Int).Add(finalUnlockAmount, roundingDifference))
 	}
 }
