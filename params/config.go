@@ -53,12 +53,12 @@ const (
 var (
 	// ColosseumChainConfig is the chain parameters to run a node on the Colosseum network.
 	ProgpowColosseumChainConfig = &ChainConfig{
-		ChainID: big.NewInt(9000),
+		ChainID: big.NewInt(9),
 		Progpow: new(ProgpowConfig),
 	}
 
 	Blake3PowColosseumChainConfig = &ChainConfig{
-		ChainID:   big.NewInt(9000),
+		ChainID:   big.NewInt(9),
 		Blake3Pow: new(Blake3powConfig),
 	}
 
