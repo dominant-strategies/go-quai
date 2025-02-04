@@ -268,7 +268,7 @@ func (g *Genesis) ToBlock(startingExpansionNumber uint64) *types.WorkObject {
 		wo.SetNumber(big.NewInt(0), i)
 		wo.SetParentHash(common.Hash{}, i)
 	}
-	
+
 	wo.WorkObjectHeader().SetHeaderHash(wo.Header().Hash())
 
 	return wo
@@ -328,7 +328,7 @@ func DefaultColosseumGenesisBlock(consensusEngine string, nonce uint64, extra []
 		Nonce:      nonce,
 		ExtraData:  extra,
 		GasLimit:   12000000,
-		Difficulty: big.NewInt(30000000000),
+		Difficulty: big.NewInt(1500000000000),
 	}
 	if consensusEngine == "blake3" {
 		genesis.Config = params.Blake3PowColosseumChainConfig
