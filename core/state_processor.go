@@ -1178,7 +1178,7 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 			// Check if the transaction is a coinbase transaction
 			if types.IsCoinBaseTx(etx) && etx.To().IsInQuaiLedgerScope() {
 
-				if len(etx.Data()) == 1 {
+				if len(etx.Data()) == 1+common.HashLength {
 					// Redeem all unlocked Quai for the coinbase address
 					internal, err := etx.To().InternalAddress()
 					if err != nil {
@@ -1209,8 +1209,12 @@ func RedeemLockedQuai(hc *HeaderChain, header *types.WorkObject, parent *types.W
 							Amt:  balance,
 						})
 					}
-				} else if len(etx.Data()) == common.AddressLength+1 || len(etx.Data()) == common.AddressLength+common.AddressLength+1 {
+				} else if len(etx.Data()) == 1+common.AddressLength+common.HashLength || len(etx.Data()) == 1+common.AddressLength+common.AddressLength+common.HashLength {
 					// This coinbase is owned by a smart contract and must be unlocked manually
+					continue
+				} else {
+					// Strange data length, log an error and skip
+					hc.logger.Errorf("Invalid data length for coinbase ETX %s: %d", etx.Hash().String(), len(etx.Data()))
 					continue
 				}
 			}
