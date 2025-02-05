@@ -1011,7 +1011,7 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 	if err != nil {
 		panic(err)
 	}
-	err = rawdb.WriteAddressLockups(c.chainDb, addressLockups)
+	err = rawdb.WriteAddressLockups(c.chainDb, make(map[[20]byte][]*types.Lockup)) // disable lockup processing
 	if err != nil {
 		panic(err)
 	}
@@ -1157,7 +1157,7 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, nodeCtx int
 		if err != nil {
 			panic(err)
 		}
-		err = rawdb.WriteAddressLockups(c.chainDb, addressLockups)
+		err = rawdb.WriteAddressLockups(c.chainDb, make(map[[20]byte][]*types.Lockup)) // disable lockup processing
 		if err != nil {
 			panic(err)
 		}
