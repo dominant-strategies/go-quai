@@ -28,7 +28,7 @@ var (
 	// Progpow GenesisHashes
 	ProgpowColosseumGenesisHash  = common.HexToHash("0xac81c28f1a72591b87b5f16c9793cdc0e87c45c6d426d1a364c3b8f6386b5b8b")
 	ProgpowGardenGenesisHash     = common.HexToHash("0xe6d0f9327aae915db55ab0cf9da7841c64e4ae39baa251c17586d8d25b59afbc")
-	ProgpowOrchardGenesisHash    = common.HexToHash("0xe6cba6ffada9b17e267317722d5a33e2e904bf4a1e3138b5f4969146d3787b05")
+	ProgpowOrchardGenesisHash    = common.HexToHash("0x7c10e30ca616616411ac84fce6c4121d8fce6a24bff725c30a1eaccb8f85920e")
 	ProgpowLighthouseGenesisHash = common.HexToHash("0xf86f23baa7818c62b0d4bd5f2100230eab65392e0b115b91f446b299fddf38d8")
 	ProgpowLocalGenesisHash      = common.HexToHash("0x445186cbbd8d387806aeeb089c1763ccf21a299ac8ae37d07bb283f5b6ada572")
 
