@@ -117,6 +117,7 @@ var (
 	createdCoinbaseLockupsPrefix = []byte("ccl") // createdCoinbaseLockupsPrefix + hash -> [][]byte
 	deletedCoinbaseLockupsPrefix = []byte("dcl") // deletedCoinbaseLockupsPrefix + hash -> [][]byte
 	supplyAnalyticsPrefix        = []byte("sa")  // supplyAnalyticsKey + hash -> SupplyAnalytics
+	lockupDeltasPrefix           = []byte("ld")  // lockupDeltasPrefix + hash -> []types.LockupDelta
 )
 
 const (
@@ -313,6 +314,10 @@ func addressUtxosKey(address [20]byte) []byte {
 
 func addressLockupsKey(address [20]byte) []byte {
 	return append(AddressLockupsPrefix, address[:]...)
+}
+
+func lockupDeltasKey(hash common.Hash) []byte {
+	return append(lockupDeltasPrefix, hash.Bytes()...)
 }
 
 var UtxoKeyLength = len(UtxoPrefix) + common.HashLength + 2

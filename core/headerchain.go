@@ -563,6 +563,9 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 				coinbaseCreatedHashes++
 			}
 			hc.logger.Infof("Deleted %d created coinbase lockups", coinbaseCreatedHashes)
+			if hc.config.IndexAddressUtxos {
+				rawdb.UndoNewLockupsForBlock(batch, hc.headerDb, prevHeader.Hash())
+			}
 		}
 		prevHeader = hc.GetHeaderByHash(prevHeader.ParentHash(hc.NodeCtx()))
 		if prevHeader == nil {
