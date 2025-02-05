@@ -260,6 +260,20 @@ message ProtoBetas {
 message ProtoLockup {
   bytes value = 1;
   uint64 unlock_height = 2;
+  common.ProtoAddress address = 3;
+}
+
+message ProtoUnlock {
+  bytes value = 1;
+  common.ProtoAddress address = 2;
+}
+
+message ProtoUnlocks {
+  repeated ProtoUnlock unlocks = 1;
+}
+
+message ProtoLockedBalance {
+  bytes value = 1;
 }
 
 message ProtoLockups {

@@ -152,6 +152,15 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 }
 
 func (s *PublicBlockChainQuaiAPI) GetLockedBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
+	internal, err := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation()).InternalAndQuaiAddress()
+	if err != nil {
+		return nil, err
+	}
+	balance := rawdb.ReadLockedBalance(s.b.Database(), internal)
+	return (*hexutil.Big)(balance), nil
+}
+
+func (s *PublicBlockChainQuaiAPI) GetLegacyLockedBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBalance call can only be made in zone chain")
