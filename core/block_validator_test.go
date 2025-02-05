@@ -14,7 +14,7 @@ func TestCalcGasLimit(t *testing.T) {
 	emptyWo := types.EmptyWorkObject(common.ZONE_CTX)
 
 	blockNumbers := []uint64{0, 10, params.TimeToStartTx, params.BlocksPerWeek, params.BlocksPerMonth, 2 * params.BlocksPerMonth, 3 * params.BlocksPerMonth / 2, 4 * params.BlocksPerMonth}
-	expectedGasLimit := []uint64{0, 0, 12500000, 0, 25000000, 50000000, 37500000, 50000000}
+	expectedGasLimit := []uint64{0, 0, 12000000, 12000000, 25000000, 50000000, 37500000, 50000000}
 
 	for i := 0; i < len(blockNumbers); i++ {
 		emptyWo.Header().SetGasLimit(params.MinGasLimit(blockNumbers[i]))

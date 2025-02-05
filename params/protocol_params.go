@@ -168,7 +168,7 @@ var (
 	OrchardDurationLimit              = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LighthouseDurationLimit           = big.NewInt(5) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	LocalDurationLimit                = big.NewInt(1) // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-	TimeToStartTx              uint64 = 15 * BlocksPerDay
+	TimeToStartTx              uint64 = 100
 	BlocksPerDay               uint64 = new(big.Int).Div(big.NewInt(86400), DurationLimit).Uint64() // BlocksPerDay is the number of blocks per day assuming 5 second block time
 	BlocksPerWeek              uint64 = 7 * BlocksPerDay
 	BlocksPerMonth             uint64 = 30 * BlocksPerDay
@@ -208,8 +208,8 @@ var (
 	OneOverBaseFeeControllerAlpha               = big.NewInt(100)
 	BaseFeeMultiplier                           = big.NewInt(50)
 
-	ConversionLockPeriod uint64 = 2 * BlocksPerWeek
-	CoinbaseEpochBlocks  uint64 = 50000
+	ConversionLockPeriod uint64 = 100
+	CoinbaseEpochBlocks  uint64 = 100
 
 	StartingKQuaiDiscount               = big.NewInt(100)
 	StartingConversionFlowAmount        = new(big.Int).Mul(big.NewInt(10000), big.NewInt(Ether)) // Starting conversion flow amount in Quai
