@@ -600,7 +600,7 @@ var (
 
 	GenesisNonce = Flag{
 		Name:  c_NodeFlagPrefix + "genesis-nonce",
-		Value: "",
+		Value: "23621466532946281564673705261963422",
 		Usage: "Nonce hex string to use for the genesis block" + generateEnvDoc(c_NodeFlagPrefix+"genesis-nonce"),
 	}
 )
