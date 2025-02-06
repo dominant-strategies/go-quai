@@ -235,6 +235,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		allLogs                  []*types.Log
 		gp                       = new(types.GasPool).AddGas(block.GasLimit())
 		numTxsProcessed          = big.NewInt(0)
+		newLockedQuai            = make(map[common.InternalAddress]*big.Int)
 		blockMinFee, blockMaxFee *big.Int
 	)
 	start := time.Now()
@@ -637,6 +638,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					}
 					if len(tx.Data()) == 1+common.HashLength {
 						// Coinbase is valid, no gas used
+						if internal, err := tx.To().InternalAddress(); err == nil && p.config.IndexAddressUtxos {
+							if balance, exists := newLockedQuai[internal]; exists {
+								newLockedQuai[internal] = balance.Add(balance, tx.Value())
+							} else {
+								newLockedQuai[internal] = new(big.Int).Set(tx.Value())
+							}
+						}
 						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}
 					} else if len(tx.Data()) == 1+common.AddressLength+common.HashLength || len(tx.Data()) == 1+common.AddressLength+common.AddressLength+common.HashLength { // Quai coinbase lockup contract
 						// Create params for uint256 lockup, uint256 balance, address recipient
@@ -810,6 +818,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					// subtract the minimum tx gas from the gas pool
 					if err := gp.SubGas(params.QiToQuaiConversionGas); err != nil {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+					}
+					if internal, err := tx.To().InternalAddress(); err == nil && p.config.IndexAddressUtxos {
+						if balance, exists := newLockedQuai[internal]; exists {
+							newLockedQuai[internal] = balance.Add(balance, tx.Value())
+						} else {
+							newLockedQuai[internal] = new(big.Int).Set(tx.Value())
+						}
 					}
 					*usedGas += params.QiToQuaiConversionGas
 					totalEtxGas += params.QiToQuaiConversionGas
@@ -1108,6 +1123,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	}
 	if err := rawdb.WriteSupplyAnalyticsForBlock(batch, p.hc.headerDb, blockHash, block.ParentHash(nodeCtx), statedb.SupplyAdded, statedb.SupplyRemoved, supplyAddedQi, supplyRemovedQi); err != nil {
 		p.logger.Errorf("failed to write supply analytics for block %x: %v", blockHash, err)
+	}
+	if p.config.IndexAddressUtxos {
+		rawdb.WriteNewLockups(batch, p.hc.headerDb, blockHash, newLockedQuai, unlocks)
 	}
 	return receipts, emittedEtxs, allLogs, statedb, *usedGas, *usedState, utxoSetSize, multiSet, unlocks, nil
 }

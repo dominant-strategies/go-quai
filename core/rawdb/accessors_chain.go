@@ -1929,3 +1929,125 @@ func ReadSupplyAnalyticsForBlock(db ethdb.Reader, blockHash common.Hash) (*big.I
 	totalSupplyQi := new(big.Int).SetBytes(protoSupplyAnalytics.TotalSupplyQi)
 	return supplyAddedQuai, supplyRemovedQuai, totalSupplyQuai, supplyAddedQi, supplyRemovedQi, totalSupplyQi, nil
 }
+
+func WriteNewLockups(db ethdb.KeyValueWriter, readDb ethdb.Reader, blockHash common.Hash, newLocks map[common.InternalAddress]*big.Int, newUnlocks []common.Unlock) {
+
+	deltas := make(map[common.InternalAddress]*big.Int)
+	for addr, amount := range newLocks {
+		if _, ok := deltas[addr]; !ok {
+			deltas[addr] = new(big.Int).Set(amount)
+		} else {
+			// Shouldn't be possible
+			db.Logger().Errorf("Address %s has multiple lockups\n", addr)
+			deltas[addr].Add(deltas[addr], amount)
+		}
+	}
+	for _, unlock := range newUnlocks {
+		if _, ok := deltas[unlock.Addr]; !ok {
+			deltas[unlock.Addr] = new(big.Int).Neg(unlock.Amt)
+		} else {
+			deltas[unlock.Addr].Sub(deltas[unlock.Addr], unlock.Amt)
+		}
+	}
+	protoDeltas := &types.ProtoKeysAndValues{KeysAndValues: make([]*types.ProtoKeyValue, 0, len(deltas))}
+	for addr, delta := range deltas {
+		protoDeltas.KeysAndValues = append(protoDeltas.KeysAndValues, &types.ProtoKeyValue{
+			Key:   addr.Bytes(),
+			Value: delta.Bytes(),
+		})
+		data, _ := readDb.Get(addressLockupsKey(addr))
+		if len(data) == 0 {
+			if delta.Sign() >= 0 {
+				if err := db.Put(addressLockupsKey(addr), delta.Bytes()); err != nil {
+					db.Logger().WithField("err", err).Error("Failed to store new lockups 1")
+				}
+			} else {
+				db.Logger().Errorf("Address %s has negative delta %s\n", addr, delta)
+				if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
+					db.Logger().WithField("err", err).Error("Failed to store new lockups 2")
+				}
+			}
+			continue
+		} else if len(data) > 32 {
+			db.Logger().Errorf("Address %s has invalid lockup data %s\n", addr, data)
+			continue
+		}
+		value := new(big.Int).SetBytes(data)
+		value.Add(value, delta)
+		if value.Sign() < 0 {
+			db.Logger().Errorf("Address %s has negative lockup %s\n", addr, value)
+			if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
+				db.Logger().WithField("err", err).Error("Failed to store new lockups 3")
+			}
+		} else {
+			if err := db.Put(addressLockupsKey(addr), value.Bytes()); err != nil {
+				db.Logger().WithField("err", err).Error("Failed to store new lockups 4")
+			}
+		}
+	}
+	data, err := proto.Marshal(protoDeltas)
+	if err != nil {
+		db.Logger().WithField("err", err).Error("Failed to store new lockups")
+		return
+	}
+	if err := db.Put(lockupDeltasKey(blockHash), data); err != nil {
+		db.Logger().WithField("err", err).Error("Failed to store new lockups")
+	}
+}
+
+func UndoNewLockupsForBlock(db ethdb.KeyValueWriter, readDb ethdb.Reader, blockHash common.Hash) {
+	data, _ := readDb.Get(lockupDeltasKey(blockHash))
+	if len(data) == 0 {
+		return
+	}
+	protoDeltas := new(types.ProtoKeysAndValues)
+	if err := proto.Unmarshal(data, protoDeltas); err != nil {
+		db.Logger().WithField("err", err).Error("Failed to unmarshal lockup deltas")
+		return
+	}
+	for _, delta := range protoDeltas.KeysAndValues {
+		if len(delta.Key) != common.AddressLength {
+			db.Logger().Errorf("Invalid address length %d\n", len(delta.Key))
+			continue
+		}
+		addr := common.InternalAddress(delta.Key)
+		amount := new(big.Int).Neg(new(big.Int).SetBytes(delta.Value))
+		data, _ := readDb.Get(addressLockupsKey(addr))
+		if len(data) == 0 {
+			if amount.Sign() >= 0 {
+				if err := db.Put(addressLockupsKey(addr), amount.Bytes()); err != nil {
+					db.Logger().WithField("err", err).Error("Failed to store new lockups")
+				}
+			} else {
+				db.Logger().Errorf("Address %s has negative delta %s\n", addr, delta)
+				if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
+					db.Logger().WithField("err", err).Error("Failed to store new lockups")
+				}
+			}
+			continue
+		} else if len(data) > 32 {
+			db.Logger().Errorf("Address %s has invalid lockup data %s\n", addr, data)
+			continue
+		}
+		value := new(big.Int).SetBytes(data)
+		value.Add(value, amount)
+		if value.Sign() < 0 {
+			db.Logger().Errorf("Address %s has negative lockup %s\n", addr, value)
+			if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
+				db.Logger().WithField("err", err).Error("Failed to store new lockups")
+			}
+		} else {
+			if err := db.Put(addressLockupsKey(addr), value.Bytes()); err != nil {
+				db.Logger().WithField("err", err).Error("Failed to store new lockups")
+			}
+		}
+	}
+}
+
+func ReadLockedBalance(db ethdb.Reader, addr common.InternalAddress) *big.Int {
+	data, _ := db.Get(addressLockupsKey(addr))
+	if len(data) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).SetBytes(data)
+}
