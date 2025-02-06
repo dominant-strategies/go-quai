@@ -18,7 +18,10 @@
 package quaiconfig
 
 import (
+	"fmt"
 	"math/big"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/cmd/genallocs"
@@ -216,4 +219,17 @@ func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location,
 	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
+}
+
+func (c Config) String() string {
+	var fields []string
+	v := reflect.ValueOf(c)
+	t := reflect.TypeOf(c)
+	for i := 0; i < t.NumField(); i++ {
+		if t.Field(i).Name == "GenesisAllocs" {
+			continue
+		}
+		fields = append(fields, fmt.Sprintf("%s: %v", t.Field(i).Name, v.Field(i).Interface()))
+	}
+	return fmt.Sprintf("Config{%s}", strings.Join(fields, ", "))
 }
