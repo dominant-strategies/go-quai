@@ -1260,6 +1260,9 @@ func (hc *HeaderChain) CalcBaseFee(block *types.WorkObject) *big.Int {
 	if hc.IsGenesisHash(block.Hash()) {
 		return big.NewInt(0)
 	} else {
+		if block.NumberU64(common.ZONE_CTX) > params.OrchardBaseFeeChangeBlock {
+			return new(big.Int).SetInt64(params.GWei)
+		}
 		var exchangeRate *big.Int
 		if hc.IsGenesisHash(block.ParentHash(common.ZONE_CTX)) {
 			exchangeRate = params.ExchangeRate
