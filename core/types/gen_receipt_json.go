@@ -29,6 +29,8 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		BlockNumber       *hexutil.Big   `json:"blockNumber,omitempty"`
 		TransactionIndex  hexutil.Uint   `json:"transactionIndex"`
 		OutboundEtxs      []*Transaction `json:"outboundEtxs"`
+		Error 		      string         `json:"error,omitempty"`
+		RevertReason      string 	     `json:"revertReason,omitempty"`
 	}
 	var enc Receipt
 	enc.Type = hexutil.Uint64(r.Type)
@@ -44,6 +46,8 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.BlockHash = r.BlockHash
 	enc.BlockNumber = (*hexutil.Big)(r.BlockNumber)
 	enc.TransactionIndex = hexutil.Uint(r.TransactionIndex)
+	enc.Error = r.Error
+	enc.RevertReason = r.RevertReason
 	return json.Marshal(&enc)
 }
 
@@ -63,6 +67,8 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		BlockNumber       *hexutil.Big    `json:"blockNumber,omitempty"`
 		TransactionIndex  *hexutil.Uint   `json:"transactionIndex"`
 		OutboundEtxs      []*Transaction  `json:"outboundEtxs"`
+		Error 		   	  *string         `json:"error,omitempty"`
+		RevertReason      *string 	      `json:"revertReason,omitempty"`
 	}
 	var dec Receipt
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -111,6 +117,12 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	}
 	if dec.OutboundEtxs != nil {
 		r.OutboundEtxs = dec.OutboundEtxs
+	}
+	if dec.Error != nil {
+		r.Error = *dec.Error
+	}
+	if dec.RevertReason != nil {
+		r.RevertReason = *dec.RevertReason
 	}
 	return nil
 }
