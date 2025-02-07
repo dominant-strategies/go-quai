@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -739,12 +740,7 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 func IsGenesisHash(db ethdb.Reader, hash common.Hash) bool {
 	genesisHashes := ReadGenesisHashes(db)
-	for _, genesisHash := range genesisHashes {
-		if hash == genesisHash {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(genesisHashes, hash)
 }
 
 // FindCommonAncestor returns the last common ancestor of two block headers
