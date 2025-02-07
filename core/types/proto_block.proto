@@ -147,6 +147,8 @@ message ProtoReceiptForStorage {
   common.ProtoAddress contract_address = 5;
   uint64 gas_used = 6;
   ProtoTransactions outbound_etxs = 7;
+  string error = 8;
+  string revert_reason = 9;
 }
 
 message ProtoReceiptsForStorage {

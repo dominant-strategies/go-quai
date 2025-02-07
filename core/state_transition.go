@@ -18,16 +18,19 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/quai/abi"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -520,4 +523,35 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
+}
+
+// revertError is an API error that encompassas an EVM revertal with JSON error
+// code and a binary data blob.
+type RevertError struct {
+	error
+	reason    string // revert reason hex encoded
+	unpackErr error
+}
+
+// ErrorCode returns the JSON error code for a revertal.
+func (e *RevertError) ErrorCode() int {
+	return 3
+}
+
+// ErrorData returns the hex encoded revert reason.
+func (e *RevertError) ErrorData() interface{} {
+	return e.reason
+}
+
+func NewRevertError(result *ExecutionResult, nodeLocation common.Location) *RevertError {
+	reason, errUnpack := abi.UnpackRevert(result.Revert(), nodeLocation)
+	err := errors.New("execution reverted")
+	if errUnpack == nil {
+		err = fmt.Errorf("execution reverted: %v", reason)
+	}
+	return &RevertError{
+		error:     err,
+		reason:    hexutil.Encode(result.Revert()),
+		unpackErr: errUnpack,
+	}
 }

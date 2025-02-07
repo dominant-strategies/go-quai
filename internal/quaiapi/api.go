@@ -39,7 +39,6 @@ import (
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
-	"github.com/dominant-strategies/go-quai/quai/abi"
 	"github.com/dominant-strategies/go-quai/rlp"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -638,35 +637,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	return result, nil
 }
 
-func newRevertError(result *core.ExecutionResult, nodeLocation common.Location) *revertError {
-	reason, errUnpack := abi.UnpackRevert(result.Revert(), nodeLocation)
-	err := errors.New("execution reverted")
-	if errUnpack == nil {
-		err = fmt.Errorf("execution reverted: %v", reason)
-	}
-	return &revertError{
-		error:  err,
-		reason: hexutil.Encode(result.Revert()),
-	}
-}
-
-// revertError is an API error that encompassas an EVM revertal with JSON error
-// code and a binary data blob.
-type revertError struct {
-	error
-	reason string // revert reason hex encoded
-}
-
-// ErrorCode returns the JSON error code for a revertal.
-func (e *revertError) ErrorCode() int {
-	return 3
-}
-
-// ErrorData returns the hex encoded revert reason.
-func (e *revertError) ErrorData() interface{} {
-	return e.reason
-}
-
 // Call executes the given transaction on the state for the given block number.
 //
 // Additionally, the caller can specify a batch of contract for fields overriding.
@@ -687,7 +657,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	}
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(result.Revert()) > 0 {
-		return nil, newRevertError(result, s.b.NodeLocation())
+		return nil, core.NewRevertError(result, s.b.NodeLocation())
 	}
 	return result.Return(), result.Err
 }
@@ -820,7 +790,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
 				if len(result.Revert()) > 0 {
-					return 0, newRevertError(result, b.NodeLocation())
+					return 0, core.NewRevertError(result, b.NodeLocation())
 				}
 				return 0, result.Err
 			}

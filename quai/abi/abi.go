@@ -265,15 +265,26 @@ var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
 // `Error(string)`. So it's a special tool for it.
 func UnpackRevert(data []byte, nodeLocation common.Location) (string, error) {
 	if len(data) < 4 {
-		return "", errors.New("invalid data for unpacking")
+		return "", errors.New("invalid data for unpacking (too short)")
 	}
 	if !bytes.Equal(data[:4], revertSelector) {
-		return "", errors.New("invalid data for unpacking")
+		return "", errors.New("invalid data for unpacking (not 'Error(string)' revert selector)")
 	}
-	typ, _ := NewType("string", "", nil)
+	typ, err := NewType("string", "", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create string type: %w", err)
+	}
 	unpacked, err := (Arguments{{Type: typ}}).Unpack(data[4:], nodeLocation)
 	if err != nil {
 		return "", err
 	}
-	return unpacked[0].(string), nil
+	// Check for an empty result
+	if len(unpacked) == 0 {
+		return "", errors.New("no arguments returned when decoding revert reason")
+	}
+	reason, ok := unpacked[0].(string)
+	if !ok {
+		return "", errors.New("decoded revert reason is not a string")
+	}
+	return reason, nil
 }

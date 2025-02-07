@@ -1296,6 +1296,19 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 		evm.UndoCoinbasesDeleted()
+		if config.IndexAddressUtxos {
+			receipt.Error = result.Err.Error()
+			if len(result.Revert()) > 0 {
+				revertError := NewRevertError(result, nodeLocation)
+				if revertError != nil && revertError.unpackErr == nil {
+					// No error unpacking, store the unpacked revert error
+					receipt.RevertReason = revertError.Error()
+				} else if revertError != nil && revertError.unpackErr != nil {
+					// Error unpacking, store the returned revert data so the client can unpack later
+					receipt.RevertReason = revertError.reason
+				}
+			}
+		}
 		logger.WithField("err", result.Err).Debug("Transaction failed")
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
@@ -1893,7 +1906,7 @@ func (p *StateProcessor) Apply(batch ethdb.Batch, block *types.WorkObject) ([]*t
 		return nil, nil, err
 	}
 	time4 := common.PrettyDuration(time.Since(start))
-	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(nodeCtx), receipts)
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(nodeCtx), receipts, p.config.IndexAddressUtxos)
 	time4_5 := common.PrettyDuration(time.Since(start))
 	// Create bloom filter and write it to cache/db
 	bloom := types.CreateBloom(receipts)
