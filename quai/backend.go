@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -353,12 +354,7 @@ func (s *Quai) isLocalBlock(header *types.WorkObject) bool {
 	}
 	// Check whether the given address is specified by `txpool.local`
 	// CLI flag.
-	for _, account := range s.config.TxPool.Locals {
-		if account == internal {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.config.TxPool.Locals, internal)
 }
 
 // shouldPreserve checks whether we should preserve the given block
