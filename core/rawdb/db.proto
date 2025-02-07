@@ -3,12 +3,8 @@ syntax = "proto3";
 package db;
 option go_package = "github.com/dominant-strategies/go-quai/core/rawdb";
 
-import "common/proto_common.proto";
-
 message ProtoNumber { uint64 number = 1; }
 
-message ProtoLegacyTxLookupEntry {
-  common.ProtoHash hash = 1;
-  uint64 block_index = 2;
-  uint64 index = 3;
+message ProtoTxLookupEntry {
+  uint64 block_index = 1;
 }
