@@ -663,7 +663,7 @@ func TestReceiptsStorage(t *testing.T) {
 		t.Fatalf("Non existent receipts returned: %v", entry)
 	}
 
-	WriteReceipts(db, hash, blockNumber, receipts)
+	WriteReceipts(db, hash, blockNumber, receipts, true)
 
 	// Test Read receipts with missing body
 	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
@@ -725,7 +725,7 @@ func TestAncientReceiptsStorage(t *testing.T) {
 	receipts := createReceipts(types.Transactions{tx1, tx2})
 	hash := receipts[0].BlockHash
 
-	freezerDb.AppendAncient(0, hash.Bytes(), receipts.Bytes(freezerDb.Logger()))
+	freezerDb.AppendAncient(0, hash.Bytes(), receipts.Bytes(freezerDb.Logger(), true))
 
 	txs := types.Transactions{tx1, tx2}
 	writeBlockForReceipts(db, hash, txs)

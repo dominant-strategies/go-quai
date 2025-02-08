@@ -70,6 +70,8 @@ type Receipt struct {
 	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
 	ContractAddress common.Address `json:"contractAddress"`
 	GasUsed         uint64         `json:"gasUsed" gencodec:"required"`
+	Error           string         `json:"error,omitempty"`
+	RevertReason    string         `json:"revertReason,omitempty"`
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
@@ -216,10 +218,10 @@ func (r *Receipt) Size() common.StorageSize {
 type ReceiptsForStorage []*ReceiptForStorage
 
 // ProtoEncode converts the receipts to a protobuf representation.
-func (rs ReceiptsForStorage) ProtoEncode() (*ProtoReceiptsForStorage, error) {
+func (rs ReceiptsForStorage) ProtoEncode(storeErrorData bool) (*ProtoReceiptsForStorage, error) {
 	protoReceipts := make([]*ProtoReceiptForStorage, len(rs))
 	for i, r := range rs {
-		protoReceipt, err := r.ProtoEncode()
+		protoReceipt, err := r.ProtoEncode(storeErrorData)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +247,7 @@ func (rs *ReceiptsForStorage) ProtoDecode(protoReceipts *ProtoReceiptsForStorage
 // entire content of a receipt, as opposed to only the consensus fields originally.
 type ReceiptForStorage Receipt
 
-func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
+func (r *ReceiptForStorage) ProtoEncode(storeErrorData bool) (*ProtoReceiptForStorage, error) {
 	ProtoReceiptForStorage := &ProtoReceiptForStorage{
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
@@ -266,6 +268,10 @@ func (r *ReceiptForStorage) ProtoEncode() (*ProtoReceiptForStorage, error) {
 		protoLogs.Logs[i] = protoLog
 	}
 	ProtoReceiptForStorage.Logs = protoLogs
+	if storeErrorData {
+		ProtoReceiptForStorage.Error = r.Error
+		ProtoReceiptForStorage.RevertReason = r.RevertReason
+	}
 	return ProtoReceiptForStorage, nil
 }
 
@@ -303,6 +309,8 @@ func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, lo
 		r.OutboundEtxs = append(r.OutboundEtxs, etx)
 	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.Error = protoReceipt.Error
+	r.RevertReason = protoReceipt.RevertReason
 	return nil
 }
 
@@ -422,13 +430,13 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 }
 
 // Convert the receipts into their storage form and serialize them
-func (rs Receipts) Bytes(logger *logrus.Logger) []byte {
+func (rs Receipts) Bytes(logger *logrus.Logger, storeErrorData bool) []byte {
 	storageReceipts := make(ReceiptsForStorage, len(rs))
 	for i, r := range rs {
 		storageReceipts[i] = (*ReceiptForStorage)(r)
 	}
 
-	protoReceipts, err := storageReceipts.ProtoEncode()
+	protoReceipts, err := storageReceipts.ProtoEncode(storeErrorData)
 	if err != nil {
 		logger.WithField("err", err).Fatal("Failed to proto encode receipt")
 	}
