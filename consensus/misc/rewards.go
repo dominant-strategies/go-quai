@@ -90,7 +90,7 @@ func CalculateQuaiReward(difficulty *big.Int, exchangeRate *big.Int) *big.Int {
 	return reward
 }
 
-// CalculateQiReward caculates the qi that can be received for mining a block and returns value in qits
+// CalculateQiReward calculates the qi that can be received for mining a block and returns value in qits
 func CalculateQiReward(header *types.WorkObjectHeader, difficulty *big.Int) *big.Int {
 	qiReward := new(big.Int).Quo(difficulty, params.OneOverKqi(header.NumberU64()))
 	if qiReward.Cmp(common.Big0) == 0 {
