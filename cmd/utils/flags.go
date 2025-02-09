@@ -415,7 +415,7 @@ var (
 	TxPoolSharingClientsFlag = Flag{
 		Name:  c_TXPoolPrefix + "sharing-clients",
 		Value: "",
-		Usage: "Comma separated list of clients end points that the node would directy share the transactions with" + generateEnvDoc(c_TXPoolPrefix+"sharing-clients"),
+		Usage: "Comma separated list of clients end points that the node would directly share the transactions with" + generateEnvDoc(c_TXPoolPrefix+"sharing-clients"),
 	}
 
 	CacheFlag = Flag{
