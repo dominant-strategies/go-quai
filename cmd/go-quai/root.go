@@ -80,7 +80,7 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) error {
 	// load config from file and environment variables
 	utils.InitConfig()
 
-	// set logger inmediately after parsing cobra flags
+	// set logger immediately after parsing cobra flags
 	logLevel := viper.GetString(utils.LogLevelFlag.Name)
 	log.SetGlobalLogger("", logLevel)
 
