@@ -84,7 +84,7 @@ func (blake3pow *Blake3pow) IntrinsicLogEntropy(powHash common.Hash) *big.Int {
 
 // TotalLogEntropy returns the total entropy reduction if the chain since genesis to the given header
 func (blake3pow *Blake3pow) TotalLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
-	// Treating the genesis block differntly
+	// Treating the genesis block differently
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
@@ -119,7 +119,7 @@ func (blake3pow *Blake3pow) TotalLogEntropy(chain consensus.ChainHeaderReader, h
 }
 
 func (blake3pow *Blake3pow) DeltaLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
-	// Treating the genesis block differntly
+	// Treating the genesis block differently
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
@@ -228,7 +228,7 @@ func (blake3pow *Blake3pow) WorkShareLogEntropy(chain consensus.ChainHeaderReade
 }
 
 func (blake3pow *Blake3pow) UncledDeltaLogEntropy(chain consensus.ChainHeaderReader, header *types.WorkObject) *big.Int {
-	// Treating the genesis block differntly
+	// Treating the genesis block differently
 	if chain.IsGenesisHash(header.Hash()) {
 		return big.NewInt(0)
 	}
