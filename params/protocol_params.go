@@ -203,7 +203,7 @@ var (
 	MaxTimeDiffBetweenBlocks             int64  = 100                     // Max time difference between the blocks to 100 secs
 	OneOverAlpha                                = big.NewInt(200)         // The alpha value for the quai to qi conversion
 	ControllerKickInBlock                uint64 = (7 * BlocksPerWeek) / 4 // This is in order of prime blocks
-	CoinbaseLockupPrecompileKickInHeight        = 5 * BlocksPerWeek       // The height at which the coinbase lockup precompile is enabled
+	CoinbaseLockupPrecompileKickInHeight uint64 = 112000                  // The height at which the coinbase lockup precompile is enabled
 	MinBaseFeeInQits                            = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha               = big.NewInt(100)
 	BaseFeeMultiplier                           = big.NewInt(50)
