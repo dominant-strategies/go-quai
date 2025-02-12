@@ -100,17 +100,6 @@ type receiptRLP struct {
 	OutboundEtxs      []*Transaction
 }
 
-// storedReceiptRLP is the storage encoding of a receipt used in database version 4.
-type storedReceiptRLP struct {
-	Status            []byte
-	CumulativeGasUsed uint64
-	TxHash            common.Hash
-	ContractAddress   common.Address
-	Logs              []*LogForStorage
-	OutboundEtxs      []*Transaction
-	GasUsed           uint64
-}
-
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 // Deprecated: create receipts using a struct literal instead.
 func NewReceipt(failed bool, cumulativeGasUsed uint64) *Receipt {
@@ -295,60 +284,6 @@ func (r *ReceiptForStorage) ProtoDecode(protoReceipt *ProtoReceiptForStorage, lo
 		r.OutboundEtxs = append(r.OutboundEtxs, etx)
 	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
-	return nil
-}
-
-// EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
-// into an RLP stream.
-func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
-	enc := &storedReceiptRLP{
-		Status:            (*Receipt)(r).statusEncoding(),
-		CumulativeGasUsed: r.CumulativeGasUsed,
-		Logs:              make([]*LogForStorage, len(r.Logs)),
-		OutboundEtxs:      make([]*Transaction, len(r.OutboundEtxs)),
-	}
-	for i, log := range r.Logs {
-		enc.Logs[i] = (*LogForStorage)(log)
-	}
-	for i, etx := range r.OutboundEtxs {
-		enc.OutboundEtxs[i] = (*Transaction)(etx)
-	}
-	return rlp.Encode(w, enc)
-}
-
-// DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
-// fields of a receipt from an RLP stream.
-func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
-	// Retrieve the entire receipt blob as we need to try multiple decoders
-	blob, err := s.Raw()
-	if err != nil {
-		return err
-	}
-	return decodeStoredReceiptRLP(r, blob)
-}
-
-func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
-	var stored storedReceiptRLP
-	if err := rlp.DecodeBytes(blob, &stored); err != nil {
-		return err
-	}
-	if err := (*Receipt)(r).setStatus(stored.Status); err != nil {
-		return err
-	}
-	r.CumulativeGasUsed = stored.CumulativeGasUsed
-	r.TxHash = stored.TxHash
-	r.ContractAddress = stored.ContractAddress
-	r.GasUsed = stored.GasUsed
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
-	r.OutboundEtxs = make([]*Transaction, len(stored.OutboundEtxs))
-	for i, etx := range stored.OutboundEtxs {
-		r.OutboundEtxs[i] = (*Transaction)(etx)
-	}
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
-
 	return nil
 }
 
