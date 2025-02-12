@@ -234,7 +234,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 //
 // The method starts feeding the section indexes into the first sub-matcher on a
 // new goroutine and returns a sink channel receiving the results.
-func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) (sink chan *partialMatches) {
+func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) chan *partialMatches {
 	// Create the source channel and feed section indexes into
 	source := make(chan *partialMatches, buffer)
 
@@ -263,13 +263,13 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) (s
 	bloomJobs := make(chan *request, buffer)
 
 	for _, bloomField := range m.filters {
-		sink = m.subMatch(sink, bloomJobs, bloomField, session)
+		source = m.subMatch(source, bloomJobs, bloomField, session)
 	}
 	// Start the request distribution
 	session.pend.Add(1)
 	go m.distributor(bloomJobs, session)
 
-	return sink
+	return source
 }
 
 // subMatch creates a sub-matcher that filters for a set of addresses or topics, binary OR-s those matches, then
