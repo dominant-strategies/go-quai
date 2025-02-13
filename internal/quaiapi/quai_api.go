@@ -106,7 +106,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	}
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
-		return nil, errors.New("getBalance call can only be made in zone chain")
+		return nil, fmt.Errorf("getBalance call can only be made in zone chain, current context is %d", nodeCtx)
 	}
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getBalance call can only be made on chain processing the state")

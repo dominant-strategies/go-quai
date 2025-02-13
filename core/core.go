@@ -1324,8 +1324,8 @@ func (c *Core) AddRemotes(txs types.Transactions) {
 	}
 }
 
-func (c *Core) TxPoolPending(enforceTips bool) (map[common.AddressBytes]types.Transactions, error) {
-	return c.sl.txPool.TxPoolPending(enforceTips)
+func (c *Core) TxPoolPending() (map[common.AddressBytes]types.Transactions, error) {
+	return c.sl.txPool.TxPoolPending()
 }
 
 func (c *Core) Get(hash common.Hash) *types.Transaction {

@@ -2081,7 +2081,7 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		return nil
 	}
 
-	pending, err := w.txPool.TxPoolPending(false)
+	pending, err := w.txPool.TxPoolPending()
 	if err != nil {
 		w.logger.WithField("err", err).Error("Failed to get pending transactions")
 		return fmt.Errorf("failed to get pending transactions: %w", err)

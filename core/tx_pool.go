@@ -742,7 +742,7 @@ func (pool *TxPool) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions
 // The enforceTips parameter can be used to do an extra filtering on the pending
 // transactions and only return those whose **effective** tip is large enough in
 // the next pending execution environment.
-func (pool *TxPool) TxPoolPending(enforceTips bool) (map[common.AddressBytes]types.Transactions, error) {
+func (pool *TxPool) TxPoolPending() (map[common.AddressBytes]types.Transactions, error) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
