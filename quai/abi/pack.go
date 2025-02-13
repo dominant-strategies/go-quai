@@ -45,6 +45,14 @@ func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
+		if reflectValue.Kind() == reflect.Struct {
+			// Convert the reflect.Value to an Address struct and call Bytes()
+			address, ok := reflectValue.Interface().(common.Address)
+			if !ok {
+				return []byte{}, errors.New("expected Address type but got something else")
+			}
+			return common.LeftPadBytes(address.Bytes(), 32), nil
+		}
 
 		return common.LeftPadBytes(reflectValue.Bytes(), 32), nil
 	case BoolTy:
