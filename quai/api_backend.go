@@ -371,7 +371,7 @@ func (b *QuaiAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getPoolTransactions can only be called in zone chain")
 	}
-	pending, err := b.quai.core.TxPoolPending(false)
+	pending, err := b.quai.core.TxPoolPending()
 	if err != nil {
 		return nil, err
 	}
