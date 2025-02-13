@@ -214,16 +214,8 @@ func (b *QuaiAPIBackend) GetOutpointsByAddressAndRange(ctx context.Context, addr
 	return b.quai.core.GetOutpointsByAddressAndRange(address, start, end)
 }
 
-func (b QuaiAPIBackend) GetLockupsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.Lockup, error) {
-	return b.quai.core.GetLockupsByAddressAndRange(address, start, end)
-}
-
 func (b *QuaiAPIBackend) AddressOutpoints(ctx context.Context, address common.Address) ([]*types.OutpointAndDenomination, error) {
 	return b.quai.core.GetOutpointsByAddress(address)
-}
-
-func (b *QuaiAPIBackend) AddressLockups(ctx context.Context, address common.Address) ([]*types.Lockup, error) {
-	return b.quai.core.GetLockupsByAddress(address)
 }
 
 func (b *QuaiAPIBackend) UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error) {
