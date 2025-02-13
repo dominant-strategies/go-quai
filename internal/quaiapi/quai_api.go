@@ -160,47 +160,6 @@ func (s *PublicBlockChainQuaiAPI) GetLockedBalance(ctx context.Context, address 
 	return (*hexutil.Big)(balance), nil
 }
 
-func (s *PublicBlockChainQuaiAPI) GetLegacyLockedBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
-	nodeCtx := s.b.NodeCtx()
-	if nodeCtx != common.ZONE_CTX {
-		return nil, errors.New("getBalance call can only be made in zone chain")
-	}
-	if !s.b.ProcessingState() {
-		return nil, errors.New("getBalance call can only be made on chain processing the state")
-	}
-
-	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
-	if addr.IsInQiLedgerScope() {
-		currHeader := s.b.CurrentHeader()
-		utxos, err := s.b.AddressOutpoints(ctx, addr)
-		if utxos == nil || err != nil {
-			return (*hexutil.Big)(big.NewInt(0)), err
-		}
-		if len(utxos) == 0 {
-			return (*hexutil.Big)(big.NewInt(0)), nil
-		}
-		lockedBalance := big.NewInt(0)
-		for _, utxo := range utxos {
-			if utxo.Lock != nil && currHeader.Number(nodeCtx).Cmp(utxo.Lock) < 0 {
-				value := types.Denominations[utxo.Denomination]
-				lockedBalance.Add(lockedBalance, value)
-			}
-		}
-		return (*hexutil.Big)(lockedBalance), nil
-	} else if addr.IsInQuaiLedgerScope() {
-		lockups, err := s.b.AddressLockups(ctx, addr)
-		if lockups == nil || err != nil {
-			return (*hexutil.Big)(big.NewInt(0)), err
-		}
-		lockedBalance := big.NewInt(0)
-		for _, lockup := range lockups {
-			lockedBalance.Add(lockedBalance, lockup.Value)
-		}
-		return (*hexutil.Big)(lockedBalance), nil
-	}
-	return nil, nil
-}
-
 func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, address common.Address) ([]interface{}, error) {
 	if address.IsInQuaiLedgerScope() {
 		return nil, fmt.Errorf("address %s is in Quai ledger scope", address.Hex())
@@ -231,50 +190,6 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	}
 
 	return jsonOutpoints, nil
-}
-
-func (s *PublicBlockChainQuaiAPI) GetLockupsByAddress(ctx context.Context, address common.Address) ([]interface{}, error) {
-	if address.IsInQiLedgerScope() {
-		return nil, fmt.Errorf("address %s is in Qi ledger scope", address.Hex())
-	}
-	lockups, err := s.b.AddressLockups(ctx, address)
-	if err != nil {
-		return nil, err
-	}
-	jsonLockups := make([]interface{}, 0, len(lockups))
-	for _, lockup := range lockups {
-		jsonLockup := map[string]interface{}{
-			"value":        hexutil.Big(*lockup.Value),
-			"unlockHeight": hexutil.Uint64(lockup.UnlockHeight),
-		}
-		jsonLockups = append(jsonLockups, jsonLockup)
-	}
-	return jsonLockups, nil
-}
-
-func (s *PublicBlockChainQuaiAPI) GetLockupsByAddressAndRange(ctx context.Context, address common.Address, start, end hexutil.Uint64) ([]interface{}, error) {
-	if address.IsInQiLedgerScope() {
-		return nil, fmt.Errorf("address %s is in Qi ledger scope", address.Hex())
-	}
-	if start > end {
-		return nil, fmt.Errorf("start is greater than end")
-	}
-	if uint32(end)-uint32(start) > maxOutpointsRange {
-		return nil, fmt.Errorf("range is too large, max range is %d", maxOutpointsRange)
-	}
-	lockups, err := s.b.GetLockupsByAddressAndRange(ctx, address, uint32(start), uint32(end))
-	if err != nil {
-		return nil, err
-	}
-	jsonLockups := make([]interface{}, 0, len(lockups))
-	for _, lockup := range lockups {
-		jsonLockup := map[string]interface{}{
-			"value":        hexutil.Big(*lockup.Value),
-			"unlockHeight": hexutil.Uint64(lockup.UnlockHeight),
-		}
-		jsonLockups = append(jsonLockups, jsonLockup)
-	}
-	return jsonLockups, nil
 }
 
 func (s *PublicBlockChainQuaiAPI) GetLockupsForContractAndMiner(ctx context.Context, ownerContract, beneficiaryMiner common.Address) (map[string]map[string][]interface{}, error) {
