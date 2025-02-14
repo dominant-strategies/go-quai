@@ -301,7 +301,7 @@ var (
 
 	SlicesRunningFlag = Flag{
 		Name:  c_NodeFlagPrefix + "slices",
-		Value: "",
+		Value: "[0 0]",
 		Usage: "All the slices that are running on this node" + generateEnvDoc(c_NodeFlagPrefix+"slices"),
 	}
 
