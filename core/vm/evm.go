@@ -213,14 +213,19 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, 0, ErrInsufficientBalance
 	}
 	if addr.Equal(LockupContractAddresses[[2]byte(evm.chainConfig.Location)]) {
-		ret, err := RunLockupContract(evm, caller.Address(), &gas, input)
+		ret, err = RunLockupContract(evm, caller.Address(), &gas, input)
 		return ret, gas, 0, err
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
-	internalAddr, err := addr.InternalAndQuaiAddress()
+	var internalAddr common.InternalAddress
+	internalAddr, err = addr.InternalAndQuaiAddress()
 	if err != nil {
-		return evm.CreateETX(addr, caller.Address(), gas, value, input)
+		ret, leftOverGas, stateGas, err = evm.CreateETX(addr, caller.Address(), gas, value, input)
+		if err != nil {
+			evm.StateDB.RevertToSnapshot(snapshot)
+		}
+		return ret, leftOverGas, stateGas, err
 	}
 	if !evm.StateDB.Exist(internalAddr) {
 		if !isPrecompile && value.Sign() == 0 {
@@ -315,8 +320,10 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
-		internalAddr, err := addrCopy.InternalAndQuaiAddress()
+		var internalAddr common.InternalAddress
+		internalAddr, err = addrCopy.InternalAndQuaiAddress()
 		if err != nil {
+			gas = 0
 			return nil, gas, err
 		}
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -344,6 +351,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
+
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -355,8 +363,10 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
-		internalAddr, err := addrCopy.InternalAndQuaiAddress()
+		var internalAddr common.InternalAddress
+		internalAddr, err = addrCopy.InternalAndQuaiAddress()
 		if err != nil {
+			gas = 0
 			return nil, gas, err
 		}
 		// Initialise a new contract and make initialise the delegate values
@@ -397,8 +407,10 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if p, isPrecompile, addr := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
-		internalAddr, err := addr.InternalAndQuaiAddress()
+		var internalAddr common.InternalAddress
+		internalAddr, err = addr.InternalAndQuaiAddress()
 		if err != nil {
+			gas = 0
 			return nil, gas, err
 		}
 		// At this point, we use a copy of address. If we don't, the go compiler will
