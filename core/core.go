@@ -1380,8 +1380,8 @@ func (c *Core) ContentFrom(addr common.Address) (types.Transactions, types.Trans
 	}
 	return c.sl.txPool.ContentFrom(internal)
 }
-func (c *Core) SendTxToSharingClients(tx *types.Transaction) {
-	c.sl.txPool.SendTxToSharingClients(tx)
+func (c *Core) SendTxToSharingClients(tx *types.Transaction) error {
+	return c.sl.txPool.SendTxToSharingClients(tx)
 }
 
 func (c *Core) GetRollingFeeInfo() (min, max, avg *big.Int) {

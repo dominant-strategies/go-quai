@@ -410,8 +410,8 @@ func (b *QuaiAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) 
 	return b.quai.core.Nonce(addr), nil
 }
 
-func (b *QuaiAPIBackend) SendTxToSharingClients(tx *types.Transaction) {
-	b.quai.core.SendTxToSharingClients(tx)
+func (b *QuaiAPIBackend) SendTxToSharingClients(tx *types.Transaction) error {
+	return b.quai.core.SendTxToSharingClients(tx)
 }
 
 func (b *QuaiAPIBackend) GetRollingFeeInfo() (min, max, avg *big.Int) {

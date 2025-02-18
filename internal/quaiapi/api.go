@@ -1502,7 +1502,8 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, errors.New("submitTransaction call can only be made on chain processing the state")
 	}
 	if tx.Type() == types.QiTxType {
-		if err := b.SendTx(ctx, tx); err != nil {
+		// Send the tx to tx pool sharing clients
+		if err := b.SendTxToSharingClients(tx); err != nil {
 			return common.Hash{}, err
 		}
 	} else {
@@ -1511,7 +1512,9 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		if err := checkTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
 			return common.Hash{}, err
 		}
-		if err := b.SendTx(ctx, tx); err != nil {
+
+		// Send the tx to tx pool sharing clients
+		if err := b.SendTxToSharingClients(tx); err != nil {
 			return common.Hash{}, err
 		}
 		// Print a log with full tx details for manual investigations and interventions
@@ -1556,9 +1559,6 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	if err != nil {
 		return common.Hash{}, err
 	}
-	// Send the tx to tx pool sharing clients
-	s.b.SendTxToSharingClients(tx)
-
 	return SubmitTransaction(ctx, s.b, tx)
 }
 
