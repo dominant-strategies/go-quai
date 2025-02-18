@@ -142,7 +142,7 @@ type Backend interface {
 	TxPoolContent() (map[common.InternalAddress]types.Transactions, map[common.InternalAddress]types.Transactions)
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
 	GetPoolGasPrice() *big.Int
-	SendTxToSharingClients(tx *types.Transaction)
+	SendTxToSharingClients(tx *types.Transaction) error
 	GetRollingFeeInfo() (min, max, avg *big.Int)
 
 	// Filter API

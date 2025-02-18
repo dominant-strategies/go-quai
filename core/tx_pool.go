@@ -104,11 +104,11 @@ var (
 )
 
 var (
-	evictionInterval          = time.Minute            // Time interval to check for evictable transactions
-	statsReportInterval       = 1 * time.Minute        // Time interval to report transaction pool stats
-	qiExpirationCheckInterval = 10 * time.Minute       // Time interval to check for expired Qi transactions
-	qiExpirationCheckDivisor  = 5                      // Check 1/nth of the pool for expired Qi transactions every interval
-	txSharingPoolTimeout      = 200 * time.Millisecond // Time to exit the tx sharing call with client
+	evictionInterval          = time.Minute      // Time interval to check for evictable transactions
+	statsReportInterval       = 1 * time.Minute  // Time interval to report transaction pool stats
+	qiExpirationCheckInterval = 10 * time.Minute // Time interval to check for expired Qi transactions
+	qiExpirationCheckDivisor  = 5                // Check 1/nth of the pool for expired Qi transactions every interval
+	txSharingPoolTimeout      = 2 * time.Second  // Time to exit the tx sharing call with client
 )
 
 var (
@@ -177,10 +177,11 @@ type blockChain interface {
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
-	Locals    []common.InternalAddress // Addresses that should be treated by default as local
-	NoLocals  bool                     // Whether local transaction handling should be disabled
-	Journal   string                   // Journal of local transactions to survive node restarts
-	Rejournal time.Duration            // Time interval to regenerate the local transaction journal
+	Locals           []common.InternalAddress // Addresses that should be treated by default as local
+	NoLocals         bool                     // Whether local transaction handling should be disabled
+	SyncTxWithReturn bool
+	Journal          string        // Journal of local transactions to survive node restarts
+	Rejournal        time.Duration // Time interval to regenerate the local transaction journal
 
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
@@ -314,13 +315,14 @@ func (config *TxPoolConfig) sanitize(logger *log.Logger) TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config      TxPoolConfig
-	chainconfig *params.ChainConfig
-	chain       blockChain
-	gasPrice    *big.Int
-	scope       event.SubscriptionScope
-	signer      types.Signer
-	mu          sync.RWMutex
+	config          TxPoolConfig
+	chainconfig     *params.ChainConfig
+	chain           blockChain
+	gasPrice        *big.Int
+	scope           event.SubscriptionScope
+	signer          types.Signer
+	mu              sync.RWMutex
+	sharingClientMu sync.RWMutex
 
 	currentState       *state.StateDB // Current state in the blockchain head
 	qiGasScalingFactor float64
@@ -1590,11 +1592,49 @@ func (pool *TxPool) queueTxEvent(tx *types.Transaction) {
 
 // SendTxToSharingClients sends the tx into the pool sharing tx ch and
 // if its full logs it
-func (pool *TxPool) SendTxToSharingClients(tx *types.Transaction) {
-	select {
-	case pool.poolSharingTxCh <- tx:
-	default:
-		pool.logger.Warn("pool sharing tx ch is full")
+func (pool *TxPool) SendTxToSharingClients(tx *types.Transaction) error {
+	pool.sharingClientMu.Lock()
+	defer pool.sharingClientMu.Unlock()
+
+	// If there are no tx pool sharing clients just submit to the local pool
+	if len(pool.config.SharingClientsEndpoints) == 0 || !pool.config.SyncTxWithReturn {
+		err := pool.AddLocal(tx)
+		if err != nil {
+			return err
+		}
+		select {
+		case pool.poolSharingTxCh <- tx:
+		default:
+			pool.logger.Warn("pool sharing tx ch is full")
+		}
+		return err
+	} else {
+		// send to the first client, and then submit to the rest
+		client := pool.poolSharingClients[0]
+		ctx, cancel := context.WithTimeout(context.Background(), txSharingPoolTimeout)
+		defer cancel()
+		err := client.SendTransactionToPoolSharingClient(ctx, tx)
+		if err != nil {
+			pool.logger.WithField("err", err).Error("Error sending transaction to pool sharing client")
+		}
+
+		if len(pool.poolSharingClients) > 1 {
+			// send to all pool sharing clients
+			for _, client := range pool.poolSharingClients[1:] {
+				if client != nil {
+					go func(*quaiclient.Client, *types.Transaction) {
+						ctx, cancel := context.WithTimeout(context.Background(), txSharingPoolTimeout)
+						defer cancel()
+						sendErr := client.SendTransactionToPoolSharingClient(ctx, tx)
+						if sendErr != nil {
+							pool.logger.WithField("err", sendErr).Error("Error sending transaction to pool sharing client")
+						}
+					}(client, tx)
+				}
+			}
+		}
+
+		return err
 	}
 }
 
