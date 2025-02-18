@@ -126,6 +126,7 @@ var NodeFlags = []Flag{
 var TXPoolFlags = []Flag{
 	TxPoolLocalsFlag,
 	TxPoolNoLocalsFlag,
+	TxPoolSyncTxWithReturnFlag,
 	TxPoolJournalFlag,
 	TxPoolRejournalFlag,
 	TxPoolPriceLimitFlag,
@@ -356,6 +357,12 @@ var (
 		Name:  c_TXPoolPrefix + "nolocals",
 		Value: false,
 		Usage: "Disables price exemptions for locally submitted transactions" + generateEnvDoc(c_TXPoolPrefix+"nolocals"),
+	}
+
+	TxPoolSyncTxWithReturnFlag = Flag{
+		Name:  c_TXPoolPrefix + "sync-tx-with-return",
+		Value: true,
+		Usage: "Shares the tx with the sharing client with syncronous return (also bypasses local pool, only use it with combination of sharing clients)" + generateEnvDoc(c_TXPoolPrefix+"sync-tx-with-return"),
 	}
 
 	TxPoolJournalFlag = Flag{
@@ -1141,6 +1148,7 @@ func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
 	if viper.IsSet(TxPoolNoLocalsFlag.Name) {
 		cfg.NoLocals = viper.GetBool(TxPoolNoLocalsFlag.Name)
 	}
+	cfg.SyncTxWithReturn = viper.GetBool(TxPoolSyncTxWithReturnFlag.Name)
 	if viper.IsSet(TxPoolJournalFlag.Name) {
 		cfg.Journal = viper.GetString(TxPoolJournalFlag.Name)
 	}
