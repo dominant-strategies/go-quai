@@ -213,19 +213,28 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, 0, ErrInsufficientBalance
 	}
 	if addr.Equal(LockupContractAddresses[[2]byte(evm.chainConfig.Location)]) {
-		ret, err = RunLockupContract(evm, caller.Address(), &gas, input)
-		return ret, gas, 0, err
+		if evm.Context.BlockNumber.Uint64() < params.OrchardEvmReturnFixBlock {
+			ret, err := RunLockupContract(evm, caller.Address(), &gas, input)
+			return ret, gas, 0, err
+		} else {
+			ret, err = RunLockupContract(evm, caller.Address(), &gas, input)
+			return ret, gas, 0, err
+		}
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
 	var internalAddr common.InternalAddress
 	internalAddr, err = addr.InternalAndQuaiAddress()
 	if err != nil {
-		ret, leftOverGas, stateGas, err = evm.CreateETX(addr, caller.Address(), gas, value, input)
-		if err != nil {
-			evm.StateDB.RevertToSnapshot(snapshot)
+		if evm.Context.BlockNumber.Uint64() < params.OrchardEvmReturnFixBlock {
+			return evm.CreateETX(addr, caller.Address(), gas, value, input)
+		} else {
+			ret, leftOverGas, stateGas, err = evm.CreateETX(addr, caller.Address(), gas, value, input)
+			if err != nil {
+				evm.StateDB.RevertToSnapshot(snapshot)
+			}
+			return ret, leftOverGas, stateGas, err
 		}
-		return ret, leftOverGas, stateGas, err
 	}
 	if !evm.StateDB.Exist(internalAddr) {
 		if !isPrecompile && value.Sign() == 0 {
@@ -320,18 +329,31 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
-		var internalAddr common.InternalAddress
-		internalAddr, err = addrCopy.InternalAndQuaiAddress()
-		if err != nil {
-			gas = 0
-			return nil, gas, err
+		if evm.Context.BlockNumber.Uint64() < params.OrchardEvmReturnFixBlock {
+			internalAddr, err := addrCopy.InternalAndQuaiAddress()
+			if err != nil {
+				return nil, gas, err
+			}
+			// Initialise a new contract and set the code that is to be used by the EVM.
+			// The contract is a scoped environment for this execution context only.
+			contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
+			ret, err = evm.interpreter.Run(contract, input, false)
+			gas = contract.Gas
+		} else {
+			var internalAddr common.InternalAddress
+			internalAddr, err = addrCopy.InternalAndQuaiAddress()
+			if err != nil {
+				gas = 0
+				return nil, gas, err
+			}
+			// Initialise a new contract and set the code that is to be used by the EVM.
+			// The contract is a scoped environment for this execution context only.
+			contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
+			ret, err = evm.interpreter.Run(contract, input, false)
+			gas = contract.Gas
 		}
-		// Initialise a new contract and set the code that is to be used by the EVM.
-		// The contract is a scoped environment for this execution context only.
-		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
-		ret, err = evm.interpreter.Run(contract, input, false)
-		gas = contract.Gas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -362,17 +384,29 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
-		var internalAddr common.InternalAddress
-		internalAddr, err = addrCopy.InternalAndQuaiAddress()
-		if err != nil {
-			gas = 0
-			return nil, gas, err
+		if evm.Context.BlockNumber.Uint64() < params.OrchardEvmReturnFixBlock {
+			internalAddr, err := addrCopy.InternalAndQuaiAddress()
+			if err != nil {
+				return nil, gas, err
+			}
+			// Initialise a new contract and make initialise the delegate values
+			contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
+			ret, err = evm.interpreter.Run(contract, input, false)
+			gas = contract.Gas
+		} else {
+			var internalAddr common.InternalAddress
+			internalAddr, err = addrCopy.InternalAndQuaiAddress()
+			if err != nil {
+				gas = 0
+				return nil, gas, err
+			}
+			// Initialise a new contract and make initialise the delegate values
+			contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
+			ret, err = evm.interpreter.Run(contract, input, false)
+			gas = contract.Gas
 		}
-		// Initialise a new contract and make initialise the delegate values
-		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
-		ret, err = evm.interpreter.Run(contract, input, false)
-		gas = contract.Gas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -406,25 +440,45 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if p, isPrecompile, addr := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
-		var internalAddr common.InternalAddress
-		internalAddr, err = addr.InternalAndQuaiAddress()
-		if err != nil {
-			gas = 0
-			return nil, gas, err
+		if evm.Context.BlockNumber.Uint64() < params.OrchardEvmReturnFixBlock {
+			internalAddr, err := addr.InternalAndQuaiAddress()
+			if err != nil {
+				return nil, gas, err
+			}
+			// At this point, we use a copy of address. If we don't, the go compiler will
+			// leak the 'contract' to the outer scope, and make allocation for 'contract'
+			// even if the actual execution ends on RunPrecompiled above.
+			addrCopy := addr
+			// Initialise a new contract and set the code that is to be used by the EVM.
+			// The contract is a scoped environment for this execution context only.
+			contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
+			// When an error was returned by the EVM or when setting the creation code
+			// above we revert to the snapshot and consume any gas remaining. Additionally
+			// when we're in this also counts for code storage gas errors.
+			ret, err = evm.interpreter.Run(contract, input, true)
+			gas = contract.Gas
+		} else {
+			var internalAddr common.InternalAddress
+			internalAddr, err = addr.InternalAndQuaiAddress()
+			if err != nil {
+				gas = 0
+				return nil, gas, err
+			}
+			// At this point, we use a copy of address. If we don't, the go compiler will
+			// leak the 'contract' to the outer scope, and make allocation for 'contract'
+			// even if the actual execution ends on RunPrecompiled above.
+			addrCopy := addr
+			// Initialise a new contract and set the code that is to be used by the EVM.
+			// The contract is a scoped environment for this execution context only.
+			contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
+			// When an error was returned by the EVM or when setting the creation code
+			// above we revert to the snapshot and consume any gas remaining. Additionally
+			// when we're in this also counts for code storage gas errors.
+			ret, err = evm.interpreter.Run(contract, input, true)
+			gas = contract.Gas
 		}
-		// At this point, we use a copy of address. If we don't, the go compiler will
-		// leak the 'contract' to the outer scope, and make allocation for 'contract'
-		// even if the actual execution ends on RunPrecompiled above.
-		addrCopy := addr
-		// Initialise a new contract and set the code that is to be used by the EVM.
-		// The contract is a scoped environment for this execution context only.
-		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(internalAddr), evm.StateDB.GetCode(internalAddr))
-		// When an error was returned by the EVM or when setting the creation code
-		// above we revert to the snapshot and consume any gas remaining. Additionally
-		// when we're in this also counts for code storage gas errors.
-		ret, err = evm.interpreter.Run(contract, input, true)
-		gas = contract.Gas
 	}
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
