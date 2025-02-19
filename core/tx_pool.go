@@ -482,6 +482,8 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		}
 	}
 
+	logger.WithFields(log.Fields{"sharing endpoints": config.SharingClientsEndpoints, "sync tx with return": config.SyncTxWithReturn}).Info("Tx pool config for sharing tx")
+
 	// connect to the pool sharing clients
 	for i := range config.SharingClientsEndpoints {
 		go func() {
@@ -1593,11 +1595,8 @@ func (pool *TxPool) queueTxEvent(tx *types.Transaction) {
 // SendTxToSharingClients sends the tx into the pool sharing tx ch and
 // if its full logs it
 func (pool *TxPool) SendTxToSharingClients(tx *types.Transaction) error {
-	pool.sharingClientMu.Lock()
-	defer pool.sharingClientMu.Unlock()
-
 	// If there are no tx pool sharing clients just submit to the local pool
-	if len(pool.config.SharingClientsEndpoints) == 0 || !pool.config.SyncTxWithReturn {
+	if !pool.config.SyncTxWithReturn || len(pool.config.SharingClientsEndpoints) == 0 {
 		err := pool.AddLocal(tx)
 		if err != nil {
 			return err
