@@ -221,11 +221,6 @@ func (es *EventSystem) SubscribeLogs(crit quai.FilterQuery, logs chan []*types.L
 		to = rpc.BlockNumber(crit.ToBlock.Int64())
 	}
 
-	// Enforce max range of 10,000 blocks
-	if from >= 0 && to >= 0 && to > from && to-from > MaxFilterRange {
-		return nil, fmt.Errorf("invalid from and to block combination: block range > %d", MaxFilterRange)
-	}
-
 	// only interested in pending logs
 	if from == rpc.PendingBlockNumber && to == rpc.PendingBlockNumber {
 		return es.subscribePendingLogs(crit, logs), nil

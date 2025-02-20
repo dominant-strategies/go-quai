@@ -19,9 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
@@ -124,8 +122,8 @@ func newFilter(backend Backend, addresses []common.Address, topics [][]common.Ha
 	}
 }
 
-// Logs searches the blockchain for matching log entries by manually checking
-// each block within the specified range using 8 goroutines for parallel processing.
+// Logs searches the blockchain for matching log entries, returning all from the
+// first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// If we're doing singleton block filtering, execute and return
 	if f.block != (common.Hash{}) {
@@ -138,113 +136,51 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 		return f.blockLogs(ctx, workObject)
 	}
+	// Figure out the limits of the filter range
+	if f.begin < 0 || f.end < 0 {
+		// Covers both latest and pending block number cases.
+		header, err := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if err != nil {
+			return nil, err
+		}
+		head := header.NumberU64(common.ZONE_CTX)
 
-	// Determine the limits of the filter range
-	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if header == nil {
-		return nil, nil
-	}
-	head := header.NumberU64(common.ZONE_CTX)
+		if f.begin < 0 {
+			f.begin = int64(head)
+		}
 
-	if f.begin == -1 {
-		f.begin = int64(head)
-	}
-	end := uint64(f.end)
-	if f.end == -1 {
-		end = head
-	}
-	if end > uint64(f.begin) && end-uint64(f.begin) > MaxFilterRange {
-		return nil, fmt.Errorf("filter range exceeds maximum limit of %d blocks", MaxFilterRange)
+		if f.end < 0 {
+			f.end = int64(head)
+		}
 	}
 
-	// Prepare to collect logs from goroutines
+	// Gather all indexed logs, and finish with non indexed ones
 	var (
-		logs     []*types.Log
-		logsLock sync.Mutex
-		wg       sync.WaitGroup
-		errChan  = make(chan error, 8)
+		logs []*types.Log
+		err  error
 	)
 
-	totalBlocks := int64(end) - f.begin + 1
-	if totalBlocks <= 0 {
-		return nil, nil
-	}
-
-	// Adjust the number of goroutines if total blocks are fewer than 8
-	numGoroutines := 8
-	if totalBlocks < int64(numGoroutines) {
-		numGoroutines = int(totalBlocks)
-	}
-
-	blocksPerGoroutine := totalBlocks / int64(numGoroutines)
-	remainderBlocks := totalBlocks % int64(numGoroutines)
-
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-
-			// Calculate the start and end blocks for this goroutine
-			startBlock := f.begin + int64(i)*blocksPerGoroutine
-			endBlock := startBlock + blocksPerGoroutine - 1
-			if i == numGoroutines-1 {
-				// The last goroutine handles any remaining blocks
-				endBlock += remainderBlocks
-			}
-
-			// Collect logs from startBlock to endBlock
-			var localLogs []*types.Log
-			for blockNum := startBlock; blockNum <= endBlock; blockNum++ {
-				// Check for context cancellation
-				select {
-				case <-ctx.Done():
-					errChan <- ctx.Err()
-					return
-				default:
-				}
-
-				workObject, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNum))
-				if err != nil {
-					errChan <- err
-					return
-				}
-				if workObject == nil {
-					continue
-				}
-
-				found, err := f.blockLogs(ctx, workObject)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				localLogs = append(localLogs, found...)
-			}
-
-			// Append localLogs to the main logs slice safely
-			logsLock.Lock()
-			logs = append(logs, localLogs...)
-			logsLock.Unlock()
-		}(i)
-	}
-
-	// Wait for all goroutines to finish
-	wg.Wait()
-	close(errChan)
-
-	// Check for errors from goroutines
-	for err := range errChan {
+	size, sections := f.backend.BloomStatus()
+	if indexed := sections * size; indexed > uint64(f.begin) {
+		if indexed > uint64(f.end) {
+			logs, err = f.indexedLogs(ctx, uint64(f.end))
+		} else {
+			logs, err = f.indexedLogs(ctx, indexed-1)
+		}
 		if err != nil {
 			return logs, err
 		}
 	}
-
-	return logs, nil
+	rest, err := f.unindexedLogs(ctx, uint64(f.end))
+	logs = append(logs, rest...)
+	return logs, err
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
 func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
-	// Create a matcher session and request servicing from the backend
+	// Create a matcher session and request servicing from the backend.
+	// Matches is a channel of matching WorkObject numbers for the given filter.
 	matches := make(chan uint64, 64)
 
 	session, err := f.matcher.Start(ctx, uint64(f.begin), end, matches)
@@ -309,13 +245,18 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(ctx context.Context, workObject *types.WorkObject) (logs []*types.Log, err error) {
-
-	found, err := f.checkMatches(ctx, workObject)
+	// Get block bloom from the database
+	bloom, err := f.backend.GetBloom(workObject.Hash())
 	if err != nil {
 		return logs, err
 	}
-	logs = append(logs, found...)
-
+	if bloomFilter(*bloom, f.addresses, f.topics) {
+		found, err := f.checkMatches(ctx, workObject)
+		if err != nil {
+			return logs, err
+		}
+		logs = append(logs, found...)
+	}
 	return logs, nil
 }
 
