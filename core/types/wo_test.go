@@ -326,7 +326,7 @@ func TestCopyWorkObject(t *testing.T) {
 func TestNewWorkObject(t *testing.T) {
 	// Verify that copy is same as original.
 	originalWo, expectedHash := woTestData()
-	newWo := NewWorkObject(originalWo.WorkObjectHeader(), originalWo.Body(), originalWo.Tx())
+	newWo := NewWorkObject(originalWo.WorkObjectHeader(), originalWo.Body())
 
 	require.Equal(t, expectedHash, newWo.Hash(), "NewWorkObject created a different WorkObject than the original")
 }
