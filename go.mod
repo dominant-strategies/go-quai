@@ -2,6 +2,8 @@ module github.com/dominant-strategies/go-quai
 
 go 1.23.2
 
+replace github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 => github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
+
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
 	github.com/adrg/xdg v0.4.0
