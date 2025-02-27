@@ -97,12 +97,9 @@ func NewEmptyQuaiTx() *Transaction {
 			StorageKeys: []common.Hash{},
 		},
 		},
-		V:          new(big.Int),
-		R:          new(big.Int),
-		S:          new(big.Int),
-		ParentHash: &common.Hash{},
-		MixHash:    &common.Hash{},
-		WorkNonce:  &BlockNonce{},
+		V: new(big.Int),
+		R: new(big.Int),
+		S: new(big.Int),
 	}
 	return NewTx(inner)
 }
