@@ -85,7 +85,7 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Wor
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
 func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.WorkObject, error) {
-	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
+	return ec.getBlock(ctx, "quai_getBlockByNumber", toBlockNumArg(number), true)
 }
 
 func (ec *Client) BlockOrCandidateByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
