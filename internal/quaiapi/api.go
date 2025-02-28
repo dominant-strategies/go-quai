@@ -1007,6 +1007,9 @@ type RPCTransaction struct {
 	OriginatingTxHash *common.Hash             `json:"originatingTxHash,omitempty"`
 	ETXIndex          *hexutil.Uint64          `json:"etxIndex,omitempty"`
 	ETxType           *hexutil.Uint64          `json:"etxType,omitempty"`
+	ParentHash        *common.Hash             `json:"parentHash,omitempty"`
+	MixHash           *common.Hash             `json:"mixHash,omitempty"`
+	WorkNonce         *hexutil.Uint64          `json:"workNonce,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1059,6 +1062,16 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			Value:    (*hexutil.Big)(tx.Value()),
 			ChainID:  (*hexutil.Big)(tx.ChainId()),
 			GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		}
+		if tx.ParentHash() != nil {
+			result.ParentHash = tx.ParentHash()
+		}
+		if tx.MixHash() != nil {
+			result.MixHash = tx.MixHash()
+		}
+		if tx.WorkNonce() != nil {
+			workNonce := hexutil.Uint64(tx.WorkNonce().Uint64())
+			result.WorkNonce = &workNonce
 		}
 		if tx.To() != nil {
 			result.To = tx.To().MixedcaseAddressPtr()
