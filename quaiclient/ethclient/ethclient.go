@@ -85,7 +85,7 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Wor
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
 func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.WorkObject, error) {
-	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
+	return ec.getBlock(ctx, "quai_getBlockByNumber", toBlockNumArg(number), true)
 }
 
 func (ec *Client) BlockOrCandidateByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
@@ -154,7 +154,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 // HeaderByHash returns the block header with the given hash.
 func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {
 	var head *types.WorkObject
-	err := ec.c.CallContext(ctx, &head, "eth_getBlockByHash", hash, false)
+	err := ec.c.CallContext(ctx, &head, "quai_getBlockByHash", hash, false)
 	if err == nil && head == nil {
 		err = quai.NotFound
 	}
@@ -165,7 +165,7 @@ func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Wo
 // nil, the latest known header is returned.
 func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.WorkObject, error) {
 	var head *types.WorkObject
-	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
+	err := ec.c.CallContext(ctx, &head, "quai_getBlockByNumber", toBlockNumArg(number), false)
 	if err == nil && head == nil {
 		err = quai.NotFound
 	}
