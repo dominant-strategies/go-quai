@@ -56,6 +56,10 @@ type txJSON struct {
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
+
+	ParentHash *common.Hash    `json:"parentHash,omitempty"`
+	MixHash    *common.Hash    `json:"mixHash,omitempty"`
+	WorkNonce  *hexutil.Uint64 `json:"workNonce,omitempty"`
 }
 
 type TxOutJSON struct {
@@ -95,6 +99,14 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+
+		enc.ParentHash = tx.ParentHash
+		enc.MixHash = tx.MixHash
+		if tx.WorkNonce != nil {
+			workNonce := tx.WorkNonce.Uint64()
+			enc.WorkNonce = (*hexutil.Uint64)(&workNonce)
+		}
+
 	case *ExternalTx:
 		enc.AccessList = &tx.AccessList
 		enc.OriginatingTxHash = &tx.OriginatingTxHash
@@ -199,6 +211,15 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(itx.V, itx.R, itx.S); err != nil {
 				return err
 			}
+		}
+		if dec.ParentHash != nil {
+			itx.ParentHash = dec.ParentHash
+		}
+		if dec.MixHash != nil {
+			itx.MixHash = dec.MixHash
+		}
+		if dec.WorkNonce != nil {
+			itx.WorkNonce = &BlockNonce{byte(*dec.WorkNonce)}
 		}
 
 	case ExternalTxType:
