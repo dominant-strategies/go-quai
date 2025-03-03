@@ -33,6 +33,55 @@ func QuaiToQi(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.In
 	return new(big.Int).Quo(qiByQuai, CalculateQuaiReward(difficulty, exchangeRate))
 }
 
+// ComputeConversionAmountInQuai computes the amount of conversion volume in
+// quai for the given set of newInboundEtxs using the values from the header
+func ComputeConversionAmountInQuai(header *types.WorkObject, newInboundEtxs types.Transactions) *big.Int {
+	conversionAmountInQuai := big.NewInt(0)
+	for _, etx := range newInboundEtxs {
+		// If the etx is conversion
+		if types.IsConversionTx(etx) {
+			value := etx.Value()
+			// If to is in Qi, convert the value into Qi
+			if etx.To().IsInQiLedgerScope() {
+				conversionAmountInQuai = new(big.Int).Add(conversionAmountInQuai, value)
+			}
+			// If To is in Quai, convert the value into Quai
+			if etx.To().IsInQuaiLedgerScope() {
+				value = QiToQuai(header, header.ExchangeRate(), header.MinerDifficulty(), value)
+				conversionAmountInQuai = new(big.Int).Add(conversionAmountInQuai, value)
+			}
+		}
+	}
+	return conversionAmountInQuai
+}
+
+// ApplyCubicDiscount applies the slippage based on the historical
+// converted amounts and apply the
+func ApplyCubicDiscount(valueInt, meanInt *big.Int) *big.Float {
+	value := new(big.Float).SetInt(valueInt)
+	mean := new(big.Float).SetInt(meanInt)
+	tenTimesAverage := new(big.Float).Mul(mean, new(big.Float).SetInt64(10))
+	if value.Cmp(mean) <= 0 {
+		value = new(big.Float).Mul(value, new(big.Float).SetInt64(99))
+		value = new(big.Float).Quo(value, new(big.Float).SetInt64(100))
+		return value
+	} else if value.Cmp(tenTimesAverage) > 0 {
+		return new(big.Float).SetInt64(0)
+	} else {
+		normalizedValue := new(big.Float).Quo(value, tenTimesAverage)
+		normalizedValueSquare := new(big.Float).Mul(normalizedValue, normalizedValue)
+		normalizedValueCube := new(big.Float).Mul(normalizedValueSquare, normalizedValue)
+		discountedValue := new(big.Float).Sub(new(big.Float).SetInt64(1), normalizedValueCube)
+		// Make sure that discounted value is greater than zero as a sanity check
+		if discountedValue.Cmp(new(big.Float).SetInt64(0)) <= 0 {
+			return new(big.Float).SetInt64(0)
+		} else {
+			// Return the actual discounted amount by multiplying the value
+			return new(big.Float).Mul(discountedValue, new(big.Float).SetInt(valueInt))
+		}
+	}
+}
+
 // CalculateQuaiReward calculates the quai that can be recieved for mining a block and returns value in its
 // k_quai = state["K Quai"]
 // alpha = params["Controller Alpha Parameter"]
@@ -45,38 +94,41 @@ func QuaiToQi(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.In
 // k_quai += alpha * (x_b_star / x_d - 1) * k_quai
 // spaces = [{"K Qi": state["K Qi"], "K Quai": k_quai}, spaces[1]]
 // return spaces
-func CalculateKQuai(block *types.WorkObject, parentExchangeRate *big.Int, minerDifficulty *big.Int, beta0 *big.Int) *big.Int {
+func CalculateKQuai(parentExchangeRate *big.Int, minerDifficulty *big.Int, xbStar *big.Int) *big.Int {
 	// Set kQuai to the exchange rate from the header
 	kQuai := new(big.Int).Set(parentExchangeRate) // in Its
 
 	// Calculate log of the difficulty
+	d1 := new(big.Int).Mul(common.Big2e64, minerDifficulty)
 	d2 := LogBig(minerDifficulty)
 
-	// Multiply beta0 and d2
-	num := new(big.Int).Mul(beta0, d2)
+	// k_quai += alpha * (x_b_star / x_d - 1) * k_quai
+	// k_quai = k_quai + alpha * (x_b_star / x_d - 1) * k_quai
+	// k_quai = (k_quai * d1 + k_quai * alpha * (x_b_star * log(d1) - d1))/d1
 
-	// Negate num
-	negnum := new(big.Int).Neg(num)
+	// To keep the maximum amount of precision,
+	// denum = d1 * 1/alpha
+	// adder = k_quai * denum
+	// num = (adder + k_quai * (xbStar * log(d1) - d1))
+	// There is a 2^64 element here on all the terms to keep the decimals from
+	// the log
 
 	// Multiply beta1 and the difficulty
-	denom := new(big.Int).Mul(common.Big2e64, minerDifficulty)
-
-	// Divide negnum by denom
-	frac := new(big.Int).Quo(negnum, denom)
-
-	// Subtract 2^64 from frac
-	sub := new(big.Int).Sub(frac, common.Big2e64)
-
-	// Multiply sub by kQuai
-	bykQuai := new(big.Int).Mul(sub, kQuai)
-
 	// Multiply params.OneOverAlpha by 2^64
-	divisor := new(big.Int).Mul(params.OneOverAlpha, common.Big2e64)
+	denum := new(big.Int).Mul(d1, params.OneOverAlpha)
+	adder := new(big.Int).Mul(kQuai, denum)
+
+	// Multiply beta0 and d2
+	num := new(big.Int).Mul(xbStar, d2)
+	// Subtract the d1
+	num = new(big.Int).Sub(num, d1)
+	// Multiply by kQuai
+	num = new(big.Int).Mul(num, kQuai)
+	// Add the previous kQuai with the denum multiplied(adder)
+	num = new(big.Int).Add(num, adder)
 
 	// Divide bykQuai by divisor to get the final result
-	delta := new(big.Int).Quo(bykQuai, divisor)
-
-	final := new(big.Int).Add(kQuai, delta)
+	final := new(big.Int).Quo(num, denum)
 
 	return final
 }
