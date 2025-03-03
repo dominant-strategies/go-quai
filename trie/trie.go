@@ -172,7 +172,7 @@ func (t *Trie) TryGetNode(path []byte) ([]byte, int, error) {
 	if item == nil {
 		return nil, resolved, nil
 	}
-	return item, resolved, err
+	return item, resolved, nil
 }
 
 func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, newnode node, resolved int, err error) {
