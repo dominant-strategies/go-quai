@@ -47,6 +47,16 @@ type BodyDb struct {
 	logger *log.Logger
 }
 
+func NewTestBodyDb(db ethdb.Database) *BodyDb {
+	bc := &BodyDb{db: db}
+	blockCache, _ := lru.New[common.Hash, types.WorkObject](blockCacheLimit)
+	bodyCache, _ := lru.New[common.Hash, types.WorkObject](bodyCacheLimit)
+
+	bc.blockCache = blockCache
+	bc.bodyCache = bodyCache
+	return bc
+}
+
 func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
 	nodeCtx := chainConfig.Location.Context()
 

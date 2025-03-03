@@ -3,6 +3,8 @@ package types
 import (
 	"errors"
 	"math/big"
+
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 type TokenChoices struct {
@@ -11,15 +13,11 @@ type TokenChoices struct {
 	Diff *big.Int
 }
 
-const (
-	C_tokenChoiceSetSize = 100
-)
-
-type TokenChoiceSet [C_tokenChoiceSetSize]TokenChoices
+type TokenChoiceSet [params.TokenChoiceSetSize]TokenChoices
 
 func NewTokenChoiceSet() TokenChoiceSet {
-	newTokenChoiceSet := [C_tokenChoiceSetSize]TokenChoices{}
-	for i := 0; i < C_tokenChoiceSetSize; i++ {
+	newTokenChoiceSet := [params.TokenChoiceSetSize]TokenChoices{}
+	for i := 0; i < int(params.TokenChoiceSetSize); i++ {
 		newTokenChoiceSet[i] = TokenChoices{Quai: 0, Qi: 0, Diff: big.NewInt(0)}
 	}
 	return newTokenChoiceSet
