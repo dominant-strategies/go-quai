@@ -372,33 +372,48 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// KQuai controller, starts computing the KQuai value
 	// This address cannot do anything else
 	if msg.From().Equal(kQuaiSettingAddress) && st.evm.Context.BlockNumber.Uint64() < params.BlocksPerYear {
-		if !st.msg.IsETX() && !contractCreation && len(st.data) > updateKQuaiLen && bytes.Equal(st.data[:updateKQuaiLen], updateKQuai) {
-			kQuaiValue := new(big.Int).SetBytes(st.data[updateKQuaiLen:])
-			err := st.state.UpdateKQuai(kQuaiValue)
-			if err != nil {
-				return nil, fmt.Errorf("unable to update k quai: %v", err)
-			}
-		} else if !st.msg.IsETX() && !contractCreation && len(st.data) == freezeKQuaiLen && bytes.Equal(st.data[:freezeKQuaiLen], freezeKQuai) {
-			err := st.state.FreezeKQuai()
-			if err != nil {
-				return nil, fmt.Errorf("unable to freeze k quai: %v", err)
-			}
-		} else if !st.msg.IsETX() && !contractCreation && len(st.data) == unfreezeKQuaiLen && bytes.Equal(st.data[:unfreezeKQuaiLen], unfreezeKQuai) {
-			err := st.state.UnFreezeKQuai()
-			if err != nil {
-				return nil, fmt.Errorf("unable to un freeze k quai: %v", err)
-			}
-		} else {
-			return nil, fmt.Errorf("invalid data used: %v", st.data)
-		}
-
 		from, err := msg.From().InternalAddress()
 		if err != nil {
 			return nil, err
 		}
+
+		// Transaction from this address either does the k quai updates or
+		// fails, in either cases, nonce has to be incremented
 		st.state.SetNonce(from, st.state.GetNonce(from)+1)
 
+		if !st.msg.IsETX() && !contractCreation && len(st.data) > updateKQuaiLen && bytes.Equal(st.data[:updateKQuaiLen], updateKQuai) {
+			kQuaiValue := new(big.Int).SetBytes(st.data[updateKQuaiLen:])
+			err = st.state.UpdateKQuai(kQuaiValue)
+			if err != nil {
+				err = fmt.Errorf("unable to update k quai: %v", err)
+			}
+		} else if !st.msg.IsETX() && !contractCreation && len(st.data) == freezeKQuaiLen && bytes.Equal(st.data[:freezeKQuaiLen], freezeKQuai) {
+			err = st.state.FreezeKQuai()
+			if err != nil {
+				err = fmt.Errorf("unable to freeze k quai: %v", err)
+			}
+		} else if !st.msg.IsETX() && !contractCreation && len(st.data) == unfreezeKQuaiLen && bytes.Equal(st.data[:unfreezeKQuaiLen], unfreezeKQuai) {
+			err = st.state.UnFreezeKQuai()
+			if err != nil {
+				err = fmt.Errorf("unable to un freeze k quai: %v", err)
+			}
+		} else {
+			err = fmt.Errorf("invalid data used: %v", st.data)
+		}
+
 		effectiveTip := st.fee()
+		if err != nil {
+			return &ExecutionResult{
+				UsedGas:      st.gasUsed(),
+				UsedState:    0,
+				Err:          err,
+				ReturnData:   []byte{},
+				Etxs:         nil,
+				QuaiFees:     new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip),
+				ContractAddr: nil,
+			}, nil
+		}
+
 		return &ExecutionResult{
 			UsedGas:      st.gasUsed(),
 			UsedState:    0,
@@ -410,7 +425,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}, nil
 
 	} else if msg.From().Equal(kQuaiSettingAddress) {
-		return nil, fmt.Errorf("transaction is not allowed from the kQuaiSettingAddress after the first year")
+		effectiveTip := st.fee()
+		return &ExecutionResult{
+			UsedGas:      st.gasUsed(),
+			UsedState:    0,
+			Err:          fmt.Errorf("transaction is not allowed from the kQuaiSettingAddress after the first year"),
+			ReturnData:   []byte{},
+			Etxs:         nil,
+			QuaiFees:     new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip),
+			ContractAddr: nil,
+		}, nil
 	}
 
 	if !st.msg.IsETX() && !contractCreation && len(st.data) == 27 && bytes.Equal(st.data[:7], suicide) && st.to().Equal(st.msg.From()) {

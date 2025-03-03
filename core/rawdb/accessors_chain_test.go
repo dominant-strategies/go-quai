@@ -554,6 +554,38 @@ func TestInboundEtxsStorage(t *testing.T) {
 	}
 }
 
+// TestEmptyInboundEtxsStorage writes a nil and an empty transactions and makes
+// sure that the code doesnt panic and returns an empty list of transactions in
+// both cases
+func TestEmptyInboundEtxsStorage(t *testing.T) {
+	var inboundEtxs types.Transactions = nil
+
+	db := NewMemoryDatabase(log.Global)
+	hash := common.Hash{1}
+
+	WriteInboundEtxs(db, hash, inboundEtxs)
+
+	readInboundEtxs := ReadInboundEtxs(db, hash)
+	require.Equal(t, types.Transactions{}, readInboundEtxs)
+
+	inboundEtxs = types.Transactions{}
+
+	db = NewMemoryDatabase(log.Global)
+	hash = common.Hash{1}
+
+	WriteInboundEtxs(db, hash, inboundEtxs)
+
+	readInboundEtxs = ReadInboundEtxs(db, hash)
+	require.Equal(t, types.Transactions{}, readInboundEtxs)
+
+	// In case nothing is written for the hash, nil is returned
+	db = NewMemoryDatabase(log.Global)
+	hash = common.Hash{1}
+
+	readInboundEtxs = ReadInboundEtxs(db, hash)
+	require.Equal(t, types.Transactions(nil), readInboundEtxs)
+}
+
 func TestHasBody(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 
