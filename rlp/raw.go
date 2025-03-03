@@ -155,7 +155,7 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 	if contentsize > uint64(len(buf))-tagsize {
 		return 0, 0, 0, ErrValueTooLarge
 	}
-	return k, tagsize, contentsize, err
+	return k, tagsize, contentsize, nil
 }
 
 func readSize(b []byte, slen byte) (uint64, error) {
