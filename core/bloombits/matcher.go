@@ -260,17 +260,16 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 		}
 	}()
 	// Assemble the daisy-chained filtering pipeline
-	next := source
-	dist := make(chan *request, buffer)
+	bloomJobs := make(chan *request, buffer)
 
-	for _, bloom := range m.filters {
-		next = m.subMatch(next, dist, bloom, session)
+	for _, bloomField := range m.filters {
+		source = m.subMatch(source, bloomJobs, bloomField, session)
 	}
 	// Start the request distribution
 	session.pend.Add(1)
-	go m.distributor(dist, session)
+	go m.distributor(bloomJobs, session)
 
-	return next
+	return source
 }
 
 // subMatch creates a sub-matcher that filters for a set of addresses or topics, binary OR-s those matches, then
@@ -434,7 +433,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 		shutdown   = session.quit            // Shutdown request channel, will gracefully wait for pending requests
 	)
 
-	// assign is a helper method fo try to assign a pending bit an actively
+	// assign is a helper method to try to assign a pending bit an actively
 	// listening servicer, or schedule it up for later when one arrives.
 	assign := func(bit uint) {
 		select {

@@ -3,6 +3,7 @@ package rawdb
 import (
 	"bytes"
 	"math/big"
+	"math/rand/v2"
 	"os"
 	reflect "reflect"
 	"strings"
@@ -651,67 +652,119 @@ func TestReceiptsStorage(t *testing.T) {
 
 	db := NewMemoryDatabase(log.Global)
 
-	tx1 := createTransaction(1)
-	tx2 := createTransaction(2)
-	receipts := createReceipts(types.Transactions{tx1, tx2})
+	for testIter := 0; testIter < 500; testIter++ {
+		// Create random blockNumber.
+		var blockNumber = rand.Uint64()
+		var numTransactions uint64 = uint64(rand.IntN(128))
 
-	hash := receipts[0].BlockHash
+		// Create random blockHash.
+		blockHash := common.BytesToHash(make([]byte, 32))
+		for byteIdx := range blockHash {
+			blockHash[byteIdx] = byte(rand.IntN(256))
+		}
 
-	blockNumber := uint64(0)
+		transactions := createTransactions(numTransactions)
 
-	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
-		t.Fatalf("Non existent receipts returned: %v", entry)
-	}
+		receipts := createReceipts(transactions, blockHash, new(big.Int).SetUint64(blockNumber))
 
-	WriteReceipts(db, hash, blockNumber, receipts)
+		if entry := ReadReceipts(db, blockHash, blockNumber, &params.ChainConfig{}); entry != nil {
+			t.Fatalf("Non existent receipts returned: %v", entry)
+		}
 
-	// Test Read receipts with missing body
-	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
-		t.Fatalf("Receipt without body returned: %v", entry)
-	}
-	if !strings.Contains(logBuf.String(), "Missing body but have receipt") {
-		t.Errorf("Expected log to contain 'Missing body but have receipt', got %s", logBuf.String())
-	}
+		WriteReceipts(db, blockHash, blockNumber, receipts)
 
-	// Write Block
-	writeBlockForReceipts(db, hash, types.Transactions{tx1, tx2})
+		// Test Read receipts with missing body
+		if entry := ReadReceipts(db, blockHash, blockNumber, &params.ChainConfig{}); entry != nil {
+			t.Fatalf("Receipt without body returned: %v", entry)
+		}
+		if !strings.Contains(logBuf.String(), "Missing body but have receipt") {
+			t.Errorf("Expected log to contain 'Missing body but have receipt', got %s", logBuf.String())
+		}
 
-	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); len(entry) != 2 {
-		t.Fatal("Stored receipts not found")
-	}
+		// Write Block
+		writeBlockForReceipts(db, blockHash, blockNumber, transactions)
 
-	DeleteReceipts(db, hash, blockNumber)
+		actualReceipts := ReadReceipts(db, blockHash, blockNumber, &params.ChainConfig{})
+		if uint64(len(actualReceipts)) != numTransactions {
+			t.Fatal("Stored receipts not found")
+		}
 
-	if entry := ReadReceipts(db, hash, blockNumber, &params.ChainConfig{}); entry != nil {
-		t.Fatalf("Deleted receipts returned: %v", entry)
+		verifyReceipts(t, receipts, actualReceipts)
+
+		DeleteReceipts(db, blockHash, blockNumber)
+
+		if entry := ReadReceipts(db, blockHash, blockNumber, &params.ChainConfig{}); entry != nil {
+			t.Fatalf("Deleted receipts returned: %v", entry)
+		}
 	}
 }
 
-func createReceipts(txs types.Transactions) types.Receipts {
+func createReceipts(txs types.Transactions, blockHash common.Hash, blockNumber *big.Int) types.Receipts {
+	var receipts types.Receipts = types.Receipts{}
+	var logIndex = uint(0)
+	var gasUsed = uint64(1234)
+	for i, tx := range txs {
+		txHash := tx.Hash()
+		blockNum64 := blockNumber.Uint64()
+		receipt := &types.Receipt{
+			Type:              tx.Type(),
+			Status:            1,
+			CumulativeGasUsed: gasUsed,
+			Logs: types.Logs{
+				&types.Log{
+					Address: common.HexToAddress("0x0000000000000000000000000000000000000001", common.Location{0, 0}), // Quai address.
+					Topics: []common.Hash{
+						common.Zero.Hash(),
+						common.ZeroExternal.Hash(),
+					},
+					Data:        common.Zero.Bytes(),
+					BlockNumber: blockNum64,
+					TxHash:      txHash,
+					TxIndex:     uint(i),
+					BlockHash:   blockHash,
+					Index:       logIndex,
+				},
+				&types.Log{
+					Address: common.HexToAddress("0x0080000000000000000000000000000000000001", common.Location{0, 0}), // Qi address.
+					Topics: []common.Hash{
+						common.Zero.Hash(),
+						common.ZeroExternal.Hash(),
+					},
+					Data:        common.Zero.Bytes(),
+					BlockNumber: blockNum64,
+					TxHash:      txHash,
+					TxIndex:     uint(i),
+					BlockHash:   blockHash,
+					Index:       logIndex + 1,
+				},
+			},
 
-	receipt1 := createReceipt(txs[0].Hash(), types.EmptyHash)
+			TxHash:          txHash,
+			ContractAddress: common.Zero,
+			GasUsed:         1234,
 
-	receipt2 := createReceipt(txs[1].Hash(), types.EmptyHash)
-
-	return types.Receipts{receipt1, receipt2}
-}
-
-func createReceipt(txHash common.Hash, blockHash common.Hash) *types.Receipt {
-	receipt := types.NewReceipt([]byte{}, false, 55000)
-	receipt.TxHash = txHash
-	receipt.GasUsed = 55000
-	receipt.BlockHash = blockHash
-	receipt.BlockNumber = big.NewInt(11)
-	return receipt
+			BlockHash:        blockHash,
+			BlockNumber:      blockNumber,
+			TransactionIndex: uint(i),
+			OutboundEtxs:     types.Transactions{tx},
+		}
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipts = append(receipts, receipt)
+		logIndex += 2
+		gasUsed += 1234
+	}
+	return receipts
 }
 
 func TestAncientReceiptsStorage(t *testing.T) {
+
 	db := NewMemoryDatabase(log.Global)
 
 	dataDir := os.TempDir() + "/testFreezer"
 	freezerDb, err := NewDatabaseWithFreezer(db, dataDir, os.TempDir(), false, common.ZONE_CTX, log.Global, common.Location{0, 0})
 
 	require.NoError(t, err)
+
 	defer func() {
 		err := freezerDb.Close()
 		require.NoError(t, err)
@@ -720,31 +773,82 @@ func TestAncientReceiptsStorage(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	tx1 := createTransaction(1)
-	tx2 := createTransaction(2)
-	receipts := createReceipts(types.Transactions{tx1, tx2})
-	hash := receipts[0].BlockHash
+	for testIter := uint64(0); testIter < 500; testIter++ {
+		var numTransactions = uint64(rand.IntN(128))
+		var blockHash common.Hash = common.BytesToHash(make([]byte, 32))
+		for byteIdx := range blockHash {
+			blockHash[byteIdx] = byte(rand.IntN(256))
+		}
 
-	freezerDb.AppendAncient(0, hash.Bytes(), receipts.Bytes(freezerDb.Logger()))
+		transactions := createTransactions(numTransactions)
+		expectedReceipts := createReceipts(transactions, blockHash, new(big.Int).SetUint64(testIter))
+		freezerDb.AppendAncient(testIter, blockHash.Bytes(), expectedReceipts.Bytes(freezerDb.Logger()))
 
-	txs := types.Transactions{tx1, tx2}
-	writeBlockForReceipts(db, hash, txs)
+		writeBlockForReceipts(db, blockHash, testIter, transactions)
 
-	if entry := ReadReceipts(freezerDb, hash, 0, &params.ChainConfig{}); len(entry) != 2 {
-		t.Fatal("Stored receipts not found")
+		readReceipts := ReadReceipts(freezerDb, blockHash, testIter, &params.ChainConfig{})
+
+		if uint64(len(readReceipts)) != numTransactions {
+			t.Fatal("Stored receipts not found")
+		}
+
+		verifyReceipts(t, expectedReceipts, readReceipts)
+
 	}
-
 }
 
-func createBlockWithTransactions(txs types.Transactions) *types.WorkObject {
+func createTransactions(maxNonce uint64) types.Transactions {
+	transactions := types.Transactions{}
+	for txIndex := range maxNonce {
+		transactions = append(transactions, createTransaction(txIndex))
+	}
+	return transactions
+}
+
+func verifyReceipts(t *testing.T, expectedReceipts types.Receipts, actualReceipts types.Receipts) {
+	for receiptIndex, expectedReceipt := range expectedReceipts {
+		require.Equal(t, expectedReceipt.Type, actualReceipts[receiptIndex].Type)
+		require.Equal(t, expectedReceipt.Status, actualReceipts[receiptIndex].Status)
+		require.Equal(t, expectedReceipt.CumulativeGasUsed, actualReceipts[receiptIndex].CumulativeGasUsed)
+		require.Equal(t, expectedReceipt.Bloom, actualReceipts[receiptIndex].Bloom)
+		for logIndex, expectedLog := range expectedReceipt.Logs {
+			actualLog := actualReceipts[receiptIndex].Logs[logIndex]
+			require.Equal(t, expectedLog.Address.Bytes(), actualLog.Address.Bytes())
+			for topicIndex, expectedTopic := range expectedLog.Topics {
+				actualTopic := actualLog.Topics[topicIndex]
+				require.Equal(t, expectedTopic.Bytes(), actualTopic.Bytes())
+			}
+			require.Equal(t, expectedLog.Data, actualLog.Data)
+			require.Equal(t, expectedLog.BlockNumber, actualLog.BlockNumber)
+			require.Equal(t, expectedLog.TxHash.Bytes(), actualLog.TxHash.Bytes())
+			require.Equal(t, expectedLog.TxIndex, actualLog.TxIndex)
+			require.Equal(t, expectedLog.BlockHash.Bytes(), actualLog.BlockHash.Bytes())
+			require.Equal(t, expectedLog.Index, actualLog.Index)
+			require.Equal(t, expectedLog.Removed, actualLog.Removed)
+		}
+
+		require.Equal(t, expectedReceipt.TxHash, actualReceipts[receiptIndex].TxHash)
+		require.Equal(t, expectedReceipt.ContractAddress, actualReceipts[receiptIndex].ContractAddress)
+		require.Equal(t, expectedReceipt.GasUsed, actualReceipts[receiptIndex].GasUsed)
+
+		require.Equal(t, expectedReceipt.BlockHash, actualReceipts[receiptIndex].BlockHash)
+		require.Equal(t, expectedReceipt.BlockNumber, actualReceipts[receiptIndex].BlockNumber)
+		require.Equal(t, expectedReceipt.TransactionIndex, actualReceipts[receiptIndex].TransactionIndex)
+		for etxIndex, etx := range expectedReceipt.OutboundEtxs {
+			require.Equal(t, etx.Hash(), actualReceipts[receiptIndex].OutboundEtxs[etxIndex].Hash())
+		}
+	}
+}
+
+func createBlockWithTransactions(blockNum uint64, txs types.Transactions) *types.WorkObject {
 	woBody := types.EmptyWorkObjectBody()
 	woBody.SetHeader(types.EmptyHeader())
 	woBody.SetTransactions(txs)
-	return types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, big.NewInt(0), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0}), []byte{0, 1, 2, 3}), woBody, nil)
+	return types.NewWorkObject(types.NewWorkObjectHeader(types.EmptyRootHash, types.EmptyRootHash, new(big.Int).SetUint64(blockNum), big.NewInt(30000), big.NewInt(42), types.EmptyRootHash, types.BlockNonce{23}, 1, 1, common.LocationFromAddressBytes([]byte{0x01, 0x01}), common.BytesToAddress([]byte{0}, common.Location{0, 0}), nil), woBody, nil)
 }
 
-func writeBlockForReceipts(db ethdb.Database, hash common.Hash, txs types.Transactions) {
-	wo := createBlockWithTransactions(txs)
+func writeBlockForReceipts(db ethdb.Database, hash common.Hash, blockNum uint64, txs types.Transactions) {
+	wo := createBlockWithTransactions(blockNum, txs)
 	WriteWorkObject(db, hash, wo, types.BlockObject, common.ZONE_CTX)
 }
 

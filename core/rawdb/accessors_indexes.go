@@ -18,45 +18,24 @@ package rawdb
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
-	"google.golang.org/protobuf/proto"
 )
 
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction
 // hash to allow retrieving the transaction or receipt by hash.
-func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
-	data, _ := db.Get(txLookupKey(hash))
-	if len(data) == 0 {
-		return nil
-	}
-	// Database v6 tx lookup just stores the block number
-	if len(data) < common.HashLength {
-		number := new(big.Int).SetBytes(data).Uint64()
-		return &number
-	}
-	// Database v4-v5 tx lookup format just stores the hash
-	if len(data) == common.HashLength {
-		return ReadHeaderNumber(db, common.BytesToHash(data))
-	}
-	// Finally try database v3 tx lookup format
-	protoLegacyTxLookupEntry := new(ProtoLegacyTxLookupEntry)
-	err := proto.Unmarshal(data, protoLegacyTxLookupEntry)
+func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) (uint64, error) {
+	data, err := db.Get(txLookupKey(hash))
 	if err != nil {
-		db.Logger().WithFields(log.Fields{
-			"hash": hash,
-			"blob": data,
-			"err":  err,
-		}).Error("Invalid transaction lookup entry protobuf")
-		return nil
+		return 0, errors.New("unable to find tx in database")
 	}
-	entry := new(LegacyTxLookupEntry)
-	entry.ProtoDecode(protoLegacyTxLookupEntry)
-	return &entry.BlockIndex
+	number := new(big.Int).SetBytes(data).Uint64()
+	return number, nil
 }
 
 // writeTxLookupEntry stores a positional metadata for a transaction,
@@ -102,15 +81,15 @@ func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
 // ReadTransaction retrieves a specific transaction from the database, along with
 // its added positional metadata.
 func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
-	blockNumber := ReadTxLookupEntry(db, hash)
-	if blockNumber == nil {
+	blockNumber, err := ReadTxLookupEntry(db, hash)
+	if err != nil {
 		return nil, common.Hash{}, 0, 0
 	}
-	blockHash := ReadCanonicalHash(db, *blockNumber)
+	blockHash := ReadCanonicalHash(db, blockNumber)
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	wo := ReadWorkObject(db, *blockNumber, blockHash, types.BlockObject)
+	wo := ReadWorkObject(db, blockNumber, blockHash, types.BlockObject)
 	if wo == nil {
 		db.Logger().WithFields(log.Fields{
 			"number": blockNumber,
@@ -120,11 +99,11 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	}
 	for txIndex, tx := range wo.Body().Transactions() {
 		if tx.Hash() == hash {
-			return tx, blockHash, *blockNumber, uint64(txIndex)
+			return tx, blockHash, blockNumber, uint64(txIndex)
 		}
 	}
 	db.Logger().WithFields(log.Fields{
-		"number": *blockNumber,
+		"number": blockNumber,
 		"hash":   blockHash,
 		"txhash": hash,
 	}).Error("Transaction not found")
