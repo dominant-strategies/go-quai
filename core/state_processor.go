@@ -1141,7 +1141,8 @@ func (p *StateProcessor) GetKQuaiAndUpdateBit(parent *types.WorkObject) (*big.In
 	}
 	state, err := p.StateAt(evmRoot, etxRoot, quaiStateSize)
 	if err != nil {
-		return nil, 0, err
+		p.logger.WithFields(log.Fields{"Hash": parent.Hash(), "err": err}).Info("State is not available for Hash")
+		return nil, 0, ErrSubNotSyncedToDom
 	}
 
 	kQuai, err := state.GetKQuai()

@@ -111,6 +111,10 @@ func (tx *Transaction) SetInner(inner TxData) {
 	tx.setDecoded(inner, 0)
 }
 
+func (tx *Transaction) Inner() TxData {
+	return tx.inner
+}
+
 // TxData is the underlying data of a transaction.
 //
 // This is implemented by QuaiTx, ExternalTx, InternalToExternal, and QiTx.

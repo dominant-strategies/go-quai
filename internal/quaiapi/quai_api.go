@@ -784,7 +784,7 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 		// Conversion transaction
 		var header *types.WorkObject
 		var err error
-		if blockNr, ok := blockNrOrHash.Number(); ok {
+		if blockNr, ok := bNrOrHash.Number(); ok {
 			if blockNr == rpc.LatestBlockNumber {
 				header = s.b.CurrentHeader()
 			} else {
