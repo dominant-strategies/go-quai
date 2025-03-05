@@ -50,8 +50,8 @@ jobs:
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
           github_token: ${{ secrets.GH_PAT_ANTITHESIS }}
           images: "go-quai:${{ env.IMAGE_TAG }};quai-cpu-miner:latest;quai-workload:latest;quai-statistics-backend:latest;elasticsearch:8.8.0;logstash:8.8.0;kibana:8.8.0;redis:6.2-alpine"
-          config_image: "qc-config:0.1.0-single.6"
+          config_image: "qc-config:latest"
           description: "nightly go-quai test"
           email_recipients: ${{ secrets.ANTITHESIS_EMAILS }}"
           additional_parameters: |-
-            custom.duration=1
+            custom.duration=10
