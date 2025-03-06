@@ -38,7 +38,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: us-central1-docker.pkg.dev/molten-verve-216720/dominant-repository/go-quai:${{ env.IMAGE_TAG }}
+          tags: |
+            us-central1-docker.pkg.dev/molten-verve-216720/dominant-repository/go-quai:${{ env.IMAGE_TAG }}
+            us-central1-docker.pkg.dev/molten-verve-216720/dominant-repository/go-quai:latest
           cache-to: type=inline
 
       - name: Run Antithesis Test
