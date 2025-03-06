@@ -15,6 +15,12 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
+# Modify params/protocol_params.go before building
+RUN sed -i 's/TimeToStartTx[[:space:]]*uint64[[:space:]]*=[[:space:]]*15 \* BlocksPerDay/TimeToStartTx uint64 = 0/' params/protocol_params.go
+
+# Verify the modification (optional, remove if not needed)
+RUN grep "TimeToStartTx" params/protocol_params.go
+
 # Build the Go app using the Makefile
 RUN make go-quai
 
