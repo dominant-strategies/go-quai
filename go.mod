@@ -1,4 +1,4 @@
-module github.com/qw-slane/go-quai
+module github.com/qwSlane/go-quai
 
 go 1.23.2
 
