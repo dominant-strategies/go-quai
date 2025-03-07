@@ -1,4 +1,4 @@
-module github.com/dominant-strategies/go-quai
+module github.com/qw-slane/go-quai
 
 go 1.23.2
 
@@ -14,6 +14,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dominant-strategies/bn256 v0.0.0-20250117181620-a3c0ff77c445
+	github.com/dominant-strategies/go-quai v0.43.2
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/golang/snappy v0.0.4
 	github.com/google/gofuzz v1.2.0
@@ -175,7 +176,6 @@ require (
 	golang.org/x/tools v0.17.0 // indirect
 	gonum.org/v1/gonum v0.14.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
 require (
