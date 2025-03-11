@@ -330,6 +330,12 @@ func (ec *Client) BalanceAt(ctx context.Context, account common.MixedcaseAddress
 	return (*big.Int)(&result), err
 }
 
+func (ec *Client) LockedBalance(ctx context.Context, account common.MixedcaseAddress) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "quai_getLockedBalance", account.Original())
+	return (*big.Int)(&result), err
+}
+
 func (ec *Client) ContractSizeAt(ctx context.Context, account common.MixedcaseAddress, blockNumber *big.Int) (*big.Int, error) {
 	var result hexutil.Big
 	err := ec.c.CallContext(ctx, &result, "quai_getContractSize", account.Original(), toBlockNumArg(blockNumber))
