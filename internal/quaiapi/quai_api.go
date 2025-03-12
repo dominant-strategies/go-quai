@@ -1045,7 +1045,7 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.WorkObject) (
 		subParentHash := b.ParentHash(nodeCtx + 1)
 		var subManifest types.BlockManifest
 		if subParent, err := s.b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
-			// If we have the the subordinate parent in our chain, that means that block
+			// If we have the subordinate parent in our chain, that means that block
 			// was also coincident. In this case, the subordinate manifest resets, and
 			// only consists of the subordinate parent hash.
 			subManifest = types.BlockManifest{subParentHash}

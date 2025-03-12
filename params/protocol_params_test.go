@@ -176,7 +176,7 @@ func TestCalculateCoinbaseValueWithLockup(t *testing.T) {
 	lockedValue := CalculateCoinbaseValueWithLockup(value, 1, twoMonthBlock-1)
 	require.Equal(t, lockedValue.Uint64(), value.Uint64())
 
-	// block after the two months should have value greater than than the input
+	// block after the two months should have value greater than the input
 	// value
 	lockedValue = CalculateCoinbaseValueWithLockup(value, 1, twoMonthBlock+1)
 	require.Greater(t, lockedValue.Uint64(), value.Uint64())
