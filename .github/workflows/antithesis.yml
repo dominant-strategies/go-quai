@@ -1,8 +1,6 @@
 name: Nightly Job
 
 on:
-  schedule:
-    - cron: '0 0 * * *'  # Runs nightly at midnight UTC
   workflow_dispatch: # Allows manual triggering
 
 jobs:
