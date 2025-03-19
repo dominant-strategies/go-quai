@@ -244,7 +244,16 @@ func (b *QuaiAPIBackend) GetBloom(hash common.Hash) (*types.Bloom, error) {
 	if nodeCtx != common.ZONE_CTX {
 		return nil, errors.New("getBloom can only be called in zone chain")
 	}
-	return b.quai.core.Slice().HeaderChain().GetBloom(hash)
+	bloom, err := b.quai.core.Slice().HeaderChain().GetBloom(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	if bloom.CheckAllZeros() {
+		return nil, nil
+	} else {
+		return bloom, nil
+	}
 }
 
 // GetBlock returns the Block for the given block hash
