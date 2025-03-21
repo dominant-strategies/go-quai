@@ -29,7 +29,6 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/rpc"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -104,23 +103,8 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, db *sta
 	}
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
-		// These fields are immutable during the estimation, safe to
-		// pass the pointer directly.
-		callArgs := TransactionArgs{
-			From:       args.From,
-			To:         args.To,
-			GasPrice:   args.GasPrice,
-			Value:      args.Value,
-			Data:       args.Data,
-			AccessList: args.AccessList,
-		}
-		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
-		if err != nil {
-			return err
-		}
-		args.Gas = &estimated
-		log.Global.WithField("gas", args.Gas).Debug("Estimate gas usage automatically")
+		gasCap := hexutil.Uint64(b.RPCGasCap())
+		args.Gas = &gasCap
 	}
 	if args.ChainID == nil {
 		id := (*hexutil.Big)(b.ChainConfig().ChainID)
