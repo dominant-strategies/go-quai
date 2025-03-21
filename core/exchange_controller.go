@@ -29,7 +29,7 @@ func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.W
 		tokenChoicesSet = append(tokenChoicesSet, tokenChoices)
 	}
 
-	sort.Slice(tokenChoicesSet, func(i, j int) bool {
+	sort.SliceStable(tokenChoicesSet, func(i, j int) bool {
 		return tokenChoicesSet[i].Diff.Cmp(tokenChoicesSet[j].Diff) < 0
 	})
 
@@ -61,22 +61,10 @@ func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.W
 
 	// Firstly calculated the new beta from the best diff calculated from the previous step
 	// Since, -B0/B1 = diff/log(diff), B1 is set to 1
-	newBeta0 := new(big.Float).Quo(new(big.Float).SetInt(bestDiff), new(big.Float).SetInt(common.LogBig(bestDiff)))
-	newBeta0 = new(big.Float).Mul(newBeta0, big.NewFloat(-1))
+	newBeta0OverBeta1 := new(big.Int).Div(new(big.Int).Mul(bestDiff, common.Big2e64), common.LogBig(bestDiff))
 
-	// convert the beta values into the big numbers so that in the exchange rate
-	// computation
-	bigBeta0 := new(big.Float).Mul(newBeta0, new(big.Float).SetInt(common.Big2e64))
-	bigBeta0Int, _ := bigBeta0.Int(nil)
-
-	parent := hc.GetBlockByHash(block.ParentHash(common.PRIME_CTX))
-	if parent == nil {
-		return nil, errors.New("parent cannot be found")
-	}
-
-	minerDifficulty := hc.ComputeMinerDifficulty(parent)
 	// If parent is genesis, there is nothing to train
-	exchangeRate := misc.CalculateKQuai(block, parentExchangeRate, minerDifficulty, bigBeta0Int)
+	exchangeRate := misc.CalculateKQuai(parentExchangeRate, block.MinerDifficulty(), newBeta0OverBeta1)
 
 	return exchangeRate, nil
 }
@@ -91,7 +79,7 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block, parent *types.WorkObject, 
 
 	var parentTokenChoicesSet *types.TokenChoiceSet
 	// Look up prior tokenChoiceSet and update
-	if block.NumberU64(common.PRIME_CTX) == params.ControllerKickInBlock {
+	if block.NumberU64(common.PRIME_CTX) <= params.ControllerKickInBlock+1 {
 		emptyTokenChoicesSet := types.NewTokenChoiceSet()
 		parentTokenChoicesSet = &emptyTokenChoicesSet
 	} else {
@@ -125,17 +113,22 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block, parent *types.WorkObject, 
 	// Depending on the number of the Quai/Qi choices the diff value can be moved
 	// to the right or left
 	if realizedConversionAmountInHash.Cmp(common.Big0) != 0 && actualConversionAmountInHash.Cmp(common.Big0) != 0 {
+		// If Qi choices are more than Quai choices, then shift the difficulty to the right
+		// as realized conversion amount is always less than the actual
+		// conversion amount, multiplying by the diff by actual and then
+		// dividing by the realized amount shifts the difficulty to the right
 		if tokenChoices.Qi > tokenChoices.Quai {
-			tokenChoices.Diff = new(big.Int).Mul(tokenChoices.Diff, realizedConversionAmountInHash)
-			tokenChoices.Diff = new(big.Int).Div(tokenChoices.Diff, actualConversionAmountInHash)
-		} else {
 			tokenChoices.Diff = new(big.Int).Mul(tokenChoices.Diff, actualConversionAmountInHash)
 			tokenChoices.Diff = new(big.Int).Div(tokenChoices.Diff, realizedConversionAmountInHash)
+		} else { // If Quai choices are more than the Qi choices, then shift the difficulty to the left
+			tokenChoices.Diff = new(big.Int).Mul(tokenChoices.Diff, realizedConversionAmountInHash)
+			tokenChoices.Diff = new(big.Int).Div(tokenChoices.Diff, actualConversionAmountInHash)
 		}
 	}
 
 	// If the tokenChoices diff is zero, which should not happen, set it to 1
 	if tokenChoices.Diff.Cmp(common.Big0) == 0 {
+		hc.logger.Warn("Token choices diff cannot be zero as min 10% of the value is kept")
 		tokenChoices.Diff = new(big.Int).SetInt64(1)
 	}
 

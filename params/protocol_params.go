@@ -201,7 +201,7 @@ var (
 	QuaiToQiConversionBase                      = big.NewInt(10000000)    // UNUSED Is the starting "historical conversion" in Qits for 10,000 Quai we need 10,000*1e3
 	QiToQuaiConversionBase                      = big.NewInt(10000000)    // UNUSED Is the starting "historical conversion" in Qits for 10,000 Qi we need 10,000*1e3
 	MaxTimeDiffBetweenBlocks             int64  = 100                     // Max time difference between the blocks to 100 secs
-	OneOverAlpha                                = big.NewInt(200)         // The alpha value for the quai to qi conversion
+	OneOverAlpha                                = big.NewInt(1000)        // The alpha value for the quai to qi conversion
 	ControllerKickInBlock                uint64 = (7 * BlocksPerWeek) / 4 // This is in order of prime blocks
 	CoinbaseLockupPrecompileKickInHeight        = 5 * BlocksPerWeek       // The height at which the coinbase lockup precompile is enabled
 	MinBaseFeeInQits                            = big.NewInt(5)
@@ -211,9 +211,12 @@ var (
 	ConversionLockPeriod uint64 = 2 * BlocksPerWeek
 	CoinbaseEpochBlocks  uint64 = 50000
 
+	// Controller related constants
 	StartingKQuaiDiscount               = big.NewInt(100)
 	StartingConversionFlowAmount        = new(big.Int).Mul(big.NewInt(10000), big.NewInt(Ether)) // Starting conversion flow amount in Quai
-	MinerDifficultyWindow        uint64 = 1000
+	MinConversionFlowAmount             = new(big.Int).Mul(big.NewInt(100), big.NewInt(Ether))   // Min conversion flow amount in Quai
+	MinerDifficultyWindow        uint64 = 4000
+	KQuaiDiscountMultiplier      int64  = 100000
 )
 
 func CalculateLockupByteRewardsMultiple(lockupByte uint8, blockNumber uint64) (*big.Int, error) {

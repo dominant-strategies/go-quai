@@ -12,7 +12,7 @@ type TokenChoices struct {
 }
 
 const (
-	C_tokenChoiceSetSize = 100
+	C_tokenChoiceSetSize = 4000
 )
 
 type TokenChoiceSet [C_tokenChoiceSetSize]TokenChoices

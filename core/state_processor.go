@@ -1141,7 +1141,7 @@ func (p *StateProcessor) GetKQuaiAndUpdateBit(parent *types.WorkObject) (*big.In
 	}
 	state, err := p.StateAt(evmRoot, etxRoot, quaiStateSize)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, ErrSubNotSyncedToDom
 	}
 
 	kQuai, err := state.GetKQuai()

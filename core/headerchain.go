@@ -101,6 +101,11 @@ type HeaderChain struct {
 	logger *log.Logger
 }
 
+// Returns the HeaderChain struct for the use of the tests
+func NewTestHeaderChain() *HeaderChain {
+	return &HeaderChain{}
+}
+
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
 func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, primeBlockFetcher getPrimeBlock, kQuaiAndUpdateBitGetter getKQuaiAndUpdateBit, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
@@ -1282,38 +1287,16 @@ func (hc *HeaderChain) CalcBaseFee(block *types.WorkObject) *big.Int {
 	}
 }
 
-// ApplyQuadraticDiscount applies the slippage based on the historical
-// converted amounts and apply the
-func (hc *HeaderChain) ApplyQuadraticDiscount(valueInt, meanInt *big.Int) *big.Float {
-	value := new(big.Float).SetInt(valueInt)
-	mean := new(big.Float).SetInt(meanInt)
-	tenTimesAverage := new(big.Float).Mul(mean, new(big.Float).SetInt64(10))
-	if value.Cmp(mean) <= 0 {
-		value = new(big.Float).Mul(value, new(big.Float).SetInt64(99))
-		value = new(big.Float).Quo(value, new(big.Float).SetInt64(100))
-		return value
-	} else if value.Cmp(tenTimesAverage) > 0 {
-		return new(big.Float).SetInt64(0)
-	} else {
-		normalizedValue := new(big.Float).Quo(value, tenTimesAverage)
-		normalizedValueSquare := new(big.Float).Mul(normalizedValue, normalizedValue)
-		normalizedValueSquareOverTwo := new(big.Float).Quo(normalizedValueSquare, new(big.Float).SetInt64(2))
-		discountedValue := new(big.Float).Sub(new(big.Float).SetInt64(1), normalizedValueSquareOverTwo)
-		// Make sure that discounted value is greater than zero as a sanity check
-		if discountedValue.Cmp(new(big.Float).SetInt64(0)) <= 0 {
-			return new(big.Float).SetInt64(0)
-		} else {
-			return discountedValue
-		}
-	}
-}
-
 // ComputeConversionFlowAmount computes a moving average conversion flow amount
 func (hc *HeaderChain) ComputeConversionFlowAmount(parent *types.WorkObject, currentBlockConversionAmount *big.Int) *big.Int {
 	prevBlockConversionFlowAmount := parent.ConversionFlowAmount()
-	newConversionFlowAmount := new(big.Int).Mul(prevBlockConversionFlowAmount, big.NewInt(99))
+	newConversionFlowAmount := new(big.Int).Mul(prevBlockConversionFlowAmount, big.NewInt(int64(params.MinerDifficultyWindow)-1))
 	newConversionFlowAmount = new(big.Int).Add(newConversionFlowAmount, currentBlockConversionAmount)
-	newConversionFlowAmount = new(big.Int).Div(newConversionFlowAmount, big.NewInt(100))
+	newConversionFlowAmount = new(big.Int).Div(newConversionFlowAmount, big.NewInt(int64(params.MinerDifficultyWindow)))
+	// Make sure that the conversion flow amount doesnt go below the MinConversionFlowAmount
+	if newConversionFlowAmount.Cmp(params.MinConversionFlowAmount) < 0 {
+		return params.MinConversionFlowAmount
+	}
 	return newConversionFlowAmount
 }
 
@@ -1334,7 +1317,7 @@ func (hc *HeaderChain) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, 
 }
 
 // ComputeKQuaiDiscount calculates the change in the K Quai
-func (hc *HeaderChain) ComputeKQuaiDiscount(block *types.WorkObject) *big.Int {
+func (hc *HeaderChain) ComputeKQuaiDiscount(block *types.WorkObject, exchangeRate *big.Int) *big.Int {
 	if block.NumberU64(common.PRIME_CTX) <= params.ControllerKickInBlock {
 		return params.StartingKQuaiDiscount
 	}
@@ -1342,43 +1325,37 @@ func (hc *HeaderChain) ComputeKQuaiDiscount(block *types.WorkObject) *big.Int {
 	// window and applying the discount on the conversion flow will offset the
 	// amount of money that can be made by arbitraging the exchange rate
 	// adjustment
-	kQuaiOld := big.NewInt(0)
-	if block.NumberU64(common.PRIME_CTX) <= 1000 {
-		kQuaiOld = params.ExchangeRate
+	var kQuaiOld *big.Int
+	if block.NumberU64(common.PRIME_CTX) <= params.MinerDifficultyWindow {
+		return big.NewInt(0)
 	} else {
-		prevBlock := hc.GetBlockByNumber(block.NumberU64(common.PRIME_CTX) - 1000)
+		prevBlock := hc.GetBlockByNumber(block.NumberU64(common.PRIME_CTX) - params.MinerDifficultyWindow)
 		kQuaiOld = prevBlock.ExchangeRate()
 	}
-	// If the discount is between -100 and 100 the discount is applied, if its
-	// more than 100 or less than -100, the whole of conversion amount is
-	// consumed
-	kQuaiDiscount := new(big.Int).Sub(kQuaiOld, block.ExchangeRate())
-	kQuaiDiscount = new(big.Int).Mul(kQuaiDiscount, big.NewInt(100))
+
+	// Since kQuai is a big number to capture the change in magniture better,
+	// KQuaiDiscountMultiplier is used
+	kQuaiDiscount := new(big.Int).Sub(kQuaiOld, exchangeRate)
+	kQuaiDiscount = new(big.Int).Mul(kQuaiDiscount, big.NewInt(params.KQuaiDiscountMultiplier))
 	kQuaiDiscount = new(big.Int).Div(kQuaiDiscount, kQuaiOld)
-	// First check is that the discount value is negative
-	// and cap the values between 0 or 100
+
+	// Bound the kQuaiDiscount value between 0 and KQuaiDiscountMultiplier
 	if kQuaiDiscount.Cmp(big.NewInt(0)) < 0 {
-		if kQuaiDiscount.Cmp(big.NewInt(-100)) < 0 {
-			kQuaiDiscount = big.NewInt(100)
+		if kQuaiDiscount.Cmp(big.NewInt(-params.KQuaiDiscountMultiplier)) < 0 {
+			kQuaiDiscount = big.NewInt(params.KQuaiDiscountMultiplier)
 		} else {
 			kQuaiDiscount = new(big.Int).Mul(kQuaiDiscount, big.NewInt(-1))
 		}
 	} else {
-		if kQuaiDiscount.Cmp(big.NewInt(100)) > 0 {
-			kQuaiDiscount = big.NewInt(100)
+		if kQuaiDiscount.Cmp(big.NewInt(params.KQuaiDiscountMultiplier)) > 0 {
+			kQuaiDiscount = big.NewInt(params.KQuaiDiscountMultiplier)
 		}
 	}
-	// Read the kQuai discount value stored for the parent
-	parent := hc.GetBlockByHash(block.ParentHash(common.PRIME_CTX))
-	if parent == nil {
-		return nil
-	}
-	kQuaiDiscountParent := parent.KQuaiDiscount()
 	// KQuaiDiscount value that is used is also a ewma with the same frequency as
-	// the exchange rate adjustment
-	newKQuaiDiscount := new(big.Int).Mul(kQuaiDiscountParent, big.NewInt(999))
+	// the miner difficulty window
+	newKQuaiDiscount := new(big.Int).Mul(block.KQuaiDiscount(), big.NewInt(int64(params.MinerDifficultyWindow)-1))
 	newKQuaiDiscount = new(big.Int).Add(newKQuaiDiscount, kQuaiDiscount)
-	newKQuaiDiscount = new(big.Int).Div(newKQuaiDiscount, big.NewInt(1000))
+	newKQuaiDiscount = new(big.Int).Div(newKQuaiDiscount, big.NewInt(int64(params.MinerDifficultyWindow)))
 	return newKQuaiDiscount
 }
 

@@ -112,6 +112,7 @@ type fullNodeBackend interface {
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error)
 	CurrentBlock() *types.WorkObject
+	CalcOrder(wo *types.WorkObject) (*big.Int, int, error)
 }
 
 // Service implements an Quai netstats reporting daemon that pushes local
@@ -1009,31 +1010,37 @@ type blockTransactionStats struct {
 
 // Trusted Only
 type blockDetailStats struct {
-	Timestamp         *big.Int `json:"timestamp"`
-	ZoneHeight        uint64   `json:"zoneHeight"`
-	RegionHeight      uint64   `json:"regionHeight"`
-	PrimeHeight       uint64   `json:"primeHeight"`
-	Chain             string   `json:"chain"`
-	Entropy           string   `json:"entropy"`
-	Difficulty        string   `json:"difficulty"`
-	QuaiPerQi         string   `json:"quaiPerQi"`
-	QuaiReward        string   `json:"quaiReward"`
-	QiReward          string   `json:"qiReward"`
-	QiType            bool     `json:"qiType"`
-	UncleCount        uint64   `json:"uncleCount"`
-	WoCount           uint64   `json:"woCount"`
-	ExchangeRate      *big.Int `json:"exchangeRate"`
-	BaseFee           *big.Int `json:"baseFee"`
-	GasLimit          uint64   `json:"gasLimit"`
-	GasUsed           uint64   `json:"gasUsed"`
-	StateLimit        uint64   `json:"stateLimit"`
-	StateUsed         uint64   `json:"stateUsed"`
-	QuaiSupplyAdded   *big.Int `json:"quaiSupplyAdded"`
-	QuaiSupplyRemoved *big.Int `json:"quaiSupplyRemoved"`
-	QuaiSupplyTotal   *big.Int `json:"quaiSupplyTotal"`
-	QiSupplyAdded     *big.Int `json:"qiSupplyAdded"`
-	QiSupplyRemoved   *big.Int `json:"qiSupplyRemoved"`
-	QiSupplyTotal     *big.Int `json:"qiSupplyTotal"`
+	Timestamp            *big.Int `json:"timestamp"`
+	ZoneHeight           uint64   `json:"zoneHeight"`
+	RegionHeight         uint64   `json:"regionHeight"`
+	PrimeHeight          uint64   `json:"primeHeight"`
+	Chain                string   `json:"chain"`
+	Entropy              string   `json:"entropy"`
+	Difficulty           string   `json:"difficulty"`
+	QuaiPerQi            string   `json:"quaiPerQi"`
+	QuaiReward           string   `json:"quaiReward"`
+	QiReward             string   `json:"qiReward"`
+	QiType               bool     `json:"qiType"`
+	UncleCount           uint64   `json:"uncleCount"`
+	WoCount              uint64   `json:"woCount"`
+	ExchangeRate         *big.Int `json:"exchangeRate"`
+	BaseFee              *big.Int `json:"baseFee"`
+	GasLimit             uint64   `json:"gasLimit"`
+	GasUsed              uint64   `json:"gasUsed"`
+	StateLimit           uint64   `json:"stateLimit"`
+	StateUsed            uint64   `json:"stateUsed"`
+	QuaiSupplyAdded      *big.Int `json:"quaiSupplyAdded"`
+	QuaiSupplyRemoved    *big.Int `json:"quaiSupplyRemoved"`
+	QuaiSupplyTotal      *big.Int `json:"quaiSupplyTotal"`
+	QiSupplyAdded        *big.Int `json:"qiSupplyAdded"`
+	QiSupplyRemoved      *big.Int `json:"qiSupplyRemoved"`
+	QiSupplyTotal        *big.Int `json:"qiSupplyTotal"`
+	KQuai                *big.Int `json:"kQuai"`
+	KQi                  *big.Int `json:"kQi"`
+	KQuaiSlip            *big.Int `json:"kQuaiSlip"`
+	ConversionFlowAmount *big.Int `json:"conversionFlowAmount"`
+	MinerDifficulty      *big.Int `json:"minerDifficulty"`
+	Slip                 *big.Int `json:"slip"`
 }
 
 // Everyone sends every block
@@ -1300,33 +1307,76 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 		s.backend.Logger().WithField("err", err).Error("Failed to get supply analytics")
 	}
 
+	kQuaiSlip := primeTerminus.KQuaiDiscount()
+	conversionFlowAmount := primeTerminus.ConversionFlowAmount()
+	kQuai := primeTerminus.ExchangeRate()
+	kQi := params.OneOverKqi(primeTerminus.NumberU64(common.ZONE_CTX))
+	minerDifficulty := primeTerminus.MinerDifficulty()
+
+	_, blockOrder, err := s.backend.(fullNodeBackend).CalcOrder(block)
+	if err != nil {
+		s.backend.Logger().WithField("err", err).Error("Failed to calculate order of the block")
+	}
+	var inboundEtxs types.Transactions
+	conversionAmount := big.NewInt(0)
+	if blockOrder == common.PRIME_CTX {
+		inboundEtxs = rawdb.ReadInboundEtxs(s.backend.Database(), block.Hash())
+		if inboundEtxs != nil {
+			conversionAmount = misc.ComputeConversionAmountInQuai(block, inboundEtxs)
+		}
+	} else {
+		inboundEtxs = rawdb.ReadInboundEtxs(s.backend.Database(), primeTerminus.Hash())
+		if inboundEtxs != nil {
+			conversionAmount = misc.ComputeConversionAmountInQuai(primeTerminus, inboundEtxs)
+		}
+	}
+
+	slip := big.NewInt(0)
+	if conversionAmount.Cmp(common.Big0) != 0 {
+		// As running the inboundEtxs processing is expensive, the slip is
+		// calculated on the parent flow and k quai discount values
+		conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(conversionAmount, new(big.Int).SetInt64(params.KQuaiDiscountMultiplier-block.KQuaiDiscount().Int64()))
+		conversionAmountAfterKQuaiDiscount = new(big.Int).Div(conversionAmountAfterKQuaiDiscount, new(big.Int).SetInt64(params.KQuaiDiscountMultiplier))
+		conversionAmountAfterFlowDiscount := misc.ApplyCubicDiscount(conversionAmountAfterKQuaiDiscount, block.KQuaiDiscount())
+		conversionAmountAfterFlowDiscountInt, _ := conversionAmountAfterFlowDiscount.Int(nil)
+
+		slip = new(big.Int).Mul(conversionAmountAfterFlowDiscountInt, common.Big100)
+		slip = new(big.Int).Div(slip, conversionAmount)
+	}
+
 	// Assemble and return the block stats
 	return &blockDetailStats{
-		Timestamp:         new(big.Int).SetUint64(block.Time()),
-		ZoneHeight:        block.NumberU64(2),
-		RegionHeight:      block.NumberU64(1),
-		PrimeHeight:       block.NumberU64(0),
-		Chain:             s.backend.NodeLocation().Name(),
-		Entropy:           common.BigBitsToBits(s.backend.TotalLogEntropy(block)).String(),
-		Difficulty:        difficulty,
-		QuaiPerQi:         quaiPerQi,
-		QuaiReward:        quaiReward.String(),
-		QiReward:          qiReward.String(),
-		QiType:            qiType,
-		UncleCount:        uncleCount,
-		WoCount:           woCount,
-		ExchangeRate:      exchangeRate,
-		BaseFee:           block.BaseFee(),
-		GasLimit:          block.GasLimit(),
-		GasUsed:           block.GasUsed(),
-		StateLimit:        block.StateLimit(),
-		StateUsed:         block.StateUsed(),
-		QuaiSupplyAdded:   supplyAddedQuai,
-		QuaiSupplyRemoved: supplyRemovedQuai,
-		QuaiSupplyTotal:   totalSupplyQuai,
-		QiSupplyAdded:     supplyAddedQi,
-		QiSupplyRemoved:   supplyRemovedQi,
-		QiSupplyTotal:     totalSupplyQi,
+		Timestamp:            new(big.Int).SetUint64(block.Time()),
+		ZoneHeight:           block.NumberU64(2),
+		RegionHeight:         block.NumberU64(1),
+		PrimeHeight:          block.NumberU64(0),
+		Chain:                s.backend.NodeLocation().Name(),
+		Entropy:              common.BigBitsToBits(s.backend.TotalLogEntropy(block)).String(),
+		Difficulty:           difficulty,
+		QuaiPerQi:            quaiPerQi,
+		QuaiReward:           quaiReward.String(),
+		QiReward:             qiReward.String(),
+		QiType:               qiType,
+		UncleCount:           uncleCount,
+		WoCount:              woCount,
+		ExchangeRate:         exchangeRate,
+		BaseFee:              block.BaseFee(),
+		GasLimit:             block.GasLimit(),
+		GasUsed:              block.GasUsed(),
+		StateLimit:           block.StateLimit(),
+		StateUsed:            block.StateUsed(),
+		QuaiSupplyAdded:      supplyAddedQuai,
+		QuaiSupplyRemoved:    supplyRemovedQuai,
+		QuaiSupplyTotal:      totalSupplyQuai,
+		QiSupplyAdded:        supplyAddedQi,
+		QiSupplyRemoved:      supplyRemovedQi,
+		QiSupplyTotal:        totalSupplyQi,
+		KQuaiSlip:            kQuaiSlip,
+		ConversionFlowAmount: conversionFlowAmount,
+		KQuai:                kQuai,
+		KQi:                  kQi,
+		MinerDifficulty:      minerDifficulty,
+		Slip:                 slip,
 	}
 }
 
