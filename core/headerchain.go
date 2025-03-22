@@ -514,6 +514,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		if prevHeader.Hash() == commonHeader.Hash() {
 			break
 		}
+		hc.logger.Debugf("Rolling back header %s number %d", prevHeader.Hash(), prevHeader.NumberU64(hc.NodeCtx()))
 		batch := hc.headerDb.NewBatch()
 		prevHashStack = append(prevHashStack, prevHeader)
 		rawdb.DeleteCanonicalHash(batch, prevHeader.NumberU64(hc.NodeCtx()))
@@ -612,7 +613,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 
 	// Run through the hash stack to update canonicalHash and forward state processor
 	for i := len(hashStack) - 1; i >= 0; i-- {
-		hc.logger.Info("Reverting header: ", " Number Array: ", hashStack[i].NumberArray(), " Hash: ", hashStack[i].Hash())
+		hc.logger.Debugf("Rolling forward header %s number %d", hashStack[i].Hash(), hashStack[i].NumberU64(hc.NodeCtx()))
 		rawdb.WriteCanonicalHash(hc.headerDb, hashStack[i].Hash(), hashStack[i].NumberU64(hc.NodeCtx()))
 		setCurrent := true
 		if nodeCtx == common.ZONE_CTX {
