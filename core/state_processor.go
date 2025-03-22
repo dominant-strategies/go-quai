@@ -639,10 +639,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					if len(tx.Data()) == 1+common.HashLength {
 						// Coinbase is valid, no gas used
 						if internal, err := tx.To().InternalAddress(); err == nil && p.config.IndexAddressUtxos {
+							reward := params.CalculateCoinbaseValueWithLockup(tx.Value(), lockupByte, block.NumberU64(common.ZONE_CTX))
 							if balance, exists := newLockedQuai[internal]; exists {
-								newLockedQuai[internal] = balance.Add(balance, tx.Value())
+								newLockedQuai[internal] = balance.Add(balance, reward)
 							} else {
-								newLockedQuai[internal] = new(big.Int).Set(tx.Value())
+								newLockedQuai[internal] = new(big.Int).Set(reward)
 							}
 						}
 						receipt = &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: gasUsedForCoinbase, TxHash: tx.Hash()}

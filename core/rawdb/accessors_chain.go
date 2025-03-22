@@ -1861,31 +1861,20 @@ func WriteNewLockups(db ethdb.KeyValueWriter, readDb ethdb.Reader, blockHash com
 	}
 	protoDeltas := &types.ProtoKeysAndValues{KeysAndValues: make([]*types.ProtoKeyValue, 0, len(deltas))}
 	for addr, delta := range deltas {
+		gobDelta, _ := delta.GobEncode()
 		protoDeltas.KeysAndValues = append(protoDeltas.KeysAndValues, &types.ProtoKeyValue{
 			Key:   addr.Bytes(),
-			Value: delta.Bytes(),
+			Value: gobDelta,
 		})
 		data, _ := readDb.Get(addressLockupsKey(addr))
-		if len(data) == 0 {
-			if delta.Sign() >= 0 {
-				if err := db.Put(addressLockupsKey(addr), delta.Bytes()); err != nil {
-					db.Logger().WithField("err", err).Error("Failed to store new lockups 1")
-				}
-			} else {
-				db.Logger().Errorf("Address %s has negative delta %s\n", addr, delta)
-				if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
-					db.Logger().WithField("err", err).Error("Failed to store new lockups 2")
-				}
-			}
-			continue
-		} else if len(data) > 32 {
+		if len(data) > 32 {
 			db.Logger().Errorf("Address %s has invalid lockup data %s\n", addr, data)
 			continue
 		}
 		value := new(big.Int).SetBytes(data)
 		value.Add(value, delta)
 		if value.Sign() < 0 {
-			db.Logger().Errorf("Address %s has negative lockup %s\n", addr, value)
+			db.Logger().Errorf("Address %s has negative lockup %s delta %s\n", addr, value, delta.String())
 			if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
 				db.Logger().WithField("err", err).Error("Failed to store new lockups 3")
 			}
@@ -1921,28 +1910,21 @@ func UndoNewLockupsForBlock(db ethdb.KeyValueWriter, readDb ethdb.Reader, blockH
 			continue
 		}
 		addr := common.InternalAddress(delta.Key)
-		amount := new(big.Int).Neg(new(big.Int).SetBytes(delta.Value))
-		data, _ := readDb.Get(addressLockupsKey(addr))
-		if len(data) == 0 {
-			if amount.Sign() >= 0 {
-				if err := db.Put(addressLockupsKey(addr), amount.Bytes()); err != nil {
-					db.Logger().WithField("err", err).Error("Failed to store new lockups")
-				}
-			} else {
-				db.Logger().Errorf("Address %s has negative delta %s\n", addr, delta)
-				if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
-					db.Logger().WithField("err", err).Error("Failed to store new lockups")
-				}
-			}
+		amount := new(big.Int)
+		if err := amount.GobDecode(delta.Value); err != nil {
+			db.Logger().WithField("err", err).Error("Failed to decode lockup value")
 			continue
-		} else if len(data) > 32 {
+		}
+		amount.Neg(amount)
+		data, _ := readDb.Get(addressLockupsKey(addr))
+		if len(data) > 32 {
 			db.Logger().Errorf("Address %s has invalid lockup data %s\n", addr, data)
 			continue
 		}
 		value := new(big.Int).SetBytes(data)
 		value.Add(value, amount)
 		if value.Sign() < 0 {
-			db.Logger().Errorf("Address %s has negative lockup %s\n", addr, value)
+			db.Logger().Errorf("Address %s has negative lockup in reorg %s amount %s\n", addr, value.String(), amount.String())
 			if err := db.Put(addressLockupsKey(addr), []byte{0}); err != nil {
 				db.Logger().WithField("err", err).Error("Failed to store new lockups")
 			}
