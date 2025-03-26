@@ -27,6 +27,11 @@ func (a InternalAddress) Hex() string {
 	return string(a.checksumHex())
 }
 
+// Cmp compares two addresses.
+func (a InternalAddress) Cmp(other InternalAddress) int {
+	return bytes.Compare(a[:], other[:])
+}
+
 // String implements fmt.Stringer.
 func (a InternalAddress) String() string {
 	return a.Hex()
