@@ -1005,5 +1005,32 @@ func newInstructionSet() JumpTable {
 			maxStack:    maxStack(4, 1),
 			writes:      true,
 		},
+		PUSH0: {
+			execute:     opPush0,
+			constantGas: gasQuickStep,
+			minStack:    minStack(0, 1),
+			maxStack:    maxStack(0, 1),
+		},
+		TLOAD: {
+			execute:     opTload,
+			constantGas: gasWarmStorageRead,
+			minStack:    minStack(1, 1),
+			maxStack:    maxStack(1, 1),
+		},
+		TSTORE: {
+			execute:     opTstore,
+			constantGas: gasWarmStorageRead,
+			minStack:    minStack(2, 0),
+			maxStack:    maxStack(2, 0),
+			writes:      true,
+		},
+		MCOPY: {
+			execute:     opMcopy,
+			constantGas: gasFastestStep,
+			dynamicGas:  gasMcopy,
+			minStack:    minStack(3, 0),
+			maxStack:    maxStack(3, 0),
+			memorySize:  memoryMcopy,
+		},
 	}
 }
