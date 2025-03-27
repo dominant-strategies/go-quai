@@ -1038,7 +1038,7 @@ quaiTxLoop:
 	}
 
 	// Sort Eligible Transactions by Gas Price in Descending Order
-	sort.Slice(sortedTransactions, func(i, j int) bool {
+	sort.SliceStable(sortedTransactions, func(i, j int) bool {
 		return sortedTransactions[i].MinerFee().Cmp(sortedTransactions[j].MinerFee()) > 0
 	})
 
