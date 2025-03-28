@@ -96,19 +96,3 @@ func SafeMul(x, y uint64) (uint64, bool) {
 	hi, lo := bits.Mul64(x, y)
 	return lo, hi != 0
 }
-
-// Minimum returns the minimum of two integers.
-func Min(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-// Maximum returns the maximum of two integers.
-func Max(x, y int) int {
-	if x > y {
-		return x
-	}
-	return y
-}
