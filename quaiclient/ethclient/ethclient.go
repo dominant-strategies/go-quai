@@ -501,13 +501,14 @@ type TransactionArgs struct {
 // the true gas limit requirement as other transactions may be added or removed by miners,
 // but it should provide a basis for setting a reasonable default.
 func (ec *Client) EstimateFeeForQi(ctx context.Context, tx *types.Transaction) (*big.Int, error) {
-	args := TransactionArgs{
+	msg := quai.CallMsg{
+		TxType: tx.Type(),
 		TxIn:   tx.TxIn(),
 		TxOut:  tx.TxOut(),
-		TxType: types.QiTxType,
+		Data:   tx.Data(),
 	}
 	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "quai_estimateFeeForQi", args)
+	err := ec.c.CallContext(ctx, &result, "quai_estimateFeeForQi", toCallArg(msg))
 	if err != nil {
 		return nil, err
 	}
@@ -598,10 +599,10 @@ func toCallArg(msg quai.CallMsg) interface{} {
 		txOuts = append(txOuts, types.RPCTxOut{Denomination: hexutil.Uint(txout.Denomination), Address: common.BytesToAddress(txout.Address, common.Location{0, 0}).MixedcaseAddress(), Lock: (*hexutil.Big)(txout.Lock)})
 	}
 	if msg.TxIn != nil {
-		arg["txIn"] = msg.TxIn
+		arg["txIn"] = txIns
 	}
 	if msg.TxOut != nil {
-		arg["txOut"] = msg.TxOut
+		arg["txOut"] = txOuts
 	}
 	return arg
 }
