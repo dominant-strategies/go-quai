@@ -13,12 +13,12 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package rpc
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"runtime/debug"
 	"strconv"
@@ -27,6 +27,11 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
+)
+
+const (
+	MaxBatchCalls        = 10000
+	MaxBatchResponseSize = 10 * 1024 * 1024 // 10 MB
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -99,6 +104,13 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		return
 	}
 
+	if len(msgs) > MaxBatchCalls {
+		h.startCallProc(func(cp *callProc) {
+			h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{fmt.Errorf("number of calls exceeds the MaxBatchCalls of %d ", MaxBatchCalls).Error()}))
+		})
+		return
+	}
+
 	// Handle non-call messages first:
 	calls := make([]*jsonrpcMessage, 0, len(msgs))
 	for _, msg := range msgs {
@@ -109,11 +121,17 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	if len(calls) == 0 {
 		return
 	}
+	totalResponseSize := 0
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
 		answers := make([]*jsonrpcMessage, 0, len(msgs))
 		for _, msg := range calls {
 			if answer := h.handleCallMsg(cp, msg); answer != nil {
+				totalResponseSize += len(answer.String())
+				if totalResponseSize > MaxBatchResponseSize {
+					h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{fmt.Errorf("batch response size exceeds %d Bytes", MaxBatchResponseSize).Error()}))
+					return
+				}
 				answers = append(answers, answer)
 			}
 		}
