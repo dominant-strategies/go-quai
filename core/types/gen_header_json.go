@@ -478,7 +478,6 @@ func (wo *WorkObject) MarshalJSON() ([]byte, error) {
 
 	enc.WoHeader = wo.WorkObjectHeader()
 	enc.WoBody = wo.Body()
-	enc.Tx = wo.Tx()
 
 	raw, err := json.Marshal(&enc)
 	return raw, err
@@ -498,6 +497,5 @@ func (wo *WorkObject) UnmarshalJSON(input []byte) error {
 
 	wo.SetWorkObjectHeader(dec.WoHeader)
 	wo.SetBody(dec.WoBody)
-	wo.SetTx(dec.Tx)
 	return nil
 }
