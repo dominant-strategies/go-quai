@@ -1335,6 +1335,103 @@ func (s *PublicBlockChainQuaiAPI) GetKQuaiAndUpdateBit(ctx context.Context, bloc
 	return fields, nil
 }
 
+// CalculateConversionAmount returns the converted amount after applying the
+// prime terminus exchange rate, and the conversion flow discount and k quai
+// discount
+func (s *PublicBlockChainQuaiAPI) CalculateConversionAmount(ctx context.Context, tx TransactionArgs) (*hexutil.Big, error) {
+	// sanity checks to make sure that the inputs are correct for the api
+	if tx.From == nil {
+		return nil, errors.New("from field cannot be nil")
+	}
+	if tx.To == nil {
+		return nil, errors.New("to field cannot be nil")
+	}
+	if tx.Value == nil {
+		return nil, errors.New("cannot convert nil or empty value")
+	}
+	if tx.From.IsInQuaiLedgerScope() && tx.To.IsInQuaiLedgerScope() ||
+		tx.From.IsInQiLedgerScope() && tx.To.IsInQiLedgerScope() {
+		return nil, errors.New("from and to cannot be in the same ledger for conversion")
+	}
+
+	currentHeader := s.b.CurrentBlock()
+	primeTerminus := s.b.GetBlockByHash(currentHeader.PrimeTerminusHash())
+	if primeTerminus == nil {
+		return nil, errors.New("cannot find the prime terminus of the current header")
+	}
+
+	exchangeRate := primeTerminus.ExchangeRate()
+	minerDifficulty := primeTerminus.MinerDifficulty()
+	value := tx.Value.ToInt()
+
+	// calculate the 10% of the original value
+	tenPercentOriginalValue := new(big.Int).Mul(value, common.Big10)
+	tenPercentOriginalValue = new(big.Int).Div(tenPercentOriginalValue, common.Big100)
+
+	// Apply the cubic conversion flow discount and k quai discount
+	cubicDiscount := misc.ApplyCubicDiscount(value, primeTerminus.ConversionFlowAmount())
+	value, _ = cubicDiscount.Int(nil)
+
+	kQuaiDiscount := primeTerminus.KQuaiDiscount()
+	conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(value, new(big.Int).Sub(big.NewInt(params.KQuaiDiscountMultiplier), kQuaiDiscount))
+	conversionAmountAfterKQuaiDiscount = new(big.Int).Div(conversionAmountAfterKQuaiDiscount, big.NewInt(params.KQuaiDiscountMultiplier))
+
+	// check if the exchange rate is increasing or decreasing
+	var exchangeRateIncreasing bool
+	if primeTerminus.NumberU64(common.PRIME_CTX) > params.MinerDifficultyWindow {
+		prevBlock, err := s.b.BlockByNumber(ctx, rpc.BlockNumber(primeTerminus.NumberU64(common.PRIME_CTX)-params.MinerDifficultyWindow))
+		if err != nil {
+			return nil, errors.New("block minerdifficultywindow blocks behind not found")
+		}
+
+		if primeTerminus.ExchangeRate().Cmp(prevBlock.ExchangeRate()) > 0 {
+			exchangeRateIncreasing = true
+		}
+	}
+
+	// Quai to Qi conversion
+	if tx.From.IsInQuaiLedgerScope() && tx.To.IsInQiLedgerScope() {
+
+		// If the exchange rate is increasing then Quai to Qi conversion will
+		// get the k quai discount
+		if exchangeRateIncreasing && value.Cmp(common.Big0) != 0 {
+			value = new(big.Int).Set(conversionAmountAfterKQuaiDiscount)
+		}
+
+		// If the value left is less than the ten percent of the original value,
+		// reset it to the ten percent of the original value
+		if value.Cmp(tenPercentOriginalValue) < 0 {
+			value = new(big.Int).Set(tenPercentOriginalValue)
+		}
+
+		value = misc.QuaiToQi(primeTerminus, exchangeRate, minerDifficulty, value)
+
+		return (*hexutil.Big)(value), nil
+	}
+
+	// Qi to Quai conversion
+	if tx.From.IsInQiLedgerScope() && tx.To.IsInQuaiLedgerScope() {
+
+		// If the exchange rate is decreasing then Qi to Quai conversion will
+		// get the k quai discount
+		if !exchangeRateIncreasing && value.Cmp(common.Big0) != 0 {
+			value = new(big.Int).Set(conversionAmountAfterKQuaiDiscount)
+		}
+
+		// If the value left is less than the ten percent of the original value,
+		// reset it to the ten percent of the original value
+		if value.Cmp(tenPercentOriginalValue) < 0 {
+			value = new(big.Int).Set(tenPercentOriginalValue)
+		}
+
+		value = misc.QiToQuai(primeTerminus, exchangeRate, minerDifficulty, value)
+
+		return (*hexutil.Big)(value), nil
+	}
+
+	return nil, nil
+}
+
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 // Moved from PublicTransactionPoolAPI
 // quai_getTransactionReceipt
