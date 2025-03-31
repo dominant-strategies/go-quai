@@ -199,8 +199,8 @@ var (
 	ExchangeRate                                = big.NewInt(221077819000000000) // This is the initial exchange rate in Qi per Quai in Its/Qit.
 	MaxTimeDiffBetweenBlocks             int64  = 100                            // Max time difference between the blocks to 100 secs
 	OneOverAlpha                                = big.NewInt(1000)               // The alpha value for the quai to qi conversion
-	ControllerKickInBlock                uint64 = 262000                         // This is in order of prime blocks
-	CoinbaseLockupPrecompileKickInHeight        = 112000                         // The height at which the coinbase lockup precompile is enabled
+	ControllerKickInBlock                uint64 = 186000                         // This is in order of prime blocks
+	CoinbaseLockupPrecompileKickInHeight uint64 = 112000                         // The height at which the coinbase lockup precompile is enabled
 	MinBaseFeeInQits                            = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha               = big.NewInt(100)
 	BaseFeeMultiplier                           = big.NewInt(50)
