@@ -400,7 +400,7 @@ func ReadWorkObject(db ethdb.Reader, number uint64, hash common.Hash, woType typ
 	if workObjectBody == nil {
 		return nil
 	}
-	return types.NewWorkObject(workObjectHeader, workObjectBody)
+	return types.NewWorkObject(workObjectHeader, workObjectBody, nil) //TODO: mmtx transaction
 }
 
 // ReadWorkObjectWithWorkShares retreive's the work object stored in hash.
@@ -413,7 +413,7 @@ func ReadWorkObjectWithWorkShares(db ethdb.Reader, number uint64, hash common.Ha
 	if workObjectBody == nil {
 		return nil
 	}
-	return types.NewWorkObject(workObjectHeader, workObjectBody)
+	return types.NewWorkObject(workObjectHeader, workObjectBody, nil) //TODO: mmtx transaction
 }
 
 func ReadWorkObjectHeaderOnly(db ethdb.Reader, number uint64, hash common.Hash, woType types.WorkObjectView) *types.WorkObject {
@@ -425,7 +425,7 @@ func ReadWorkObjectHeaderOnly(db ethdb.Reader, number uint64, hash common.Hash, 
 	if workObjectBodyHeaderOnly == nil {
 		return nil
 	}
-	return types.NewWorkObject(workObjectHeader, workObjectBodyHeaderOnly)
+	return types.NewWorkObject(workObjectHeader, workObjectBodyHeaderOnly, nil)
 }
 
 // WriteWorkObject writes the work object of the terminus hash.
