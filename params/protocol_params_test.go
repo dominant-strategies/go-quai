@@ -187,19 +187,19 @@ func TestOneOverKQi(t *testing.T) {
 	doublingBlocks := (365 * BlocksPerDay * 269) / 100
 
 	blockNumbers := []uint64{0, 10, 1000, 10000000, 100000000000, 100000000}
-	expectedOneOverKQi := []uint64{26000000, 26000015, 26001532, 41324434, 104000000, 104000000}
+	expectedOneOverKQi := []uint64{26000000, 26000015, 26001532, 41324, 104000, 104000}
 
 	// at the doubling block, it should be double the base rate
 	blockNumbers = append(blockNumbers, doublingBlocks)
-	expectedOneOverKQi = append(expectedOneOverKQi, 52000000)
+	expectedOneOverKQi = append(expectedOneOverKQi, 52000)
 
 	// at the second doubling, it should be 4x the base rate
 	blockNumbers = append(blockNumbers, 2*doublingBlocks)
-	expectedOneOverKQi = append(expectedOneOverKQi, 104000000)
+	expectedOneOverKQi = append(expectedOneOverKQi, 104000)
 
 	// at 1.5 first doubling, it should be 3x the base rate
 	blockNumbers = append(blockNumbers, 3*doublingBlocks/2)
-	expectedOneOverKQi = append(expectedOneOverKQi, 78000000)
+	expectedOneOverKQi = append(expectedOneOverKQi, 78000)
 
 	for i, number := range blockNumbers {
 		oneOverKQi := OneOverKqi(number)
