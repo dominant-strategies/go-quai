@@ -1063,10 +1063,7 @@ func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.WorkObject) (
 		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
 			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
 		}
-		newWo := &types.WorkObject{}
-		newWo.SetWorkObjectHeader(types.CopyWorkObjectHeader(b.WorkObjectHeader()))
-		newWo.WithBody(b.Header(), b.Transactions(), b.OutboundEtxs(), b.Uncles(), subManifest, b.InterlinkHashes())
-		return newWo, nil
+		return types.NewWorkObjectWithHeaderAndTx(b.WorkObjectHeader(), b.Tx()).WithBody(b.Header(), b.Transactions(), b.OutboundEtxs(), b.Uncles(), subManifest, b.InterlinkHashes()), nil
 	}
 }
 
@@ -1169,7 +1166,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShar
 			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
 			return err
 		}
-		wo := types.NewWorkObject(workShare, pendingBlockBody.Body())
+		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
 		shareView := wo.ConvertToWorkObjectShareView(txs)
 		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
 		if err != nil {

@@ -143,12 +143,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	copy(manifest, body.SubManifest)
 	var interlinkHashes common.Hashes
 	copy(interlinkHashes, body.InterlinkHashes)
-
-	newWo := &types.WorkObject{}
-	newWo.SetWorkObjectHeader(types.CopyWorkObjectHeader(head.WorkObjectHeader()))
-	newWo.WithBody(body.Header, txs, etxs, body.UncleHashes, manifest, interlinkHashes)
-
-	return newWo, nil
+	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(body.Header, txs, etxs, body.UncleHashes, manifest, interlinkHashes), nil
 }
 
 // HeaderByHash returns the block header with the given hash.

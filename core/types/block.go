@@ -185,7 +185,7 @@ func EmptyHeader() *Header {
 
 // Construct an empty header
 func EmptyWorkObject(nodeCtx int) *WorkObject {
-	wo := &WorkObject{woHeader: &WorkObjectHeader{}, woBody: &WorkObjectBody{}}
+	wo := &WorkObject{woHeader: &WorkObjectHeader{}, woBody: &WorkObjectBody{}, tx: &Transaction{}}
 	h := EmptyHeader()
 	wo.woHeader.SetHeaderHash(EmptyRootHash)
 	wo.woHeader.SetParentHash(EmptyRootHash)

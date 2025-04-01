@@ -24,6 +24,7 @@ var ObjectPool = sync.Pool{
 type WorkObject struct {
 	woHeader *WorkObjectHeader
 	woBody   *WorkObjectBody
+	tx       *Transaction
 
 	// caches
 	appendTime                atomic.Value
@@ -96,6 +97,10 @@ func (wo *WorkObject) Body() *WorkObjectBody {
 	return wo.woBody
 }
 
+func (wo *WorkObject) Tx() *Transaction {
+	return wo.tx
+}
+
 ////////////////////////////////////////////////////////////
 /////////////////// Work Object Setters ///////////////
 ////////////////////////////////////////////////////////////
@@ -106,6 +111,10 @@ func (wo *WorkObject) SetWorkObjectHeader(header *WorkObjectHeader) {
 
 func (wo *WorkObject) SetBody(body *WorkObjectBody) {
 	wo.woBody = body
+}
+
+func (wo *WorkObject) SetTx(tx *Transaction) {
+	wo.tx = tx
 }
 
 func (wo *WorkObject) SetAppendTime(appendTime time.Duration) {
@@ -725,11 +734,16 @@ func CalcUncleHash(uncles []*WorkObjectHeader) (hash common.Hash) {
 /////////////////// New Object Creation Methods ////////////
 ////////////////////////////////////////////////////////////
 
-func NewWorkObject(woHeader *WorkObjectHeader, woBody *WorkObjectBody) *WorkObject {
+func NewWorkObject(woHeader *WorkObjectHeader, woBody *WorkObjectBody, tx *Transaction) *WorkObject {
 	return &WorkObject{
 		woHeader: woHeader,
 		woBody:   woBody,
+		tx:       tx,
 	}
+}
+
+func NewWorkObjectWithHeaderAndTx(header *WorkObjectHeader, tx *Transaction) *WorkObject {
+	return &WorkObject{woHeader: CopyWorkObjectHeader(header), tx: tx}
 }
 
 func (wo *WorkObject) WithBody(header *Header, txs []*Transaction, etxs []*Transaction, uncles []*WorkObjectHeader, manifest BlockManifest, interlinkHashes common.Hashes) *WorkObject {
@@ -753,6 +767,7 @@ func (wo *WorkObject) WithBody(header *Header, txs []*Transaction, etxs []*Trans
 	newWo := &WorkObject{
 		woHeader: CopyWorkObjectHeader(wo.woHeader),
 		woBody:   woBody,
+		tx:       wo.tx,
 	}
 	return newWo
 }
@@ -823,13 +838,14 @@ func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, 
 func NewWorkObjectWithHeader(header *WorkObject, tx *Transaction, nodeCtx int, woType WorkObjectView) *WorkObject {
 	woHeader := NewWorkObjectHeader(header.Hash(), header.ParentHash(common.ZONE_CTX), header.WorkObjectHeader().number, header.WorkObjectHeader().difficulty, header.WorkObjectHeader().PrimeTerminusNumber(), header.WorkObjectHeader().txHash, header.WorkObjectHeader().nonce, header.WorkObjectHeader().lock, header.WorkObjectHeader().time, header.Location(), header.PrimaryCoinbase(), header.WorkObjectHeader().data)
 	woBody, _ := NewWorkObjectBody(header.Body().Header(), nil, nil, nil, nil, nil, nil, nodeCtx)
-	return NewWorkObject(woHeader, woBody)
+	return NewWorkObject(woHeader, woBody, tx)
 }
 
 func CopyWorkObject(wo *WorkObject) *WorkObject {
 	newWo := &WorkObject{
 		woHeader: CopyWorkObjectHeader(wo.woHeader),
 		woBody:   CopyWorkObjectBody(wo.woBody),
+		tx:       wo.tx,
 	}
 	return newWo
 }
@@ -839,6 +855,9 @@ func (wo *WorkObject) RPCMarshalWorkObject() map[string]interface{} {
 	}
 	if wo.woBody != nil {
 		result["woBody"] = wo.woBody.RPCMarshalWorkObjectBody()
+	}
+	if wo.tx != nil {
+		result["tx"] = wo.tx
 	}
 	return result
 }
@@ -878,10 +897,22 @@ func (wo *WorkObject) ProtoEncode(woType WorkObjectView) (*ProtoWorkObject, erro
 		if err != nil {
 			return nil, err
 		}
-		return &ProtoWorkObject{
-			WoHeader: header,
-			WoBody:   body,
-		}, nil
+		if wo.tx == nil || wo.tx.inner == nil {
+			return &ProtoWorkObject{
+				WoHeader: header,
+				WoBody:   body,
+			}, nil
+		} else {
+			tx, err := wo.tx.ProtoEncode()
+			if err != nil {
+				return nil, err
+			}
+			return &ProtoWorkObject{
+				WoHeader: header,
+				WoBody:   body,
+				Tx:       tx,
+			}, nil
+		}
 	}
 }
 
@@ -967,6 +998,13 @@ func (wo *WorkObject) ProtoDecode(data *ProtoWorkObject, location common.Locatio
 		err = wo.woBody.ProtoDecode(data.GetWoBody(), location, woType)
 		if err != nil {
 			return err
+		}
+		if data.Tx != nil {
+			wo.tx = new(Transaction)
+			err = wo.tx.ProtoDecode(data.GetTx(), location)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
