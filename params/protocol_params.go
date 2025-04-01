@@ -217,6 +217,9 @@ var (
 	MinCubicDiscountBasisPoint   uint64 = 20
 	MinCubicDiscountDivisor      uint64 = 10000
 	TokenDiffAlpha                      = big.NewInt(5)
+
+	// QiActivationBlock is the approximated Zone block number for the corresponding prime controller kick in block
+	QiActivationBlock uint64 = 1220000
 )
 
 const (
@@ -269,8 +272,11 @@ func MinGasLimit(number uint64) uint64 {
 }
 
 func OneOverKqi(number uint64) *big.Int {
-	// This is the number of hashes need to get 1 Qit. 2.6e9 is ~$0.001
+	// This is the number of hashes need to get 1 Qit. 8e9 is ~$0.001
 	baseOneOverKqi := big.NewInt(26000000)
+	if number > QiActivationBlock {
+		baseOneOverKqi = big.NewInt(8000000000)
+	}
 	// Based on the research done
 	// https://epoch.ai/blog/predicting-gpu-performance, it seems that the
 	// decrease in the transistor size and the improvements of flops from the
