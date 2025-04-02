@@ -124,10 +124,6 @@ func (b *Bloom) ProtoDecode(data []byte) error {
 	return nil
 }
 
-func (b Bloom) CheckAllZeros() bool {
-	return b == Bloom{}
-}
-
 // CreateBloom creates a bloom filter out of the give Receipts (+Logs)
 func CreateBloom(receipts Receipts) Bloom {
 	buf := make([]byte, 6)
