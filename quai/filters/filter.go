@@ -92,12 +92,10 @@ func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Addres
 		}
 		filters = append(filters, filter)
 	}
-	size, _ := backend.BloomStatus()
 
 	// Create a generic filter and convert it into a range filter
 	filter := newFilter(backend, addresses, topics)
 
-	filter.matcher = bloombits.NewMatcher(size, filters, logger)
 	filter.begin = begin
 	filter.end = end
 
