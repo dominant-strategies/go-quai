@@ -266,10 +266,6 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 		return nil, ErrBloomNotFound
 	}
 
-	if bloom.CheckAllZeros() {
-		return nil, nil
-	}
-	
 	return &bloom, nil
 }
 
