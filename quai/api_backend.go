@@ -717,6 +717,10 @@ func (b *QuaiAPIBackend) AddToCalcOrderCache(hash common.Hash, order int, intrin
 	b.quai.core.AddToCalcOrderCache(hash, order, intrinsicS)
 }
 
+func (b *QuaiAPIBackend) AddPendingWorkObjectBody(wo *types.WorkObject) {
+	b.quai.core.AddPendingWorkObjectBody(wo)
+}
+
 func (b *QuaiAPIBackend) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
 	return b.quai.core.ApplyPoWFilter(wo)
 }

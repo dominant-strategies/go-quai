@@ -126,6 +126,11 @@ type transactionOrderingInfo struct {
 	block                   *types.WorkObject
 }
 
+// Exposes public methods of the worker
+type Worker interface {
+	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
+}
+
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
@@ -297,6 +302,19 @@ func (w *worker) pickCoinbases() {
 		// if MinerPreference > 0.5, bias is towards Qi
 		w.primaryCoinbase = w.qiCoinbase
 	}
+}
+
+func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	custom := types.CopyWorkObject(original)
+	custom.WorkObjectHeader().PickCoinbase(minerPreference, quaiCoinbase, qiCoinbase)
+	custom.WorkObjectHeader().SetData([]byte{lock})
+
+	w.AddPendingWorkObjectBody(custom)
+
+	return custom
 }
 
 // setPrimaryCoinbase sets the coinbase used to initialize the block primary coinbase field.
