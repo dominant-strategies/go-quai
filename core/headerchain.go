@@ -1301,6 +1301,11 @@ func (hc *HeaderChain) ComputeConversionFlowAmount(parent *types.WorkObject, cur
 	if newConversionFlowAmount.Cmp(params.MinConversionFlowAmount) < 0 {
 		return params.MinConversionFlowAmount
 	}
+	twoXPrevConversionFlowAmount := new(big.Int).Mul(prevBlockConversionFlowAmount, common.Big2)
+	// cap the newConversionFlowAmount to 2x the prevBlockConversionFlowAmount
+	if newConversionFlowAmount.Cmp(twoXPrevConversionFlowAmount) > 0 {
+		return twoXPrevConversionFlowAmount
+	}
 	return newConversionFlowAmount
 }
 
