@@ -122,6 +122,10 @@ func (tx *QuaiTx) isCoinbase() bool {
 	panic("quai TX does not have isCoinbase field")
 }
 
+func (tx *QuaiTx) setEtxType(typ uint64) {
+	panic("quai TX does not have set etx type method")
+}
+
 func (tx *QuaiTx) setTo(to common.Address) {
 	tx.To = &to
 }

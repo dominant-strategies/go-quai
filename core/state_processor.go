@@ -716,6 +716,79 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				timeDelta := time.Since(startTimeEtx)
 				timeCoinbase += timeDelta
 				continue
+			} else if etx.EtxType() == types.ConversionRevertType {
+				// checking to make sure that the conversions that have to be
+				// refunded and processed before processing etxs from other
+				// zones
+				to := tx.To()
+				var sender common.Address
+				if to.IsInQuaiLedgerScope() {
+					sender = common.BytesToAddress(tx.Data()[2:22], p.hc.NodeLocation())
+				} else {
+					sender = tx.ETXSender()
+				}
+
+				// If the sender is in Quai ledger scope and to is in Qi,
+				// the reverted transaction should add the balance back to
+				// the original sender (Quai ledger)
+				if sender.IsInQuaiLedgerScope() && to.IsInQiLedgerScope() {
+					senderInternal, err := sender.InternalAddress()
+					if err != nil {
+						return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+					}
+					statedb.AddBalance(senderInternal, etx.Value())
+					*usedGas += params.QiToQuaiConversionGas
+					totalEtxGas += params.QiToQuaiConversionGas
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
+					receipts = append(receipts, receipt)
+					continue
+				}
+				if sender.IsInQiLedgerScope() && to.IsInQuaiLedgerScope() {
+					value := etx.Value()
+					// Lock the refund for ConversionLockPeriod
+					lock := new(big.Int).Set(new(big.Int).Add(block.Number(nodeCtx), big.NewInt(int64(params.ConversionLockPeriod))))
+					txGas := etx.Gas()
+					denominations := misc.FindMinDenominations(value)
+					outputIndex := uint16(0)
+					total := big.NewInt(0)
+					// Iterate over the denominations in descending order
+					for denomination := types.MaxDenomination; denomination > types.MaxTrimDenomination; denomination-- {
+
+						for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+							if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+								break
+							}
+							if err := gp.SubGas(params.CallValueTransferGas); err != nil {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							}
+							txGas -= params.CallValueTransferGas
+							*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
+							totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
+							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), sender.Bytes(), lock))
+							// the ETX hash is guaranteed to be unique
+							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							}
+							supplyAddedQi.Add(supplyAddedQi, types.Denominations[uint8(denomination)])
+
+							utxosCreatedDeleted.UtxosCreatedHashes = append(utxosCreatedDeleted.UtxosCreatedHashes, types.UTXOHash(etx.Hash(), outputIndex, utxo))
+							utxosCreatedDeleted.UtxosCreatedKeys = append(utxosCreatedDeleted.UtxosCreatedKeys, rawdb.UtxoKeyWithDenomination(etx.Hash(), outputIndex, utxo.Denomination))
+							p.logger.Debugf("Reverting a Qi to Quai Conversionh %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, lock)
+							total.Add(total, types.Denominations[uint8(denomination)])
+							outputIndex++
+						}
+					}
+					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: etx.Gas() - txGas, TxHash: tx.Hash(),
+						Logs: []*types.Log{{
+							Address: *etx.To(),
+							Topics:  []common.Hash{types.QiToQuaiRevertTopic},
+							Data:    total.Bytes(),
+						}},
+					}
+					receipts = append(receipts, receipt)
+					allLogs = append(allLogs, receipt.Logs...)
+					continue
+				}
 			} else if !types.IsCoinBaseTx(tx) && etx.To().IsInQiLedgerScope() {
 				if etx.ETXSender().Location().Equal(*etx.To().Location()) { // Quai->Qi Conversion
 					if block.PrimeTerminusNumber().Uint64() < params.ControllerKickInBlock {
@@ -835,6 +908,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					receipts = append(receipts, receipt)
 					continue // locked and redeemed later
 				}
+
 				// Apply ETX to Quai state
 				// This could also be an unlocked Quai coinbase redemption ETX, the process is the same
 				fees := big.NewInt(0)
@@ -1348,9 +1422,20 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 	if tx.ChainId().Cmp(signer.ChainID()) != 0 {
 		return nil, fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
-	if len(tx.Data()) != 0 && len(tx.Data()) != common.AddressLength {
-		return nil, fmt.Errorf("tx %v emits UTXO with invalid data length %d", tx.Hash().Hex(), len(tx.Data()))
+	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) != common.AddressLength) {
+		return nil, fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength)
 	}
+
+	// Wrap Qi Transaction
+	if len(tx.Data()) == common.AddressLength && !common.BytesToAddress(tx.Data()[:], currentHeader.Location()).IsInQuaiLedgerScope() {
+		return nil, fmt.Errorf("tx %v emits UTXO with contract that is not in quai ledger scope", tx.Hash().Hex())
+	}
+
+	// Qi To Quai Conversion
+	if len(tx.Data()) == params.MaxQiTxDataLength && !common.BytesToAddress(tx.Data()[2:22], currentHeader.Location()).IsInQiLedgerScope() {
+		return nil, fmt.Errorf("tx %v emits UTXO with data refund address not in Qi ledger scope", tx.Hash().Hex())
+	}
+
 	totalQitIn := big.NewInt(0)
 	addresses := make(map[common.AddressBytes]struct{})
 	inputs := make(map[uint]uint64)
@@ -1455,15 +1540,12 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
 
-		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == 0 { // Qi->Quai conversion
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == params.MaxQiTxDataLength { // Qi->Quai conversion
 			conversion = true
-			if txOut.Denomination < params.MinQiConversionDenomination {
-				return nil, fmt.Errorf("tx %v emits UTXO with value %d less than minimum denomination %d", tx.Hash().Hex(), txOut.Denomination, params.MinQiConversionDenomination)
-			}
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
 			delete(addresses, toAddr.Bytes20())
 			continue
-		} else if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) != 0 { // Qi wrapping
+		} else if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == common.AddressLength { // Qi wrapping
 			ownerContract := common.BytesToAddress(tx.Data(), location)
 			if _, err := ownerContract.InternalAndQuaiAddress(); err != nil {
 				return nil, err
@@ -1530,9 +1612,6 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64())
 	}
-	if conversion && totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
-		return nil, fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64())
-	}
 	if conversion || wrapping {
 		if conversion && wrapping {
 			return nil, fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash())
@@ -1595,9 +1674,21 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	if currentHeader == nil || batch == nil || gp == nil || usedGas == nil || signer == nil || etxRLimit == nil || etxPLimit == nil {
 		return nil, nil, nil, errors.New("one of the parameters is nil"), nil
 	}
-	if len(tx.Data()) != 0 && len(tx.Data()) != common.AddressLength {
-		return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with invalid data length %d", tx.Hash().Hex(), len(tx.Data())), nil
+
+	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) != common.AddressLength) {
+		return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength), nil
 	}
+
+	// Wrap Qi Transaction
+	if len(tx.Data()) == common.AddressLength && !common.BytesToAddress(tx.Data()[:], currentHeader.Location()).IsInQuaiLedgerScope() {
+		return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with contract that is not in quai ledger scope", tx.Hash().Hex()), nil
+	}
+
+	// Qi To Quai Conversion
+	if len(tx.Data()) == params.MaxQiTxDataLength && !common.BytesToAddress(tx.Data()[2:22], currentHeader.Location()).IsInQiLedgerScope() {
+		return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with data refund address not in Qi ledger scope", tx.Hash().Hex()), nil
+	}
+
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx, qiScalingFactor)
 	*usedGas += intrinsicGas
 	if err := gp.SubGas(intrinsicGas); err != nil {
@@ -1700,7 +1791,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		addresses[toAddr.Bytes20()] = struct{}{}
 		outputs[uint(txOut.Denomination)]++
 
-		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == 0 { // Qi->Quai conversion
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == params.MaxQiTxDataLength { // Qi->Quai conversion
 			conversion = true
 			convertAddress = toAddr
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
@@ -1791,18 +1882,14 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64()), nil
 	}
-	if conversion && totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
-		return nil, nil, nil, fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64()), nil
-	}
 	if conversion || wrapping {
 		if conversion && wrapping {
 			return nil, nil, nil, fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash()), nil
 		}
 		etxType := types.ConversionType
-		data := []byte{}
+		data := tx.Data()
 		if wrapping {
 			etxType = types.WrappingQiType
-			data = tx.Data()
 		}
 		// Since this transaction contains a conversion, check if the required conversion gas is paid
 		// The user must pay this to the miner now, but it is only added to the block gas limit when the ETX is played in the destination
@@ -1815,7 +1902,11 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		if ETXPGas > *etxPLimit {
 			return nil, nil, nil, fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXPGas, etxPLimit), nil
 		}
-		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: uint64(etxType), OriginatingTxHash: tx.Hash(), Gas: 0, Data: data} // Value is in Qits not Denomination
+		// gas left
+		gasLeft := new(big.Int).Sub(txFeeInQuai, minimumFeeInQuai)
+		gasLeft = new(big.Int).Div(gasLeft, currentHeader.BaseFee())
+
+		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: uint64(etxType), OriginatingTxHash: tx.Hash(), Gas: gasLeft.Uint64(), Data: data} // Value is in Qits not Denomination
 		*usedGas += params.ETXGas
 		if err := gp.SubGas(params.ETXGas); err != nil {
 			return nil, nil, nil, err, nil

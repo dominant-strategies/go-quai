@@ -25,6 +25,7 @@ var (
 	QuaiToQiConversionTopic = crypto.Keccak256Hash([]byte("QuaiToQiConversion"))
 	QuaiCoinbaseLockupTopic = crypto.Keccak256Hash([]byte("QuaiCoinbaseLockup"))
 	QiCoinbaseLockupTopic   = crypto.Keccak256Hash([]byte("QiCoinbaseLockup"))
+	QiToQuaiRevertTopic     = crypto.Keccak256Hash([]byte("QiToQuaiRevert"))
 )
 
 // Denominations is a map of denomination to number of Qi

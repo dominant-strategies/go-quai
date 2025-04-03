@@ -66,7 +66,7 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block, parent *types.WorkObject, 
 			} else if tx.To().IsInQuaiLedgerScope() {
 				tokenChoices.Quai++
 			}
-		} else if types.IsConversionTx(tx) {
+		} else if types.IsConversionTx(tx) && tx.Value().Cmp(common.Big0) > 0 {
 			// Here the parents exchange rate is used to calculate the
 			// conversion value because the blocks exchange rate is yet to be
 			// calculated
@@ -87,7 +87,7 @@ func CalculateTokenChoicesSet(hc *HeaderChain, block, parent *types.WorkObject, 
 		// downwards and in the case of Qi being greater than Quai the
 		// difficulty is is shifted upwards
 		// delta to shift by is calculated as
-		// diffDelta = (1-alpha) * (actualAmount - realizedAmount)/actualAmount
+		// diff (+-)= diff * alpha * (actualAmount - realizedAmount)/actualAmount
 		diffErr := new(big.Int).Sub(actualConversionAmountInHash, realizedConversionAmountInHash)
 		diffErr = new(big.Int).Mul(diffErr, tokenChoices.Diff)
 		diffErr = new(big.Int).Div(diffErr, actualConversionAmountInHash)

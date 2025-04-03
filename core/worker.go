@@ -1130,6 +1130,81 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 		}
 	}
+
+	// Checking to make sure that the conversions that have to be
+	// refunded and processed before processing etxs from other
+	// zones
+	if tx.Type() == types.ExternalTxType && tx.EtxType() == types.ConversionRevertType {
+		to := tx.To()
+		var sender common.Address
+		if to.IsInQuaiLedgerScope() {
+			sender = common.BytesToAddress(tx.Data()[2:22], w.hc.NodeLocation())
+		} else {
+			sender = tx.ETXSender()
+		}
+
+		// If the sender is in Quai ledger scope and to is in Qi,
+		// the reverted transaction should add the balance back to
+		// the original sender (Quai ledger)
+		if sender.IsInQuaiLedgerScope() && to.IsInQiLedgerScope() {
+			// original sender is the to address
+			senderInternal, err := sender.InternalAddress()
+			if err != nil {
+				return []*types.Log{}, false, err
+			}
+			// refund the sender
+			env.state.AddBalance(senderInternal, tx.Value())
+			gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
+			env.wo.Header().SetGasUsed(gasUsed)
+			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+			env.txs = append(env.txs, tx)
+			receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
+			env.receipts = append(env.receipts, receipt)
+			return []*types.Log{}, false, nil
+		}
+		if sender.IsInQiLedgerScope() && to.IsInQuaiLedgerScope() {
+			value := tx.Value()
+			// lock the refund for ConversionLockPeriod
+			lock := new(big.Int).Set(new(big.Int).Add(env.wo.Number(w.hc.NodeCtx()), big.NewInt(int64(params.ConversionLockPeriod))))
+			txGas := tx.Gas()
+			gasUsed := env.wo.GasUsed()
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+			total := big.NewInt(0)
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination > types.MaxTrimDenomination; denomination-- {
+
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						break
+					}
+					if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
+						return nil, false, err
+					}
+					txGas -= params.CallValueTransferGas
+					gasUsed += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
+					utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), sender.Bytes(), lock))
+					env.utxosCreate = append(env.utxosCreate, types.UTXOHash(tx.Hash(), outputIndex, utxo))
+					w.logger.Debugf("Reverting a Qi to Quai Conversionh %032x with denomination %d index %d lock %d\n", tx.Hash(), denomination, outputIndex, lock)
+					total.Add(total, types.Denominations[uint8(denomination)])
+					outputIndex++
+				}
+			}
+			receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: tx.Gas() - txGas, TxHash: tx.Hash(),
+				Logs: []*types.Log{{
+					Address: *tx.To(),
+					Topics:  []common.Hash{types.QiToQuaiRevertTopic},
+					Data:    total.Bytes(),
+				}},
+			}
+			env.wo.Header().SetGasUsed(gasUsed)
+			env.txs = append(env.txs, tx)
+			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
+			env.receipts = append(env.receipts, receipt)
+			return []*types.Log{}, false, nil
+		}
+	}
+
 	if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
 		gasUsed := env.wo.GasUsed()
 		if tx.EtxType() == types.CoinbaseLockupType {
@@ -1309,6 +1384,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		env.receipts = append(env.receipts, receipt)
 		return []*types.Log{}, false, nil
 	}
+
 	snap := env.state.Snapshot()
 	// retrieve the gas used int and pass in the reference to the ApplyTransaction
 	gasUsed := env.wo.GasUsed()
@@ -1686,17 +1762,12 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			newWo.Header().SetExchangeRate(params.ExchangeRate)
 		} else {
 
-			///////// Step 1 //////////
 			// Read inbound etxs, this needs to be calculated for the pending manifests
 			inboundEtxs := rawdb.ReadInboundEtxs(w.workerDb, parent.Hash())
 			if inboundEtxs == nil {
 				return nil, errors.New("cannot find the inbound etxs for parent")
 			}
 
-			// Need a variable to calculate the total hash value that is being converted
-			conversionAmountInQuai := misc.ComputeConversionAmountInQuai(parent, inboundEtxs)
-
-			///////// Step 2 /////////
 			// Conversion Flows that happen in the direction of the exchange rate
 			// controller adjustment, get the k quai discount,and the conversion
 			// flows going against the exchange rate controller adjustment dont
@@ -1712,28 +1783,175 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 				}
 			}
 
-			// Compute the cubic flow discount
-			discountedConversionAmount := misc.ApplyCubicDiscount(conversionAmountInQuai, parent.ConversionFlowAmount())
-			discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
+			// sort the newInboundEtxs based on the decreasing order of the max slips
+			sort.SliceStable(inboundEtxs, func(i, j int) bool {
+				etxi := inboundEtxs[i]
+				etxj := inboundEtxs[j]
 
-			// Apply K Quai discount before applying the quadratic discount, conversionAmount = (1-kQuaiDiscount)*conversionAmountInHash
-			// Apply a flow discount based on the parent conversion flow amount
+				var slipi *big.Int
+				if etxi.EtxType() == types.ConversionType {
+					// If no slip is mentioned it is set to 90%
+					slipAmount := new(big.Int).Set(params.MaxSlip)
+					if len(etxi.Data()) > 1 {
+						slipAmount = new(big.Int).SetBytes(etxi.Data()[:2])
+						if slipAmount.Cmp(params.MaxSlip) > 0 {
+							slipAmount = new(big.Int).Set(params.MaxSlip)
+						}
+						if slipAmount.Cmp(params.MinSlip) < 0 {
+							slipAmount = new(big.Int).Set(params.MinSlip)
+						}
+					}
+					slipi = slipAmount
+				} else {
+					slipi = big.NewInt(0)
+				}
+
+				var slipj *big.Int
+				if etxj.EtxType() == types.ConversionType {
+					// If no slip is mentioned it is set to 90%
+					slipAmount := new(big.Int).Set(params.MaxSlip)
+					if len(etxj.Data()) > 1 {
+						slipAmount = new(big.Int).SetBytes(etxj.Data()[:2])
+						if slipAmount.Cmp(params.MaxSlip) > 0 {
+							slipAmount = new(big.Int).Set(params.MaxSlip)
+						}
+						if slipAmount.Cmp(params.MinSlip) < 0 {
+							slipAmount = new(big.Int).Set(params.MinSlip)
+						}
+					}
+					slipj = slipAmount
+				} else {
+					slipj = big.NewInt(0)
+				}
+
+				return slipi.Cmp(slipj) > 0
+			})
+
 			kQuaiDiscount := parent.KQuaiDiscount()
-			conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(discountedConversionAmountInInt, new(big.Int).Sub(big.NewInt(params.KQuaiDiscountMultiplier), kQuaiDiscount))
-			conversionAmountAfterKQuaiDiscount = new(big.Int).Div(conversionAmountAfterKQuaiDiscount, big.NewInt(params.KQuaiDiscountMultiplier))
 
+			originalEtxValues := make([]*big.Int, len(inboundEtxs))
+			actualConversionAmountInQuai := big.NewInt(0)
 			realizedConversionAmountInQuai := big.NewInt(0)
 
-			for _, etx := range inboundEtxs {
+			for i, etx := range inboundEtxs {
+
+				originalEtxValues[i] = new(big.Int).Set(etx.Value())
 
 				// If the etx is conversion
-				if types.IsConversionTx(etx) {
+				if types.IsConversionTx(etx) && etx.Value().Cmp(common.Big0) > 0 {
 					value := new(big.Int).Set(etx.Value())
 					originalValue := new(big.Int).Set(etx.Value())
 
-					value = new(big.Int).Mul(value, discountedConversionAmountInInt)
-					value = new(big.Int).Div(value, conversionAmountInQuai)
+					// Keeping a temporary actual conversion amount in quai so
+					// that, in case the transaction gets reverted, doesnt effect the
+					// actualConversionAmountInQuai
+					var tempActualConversionAmountInQuai *big.Int
+					if etx.To().IsInQuaiLedgerScope() {
+						tempActualConversionAmountInQuai = new(big.Int).Add(actualConversionAmountInQuai, misc.QiToQuai(parent, parent.ExchangeRate(), parent.MinerDifficulty(), value))
+					} else {
+						tempActualConversionAmountInQuai = new(big.Int).Add(actualConversionAmountInQuai, value)
+					}
 
+					// If no slip is mentioned it is set to 90%, otherwise use
+					// the slip specified in the transaction data with a max of
+					// 90%
+					slipAmount := new(big.Int).Set(params.MaxSlip)
+					if len(etx.Data()) > 1 {
+						slipAmount = new(big.Int).SetBytes(etx.Data()[:2])
+						if slipAmount.Cmp(params.MaxSlip) > 0 {
+							slipAmount = new(big.Int).Set(params.MaxSlip)
+						}
+						if slipAmount.Cmp(params.MinSlip) < 0 {
+							slipAmount = new(big.Int).Set(params.MinSlip)
+						}
+					}
+
+					// Apply the cubic discount based on the current tempActualConversionAmountInQuai
+					discountedConversionAmount := misc.ApplyCubicDiscount(parent.ConversionFlowAmount(), tempActualConversionAmountInQuai)
+					discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
+
+					// Conversions going against the direction of the exchange
+					// rate adjustment dont get any k quai discount applied
+					conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(discountedConversionAmountInInt, new(big.Int).Sub(big.NewInt(params.KQuaiDiscountMultiplier), kQuaiDiscount))
+					conversionAmountAfterKQuaiDiscount = new(big.Int).Div(conversionAmountAfterKQuaiDiscount, big.NewInt(params.KQuaiDiscountMultiplier))
+
+					// Apply the conversion flow discount to all transactions
+					value = new(big.Int).Mul(value, discountedConversionAmountInInt)
+					value = new(big.Int).Div(value, tempActualConversionAmountInQuai)
+
+					// ten percent original value is calculated so that in case
+					// the slip is more than this it can be reset
+					tenPercentOriginalValue := new(big.Int).Mul(originalValue, common.Big10)
+					tenPercentOriginalValue = new(big.Int).Div(tenPercentOriginalValue, common.Big100)
+
+					// amount after max slip is calculated based on the
+					// specified slip so that if the final value exceeds this,
+					// the transaction can be reverted
+					amountAfterMaxSlip := new(big.Int).Mul(originalValue, new(big.Int).Sub(params.SlipAmountRange, slipAmount))
+					amountAfterMaxSlip = new(big.Int).Div(amountAfterMaxSlip, params.SlipAmountRange)
+
+					// If to is in Qi, convert the value into Qi
+					if etx.To().IsInQiLedgerScope() {
+						// Apply the k quai discount only if the exchange rate is increasing
+						if exchangeRateIncreasing && discountedConversionAmountInInt.Cmp(common.Big0) != 0 {
+							value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+							value = new(big.Int).Div(value, discountedConversionAmountInInt)
+						}
+
+					}
+					// If To is in Quai, convert the value into Quai
+					if etx.To().IsInQuaiLedgerScope() {
+						// Apply the k quai discount only if the exchange rate is decreasing
+						if !exchangeRateIncreasing && discountedConversionAmountInInt.Cmp(common.Big0) != 0 {
+							value = new(big.Int).Mul(value, conversionAmountAfterKQuaiDiscount)
+							value = new(big.Int).Div(value, discountedConversionAmountInInt)
+						}
+					}
+
+					// If the value is less than the ten percent of the
+					// original, reset it to 10%
+					if value.Cmp(tenPercentOriginalValue) < 0 {
+						value = new(big.Int).Set(tenPercentOriginalValue)
+					}
+
+					// If the value is less than the amount after the slip,
+					// reset the value to zero, so that the transactions
+					// that will get reverted dont add anything weight, to
+					// the exchange rate calculation
+					if value.Cmp(amountAfterMaxSlip) < 0 {
+						etx.SetValue(big.NewInt(0))
+					} else {
+						actualConversionAmountInQuai = new(big.Int).Set(tempActualConversionAmountInQuai)
+					}
+
+				}
+			}
+
+			// Once the transactions are filtered, computed the total quai amount
+			actualConversionAmountInQuai = misc.ComputeConversionAmountInQuai(parent, inboundEtxs)
+
+			// Once all the etxs are filtered, the calculation has to run again
+			// to use the true actualConversionAmount and realizedConversionAmount
+			// Apply the cubic discount based on the current tempActualConversionAmountInQuai
+			discountedConversionAmount := misc.ApplyCubicDiscount(parent.ConversionFlowAmount(), actualConversionAmountInQuai)
+			discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
+
+			// Conversions going against the direction of the exchange
+			// rate adjustment dont get any k quai discount applied
+			conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(discountedConversionAmountInInt, new(big.Int).Sub(big.NewInt(params.KQuaiDiscountMultiplier), kQuaiDiscount))
+			conversionAmountAfterKQuaiDiscount = new(big.Int).Div(conversionAmountAfterKQuaiDiscount, big.NewInt(params.KQuaiDiscountMultiplier))
+
+			for i, etx := range inboundEtxs {
+				if etx.EtxType() == types.ConversionType && etx.Value().Cmp(common.Big0) > 0 {
+					value := new(big.Int).Set(originalEtxValues[i])
+					originalValue := new(big.Int).Set(value)
+
+					// Apply the conversion flow discount to all transactions
+					value = new(big.Int).Mul(value, discountedConversionAmountInInt)
+					value = new(big.Int).Div(value, actualConversionAmountInQuai)
+
+					// ten percent original value is calculated so that in case
+					// the slip is more than this it can be reset
 					tenPercentOriginalValue := new(big.Int).Mul(originalValue, common.Big10)
 					tenPercentOriginalValue = new(big.Int).Div(tenPercentOriginalValue, common.Big100)
 
@@ -1771,20 +1989,16 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 						value = misc.QiToQuai(parent, parent.ExchangeRate(), parent.MinerDifficulty(), value)
 						realizedConversionAmountInQuai = new(big.Int).Add(realizedConversionAmountInQuai, value)
 					}
-
 					etx.SetValue(value)
 				}
 			}
 
 			// compute and write the conversion flow amount based on the current block
-			currentBlockConversionFlowAmount := w.hc.ComputeConversionFlowAmount(parent, new(big.Int).Set(realizedConversionAmountInQuai))
+			currentBlockConversionFlowAmount := w.hc.ComputeConversionFlowAmount(parent, new(big.Int).Set(actualConversionAmountInQuai))
 			newWo.Header().SetConversionFlowAmount(currentBlockConversionFlowAmount)
 
 			//////// Step 3 /////////
 			minerDifficulty := parent.MinerDifficulty()
-
-			// save the actual and realized conversion amount
-			actualConversionAmountInQuai := new(big.Int).Set(conversionAmountInQuai)
 
 			parentOfParent := w.hc.GetBlockByHash(parent.ParentHash(common.PRIME_CTX))
 			if parentOfParent == nil {
@@ -2200,9 +2414,18 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
-	if len(tx.Data()) != 0 && len(tx.Data()) != common.AddressLength {
-		return fmt.Errorf("tx %v emits UTXO with invalid data length %d", tx.Hash().Hex(), len(tx.Data()))
+	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) == params.MaxQiTxDataLength) {
+		return fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength)
 	}
+	// Wrap Qi Transaction
+	if len(tx.Data()) == common.AddressLength && !common.BytesToAddress(tx.Data()[:], parent.Location()).IsInQuaiLedgerScope() {
+		return fmt.Errorf("tx %v emits UTXO with contract that is not in quai ledger scope", tx.Hash().Hex())
+	}
+	// Qi To Quai Conversion
+	if len(tx.Data()) == params.MaxQiTxDataLength && !common.BytesToAddress(tx.Data()[2:22], parent.Location()).IsInQiLedgerScope() {
+		return fmt.Errorf("tx %v emits UTXO with data refund address not in Qi ledger scope", tx.Hash().Hex())
+	}
+
 	gasUsed := env.wo.GasUsed()
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx, env.qiGasScalingFactor)
 	gasUsed += intrinsicGas // the amount of block gas used in this transaction is only the txGas, regardless of ETXs emitted
@@ -2274,7 +2497,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		}
 		addresses[toAddr.Bytes20()] = struct{}{}
 
-		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == 0 { // Qi->Quai conversion
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == params.MaxQiTxDataLength { // Qi->Quai conversion
 			if conversion && !toAddr.Equal(convertAddress) { // All convert outputs must have the same To address for aggregation
 				return fmt.Errorf("tx %032x emits multiple convert UTXOs with different To addresses", tx.Hash())
 			}
@@ -2368,18 +2591,14 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 	}
-	if conversion && totalConvertQitOut.Cmp(types.Denominations[params.MinQiConversionDenomination]) < 0 {
-		return fmt.Errorf("tx %032x emits convert UTXO with value %d less than minimum conversion denomination", tx.Hash(), totalConvertQitOut.Uint64())
-	}
 	if conversion || wrapping {
 		if conversion && wrapping {
 			return fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash())
 		}
 		etxType := types.ConversionType
-		data := []byte{}
+		data := tx.Data()
 		if wrapping {
 			etxType = types.WrappingQiType
-			data = tx.Data()
 		}
 		// Since this transaction contains a conversion, check if the required conversion gas is paid
 		// The user must pay this to the miner now, but it is only added to the block gas limit when the ETX is played in the destination
@@ -2392,8 +2611,12 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		if ETXPGas > env.etxPLimit {
 			return fmt.Errorf("tx [%v] emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash().Hex(), ETXPGas, env.etxPLimit)
 		}
+		// gas left
+		gasLeft := new(big.Int).Sub(txFeeInQuai, minimumFeeInQuai)
+		gasLeft = new(big.Int).Div(gasLeft, env.wo.BaseFee())
+
 		// Value is in Qits not Denomination
-		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: uint64(etxType), OriginatingTxHash: tx.Hash(), Gas: 0, Data: data} // Conversion gas is paid from the converted Quai balance (for new account creation, when redeemed)
+		etxInner := types.ExternalTx{Value: totalConvertQitOut, To: &convertAddress, Sender: common.ZeroAddress(location), EtxType: uint64(etxType), OriginatingTxHash: tx.Hash(), Gas: gasLeft.Uint64(), Data: data} // Conversion gas is paid from the converted Quai balance (for new account creation, when redeemed)
 		gasUsed += params.ETXGas
 		if err := env.gasPool.SubGas(params.ETXGas); err != nil {
 			return err

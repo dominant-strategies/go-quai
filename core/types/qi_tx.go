@@ -27,6 +27,7 @@ type WireQiTx struct {
 	TxIn      TxIns
 	TxOut     TxOuts
 	Signature []byte
+	Data      []byte
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -65,6 +66,7 @@ func (tx *QiTx) copyToWire() *WireQiTx {
 
 	cpy.TxIn = make([]TxIn, len(tx.TxIn))
 	cpy.TxOut = make([]TxOut, len(tx.TxOut))
+	cpy.Data = make([]byte, len(tx.Data))
 	if tx.Signature != nil {
 		copy(cpy.Signature, tx.Signature.Serialize())
 	} else {
@@ -72,6 +74,7 @@ func (tx *QiTx) copyToWire() *WireQiTx {
 	}
 	copy(cpy.TxIn, tx.TxIn)
 	copy(cpy.TxOut, tx.TxOut)
+	copy(cpy.Data, tx.Data)
 	return cpy
 }
 
@@ -85,6 +88,7 @@ func (tx *WireQiTx) copyFromWire() *QiTx {
 
 	cpy.TxIn = make([]TxIn, len(tx.TxIn))
 	cpy.TxOut = make([]TxOut, len(tx.TxOut))
+	cpy.Data = make([]byte, len(tx.Data))
 	if tx.Signature != nil {
 		cpy.Signature, _ = schnorr.ParseSignature(tx.Signature) // optional: fatal if error is not nil
 	} else {
@@ -92,6 +96,7 @@ func (tx *WireQiTx) copyFromWire() *QiTx {
 	}
 	copy(cpy.TxIn, tx.TxIn)
 	copy(cpy.TxOut, tx.TxOut)
+	copy(cpy.Data, tx.Data)
 	return cpy
 }
 
@@ -181,6 +186,10 @@ func CalculateIntrinsicQiTxGas(transaction *Transaction, scalingFactor float64) 
 
 func (tx *QiTx) setTo(to common.Address) {
 	panic("Cannot set To on a Qi transaction")
+}
+
+func (tx *QiTx) setEtxType(typ uint64) {
+	panic("Cannot set the etx type on a Qi transaction")
 }
 
 func (tx *QiTx) setValue(value *big.Int) {

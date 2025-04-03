@@ -18,6 +18,7 @@ package quaiapi
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -470,6 +471,46 @@ func GetDeltas(s *PublicBlockChainQuaiAPI, currentBlock *types.WorkObject, addre
 
 					addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()] =
 						append(addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()], map[string]interface{}{
+							"index":        hexutil.Uint64(outputIndex),
+							"denomination": hexutil.Uint64(uint8(denomination)),
+							"lock":         hexutil.Big(*lockup),
+						})
+
+					outputIndex++
+				}
+			}
+			// This is the conversion reverts from a qi-quai conversion
+		} else if tx.Type() == types.ExternalTxType && tx.EtxType() == types.ConversionRevertType && tx.To().IsInQuaiLedgerScope() {
+			lockup := new(big.Int).SetUint64(params.ConversionLockPeriod)
+			lockup.Add(lockup, currentBlock.Number(nodeCtx))
+			value := tx.Value()
+
+			addr20 := common.BytesToAddress(tx.Data()[2:22], currentBlock.Location()).Bytes20()
+			binary.BigEndian.PutUint32(addr20[16:], uint32(currentBlock.NumberU64(nodeCtx)))
+
+			if _, ok := addressMap[common.AddressBytes(addr20.Bytes())]; !ok {
+				continue
+			}
+
+			txGas := tx.Gas()
+			if txGas < params.TxGas {
+				continue
+			}
+			txGas -= params.TxGas
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination > types.MaxTrimDenomination; denomination-- {
+
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						// No more gas, the rest of the denominations are lost but the tx is still valid
+						break
+					}
+					txGas -= params.CallValueTransferGas
+					// the ETX hash is guaranteed to be unique
+					addressToCreatedDeletedToTxHashToOutputs[addr20.String()]["created"][tx.Hash().String()] =
+						append(addressToCreatedDeletedToTxHashToOutputs[addr20.String()]["created"][tx.Hash().String()], map[string]interface{}{
 							"index":        hexutil.Uint64(outputIndex),
 							"denomination": hexutil.Uint64(uint8(denomination)),
 							"lock":         hexutil.Big(*lockup),

@@ -55,6 +55,7 @@ const (
 	ConversionType
 	CoinbaseLockupType
 	WrappingQiType
+	ConversionRevertType
 )
 
 const (
@@ -138,6 +139,7 @@ type TxData interface {
 	txOut() TxOuts
 	getEcdsaSignatureValues() (v, r, s *big.Int)
 	setEcdsaSignatureValues(chainID, v, r, s *big.Int)
+	setEtxType(typ uint64)
 	setTo(to common.Address)
 	setValue(value *big.Int)
 	parentHash() *common.Hash
@@ -643,6 +645,10 @@ func (tx *Transaction) SetFrom(from common.Address, signer Signer) {
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
 	return tx.inner.to()
+}
+
+func (tx *Transaction) SetEtxType(typ uint64) {
+	tx.inner.setEtxType(typ)
 }
 
 func (tx *Transaction) SetTo(addr common.Address) {
