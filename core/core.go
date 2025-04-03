@@ -938,6 +938,10 @@ func (c *Core) AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.
 	c.sl.hc.AddToCalcOrderCache(hash, order, intrinsicS)
 }
 
+func (c *Core) AddPendingWorkObjectBody(wo *types.WorkObject) {
+	c.sl.miner.AddPendingWorkObjectBody(wo)
+}
+
 // GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (c *Core) GetHeaderOrCandidateByHash(hash common.Hash) *types.WorkObject {

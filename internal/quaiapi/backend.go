@@ -111,6 +111,7 @@ type Backend interface {
 	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
 	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)
+	AddPendingWorkObjectBody(wo *types.WorkObject)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
 	consensus.ChainHeaderReader
