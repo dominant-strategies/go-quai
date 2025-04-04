@@ -140,7 +140,7 @@ var TXPoolFlags = []Flag{
 }
 
 var WorkShareFlags = []Flag{
-	WorkShareMiningFlag,
+	WorkSharePoolFlag,
 	WorkShareThresholdFlag,
 	WorkShareMinerEndpoints,
 	WorkShareP2PThreshold,
@@ -727,10 +727,10 @@ var (
 	// **         WORKSHARE FLAGS            **
 	// **                                    **
 	// ****************************************
-	WorkShareMiningFlag = Flag{
-		Name:  c_WorkShareFlagPrefix + "mining",
+	WorkSharePoolFlag = Flag{
+		Name:  c_WorkShareFlagPrefix + "pool",
 		Value: false,
-		Usage: "Enable workshare mining" + generateEnvDoc(c_WorkShareFlagPrefix+"mining"),
+		Usage: "Enable workshare pool" + generateEnvDoc(c_WorkShareFlagPrefix+"pool"),
 	}
 
 	WorkShareThresholdFlag = Flag{
@@ -1442,7 +1442,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 
 	cfg.GenesisNonce, cfg.GenesisExtra = GetGenesisNonce()
 
-	cfg.Miner.WorkShareMining = viper.GetBool(WorkShareMiningFlag.Name)
+	cfg.Miner.WorkSharePool = viper.GetBool(WorkSharePoolFlag.Name)
 	cfg.Miner.WorkShareThreshold = params.WorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
 	if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
 		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}

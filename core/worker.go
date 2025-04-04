@@ -115,7 +115,7 @@ type Config struct {
 	GasPrice              *big.Int        // Minimum gas price for mining a transaction
 	Recommit              time.Duration   // The time interval for miner to re-create mining work.
 	Noverify              bool            // Disable remote mining solution verification(only useful in ethash).
-	WorkShareMining       bool            // Whether to mine work shares from raw transactions.
+	WorkSharePool         bool            // Whether to operate a work share pool.
 	WorkShareThreshold    int             // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
 	Endpoints             []string        // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
 }
@@ -305,13 +305,11 @@ func (w *worker) pickCoinbases() {
 }
 
 func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	custom := types.CopyWorkObject(original)
 	custom.WorkObjectHeader().PickCoinbase(minerPreference, quaiCoinbase, qiCoinbase)
 	custom.WorkObjectHeader().SetData([]byte{lock})
 
+	// Not sure if lock is needed here.
 	w.AddPendingWorkObjectBody(custom)
 
 	return custom
