@@ -120,6 +120,7 @@ type Backend interface {
 	GetMinerEndpoints() []string
 	GetWorkShareP2PThreshold() int
 	SetWorkShareP2PThreshold(threshold int)
+	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool
