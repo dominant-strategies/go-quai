@@ -115,7 +115,7 @@ type Backend interface {
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
 	consensus.ChainHeaderReader
-	TxMiningEnabled() bool
+	WorkSharePoolEnabled() bool
 	GetWorkShareThreshold() int
 	GetMinerEndpoints() []string
 	GetWorkShareP2PThreshold() int
@@ -227,7 +227,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		apis = append(apis, rpc.API{
 			Namespace: "workshare",
 			Version:   "1.0",
-			Service:   NewPublicWorkSharesAPI(apis[7].Service.(*PublicTransactionPoolAPI), apiBackend),
+			Service:   NewPublicWorkSharePoolAPI(apiBackend),
 			Public:    true,
 		})
 	}

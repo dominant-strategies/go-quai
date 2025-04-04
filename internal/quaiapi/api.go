@@ -1705,22 +1705,22 @@ func toHexSlice(b [][]byte) []string {
 	return r
 }
 
-type PublicWorkSharesAPI struct {
+type PublicWorkSharePoolAPI struct {
 	b Backend
 }
 
-// NewPublicWorkSharesAPI creates a new RPC service with methods specific for the transaction pool.
-func NewPublicWorkSharesAPI(txpoolAPi *PublicTransactionPoolAPI, b Backend) *PublicWorkSharesAPI {
-	api := &PublicWorkSharesAPI{
+// NewPublicWorkSharePoolAPI creates a new RPC service with methods specific for operating a workshare pool.
+func NewPublicWorkSharePoolAPI(b Backend) *PublicWorkSharePoolAPI {
+	api := &PublicWorkSharePoolAPI{
 		b,
 	}
-	if b.TxMiningEnabled() {
+	if b.WorkSharePoolEnabled() {
 	}
 
 	return api
 }
 
 // GetWorkShareThreshold returns the minimal WorkShareThreshold that this node will accept
-func (s *PublicWorkSharesAPI) GetWorkShareThreshold(ctx context.Context) (int, error) {
+func (s *PublicWorkSharePoolAPI) GetWorkShareThreshold(ctx context.Context) (int, error) {
 	return s.b.GetWorkShareThreshold(), nil
 }
