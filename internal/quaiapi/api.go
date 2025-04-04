@@ -1705,92 +1705,55 @@ func toHexSlice(b [][]byte) []string {
 	return r
 }
 
-type PublicWorkSharesAPI struct {
-	b        Backend
-	txPool   *PublicTransactionPoolAPI
-	txWorker *TxWorker
+type poolSubscriber struct {
+	subscription    *rpc.ClientSubscription
+	channel         chan common.Hash
+	lockByte        uint8
+	minerPreference float64
+	quaiCoinbase    common.Address
+	qiCoinbase      common.Address
 }
 
-// NewPublicWorkSharesAPI creates a new RPC service with methods specific for the transaction pool.
-func NewPublicWorkSharesAPI(txpoolAPi *PublicTransactionPoolAPI, b Backend) *PublicWorkSharesAPI {
-	api := &PublicWorkSharesAPI{
+type PublicWorkSharePoolAPI struct {
+	b              Backend
+	workObjectChan chan *types.WorkObject
+	subscribers    map[*poolSubscriber]struct{}
+}
+
+// NewPublicWorkSharePoolAPI creates a new RPC service with methods specific for operating a workshare pool.
+func NewPublicWorkSharePoolAPI(b Backend) *PublicWorkSharePoolAPI {
+	api := &PublicWorkSharePoolAPI{
 		b,
-		txpoolAPi,
-		nil,
+		make(chan *types.WorkObject),
+		make(map[*poolSubscriber]struct{}),
 	}
-	if b.TxMiningEnabled() {
-		// Start WorkShare workers
-		worker := StartTxWorker(b.Engine(), b.GetMinerEndpoints(), b.NodeLocation(), api, b.GetWorkShareThreshold())
-		api.txWorker = worker
+	if b.WorkSharePoolEnabled() {
+		// Start listening for work objects, serve them to subscribers.
+		go func() {
+			for {
+				select {
+				case original := <-api.workObjectChan:
+					// Send the work object to all subscribers
+					for sub := range api.subscribers {
+						// Create custom work object for this subscriber.
+						customWo := b.GenerateCustomWorkObject(original, sub.lockByte, sub.minerPreference, sub.quaiCoinbase, sub.qiCoinbase)
+						select {
+						case sub.channel <- customWo.SealHash():
+						default:
+							// If the subscriber is not ready, remove it
+							delete(api.subscribers, sub)
+						}
+					}
+
+				}
+			}
+		}()
 	}
 
 	return api
 }
 
-// GetWork returns the current workObjectHeader and the workThreshold to recognize a share
-func (s *PublicWorkSharesAPI) GetWork(ctx context.Context) (hexutil.Bytes, int, error) {
-	header := s.b.CurrentHeader()
-
-	protoWo, err := header.WorkObjectHeader().ProtoEncode()
-	if err != nil {
-		return nil, -1, err
-	}
-
-	protoBytes, err := proto.Marshal(protoWo)
-	if err != nil {
-		return nil, -1, err
-	}
-
-	return protoBytes, s.b.GetWorkShareThreshold(), nil
-}
-
 // GetWorkShareThreshold returns the minimal WorkShareThreshold that this node will accept
-func (s *PublicWorkSharesAPI) GetWorkShareThreshold(ctx context.Context) (int, error) {
+func (s *PublicWorkSharePoolAPI) GetWorkShareThreshold(ctx context.Context) (int, error) {
 	return s.b.GetWorkShareThreshold(), nil
-}
-
-// SendWorkedTransaction will check that the transaction in the form of a worked WorkObject
-// fufills the work threshold before adding it to the transaction pool.
-func (s *PublicWorkSharesAPI) SendUnworkedTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
-	tx := new(types.Transaction)
-	protoTransaction := new(types.ProtoTransaction)
-	err := proto.Unmarshal(input, protoTransaction)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return tx.Hash(), s.txWorker.AddTransaction(tx)
-}
-
-func (s *PublicWorkSharesAPI) ReceiveSubWorkshare(ctx context.Context, input hexutil.Bytes) error {
-	protoSubWorkshare := &types.ProtoWorkObject{}
-	err := proto.Unmarshal(input, protoSubWorkshare)
-	if err != nil {
-		return err
-	}
-
-	workShare := &types.WorkObject{}
-	workShare.ProtoDecode(protoSubWorkshare, s.b.NodeLocation(), types.WorkShareTxObject)
-
-	// check if the workshare is valid before broadcasting as a sanity
-	workShareValidity := s.b.CheckIfValidWorkShare(workShare.WorkObjectHeader())
-	if workShareValidity == types.Valid {
-		s.b.Logger().WithField("number", workShare.WorkObjectHeader().NumberU64()).Info("Received Work Share")
-		shareView := workShare.ConvertToWorkObjectShareView(workShare.Transactions())
-		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithField("err", err).Error("Error broadcasting work share")
-		}
-		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
-		s.b.Logger().WithFields(log.Fields{"tx count": len(workShare.Transactions())}).Info("Broadcasted workshares with txs")
-		return nil
-	} else if workShareValidity == types.Sub {
-		tx := workShare.Tx()
-		return s.b.SendTx(ctx, tx)
-	} else {
-		return errors.New("work share is invalid")
-	}
 }

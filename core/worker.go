@@ -115,7 +115,7 @@ type Config struct {
 	GasPrice              *big.Int        // Minimum gas price for mining a transaction
 	Recommit              time.Duration   // The time interval for miner to re-create mining work.
 	Noverify              bool            // Disable remote mining solution verification(only useful in ethash).
-	WorkShareMining       bool            // Whether to mine work shares from raw transactions.
+	WorkSharePool         bool            // Whether to operate a work share pool.
 	WorkShareThreshold    int             // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
 	Endpoints             []string        // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
 }
@@ -124,6 +124,11 @@ type transactionOrderingInfo struct {
 	txs                     []*types.Transaction
 	gasUsedAfterTransaction []uint64
 	block                   *types.WorkObject
+}
+
+// Exposes public methods of the worker
+type Worker interface {
+	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
@@ -297,6 +302,17 @@ func (w *worker) pickCoinbases() {
 		// if MinerPreference > 0.5, bias is towards Qi
 		w.primaryCoinbase = w.qiCoinbase
 	}
+}
+
+func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	custom := types.CopyWorkObject(original)
+	custom.WorkObjectHeader().PickCoinbase(minerPreference, quaiCoinbase, qiCoinbase)
+	custom.WorkObjectHeader().SetData([]byte{lock})
+
+	// Not sure if lock is needed here.
+	w.AddPendingWorkObjectBody(custom)
+
+	return custom
 }
 
 // setPrimaryCoinbase sets the coinbase used to initialize the block primary coinbase field.

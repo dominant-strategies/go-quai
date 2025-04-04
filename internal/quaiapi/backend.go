@@ -111,14 +111,16 @@ type Backend interface {
 	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
 	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)
+	AddPendingWorkObjectBody(wo *types.WorkObject)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
 	consensus.ChainHeaderReader
-	TxMiningEnabled() bool
+	WorkSharePoolEnabled() bool
 	GetWorkShareThreshold() int
 	GetMinerEndpoints() []string
 	GetWorkShareP2PThreshold() int
 	SetWorkShareP2PThreshold(threshold int)
+	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool
@@ -226,7 +228,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		apis = append(apis, rpc.API{
 			Namespace: "workshare",
 			Version:   "1.0",
-			Service:   NewPublicWorkSharesAPI(apis[7].Service.(*PublicTransactionPoolAPI), apiBackend),
+			Service:   NewPublicWorkSharePoolAPI(apiBackend),
 			Public:    true,
 		})
 	}

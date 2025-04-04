@@ -641,8 +641,8 @@ func (b *QuaiAPIBackend) GetMaxTxInWorkShare() uint64 {
 	return b.quai.core.GetMaxTxInWorkShare()
 }
 
-func (b *QuaiAPIBackend) TxMiningEnabled() bool {
-	return b.quai.core.TxMiningEnabled()
+func (b *QuaiAPIBackend) WorkSharePoolEnabled() bool {
+	return b.quai.core.WorkSharePoolEnabled()
 }
 
 func (b *QuaiAPIBackend) GetWorkShareThreshold() int {
@@ -715,6 +715,10 @@ func (b *QuaiAPIBackend) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int,
 
 func (b *QuaiAPIBackend) AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int) {
 	b.quai.core.AddToCalcOrderCache(hash, order, intrinsicS)
+}
+
+func (b *QuaiAPIBackend) AddPendingWorkObjectBody(wo *types.WorkObject) {
+	b.quai.core.AddPendingWorkObjectBody(wo)
 }
 
 func (b *QuaiAPIBackend) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
