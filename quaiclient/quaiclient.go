@@ -93,6 +93,11 @@ func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- []byte) 
 	return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader")
 }
 
+// SubscribeCustomSealHash subscribes to seal hashes created for the mining client.
+func (ec *Client) SubscribeCustomSealHash(ctx context.Context, ch chan<- []byte, lockPreference uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, lockPreference, minerPreference, quaiCoinbase, qiCoinbase, "customSealHash")
+}
+
 func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) *types.Header {
 	var raw json.RawMessage
 	ec.c.CallContext(ctx, &raw, "quai_getHeaderByHash", hash)

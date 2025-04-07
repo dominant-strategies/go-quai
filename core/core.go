@@ -798,6 +798,10 @@ func (c *Core) SubscribeExpansionEvent(ch chan<- ExpansionEvent) event.Subscript
 	return c.sl.SubscribeExpansionEvent(ch)
 }
 
+func (c *Core) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	return c.sl.miner.worker.GenerateCustomWorkObject(original, lock, minerPreference, quaiCoinbase, qiCoinbase)
+}
+
 func (c *Core) SetDomInterface(domInterface CoreBackend) {
 	c.sl.SetDomInterface(domInterface)
 }
@@ -988,6 +992,10 @@ func (c *Core) Genesis() *types.WorkObject {
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return c.sl.hc.SubscribeChainHeadEvent(ch)
+}
+
+func (c *Core) SubscribePendingWorkObjectEvent(ch chan<- PendingWoEvent) event.Subscription {
+	return c.sl.hc.SubscribePendingWorkObjectEvent(ch)
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database by

@@ -320,6 +320,10 @@ func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) 
 	return b.quai.Core().SubscribeChainHeadEvent(ch)
 }
 
+func (b *QuaiAPIBackend) SubscribePendingWorkObjectEvent(ch chan<- core.PendingWoEvent) event.Subscription {
+	return b.quai.Core().SubscribePendingWorkObjectEvent(ch)
+}
+
 func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return b.quai.Core().SubscribeChainSideEvent(ch)
 }
@@ -619,6 +623,10 @@ func (b *QuaiAPIBackend) GetWorkShareP2PThreshold() int {
 
 func (b *QuaiAPIBackend) SetWorkShareP2PThreshold(threshold int) {
 	b.quai.SetWorkShareP2PThreshold(threshold)
+}
+
+func (b *QuaiAPIBackend) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	return b.quai.core.GenerateCustomWorkObject(original, lock, minerPreference, quaiCoinbase, qiCoinbase)
 }
 
 func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription {

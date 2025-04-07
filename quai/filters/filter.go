@@ -43,6 +43,7 @@ type Backend interface {
 	GetBlock(hash common.Hash, number uint64) (*types.WorkObject, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	SubscribePendingWorkObjectEvent(ch chan<- core.PendingWoEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
