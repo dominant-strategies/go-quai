@@ -156,6 +156,14 @@ type FilterQuery struct {
 	Topics [][]common.Hash
 }
 
+// WorkShareCriteria represents the parameters for a work share filter.
+type WorkShareCriteria struct {
+	QuaiCoinbase    common.Address // the Quai coinbase address of the work share
+	QiCoinbase      common.Address // the Qi coinbase address of the work share
+	MinerPreference float64        // the miner preference of the work share
+	LockupByte      uint8          // the lockup byte of the work share
+}
+
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //

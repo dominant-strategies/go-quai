@@ -81,6 +81,7 @@ type subscription struct {
 	typ       Type
 	created   time.Time
 	logsCrit  quai.FilterQuery
+	woCrit    quai.WorkShareCriteria
 	logs      chan []*types.Log
 	hashes    chan []common.Hash
 	headers   chan *types.WorkObject
