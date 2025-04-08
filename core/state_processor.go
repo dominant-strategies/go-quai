@@ -441,7 +441,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid external transaction: etx %x is not in order or not found in unspent etx set", tx.Hash())
 			}
 
-			if etx.EtxType() == types.CoinbaseLockupType {
+			if etx.EtxType() == types.CoinbaseLockupType || etx.EtxType() == types.UnwrapQiType {
 				// This is either an unlocked Qi coinbase that was redeemed or Wrapped Qi
 				// An unlocked/redeemed Quai coinbase ETX is processed below as a standard Quai ETX
 				if tx.To().IsInQiLedgerScope() {
@@ -457,6 +457,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							continue
 						}
 
+						if etx.EtxType() == types.UnwrapQiType && denomination <= types.MaxTrimDenomination {
+							break
+						}
+
 						for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 							if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
 								// No more gas, the rest of the denominations are lost but the tx is still valid
@@ -469,7 +473,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							}
 							*usedGas += params.CallValueTransferGas    // In the future we may want to determine what a fair gas cost is
 							totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
-							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), etx.To().Bytes(), big.NewInt(0)))
+							lock := big.NewInt(0)
+							if etx.EtxType() == types.UnwrapQiType {
+								lock = new(big.Int).Add(block.Number(nodeCtx), new(big.Int).SetUint64(params.ConversionLockPeriod))
+							}
+							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), etx.To().Bytes(), lock))
 							// the ETX hash is guaranteed to be unique
 							if err := rawdb.CreateUTXO(batch, etx.Hash(), outputIndex, utxo); err != nil {
 								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err

@@ -56,6 +56,7 @@ const (
 	CoinbaseLockupType
 	WrappingQiType
 	ConversionRevertType
+	UnwrapQiType
 )
 
 const (
