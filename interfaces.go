@@ -174,6 +174,13 @@ type LogFilterer interface {
 	SubscribeFilterLogs(ctx context.Context, q FilterQuery, ch chan<- types.Log) (Subscription, error)
 }
 
+// CustomWorkShareBuilder provides access to custom work share subscriptions.
+// This enables others to mine on this node (for a fee) without requiring
+// a traditional mining pool.
+type CustomWorkShareBuilder interface {
+	SubscribeCustomWorkobjects(context.Context, WorkShareCriteria) (Subscription, error)
+}
+
 // TransactionSender wraps transaction sending. The SendTransaction method injects a
 // signed transaction into the pending transaction pool for execution. If the transaction
 // was a contract creation, the TransactionReceipt method can be used to retrieve the
