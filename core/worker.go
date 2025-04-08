@@ -1207,7 +1207,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 
 	if tx.Type() == types.ExternalTxType && tx.To().IsInQiLedgerScope() {
 		gasUsed := env.wo.GasUsed()
-		if tx.EtxType() == types.CoinbaseLockupType {
+		if tx.EtxType() == types.CoinbaseLockupType || tx.EtxType() == types.UnwrapQiType {
 			// This is either an unlocked Qi coinbase that was redeemed or Wrapped Qi
 			// An unlocked/redeemed Quai coinbase ETX is processed below as a standard Quai ETX
 			if tx.To().IsInQiLedgerScope() {
@@ -1222,6 +1222,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 					if denominations[uint8(denomination)] == 0 {
 						continue
 					}
+					if tx.EtxType() == types.UnwrapQiType && denomination <= types.MaxTrimDenomination {
+						break
+					}
 
 					for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
 						if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
@@ -1234,7 +1237,11 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 							return nil, false, err
 						}
 						gasUsed += params.CallValueTransferGas
-						utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), big.NewInt(0)))
+						lock := big.NewInt(0)
+						if tx.EtxType() == types.UnwrapQiType {
+							lock = new(big.Int).Add(env.wo.Number(common.ZONE_CTX), new(big.Int).SetUint64(params.ConversionLockPeriod))
+						}
+						utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), tx.To().Bytes(), lock))
 						env.utxosCreate = append(env.utxosCreate, types.UTXOHash(tx.Hash(), outputIndex, utxo))
 						total.Add(total, types.Denominations[uint8(denomination)])
 						outputIndex++
