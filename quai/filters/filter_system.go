@@ -153,7 +153,11 @@ func NewEventSystem(backend Backend) *EventSystem {
 
 	m.chainHeadSub = m.backend.SubscribeChainHeadEvent(m.chainHeadCh)
 
-	m.pendingWoSub = m.backend.SubscribePendingWorkObjectEvent(m.pendingWoCh)
+	pendingWoSub, err := m.backend.SubscribePendingWorkObjectEvent(m.pendingWoCh)
+	if err != nil {
+		backend.Logger().Fatal("Subscribe for pending work object event failed")
+	}
+	m.pendingWoSub = pendingWoSub
 
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {

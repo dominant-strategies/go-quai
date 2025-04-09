@@ -199,8 +199,8 @@ func (b *testBackend) SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.S
 	return b.unlocksFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribePendingWorkObjectEvent(ch chan<- core.PendingWoEvent) event.Subscription {
-	return b.pendingHeaderFeed.Subscribe(ch)
+func (b *testBackend) SubscribePendingWorkObjectEvent(ch chan<- core.PendingWoEvent) (event.Subscription, error) {
+	return b.pendingHeaderFeed.Subscribe(ch), nil
 }
 
 // TestPendingTxFilter tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.

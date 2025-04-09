@@ -310,6 +310,8 @@ func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8
 	custom.WorkObjectHeader().SetData([]byte{lock})
 
 	// Not sure if lock is needed here.
+	// w.mu.Lock()
+	// defer w.mu.Unlock()
 	w.AddPendingWorkObjectBody(custom)
 
 	return custom

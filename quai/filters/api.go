@@ -877,7 +877,11 @@ func (api *PublicFilterAPI) CustomWorkObject(ctx context.Context, crit quai.Work
 			select {
 			case wo := <-pendingWoChan:
 				newWo := api.backend.GenerateCustomWorkObject(wo.PendingWo, crit.LockupByte, crit.MinerPreference, crit.QuaiCoinbase, crit.QiCoinbase)
-				notifier.Notify(rpcSub.ID, newWo)
+				notifier.Notify(rpcSub.ID, core.CustomWorkObject{
+					SealHash:            newWo.SealHash(),
+					PrimeTerminusNumber: newWo.PrimeTerminusNumber(),
+					Difficulty:          newWo.Difficulty(),
+				})
 
 			case <-rpcSub.Err():
 				pendingWoSub.Unsubscribe()
