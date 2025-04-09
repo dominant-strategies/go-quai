@@ -21,6 +21,7 @@ import (
 	"context"
 	"math/big"
 
+	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
@@ -152,7 +153,7 @@ type Backend interface {
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
-	SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription
+	SubscribePendingHeaderEvent(ch chan<- *quai.WorkShareUpdate) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
