@@ -320,7 +320,7 @@ func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) 
 	return b.quai.Core().SubscribeChainHeadEvent(ch)
 }
 
-func (b *QuaiAPIBackend) SubscribePendingWorkObjectEvent(ch chan<- core.PendingWoEvent) (event.Subscription, error) {
+func (b *QuaiAPIBackend) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) (event.Subscription, error) {
 	if !b.WorkSharePoolEnabled() {
 		return nil, errors.New("workShare pool mining is not enabled")
 	}
@@ -654,10 +654,6 @@ func (b *QuaiAPIBackend) GetMaxTxInWorkShare() uint64 {
 
 func (b *QuaiAPIBackend) WorkSharePoolEnabled() bool {
 	return b.quai.core.WorkSharePoolEnabled()
-}
-
-func (b *QuaiAPIBackend) GetWorkShareThreshold() int {
-	return b.quai.core.GetWorkShareThreshold()
 }
 
 func (b *QuaiAPIBackend) GetMinerEndpoints() []string {

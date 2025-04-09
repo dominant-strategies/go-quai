@@ -2379,7 +2379,7 @@ func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.WorkObject) event.Su
 	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
 }
 
-func (w *worker) SubscribePendingWorkObjectEvent(ch chan<- PendingWoEvent) event.Subscription {
+func (w *worker) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) event.Subscription {
 	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
 }
 

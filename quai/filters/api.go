@@ -872,13 +872,13 @@ func (api *PublicFilterAPI) CustomWorkObject(ctx context.Context, crit quai.Work
 		}()
 
 		api.activeSubscriptions += 1
-		pendingWoChan := make(chan core.PendingWoEvent)
+		pendingWoChan := make(chan *types.WorkObject)
 		pendingWoSub := api.events.SubscribeCustomSealHash(crit, pendingWoChan)
 
 		for {
 			select {
 			case wo := <-pendingWoChan:
-				newWo := api.backend.GenerateCustomWorkObject(wo.PendingWo, crit.LockupByte, crit.MinerPreference, crit.QuaiCoinbase, crit.QiCoinbase)
+				newWo := api.backend.GenerateCustomWorkObject(wo, crit.LockupByte, crit.MinerPreference, crit.QuaiCoinbase, crit.QiCoinbase)
 				notifier.Notify(rpcSub.ID, &quai.WorkShareUpdate{
 					SealHash:            newWo.SealHash(),
 					PrimeTerminusNumber: newWo.PrimeTerminusNumber(),

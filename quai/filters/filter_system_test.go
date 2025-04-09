@@ -199,7 +199,7 @@ func (b *testBackend) SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.S
 	return b.unlocksFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribePendingWorkObjectEvent(ch chan<- core.PendingWoEvent) (event.Subscription, error) {
+func (b *testBackend) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) (event.Subscription, error) {
 	return b.pendingHeaderFeed.Subscribe(ch), nil
 }
 

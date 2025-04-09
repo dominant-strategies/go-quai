@@ -994,7 +994,7 @@ func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscript
 	return c.sl.hc.SubscribeChainHeadEvent(ch)
 }
 
-func (c *Core) SubscribePendingWorkObjectEvent(ch chan<- PendingWoEvent) event.Subscription {
+func (c *Core) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) event.Subscription {
 	return c.Miner().worker.SubscribePendingWorkObjectEvent(ch)
 }
 
@@ -1060,10 +1060,6 @@ func (c *Core) GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, err
 
 func (c *Core) WorkSharePoolEnabled() bool {
 	return c.workSharePool
-}
-
-func (c *Core) GetWorkShareThreshold() int {
-	return c.workShareThreshold
 }
 
 func (c *Core) GetMinerEndpoints() []string {

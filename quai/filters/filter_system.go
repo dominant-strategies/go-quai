@@ -85,7 +85,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan []common.Hash
 	headers   chan *types.WorkObject
-	pendingWo chan core.PendingWoEvent
+	pendingWo chan *types.WorkObject
 	unlocks   chan core.UnlocksEvent
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
@@ -117,7 +117,7 @@ type EventSystem struct {
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
 	unlocksCh     chan core.UnlocksEvent     // Channel to receive newly unlocked coinbases
 	chainHeadCh   chan core.ChainHeadEvent   // Channel to receive new chain event
-	pendingWoCh   chan core.PendingWoEvent   // Channel to receive pending work object
+	pendingWoCh   chan *types.WorkObject     // Channel to receive pending work object
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -138,7 +138,7 @@ func NewEventSystem(backend Backend) *EventSystem {
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
 		unlocksCh:     make(chan core.UnlocksEvent, unlocksEvChanSize),
 		chainHeadCh:   make(chan core.ChainHeadEvent, chainEvChanSize),
-		pendingWoCh:   make(chan core.PendingWoEvent, pendingWoEventSize),
+		pendingWoCh:   make(chan *types.WorkObject, pendingWoEventSize),
 	}
 
 	nodeCtx := backend.NodeCtx()
@@ -148,16 +148,16 @@ func NewEventSystem(backend Backend) *EventSystem {
 		m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 		m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 		m.unlocksSub = m.backend.SubscribeUnlocksEvent(m.unlocksCh)
+
+		pendingWoSub, err := m.backend.SubscribePendingWorkObjectEvent(m.pendingWoCh)
+		if err != nil {
+			log.Global.WithField("err", err).Fatal("Subscribe for pending work object event failed")
+		}
+		m.pendingWoSub = pendingWoSub
 	}
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 
 	m.chainHeadSub = m.backend.SubscribeChainHeadEvent(m.chainHeadCh)
-
-	pendingWoSub, err := m.backend.SubscribePendingWorkObjectEvent(m.pendingWoCh)
-	if err != nil {
-		log.Global.WithField("err", err).Fatal("Subscribe for pending work object event failed")
-	}
-	m.pendingWoSub = pendingWoSub
 
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
@@ -316,7 +316,7 @@ func (es *EventSystem) subscribePendingLogs(crit quai.FilterQuery, logs chan []*
 	return es.subscribe(sub)
 }
 
-func (es *EventSystem) SubscribeCustomSealHash(crit quai.WorkShareCriteria, pendingWo chan core.PendingWoEvent) *Subscription {
+func (es *EventSystem) SubscribeCustomSealHash(crit quai.WorkShareCriteria, pendingWo chan *types.WorkObject) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       PendingWoSubscription,
@@ -496,10 +496,10 @@ func (es *EventSystem) handleUnlocksEvent(filters filterIndex, ev core.UnlocksEv
 	}
 }
 
-func (es *EventSystem) handleWorkObject(filters filterIndex, ev core.PendingWoEvent) {
+func (es *EventSystem) handleWorkObject(filters filterIndex, wo *types.WorkObject) {
 	for _, f := range filters[PendingWoSubscription] {
 		select {
-		case f.pendingWo <- ev:
+		case f.pendingWo <- wo:
 		default:
 			es.backend.Logger().Error("Failed to deliver pending work object event to a subscriber")
 		}
@@ -541,7 +541,7 @@ func (es *EventSystem) eventLoop() {
 	}()
 
 	index := make(filterIndex)
-	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
+	for i := UnknownSubscription; i < PendingWoSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
