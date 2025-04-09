@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/big"
 
-	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
@@ -589,7 +588,7 @@ func (b *QuaiAPIBackend) AddPendingEtxsRollup(pEtxsRollup types.PendingEtxsRollu
 	return b.quai.core.AddPendingEtxsRollup(pEtxsRollup)
 }
 
-func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *quai.WorkShareUpdate) event.Subscription {
+func (b *QuaiAPIBackend) SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription {
 	return b.quai.core.SubscribePendingHeader(ch)
 }
 
