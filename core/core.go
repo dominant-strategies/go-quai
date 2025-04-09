@@ -995,7 +995,7 @@ func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscript
 }
 
 func (c *Core) SubscribePendingWorkObjectEvent(ch chan<- PendingWoEvent) event.Subscription {
-	return c.sl.hc.SubscribePendingWorkObjectEvent(ch)
+	return c.Miner().worker.SubscribePendingWorkObjectEvent(ch)
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database by

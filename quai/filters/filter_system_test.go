@@ -137,6 +137,13 @@ func (b *testBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocks, b.sections
 }
 
+func (b *testBackend) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	newWo := types.CopyWorkObject(original)
+	newWo.WorkObjectHeader().PickCoinbase(minerPreference, quaiCoinbase, qiCoinbase)
+	newWo.WorkObjectHeader().SetData([]byte{lock})
+	return newWo
+}
+
 func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	requests := make(chan chan *bloombits.Retrieval)
 

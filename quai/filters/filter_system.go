@@ -199,6 +199,7 @@ func (sub *Subscription) Unsubscribe() {
 			case <-sub.f.hashes:
 			case <-sub.f.headers:
 			case <-sub.f.unlocks:
+			case <-sub.f.pendingWo:
 			}
 		}
 
@@ -490,6 +491,16 @@ func (es *EventSystem) handleUnlocksEvent(filters filterIndex, ev core.UnlocksEv
 	}
 }
 
+func (es *EventSystem) handleWorkObject(filters filterIndex, ev core.PendingWoEvent) {
+	for _, f := range filters[PendingWoSubscription] {
+		select {
+		case f.pendingWo <- ev:
+		default:
+			es.backend.Logger().Error("Failed to deliver pending work object event to a subscriber")
+		}
+	}
+}
+
 func (es *EventSystem) handleChainHeadEvent(filters filterIndex, ev core.ChainHeadEvent) {
 	for _, f := range filters[ChainHeadSubscription] {
 		select {
@@ -546,6 +557,8 @@ func (es *EventSystem) eventLoop() {
 				es.handlePendingLogs(index, ev)
 			case ev := <-es.unlocksCh:
 				es.handleUnlocksEvent(index, ev)
+			case ev := <-es.pendingWoCh:
+				es.handleWorkObject(index, ev)
 			case f := <-es.install:
 				index[f.typ][f.id] = f
 				close(f.installed)

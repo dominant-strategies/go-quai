@@ -844,3 +844,50 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 
 	return rpcSub, nil
 }
+
+// CustomWorkObject builds a custom work object for each subscriber on new pending header.
+func (api *PublicFilterAPI) CustomWorkObject(ctx context.Context, crit quai.WorkShareCriteria) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+
+		api.activeSubscriptions += 1
+		pendingWoChan := make(chan core.PendingWoEvent)
+		pendingWoSub := api.events.subscribePendingWo(pendingWoChan)
+
+		for {
+			select {
+			case wo := <-pendingWoChan:
+				newWo := api.backend.GenerateCustomWorkObject(wo.PendingWo, crit.LockupByte, crit.MinerPreference, crit.QuaiCoinbase, crit.QiCoinbase)
+				notifier.Notify(rpcSub.ID, newWo)
+
+			case <-rpcSub.Err():
+				pendingWoSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				pendingWoSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}

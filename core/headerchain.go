@@ -65,7 +65,6 @@ type HeaderChain struct {
 	chainHeadFeed event.Feed
 	unlocksFeed   event.Feed
 	chainSideFeed event.Feed
-	pendingWoFeed event.Feed
 	scope         event.SubscriptionScope
 
 	headerDb      ethdb.Database
@@ -1173,10 +1172,6 @@ func (hc *HeaderChain) Engine() consensus.Engine {
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return hc.scope.Track(hc.chainHeadFeed.Subscribe(ch))
-}
-
-func (hc *HeaderChain) SubscribePendingWorkObjectEvent(ch chan<- PendingWoEvent) event.Subscription {
-	return hc.scope.Track(hc.pendingWoFeed.Subscribe(ch))
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
