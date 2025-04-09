@@ -316,11 +316,12 @@ func (es *EventSystem) subscribePendingLogs(crit quai.FilterQuery, logs chan []*
 	return es.subscribe(sub)
 }
 
-func (es *EventSystem) subscribePendingWo(pendingWo chan core.PendingWoEvent) *Subscription {
+func (es *EventSystem) SubscribeCustomSealHash(crit quai.WorkShareCriteria, pendingWo chan core.PendingWoEvent) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       PendingWoSubscription,
 		created:   time.Now(),
+		woCrit:    crit, // Arguments for creating custom WorkShares.
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
 		headers:   make(chan *types.WorkObject),

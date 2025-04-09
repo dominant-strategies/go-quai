@@ -163,7 +163,7 @@ func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObje
 }
 
 // SubscribeCustomSealHash subscribes to seal hashes created for the mining client.
-func (ec *Client) SubscribeCustomSealHash(ctx context.Context, ch chan<- []byte, crit quai.WorkShareCriteria) (quai.Subscription, error) {
+func (ec *Client) SubscribeCustomSealHash(ctx context.Context, crit quai.WorkShareCriteria, ch chan<- quai.WorkShareUpdate) (quai.Subscription, error) {
 	// Marshal to JSON
 	jsonBytes, err := json.Marshal(crit)
 	if err != nil {

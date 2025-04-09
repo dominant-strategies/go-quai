@@ -24,12 +24,6 @@ type ChainEvent struct {
 	Entropy *big.Int
 }
 
-type CustomWorkObject struct {
-	SealHash            common.Hash
-	PrimeTerminusNumber *big.Int
-	Difficulty          *big.Int
-}
-
 type UnlocksEvent struct {
 	Hash    common.Hash
 	Unlocks []common.Unlock

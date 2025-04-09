@@ -164,6 +164,12 @@ type WorkShareCriteria struct {
 	LockupByte      uint8          `json:"lockupByte"`      // the lockup byte of the work share
 }
 
+type WorkShareUpdate struct {
+	SealHash            common.Hash
+	PrimeTerminusNumber *big.Int
+	Difficulty          *big.Int
+}
+
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //
