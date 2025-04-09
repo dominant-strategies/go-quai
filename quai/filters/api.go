@@ -785,6 +785,8 @@ func decodeTopic(s string) (common.Hash, error) {
 	return common.BytesToHash(b), err
 }
 
+// // WorkShareFilter Methods
+
 // PendingHeader sends a notification each time a new pending header is created.
 func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)

@@ -93,11 +93,6 @@ func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- []byte) 
 	return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader")
 }
 
-// SubscribeCustomSealHash subscribes to seal hashes created for the mining client.
-func (ec *Client) SubscribeCustomSealHash(ctx context.Context, ch chan<- []byte, lockPreference uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) (quai.Subscription, error) {
-	return ec.c.QuaiSubscribe(ctx, ch, lockPreference, minerPreference, quaiCoinbase, qiCoinbase, "customSealHash")
-}
-
 func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) *types.Header {
 	var raw json.RawMessage
 	ec.c.CallContext(ctx, &raw, "quai_getHeaderByHash", hash)
@@ -165,6 +160,24 @@ func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObje
 		return err
 	}
 	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", hexutil.Bytes(data))
+}
+
+// SubscribeCustomSealHash subscribes to seal hashes created for the mining client.
+func (ec *Client) SubscribeCustomSealHash(ctx context.Context, ch chan<- []byte, crit quai.WorkShareCriteria) (quai.Subscription, error) {
+	// Marshal to JSON
+	jsonBytes, err := json.Marshal(crit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal JSON to map[string]interface{}
+	var args map[string]any
+	err = json.Unmarshal(jsonBytes, &args)
+	if err != nil {
+		return nil, err
+	}
+
+	return ec.c.QuaiSubscribe(ctx, ch, "customSealHash", args)
 }
 
 func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObjectHeader) error {
