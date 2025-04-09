@@ -28,7 +28,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
-	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
@@ -37,7 +36,6 @@ import (
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/dominant-strategies/go-quai/trie"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -1075,42 +1073,8 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	return result, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.WorkObject) (*types.WorkObject, error) {
-	nodeCtx := s.b.NodeCtx()
-	if b.ManifestHash(nodeCtx+1) == types.EmptyRootHash {
-		return nil, errors.New("cannot fill empty subordinate manifest")
-	} else if subManifestHash := types.DeriveSha(b.Manifest(), trie.NewStackTrie(nil)); subManifestHash == b.ManifestHash(nodeCtx+1) {
-		// If the manifest hashes match, nothing to do
-		return b, nil
-	} else {
-		subParentHash := b.ParentHash(nodeCtx + 1)
-		var subManifest types.BlockManifest
-		if subParent, err := s.b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
-			// If we have the the subordinate parent in our chain, that means that block
-			// was also coincident. In this case, the subordinate manifest resets, and
-			// only consists of the subordinate parent hash.
-			subManifest = types.BlockManifest{subParentHash}
-		} else {
-			// Otherwise we need to reconstruct the sub manifest, by getting the
-			// parent's sub manifest and appending the parent hash.
-			subManifest, err = s.b.GetSubManifest(b.Location(), subParentHash)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if len(subManifest) == 0 {
-			return nil, errors.New("reconstructed sub manifest is empty")
-		}
-		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
-			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
-		}
-		return types.NewWorkObjectWithHeaderAndTx(b.WorkObjectHeader(), b.Tx()).WithBody(b.Header(), b.Transactions(), b.OutboundEtxs(), b.Uncles(), subManifest, b.InterlinkHashes()), nil
-	}
-}
-
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw hexutil.Bytes) error {
-	nodeCtx := s.b.NodeCtx()
 	protoWorkObject := &types.ProtoWorkObject{}
 	err := proto.Unmarshal(raw, protoWorkObject)
 	if err != nil {
@@ -1122,41 +1086,9 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw he
 	if err != nil {
 		return err
 	}
-	block, err := s.b.ConstructLocalMinedBlock(woHeader)
-	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && nodeCtx < common.ZONE_CTX {
-		s.b.Logger().Info("filling sub manifest")
-		// If we just mined this block, and we have a subordinate chain, its possible
-		// the subordinate manifest in our block body is incorrect. If so, ask our sub
-		// for the correct manifest and reconstruct the block.
-		var err error
-		block, err = s.fillSubordinateManifest(block)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
 
-	// Broadcast the block and announce chain insertion event
-	if block.Header() != nil {
-		err := s.b.BroadcastBlock(block, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithField("err", err).Error("Error broadcasting block")
-		}
-		if nodeCtx == common.ZONE_CTX {
-			err = s.b.BroadcastHeader(block, s.b.NodeLocation())
-			if err != nil {
-				s.b.Logger().WithField("err", err).Error("Error broadcasting header")
-			}
-		}
-	}
-	s.b.Logger().WithFields(log.Fields{
-		"number":   block.Number(s.b.NodeCtx()),
-		"location": block.Location(),
-		"hash":     block.Hash(),
-	}).Info("Received mined header")
+	return s.b.ReceiveMinedHeader(woHeader)
 
-	return nil
 }
 
 // Receives a WorkObjectHeader in the form of bytes, decodes it, then calls ReceiveWorkShare.

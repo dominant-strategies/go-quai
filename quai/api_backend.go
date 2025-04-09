@@ -34,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
+	"github.com/dominant-strategies/go-quai/trie"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
@@ -576,9 +577,89 @@ func (b *QuaiAPIBackend) ReceiveWorkShare(workShare *types.WorkObjectHeader) err
 	return nil
 }
 
+// ReceiveNonce will build the workObject given the sealHash and provided Nonce.
+// Then it will call ReceiveWorkShare to broadcast the share.
+// After which it will check if the share is also a block and call ReceiveMinedHeader.
 func (b *QuaiAPIBackend) ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) error {
 	workObject := b.GetPendingBlockBody(sealHash)
-	return b.ReceiveWorkShare(workObject.WorkObjectHeader())
+	err := b.ReceiveWorkShare(workObject.WorkObjectHeader())
+	if err != nil {
+		return err
+	}
+
+	return b.ReceiveMinedHeader(workObject)
+}
+
+func (b *QuaiAPIBackend) ReceiveMinedHeader(woHeader *types.WorkObject) error {
+
+	block, err := b.ConstructLocalMinedBlock(woHeader)
+	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && b.NodeLocation().Context() < common.ZONE_CTX {
+		b.Logger().Info("filling sub manifest")
+		// If we just mined this block, and we have a subordinate chain, its possible
+		// the subordinate manifest in our block body is incorrect. If so, ask our sub
+		// for the correct manifest and reconstruct the block.
+		var err error
+		block, err = b.fillSubordinateManifest(block)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	// Broadcast the block and announce chain insertion event
+	if block.Header() != nil {
+		err := b.BroadcastBlock(block, b.NodeLocation())
+		if err != nil {
+			b.Logger().WithField("err", err).Error("Error broadcasting block")
+		}
+		if b.NodeLocation().Context() == common.ZONE_CTX {
+			err = b.BroadcastHeader(block, b.NodeLocation())
+			if err != nil {
+				b.Logger().WithField("err", err).Error("Error broadcasting header")
+			}
+		}
+	}
+	b.Logger().WithFields(log.Fields{
+		"number":   block.Number(b.NodeCtx()),
+		"location": block.Location(),
+		"hash":     block.Hash(),
+	}).Info("Received mined header")
+
+	return nil
+}
+
+func (b *QuaiAPIBackend) fillSubordinateManifest(workObject *types.WorkObject) (*types.WorkObject, error) {
+	nodeCtx := b.NodeCtx()
+	if workObject.ManifestHash(nodeCtx+1) == types.EmptyRootHash {
+		return nil, errors.New("cannot fill empty subordinate manifest")
+	} else if subManifestHash := types.DeriveSha(workObject.Manifest(), trie.NewStackTrie(nil)); subManifestHash == workObject.ManifestHash(nodeCtx+1) {
+		// If the manifest hashes match, nothing to do
+		return workObject, nil
+	} else {
+		subParentHash := workObject.ParentHash(nodeCtx + 1)
+		var subManifest types.BlockManifest
+		if subParent, err := b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
+			// If we have the the subordinate parent in our chain, that means that block
+			// was also coincident. In this case, the subordinate manifest resets, and
+			// only consists of the subordinate parent hash.
+			subManifest = types.BlockManifest{subParentHash}
+		} else {
+			// Otherwise we need to reconstruct the sub manifest, by getting the
+			// parent's sub manifest and appending the parent hash.
+			subManifest, err = b.GetSubManifest(workObject.Location(), subParentHash)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(subManifest) == 0 {
+			return nil, errors.New("reconstructed sub manifest is empty")
+		}
+		if subManifest == nil || workObject.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
+			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
+		}
+		return types.NewWorkObjectWithHeaderAndTx(workObject.WorkObjectHeader(), workObject.Tx()).WithBody(workObject.Header(), workObject.Transactions(), workObject.OutboundEtxs(), workObject.Uncles(), subManifest, workObject.InterlinkHashes()), nil
+	}
 }
 
 func (b *QuaiAPIBackend) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
