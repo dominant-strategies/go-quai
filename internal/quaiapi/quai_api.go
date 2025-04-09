@@ -1159,6 +1159,7 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw he
 	return nil
 }
 
+// Receives a WorkObjectHeader in the form of bytes, decodes it, then calls ReceiveWorkShare.
 func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw hexutil.Bytes) error {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -1180,47 +1181,11 @@ func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw h
 }
 
 func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShare *types.WorkObjectHeader) error {
-	if workShare != nil {
-		var isWorkShare, isSubShare bool
-		threshold := s.b.GetWorkShareP2PThreshold()
-		isSubShare = s.b.Engine().CheckWorkThreshold(workShare, threshold)
-		if !isSubShare {
-			return errors.New("workshare has less entropy than the workshare p2p threshold")
-		}
+	return s.b.ReceiveWorkShare(workShare)
+}
 
-		s.b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
-		pendingBlockBody := s.b.GetPendingBlockBody(workShare)
-		txs, err := s.b.GetTxsFromBroadcastSet(workShare.TxHash())
-		if err != nil {
-			txs = types.Transactions{}
-			if workShare.TxHash() != types.EmptyRootHash {
-				s.b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
-			}
-		}
-		// If the share qualifies is not a workshare and there are no transactions,
-		// there is no need to broadcast the share
-		isWorkShare = s.b.Engine().CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
-		if !isWorkShare && len(txs) == 0 {
-			return nil
-		}
-		if pendingBlockBody == nil {
-			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
-			return err
-		}
-		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
-		shareView := wo.ConvertToWorkObjectShareView(txs)
-		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithFields(log.Fields{
-				"hash": shareView.Hash(),
-				"err":  err,
-			}).Error("Error broadcasting work share")
-			return err
-		}
-		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
-		s.b.Logger().WithFields(log.Fields{"tx count": len(txs)}).Info("Broadcasted workshares with txs")
-	}
-	return nil
+func (s *PublicBlockChainQuaiAPI) ReceiveNonce(ctx context.Context, sealHash common.Hash, nonce types.BlockNonce) error {
+	return s.b.ReceiveNonce(sealHash, nonce)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {

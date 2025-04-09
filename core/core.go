@@ -702,8 +702,8 @@ func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.Work
 	return c.sl.ConstructLocalMinedBlock(woHeader)
 }
 
-func (c *Core) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
-	return c.sl.GetPendingBlockBody(woHeader)
+func (c *Core) GetPendingBlockBody(sealHash common.Hash) *types.WorkObject {
+	return c.sl.GetPendingBlockBody(sealHash)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {

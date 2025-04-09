@@ -1202,7 +1202,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	nodeCtx := sl.NodeLocation().Context()
 	var pendingBlockBody *types.WorkObject
 	if nodeCtx == common.ZONE_CTX {
-		pendingBlockBody = sl.GetPendingBlockBody(wo.WorkObjectHeader())
+		pendingBlockBody = sl.GetPendingBlockBody(wo.WorkObjectHeader().SealHash())
 		if pendingBlockBody == nil {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
@@ -1815,8 +1815,8 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	return pendingHeader, nil
 }
 
-func (sl *Slice) GetPendingBlockBody(wo *types.WorkObjectHeader) *types.WorkObject {
-	blockBody, _ := sl.miner.worker.GetPendingBlockBody(wo)
+func (sl *Slice) GetPendingBlockBody(sealHash common.Hash) *types.WorkObject {
+	blockBody, _ := sl.miner.worker.GetPendingBlockBody(sealHash)
 	return blockBody
 }
 

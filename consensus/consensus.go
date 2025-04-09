@@ -242,12 +242,11 @@ func DifficultyToTarget(difficulty *big.Int) *big.Int {
 
 // CalcWorkShareThreshold lowers the difficulty of the workShare header by thresholdDiff bits.
 // workShareTarget := 2^256 / workShare.Difficulty() * 2^workShareThresholdDiff
-func CalcWorkShareThreshold(workShare *types.WorkObjectHeader, workShareThresholdDiff int) (*big.Int, error) {
+func CalcWorkShareThreshold(diff *big.Int, workShareThresholdDiff int) (*big.Int, error) {
 	if workShareThresholdDiff <= 0 {
 		// If workShareThresholdDiff = 0, you should use the difficulty directly from the header.
 		return nil, ErrInvalidThresholdDiff
 	}
-	diff := workShare.Difficulty()
 	diffTarget := new(big.Int).Div(common.Big2e256, diff)
 	workShareTarget := new(big.Int).Exp(common.Big2, big.NewInt(int64(workShareThresholdDiff)), nil)
 

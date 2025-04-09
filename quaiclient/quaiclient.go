@@ -135,6 +135,20 @@ func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, erro
 	return wo, nil
 }
 
+func (ec *Client) GetWorkShareThreshold(ctx context.Context) (int, error) {
+	var raw json.RawMessage
+	err := ec.c.CallContext(ctx, &raw, "workshare_getWorkShareThreshold")
+	if err != nil {
+		return -1, err
+	}
+
+	var threshold int
+	if err := json.Unmarshal(raw, &threshold); err != nil {
+		return -1, err
+	}
+	return threshold, nil
+}
+
 // ReceiveMinedHeader sends a mined block back to the node
 func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObject) error {
 	protoWo, err := header.ProtoEncode(types.PEtxObject)
@@ -148,29 +162,27 @@ func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObje
 	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", hexutil.Bytes(data))
 }
 
+// ReceiveNonce builds the workShare from the sealHash and the nonce
+func (ec *Client) ReceiveNonce(ctx context.Context, sealHash common.Hash, nonce types.BlockNonce) error {
+	return ec.c.CallContext(ctx, nil, "quai_receiveNonce", sealHash, nonce)
+}
+
 // SubscribeCustomSealHash subscribes to seal hashes created for the mining client.
 func (ec *Client) SubscribeCustomSealHash(ctx context.Context, crit quai.WorkShareCriteria, ch chan<- *quai.WorkShareUpdate) (quai.Subscription, error) {
 	// Marshal to JSON
-	// jsonBytes, err := json.Marshal(crit)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// // Unmarshal JSON to map[string]interface{}
-	// var args map[string]any
-	// err = json.Unmarshal(jsonBytes, &args)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	args := map[string]interface{}{
-		"quaiCoinbase":    crit.QuaiCoinbase,
-		"qiCoinbase":      crit.QiCoinbase,
-		"minerPreference": crit.MinerPreference,
-		"lockupByte":      crit.LockupByte,
+	jsonBytes, err := json.Marshal(crit)
+	if err != nil {
+		return nil, err
 	}
 
-	return ec.c.QuaiSubscribe(ctx, ch, "customSealHash", args)
+	// Unmarshal JSON to map[string]interface{}
+	var args map[string]any
+	err = json.Unmarshal(jsonBytes, &args)
+	if err != nil {
+		return nil, err
+	}
+
+	return ec.c.QuaiSubscribe(ctx, ch, "customWorkObject", args)
 }
 
 func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObjectHeader) error {
@@ -313,6 +325,21 @@ func (ec *Client) TxPoolStatus(ctx context.Context) (map[string]hexutil.Uint, er
 	var result map[string]hexutil.Uint
 	err := ec.c.CallContext(ctx, &result, "txpool_status")
 	return result, err
+}
+
+// Submits a minimally worked workshare to the client node
+func (ec *Client) SubmitSubWorkshare(ctx context.Context, wo *types.WorkObject) error {
+	protoWo, err := wo.ProtoEncode(types.WorkShareTxObject)
+	if err != nil {
+		log.Global.WithField("err", err).Error("Unable to encode worked transaction")
+		return err
+	}
+	bytesWo, err := proto.Marshal(protoWo)
+	if err != nil {
+		log.Global.WithField("err", err).Error("Unable to marshal worked transaction")
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "workshare_receiveSubWorkshare", hexutil.Bytes(bytesWo))
 }
 
 func (ec *Client) CalcOrder(ctx context.Context, header *types.WorkObject) (int, error) {
