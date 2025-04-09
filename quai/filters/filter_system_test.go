@@ -203,6 +203,10 @@ func (b *testBackend) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObjec
 	return b.pendingHeaderFeed.Subscribe(ch), nil
 }
 
+func (b *testBackend) GetPendingHeader() (*types.WorkObject, error) {
+	return rawdb.ReadWorkObject(b.db, 1, common.Zero.Hash(), types.WorkObjectView(0)), nil
+}
+
 // TestPendingTxFilter tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.
 func TestPendingTxFilter(t *testing.T) {
 	t.Skip("Todo: Fix broken test")

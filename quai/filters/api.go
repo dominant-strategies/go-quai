@@ -875,6 +875,18 @@ func (api *PublicFilterAPI) CustomWorkObject(ctx context.Context, crit quai.Work
 		pendingWoChan := make(chan *types.WorkObject)
 		pendingWoSub := api.events.SubscribeCustomSealHash(crit, pendingWoChan)
 
+		// Send first job to client.
+		currentWo, err := api.backend.GetPendingHeader()
+		if err != nil {
+			pendingWoSub.Unsubscribe()
+		}
+		wo := api.backend.GenerateCustomWorkObject(currentWo, crit.LockupByte, crit.MinerPreference, crit.QuaiCoinbase, crit.QiCoinbase)
+		notifier.Notify(rpcSub.ID, &quai.WorkShareUpdate{
+			SealHash:            wo.SealHash(),
+			PrimeTerminusNumber: wo.PrimeTerminusNumber(),
+			Difficulty:          wo.Difficulty(),
+		})
+
 		for {
 			select {
 			case wo := <-pendingWoChan:
