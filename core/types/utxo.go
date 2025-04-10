@@ -53,12 +53,12 @@ func init() {
 	Denominations[14] = big.NewInt(1000000000) // 1000000 Qi
 
 	TrimDepths = make(map[uint8]uint64)
-	TrimDepths[0] = 720  // 2 hours after fork starts from block 1
-	TrimDepths[1] = 720  // 2 hours
-	TrimDepths[2] = 1080 // 3 hours
-	TrimDepths[3] = 1080 // 3 hours
-	TrimDepths[4] = 2160 // 6 hours
-	TrimDepths[5] = 4320 // 12 hours
+	TrimDepths[0] = 2 * params.BlocksPerWeek  // 2 weeks
+	TrimDepths[1] = 4 * params.BlocksPerWeek  // 4 weeks
+	TrimDepths[2] = 6 * params.BlocksPerWeek  // 6 weeks
+	TrimDepths[3] = 8 * params.BlocksPerWeek  // 8 weeks
+	TrimDepths[4] = 10 * params.BlocksPerWeek // 10 weeks
+	TrimDepths[5] = 12 * params.BlocksPerWeek // 12 weeks
 }
 
 type TxIns []TxIn
