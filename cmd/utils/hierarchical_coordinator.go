@@ -355,7 +355,11 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 
 // Create a new instance of the QuaiBackend consensus service
 func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error) {
-	quaiBackend, _ := quai.NewQuaiBackend()
+	quaiBackend, err := quai.NewQuaiBackend()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Error creating the quai backend")
+		return nil, err
+	}
 	// Set the consensus backend and subscribe to the new topics
 	hc.p2p.SetConsensusBackend(quaiBackend)
 	// Set the p2p backend inside the quaiBackend
