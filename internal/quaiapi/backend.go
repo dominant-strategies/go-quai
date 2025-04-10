@@ -116,6 +116,7 @@ type Backend interface {
 	WorkSharePoolEnabled() bool
 
 	// Mining methods
+	ComputePowLight(*types.WorkObjectHeader) (mixHash, powHash common.Hash)
 	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity
 	SendWorkShare(workShare *types.WorkObjectHeader) error
 	GetWorkShareP2PThreshold() int

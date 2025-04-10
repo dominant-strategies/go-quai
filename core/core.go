@@ -905,6 +905,10 @@ func (c *Core) CurrentHeader() *types.WorkObject {
 	return c.sl.hc.CurrentHeader()
 }
 
+func (c *Core) ComputePowLight(workObject *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
+	return c.engine.ComputePowLight(workObject)
+}
+
 func (c *Core) ComputeExpansionNumber(parent *types.WorkObject) (uint8, error) {
 	return c.sl.hc.ComputeExpansionNumber(parent)
 }

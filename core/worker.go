@@ -312,6 +312,7 @@ func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8
 	// Not sure if lock is needed here.
 	// w.mu.Lock()
 	// defer w.mu.Unlock()
+	custom.WorkObjectHeader().SetTxHash(common.Hash{})
 	w.AddPendingWorkObjectBody(custom)
 
 	return custom
@@ -2358,6 +2359,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
 	// do not include the tx hash while storing the body
 	woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
+	log.Global.Warn(woHeaderCopy.SealHash())
 	woHeaderCopy.SetTxHash(common.Hash{})
 	w.pendingBlockBody.Add(woHeaderCopy.SealHash(), *wo)
 }

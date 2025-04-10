@@ -363,6 +363,8 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				return pubsub.ValidationReject
 			}
 
+			log.Global.WithField("sealHash", block.SealHash()).Warn("Sealhash received")
+
 			threshold := backend.GetWorkShareP2PThreshold()
 			if !backend.Engine().CheckWorkThreshold(block.WorkObjectHeader(), threshold) {
 				backend.Logger().Error("workshare has less entropy than the workshare p2p threshold")

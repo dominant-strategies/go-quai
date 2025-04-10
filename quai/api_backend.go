@@ -582,6 +582,9 @@ func (b *QuaiAPIBackend) ReceiveWorkShare(workShare *types.WorkObjectHeader) err
 // After which it will check if the share is also a block and call ReceiveMinedHeader.
 func (b *QuaiAPIBackend) ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) error {
 	workObject := b.GetPendingBlockBody(sealHash)
+	workObject.WorkObjectHeader().SetNonce(nonce)
+	mixHash, _ := b.ComputePowLight(workObject.WorkObjectHeader())
+	workObject.SetMixHash(mixHash)
 	err := b.ReceiveWorkShare(workObject.WorkObjectHeader())
 	if err != nil {
 		return err
@@ -772,6 +775,10 @@ func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) 
 
 func (b *QuaiAPIBackend) SendWorkShare(workShare *types.WorkObjectHeader) error {
 	return b.quai.core.SendWorkShare(workShare)
+}
+
+func (b *QuaiAPIBackend) ComputePowLight(workObject *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
+	return b.quai.core.ComputePowLight(workObject)
 }
 
 func (b *QuaiAPIBackend) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {

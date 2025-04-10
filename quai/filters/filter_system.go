@@ -161,7 +161,7 @@ func NewEventSystem(backend Backend) *EventSystem {
 
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
-		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.chainHeadCh == nil {
+		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.chainHeadCh == nil || m.pendingWoCh == nil {
 			log.Global.Fatal("Subscribe for event system failed")
 		}
 	} else {
@@ -322,9 +322,6 @@ func (es *EventSystem) SubscribeCustomSealHash(crit quai.WorkShareCriteria, pend
 		typ:       PendingWoSubscription,
 		created:   time.Now(),
 		woCrit:    crit, // Arguments for creating custom WorkShares.
-		logs:      make(chan []*types.Log),
-		hashes:    make(chan []common.Hash),
-		headers:   make(chan *types.WorkObject),
 		pendingWo: pendingWo,
 		installed: make(chan struct{}),
 		err:       make(chan error),
@@ -541,7 +538,7 @@ func (es *EventSystem) eventLoop() {
 	}()
 
 	index := make(filterIndex)
-	for i := UnknownSubscription; i < PendingWoSubscription; i++ {
+	for i := UnknownSubscription; i <= PendingWoSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
