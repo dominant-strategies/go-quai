@@ -41,7 +41,7 @@ const (
 	minRecommitInterval = 1 * time.Second
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
-	pendingBlockBodyLimit = 100
+	pendingBlockBodyLimit = 10000
 
 	// c_headerPrintsExpiryTime is how long a header hash is kept in the cache, so that currentInfo
 	// is not printed on a Proc frequency
@@ -312,7 +312,6 @@ func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8
 	// Not sure if lock is needed here.
 	// w.mu.Lock()
 	// defer w.mu.Unlock()
-	custom.WorkObjectHeader().SetTxHash(common.Hash{})
 	w.AddPendingWorkObjectBody(custom)
 
 	return custom
@@ -2360,7 +2359,7 @@ func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
 	// do not include the tx hash while storing the body
 	woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
 	log.Global.Warn(woHeaderCopy.SealHash())
-	woHeaderCopy.SetTxHash(common.Hash{})
+	woHeaderCopy.SetTxHash(types.EmptyRootHash)
 	w.pendingBlockBody.Add(woHeaderCopy.SealHash(), *wo)
 }
 
