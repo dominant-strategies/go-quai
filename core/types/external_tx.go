@@ -180,6 +180,10 @@ func (tx *ExternalTx) setEcdsaSignatureValues(chainID, v, r, s *big.Int) {
 	// Signature values are ignored for external transactions
 }
 
+func (tx *ExternalTx) setEtxType(typ uint64) {
+	tx.EtxType = typ
+}
+
 func (tx *ExternalTx) setTo(to common.Address) {
 	tx.To = &to
 }

@@ -926,6 +926,44 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 					outputIndex++
 				}
 			}
+			// This is the conversion reverts from a qi-quai conversion
+		} else if tx.EtxType() == types.ConversionRevertType && tx.To().IsInQuaiLedgerScope() {
+			lockup := new(big.Int).SetUint64(params.ConversionLockPeriod)
+			lock := new(big.Int).Add(block.Number(nodeCtx), lockup)
+			value := tx.Value()
+
+			addr20 := common.BytesToAddress(tx.Data()[2:22], block.Location()).Bytes20()
+			binary.BigEndian.PutUint32(addr20[16:], uint32(block.NumberU64(nodeCtx)))
+			txGas := tx.Gas()
+			if txGas < params.TxGas {
+				continue
+			}
+			txGas -= params.TxGas
+			denominations := misc.FindMinDenominations(value)
+			outputIndex := uint16(0)
+			// Iterate over the denominations in descending order
+			for denomination := types.MaxDenomination; denomination > types.MaxTrimDenomination; denomination-- {
+
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						// No more gas, the rest of the denominations are lost but the tx is still valid
+						break
+					}
+					txGas -= params.CallValueTransferGas
+					// the ETX hash is guaranteed to be unique
+
+					outpointAndDenom := &types.OutpointAndDenomination{
+						TxHash:       tx.Hash(),
+						Index:        outputIndex,
+						Denomination: uint8(denomination),
+						Lock:         lock,
+					}
+
+					addressOutpointsWithBlockHeight[addr20] = append(addressOutpointsWithBlockHeight[addr20], outpointAndDenom)
+					rawdb.WriteUtxoToBlockHeight(c.chainDb, outpointAndDenom.TxHash, outpointAndDenom.Index, uint32(block.NumberU64(nodeCtx)))
+					outputIndex++
+				}
+			}
 		}
 	}
 

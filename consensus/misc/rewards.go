@@ -41,6 +41,9 @@ func ComputeConversionAmountInQuai(header *types.WorkObject, newInboundEtxs type
 		// If the etx is conversion
 		if types.IsConversionTx(etx) {
 			value := etx.Value()
+			if value.Cmp(common.Big0) == 0 {
+				continue
+			}
 			// If to is in Qi, convert the value into Qi
 			if etx.To().IsInQiLedgerScope() {
 				conversionAmountInQuai = new(big.Int).Add(conversionAmountInQuai, value)

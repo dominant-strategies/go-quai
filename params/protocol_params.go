@@ -148,7 +148,6 @@ const (
 	// infrastructure, if needed, to account for the upcoming network change.
 	TREE_EXPANSION_WAIT_COUNT = 1024
 
-	MinQiConversionDenomination   = 10
 	ConversionConfirmationContext = common.PRIME_CTX // A conversion requires a single coincident Dom confirmation
 	QiToQuaiConversionGas         = 100000           // The gas used to convert Qi to Quai
 	DefaultCoinbaseLockup         = 0                // The default lockup byte for coinbase rewards
@@ -218,8 +217,13 @@ var (
 	MinCubicDiscountDivisor      uint64 = 10000
 	TokenDiffAlpha                      = big.NewInt(5)
 
+	SlipAmountRange = big.NewInt(10000)
+	MaxSlip         = big.NewInt(9000)
+	MinSlip         = big.NewInt(30)
+
 	// QiActivationBlock is the approximated Zone block number for the corresponding prime controller kick in block
 	QiActivationBlock uint64 = 882000
+	MaxQiTxDataLength        = 22 // Qi Tx Data can only be max of 22 bytes for the WrapQi it is 20 byte and 22 (2 byte slip + 20 byte address) byte for Conversion
 )
 
 const (
