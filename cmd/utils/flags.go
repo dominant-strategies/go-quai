@@ -1452,6 +1452,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	// workshare p2p threshold cannot be less than the workshare threshold diff
 	if cfg.WorkShareP2PThreshold < params.WorkSharesThresholdDiff {
 		cfg.WorkShareP2PThreshold = params.WorkSharesThresholdDiff
+		cfg.Miner.WorkShareP2PThreshold = cfg.WorkShareP2PThreshold
 	}
 
 	minerPreference := viper.GetFloat64(MinerPreferenceFlag.Name)
@@ -1554,6 +1555,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	}
 
 	cfg.Genesis.Config.Location = nodeLocation
+	cfg.Genesis.Config.WorkShareP2PThreshold = cfg.WorkShareP2PThreshold
 }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {

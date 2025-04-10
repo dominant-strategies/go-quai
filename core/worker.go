@@ -117,6 +117,7 @@ type Config struct {
 	Noverify              bool            // Disable remote mining solution verification(only useful in ethash).
 	WorkSharePool         bool            // Whether to operate a work share pool.
 	WorkShareThreshold    int             // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
+	WorkShareP2PThreshold int             // WorkShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers.
 	Endpoints             []string        // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
 }
 

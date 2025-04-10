@@ -60,6 +60,7 @@ type CoreBackend interface {
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
+	// ReceiveNonce()
 }
 
 type pEtxRetry struct {
@@ -1273,6 +1274,40 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	return block, nil
 }
 
+func (sl *Slice) ReceiveWorkShare(workShare *types.WorkObjectHeader) (*types.WorkObjectShareView, error) {
+	if workShare != nil {
+		var isWorkShare, isSubShare bool
+		isSubShare = sl.engine.CheckWorkThreshold(workShare, sl.config.WorkShareP2PThreshold)
+		if !isSubShare {
+			return nil, errors.New("workshare has less entropy than the workshare p2p threshold")
+		}
+
+		sl.logger.WithField("number", workShare.NumberU64()).Info("Received Work Share")
+		pendingBlockBody := sl.GetPendingBlockBody(workShare.SealHash())
+		txs, err := sl.GetTxsFromBroadcastSet(workShare.TxHash())
+		if err != nil {
+			txs = types.Transactions{}
+			if workShare.TxHash() != types.EmptyRootHash {
+				sl.logger.Warn("Failed to get txs from the broadcastSetCache", "err", err)
+			}
+		}
+		// If the share qualifies is not a workshare and there are no transactions,
+		// there is no need to broadcast the share
+		isWorkShare = sl.engine.CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
+		if !isWorkShare && len(txs) == 0 {
+			return nil, nil
+		}
+		if pendingBlockBody == nil {
+			sl.logger.Warn("Could not get the pending Block body", "err", err)
+			return nil, err
+		}
+		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
+		shareView := wo.ConvertToWorkObjectShareView(txs)
+		return shareView, nil
+	}
+	return nil, errors.New("workshare is nil")
+}
+
 // combinePendingHeader updates the pending header at the given index with the value from given header.
 func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader *types.WorkObject, index int, inSlice bool) *types.WorkObject {
 	// copying the slPendingHeader and updating the copy to remove any shared memory access issues
@@ -2199,3 +2234,14 @@ func (sl *Slice) AddGenesisPendingEtxs(block *types.WorkObject) {
 func (sl *Slice) SubscribeExpansionEvent(ch chan<- ExpansionEvent) event.Subscription {
 	return sl.scope.Track(sl.expansionFeed.Subscribe(ch))
 }
+
+// func (sl *Slice) ReceiveNonce() {
+// 	switch sl.NodeCtx() {
+// 	case common.PRIME_CTX:
+
+// 	case common.REGION_CTX:
+// 		sl.domInterface.ReceiveNonce()
+// 	case common.ZONE_CTX:
+// 		sl.domInterface.ReceiveNonce()
+// 	}
+// }

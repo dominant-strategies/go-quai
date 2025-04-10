@@ -534,46 +534,23 @@ func (b *QuaiAPIBackend) GetPendingBlockBody(sealHash common.Hash) *types.WorkOb
 }
 
 func (b *QuaiAPIBackend) ReceiveWorkShare(workShare *types.WorkObjectHeader) error {
-	if workShare != nil {
-		var isWorkShare, isSubShare bool
-		threshold := b.GetWorkShareP2PThreshold()
-		isSubShare = b.Engine().CheckWorkThreshold(workShare, threshold)
-		if !isSubShare {
-			return errors.New("workshare has less entropy than the workshare p2p threshold")
-		}
-
-		b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
-		pendingBlockBody := b.GetPendingBlockBody(workShare.SealHash())
-		txs, err := b.GetTxsFromBroadcastSet(workShare.TxHash())
-		if err != nil {
-			txs = types.Transactions{}
-			if workShare.TxHash() != types.EmptyRootHash {
-				b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
-			}
-		}
-		// If the share qualifies is not a workshare and there are no transactions,
-		// there is no need to broadcast the share
-		isWorkShare = b.Engine().CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
-		if !isWorkShare && len(txs) == 0 {
-			return nil
-		}
-		if pendingBlockBody == nil {
-			b.Logger().Warn("Could not get the pending Block body", "err", err)
-			return err
-		}
-		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
-		shareView := wo.ConvertToWorkObjectShareView(txs)
-		err = b.BroadcastWorkShare(shareView, b.NodeLocation())
-		if err != nil {
-			b.Logger().WithFields(log.Fields{
-				"hash": shareView.Hash(),
-				"err":  err,
-			}).Error("Error broadcasting work share")
-			return err
-		}
-		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
-		b.Logger().WithFields(log.Fields{"tx count": len(txs)}).Info("Broadcasted workshares with txs")
+	// Evaluate the validity of the share and add it to the chain.
+	shareView, err := b.quai.core.ReceiveWorkShare(workShare)
+	if err != nil {
+		return err
 	}
+
+	// Broadcast the share to P2P backend.
+	err = b.BroadcastWorkShare(shareView, b.NodeLocation())
+	if err != nil {
+		b.Logger().WithFields(log.Fields{
+			"hash": shareView.Hash(),
+			"err":  err,
+		}).Error("Error broadcasting work share")
+		return err
+	}
+	txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
+	b.Logger().WithFields(log.Fields{"tx count": len(shareView.Transactions())}).Info("Broadcasted workshares with txs")
 	return nil
 }
 

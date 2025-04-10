@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -53,6 +54,11 @@ const (
 	c_maxFutureEntropyMultiple          = 200
 )
 
+var (
+	txPropagationMetrics = metrics_config.NewCounterVec("TxCount", "Transaction counter")
+	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
+)
+
 type blockNumberAndRetryCounter struct {
 	number  uint64
 	entropy *big.Int
@@ -71,10 +77,11 @@ type Core struct {
 
 	procCounter int
 
-	normalListBackoff  uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
-	workSharePool      bool   // whether to operate a workshare pool
-	workShareThreshold int    // workShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction
-	endpoints          []string
+	normalListBackoff     uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
+	workSharePool         bool   // whether to operate a workshare pool
+	workShareThreshold    int    // workShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction
+	workShareP2PThreshold int    // workShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers
+	endpoints             []string
 
 	quit chan struct{} // core quit channel
 
@@ -88,15 +95,16 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 	}
 
 	c := &Core{
-		sl:                 slice,
-		engine:             engine,
-		quit:               make(chan struct{}),
-		procCounter:        0,
-		normalListBackoff:  1,
-		workSharePool:      config.WorkSharePool,
-		workShareThreshold: config.WorkShareThreshold,
-		endpoints:          config.Endpoints,
-		logger:             logger,
+		sl:                    slice,
+		engine:                engine,
+		quit:                  make(chan struct{}),
+		procCounter:           0,
+		normalListBackoff:     1,
+		workSharePool:         config.WorkSharePool,
+		workShareThreshold:    config.WorkShareThreshold,
+		workShareP2PThreshold: config.WorkShareP2PThreshold,
+		endpoints:             config.Endpoints,
+		logger:                logger,
 	}
 
 	// Initialize the sync target to current header parent entropy
@@ -568,7 +576,7 @@ func (c *Core) Config() *params.ChainConfig {
 	return c.sl.hc.bc.chainConfig
 }
 
-// Engine retreives the blake3 consensus engine.
+// Engine retreives the relevant consensus engine.
 func (c *Core) Engine() consensus.Engine {
 	return c.engine
 }
@@ -700,6 +708,10 @@ func (c *Core) DownloadBlocksInManifest(blockHash common.Hash, manifest types.Bl
 // ConstructLocalBlock takes a header and construct the Block locally
 func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.WorkObject, error) {
 	return c.sl.ConstructLocalMinedBlock(woHeader)
+}
+
+func (c *Core) ReceiveWorkShare(workShare *types.WorkObjectHeader) (*types.WorkObjectShareView, error) {
+	return c.sl.ReceiveWorkShare(workShare)
 }
 
 func (c *Core) GetPendingBlockBody(sealHash common.Hash) *types.WorkObject {
