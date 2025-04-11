@@ -162,6 +162,11 @@ func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObje
 	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", hexutil.Bytes(data))
 }
 
+// ReceiveNonce builds the workShare from the sealHash and the nonce
+func (ec *Client) ReceiveNonce(ctx context.Context, sealHash common.Hash, nonce types.BlockNonce) error {
+	return ec.c.CallContext(ctx, nil, "quai_receiveNonce", sealHash, nonce)
+}
+
 func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObjectHeader) error {
 	protoWs, err := header.ProtoEncode()
 	if err != nil {
