@@ -41,7 +41,7 @@ const (
 	minRecommitInterval = 1 * time.Second
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
-	pendingBlockBodyLimit = 100
+	pendingBlockBodyLimit = 10000
 
 	// c_headerPrintsExpiryTime is how long a header hash is kept in the cache, so that currentInfo
 	// is not printed on a Proc frequency
@@ -115,8 +115,9 @@ type Config struct {
 	GasPrice              *big.Int        // Minimum gas price for mining a transaction
 	Recommit              time.Duration   // The time interval for miner to re-create mining work.
 	Noverify              bool            // Disable remote mining solution verification(only useful in ethash).
-	WorkShareMining       bool            // Whether to mine work shares from raw transactions.
+	WorkSharePool         bool            // Whether to operate a work share pool.
 	WorkShareThreshold    int             // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
+	WorkShareP2PThreshold int             // WorkShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers.
 	Endpoints             []string        // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
 }
 
@@ -124,6 +125,11 @@ type transactionOrderingInfo struct {
 	txs                     []*types.Transaction
 	gasUsedAfterTransaction []uint64
 	block                   *types.WorkObject
+}
+
+// Exposes public methods of the worker
+type Worker interface {
+	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
@@ -297,6 +303,19 @@ func (w *worker) pickCoinbases() {
 		// if MinerPreference > 0.5, bias is towards Qi
 		w.primaryCoinbase = w.qiCoinbase
 	}
+}
+
+func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	custom := types.CopyWorkObject(original)
+	custom.WorkObjectHeader().PickCoinbase(minerPreference, quaiCoinbase, qiCoinbase)
+	custom.WorkObjectHeader().SetData([]byte{lock})
+
+	// Not sure if lock is needed here.
+	// w.mu.Lock()
+	// defer w.mu.Unlock()
+	w.AddPendingWorkObjectBody(custom)
+
+	return custom
 }
 
 // setPrimaryCoinbase sets the coinbase used to initialize the block primary coinbase field.
@@ -2340,24 +2359,26 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
 	// do not include the tx hash while storing the body
 	woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
-	woHeaderCopy.SetTxHash(common.Hash{})
+	log.Global.Warn(woHeaderCopy.SealHash())
+	woHeaderCopy.SetTxHash(types.EmptyRootHash)
 	w.pendingBlockBody.Add(woHeaderCopy.SealHash(), *wo)
 }
 
 // GetPendingBlockBody gets the block body associated with the given header.
-func (w *worker) GetPendingBlockBody(woHeader *types.WorkObjectHeader) (*types.WorkObject, error) {
-	// do not include the tx hash while storing the body
-	woHeaderCopy := types.CopyWorkObjectHeader(woHeader)
-	woHeaderCopy.SetTxHash(common.Hash{})
-	body, ok := w.pendingBlockBody.Peek(woHeaderCopy.SealHash())
+func (w *worker) GetPendingBlockBody(sealHash common.Hash) (*types.WorkObject, error) {
+	body, ok := w.pendingBlockBody.Peek(sealHash)
 	if ok {
 		return &body, nil
 	}
-	w.logger.WithField("key", woHeader.SealHash()).Warn("pending block body not found for header")
+	w.logger.WithField("key", sealHash).Warn("pending block body not found for header")
 	return nil, errors.New("pending block body not found")
 }
 
 func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.WorkObject) event.Subscription {
+	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
+}
+
+func (w *worker) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) event.Subscription {
 	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
 }
 

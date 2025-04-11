@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -53,6 +54,11 @@ const (
 	c_maxFutureEntropyMultiple          = 200
 )
 
+var (
+	txPropagationMetrics = metrics_config.NewCounterVec("TxCount", "Transaction counter")
+	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
+)
+
 type blockNumberAndRetryCounter struct {
 	number  uint64
 	entropy *big.Int
@@ -71,10 +77,11 @@ type Core struct {
 
 	procCounter int
 
-	normalListBackoff  uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
-	workShareMining    bool   // whether to mine workshare transactions
-	workShareThreshold int    // workShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction
-	endpoints          []string
+	normalListBackoff     uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
+	workSharePool         bool   // whether to operate a workshare pool
+	workShareThreshold    int    // workShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction
+	workShareP2PThreshold int    // workShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers
+	endpoints             []string
 
 	quit chan struct{} // core quit channel
 
@@ -88,15 +95,16 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 	}
 
 	c := &Core{
-		sl:                 slice,
-		engine:             engine,
-		quit:               make(chan struct{}),
-		procCounter:        0,
-		normalListBackoff:  1,
-		workShareMining:    config.WorkShareMining,
-		workShareThreshold: config.WorkShareThreshold,
-		endpoints:          config.Endpoints,
-		logger:             logger,
+		sl:                    slice,
+		engine:                engine,
+		quit:                  make(chan struct{}),
+		procCounter:           0,
+		normalListBackoff:     1,
+		workSharePool:         config.WorkSharePool,
+		workShareThreshold:    config.WorkShareThreshold,
+		workShareP2PThreshold: config.WorkShareP2PThreshold,
+		endpoints:             config.Endpoints,
+		logger:                logger,
 	}
 
 	// Initialize the sync target to current header parent entropy
@@ -568,7 +576,7 @@ func (c *Core) Config() *params.ChainConfig {
 	return c.sl.hc.bc.chainConfig
 }
 
-// Engine retreives the blake3 consensus engine.
+// Engine retreives the relevant consensus engine.
 func (c *Core) Engine() consensus.Engine {
 	return c.engine
 }
@@ -702,8 +710,12 @@ func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.Work
 	return c.sl.ConstructLocalMinedBlock(woHeader)
 }
 
-func (c *Core) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
-	return c.sl.GetPendingBlockBody(woHeader)
+func (c *Core) ReceiveWorkShare(workShare *types.WorkObjectHeader) (*types.WorkObjectShareView, error) {
+	return c.sl.ReceiveWorkShare(workShare)
+}
+
+func (c *Core) GetPendingBlockBody(sealHash common.Hash) *types.WorkObject {
+	return c.sl.GetPendingBlockBody(sealHash)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {
@@ -796,6 +808,10 @@ func (c *Core) AddGenesisPendingEtxs(block *types.WorkObject) {
 
 func (c *Core) SubscribeExpansionEvent(ch chan<- ExpansionEvent) event.Subscription {
 	return c.sl.SubscribeExpansionEvent(ch)
+}
+
+func (c *Core) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	return c.sl.miner.worker.GenerateCustomWorkObject(original, lock, minerPreference, quaiCoinbase, qiCoinbase)
 }
 
 func (c *Core) SetDomInterface(domInterface CoreBackend) {
@@ -901,6 +917,10 @@ func (c *Core) CurrentHeader() *types.WorkObject {
 	return c.sl.hc.CurrentHeader()
 }
 
+func (c *Core) ComputePowLight(workObject *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
+	return c.engine.ComputePowLight(workObject)
+}
+
 func (c *Core) ComputeExpansionNumber(parent *types.WorkObject) (uint8, error) {
 	return c.sl.hc.ComputeExpansionNumber(parent)
 }
@@ -936,6 +956,10 @@ func (c *Core) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool) {
 
 func (c *Core) AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int) {
 	c.sl.hc.AddToCalcOrderCache(hash, order, intrinsicS)
+}
+
+func (c *Core) AddPendingWorkObjectBody(wo *types.WorkObject) {
+	c.sl.miner.AddPendingWorkObjectBody(wo)
 }
 
 // GetHeaderOrCandidateByHash retrieves a block header from the database by hash, caching it if
@@ -984,6 +1008,10 @@ func (c *Core) Genesis() *types.WorkObject {
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
 	return c.sl.hc.SubscribeChainHeadEvent(ch)
+}
+
+func (c *Core) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) event.Subscription {
+	return c.Miner().worker.SubscribePendingWorkObjectEvent(ch)
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database by
@@ -1046,12 +1074,8 @@ func (c *Core) GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, err
 	return c.sl.hc.GetKQuaiAndUpdateBit(blockHash)
 }
 
-func (c *Core) TxMiningEnabled() bool {
-	return c.workShareMining
-}
-
-func (c *Core) GetWorkShareThreshold() int {
-	return c.workShareThreshold
+func (c *Core) WorkSharePoolEnabled() bool {
+	return c.workSharePool
 }
 
 func (c *Core) GetMinerEndpoints() []string {

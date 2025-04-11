@@ -126,6 +126,11 @@ func (miner *Miner) PendingBlockAndReceipts() (*types.WorkObject, types.Receipts
 	return miner.worker.pendingBlockAndReceipts()
 }
 
+// Adds the pending WorkObject to the worker's LRU cache.
+func (miner *Miner) AddPendingWorkObjectBody(workObject *types.WorkObject) {
+	miner.worker.AddPendingWorkObjectBody(workObject)
+}
+
 func (miner *Miner) SetPrimaryCoinbase(addr common.Address) {
 	miner.worker.setPrimaryCoinbase(addr)
 }

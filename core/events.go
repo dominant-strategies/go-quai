@@ -37,6 +37,10 @@ type ChainHeadEvent struct {
 	Block *types.WorkObject
 }
 
+type PendingWoEvent struct {
+	PendingWo *types.WorkObject
+}
+
 type ExpansionEvent struct {
 	Block *types.WorkObject
 }
