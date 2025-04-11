@@ -517,8 +517,72 @@ func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.WorkObject) (*ty
 	return b.quai.core.ConstructLocalMinedBlock(header)
 }
 
-func (b *QuaiAPIBackend) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
-	return b.quai.core.GetPendingBlockBody(woHeader)
+func (b *QuaiAPIBackend) GetPendingBlockBody(sealHash common.Hash) *types.WorkObject {
+	return b.quai.core.GetPendingBlockBody(sealHash)
+}
+
+func (b *QuaiAPIBackend) ReceiveWorkShare(workShare *types.WorkObjectHeader) error {
+	// Evaluate the validity of the share and add it to the chain.
+	shareView, isBlock, err := b.quai.core.ReceiveWorkShare(workShare)
+	if err != nil && !isBlock {
+		return err
+	}
+	if isBlock {
+		return nil
+	}
+
+	return b.BroadcastWorkShare(shareView, b.NodeLocation())
+}
+
+// ReceiveNonce will build the workObject given the sealHash and provided Nonce.
+// It will calculate the correct order of the share. If it is just a share, it will
+// call ReceiveWorkShare to add it to the chain.
+// If it is a block, it will send to the appropriate backends.
+func (b *QuaiAPIBackend) ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) error {
+	workObject, err := b.quai.core.ReceiveNonce(sealHash, nonce)
+	if err != nil {
+		return err
+	}
+	return b.ReceiveMinedHeader(workObject)
+}
+
+func (b *QuaiAPIBackend) ReceiveMinedHeader(wo *types.WorkObject) error {
+
+	if b.NodeCtx() == common.ZONE_CTX {
+		// Once the sealhash and the nonce is recieved, the workshare is constructed
+		workShare, isBlock, err := b.quai.core.ReceiveWorkShare(wo.WorkObjectHeader())
+		if err == nil && !isBlock {
+			// Broadcast the share to P2P backend.
+			err = b.BroadcastWorkShare(workShare, b.NodeLocation())
+			if err != nil {
+				b.Logger().WithField("err", err).Error("Error broadcasting block")
+			}
+			return nil
+		} else if err != nil {
+			return err
+		}
+	}
+
+	block, err := b.quai.core.ReceiveMinedHeader(wo)
+	if err != nil {
+		return err
+	}
+
+	// Broadcast the block and announce chain insertion event
+	if block.Header() != nil {
+		err := b.BroadcastBlock(block, b.NodeLocation())
+		if err != nil {
+			b.Logger().WithField("err", err).Error("Error broadcasting block")
+		}
+		if b.NodeLocation().Context() == common.ZONE_CTX {
+			err = b.BroadcastHeader(block, b.NodeLocation())
+			if err != nil {
+				b.Logger().WithField("err", err).Error("Error broadcasting header")
+			}
+		}
+	}
+
+	return nil
 }
 
 func (b *QuaiAPIBackend) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {

@@ -702,8 +702,20 @@ func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.Work
 	return c.sl.ConstructLocalMinedBlock(woHeader)
 }
 
-func (c *Core) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
-	return c.sl.GetPendingBlockBody(woHeader)
+func (c *Core) ReceiveWorkShare(workShare *types.WorkObjectHeader) (*types.WorkObjectShareView, bool, error) {
+	return c.sl.ReceiveWorkShare(workShare)
+}
+
+func (c *Core) ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) (*types.WorkObject, error) {
+	return c.sl.ReceiveNonce(sealHash, nonce)
+}
+
+func (c *Core) ReceiveMinedHeader(workObject *types.WorkObject) (*types.WorkObject, error) {
+	return c.sl.ReceiveMinedHeader(workObject)
+}
+
+func (c *Core) GetPendingBlockBody(sealHash common.Hash) *types.WorkObject {
+	return c.sl.GetPendingBlockBody(sealHash)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {
