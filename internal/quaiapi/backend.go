@@ -84,7 +84,10 @@ type Backend interface {
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
 	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
 	GetPendingHeader() (*types.WorkObject, error)
-	GetPendingBlockBody(workShare *types.WorkObjectHeader) *types.WorkObject
+	GetPendingBlockBody(sealHash common.Hash) *types.WorkObject
+	ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) error
+	ReceiveWorkShare(ws *types.WorkObjectHeader) error
+	ReceiveMinedHeader(wo *types.WorkObject) error
 	GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
