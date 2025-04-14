@@ -164,7 +164,7 @@ func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObje
 
 // ReceiveNonce builds the workShare from the sealHash and the nonce
 func (ec *Client) ReceiveNonce(ctx context.Context, sealHash common.Hash, nonce types.BlockNonce) error {
-	return ec.c.CallContext(ctx, nil, "quai_receiveNonce", sealHash, nonce)
+	return ec.c.CallContext(ctx, nil, "workshares_receiveNonce", sealHash, nonce)
 }
 
 // SubscribeCustomSealHash subscribes to seal hashes created for the mining client.

@@ -137,6 +137,13 @@ func (b *testBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocks, b.sections
 }
 
+func (b *testBackend) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	newWo := types.CopyWorkObject(original)
+	newWo.WorkObjectHeader().PickCoinbase(minerPreference, quaiCoinbase, qiCoinbase)
+	newWo.WorkObjectHeader().SetData([]byte{lock})
+	return newWo
+}
+
 func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	requests := make(chan chan *bloombits.Retrieval)
 
@@ -190,6 +197,14 @@ func (b *testBackend) SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) e
 
 func (b *testBackend) SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.Subscription {
 	return b.unlocksFeed.Subscribe(ch)
+}
+
+func (b *testBackend) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) (event.Subscription, error) {
+	return b.pendingHeaderFeed.Subscribe(ch), nil
+}
+
+func (b *testBackend) GetPendingHeader() (*types.WorkObject, error) {
+	return rawdb.ReadWorkObject(b.db, 1, common.Zero.Hash(), types.WorkObjectView(0)), nil
 }
 
 // TestPendingTxFilter tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.

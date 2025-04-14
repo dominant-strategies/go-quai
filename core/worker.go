@@ -41,7 +41,7 @@ const (
 	minRecommitInterval = 1 * time.Second
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
-	pendingBlockBodyLimit = 100
+	pendingBlockBodyLimit = 10000
 
 	// c_headerPrintsExpiryTime is how long a header hash is kept in the cache, so that currentInfo
 	// is not printed on a Proc frequency
@@ -118,6 +118,11 @@ type Config struct {
 	WorkSharePool          bool            // Whether to operate a work share pool.
 	WorkShareFeePercentage float64         // The percentage chance that this node should generate a custom workshare paid to its own coinbase address.
 	WorkShareP2PThreshold  int             // WorkShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers.
+}
+
+// Exposes public methods of the worker
+type Worker interface {
+	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
