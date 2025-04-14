@@ -70,9 +70,7 @@ type Core struct {
 
 	normalListBackoff     uint64 // normalListBackoff is the multiple on c_normalListProcCounter which delays the proc on normal list
 	workSharePool         bool   // whether to operate a workshare pool
-	workShareThreshold    int    // workShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction
 	workShareP2PThreshold int    // workShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers
-	endpoints             []string
 
 	quit chan struct{} // core quit channel
 
@@ -92,9 +90,7 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 		procCounter:           0,
 		normalListBackoff:     1,
 		workSharePool:         config.WorkSharePool,
-		workShareThreshold:    config.WorkShareThreshold,
 		workShareP2PThreshold: config.WorkShareP2PThreshold,
-		endpoints:             config.Endpoints,
 		logger:                logger,
 	}
 
@@ -1071,10 +1067,6 @@ func (c *Core) GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, err
 
 func (c *Core) WorkSharePoolEnabled() bool {
 	return c.workSharePool
-}
-
-func (c *Core) GetMinerEndpoints() []string {
-	return c.endpoints
 }
 
 //--------------------//

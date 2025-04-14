@@ -229,9 +229,9 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Public:    true,
 		})
 		apis = append(apis, rpc.API{
-			Namespace: "workshare",
+			Namespace: "workshares",
 			Version:   "1.0",
-			Service:   NewPublicWorkSharesAPI(apis[7].Service.(*PublicTransactionPoolAPI), apiBackend),
+			Service:   NewPublicWorkSharesAPI(apiBackend),
 			Public:    true,
 		})
 	}
