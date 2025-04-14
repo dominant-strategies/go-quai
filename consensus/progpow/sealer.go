@@ -130,7 +130,7 @@ func (progpow *Progpow) MineToThreshold(workObject *types.WorkObject, workShareT
 		return
 	}
 
-	target, err := consensus.CalcWorkShareThreshold(workObject.WorkObjectHeader(), workShareThreshold)
+	target, err := consensus.CalcWorkShareThreshold(workObject.WorkObjectHeader().Difficulty(), workShareThreshold)
 	if err != nil {
 		log.Global.WithField("err", err).Error("Issue mining")
 		return

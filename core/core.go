@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -66,8 +65,6 @@ type Core struct {
 	appendQueue     *lru.Cache[common.Hash, blockNumberAndRetryCounter]
 	processingCache *expireLru.LRU[common.Hash, interface{}]
 	remoteTxQueue   *lru.Cache[common.Hash, types.Transaction]
-
-	writeBlockLock sync.RWMutex
 
 	procCounter int
 
@@ -373,7 +370,7 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, ord
 	// appended to reduce the network bandwidth utilization
 	nodeCtx := c.NodeLocation().Context()
 	if nodeCtx == common.PRIME_CTX {
-		// If prime all you can do it to ask for the block
+		// If prime all you can do is to ask for the block
 		_, exists := c.appendQueue.Get(hash)
 		if !exists {
 			c.logger.WithFields(log.Fields{
@@ -568,7 +565,7 @@ func (c *Core) Config() *params.ChainConfig {
 	return c.sl.hc.bc.chainConfig
 }
 
-// Engine retreives the blake3 consensus engine.
+// Engine retreives the relevant consensus engine.
 func (c *Core) Engine() consensus.Engine {
 	return c.engine
 }

@@ -2344,10 +2344,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 // AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
 // maps it to body.
 func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
-	// do not include the tx hash while storing the body
-	woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
-	woHeaderCopy.SetTxHash(common.Hash{})
-	w.pendingBlockBody.Add(woHeaderCopy.SealHash(), *wo)
+		w.pendingBlockBody.Add(wo.SealHash(), *wo)
 }
 
 // GetPendingBlockBody gets the block body associated with the given header.
