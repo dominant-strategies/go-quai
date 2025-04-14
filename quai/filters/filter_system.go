@@ -319,6 +319,11 @@ func (es *EventSystem) subscribePendingLogs(crit quai.FilterQuery, logs chan []*
 }
 
 func (es *EventSystem) SubscribeCustomSealHash(crit quai.WorkShareCriteria, pendingWo chan *types.WorkObject) *Subscription {
+	// Make sure that the flag is enabled before we provide this subscription.
+	if !es.backend.WorkSharePoolEnabled() {
+		return nil
+	}
+
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       PendingWoSubscription,

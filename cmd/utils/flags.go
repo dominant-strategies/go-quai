@@ -44,7 +44,7 @@ const (
 	c_NodeFlagPrefix      = "node."
 	c_TXPoolPrefix        = "txpool."
 	c_RPCFlagPrefix       = "rpc."
-	c_WorkShareFlagPrefix = "workshare."
+	c_WorkShareFlagPrefix = "workshares."
 	c_PeersFlagPrefix     = "peers."
 	c_MetricsFlagPrefix   = "metrics."
 
@@ -738,11 +738,6 @@ var (
 		Usage: "Percentage fee taken for providing custom workshares via WorkSharePool endpoint" + generateEnvDoc(c_WorkShareFlagPrefix+"fee"),
 	}
 
-	WorkShareMinerEndpoints = Flag{
-		Name:  c_WorkShareFlagPrefix + "miners",
-		Value: "",
-		Usage: "RPC endpoint to send minimally mined transactions for further working" + generateEnvDoc(c_WorkShareFlagPrefix+"miners"),
-	}
 	WorkShareP2PThreshold = Flag{
 		Name:  c_WorkShareFlagPrefix + "p2pthreshold",
 		Value: 7,
