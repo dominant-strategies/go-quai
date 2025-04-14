@@ -523,8 +523,9 @@ func (b *QuaiAPIBackend) GetPendingBlockBody(sealHash common.Hash) *types.WorkOb
 
 func (b *QuaiAPIBackend) ReceiveWorkShare(workShare *types.WorkObjectHeader) error {
 	// Evaluate the validity of the share and add it to the chain.
-	shareView, isBlock, err := b.quai.core.ReceiveWorkShare(workShare)
-	if err != nil && !isBlock {
+	shareView, isBlock, isWorkShare, err := b.quai.core.ReceiveWorkShare(workShare)
+	if err != nil && !isBlock && !isWorkShare {
+		// An error was returned and this isn't a block or regular share indicating the object is not even a valid p2p share.
 		return err
 	}
 	if isBlock {
@@ -550,12 +551,15 @@ func (b *QuaiAPIBackend) ReceiveMinedHeader(wo *types.WorkObject) error {
 
 	if b.NodeCtx() == common.ZONE_CTX {
 		// Once the sealhash and the nonce is recieved, the workshare is constructed
-		workShare, isBlock, err := b.quai.core.ReceiveWorkShare(wo.WorkObjectHeader())
-		if err == nil && !isBlock {
+		workShare, isBlock, isWorkShare, err := b.quai.core.ReceiveWorkShare(wo.WorkObjectHeader())
+		if err == nil && !isBlock && isWorkShare {
+			if workShare != nil {
+				// Only if the workshare had transactions should it be broadcasted.
 			// Broadcast the share to P2P backend.
 			err = b.BroadcastWorkShare(workShare, b.NodeLocation())
 			if err != nil {
 				b.Logger().WithField("err", err).Error("Error broadcasting block")
+				}
 			}
 			return nil
 		} else if err != nil {
