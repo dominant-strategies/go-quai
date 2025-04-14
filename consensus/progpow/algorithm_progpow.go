@@ -37,16 +37,23 @@ const (
 	progpowMixBytes     = 256
 )
 
+func combineUint32(high, low uint32) uint64 {
+	return (uint64(high) << 32) | uint64(low)
+}
+
 func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
-	blockNumber uint64, cDag []uint32, lookupCache *goLRU.Cache[uint32, []byte]) ([]byte, []byte) {
+	blockNumber uint64, cDag []uint32, lookupCache *goLRU.Cache[uint64, []byte]) ([]byte, []byte) {
 	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 	lookup := func(index uint32) []byte {
-		res, ok := lookupCache.Get(index)
+		epoch := blockNumber / C_epochLength
+		key := combineUint32(uint32(epoch), index)
+		// use the epoch along with the index while caching into the lookupCache
+		res, ok := lookupCache.Get(key)
 		if ok {
 			return res
 		}
 		datasetItem := generateDatasetItem(cache, index/16, keccak512)
-		lookupCache.Add(index, datasetItem)
+		lookupCache.Add(key, datasetItem)
 		return datasetItem
 	}
 	return progpow(hash, nonce, size, blockNumber, cDag, lookup)

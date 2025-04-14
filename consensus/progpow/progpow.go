@@ -180,7 +180,7 @@ type Progpow struct {
 	config Config
 
 	caches      *lru                         // In memory caches to avoid regenerating too often
-	lookupCache *goLRU.Cache[uint32, []byte] // Cache to store the last few block hashes
+	lookupCache *goLRU.Cache[uint64, []byte] // Cache to store the last few block hashes
 	hashCache   *goLRU.Cache[common.Hash, mixHashWorkHash]
 
 	// Mining related fields
@@ -205,7 +205,7 @@ type Progpow struct {
 func New(config Config, notify []string, noverify bool, logger *log.Logger) *Progpow {
 	if config.CachesInMem <= 0 {
 		logger.WithField("requested", config.CachesInMem).Warn("Invalid ethash caches in memory, defaulting to 1")
-		config.CachesInMem = 1
+		config.CachesInMem = 5
 	}
 	if config.CacheDir != "" && config.CachesOnDisk > 0 {
 		logger.WithFields(log.Fields{
@@ -214,7 +214,7 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 		}).Info("Disk storage enabled for ethash caches")
 	}
 
-	lookupCache, err := goLRU.New[uint32, []byte](c_dagItemsInCache)
+	lookupCache, err := goLRU.New[uint64, []byte](c_dagItemsInCache)
 	if err != nil {
 		logger.WithField("err", err).Fatal("Failed to create ethash lookup cache")
 	}
