@@ -324,6 +324,13 @@ func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) 
 	return b.quai.Core().SubscribeChainHeadEvent(ch)
 }
 
+func (b *QuaiAPIBackend) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) (event.Subscription, error) {
+	if !b.WorkSharePoolEnabled() {
+		return nil, errors.New("workShare pool mining is not enabled")
+	}
+	return b.quai.Core().SubscribePendingWorkObjectEvent(ch), nil
+}
+
 func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return b.quai.Core().SubscribeChainSideEvent(ch)
 }

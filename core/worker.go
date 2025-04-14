@@ -2362,6 +2362,10 @@ func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.WorkObject) event.Su
 	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
 }
 
+func (w *worker) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) event.Subscription {
+	return w.scope.Track(w.pendingHeaderFeed.Subscribe(ch))
+}
+
 // copyReceipts makes a deep copy of the given receipts.
 func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 	result := make([]*types.Receipt, len(receipts))
