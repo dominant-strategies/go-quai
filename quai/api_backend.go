@@ -709,12 +709,8 @@ func (b *QuaiAPIBackend) GetMaxTxInWorkShare() uint64 {
 	return b.quai.core.GetMaxTxInWorkShare()
 }
 
-func (b *QuaiAPIBackend) TxMiningEnabled() bool {
-	return b.quai.core.TxMiningEnabled()
-}
-
-func (b *QuaiAPIBackend) GetWorkShareThreshold() int {
-	return b.quai.core.GetWorkShareThreshold()
+func (b *QuaiAPIBackend) WorkSharePoolEnabled() bool {
+	return b.quai.core.WorkSharePoolEnabled()
 }
 
 func (b *QuaiAPIBackend) GetMinerEndpoints() []string {
