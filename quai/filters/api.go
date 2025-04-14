@@ -34,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -785,6 +786,8 @@ func decodeTopic(s string) (common.Hash, error) {
 	return common.BytesToHash(b), err
 }
 
+// // WorkShareFilter Methods
+
 // PendingHeader sends a notification each time a new pending header is created.
 func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -837,6 +840,83 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 				return
 			case <-notifier.Closed():
 				headerSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// CustomWorkObject builds a custom work object for each subscriber on new pending header.
+func (api *PublicFilterAPI) CustomWorkObject(ctx context.Context, crit quai.WorkShareCriteria) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	// Sanity checks for WorkShareCriteria
+	if !crit.QuaiCoinbase.IsInQuaiLedgerScope() {
+		return nil, errors.New("invalid quai address")
+	}
+	if !crit.QiCoinbase.IsInQiLedgerScope() {
+		return nil, errors.New("invalid qi address")
+	}
+	if crit.MinerPreference < 0 || crit.MinerPreference > 1 {
+		return nil, errors.New("invalid miner preference")
+	}
+	if crit.LockupByte >= uint8(len(params.LockupByteToBlockDepth)) {
+		return nil, errors.New("invalid lockup byte")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+
+		api.activeSubscriptions += 1
+		pendingWoChan := make(chan *types.WorkObject)
+		pendingWoSub := api.events.SubscribeCustomSealHash(crit, pendingWoChan)
+
+		// Send first job to client.
+		currentWo, err := api.backend.GetPendingHeader()
+		if err != nil {
+			pendingWoSub.Unsubscribe()
+		}
+		wo := api.backend.GenerateCustomWorkObject(currentWo, crit.LockupByte, crit.MinerPreference, crit.QuaiCoinbase, crit.QiCoinbase)
+		notifier.Notify(rpcSub.ID, &quai.WorkShareUpdate{
+			SealHash:            wo.SealHash(),
+			PrimeTerminusNumber: wo.PrimeTerminusNumber(),
+			Difficulty:          wo.Difficulty(),
+		})
+
+		for {
+			select {
+			case wo := <-pendingWoChan:
+				newWo := api.backend.GenerateCustomWorkObject(wo, crit.LockupByte, crit.MinerPreference, crit.QuaiCoinbase, crit.QiCoinbase)
+				notifier.Notify(rpcSub.ID, &quai.WorkShareUpdate{
+					SealHash:            newWo.SealHash(),
+					PrimeTerminusNumber: newWo.PrimeTerminusNumber(),
+					Difficulty:          newWo.Difficulty(),
+				})
+
+			case <-rpcSub.Err():
+				pendingWoSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				pendingWoSub.Unsubscribe()
 				return
 			}
 		}
