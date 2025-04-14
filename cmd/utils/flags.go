@@ -141,8 +141,7 @@ var TXPoolFlags = []Flag{
 
 var WorkShareFlags = []Flag{
 	WorkSharePoolFlag,
-	WorkShareThresholdFlag,
-	WorkShareMinerEndpoints,
+	WorkShareFeePercentageFlag,
 	WorkShareP2PThreshold,
 }
 
@@ -733,10 +732,10 @@ var (
 		Usage: "Enable workshare pool" + generateEnvDoc(c_WorkShareFlagPrefix+"pool"),
 	}
 
-	WorkShareThresholdFlag = Flag{
-		Name:  c_WorkShareFlagPrefix + "threshold",
-		Value: 10,
-		Usage: "Threshold for workshare" + generateEnvDoc(c_WorkShareFlagPrefix+"threshold"),
+	WorkShareFeePercentageFlag = Flag{
+		Name:  c_WorkShareFlagPrefix + "fee",
+		Value: 0.1, // => 0.1% fee taken.
+		Usage: "Percentage fee taken for providing custom workshares via WorkSharePool endpoint" + generateEnvDoc(c_WorkShareFlagPrefix+"fee"),
 	}
 
 	WorkShareMinerEndpoints = Flag{
@@ -1443,10 +1442,9 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	cfg.GenesisNonce, cfg.GenesisExtra = GetGenesisNonce()
 
 	cfg.Miner.WorkSharePool = viper.GetBool(WorkSharePoolFlag.Name)
-	cfg.Miner.WorkShareThreshold = params.WorkSharesThresholdDiff + viper.GetInt(WorkShareThresholdFlag.Name)
-	if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
-		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
-	}
+
+	// Divide by 100 to convert from percentage to ratio.
+	cfg.Miner.WorkShareFeePercentage = viper.GetFloat64(WorkShareFeePercentageFlag.Name) / 100
 
 	cfg.WorkShareP2PThreshold = viper.GetInt(WorkShareP2PThreshold.Name)
 	// workshare p2p threshold cannot be less than the workshare threshold diff

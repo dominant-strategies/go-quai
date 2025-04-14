@@ -562,10 +562,10 @@ func (b *QuaiAPIBackend) ReceiveMinedHeader(wo *types.WorkObject) error {
 		if err == nil && !isBlock && isWorkShare {
 			if workShare != nil {
 				// Only if the workshare had transactions should it be broadcasted.
-			// Broadcast the share to P2P backend.
-			err = b.BroadcastWorkShare(workShare, b.NodeLocation())
-			if err != nil {
-				b.Logger().WithField("err", err).Error("Error broadcasting block")
+				// Broadcast the share to P2P backend.
+				err = b.BroadcastWorkShare(workShare, b.NodeLocation())
+				if err != nil {
+					b.Logger().WithField("err", err).Error("Error broadcasting block")
 				}
 			}
 			return nil

@@ -102,29 +102,22 @@ func (env *environment) unclelist() []*types.WorkObjectHeader {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	QuaiCoinbase          common.Address  `toml:",omitempty"` // Public address for Quai mining rewards
-	QiCoinbase            common.Address  `toml:",omitempty"` // Public address for Qi mining rewards
-	CoinbaseLockup        uint8           `toml:",omitempty"` // Lockup byte the determines number of blocks before mining rewards can be spent
-	LockupContractAddress *common.Address `toml:",omitempty"` // Address of the lockup contract to use for coinbase rewards
-	MinerPreference       float64         // Determines the relative preference of Quai or Qi [0, 1] respectively
-	Notify                []string        `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
-	NotifyFull            bool            `toml:",omitempty"` // Notify with pending block headers instead of work packages
-	ExtraData             hexutil.Bytes   `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor              uint64          // Target gas floor for mined blocks.
-	GasCeil               uint64          // Target gas ceiling for mined blocks.
-	GasPrice              *big.Int        // Minimum gas price for mining a transaction
-	Recommit              time.Duration   // The time interval for miner to re-create mining work.
-	Noverify              bool            // Disable remote mining solution verification(only useful in ethash).
-	WorkSharePool         bool            // Whether to operate a work share pool.
-	WorkShareThreshold    int             // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
-WorkShareP2PThreshold int             // WorkShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers.
-	Endpoints             []string        // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
-}
-
-type transactionOrderingInfo struct {
-	txs                     []*types.Transaction
-	gasUsedAfterTransaction []uint64
-	block                   *types.WorkObject
+	QuaiCoinbase           common.Address  `toml:",omitempty"` // Public address for Quai mining rewards
+	QiCoinbase             common.Address  `toml:",omitempty"` // Public address for Qi mining rewards
+	CoinbaseLockup         uint8           `toml:",omitempty"` // Lockup byte the determines number of blocks before mining rewards can be spent
+	LockupContractAddress  *common.Address `toml:",omitempty"` // Address of the lockup contract to use for coinbase rewards
+	MinerPreference        float64         // Determines the relative preference of Quai or Qi [0, 1] respectively
+	Notify                 []string        `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
+	NotifyFull             bool            `toml:",omitempty"` // Notify with pending block headers instead of work packages
+	ExtraData              hexutil.Bytes   `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor               uint64          // Target gas floor for mined blocks.
+	GasCeil                uint64          // Target gas ceiling for mined blocks.
+	GasPrice               *big.Int        // Minimum gas price for mining a transaction
+	Recommit               time.Duration   // The time interval for miner to re-create mining work.
+	Noverify               bool            // Disable remote mining solution verification(only useful in ethash).
+	WorkSharePool          bool            // Whether to operate a work share pool.
+	WorkShareFeePercentage float64         // The percentage chance that this node should generate a custom workshare paid to its own coinbase address.
+	WorkShareP2PThreshold  int             // WorkShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers.
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
@@ -298,6 +291,22 @@ func (w *worker) pickCoinbases() {
 		// if MinerPreference > 0.5, bias is towards Qi
 		w.primaryCoinbase = w.qiCoinbase
 	}
+}
+
+func (w *worker) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	custom := types.CopyWorkObject(original)
+	if rand.Float64() < w.config.WorkShareFeePercentage {
+		// Generate a work object that pays to our address.
+		custom.WorkObjectHeader().PickCoinbase(w.config.MinerPreference, w.config.QuaiCoinbase, w.config.QiCoinbase)
+		custom.WorkObjectHeader().SetData([]byte{w.config.CoinbaseLockup})
+	} else {
+		custom.WorkObjectHeader().PickCoinbase(minerPreference, quaiCoinbase, qiCoinbase)
+		custom.WorkObjectHeader().SetData([]byte{lock})
+	}
+
+	w.AddPendingWorkObjectBody(custom)
+
+	return custom
 }
 
 // setPrimaryCoinbase sets the coinbase used to initialize the block primary coinbase field.
@@ -2345,7 +2354,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 // AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
 // maps it to body.
 func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
-		w.pendingBlockBody.Add(wo.SealHash(), *wo)
+	w.pendingBlockBody.Add(wo.SealHash(), *wo)
 }
 
 // GetPendingBlockBody gets the block body associated with the given header.
