@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -607,6 +608,17 @@ func (wh *WorkObjectHeader) SetTxHash(txHash common.Hash) {
 
 func (wh *WorkObjectHeader) SetPrimaryCoinbase(coinbase common.Address) {
 	wh.primaryCoinbase = coinbase
+}
+
+func (wh *WorkObjectHeader) PickCoinbase(minerPreference float64, quaiCoinbase, qiCoinbase common.Address) {
+	// Use the MinerPreference to bias the decision
+	if rand.Float64() > minerPreference {
+		// if MinerPreference < 0.5, bias is towards Quai
+		wh.primaryCoinbase = quaiCoinbase
+	} else {
+		// if MinerPreference > 0.5, bias is towards Qi
+		wh.primaryCoinbase = qiCoinbase
+	}
 }
 
 func (wh *WorkObjectHeader) SetLocation(location common.Location) {
