@@ -294,7 +294,7 @@ func (progpow *Progpow) CheckIfValidWorkShare(workShare *types.WorkObjectHeader)
 }
 
 func (progpow *Progpow) CheckWorkThreshold(workShare *types.WorkObjectHeader, workShareThresholdDiff int) bool {
-	workShareMinTarget, err := consensus.CalcWorkShareThreshold(workShare, workShareThresholdDiff)
+	workShareMinTarget, err := consensus.CalcWorkShareThreshold(workShare.Difficulty(), workShareThresholdDiff)
 	if err != nil {
 		return false
 	}
