@@ -37,6 +37,10 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
+var (
+	txEgressCounter = txPropagationMetrics.WithLabelValues("egress")
+)
+
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
 	extRPCEnabled bool
@@ -696,6 +700,10 @@ func (b *QuaiAPIBackend) SetWorkShareP2PThreshold(threshold int) {
 	b.quai.SetWorkShareP2PThreshold(threshold)
 }
 
+func (b *QuaiAPIBackend) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	return b.quai.core.GenerateCustomWorkObject(original, lock, minerPreference, quaiCoinbase, qiCoinbase)
+}
+
 func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription {
 	return b.quai.core.SubscribeExpansionEvent(ch)
 }
@@ -788,6 +796,10 @@ func (b *QuaiAPIBackend) AddToCalcOrderCache(hash common.Hash, order int, intrin
 	b.quai.core.AddToCalcOrderCache(hash, order, intrinsicS)
 }
 
+func (b *QuaiAPIBackend) AddPendingWorkObjectBody(wo *types.WorkObject) {
+	b.quai.core.AddPendingWorkObjectBody(wo)
+}
+
 func (b *QuaiAPIBackend) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
 	return b.quai.core.ApplyPoWFilter(wo)
 }
@@ -824,7 +836,18 @@ func (b *QuaiAPIBackend) ComputeMinerDifficulty(parent *types.WorkObject) *big.I
 // /////// P2P ///////////////
 // ///////////////////////////
 func (b *QuaiAPIBackend) BroadcastBlock(block *types.WorkObject, location common.Location) error {
-	return b.quai.p2p.Broadcast(location, block.ConvertToBlockView())
+	err := b.quai.p2p.Broadcast(location, block.ConvertToBlockView())
+	if err != nil {
+		b.Logger().WithFields(log.Fields{
+			"hash": block.Hash(),
+			"err":  err,
+		}).Error("Error broadcasting block")
+		return err
+	}
+	// Log the number of transactions in this block.
+	txEgressCounter.Add(float64(len(block.Transactions())))
+	b.Logger().WithField("tx count", len(block.Transactions())).Info("Broadcasted block with txs")
+	return nil
 }
 
 func (b *QuaiAPIBackend) BroadcastHeader(header *types.WorkObject, location common.Location) error {
@@ -832,5 +855,8 @@ func (b *QuaiAPIBackend) BroadcastHeader(header *types.WorkObject, location comm
 }
 
 func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error {
+	// Log the number of transactions in this block.
+	txEgressCounter.Add(float64(len(workShare.Transactions())))
+	b.Logger().WithField("tx count", len(workShare.Transactions())).Info("Broadcasted block with txs")
 	return b.quai.p2p.Broadcast(location, workShare)
 }
