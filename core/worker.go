@@ -115,8 +115,9 @@ type Config struct {
 	GasPrice              *big.Int        // Minimum gas price for mining a transaction
 	Recommit              time.Duration   // The time interval for miner to re-create mining work.
 	Noverify              bool            // Disable remote mining solution verification(only useful in ethash).
-	WorkShareMining       bool            // Whether to mine work shares from raw transactions.
+	WorkSharePool         bool            // Whether to operate a work share pool.
 	WorkShareThreshold    int             // WorkShareThreshold is the minimum fraction of a share that this node will accept to mine a transaction.
+WorkShareP2PThreshold int             // WorkShareP2PThreshold is the minimum fraction of a share that this node will accept to propagate to peers.
 	Endpoints             []string        // Holds RPC endpoints to send minimally mined transactions to for further mining/propagation.
 }
 
