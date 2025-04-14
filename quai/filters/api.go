@@ -69,6 +69,10 @@ type PublicFilterAPI struct {
 	activeSubscriptions int
 }
 
+type WorkSharesFilterAPI struct {
+	PublicFilterAPI
+}
+
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
 func NewPublicFilterAPI(backend Backend, timeout time.Duration, subscriptionLimit int) *PublicFilterAPI {
 	api := &PublicFilterAPI{
@@ -80,6 +84,25 @@ func NewPublicFilterAPI(backend Backend, timeout time.Duration, subscriptionLimi
 		subscriptionLimit:   subscriptionLimit,
 		activeSubscriptions: 0,
 	}
+	go api.timeoutLoop(timeout)
+
+	return api
+}
+
+// NewPublicFilterAPI returns a new PublicFilterAPI instance.
+func NewWorkSharesAPI(backend Backend, timeout time.Duration, subscriptionLimit int) *WorkSharesFilterAPI {
+	api := &WorkSharesFilterAPI{
+		PublicFilterAPI{
+			backend:             backend,
+			chainDb:             backend.ChainDb(),
+			events:              NewEventSystem(backend),
+			filters:             make(map[rpc.ID]*filter),
+			timeout:             timeout,
+			subscriptionLimit:   subscriptionLimit,
+			activeSubscriptions: 0,
+		},
+	}
+
 	go api.timeoutLoop(timeout)
 
 	return api
@@ -790,6 +813,11 @@ func decodeTopic(s string) (common.Hash, error) {
 
 // PendingHeader sends a notification each time a new pending header is created.
 func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscription, error) {
+	// If we are running a WorkSharePool we must disable this subscription.
+	if api.backend.WorkSharePoolEnabled() {
+		return nil, errors.New("cannot serve pending headers while WorkSharePool is active")
+	}
+
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -850,6 +878,9 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 
 // CustomWorkObject builds a custom work object for each subscriber on new pending header.
 func (api *PublicFilterAPI) CustomWorkObject(ctx context.Context, crit quai.WorkShareCriteria) (*rpc.Subscription, error) {
+	if !api.backend.WorkSharePoolEnabled() {
+		return nil, errors.New("workSharePool flag not enabled")
+	}
 	if api.activeSubscriptions >= api.subscriptionLimit {
 		return &rpc.Subscription{}, errors.New("too many subscribers")
 	}

@@ -43,6 +43,7 @@ type Backend interface {
 	GetBlock(hash common.Hash, number uint64) (*types.WorkObject, error)
 	GetPendingHeader() (*types.WorkObject, error)
 	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
+	WorkSharePoolEnabled() bool
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) (event.Subscription, error)

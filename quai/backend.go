@@ -193,7 +193,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		blake3Config.NotifyFull = config.Miner.NotifyFull
 		blake3Config.NodeLocation = config.NodeLocation
 		blake3Config.GenAllocs = config.GenesisAllocs
-		quai.engine = quaiconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &blake3Config, config.Miner.Notify, config.Miner.Noverify, config.Miner.WorkShareThreshold, chainDb, logger)
+		quai.engine = quaiconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &blake3Config, config.Miner.Notify, config.Miner.Noverify, chainDb, logger)
 	} else {
 		// Transfer mining-related config to the progpow config.
 		progpowConfig := config.Progpow
@@ -307,6 +307,11 @@ func (s *Quai) APIs() []rpc.API {
 			Namespace: "quai",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs),
+			Public:    true,
+		}, {
+			Namespace: "workshares",
+			Version:   "1.0",
+			Service:   filters.NewWorkSharesAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs),
 			Public:    true,
 		}, {
 			Namespace: "admin",
