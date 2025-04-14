@@ -701,7 +701,7 @@ func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.Work
 	return c.sl.ConstructLocalMinedBlock(woHeader)
 }
 
-func (c *Core) ReceiveWorkShare(workShare *types.WorkObjectHeader) (*types.WorkObjectShareView, bool, error) {
+func (c *Core) ReceiveWorkShare(workShare *types.WorkObjectHeader) (shareView *types.WorkObjectShareView, isBlock, isWorkShare bool, err error) {
 	return c.sl.ReceiveWorkShare(workShare)
 }
 

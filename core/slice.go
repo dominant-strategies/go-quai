@@ -1235,12 +1235,12 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	var pendingBlockBody *types.WorkObject
 	if nodeCtx == common.ZONE_CTX {
 		// do not include the tx hash while storing the body
-				pendingBlockBody = sl.GetPendingBlockBody(wo.SealHash())
+		pendingBlockBody = sl.GetPendingBlockBody(wo.SealHash())
 		if pendingBlockBody == nil {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
-"wo.SealHash()":   wo.SealHash(),
+				"wo.SealHash()":   wo.SealHash(),
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
 			}).Error("Pending Block Body not found")
@@ -1252,7 +1252,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
-"wo.SealHash()":   wo.SealHash(),
+				"wo.SealHash()":   wo.SealHash(),
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
 			}).Error("Pending Block Body has no transactions")
@@ -1308,24 +1308,27 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	return block, nil
 }
 
-func (sl *Slice) ReceiveWorkShare(workShare *types.WorkObjectHeader) (*types.WorkObjectShareView, bool, error) {
+// This function returns bools for isBlock or isWorkShare.
+// If this is a subWorkShare, it will not return an error, but isBlock and isWorkShare will be false.
+// If an error is returned this means the workShare was invalid and/or did not meet the minimum p2p threshold.
+func (sl *Slice) ReceiveWorkShare(workShare *types.WorkObjectHeader) (shareView *types.WorkObjectShareView, isBlock, isWorkShare bool, err error) {
 	if workShare != nil {
+		var isWorkShare, isSubShare bool
+		isSubShare = sl.engine.CheckWorkThreshold(workShare, params.WorkShareP2PThresholdDiff)
+		if !isSubShare {
+			// This cannot be a block or a workshare or even a subWorkShare since it didn't pass the minimum workShare threshold.
+			return nil, false, false, errors.New("workshare has less entropy than the workshare p2p threshold")
+		}
+		sl.logger.WithField("number", workShare.NumberU64()).Info("Received Work Share")
+
+		// Now check if this subWorkShare is a full block.
 		var isBlock bool
 		_, err := sl.engine.VerifySeal(workShare)
 		if err == nil {
 			isBlock = true
 		}
 
-		var isWorkShare, isSubShare bool
-		isSubShare = sl.engine.CheckWorkThreshold(workShare, params.WorkShareP2PThresholdDiff)
-		if !isSubShare {
-			return nil, isBlock, errors.New("workshare has less entropy than the workshare p2p threshold")
-		}
-
-		sl.logger.WithField("number", workShare.NumberU64()).Info("Received Work Share")
-		workShareCopy := types.CopyWorkObjectHeader(workShare)
-		workShareCopy.SetTxHash(common.Hash{})
-		pendingBlockBody := sl.GetPendingBlockBody(workShareCopy.SealHash())
+		pendingBlockBody := sl.GetPendingBlockBody(workShare.SealHash())
 		txs, err := sl.GetTxsFromBroadcastSet(workShare.TxHash())
 		if err != nil {
 			txs = types.Transactions{}
@@ -1337,17 +1340,19 @@ func (sl *Slice) ReceiveWorkShare(workShare *types.WorkObjectHeader) (*types.Wor
 		// there is no need to broadcast the share
 		isWorkShare = sl.engine.CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
 		if !isWorkShare && len(txs) == 0 {
-			return nil, isBlock, errors.New("this workshare doesnt meet the workshare work requirement")
+			// This is a p2p workshare and has no transactions.
+			return nil, false, true, nil
 		}
 		if pendingBlockBody == nil {
-			sl.logger.Warn("Could not get the pending Block body", "err", err)
-			return nil, isBlock, err
+			err = errors.New("pending block body is nil")
+			sl.logger.WithField("err", err).Warn("Could not get the pending Block body")
+			return nil, isBlock, isWorkShare, err
 		}
 		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
-		shareView := wo.ConvertToWorkObjectShareView(txs)
-		return shareView, isBlock, nil
+		shareView := wo.ConvertToWorkObjectShareView()
+		return shareView, isBlock, isWorkShare, nil
 	}
-	return nil, false, errors.New("workshare is nil")
+	return nil, false, false, errors.New("workshare is nil")
 }
 
 func (sl *Slice) ReceiveMinedHeader(woHeader *types.WorkObject) (*types.WorkObject, error) {
