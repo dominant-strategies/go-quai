@@ -129,7 +129,7 @@ func (blake3pow *Blake3pow) MineToThreshold(workObject *types.WorkObject, workSh
 		return
 	}
 
-	target, err := consensus.CalcWorkShareThreshold(workObject.WorkObjectHeader(), workShareThreshold)
+	target, err := consensus.CalcWorkShareThreshold(workObject.WorkObjectHeader().Difficulty(), workShareThreshold)
 	if err != nil {
 		log.Global.WithField("err", err).Error("Issue mining")
 		return

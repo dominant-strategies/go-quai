@@ -60,7 +60,7 @@ type CoreBackend interface {
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
-	ReceiveMinedHeader(wo *types.WorkObject) error
+	ReceiveMinedHeader(*types.WorkObject) error
 }
 
 type pEtxRetry struct {
@@ -1211,6 +1211,13 @@ func (sl *Slice) init() error {
 func (sl *Slice) ConstructLocalBlock(header *types.WorkObject) (*types.WorkObject, error) {
 	block := rawdb.ReadWorkObject(sl.sliceDb, header.NumberU64(sl.NodeCtx()), header.Hash(), types.BlockObject)
 	if block == nil {
+		sl.logger.WithFields(log.Fields{"wo.Hash": header.Hash(),
+			"wo.Header":       header.HeaderHash(),
+			"wo.ParentHash":   header.ParentHash(common.ZONE_CTX),
+			"wo.SealHash()":   header.SealHash(),
+			"wo.Difficulty()": header.Difficulty(),
+			"wo.Location()":   header.Location(),
+		}).Error("Pending Block Body not found")
 		return nil, ErrBodyNotFound
 	}
 	if err := sl.validator.ValidateBody(block); err != nil {
@@ -1228,13 +1235,12 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	var pendingBlockBody *types.WorkObject
 	if nodeCtx == common.ZONE_CTX {
 		// do not include the tx hash while storing the body
-		woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
-		woHeaderCopy.SetTxHash(common.Hash{})
-		pendingBlockBody = sl.GetPendingBlockBody(woHeaderCopy.SealHash())
+				pendingBlockBody = sl.GetPendingBlockBody(wo.SealHash())
 		if pendingBlockBody == nil {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
+"wo.SealHash()":   wo.SealHash(),
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
 			}).Error("Pending Block Body not found")
@@ -1246,6 +1252,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
 				"wo.ParentHash":   wo.ParentHash(common.ZONE_CTX),
+"wo.SealHash()":   wo.SealHash(),
 				"wo.Difficulty()": wo.Difficulty(),
 				"wo.Location()":   wo.Location(),
 			}).Error("Pending Block Body has no transactions")
