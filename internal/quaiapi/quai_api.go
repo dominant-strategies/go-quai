@@ -1071,10 +1071,6 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShar
 	return s.b.ReceiveWorkShare(workShare)
 }
 
-func (s *PublicBlockChainQuaiAPI) ReceiveNonce(ctx context.Context, sealHash common.Hash, nonce types.BlockNonce) error {
-	return s.b.ReceiveNonce(sealHash, nonce)
-}
-
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getPendingHeader call can only be made on chain processing the state")

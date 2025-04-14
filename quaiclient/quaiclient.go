@@ -182,7 +182,7 @@ func (ec *Client) SubscribeCustomSealHash(ctx context.Context, crit quai.WorkSha
 		return nil, err
 	}
 
-	return ec.c.QuaiSubscribe(ctx, ch, "customWorkObject", args)
+	return ec.c.WorkShareSubscribe(ctx, ch, "customWorkObject", args)
 }
 
 func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObjectHeader) error {

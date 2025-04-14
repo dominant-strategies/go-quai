@@ -555,6 +555,9 @@ func (b *QuaiAPIBackend) ReceiveWorkShare(workShare *types.WorkObjectHeader) err
 // call ReceiveWorkShare to add it to the chain.
 // If it is a block, it will send to the appropriate backends.
 func (b *QuaiAPIBackend) ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) error {
+	if !b.WorkSharePoolEnabled() {
+		return errors.New("workshare pool mining is not enabled")
+	}
 	workObject, err := b.quai.core.ReceiveNonce(sealHash, nonce)
 	if err != nil {
 		return err
@@ -730,10 +733,6 @@ func (b *QuaiAPIBackend) GetMaxTxInWorkShare() uint64 {
 
 func (b *QuaiAPIBackend) WorkSharePoolEnabled() bool {
 	return b.quai.core.WorkSharePoolEnabled()
-}
-
-func (b *QuaiAPIBackend) GetMinerEndpoints() []string {
-	return b.quai.core.GetMinerEndpoints()
 }
 
 func (b *QuaiAPIBackend) BadHashExistsInChain() bool {
