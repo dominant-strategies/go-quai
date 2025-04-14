@@ -295,7 +295,7 @@ func (blake3pow *Blake3pow) CheckIfValidWorkShare(workShare *types.WorkObjectHea
 }
 
 func (blake3pow *Blake3pow) CheckWorkThreshold(workShare *types.WorkObjectHeader, workShareThresholdDiff int) bool {
-	workShareMinTarget, err := consensus.CalcWorkShareThreshold(workShare, workShareThresholdDiff)
+	workShareMinTarget, err := consensus.CalcWorkShareThreshold(workShare.Difficulty(), workShareThresholdDiff)
 	if err != nil {
 		return false
 	}

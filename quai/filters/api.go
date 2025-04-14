@@ -59,7 +59,6 @@ type filter struct {
 type PublicFilterAPI struct {
 	backend             Backend
 	mux                 *event.TypeMux
-	quit                chan struct{}
 	chainDb             ethdb.Database
 	events              *EventSystem
 	filtersMu           sync.Mutex
