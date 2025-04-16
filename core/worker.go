@@ -1875,6 +1875,9 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 
 					// Apply the cubic discount based on the current tempActualConversionAmountInQuai
 					discountedConversionAmount := misc.ApplyCubicDiscount(parent.ConversionFlowAmount(), tempActualConversionAmountInQuai)
+					if parent.NumberU64(common.PRIME_CTX) > params.ConversionSlipChangeBlock {
+						discountedConversionAmount = misc.ApplyCubicDiscount(tempActualConversionAmountInQuai, parent.ConversionFlowAmount())
+					}
 					discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
 
 					// Conversions going against the direction of the exchange
@@ -1941,6 +1944,9 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			// to use the true actualConversionAmount and realizedConversionAmount
 			// Apply the cubic discount based on the current tempActualConversionAmountInQuai
 			discountedConversionAmount := misc.ApplyCubicDiscount(parent.ConversionFlowAmount(), actualConversionAmountInQuai)
+			if parent.NumberU64(common.PRIME_CTX) > params.ConversionSlipChangeBlock {
+				discountedConversionAmount = misc.ApplyCubicDiscount(actualConversionAmountInQuai, parent.ConversionFlowAmount())
+			}
 			discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
 
 			// Conversions going against the direction of the exchange

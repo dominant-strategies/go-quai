@@ -437,6 +437,9 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 
 					// Apply the cubic discount based on the current tempActualConversionAmountInQuai
 					discountedConversionAmount := misc.ApplyCubicDiscount(block.ConversionFlowAmount(), tempActualConversionAmountInQuai)
+					if header.NumberU64(common.PRIME_CTX) > params.ConversionSlipChangeBlock {
+						discountedConversionAmount = misc.ApplyCubicDiscount(tempActualConversionAmountInQuai, block.ConversionFlowAmount())
+					}
 					discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
 
 					// Conversions going against the direction of the exchange
@@ -502,6 +505,9 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 			// to use the true actualConversionAmount and realizedConversionAmount
 			// Apply the cubic discount based on the current tempActualConversionAmountInQuai
 			discountedConversionAmount := misc.ApplyCubicDiscount(block.ConversionFlowAmount(), actualConversionAmountInQuai)
+			if header.NumberU64(common.PRIME_CTX) > params.ConversionSlipChangeBlock {
+				discountedConversionAmount = misc.ApplyCubicDiscount(actualConversionAmountInQuai, block.ConversionFlowAmount())
+			}
 			discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
 
 			// Conversions going against the direction of the exchange
@@ -1584,6 +1590,9 @@ func (sl *Slice) verifyParentExchangeRateAndFlowAmount(header *types.WorkObject)
 
 				// Apply the cubic discount based on the current tempActualConversionAmountInQuai
 				discountedConversionAmount := misc.ApplyCubicDiscount(parent.ConversionFlowAmount(), tempActualConversionAmountInQuai)
+				if parent.NumberU64(common.PRIME_CTX) > params.ConversionSlipChangeBlock {
+					discountedConversionAmount = misc.ApplyCubicDiscount(tempActualConversionAmountInQuai, parent.ConversionFlowAmount())
+				}
 				discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
 
 				// Conversions going against the direction of the exchange
@@ -1648,6 +1657,9 @@ func (sl *Slice) verifyParentExchangeRateAndFlowAmount(header *types.WorkObject)
 		// to use the true actualConversionAmount and realizedConversionAmount
 		// Apply the cubic discount based on the current tempActualConversionAmountInQuai
 		discountedConversionAmount := misc.ApplyCubicDiscount(parent.ConversionFlowAmount(), actualConversionAmountInQuai)
+		if parent.NumberU64(common.PRIME_CTX) > params.ConversionSlipChangeBlock {
+			discountedConversionAmount = misc.ApplyCubicDiscount(actualConversionAmountInQuai, parent.ConversionFlowAmount())
+		}
 		discountedConversionAmountInInt, _ := discountedConversionAmount.Int(nil)
 
 		// Conversions going against the direction of the exchange
