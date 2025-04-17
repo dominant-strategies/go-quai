@@ -125,7 +125,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
 		}
 
-		utxos, err := s.b.AddressOutpoints(ctx, addr)
+		utxos, err := s.b.UTXOsByAddress(ctx, addr)
 		if utxos == nil || err != nil {
 			return (*hexutil.Big)(big.NewInt(0)), err
 		}
@@ -153,12 +153,26 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 }
 
 func (s *PublicBlockChainQuaiAPI) GetLockedBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
-	internal, err := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation()).InternalAndQuaiAddress()
-	if err != nil {
-		return nil, err
+	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
+	if internal, err := addr.InternalAndQuaiAddress(); err == nil {
+		balance := rawdb.ReadLockedBalance(s.b.Database(), internal)
+		return (*hexutil.Big)(balance), nil
+	} else if _, err := addr.InternalAndQiAddress(); err == nil {
+		utxos, err := s.b.UTXOsByAddress(ctx, addr)
+		if utxos == nil || len(utxos) == 0 || err != nil {
+			return (*hexutil.Big)(big.NewInt(0)), err
+		}
+		currentHeader := s.b.CurrentHeader()
+		balance := big.NewInt(0)
+		for _, utxo := range utxos {
+			if utxo.Lock != nil && currentHeader.Number(s.b.NodeCtx()).Cmp(utxo.Lock) < 0 {
+				value := types.Denominations[utxo.Denomination]
+				balance.Add(balance, value)
+			}
+		}
+		return (*hexutil.Big)(balance), nil
 	}
-	balance := rawdb.ReadLockedBalance(s.b.Database(), internal)
-	return (*hexutil.Big)(balance), nil
+	return nil, fmt.Errorf("address %s is invalid", addr.Hex())
 }
 
 func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, address common.Address) ([]interface{}, error) {
