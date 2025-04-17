@@ -153,10 +153,10 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 
 func (s *PublicBlockChainQuaiAPI) GetLockedBalance(ctx context.Context, address common.MixedcaseAddress) (*hexutil.Big, error) {
 	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
-	if internal, err := addr.InternalAndQuaiAddress(); err != nil {
+	if internal, err := addr.InternalAndQuaiAddress(); err == nil {
 		balance := rawdb.ReadLockedBalance(s.b.Database(), internal)
 		return (*hexutil.Big)(balance), nil
-	} else if _, err := addr.InternalAndQiAddress(); err != nil {
+	} else if _, err := addr.InternalAndQiAddress(); err == nil {
 		utxos, err := s.b.UTXOsByAddress(ctx, addr)
 		if utxos == nil || len(utxos) == 0 || err != nil {
 			return (*hexutil.Big)(big.NewInt(0)), err
