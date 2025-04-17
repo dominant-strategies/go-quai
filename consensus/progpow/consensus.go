@@ -668,7 +668,7 @@ func (progpow *Progpow) Prepare(chain consensus.ChainHeaderReader, header *types
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
 // Finalize returns the new MuHash of the UTXO set, the new size of the UTXO set and an error if any
-func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.Batch, header *types.WorkObject, state *state.StateDB, setRoots bool, utxoSetSize uint64, utxosCreate, utxosDelete []common.Hash, supplyRemovedQi *big.Int) (*multiset.MultiSet, uint64, error) {
+func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.Batch, header *types.WorkObject, state *state.StateDB, setRoots bool, utxoSetSize uint64, utxosCreate, utxosDelete []common.Hash, supplyRemovedQi *big.Int) (*multiset.MultiSet, uint64, []*types.SpentUtxoEntry, error) {
 	nodeLocation := progpow.NodeLocation()
 	nodeCtx := progpow.NodeLocation().Context()
 
@@ -679,7 +679,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 				"err":      err,
 				"blockNum": header.Number(common.ZONE_CTX),
 			}).Error("Unable to add state for genesis accounts")
-			return nil, 0, err
+			return nil, 0, nil, err
 		}
 	}
 
@@ -688,7 +688,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 		multiSet = multiset.New()
 		internalLockupContract, err := vm.LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}].InternalAddress()
 		if err != nil {
-			return nil, 0, fmt.Errorf("Error getting internal address for lockup contract, err %s", err)
+			return nil, 0, nil, fmt.Errorf("Error getting internal address for lockup contract, err %s", err)
 		}
 		state.SetNonce(internalLockupContract, 1)
 
@@ -701,12 +701,12 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 		multiSet = rawdb.ReadMultiSet(chain.Database(), header.ParentHash(nodeCtx))
 	}
 	if multiSet == nil {
-		return nil, 0, fmt.Errorf("Multiset is nil for block %s", header.ParentHash(nodeCtx).String())
+		return nil, 0, nil, fmt.Errorf("Multiset is nil for block %s", header.ParentHash(nodeCtx).String())
 	}
 
 	utxoSetSize += uint64(len(utxosCreate))
 	if utxoSetSize < uint64(len(utxosDelete)) {
-		return nil, 0, fmt.Errorf("UTXO set size is less than the number of utxos to delete. This is a bug. UTXO set size: %d, UTXOs to delete: %d", utxoSetSize, len(utxosDelete))
+		return nil, 0, nil, fmt.Errorf("UTXO set size is less than the number of utxos to delete. This is a bug. UTXO set size: %d, UTXOs to delete: %d", utxoSetSize, len(utxosDelete))
 	}
 	utxoSetSize -= uint64(len(utxosDelete))
 
@@ -753,7 +753,7 @@ func (progpow *Progpow) Finalize(chain consensus.ChainHeaderReader, batch ethdb.
 		header.Header().SetEtxSetRoot(state.ETXRoot())
 		header.Header().SetQuaiStateSize(state.GetQuaiTrieSize())
 	}
-	return multiSet, utxoSetSize, nil
+	return multiSet, utxoSetSize, trimmedUtxos, nil
 }
 
 // TrimBlock trims all UTXOs of a given denomination that were created in a given block.
@@ -831,7 +831,7 @@ func (progpow *Progpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	nodeCtx := progpow.config.NodeLocation.Context()
 	if nodeCtx == common.ZONE_CTX && chain.ProcessingState() {
 		// Finalize block
-		if _, _, err := progpow.Finalize(chain, nil, header, state, true, parentUtxoSetSize, utxosCreate, utxosDelete, nil); err != nil {
+		if _, _, _, err := progpow.Finalize(chain, nil, header, state, true, parentUtxoSetSize, utxosCreate, utxosDelete, nil); err != nil {
 			return nil, err
 		}
 	}

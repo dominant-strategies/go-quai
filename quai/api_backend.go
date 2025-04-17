@@ -219,7 +219,7 @@ func (b *QuaiAPIBackend) GetOutpointsByAddressAndRange(ctx context.Context, addr
 }
 
 func (b *QuaiAPIBackend) AddressOutpoints(ctx context.Context, address common.Address) ([]*types.OutpointAndDenomination, error) {
-	return b.quai.core.GetOutpointsByAddress(address)
+	return rawdb.ReadAddressUTXOs(b.quai.core.Database(), address.Bytes20())
 }
 
 func (b *QuaiAPIBackend) UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error) {

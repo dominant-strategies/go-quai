@@ -528,6 +528,20 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 			for _, sutxo := range sutxos {
 				rawdb.CreateUTXO(batch, sutxo.TxHash, sutxo.Index, sutxo.UtxoEntry)
 			}
+			if hc.config.IndexAddressUtxos {
+				addressOutpointsToAddMap := make(map[[20]byte][]*types.OutpointAndDenomination)
+				for _, sutxo := range sutxos {
+					addressOutpointsToAddMap[common.AddressBytes(sutxo.Address)] = append(addressOutpointsToAddMap[common.AddressBytes(sutxo.Address)], &types.OutpointAndDenomination{
+						TxHash:       sutxo.TxHash,
+						Index:        sutxo.Index,
+						Denomination: sutxo.Denomination,
+						Lock:         sutxo.Lock,
+					})
+				}
+				if err := rawdb.WriteAddressUTXOs(batch, hc.headerDb, addressOutpointsToAddMap); err != nil {
+					hc.logger.Errorf("failed to write address utxos: %v", err)
+				}
+			}
 			utxoKeys, err := rawdb.ReadCreatedUTXOKeys(hc.headerDb, prevHeader.Hash())
 			if err != nil {
 				return err
@@ -539,6 +553,33 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 					hc.logger.Errorf("invalid created utxo key length: %d", len(key))
 				}
 				batch.Delete(key)
+			}
+			if hc.config.IndexAddressUtxos {
+				addressOutpointsToRemoveMap := make(map[[20]byte][]*types.OutPoint)
+				for _, key := range utxoKeys {
+					if len(key) == rawdb.UtxoKeyWithDenominationLength {
+						key = key[:rawdb.UtxoKeyLength] // The last byte of the key is the denomination (but only in CreatedUTXOKeys)
+					} else {
+						hc.logger.Errorf("invalid created utxo key length: %d", len(key))
+					}
+					txHash, index, err := rawdb.ReverseUtxoKey(key)
+					if err != nil {
+						hc.logger.Errorf("failed to reverse utxo key: %v", err)
+						continue
+					}
+					utxo := rawdb.GetUTXO(hc.headerDb, txHash, index)
+					if utxo == nil {
+						hc.logger.Errorf("failed to get utxo for key: %v", key)
+						continue
+					}
+					addressOutpointsToRemoveMap[common.AddressBytes(utxo.Address)] = append(addressOutpointsToRemoveMap[common.AddressBytes(utxo.Address)], &types.OutPoint{
+						TxHash: txHash,
+						Index:  index,
+					})
+				}
+				if err := rawdb.DeleteAddressUTXOsWithBatch(batch, hc.headerDb, addressOutpointsToRemoveMap); err != nil {
+					hc.logger.Errorf("failed to remove address utxos: %v", err)
+				}
 			}
 
 			deletedCoinbases, err := rawdb.ReadDeletedCoinbaseLockups(hc.headerDb, prevHeader.Hash())
