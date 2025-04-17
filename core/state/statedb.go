@@ -145,6 +145,10 @@ type StateDB struct {
 	// Per-transaction access list
 	accessList            *accessList
 	bypassAccessListCheck bool // used for simulating the EVM to create an access list, and allowing ETXs which do not contain an access list
+
+	// Transient storage
+	transientStorage transientStorage
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -195,6 +199,7 @@ func New(root common.Hash, etxRoot common.Hash, quaiStateSize *big.Int, db Datab
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
 		accessList:          newAccessList(),
+		transientStorage:    newTransientStorage(),
 		hasher:              crypto.NewKeccakState(),
 		nodeLocation:        nodeLocation,
 		SupplyAdded:         big.NewInt(0),
@@ -541,6 +546,33 @@ func (s *StateDB) Suicide(addr common.InternalAddress) bool {
 	stateObject.data.Size = new(big.Int)
 
 	return true
+}
+
+// SetTransientState sets transient storage for a given account. It
+// adds the change to the journal so that it can be rolled back
+// to its previous value if there is a revert.
+func (s *StateDB) SetTransientState(addr common.InternalAddress, key, value common.Hash) {
+	prev := s.GetTransientState(addr, key)
+	if prev == value {
+		return
+	}
+	s.journal.append(transientStorageChange{
+		account:  &addr,
+		key:      key,
+		prevalue: prev,
+	})
+	s.setTransientState(addr, key, value)
+}
+
+// setTransientState is a lower level setter for transient storage. It
+// is called during a revert to prevent modifications to the journal.
+func (s *StateDB) setTransientState(addr common.InternalAddress, key, value common.Hash) {
+	s.transientStorage.Set(addr, key, value)
+}
+
+// GetTransientState gets transient storage for a given account.
+func (s *StateDB) GetTransientState(addr common.InternalAddress, key common.Hash) common.Hash {
+	return s.transientStorage.Get(addr, key)
 }
 
 //
@@ -912,6 +944,7 @@ func (s *StateDB) Copy() *StateDB {
 		logger:              s.logger,
 		SupplyAdded:         new(big.Int).Set(s.SupplyAdded),
 		SupplyRemoved:       new(big.Int).Set(s.SupplyRemoved),
+		transientStorage:    s.transientStorage.Copy(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -1158,6 +1191,8 @@ func (s *StateDB) Prepare(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
 	s.accessList = newAccessList()
+	// Reset transient storage at the beginning of transaction execution
+	s.transientStorage = newTransientStorage()
 }
 
 func (s *StateDB) clearJournalAndRefund() {
