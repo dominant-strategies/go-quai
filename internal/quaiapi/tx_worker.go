@@ -159,7 +159,6 @@ func (worker *TxWorker) AddTransaction(tx *types.Transaction) error {
 	worker.workTemplate = pendingWo
 	pendingWo = types.CopyWorkObject(pendingWo)
 
-	pendingWo.SetTx(tx)
 	select {
 	case worker.txChan <- pendingWo:
 		return nil
