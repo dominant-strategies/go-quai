@@ -1280,12 +1280,8 @@ func (c *Core) GetOutpointsByAddressAndRange(address common.Address, start, end 
 	return outpoints, nil
 }
 
-func (c *Core) GetOutpointsByAddress(address common.Address) ([]*types.OutpointAndDenomination, error) {
-	return rawdb.ReadOutpointsForAddress(c.sl.sliceDb, address)
-}
-
 func (c *Core) GetUTXOsByAddress(address common.Address) ([]*types.UtxoEntry, error) {
-	outpointsForAddress, err := c.GetOutpointsByAddress(address)
+	outpointsForAddress, err := rawdb.ReadAddressUTXOs(c.sl.sliceDb, address.Bytes20())
 	if err != nil {
 		return nil, err
 	}
@@ -1294,6 +1290,7 @@ func (c *Core) GetUTXOsByAddress(address common.Address) ([]*types.UtxoEntry, er
 	for _, outpoint := range outpointsForAddress {
 		entry := rawdb.GetUTXO(c.sl.sliceDb, outpoint.TxHash, outpoint.Index)
 		if entry == nil {
+			c.logger.Errorf("UTXO not found for tx hash %s index %d", outpoint.TxHash.String(), outpoint.Index)
 			continue
 		}
 		utxos = append(utxos, entry)
