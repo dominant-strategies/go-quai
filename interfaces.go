@@ -156,6 +156,20 @@ type FilterQuery struct {
 	Topics [][]common.Hash
 }
 
+// WorkShareCriteria represents the parameters for a work share filter.
+type WorkShareCriteria struct {
+	QuaiCoinbase    common.Address `json:"quaiCoinbase"`    // the Quai coinbase address of the work share
+	QiCoinbase      common.Address `json:"qiCoinbase"`      // the Qi coinbase address of the work share
+	MinerPreference float64        `json:"minerPreference"` // the miner preference of the work share
+	LockupByte      uint8          `json:"lockupByte"`      // the lockup byte of the work share
+}
+
+type WorkShareUpdate struct {
+	SealHash            common.Hash
+	PrimeTerminusNumber *big.Int
+	Difficulty          *big.Int
+}
+
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //
@@ -164,6 +178,13 @@ type FilterQuery struct {
 type LogFilterer interface {
 	FilterLogs(ctx context.Context, q FilterQuery) ([]types.Log, error)
 	SubscribeFilterLogs(ctx context.Context, q FilterQuery, ch chan<- types.Log) (Subscription, error)
+}
+
+// CustomWorkShareBuilder provides access to custom work share subscriptions.
+// This enables others to mine on this node (for a fee) without requiring
+// a traditional mining pool.
+type CustomWorkShareBuilder interface {
+	SubscribeCustomWorkobjects(context.Context, WorkShareCriteria) (Subscription, error)
 }
 
 // TransactionSender wraps transaction sending. The SendTransaction method injects a
