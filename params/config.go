@@ -115,9 +115,9 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false}
+	AllProgpowProtocolChanges = &ChainConfig{big.NewInt(1337), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false, 2}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false}
+	TestChainConfig = &ChainConfig{big.NewInt(1), "progpow", new(Blake3powConfig), new(ProgpowConfig), common.Location{}, common.Hash{}, false, 2}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -129,12 +129,13 @@ var (
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 	// Various consensus engines
-	ConsensusEngine    string
-	Blake3Pow          *Blake3powConfig `json:"blake3pow,omitempty"`
-	Progpow            *ProgpowConfig   `json:"progpow,omitempty"`
-	Location           common.Location
-	DefaultGenesisHash common.Hash
-	IndexAddressUtxos  bool
+	ConsensusEngine       string
+	Blake3Pow             *Blake3powConfig `json:"blake3pow,omitempty"`
+	Progpow               *ProgpowConfig   `json:"progpow,omitempty"`
+	Location              common.Location
+	DefaultGenesisHash    common.Hash
+	IndexAddressUtxos     bool
+	WorkShareP2PThreshold int
 }
 
 // SetLocation sets the location on the chain config

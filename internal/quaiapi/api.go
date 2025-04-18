@@ -1706,91 +1706,26 @@ func toHexSlice(b [][]byte) []string {
 }
 
 type PublicWorkSharesAPI struct {
-	b        Backend
-	txPool   *PublicTransactionPoolAPI
-	txWorker *TxWorker
+	b Backend
 }
 
-// NewPublicWorkSharesAPI creates a new RPC service with methods specific for the transaction pool.
-func NewPublicWorkSharesAPI(txpoolAPi *PublicTransactionPoolAPI, b Backend) *PublicWorkSharesAPI {
+// NewPublicWorkSharesAPI creates a new RPC service with methods for operating a decentralized workshare pool.
+func NewPublicWorkSharesAPI(b Backend) *PublicWorkSharesAPI {
 	api := &PublicWorkSharesAPI{
 		b,
-		txpoolAPi,
-		nil,
 	}
-	if b.TxMiningEnabled() {
-		// Start WorkShare workers
-		worker := StartTxWorker(b.Engine(), b.GetMinerEndpoints(), b.NodeLocation(), api, b.GetWorkShareThreshold())
-		api.txWorker = worker
-	}
-
 	return api
 }
 
-// GetWork returns the current workObjectHeader and the workThreshold to recognize a share
-func (s *PublicWorkSharesAPI) GetWork(ctx context.Context) (hexutil.Bytes, int, error) {
-	header := s.b.CurrentHeader()
-
-	protoWo, err := header.WorkObjectHeader().ProtoEncode()
-	if err != nil {
-		return nil, -1, err
-	}
-
-	protoBytes, err := proto.Marshal(protoWo)
-	if err != nil {
-		return nil, -1, err
-	}
-
-	return protoBytes, s.b.GetWorkShareThreshold(), nil
+// ReceiveNonce will build the workObject given the sealHash and provided Nonce.
+// It will calculate the correct order of the share. If it is just a share, it will
+// call ReceiveWorkShare to add it to the chain.
+// If it is a block, it will send to the appropriate backends.
+func (s *PublicWorkSharesAPI) ReceiveNonce(ctx context.Context, sealHash common.Hash, nonce types.BlockNonce) error {
+	return s.b.ReceiveNonce(sealHash, nonce)
 }
 
-// GetWorkShareThreshold returns the minimal WorkShareThreshold that this node will accept
-func (s *PublicWorkSharesAPI) GetWorkShareThreshold(ctx context.Context) (int, error) {
-	return s.b.GetWorkShareThreshold(), nil
-}
-
-// SendWorkedTransaction will check that the transaction in the form of a worked WorkObject
-// fufills the work threshold before adding it to the transaction pool.
-func (s *PublicWorkSharesAPI) SendUnworkedTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
-	tx := new(types.Transaction)
-	protoTransaction := new(types.ProtoTransaction)
-	err := proto.Unmarshal(input, protoTransaction)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return tx.Hash(), s.txWorker.AddTransaction(tx)
-}
-
-func (s *PublicWorkSharesAPI) ReceiveSubWorkshare(ctx context.Context, input hexutil.Bytes) error {
-	protoSubWorkshare := &types.ProtoWorkObject{}
-	err := proto.Unmarshal(input, protoSubWorkshare)
-	if err != nil {
-		return err
-	}
-
-	workShare := &types.WorkObject{}
-	workShare.ProtoDecode(protoSubWorkshare, s.b.NodeLocation(), types.WorkShareTxObject)
-
-	// check if the workshare is valid before broadcasting as a sanity
-	workShareValidity := s.b.CheckIfValidWorkShare(workShare.WorkObjectHeader())
-	if workShareValidity == types.Valid {
-		s.b.Logger().WithField("number", workShare.WorkObjectHeader().NumberU64()).Info("Received Work Share")
-		shareView := workShare.ConvertToWorkObjectShareView(workShare.Transactions())
-		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithField("err", err).Error("Error broadcasting work share")
-		}
-		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
-		s.b.Logger().WithFields(log.Fields{"tx count": len(workShare.Transactions())}).Info("Broadcasted workshares with txs")
-		return nil
-	} else if workShareValidity == types.Sub {
-		tx := workShare.Tx()
-		return s.b.SendTx(ctx, tx)
-	} else {
-		return errors.New("work share is invalid")
-	}
+// GenerateCustomWorkObject
+func (s *PublicWorkSharesAPI) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	return s.b.GenerateCustomWorkObject(original, lock, minerPreference, quaiCoinbase, qiCoinbase)
 }

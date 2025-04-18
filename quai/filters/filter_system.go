@@ -56,6 +56,8 @@ const (
 	ChainHeadSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
+	// PendingWoSubscription queries for the latest pending work object
+	PendingWoSubscription
 )
 
 const (
@@ -67,8 +69,11 @@ const (
 	// logsChanSize is the size of channel listening to LogsEvent.
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
-	chainEvChanSize   = 10
-	unlocksEvChanSize = 10
+	chainEvChanSize = 10
+
+	// pendingWoEventSize is the size of channel listening to PendingWoEvent.
+	pendingWoEventSize = 10
+	unlocksEvChanSize  = 10
 )
 
 type subscription struct {
@@ -76,11 +81,12 @@ type subscription struct {
 	typ       Type
 	created   time.Time
 	logsCrit  quai.FilterQuery
+	woCrit    quai.WorkShareCriteria
 	logs      chan []*types.Log
 	hashes    chan []common.Hash
 	headers   chan *types.WorkObject
+	pendingWo chan *types.WorkObject
 	unlocks   chan core.UnlocksEvent
-	header    chan *types.WorkObject
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -99,6 +105,7 @@ type EventSystem struct {
 	chainSub       event.Subscription // Subscription for new chain event
 	unlocksSub     event.Subscription // Subscription for new unlocks event
 	chainHeadSub   event.Subscription // Subscription for new head event
+	pendingWoSub   event.Subscription // Subscription for pending work object
 
 	// Channels
 	install       chan *subscription         // install filter for event notification
@@ -110,6 +117,7 @@ type EventSystem struct {
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
 	unlocksCh     chan core.UnlocksEvent     // Channel to receive newly unlocked coinbases
 	chainHeadCh   chan core.ChainHeadEvent   // Channel to receive new chain event
+	pendingWoCh   chan *types.WorkObject     // Channel to receive pending work object
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -130,6 +138,7 @@ func NewEventSystem(backend Backend) *EventSystem {
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
 		unlocksCh:     make(chan core.UnlocksEvent, unlocksEvChanSize),
 		chainHeadCh:   make(chan core.ChainHeadEvent, chainEvChanSize),
+		pendingWoCh:   make(chan *types.WorkObject, pendingWoEventSize),
 	}
 
 	nodeCtx := backend.NodeCtx()
@@ -139,6 +148,14 @@ func NewEventSystem(backend Backend) *EventSystem {
 		m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 		m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 		m.unlocksSub = m.backend.SubscribeUnlocksEvent(m.unlocksCh)
+
+		if backend.WorkSharePoolEnabled() {
+			pendingWoSub, err := m.backend.SubscribePendingWorkObjectEvent(m.pendingWoCh)
+			if err != nil {
+				log.Global.WithField("err", err).Fatal("Subscribe for pending work object event failed")
+			}
+			m.pendingWoSub = pendingWoSub
+		}
 	}
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 
@@ -146,12 +163,12 @@ func NewEventSystem(backend Backend) *EventSystem {
 
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
-		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.chainHeadCh == nil {
-			backend.Logger().Fatal("Subscribe for event system failed")
+		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.chainHeadCh == nil || m.pendingWoCh == nil {
+			log.Global.Fatal("Subscribe for event system failed")
 		}
 	} else {
 		if m.chainSub == nil {
-			backend.Logger().Fatal("Subscribe for event system failed")
+			log.Global.Fatal("Subscribe for event system failed")
 		}
 	}
 
@@ -188,6 +205,7 @@ func (sub *Subscription) Unsubscribe() {
 			case <-sub.f.hashes:
 			case <-sub.f.headers:
 			case <-sub.f.unlocks:
+			case <-sub.f.pendingWo:
 			}
 		}
 
@@ -294,6 +312,24 @@ func (es *EventSystem) subscribePendingLogs(crit quai.FilterQuery, logs chan []*
 		logs:      logs,
 		hashes:    make(chan []common.Hash),
 		headers:   make(chan *types.WorkObject),
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
+func (es *EventSystem) SubscribeCustomSealHash(crit quai.WorkShareCriteria, pendingWo chan *types.WorkObject) *Subscription {
+	// Make sure that the flag is enabled before we provide this subscription.
+	if !es.backend.WorkSharePoolEnabled() {
+		return nil
+	}
+
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       PendingWoSubscription,
+		created:   time.Now(),
+		woCrit:    crit, // Arguments for creating custom WorkShares.
+		pendingWo: pendingWo,
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -464,6 +500,16 @@ func (es *EventSystem) handleUnlocksEvent(filters filterIndex, ev core.UnlocksEv
 	}
 }
 
+func (es *EventSystem) handleWorkObject(filters filterIndex, wo *types.WorkObject) {
+	for _, f := range filters[PendingWoSubscription] {
+		select {
+		case f.pendingWo <- wo:
+		default:
+			es.backend.Logger().Error("Failed to deliver pending work object event to a subscriber")
+		}
+	}
+}
+
 func (es *EventSystem) handleChainHeadEvent(filters filterIndex, ev core.ChainHeadEvent) {
 	for _, f := range filters[ChainHeadSubscription] {
 		select {
@@ -499,7 +545,7 @@ func (es *EventSystem) eventLoop() {
 	}()
 
 	index := make(filterIndex)
-	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
+	for i := UnknownSubscription; i <= PendingWoSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
@@ -520,6 +566,8 @@ func (es *EventSystem) eventLoop() {
 				es.handlePendingLogs(index, ev)
 			case ev := <-es.unlocksCh:
 				es.handleUnlocksEvent(index, ev)
+			case ev := <-es.pendingWoCh:
+				es.handleWorkObject(index, ev)
 			case f := <-es.install:
 				index[f.typ][f.id] = f
 				close(f.installed)
