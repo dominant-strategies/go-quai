@@ -230,6 +230,9 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 
 		balance := big.NewInt(0)
 		for _, utxo := range utxos {
+			if utxo.Lock != nil && header.Number(s.b.NodeCtx()).Cmp(utxo.Lock) < 0 {
+				continue
+			}
 			denomination := utxo.Denomination
 			value := types.Denominations[denomination]
 			if balance == nil {
