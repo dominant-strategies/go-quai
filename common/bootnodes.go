@@ -4,10 +4,10 @@ var (
 	BootstrapPeers = map[string][]string{
 		"colosseum": {
 			"/ip4/35.188.147.227/tcp/4002/p2p/12D3KooWB72Vs7gfLgvJsmR7cex7tG5WY7WDdqJD124Res3byDyk",
-			"/ip4/35.192.179.80/tcp/4002/p2p/12D3KooWEtM3ae7ttQuCx9u7fVwk7hLWekYsTjSeBK2kSL1aYmBM",
-			"/ip4/35.194.59.149/tcp/4002/p2p/12D3KooWAKQzh3osrPCBFAhqhVTUyDt6YyGrNrqg3QV1YxP5iQfa",
+			"/ip4/35.192.179.80/tcp/4002/p2p/12D3KooWSLi4cQz8j9VSt9tiarbqDoTE1TiaH98Jsj6STsKZY5Vc",
+			"/ip4/35.194.59.149/tcp/4002/p2p/12D3KooWDkMpRGoYuQHGieCrGjb7rwK559jxVghjwq1RSgXBt3bp",
 			"/ip4/34.23.115.164/tcp/4002/p2p/12D3KooWPdEr7wZfcWg9d2EoX6cmnyx3GvEnV5pVJvRxMUbkKesB",
-			"/ip4/34.127.125.153/tcp/4002/p2p/12D3KooWG2n47V8EFh9MdxPpSmzuAwPS7dDTPEreFYJUR3ucz3sL",
+			"/ip4/34.127.125.153/tcp/4002/p2p/12D3KooWEb6WpgPQorQSRGmFWFAJFEUAw2bjasT2fzmD55B2hdNJ",
 			"/ip4/34.145.104.213/tcp/4002/p2p/12D3KooWMHTexdSq1zQ2Sn4L8zddEa8PWK8TGM56ZHszRuoUPoq1",
 		},
 		"garden": {
