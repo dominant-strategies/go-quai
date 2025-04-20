@@ -29,11 +29,11 @@ const (
 	// c_expansionChSize is the size of the chain head channel listening to new
 	// expansion events
 	c_expansionChSize            = 10
-	c_recentBlockCacheSize       = 1000
+	c_recentBlockCacheSize       = 2000
 	c_ancestorCheckDist          = 10000
-	c_chainEventChSize           = 1000
+	c_chainEventChSize           = 2000
 	c_buildPendingHeadersTimeout = 5 * time.Second
-	c_pendingHeaderSize          = 2000
+	c_pendingHeaderSize          = 3000
 	c_maxHeaderWorkers           = 1
 )
 
