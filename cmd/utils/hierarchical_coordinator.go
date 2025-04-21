@@ -29,11 +29,11 @@ const (
 	// c_expansionChSize is the size of the chain head channel listening to new
 	// expansion events
 	c_expansionChSize            = 10
-	c_recentBlockCacheSize       = 1000
+	c_recentBlockCacheSize       = 2000
 	c_ancestorCheckDist          = 10000
-	c_chainEventChSize           = 1000
+	c_chainEventChSize           = 2000
 	c_buildPendingHeadersTimeout = 5 * time.Second
-	c_pendingHeaderSize          = 2000
+	c_pendingHeaderSize          = 3000
 	c_maxHeaderWorkers           = 1
 )
 
@@ -355,7 +355,11 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 
 // Create a new instance of the QuaiBackend consensus service
 func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error) {
-	quaiBackend, _ := quai.NewQuaiBackend()
+	quaiBackend, err := quai.NewQuaiBackend()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Error creating the quai backend")
+		return nil, err
+	}
 	// Set the consensus backend and subscribe to the new topics
 	hc.p2p.SetConsensusBackend(quaiBackend)
 	// Set the p2p backend inside the quaiBackend
@@ -1017,7 +1021,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 	}
 
 	bestNode, exists := hc.pendingHeaders.collection.Peek(hc.bestEntropy.String())
-	if exists && hc.generateHeaderWorkersCount <= c_maxHeaderWorkers {
+	if exists && hc.generateHeaderWorkersCount < c_maxHeaderWorkers {
 		hc.generateHeaderWorkersCount++
 		go hc.ComputePendingHeaders(bestNode)
 	} else {
@@ -1273,7 +1277,7 @@ func (hc *HierarchicalCoordinator) IsAncestor(ancestor common.Hash, header commo
 	return false
 }
 
-func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, primeNode, regionNode, zoneNode common.Hash, location common.Location) {
+func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, primeHash, regionHash, zoneHash common.Hash, location common.Location) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -1286,9 +1290,9 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	primeBackend := *hc.consensus.GetBackend(common.Location{})
 	regionBackend := *hc.consensus.GetBackend(common.Location{byte(location.Region())})
 	zoneBackend := *hc.consensus.GetBackend(location)
-	primeBlock := primeBackend.BlockOrCandidateByHash(primeNode)
+	primeBlock := primeBackend.BlockOrCandidateByHash(primeHash)
 	if primeBlock == nil {
-		log.Global.WithField("hash", primeNode.String()).Error("prime block not found for hash")
+		log.Global.WithField("hash", primeHash.String()).Error("prime block not found for hash")
 		return
 	}
 	primePendingHeader, err := primeBackend.GeneratePendingHeader(primeBlock, false)
@@ -1296,9 +1300,9 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 		log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating prime pending header")
 		return
 	}
-	regionBlock := regionBackend.BlockOrCandidateByHash(regionNode)
+	regionBlock := regionBackend.BlockOrCandidateByHash(regionHash)
 	if regionBlock == nil {
-		log.Global.WithField("hash", regionNode.String()).Error("region block not found for hash")
+		log.Global.WithField("hash", regionHash.String()).Error("region block not found for hash")
 		return
 	}
 	regionPendingHeader, err := regionBackend.GeneratePendingHeader(regionBlock, false)
@@ -1306,9 +1310,9 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 		log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating region pending header")
 		return
 	}
-	zoneBlock := zoneBackend.GetBlockByHash(zoneNode)
+	zoneBlock := zoneBackend.GetBlockByHash(zoneHash)
 	if zoneBlock == nil {
-		log.Global.WithField("hash", zoneNode.String()).Error("zone block not found for hash")
+		log.Global.WithField("hash", zoneHash.String()).Error("zone block not found for hash")
 		return
 	}
 	zonePendingHeader, err := zoneBackend.GeneratePendingHeader(zoneBlock, false)

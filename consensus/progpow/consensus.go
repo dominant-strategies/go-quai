@@ -609,14 +609,14 @@ func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash
 }
 
 // VerifySeal returns the PowHash and the verifySeal output
-func (progpow *Progpow) VerifySeal(header *types.WorkObjectHeader) (common.Hash, error) {
+func (progpow *Progpow) VerifySeal(header *types.WorkObjectHeader) (powHash common.Hash, err error) {
 	return progpow.verifySeal(header)
 }
 
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
 // either using the usual progpow cache for it, or alternatively using a full DAG
 // to make remote mining fast.
-func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (common.Hash, error) {
+func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (powHash common.Hash, err error) {
 	// If we're running a fake PoW, accept any seal as valid
 	if progpow.config.PowMode == ModeFake || progpow.config.PowMode == ModeFullFake {
 		time.Sleep(progpow.fakeDelay)
@@ -633,7 +633,7 @@ func (progpow *Progpow) verifySeal(header *types.WorkObjectHeader) (common.Hash,
 	if header.Difficulty().Sign() <= 0 {
 		return common.Hash{}, consensus.ErrInvalidDifficulty
 	}
-	powHash, err := progpow.ComputePowHash(header)
+	powHash, err = progpow.ComputePowHash(header)
 	if err != nil {
 		return common.Hash{}, err
 	}

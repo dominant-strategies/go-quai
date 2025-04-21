@@ -162,6 +162,29 @@ func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObje
 	return ec.c.CallContext(ctx, nil, "quai_receiveMinedHeader", hexutil.Bytes(data))
 }
 
+// ReceiveNonce builds the workShare from the sealHash and the nonce
+func (ec *Client) ReceiveNonce(ctx context.Context, sealHash common.Hash, nonce types.BlockNonce) error {
+	return ec.c.CallContext(ctx, nil, "workshares_receiveNonce", sealHash, nonce)
+}
+
+// SubscribeCustomSealHash subscribes to seal hashes created for the mining client.
+func (ec *Client) SubscribeCustomSealHash(ctx context.Context, crit quai.WorkShareCriteria, ch chan<- *quai.WorkShareUpdate) (quai.Subscription, error) {
+	// Marshal to JSON
+	jsonBytes, err := json.Marshal(crit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal JSON to map[string]interface{}
+	var args map[string]any
+	err = json.Unmarshal(jsonBytes, &args)
+	if err != nil {
+		return nil, err
+	}
+
+	return ec.c.WorkShareSubscribe(ctx, ch, "customWorkObject", args)
+}
+
 func (ec *Client) ReceiveWorkShare(ctx context.Context, header *types.WorkObjectHeader) error {
 	protoWs, err := header.ProtoEncode()
 	if err != nil {
