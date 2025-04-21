@@ -1017,7 +1017,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 	}
 
 	bestNode, exists := hc.pendingHeaders.collection.Peek(hc.bestEntropy.String())
-	if exists && hc.generateHeaderWorkersCount <= c_maxHeaderWorkers {
+	if exists && hc.generateHeaderWorkersCount < c_maxHeaderWorkers {
 		hc.generateHeaderWorkersCount++
 		go hc.ComputePendingHeaders(bestNode)
 	} else {
