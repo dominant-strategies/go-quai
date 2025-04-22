@@ -1294,7 +1294,6 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	primePendingHeader, err := primeBackend.GeneratePendingHeader(primeBlock, false)
 	if err != nil {
 		log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating prime pending header")
-		return
 	}
 	regionBlock := regionBackend.BlockOrCandidateByHash(regionNode)
 	if regionBlock == nil {
@@ -1304,7 +1303,6 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	regionPendingHeader, err := regionBackend.GeneratePendingHeader(regionBlock, false)
 	if err != nil {
 		log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating region pending header")
-		return
 	}
 	zoneBlock := zoneBackend.GetBlockByHash(zoneNode)
 	if zoneBlock == nil {
@@ -1314,8 +1312,13 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	zonePendingHeader, err := zoneBackend.GeneratePendingHeader(zoneBlock, false)
 	if err != nil {
 		log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating zone pending header")
+	}
+
+	// If any of the pending header is nil, return
+	if primePendingHeader == nil || regionPendingHeader == nil || zonePendingHeader == nil {
 		return
 	}
+
 	zoneBackend.MakeFullPendingHeader(primePendingHeader, regionPendingHeader, zonePendingHeader)
 }
 
