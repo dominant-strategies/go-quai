@@ -1046,7 +1046,14 @@ func (sl *Slice) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, error)
 		if block == nil {
 			return nil, 0, ErrSubNotSyncedToDom
 		}
-		return sl.hc.bc.processor.GetKQuaiAndUpdateBit(block)
+		kQuai, updateBit, err := sl.hc.bc.processor.GetKQuaiAndUpdateBit(block)
+		if err != nil && err.Error() == ErrSubNotSyncedToDom.Error() {
+			// if the block is already appended, set it as the current header
+			sl.hc.headermu.Lock()
+			sl.hc.SetCurrentHeader(block)
+			sl.hc.headermu.Unlock()
+		}
+		return kQuai, updateBit, err
 	}
 }
 
