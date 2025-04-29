@@ -27,7 +27,7 @@ const (
 	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
 	c_recentBlockReqTimeout = 1 * time.Minute
 	// c_primeBlockSyncDepth is how far back the prime block downloading will start
-	c_primeBlockSyncDepth = 500
+	c_primeBlockSyncDepth = 2000
 )
 
 var (
