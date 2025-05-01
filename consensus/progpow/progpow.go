@@ -179,9 +179,8 @@ type mixHashWorkHash struct {
 type Progpow struct {
 	config Config
 
-	caches      *lru                         // In memory caches to avoid regenerating too often
-	lookupCache *goLRU.Cache[uint32, []byte] // Cache to store the last few block hashes
-	hashCache   *goLRU.Cache[common.Hash, mixHashWorkHash]
+	caches    *lru // In memory caches to avoid regenerating too often
+	hashCache *goLRU.Cache[common.Hash, mixHashWorkHash]
 
 	// Mining related fields
 	rand    *rand.Rand    // Properly seeded random source for nonces
@@ -214,25 +213,19 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 		}).Info("Disk storage enabled for ethash caches")
 	}
 
-	lookupCache, err := goLRU.New[uint32, []byte](c_dagItemsInCache)
-	if err != nil {
-		logger.WithField("err", err).Fatal("Failed to create ethash lookup cache")
-	}
-
 	hashCache, err := goLRU.New[common.Hash, mixHashWorkHash](c_dagItemsInCache)
 	if err != nil {
 		logger.WithField("err", err).Fatal("Failed to create ethash hash cache")
 	}
 
 	progpow := &Progpow{
-		config:      config,
-		caches:      newlru("cache", config.CachesInMem, newCache, logger),
-		lookupCache: lookupCache,
-		hashCache:   hashCache,
-		update:      make(chan struct{}),
-		logger:      logger,
-		rand:        rand.New(rand.NewSource(time.Now().UnixNano())),
-		threads:     config.NumThreads,
+		config:    config,
+		caches:    newlru("cache", config.CachesInMem, newCache, logger),
+		hashCache: hashCache,
+		update:    make(chan struct{}),
+		logger:    logger,
+		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		threads:   config.NumThreads,
 	}
 	if config.PowMode == ModeShared {
 		progpow.shared = sharedProgpow
