@@ -589,7 +589,7 @@ func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash
 			generateCDag(cDag, ethashCache.cache, blockNumber/C_epochLength, progpow.logger)
 			ethashCache.cDag = cDag
 		}
-		return progpowLight(size, cache, hash.Bytes(), nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)
+		return progpowLight(size, cache, hash.Bytes(), nonce, blockNumber, ethashCache.cDag)
 	}
 	cache := progpow.cache(header.PrimeTerminusNumber().Uint64())
 	size := datasetSize(header.PrimeTerminusNumber().Uint64())

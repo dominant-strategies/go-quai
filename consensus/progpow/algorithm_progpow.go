@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"math/bits"
 
-	goLRU "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -38,16 +37,10 @@ const (
 )
 
 func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
-	blockNumber uint64, cDag []uint32, lookupCache *goLRU.Cache[uint32, []byte]) ([]byte, []byte) {
+	blockNumber uint64, cDag []uint32) ([]byte, []byte) {
 	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 	lookup := func(index uint32) []byte {
-		res, ok := lookupCache.Get(index)
-		if ok {
-			return res
-		}
-		datasetItem := generateDatasetItem(cache, index/16, keccak512)
-		lookupCache.Add(index, datasetItem)
-		return datasetItem
+		return generateDatasetItem(cache, index/16, keccak512)
 	}
 	return progpow(hash, nonce, size, blockNumber, cDag, lookup)
 }

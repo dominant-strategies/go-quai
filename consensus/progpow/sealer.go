@@ -164,7 +164,7 @@ search:
 					generateCDag(cDag, ethashCache.cache, blockNumber/C_epochLength, progpow.logger)
 					ethashCache.cDag = cDag
 				}
-				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag, progpow.lookupCache)
+				return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
 			}
 			cache := progpow.cache(workObject.PrimeTerminusNumber().Uint64())
 			size := datasetSize(workObject.PrimeTerminusNumber().Uint64())
