@@ -20,8 +20,9 @@ func TestProgpowCacheSizes(t *testing.T) {
 	}
 }
 
-func printSizes(calcFunc func(epoch int) uint64, maxEpoch int, groupSize int, varName string) {
+func printSizes(calcFunc func(epoch int) uint64, maxEpoch int, varName string) {
 	var results []string
+	groupSize := 4 // Number of elements to print per line
 
 	for epoch := 0; epoch < maxEpoch; epoch++ {
 		numberToBePrinted := calcFunc(epoch)
