@@ -601,14 +601,20 @@ func calculateKeccakGas(data []byte) (int64, error) {
 // It returns the modified data for contract creation and any error encountered.
 func (evm *EVM) attemptGrindContractCreation(caller ContractRef, nonce uint64, gas uint64, gasCost int64, code []byte) (common.Address, uint64, error) {
 	codeAndHash := &codeAndHash{code: code}
-	return GrindContract(caller.Address(), nonce, gas, gasCost, codeAndHash.Hash(), evm.chainConfig.Location)
+	return GrindContract(caller.Address(), nonce, gas, gasCost, codeAndHash.Hash(), evm.Context.BlockNumber, evm.chainConfig.Location)
 }
 
-func GrindContract(senderAddress common.Address, nonce uint64, gas uint64, gasCost int64, codeHash common.Hash, nodeLocation common.Location) (common.Address, uint64, error) {
+func GrindContract(senderAddress common.Address, nonce uint64, gas uint64, gasCost int64, codeHash common.Hash, blockNumber *big.Int, nodeLocation common.Location) (common.Address, uint64, error) {
 	var salt [32]byte
 	binary.BigEndian.PutUint64(salt[24:], nonce)
+
+	MaxAddressGrindAttemmpts := params.MaxAddressGrindAttempts
+	if blockNumber.Cmp(params.MaxGrindIncreaseForkBlock) < 0 {
+		MaxAddressGrindAttemmpts = params.PreviousMaxAddressGrindAttempts
+	}
+
 	// Iterate through possible nonce values to find a suitable contract address.
-	for i := 0; i < params.MaxAddressGrindAttempts; i++ {
+	for i := 0; i < MaxAddressGrindAttemmpts; i++ {
 
 		// Check if there is enough gas left to continue.
 		if gas < uint64(gasCost) {
