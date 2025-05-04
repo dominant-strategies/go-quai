@@ -1226,7 +1226,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	} else {
 		to = crypto.CreateAddress(args.from(nodeLocation), uint64(*args.Nonce), *args.Data, nodeLocation)
 		if _, err := to.InternalAndQuaiAddress(); err != nil {
-			to, _, err = vm.GrindContract(args.from(nodeLocation), uint64(*args.Nonce), math.MaxUint64, 0, crypto.Keccak256Hash(*args.Data), nodeLocation)
+			to, _, err = vm.GrindContract(args.from(nodeLocation), uint64(*args.Nonce), math.MaxUint64, 0, crypto.Keccak256Hash(*args.Data), b.CurrentBlock().Number(nodeCtx), nodeLocation)
 			if err != nil {
 				return nil, 0, nil, err
 			}

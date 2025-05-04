@@ -112,13 +112,13 @@ const (
 	Bn256PairingPerPointGas uint64 = 34000 // Per-point price for an elliptic curve pairing check
 
 	// The Refund Quotient is the cap on how much of the used gas can be refunded
-	RefundQuotient uint64 = 5
-
-	MaxAddressGrindAttempts int = 1000 // Maximum number of attempts to grind an address to a valid one
-	MinimumEtxGasDivisor        = 5    // The divisor for the minimum gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor)
-	MaximumEtxGasMultiplier     = 2    // Multiplied with the minimum ETX gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor) * MaximumEtxGasMultiplier
-	MinEtxCount                 = 50   // These counts are used in the case where tx is not eligible to be started
-	MaxEtxCount                 = 100
+	RefundQuotient                  uint64 = 5
+	PreviousMaxAddressGrindAttempts int    = 1000  // Previous maximum number of attempts to grind an address to a valid one
+	MaxAddressGrindAttempts         int    = 10000 // Maximum number of attempts to grind an address to a valid one
+	MinimumEtxGasDivisor                   = 5     // The divisor for the minimum gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor)
+	MaximumEtxGasMultiplier                = 2     // Multiplied with the minimum ETX gas for inbound ETXs (Block gas limit / MinimumEtxGasDivisor) * MaximumEtxGasMultiplier
+	MinEtxCount                            = 50    // These counts are used in the case where tx is not eligible to be started
+	MaxEtxCount                            = 100
 
 	// Dynamic Expansion parameters
 
