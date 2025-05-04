@@ -23,6 +23,13 @@ import (
 // OpCode is an EVM opcode
 type OpCode byte
 
+var NewOpCodes = map[OpCode]bool{
+	PUSH0:  true,
+	TLOAD:  true,
+	TSTORE: true,
+	MCOPY:  true,
+}
+
 // IsPush specifies if an opcode is a PUSH opcode.
 func (op OpCode) IsPush() bool {
 	switch op {
