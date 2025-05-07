@@ -34,7 +34,6 @@ import (
 	"github.com/dominant-strategies/go-quai/common/bitutil"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 )
 
 const (
@@ -51,7 +50,7 @@ const (
 )
 
 var (
-	C_epochLength = params.BlocksPerMonth * 3 / 4 // 90 days worth of prime blocks
+	C_epochLength = uint64(285000) // Number of prime blocks in an epoch
 )
 
 // cacheSize returns the size of the ethash verification cache that belongs to a certain
