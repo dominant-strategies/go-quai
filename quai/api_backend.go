@@ -170,8 +170,8 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.
 	}
 	// Pending state is only known by the miner
 	if number == rpc.PendingBlockNumber {
-		block := b.quai.core.Pending()
-		return &state.StateDB{}, block, nil
+		pendingState, pendingBlock := b.quai.core.PendingStateAndBlock()
+		return pendingState, pendingBlock, nil
 	}
 	// Otherwise resolve the block number and return its state
 	header, err := b.HeaderByNumber(ctx, number)
@@ -210,6 +210,10 @@ func (b *QuaiAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, block
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+func (b *QuaiAPIBackend) UsePendingState() bool {
+	return b.quai.config.UsePendingState
+}
+
 func (b *QuaiAPIBackend) GetOutpointsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error) {
 	return b.quai.core.GetOutpointsByAddressAndRange(address, start, end)
 }
@@ -232,6 +236,16 @@ func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 		return nil, errors.New("getReceipts can only be called in zone chain")
 	}
 	return b.quai.core.GetReceiptsByHash(hash), nil
+}
+
+func (b *QuaiAPIBackend) GetPendingReceipt(txHash common.Hash) *types.Receipt {
+	pendingReceipts := b.quai.core.PendingReceipts()
+	for _, receipt := range pendingReceipts {
+		if receipt.TxHash == txHash {
+			return receipt
+		}
+	}
+	return nil
 }
 
 func (b *QuaiAPIBackend) GetPrimeBlock(blockHash common.Hash) *types.WorkObject {
