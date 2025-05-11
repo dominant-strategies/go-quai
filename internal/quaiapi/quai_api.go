@@ -113,6 +113,9 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 		return nil, errors.New("getBalance call can only be made on chain processing the state")
 	}
 
+	if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if flag is set
+	}
 	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -750,6 +753,9 @@ func (s *PublicBlockChainQuaiAPI) GetCode(ctx context.Context, address common.Mi
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getCode call can only be made on chain processing the state")
 	}
+	if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if latest is requested and flag is set
+	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -795,6 +801,16 @@ func (s *PublicBlockChainQuaiAPI) GetStorageAt(ctx context.Context, address comm
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainQuaiAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
+	nodeCtx := s.b.NodeCtx()
+	if nodeCtx != common.ZONE_CTX {
+		return nil, errors.New("call can only called in zone chain")
+	}
+	if !s.b.ProcessingState() {
+		return nil, errors.New("evm call can only be made on chain processing the state")
+	}
+	if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if flag is set
+	}
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, 5*time.Second, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
@@ -871,6 +887,9 @@ func (s *PublicBlockChainQuaiAPI) EstimateGas(ctx context.Context, args Transact
 		scalingFactor := math.Log(float64(rawdb.ReadUTXOSetSize(s.b.Database(), block.Hash())))
 		return args.CalculateQiTxGas(scalingFactor, s.b.NodeLocation())
 	case types.QuaiTxType:
+		if num, ok := bNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+			bNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if latest is requested and flag is set
+		}
 		return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
 	default:
 		return 0, errors.New("unsupported tx type")
@@ -1063,6 +1082,9 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
+	}
+	if num, ok := bNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		bNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if latest is requested and flag is set
 	}
 	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
 	if err != nil {
@@ -1474,18 +1496,37 @@ func (s *PublicBlockChainQuaiAPI) CalculateConversionAmount(ctx context.Context,
 // Moved from PublicTransactionPoolAPI
 // quai_getTransactionReceipt
 func (s *PublicBlockChainQuaiAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	usePending := false
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
-	if err != nil {
-		return nil, nil
-	}
-	receipts, err := s.b.GetReceipts(ctx, blockHash)
-	if err != nil {
-		return nil, err
+	if err != nil || tx == nil {
+		// tx not confirmed in chain, check pending state
+		if s.b.UsePendingState() {
+			tx = s.b.GetPoolTransaction(hash)
+			if tx == nil {
+				return nil, nil
+			}
+			usePending = true
+			blockNumber = s.b.CurrentHeader().NumberU64(s.b.NodeCtx()) + 1
+			blockHash = common.Hash{}
+		} else {
+			return nil, nil
+		}
 	}
 	receipt := &types.Receipt{}
-	for _, r := range receipts {
-		if r.TxHash == hash {
-			receipt = r
+	if usePending {
+		receipt = s.b.GetPendingReceipt(hash)
+		if receipt == nil {
+			return nil, nil
+		}
+	} else {
+		receipts, err := s.b.GetReceipts(ctx, blockHash)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range receipts {
+			if r.TxHash == hash {
+				receipt = r
+			}
 		}
 	}
 
