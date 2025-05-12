@@ -193,9 +193,10 @@ type worker struct {
 
 	logger *log.Logger
 
-	newPendingCh chan *PendingState // newPendingCh is used to send new pending state, block and receipts to the worker
-	pendingMu    sync.RWMutex
-	pendingState *PendingState
+	newPendingCh      chan *PendingState // newPendingCh is used to send new pending state, block and receipts to the worker
+	pendingBlockCache *lru.Cache[common.Hash, *types.WorkObject]
+	pendingMu         sync.RWMutex
+	pendingState      *PendingState
 }
 
 type RollingAverage struct {
@@ -282,6 +283,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	if headerchain.ProcessingState() && nodeCtx == common.ZONE_CTX {
 		worker.chainSideSub = worker.hc.SubscribeChainSideEvent(worker.chainSideCh)
 		worker.wg.Add(1)
+		worker.pendingBlockCache, _ = lru.New[common.Hash, *types.WorkObject](20)
 		go worker.asyncStateLoop()
 		go worker.PendingStateCache()
 	}
@@ -378,6 +380,11 @@ func (w *worker) enablePreseal() {
 	atomic.StoreUint32(&w.noempty, 0)
 }
 
+func (w *worker) PendingBlockByHash(blockHash common.Hash) *types.WorkObject {
+	pendingBlock, _ := w.pendingBlockCache.Get(blockHash)
+	return pendingBlock
+}
+
 // pending returns the pending state and corresponding block.
 func (w *worker) pending() *types.WorkObject {
 	w.pendingMu.RLock()
@@ -452,6 +459,16 @@ func (w *worker) PendingStateCache() {
 			w.pendingMu.Lock()
 			w.pendingState = newPendingState
 			w.pendingMu.Unlock()
+			w.pendingBlockCache.Add(newPendingState.pendingBlock.Hash(), newPendingState.pendingBlock)
+			for _, r := range newPendingState.pendingReceipts {
+				if r.Type == types.QuaiTxType {
+					w.logger.WithFields(log.Fields{
+						"txHash":      r.TxHash,
+						"blockHash":   newPendingState.pendingBlock.Hash(),
+						"blockNumber": newPendingState.pendingBlock.NumberU64(common.ZONE_CTX),
+					}).Info("New receipt in pending block")
+				}
+			}
 		case <-w.exitCh:
 			return
 		}
@@ -528,7 +545,7 @@ func (w *worker) asyncStateLoop() {
 	}()
 	defer w.wg.Done() // decrement the wait group after the close of the loop
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(minRecommitInterval)
 	var prevHeader *types.WorkObject = nil
 	defer ticker.Stop()
 	for {

@@ -365,15 +365,18 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
+	if number == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		number = rpc.PendingBlockNumber // Use pending state for API queries if latest is requested and flag is set
+	}
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
 		response, err := RPCMarshalETHBlock(block, true, fullTx, s.b.NodeLocation())
-		if err == nil && number == rpc.PendingBlockNumber {
+		/*if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
-		}
+		}*/
 		return response, err
 	}
 	return nil, err
@@ -383,6 +386,9 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 // detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByHash(ctx, hash)
+	if block == nil && s.b.UsePendingState() {
+		block = s.b.PendingBlockByHash(hash)
+	}
 	if block != nil {
 		return RPCMarshalETHBlock(block, true, fullTx, s.b.NodeLocation())
 	}
@@ -963,7 +969,7 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 		}
-		txs := block.Transactions()
+		txs := block.QuaiTransactions()
 		transactions := make([]interface{}, len(txs))
 		var err error
 		for i, tx := range txs {
@@ -1303,14 +1309,13 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 			}
 			usePending = true
 			blockNumber = s.b.CurrentHeader().NumberU64(s.b.NodeCtx()) + 1
-			blockHash = common.Hash{}
 		} else {
 			return nil, nil
 		}
 	}
 	receipt := &types.Receipt{}
 	if usePending {
-		receipt = s.b.GetPendingReceipt(hash)
+		receipt, blockHash = s.b.GetPendingReceipt(hash)
 		if receipt == nil {
 			return nil, nil
 		}

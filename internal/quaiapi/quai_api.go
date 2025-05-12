@@ -1507,14 +1507,13 @@ func (s *PublicBlockChainQuaiAPI) GetTransactionReceipt(ctx context.Context, has
 			}
 			usePending = true
 			blockNumber = s.b.CurrentHeader().NumberU64(s.b.NodeCtx()) + 1
-			blockHash = common.Hash{}
 		} else {
 			return nil, nil
 		}
 	}
 	receipt := &types.Receipt{}
 	if usePending {
-		receipt = s.b.GetPendingReceipt(hash)
+		receipt, blockHash = s.b.GetPendingReceipt(hash)
 		if receipt == nil {
 			return nil, nil
 		}

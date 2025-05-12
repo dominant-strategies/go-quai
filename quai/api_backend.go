@@ -238,14 +238,18 @@ func (b *QuaiAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 	return b.quai.core.GetReceiptsByHash(hash), nil
 }
 
-func (b *QuaiAPIBackend) GetPendingReceipt(txHash common.Hash) *types.Receipt {
-	pendingReceipts := b.quai.core.PendingReceipts()
+func (b *QuaiAPIBackend) GetPendingReceipt(txHash common.Hash) (*types.Receipt, common.Hash) {
+	pendingBlock, pendingReceipts := b.quai.core.PendingBlockAndReceipts()
 	for _, receipt := range pendingReceipts {
 		if receipt.TxHash == txHash {
-			return receipt
+			return receipt, pendingBlock.Hash()
 		}
 	}
-	return nil
+	return nil, common.Hash{}
+}
+
+func (b *QuaiAPIBackend) PendingBlockByHash(blockHash common.Hash) *types.WorkObject {
+	return b.quai.core.PendingBlockByHash(blockHash)
 }
 
 func (b *QuaiAPIBackend) GetPrimeBlock(blockHash common.Hash) *types.WorkObject {
