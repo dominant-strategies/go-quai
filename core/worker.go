@@ -466,7 +466,7 @@ func (w *worker) PendingStateCache() {
 						"txHash":      r.TxHash,
 						"blockHash":   newPendingState.pendingBlock.Hash(),
 						"blockNumber": newPendingState.pendingBlock.NumberU64(common.ZONE_CTX),
-					}).Info("New receipt in pending block")
+					}).Debug("New receipt in pending block")
 				}
 			}
 		case <-w.exitCh:
