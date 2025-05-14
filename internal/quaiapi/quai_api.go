@@ -1420,9 +1420,26 @@ func (s *PublicBlockChainQuaiAPI) CalculateConversionAmount(ctx context.Context,
 	tenPercentOriginalValue := new(big.Int).Mul(value, common.Big10)
 	tenPercentOriginalValue = new(big.Int).Div(tenPercentOriginalValue, common.Big100)
 
+	// cubic discount calculation only works on quai value, so the qi value has
+	// to be changed to quai value
+	var quaiAmount *big.Int
+	if tx.From.IsInQuaiLedgerScope() {
+		quaiAmount = new(big.Int).Set(value)
+	} else {
+		quaiAmount = misc.QiToQuai(primeTerminus, exchangeRate, minerDifficulty, value)
+	}
+
 	// Apply the cubic conversion flow discount and k quai discount
-	cubicDiscount := misc.ApplyCubicDiscount(value, primeTerminus.ConversionFlowAmount())
-	value, _ = cubicDiscount.Int(nil)
+	cubicDiscount := misc.ApplyCubicDiscount(quaiAmount, primeTerminus.ConversionFlowAmount())
+	valueAfterCubicDiscount, _ := cubicDiscount.Int(nil)
+
+	// Since rest of the calculation assumes the value is in the origin ledger,
+	// we need to convert it back to the original ledger for Qi
+	if tx.From.IsInQiLedgerScope() {
+		value = misc.QuaiToQi(primeTerminus, exchangeRate, minerDifficulty, valueAfterCubicDiscount)
+	} else {
+		value = valueAfterCubicDiscount
+	}
 
 	kQuaiDiscount := primeTerminus.KQuaiDiscount()
 	conversionAmountAfterKQuaiDiscount := new(big.Int).Mul(value, new(big.Int).Sub(big.NewInt(params.KQuaiDiscountMultiplier), kQuaiDiscount))
