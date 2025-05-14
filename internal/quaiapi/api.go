@@ -1304,8 +1304,13 @@ func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash co
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
 		"logs":              receipt.Logs,
-		"logsBloom":         receipt.Bloom.ToLegacyBloom(),
 		"type":              hexutil.Uint(tx.Type()),
+	}
+
+	if receipt.Bloom.CheckAllZeros() {
+		fields["logsBloom"] = nil
+	} else {
+		fields["logsBloom"] = receipt.Bloom.ToLegacyBloom()
 	}
 
 	if tx.Type() == types.QuaiTxType {
