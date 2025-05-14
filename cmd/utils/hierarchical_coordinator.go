@@ -355,7 +355,11 @@ func (hc *HierarchicalCoordinator) StartHierarchicalCoordinator() error {
 
 // Create a new instance of the QuaiBackend consensus service
 func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error) {
-	quaiBackend, _ := quai.NewQuaiBackend()
+	quaiBackend, err := quai.NewQuaiBackend()
+	if err != nil {
+		log.Global.WithField("err", err).Fatal("Error creating the quai backend")
+		return nil, err
+	}
 	// Set the consensus backend and subscribe to the new topics
 	hc.p2p.SetConsensusBackend(quaiBackend)
 	// Set the p2p backend inside the quaiBackend
@@ -1273,7 +1277,7 @@ func (hc *HierarchicalCoordinator) IsAncestor(ancestor common.Hash, header commo
 	return false
 }
 
-func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, primeNode, regionNode, zoneNode common.Hash, location common.Location) {
+func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, primeHash, regionHash, zoneHash common.Hash, location common.Location) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -1288,27 +1292,27 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	primeBackend := *hc.consensus.GetBackend(common.Location{})
 	regionBackend := *hc.consensus.GetBackend(common.Location{byte(location.Region())})
 	zoneBackend := *hc.consensus.GetBackend(location)
-	primeBlock := primeBackend.GetBlockByHash(primeNode)
+	primeBlock := primeBackend.GetBlockByHash(primeHash)
 	if primeBlock == nil {
-		log.Global.WithField("hash", primeNode.String()).Error("prime block not found for hash")
+		log.Global.WithField("hash", primeHash.String()).Error("prime block not found for hash")
 	} else {
 		primePendingHeader, err = primeBackend.GeneratePendingHeader(primeBlock, false)
 		if err != nil {
 			log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating prime pending header")
 		}
 	}
-	regionBlock := regionBackend.GetBlockByHash(regionNode)
+	regionBlock := regionBackend.GetBlockByHash(regionHash)
 	if regionBlock == nil {
-		log.Global.WithField("hash", regionNode.String()).Error("region block not found for hash")
+		log.Global.WithField("hash", regionHash.String()).Error("region block not found for hash")
 	} else {
 		regionPendingHeader, err = regionBackend.GeneratePendingHeader(regionBlock, false)
 		if err != nil {
 			log.Global.WithFields(log.Fields{"error": err, "location": location.Name()}).Error("Error generating region pending header")
 		}
 	}
-	zoneBlock := zoneBackend.GetBlockByHash(zoneNode)
+	zoneBlock := zoneBackend.GetBlockByHash(zoneHash)
 	if zoneBlock == nil {
-		log.Global.WithField("hash", zoneNode.String()).Error("zone block not found for hash")
+		log.Global.WithField("hash", zoneHash.String()).Error("zone block not found for hash")
 	} else {
 		zonePendingHeader, err = zoneBackend.GeneratePendingHeader(zoneBlock, false)
 		if err != nil {

@@ -37,6 +37,10 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
+var (
+	txEgressCounter = txPropagationMetrics.WithLabelValues("egress")
+)
+
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
 	extRPCEnabled bool
@@ -324,6 +328,13 @@ func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) 
 	return b.quai.Core().SubscribeChainHeadEvent(ch)
 }
 
+func (b *QuaiAPIBackend) SubscribePendingWorkObjectEvent(ch chan<- *types.WorkObject) (event.Subscription, error) {
+	if !b.WorkSharePoolEnabled() {
+		return nil, errors.New("workShare pool mining is not enabled")
+	}
+	return b.quai.Core().SubscribePendingWorkObjectEvent(ch), nil
+}
+
 func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return b.quai.Core().SubscribeChainSideEvent(ch)
 }
@@ -521,8 +532,79 @@ func (b *QuaiAPIBackend) ConstructLocalMinedBlock(header *types.WorkObject) (*ty
 	return b.quai.core.ConstructLocalMinedBlock(header)
 }
 
-func (b *QuaiAPIBackend) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
-	return b.quai.core.GetPendingBlockBody(woHeader)
+func (b *QuaiAPIBackend) GetPendingBlockBody(sealHash common.Hash) *types.WorkObject {
+	return b.quai.core.GetPendingBlockBody(sealHash)
+}
+
+func (b *QuaiAPIBackend) ReceiveWorkShare(workShare *types.WorkObjectHeader) error {
+	// Evaluate the validity of the share and add it to the chain.
+	shareView, isBlock, isWorkShare, err := b.quai.core.ReceiveWorkShare(workShare)
+	if err != nil && !isBlock && !isWorkShare {
+		// An error was returned and this isn't a block or regular share indicating the object is not even a valid p2p share.
+		return err
+	}
+	if isBlock {
+		return nil
+	}
+
+	return b.BroadcastWorkShare(shareView, b.NodeLocation())
+}
+
+// ReceiveNonce will build the workObject given the sealHash and provided Nonce.
+// It will calculate the correct order of the share. If it is just a share, it will
+// call ReceiveWorkShare to add it to the chain.
+// If it is a block, it will send to the appropriate backends.
+func (b *QuaiAPIBackend) ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) error {
+	if !b.WorkSharePoolEnabled() {
+		return errors.New("workshare pool mining is not enabled")
+	}
+	workObject, err := b.quai.core.ReceiveNonce(sealHash, nonce)
+	if err != nil {
+		return err
+	}
+	return b.ReceiveMinedHeader(workObject)
+}
+
+func (b *QuaiAPIBackend) ReceiveMinedHeader(wo *types.WorkObject) error {
+
+	if b.NodeCtx() == common.ZONE_CTX {
+		// Once the sealhash and the nonce is recieved, the workshare is constructed
+		workShare, isBlock, isWorkShare, err := b.quai.core.ReceiveWorkShare(wo.WorkObjectHeader())
+		if err == nil && !isBlock && isWorkShare {
+			if workShare != nil {
+				// Only if the workshare had transactions should it be broadcasted.
+				// Broadcast the share to P2P backend.
+				err = b.BroadcastWorkShare(workShare, b.NodeLocation())
+				if err != nil {
+					b.Logger().WithField("err", err).Error("Error broadcasting block")
+				}
+			}
+			return nil
+		} else if err != nil {
+			return err
+		}
+	}
+
+	block, err := b.quai.core.ReceiveMinedHeader(wo)
+	if err != nil {
+		return err
+	}
+
+	// Broadcast the block and announce chain insertion event
+	if block.Header() != nil {
+		err := b.BroadcastBlock(block, b.NodeLocation())
+		if err != nil {
+			b.Logger().WithField("err", err).Error("Error broadcasting block")
+		}
+		if b.NodeLocation().Context() == common.ZONE_CTX {
+			err = b.BroadcastHeader(block, b.NodeLocation())
+			if err != nil {
+				b.Logger().WithField("err", err).Error("Error broadcasting header")
+			}
+		}
+	}
+
+	return nil
 }
 
 func (b *QuaiAPIBackend) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
@@ -625,6 +707,10 @@ func (b *QuaiAPIBackend) SetWorkShareP2PThreshold(threshold int) {
 	b.quai.SetWorkShareP2PThreshold(threshold)
 }
 
+func (b *QuaiAPIBackend) GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject {
+	return b.quai.core.GenerateCustomWorkObject(original, lock, minerPreference, quaiCoinbase, qiCoinbase)
+}
+
 func (b *QuaiAPIBackend) SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription {
 	return b.quai.core.SubscribeExpansionEvent(ch)
 }
@@ -645,16 +731,8 @@ func (b *QuaiAPIBackend) GetMaxTxInWorkShare() uint64 {
 	return b.quai.core.GetMaxTxInWorkShare()
 }
 
-func (b *QuaiAPIBackend) TxMiningEnabled() bool {
-	return b.quai.core.TxMiningEnabled()
-}
-
-func (b *QuaiAPIBackend) GetWorkShareThreshold() int {
-	return b.quai.core.GetWorkShareThreshold()
-}
-
-func (b *QuaiAPIBackend) GetMinerEndpoints() []string {
-	return b.quai.core.GetMinerEndpoints()
+func (b *QuaiAPIBackend) WorkSharePoolEnabled() bool {
+	return b.quai.core.WorkSharePoolEnabled()
 }
 
 func (b *QuaiAPIBackend) BadHashExistsInChain() bool {
@@ -725,6 +803,10 @@ func (b *QuaiAPIBackend) AddToCalcOrderCache(hash common.Hash, order int, intrin
 	b.quai.core.AddToCalcOrderCache(hash, order, intrinsicS)
 }
 
+func (b *QuaiAPIBackend) AddPendingWorkObjectBody(wo *types.WorkObject) {
+	b.quai.core.AddPendingWorkObjectBody(wo)
+}
+
 func (b *QuaiAPIBackend) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationResult {
 	return b.quai.core.ApplyPoWFilter(wo)
 }
@@ -761,7 +843,18 @@ func (b *QuaiAPIBackend) ComputeMinerDifficulty(parent *types.WorkObject) *big.I
 // /////// P2P ///////////////
 // ///////////////////////////
 func (b *QuaiAPIBackend) BroadcastBlock(block *types.WorkObject, location common.Location) error {
-	return b.quai.p2p.Broadcast(location, block.ConvertToBlockView())
+	err := b.quai.p2p.Broadcast(location, block.ConvertToBlockView())
+	if err != nil {
+		b.Logger().WithFields(log.Fields{
+			"hash": block.Hash(),
+			"err":  err,
+		}).Error("Error broadcasting block")
+		return err
+	}
+	// Log the number of transactions in this block.
+	txEgressCounter.Add(float64(len(block.Transactions())))
+	b.Logger().WithField("tx count", len(block.Transactions())).Info("Broadcasted block with txs")
+	return nil
 }
 
 func (b *QuaiAPIBackend) BroadcastHeader(header *types.WorkObject, location common.Location) error {
@@ -769,5 +862,8 @@ func (b *QuaiAPIBackend) BroadcastHeader(header *types.WorkObject, location comm
 }
 
 func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error {
+	// Log the number of transactions in this block.
+	txEgressCounter.Add(float64(len(workShare.Transactions())))
+	b.Logger().WithField("tx count", len(workShare.Transactions())).Info("Broadcasted block with txs")
 	return b.quai.p2p.Broadcast(location, workShare)
 }

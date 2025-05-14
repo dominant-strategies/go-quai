@@ -27,23 +27,18 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
-	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/dominant-strategies/go-quai/trie"
 	"google.golang.org/protobuf/proto"
 )
 
 var (
-	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
-	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
-	maxOutpointsRange    = uint32(1000)
+	maxOutpointsRange = uint32(1000)
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -1048,42 +1043,8 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	return result, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.WorkObject) (*types.WorkObject, error) {
-	nodeCtx := s.b.NodeCtx()
-	if b.ManifestHash(nodeCtx+1) == types.EmptyRootHash {
-		return nil, errors.New("cannot fill empty subordinate manifest")
-	} else if subManifestHash := types.DeriveSha(b.Manifest(), trie.NewStackTrie(nil)); subManifestHash == b.ManifestHash(nodeCtx+1) {
-		// If the manifest hashes match, nothing to do
-		return b, nil
-	} else {
-		subParentHash := b.ParentHash(nodeCtx + 1)
-		var subManifest types.BlockManifest
-		if subParent, err := s.b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
-			// If we have the the subordinate parent in our chain, that means that block
-			// was also coincident. In this case, the subordinate manifest resets, and
-			// only consists of the subordinate parent hash.
-			subManifest = types.BlockManifest{subParentHash}
-		} else {
-			// Otherwise we need to reconstruct the sub manifest, by getting the
-			// parent's sub manifest and appending the parent hash.
-			subManifest, err = s.b.GetSubManifest(b.Location(), subParentHash)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if len(subManifest) == 0 {
-			return nil, errors.New("reconstructed sub manifest is empty")
-		}
-		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
-			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
-		}
-		return types.NewWorkObjectWithHeaderAndTx(b.WorkObjectHeader(), b.Tx()).WithBody(b.Header(), b.Transactions(), b.OutboundEtxs(), b.Uncles(), subManifest, b.InterlinkHashes()), nil
-	}
-}
-
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw hexutil.Bytes) error {
-	nodeCtx := s.b.NodeCtx()
 	protoWorkObject := &types.ProtoWorkObject{}
 	err := proto.Unmarshal(raw, protoWorkObject)
 	if err != nil {
@@ -1095,43 +1056,11 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw he
 	if err != nil {
 		return err
 	}
-	block, err := s.b.ConstructLocalMinedBlock(woHeader)
-	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && nodeCtx < common.ZONE_CTX {
-		s.b.Logger().Info("filling sub manifest")
-		// If we just mined this block, and we have a subordinate chain, its possible
-		// the subordinate manifest in our block body is incorrect. If so, ask our sub
-		// for the correct manifest and reconstruct the block.
-		var err error
-		block, err = s.fillSubordinateManifest(block)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
 
-	// Broadcast the block and announce chain insertion event
-	if block.Header() != nil {
-		err := s.b.BroadcastBlock(block, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithField("err", err).Error("Error broadcasting block")
-		}
-		if nodeCtx == common.ZONE_CTX {
-			err = s.b.BroadcastHeader(block, s.b.NodeLocation())
-			if err != nil {
-				s.b.Logger().WithField("err", err).Error("Error broadcasting header")
-			}
-		}
-	}
-	s.b.Logger().WithFields(log.Fields{
-		"number":   block.Number(s.b.NodeCtx()),
-		"location": block.Location(),
-		"hash":     block.Hash(),
-	}).Info("Received mined header")
-
-	return nil
+	return s.b.ReceiveMinedHeader(woHeader)
 }
 
+// Receives a WorkObjectHeader in the form of bytes, decodes it, then calls ReceiveWorkShare.
 func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw hexutil.Bytes) error {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -1143,57 +1072,17 @@ func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw h
 		return err
 	}
 
-	workShare := &types.WorkObjectHeader{}
-	err = workShare.ProtoDecode(protoWorkShare, s.b.NodeLocation())
+	workShareHeader := &types.WorkObjectHeader{}
+	err = workShareHeader.ProtoDecode(protoWorkShare, s.b.NodeLocation())
 	if err != nil {
 		return err
 	}
 
-	return s.ReceiveWorkShare(ctx, workShare)
+	return s.ReceiveWorkShare(ctx, workShareHeader)
 }
 
 func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShare *types.WorkObjectHeader) error {
-	if workShare != nil {
-		var isWorkShare, isSubShare bool
-		threshold := s.b.GetWorkShareP2PThreshold()
-		isSubShare = s.b.Engine().CheckWorkThreshold(workShare, threshold)
-		if !isSubShare {
-			return errors.New("workshare has less entropy than the workshare p2p threshold")
-		}
-
-		s.b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
-		pendingBlockBody := s.b.GetPendingBlockBody(workShare)
-		txs, err := s.b.GetTxsFromBroadcastSet(workShare.TxHash())
-		if err != nil {
-			txs = types.Transactions{}
-			if workShare.TxHash() != types.EmptyRootHash {
-				s.b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
-			}
-		}
-		// If the share qualifies is not a workshare and there are no transactions,
-		// there is no need to broadcast the share
-		isWorkShare = s.b.Engine().CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
-		if !isWorkShare && len(txs) == 0 {
-			return nil
-		}
-		if pendingBlockBody == nil {
-			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
-			return err
-		}
-		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
-		shareView := wo.ConvertToWorkObjectShareView(txs)
-		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithFields(log.Fields{
-				"hash": shareView.Hash(),
-				"err":  err,
-			}).Error("Error broadcasting work share")
-			return err
-		}
-		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
-		s.b.Logger().WithFields(log.Fields{"tx count": len(txs)}).Info("Broadcasted workshares with txs")
-	}
-	return nil
+	return s.b.ReceiveWorkShare(workShare)
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {
