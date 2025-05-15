@@ -1263,7 +1263,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 		wo.Body().SetTransactions(nil)
 		wo.Body().SetOutboundEtxs(nil)
 		wo.Body().SetInterlinkHashes(interlinkHashes)
-		pendingBlockBody = types.NewWorkObject(wo.WorkObjectHeader(), wo.Body(), nil)
+		pendingBlockBody = types.NewWorkObject(wo.WorkObjectHeader(), wo.Body())
 	}
 	// Load uncles because they are not included in the block response.
 	txs := make([]*types.Transaction, len(pendingBlockBody.Transactions()))
@@ -1292,7 +1292,7 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	pendingBlockBody.Body().SetOutboundEtxs(etxs)
 	pendingBlockBody.Body().SetManifest(subManifest)
 	pendingBlockBody.Body().SetInterlinkHashes(interlinkHashes)
-	block := types.NewWorkObject(wo.WorkObjectHeader(), pendingBlockBody.Body(), nil)
+	block := types.NewWorkObject(wo.WorkObjectHeader(), pendingBlockBody.Body())
 	if nodeCtx != common.ZONE_CTX {
 		subManifestHash := types.DeriveSha(block.Manifest(), trie.NewStackTrie(nil))
 		if subManifestHash == types.EmptyRootHash || subManifestHash != block.ManifestHash(nodeCtx+1) {

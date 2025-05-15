@@ -1790,9 +1790,6 @@ func (s *PublicWorkSharesAPI) ReceiveSubWorkshare(ctx context.Context, input hex
 		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
 		s.b.Logger().WithFields(log.Fields{"tx count": len(workShare.Transactions())}).Info("Broadcasted workshares with txs")
 		return nil
-	} else if workShareValidity == types.Sub {
-		tx := workShare.Tx()
-		return s.b.SendTx(ctx, tx)
 	} else {
 		return errors.New("work share is invalid")
 	}

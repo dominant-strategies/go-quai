@@ -791,7 +791,7 @@ func (blake3pow *Blake3pow) FinalizeAndAssemble(chain consensus.ChainHeaderReade
 		return nil, err
 	}
 	// Header seems complete, assemble into a block and return
-	return types.NewWorkObject(header.WorkObjectHeader(), woBody, nil), nil
+	return types.NewWorkObject(header.WorkObjectHeader(), woBody), nil
 }
 
 // NodeLocation returns the location of the node
