@@ -17,7 +17,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -516,7 +515,7 @@ func (c *Core) printStats() {
 	}).Info("Blocks waiting to be appended")
 
 	// Print hashes & heights of all queue entries.
-	for _, hash := range c.appendQueue.Keys()[:math.Min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
+	for _, hash := range c.appendQueue.Keys()[:min(len(c.appendQueue.Keys()), c_appendQueuePrintSize)] {
 		if value, exist := c.appendQueue.Peek(hash); exist {
 			hashNumber := types.HashAndNumber{Hash: hash, Number: value.number}
 			c.logger.WithFields(log.Fields{

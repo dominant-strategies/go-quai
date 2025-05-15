@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"net/http"
 	_ "net/http/pprof"
@@ -1372,7 +1371,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	}
 	// Ensure Go's GC ignores the database cache for trigger percentage
 	cache := viper.GetInt(CacheFlag.Name)
-	gogc := math.Max(20, math.Min(100, 100/(float64(cache)/1024)))
+	gogc := max(20, min(100, 100/(float64(cache)/1024)))
 
 	logger.WithField("gogc", int(gogc)).Debug("Sanitizing Go's GC trigger")
 	godebug.SetGCPercent(int(gogc))
