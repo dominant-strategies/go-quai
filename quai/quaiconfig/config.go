@@ -169,6 +169,9 @@ type Config struct {
 
 	// DefaultGenesisHash is the hard coded genesis hash
 	DefaultGenesisHash common.Hash
+
+	// UsePendingState enables or disables the use of the pending state for API queries
+	UsePendingState bool
 }
 
 // CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.

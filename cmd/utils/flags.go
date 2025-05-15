@@ -121,6 +121,7 @@ var NodeFlags = []Flag{
 	StartingExpansionNumberFlag,
 	NodeLogLevelFlag,
 	GenesisNonce,
+	UsePendingState,
 }
 
 var TXPoolFlags = []Flag{
@@ -609,6 +610,12 @@ var (
 		Name:  c_NodeFlagPrefix + "genesis-nonce",
 		Value: "23621466532946281564673705261963422",
 		Usage: "Nonce hex string to use for the genesis block" + generateEnvDoc(c_NodeFlagPrefix+"genesis-nonce"),
+	}
+
+	UsePendingState = Flag{
+		Name:  c_NodeFlagPrefix + "pending-state",
+		Value: false,
+		Usage: "Use the pending state for API queries" + generateEnvDoc(c_NodeFlagPrefix+"use-pending-state"),
 	}
 )
 
@@ -1427,7 +1434,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		cfg.EnablePreimageRecording = viper.GetBool(VMEnableDebugFlag.Name)
 	}
 	cfg.IndexAddressUtxos = viper.GetBool(IndexAddressUtxos.Name)
-
+	cfg.UsePendingState = viper.GetBool(UsePendingState.Name)
 	if viper.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = viper.GetUint64(RPCGlobalGasCapFlag.Name)
 	}

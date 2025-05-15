@@ -1154,6 +1154,14 @@ func (c *Core) Pending() *types.WorkObject {
 	return c.sl.miner.Pending()
 }
 
+func (c *Core) PendingStateAndBlock() (*state.StateDB, *types.WorkObject) {
+	return c.sl.miner.worker.PendingStateAndBlock()
+}
+
+func (c *Core) PendingReceipts() types.Receipts {
+	return c.sl.miner.worker.PendingReceipts()
+}
+
 // PendingBlock returns the currently pending block.
 //
 // Note, to access both the pending block and the pending state
@@ -1161,6 +1169,10 @@ func (c *Core) Pending() *types.WorkObject {
 // change between multiple method calls
 func (c *Core) PendingBlock() *types.WorkObject {
 	return c.sl.miner.PendingBlock()
+}
+
+func (c *Core) PendingBlockByHash(blockHash common.Hash) *types.WorkObject {
+	return c.sl.miner.worker.PendingBlockByHash(blockHash)
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.

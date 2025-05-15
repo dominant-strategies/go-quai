@@ -69,6 +69,8 @@ type Backend interface {
 	GetOutpointsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error)
 	UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
+	GetPendingReceipt(txHash common.Hash) (*types.Receipt, common.Hash)
+	PendingBlockByHash(blockHash common.Hash) *types.WorkObject
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.WorkObject, parent *types.WorkObject, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SetCurrentExpansionNumber(expansionNumber uint8)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
@@ -94,6 +96,7 @@ type Backend interface {
 	GetPendingEtxsRollupFromSub(hash common.Hash, location common.Location) (types.PendingEtxsRollup, error)
 	GetPendingEtxsFromSub(hash common.Hash, location common.Location) (types.PendingEtxs, error)
 	ProcessingState() bool
+	UsePendingState() bool
 	GetSlicesRunning() []common.Location
 	SetSubInterface(subInterface core.CoreBackend, location common.Location)
 	AddGenesisPendingEtxs(block *types.WorkObject)
