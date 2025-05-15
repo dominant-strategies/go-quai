@@ -265,6 +265,7 @@ func (hc *HeaderChain) GetBloom(hash common.Hash) (*types.Bloom, error) {
 		hc.logger.WithField("hash", hash.String()).Trace("Unable to find bloom for hash in manifest")
 		return nil, ErrBloomNotFound
 	}
+
 	return &bloom, nil
 }
 
