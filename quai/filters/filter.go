@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -378,13 +379,7 @@ Logs:
 			continue Logs
 		}
 		for i, sub := range topics {
-			match := len(sub) == 0 // empty rule set == wildcard
-			for _, topic := range sub {
-				if log.Topics[i] == topic {
-					match = true
-					break
-				}
-			}
+			match := slices.Contains(sub, log.Topics[i])
 			if !match {
 				continue Logs
 			}
