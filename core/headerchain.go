@@ -65,6 +65,7 @@ type HeaderChain struct {
 	chainHeadFeed event.Feed
 	unlocksFeed   event.Feed
 	chainSideFeed event.Feed
+	workshareFeed event.Feed
 	scope         event.SubscriptionScope
 
 	headerDb      ethdb.Database
@@ -1218,6 +1219,11 @@ func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.S
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (hc *HeaderChain) SubscribeUnlocksEvent(ch chan<- UnlocksEvent) event.Subscription {
 	return hc.scope.Track(hc.unlocksFeed.Subscribe(ch))
+}
+
+// SubscribeNewWorkshareEvent registers a subscription of NewWorkshareEvent.
+func (hc *HeaderChain) SubscribeNewWorkshareEvent(ch chan<- NewWorkshareEvent) event.Subscription {
+	return hc.scope.Track(hc.workshareFeed.Subscribe(ch))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.

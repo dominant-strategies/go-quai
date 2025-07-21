@@ -324,6 +324,14 @@ func (b *QuaiAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) 
 	return b.quai.Core().SubscribeChainSideEvent(ch)
 }
 
+func (b *QuaiAPIBackend) SubscribeNewWorkshareEvent(ch chan<- core.NewWorkshareEvent) event.Subscription {
+	return b.quai.Core().SubscribeNewWorkshareEvent(ch)
+}
+
+func (b *QuaiAPIBackend) SendNewWorkshareEvent(workshare *types.WorkObject) {
+	b.quai.Core().SendNewWorkshareEvent(workshare)
+}
+
 func (b *QuaiAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {

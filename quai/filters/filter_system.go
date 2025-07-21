@@ -54,6 +54,8 @@ const (
 	UnlocksSubscription
 	// ChainHeadSubscription queries for the chain head block
 	ChainHeadSubscription
+	// WorkshareSubscription queries for new workshares received via P2P
+	WorkshareSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -67,8 +69,9 @@ const (
 	// logsChanSize is the size of channel listening to LogsEvent.
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
-	chainEvChanSize   = 10
-	unlocksEvChanSize = 10
+	chainEvChanSize      = 10
+	unlocksEvChanSize    = 10
+	workshareEvChanSize = 100
 )
 
 type subscription struct {
@@ -76,11 +79,12 @@ type subscription struct {
 	typ       Type
 	created   time.Time
 	logsCrit  quai.FilterQuery
-	logs      chan []*types.Log
-	hashes    chan []common.Hash
-	headers   chan *types.WorkObject
-	unlocks   chan core.UnlocksEvent
-	header    chan *types.WorkObject
+	logs       chan []*types.Log
+	hashes     chan []common.Hash
+	headers    chan *types.WorkObject
+	unlocks    chan core.UnlocksEvent
+	header     chan *types.WorkObject
+	workshares chan *types.WorkObject
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -99,6 +103,7 @@ type EventSystem struct {
 	chainSub       event.Subscription // Subscription for new chain event
 	unlocksSub     event.Subscription // Subscription for new unlocks event
 	chainHeadSub   event.Subscription // Subscription for new head event
+	workshareSub   event.Subscription // Subscription for new workshare event
 
 	// Channels
 	install       chan *subscription         // install filter for event notification
@@ -108,8 +113,9 @@ type EventSystem struct {
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
-	unlocksCh     chan core.UnlocksEvent     // Channel to receive newly unlocked coinbases
-	chainHeadCh   chan core.ChainHeadEvent   // Channel to receive new chain event
+	unlocksCh     chan core.UnlocksEvent       // Channel to receive newly unlocked coinbases
+	chainHeadCh   chan core.ChainHeadEvent     // Channel to receive new chain event
+	workshareCh   chan core.NewWorkshareEvent // Channel to receive new workshare event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -130,6 +136,7 @@ func NewEventSystem(backend Backend) *EventSystem {
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
 		unlocksCh:     make(chan core.UnlocksEvent, unlocksEvChanSize),
 		chainHeadCh:   make(chan core.ChainHeadEvent, chainEvChanSize),
+		workshareCh:   make(chan core.NewWorkshareEvent, workshareEvChanSize),
 	}
 
 	nodeCtx := backend.NodeCtx()
@@ -143,14 +150,15 @@ func NewEventSystem(backend Backend) *EventSystem {
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 
 	m.chainHeadSub = m.backend.SubscribeChainHeadEvent(m.chainHeadCh)
+	m.workshareSub = m.backend.SubscribeNewWorkshareEvent(m.workshareCh)
 
 	// Make sure none of the subscriptions are empty
 	if nodeCtx == common.ZONE_CTX && backend.ProcessingState() {
-		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.chainHeadCh == nil {
+		if m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.chainHeadSub == nil || m.workshareSub == nil {
 			backend.Logger().Fatal("Subscribe for event system failed")
 		}
 	} else {
-		if m.chainSub == nil {
+		if m.chainSub == nil || m.chainHeadSub == nil || m.workshareSub == nil {
 			backend.Logger().Fatal("Subscribe for event system failed")
 		}
 	}
@@ -316,6 +324,22 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.WorkObject) *Subscr
 	return es.subscribe(sub)
 }
 
+// SubscribeNewWorkshares creates a subscription that writes workshares received via P2P.
+func (es *EventSystem) SubscribeNewWorkshares(workshares chan *types.WorkObject) *Subscription {
+	sub := &subscription{
+		id:         rpc.NewID(),
+		typ:        WorkshareSubscription,
+		created:    time.Now(),
+		logs:       make(chan []*types.Log),
+		hashes:     make(chan []common.Hash),
+		headers:    make(chan *types.WorkObject),
+		workshares: workshares,
+		installed:  make(chan struct{}),
+		err:        make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
 // SubscribeUnlocks creates a subscription that writes the recently unlocked balances
 func (es *EventSystem) SubscribeUnlocks(unlocks chan core.UnlocksEvent) *Subscription {
 	sub := &subscription{
@@ -474,6 +498,16 @@ func (es *EventSystem) handleChainHeadEvent(filters filterIndex, ev core.ChainHe
 	}
 }
 
+func (es *EventSystem) handleWorkshareEvent(filters filterIndex, ev core.NewWorkshareEvent) {
+	for _, f := range filters[WorkshareSubscription] {
+		select {
+		case f.workshares <- ev.Workshare:
+		default:
+			es.backend.Logger().Error("Failed to deliver workshare event to a subscriber")
+		}
+	}
+}
+
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
 	defer func() {
@@ -495,6 +529,7 @@ func (es *EventSystem) eventLoop() {
 		}
 		es.chainSub.Unsubscribe()
 		es.chainHeadSub.Unsubscribe()
+		es.workshareSub.Unsubscribe()
 
 	}()
 
@@ -520,6 +555,8 @@ func (es *EventSystem) eventLoop() {
 				es.handlePendingLogs(index, ev)
 			case ev := <-es.unlocksCh:
 				es.handleUnlocksEvent(index, ev)
+			case ev := <-es.workshareCh:
+				es.handleWorkshareEvent(index, ev)
 			case f := <-es.install:
 				index[f.typ][f.id] = f
 				close(f.installed)
@@ -538,6 +575,8 @@ func (es *EventSystem) eventLoop() {
 				return
 			case <-es.chainHeadSub.Err():
 				return
+			case <-es.workshareSub.Err():
+				return
 			}
 		}
 	} else {
@@ -548,6 +587,9 @@ func (es *EventSystem) eventLoop() {
 
 			case ev := <-es.chainHeadCh:
 				es.handleChainHeadEvent(index, ev)
+
+			case ev := <-es.workshareCh:
+				es.handleWorkshareEvent(index, ev)
 
 			case f := <-es.install:
 				index[f.typ][f.id] = f
@@ -560,6 +602,8 @@ func (es *EventSystem) eventLoop() {
 			case <-es.chainSub.Err():
 				return
 			case <-es.chainHeadSub.Err():
+				return
+			case <-es.workshareSub.Err():
 				return
 			}
 		}

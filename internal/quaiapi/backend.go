@@ -151,6 +151,8 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription
+	SubscribeNewWorkshareEvent(ch chan<- core.NewWorkshareEvent) event.Subscription
+	SendNewWorkshareEvent(workshare *types.WorkObject)
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine

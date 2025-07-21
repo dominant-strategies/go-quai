@@ -1047,6 +1047,7 @@ func CopyWorkObjectHeader(wh *WorkObjectHeader) *WorkObjectHeader {
 
 func (wh *WorkObjectHeader) RPCMarshalWorkObjectHeader() map[string]interface{} {
 	result := map[string]interface{}{
+		"hash":                wh.Hash(),
 		"headerHash":          wh.HeaderHash(),
 		"parentHash":          wh.ParentHash(),
 		"number":              (*hexutil.Big)(wh.Number()),
