@@ -182,6 +182,9 @@ func (args *TransactionArgs) CalculateQiTxGas(qiScalingFactor float64, location 
 		}
 	}
 	for i, out := range args.TxOut {
+		if len(out.Address.Address().Bytes()) != 20 {
+			return 0, fmt.Errorf("Qi transaction has an output with an invalid address: %s", out.Address.Address().Bytes())
+		}
 		outs[i] = types.TxOut{
 			Denomination: uint8(out.Denomination),
 			Address:      out.Address.Address().Bytes(),
