@@ -831,8 +831,8 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
-	// Add 10% to the final gas estimate
-	hi = hi + hi/10
+	// Add 33% to the final gas estimate
+	hi = hi + hi/3
 	return hexutil.Uint64(hi), nil
 }
 
@@ -954,7 +954,12 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 		}
-		txs := block.Transactions()
+		txs := make([]*types.Transaction, 0)
+		for _, tx := range block.Transactions() {
+			if tx.Type() == types.QuaiTxType {
+				txs = append(txs, tx)
+			}
+		}
 		transactions := make([]interface{}, len(txs))
 		var err error
 		for i, tx := range txs {
