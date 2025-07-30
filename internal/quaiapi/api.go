@@ -954,7 +954,12 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 		}
-		txs := block.Transactions()
+		txs := make([]*types.Transaction, 0)
+		for _, tx := range block.Transactions() {
+			if tx.Type() == types.QuaiTxType {
+				txs = append(txs, tx)
+			}
+		}
 		transactions := make([]interface{}, len(txs))
 		var err error
 		for i, tx := range txs {
