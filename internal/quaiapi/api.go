@@ -214,11 +214,6 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 			return nil, err
 		}
 
-		currHeader := s.b.CurrentHeader()
-		if header.Hash() != currHeader.Hash() {
-			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
-		}
-
 		utxos, err := s.b.UTXOsByAddress(ctx, addr)
 		if utxos == nil || err != nil {
 			return nil, err

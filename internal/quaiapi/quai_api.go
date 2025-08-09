@@ -120,10 +120,6 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 
 	addr := common.Bytes20ToAddress(address.Address().Bytes20(), s.b.NodeLocation())
 	if addr.IsInQiLedgerScope() {
-		currHeader := s.b.CurrentHeader()
-		if header.Hash() != currHeader.Hash() {
-			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
-		}
 
 		utxos, err := s.b.UTXOsByAddress(ctx, addr)
 		if utxos == nil || err != nil {
@@ -136,7 +132,7 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 
 		balance := big.NewInt(0)
 		for _, utxo := range utxos {
-			if utxo.Lock != nil && currHeader.Number(nodeCtx).Cmp(utxo.Lock) < 0 {
+			if utxo.Lock != nil && header.Number(nodeCtx).Cmp(utxo.Lock) < 0 {
 				continue
 			}
 			value := types.Denominations[utxo.Denomination]
