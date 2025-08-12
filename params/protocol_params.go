@@ -94,7 +94,9 @@ const (
 	MaxBaseFee               = 100 * GWei // Maximum base fee for blocks.
 	InitialStateLimit        = 5000000    // Initial state fee for blocks.
 
-	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
+	MaxCodeSize           = 24576   // Maximum bytecode to permit for a contract (24KB)
+	NewMaxCodeSize        = 32768   // Maximum bytecode to permit for a contract after fork (32KB)
+	MaxCodeSizeForkHeight = 5000000 // Block height at which the new 32KB code size limit activates
 
 	// Precompiled contract gas prices
 
@@ -392,4 +394,11 @@ func CalculateQiGasWithUTXOSetSizeScalingFactor(scalingFactor float64, baseRate 
 		return baseRate
 	}
 	return uint64(scalingFactor*float64(baseRate)) / 15
+}
+
+func GetMaxCodeSize(blockNumber uint64) int {
+	if blockNumber >= MaxCodeSizeForkHeight {
+		return NewMaxCodeSize
+	}
+	return MaxCodeSize
 }
