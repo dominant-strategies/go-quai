@@ -1585,3 +1585,92 @@ func (s *PublicBlockChainQuaiAPI) GetTransactionReceipt(ctx context.Context, has
 	}
 	return fields, nil
 }
+
+// GetBlockRewardInQuai returns the block reward in Quai for a given block
+func (s *PublicBlockChainQuaiAPI) GetBlockRewardInQuai(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	// Get the block
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if block == nil || err != nil {
+		return nil, err
+	}
+
+	// Get the work object header which contains difficulty
+	woHeader := block.WorkObjectHeader()
+	if woHeader == nil {
+		return nil, errors.New("work object header not found")
+	}
+
+	// Get difficulty and exchange rate
+	difficulty := woHeader.Difficulty()
+	exchangeRate := block.ExchangeRate()
+
+	if difficulty == nil || exchangeRate == nil {
+		return nil, errors.New("difficulty or exchange rate not available")
+	}
+
+	// Calculate Quai reward using the misc package
+	quaiReward := misc.CalculateQuaiReward(difficulty, exchangeRate)
+
+	return (*hexutil.Big)(quaiReward), nil
+}
+
+// GetBlockRewardInQi returns the block reward in Qi for a given block
+func (s *PublicBlockChainQuaiAPI) GetBlockRewardInQi(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	// Get the block
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if block == nil || err != nil {
+		return nil, err
+	}
+
+	// Get the work object header which contains difficulty
+	woHeader := block.WorkObjectHeader()
+	if woHeader == nil {
+		return nil, errors.New("work object header not found")
+	}
+
+	// Get difficulty
+	difficulty := woHeader.Difficulty()
+	if difficulty == nil {
+		return nil, errors.New("difficulty not available")
+	}
+
+	// Calculate Qi reward using the misc package
+	qiReward := misc.CalculateQiReward(woHeader, difficulty)
+
+	return (*hexutil.Big)(qiReward), nil
+}
+
+// HashesPerQits returns the number of hashes needed to mine the given number of Qits at a given block.
+// This is calculated by multiplying the number of Qits by OneOverKqi (hashes per Qit).
+//
+// Parameters:
+//   - qiAmount: The number of Qits (note: 1 Qi = 1000 Qit)
+//   - blockNrOrHash: The block number or hash to query
+//
+// Returns:
+//   - The total number of hashes required
+//
+// Example:
+//
+//	// How many hashes to mine 1 Qi (1000 Qit)?
+//	hashes := HashesPerQits(ctx, 1000, "latest")
+//
+//	// How many hashes to mine 0.001 Qi (1 Qit)?
+//	hashes := HashesPerQits(ctx, 1, "latest")
+func (s *PublicBlockChainQuaiAPI) HashesPerQits(ctx context.Context, qiAmount hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	// Handle zero or negative amounts
+	if qiAmount.ToInt().Sign() <= 0 {
+		return (*hexutil.Big)(big.NewInt(0)), nil
+	}
+	blockNumber, ok := blockNrOrHash.Number()
+	if !ok {
+		return nil, errors.New("invalid block number or hash")
+	}
+
+	// Calculate: qiAmount * OneOverKqi(blockNumber)
+	// OneOverKqi returns hashes per 1 Qit
+	hashesPerQit := params.OneOverKqi(uint64(blockNumber))
+	totalHashes := new(big.Int).Mul(qiAmount.ToInt(), hashesPerQit)
+
+	return (*hexutil.Big)(totalHashes), nil
+}
