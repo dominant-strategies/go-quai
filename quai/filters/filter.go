@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/bloombits"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -47,10 +48,12 @@ type Backend interface {
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) event.Subscription
+	SubscribeNewWorkshareEvent(ch chan<- core.NewWorkshareEvent) event.Subscription
 	SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.Subscription
 	ProcessingState() bool
 	NodeLocation() common.Location
 	NodeCtx() int
+	Engine() consensus.Engine
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)

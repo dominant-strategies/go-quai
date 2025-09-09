@@ -986,6 +986,14 @@ func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscript
 	return c.sl.hc.SubscribeChainHeadEvent(ch)
 }
 
+func (c *Core) SubscribeNewWorkshareEvent(ch chan<- NewWorkshareEvent) event.Subscription {
+	return c.sl.hc.SubscribeNewWorkshareEvent(ch)
+}
+
+func (c *Core) SendNewWorkshareEvent(workshare *types.WorkObject) {
+	c.sl.hc.workshareFeed.Send(NewWorkshareEvent{Workshare: workshare})
+}
+
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (c *Core) GetBody(hash common.Hash) *types.WorkObject {

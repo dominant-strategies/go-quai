@@ -2404,6 +2404,11 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 	}
 
 	w.uncles.ContainsOrAdd(workShare.Hash(), *workShare)
+	
+	// Emit workshare event for real-time updates
+	workshareObj := types.NewWorkObjectWithHeaderAndTx(workShare, nil)
+	w.hc.workshareFeed.Send(NewWorkshareEvent{Workshare: workshareObj})
+	
 	return nil
 }
 

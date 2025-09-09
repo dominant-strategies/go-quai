@@ -10,3 +10,4 @@ traces/
 *.sh
 **/testdata/
 *.cov
+chain-visualizer/node_modules*

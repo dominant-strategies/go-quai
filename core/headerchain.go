@@ -66,6 +66,7 @@ type HeaderChain struct {
 	chainHeadFeed event.Feed
 	unlocksFeed   event.Feed
 	chainSideFeed event.Feed
+	workshareFeed event.Feed
 	scope         event.SubscriptionScope
 
 	headerDb      ethdb.Database
@@ -1225,6 +1226,11 @@ func (hc *HeaderChain) SubscribeUnlocksEvent(ch chan<- UnlocksEvent) event.Subsc
 	return hc.scope.Track(hc.unlocksFeed.Subscribe(ch))
 }
 
+// SubscribeNewWorkshareEvent registers a subscription of NewWorkshareEvent.
+func (hc *HeaderChain) SubscribeNewWorkshareEvent(ch chan<- NewWorkshareEvent) event.Subscription {
+	return hc.scope.Track(hc.workshareFeed.Subscribe(ch))
+}
+
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (hc *HeaderChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return hc.scope.Track(hc.chainSideFeed.Subscribe(ch))
@@ -1258,7 +1264,7 @@ func (hc *HeaderChain) ComputeExpansionNumber(parent *types.WorkObject) (uint8, 
 	}
 
 	// If the Prime Terminus is genesis the expansion number is the genesis expansion number
-	if hc.IsGenesisHash(primeTerminusHash) && hc.NodeLocation().Equal(common.Location{0, 0}) {
+	if hc.IsGenesisHash(primeTerminusHash) {
 		return primeTerminus.ExpansionNumber(), nil
 	} else {
 		// check if the prime terminus is the block where the threshold count

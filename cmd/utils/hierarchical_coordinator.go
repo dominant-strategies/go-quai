@@ -213,8 +213,17 @@ func (ns *NodeSet) Entropy(numRegions int, numZones int) *big.Int {
 
 	entropy.Add(entropy, ns.nodes[common.Location{}.Name()].entropy)
 	for i := 0; i < numRegions; i++ {
+		_, exists := ns.nodes[common.Location{byte(i)}.Name()]
+		if !exists {
+			continue
+		}
 		entropy.Add(entropy, ns.nodes[common.Location{byte(i)}.Name()].entropy)
+
 		for j := 0; j < numZones; j++ {
+			_, exists := ns.nodes[common.Location{byte(i), byte(j)}.Name()]
+			if !exists {
+				continue
+			}
 			entropy.Add(entropy, ns.nodes[common.Location{byte(i), byte(j)}.Name()].entropy)
 		}
 	}

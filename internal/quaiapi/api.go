@@ -1782,6 +1782,10 @@ func (s *PublicWorkSharesAPI) ReceiveSubWorkshare(ctx context.Context, input hex
 	workShareValidity := s.b.CheckIfValidWorkShare(workShare.WorkObjectHeader())
 	if workShareValidity == types.Valid {
 		s.b.Logger().WithField("number", workShare.WorkObjectHeader().NumberU64()).Info("Received Work Share")
+		
+		// Emit workshare event for real-time updates
+		s.b.SendNewWorkshareEvent(workShare)
+		
 		shareView := workShare.ConvertToWorkObjectShareView(workShare.Transactions())
 		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
 		if err != nil {
