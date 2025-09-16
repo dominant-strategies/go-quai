@@ -63,6 +63,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	network := viper.GetString(utils.EnvironmentFlag.Name)
 	log.Global.Infof("Starting %s on the %s network", params.Version.Full(), network)
 
+	params.GitCommit = gitCommit
 	log.Global.WithFields(log.Fields{"commit": gitCommit, "date": gitDate}).Info("node version")
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -20,9 +20,18 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 )
+
+// max returns the maximum of two uint64 values
+func max(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
 
 const (
 	GasLimitBoundDivisor    uint64 = 1024     // The bound divisor of the gas limit, used in update calculations.
@@ -180,14 +189,15 @@ var (
 	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(10000000000), big.NewInt(GWei)) // 0.000000001 Quai
 	MaxWorkShareCount                 = 16
 	WorkSharesThresholdDiff           = 3 // Number of bits lower than the target that the default consensus engine uses
+	ExpectedWorksharesPerBlock        = 8 // The expected number of work shares per block
 	WorkShareP2PThresholdDiff         = 7 // Default value in bits lower than the target
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	MaxLockupByte                     = 3 // Max lockup byte allowed in the transactions for coinbase
 	LockupByteToBlockDepth            = [4]uint64{
-		ConversionLockPeriod, // 2 weeks
-		3 * BlocksPerMonth,   // 3 months
-		6 * BlocksPerMonth,   // 6 months
-		BlocksPerYear,        // 12 months
+		ConversionLockPeriod, // 100
+		200,                  // 200
+		300,                  // 300
+		400,                  // 400
 	}
 	// The first value represents the multiplier that represents interest rate
 	// for the first year, the second value represents the terminal rate these
@@ -244,6 +254,65 @@ var (
 	NewOpcodesForkBlock = big.NewInt(1310000) // The block at which the new opcodes are activated
 
 	MaxAllowableEntropyDist uint64 = 40 // Maximum multiple of zone intrinsic S distance allowed from the current Entropy
+)
+
+var (
+	KawPowForkBlock            uint64 = 3  // Block at which KawPow activates
+	KawPowTransitionPeriod     uint64 = 10 // Number of blocks over which the transition happens
+	TotalPowEngines            uint64 = 2  // Total number of PoW engines supported (Progpow, Kawpow)
+	AuxTemplateLivenessTime    uint64 = 15
+	AuxTemplateStaleTime       uint64 = uint64(10 * time.Minute)
+	ShareLivenessTime          uint32 = 20             // The time in seconds that a share is considered live for the purposes of inclusion in the block reward calculation
+	ShareDiffRelativeThreshold        = big.NewInt(90) // 90% of the current header diff
+	GammaInverse                      = big.NewInt(1)
+	AlphaInverse                      = big.NewInt(1)
+
+	// PoW share difficulty parameters
+	InitialShaDiff          = big.NewInt(8e12) // Minimum difficulty for a SHA work share, With 4TH/s, diff to get a share every 5 secs 20e12
+	InitialScryptDiff       = big.NewInt(8e8)  // Minimum difficulty for a Scrypt work share, With 1GH/s, diff to get a share every 5 secs is 5e9
+	MinPowDivisor           = big.NewInt(2)    // Minimum multiple of the target difficulty that a share must meet to be valid
+	PowDiffAdjustmentFactor = big.NewInt(300000)
+
+	// Target number of shares per algo times 2^32
+	TargetShaShares = big.NewInt(12884901888)
+	MaxShaShares    = big.NewInt(17179869184) // 2x the target
+
+	// Maximum number of shares that can be included in a block for each algo.
+	// This is to prevent a single block from being filled with shares from one
+	// specific algo
+	MaxShaSharesCount    = 8
+	MaxScryptSharesCount = 8
+
+	// Maximum amount of hashrate allowed on subsidy chain
+	MaxSubsidyNumerator   = big.NewInt(3)
+	MaxSubsidyDenominator = big.NewInt(4)
+
+	InitialKawpowDiff       = big.NewInt(1300000000) // Ravencoin testnet has 260Mh/s
+	RavenQuaiBlockTimeRatio = big.NewInt(12)         // 60s/5s = 12
+
+	RavencoinDiffPercentage  = big.NewInt(10000) // 100% in basis points
+	RavencoinDiffCutoffEnd   = big.NewInt(9000)  // 90%
+	RavencoinDiffCutoffStart = big.NewInt(7500)  // 75%
+	RavencoinDiffCutoffRange = big.NewInt(1500)
+
+	// The number of blocks to use in the exponential moving average
+	WorkShareEmaBlocks = big.NewInt(1000) // About 1 day worth of blocks
+
+	// MuSig2 2-of-3 public keys for AuxTemplate signing
+	// Add this to go-quai/params/protocol_params.go
+	MuSig2PublicKeys = []string{
+		"033073c6c8f3d296c86e79443a45ff66b64c05d9e0fda0b593adffeaa57def3381", // Key 1
+		"03d6d355f016a19b1800f1c5e04f1ae1935e1a0b5803b85d349d978bbea7a2b982", // Key 2
+		"03a9eb89ddab4f63503e6cef12bfc97cdb749389ad31a221fcfb672b607f8adf0c", // Key 3
+	}
+
+	// MerkleNonce, MerkleSize is used for the auxpow2
+	MerkleNonce uint32 = 0
+	MerkleSize  uint32 = 2
+
+	UnlivelySharePenalty      = big.NewInt(90) // Amount of share reward left after applying the penalty for shares that are not included in the block reward calculation due to being stale
+	ProgpowPenalty            = big.NewInt(80) // Amount of share reward left after applying the penalty for shares that are not included in the block reward calculation due to share being progpow after the fork
+	ShareRewardPenaltyDivisor = big.NewInt(100)
 )
 
 const (

@@ -11,6 +11,9 @@ message GossipWorkObject { block.ProtoWorkObject work_object = 1; }
 
 message GossipTransaction { block.ProtoTransaction transaction = 1; }
 
+// New message for broadcasting AuxTemplate
+message GossipAuxTemplate { block.ProtoAuxTemplate aux_template = 1; }
+
 // QuaiRequestMessage is the main 'envelope' for QuaiProtocol request messages
 message QuaiRequestMessage {
     uint32 id = 1;
@@ -24,6 +27,7 @@ message QuaiRequestMessage {
         block.ProtoWorkObjectBlocksView work_object_blocks = 6;
         block.ProtoWorkObjectHeaderView work_object_header = 7;
         common.ProtoHash block_hash = 8;
+        block.ProtoAuxTemplate aux_template = 9;
     }
 }
 
@@ -36,6 +40,7 @@ message QuaiResponseMessage {
         block.ProtoWorkObjectBlockView work_object_block_view = 4;
         block.ProtoWorkObjectBlocksView work_object_blocks_view = 5;
         common.ProtoHash block_hash = 6;
+        block.ProtoAuxTemplate aux_template = 7;
     }
 }
 

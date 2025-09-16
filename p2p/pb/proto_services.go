@@ -274,6 +274,9 @@ func ConvertAndMarshal(data interface{}) ([]byte, error) {
 	case common.Hash:
 		protoBlock := data.ProtoEncode()
 		return proto.Marshal(protoBlock)
+	case *types.AuxTemplate:
+		protoTemplate := data.ProtoEncode()
+		return proto.Marshal(protoTemplate)
 	default:
 		return nil, errors.New("unsupported data type")
 	}
@@ -334,6 +337,19 @@ func UnmarshalAndConvert(data []byte, sourceLocation common.Location, dataPtr *i
 		hash := common.Hash{}
 		hash.ProtoDecode(protoHash)
 		*dataPtr = hash
+		return nil
+	case *types.AuxTemplate:
+		protoTemplate := &types.ProtoAuxTemplate{}
+		err := proto.Unmarshal(data, protoTemplate)
+		if err != nil {
+			return err
+		}
+		auxTemplate := &types.AuxTemplate{}
+		err = auxTemplate.ProtoDecode(protoTemplate)
+		if err != nil {
+			return err
+		}
+		*dataPtr = auxTemplate
 		return nil
 	default:
 		return errors.New("unsupported data type")

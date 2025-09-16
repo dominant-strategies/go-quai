@@ -140,7 +140,13 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 
 			backend.Logger().WithFields(log.Fields{"tx count": len(data.WorkObject.Transactions()), "message id": Id}).Info("Received a work share broadcast")
 			// Unpack the workobjectheader and the transactions
-			backend.SendWorkShare(data.WorkObject.WorkObjectHeader())
+			err := backend.SendWorkShare(data.WorkObject.WorkObjectHeader())
+			if err != nil {
+				backend.Logger().WithFields(log.Fields{
+					"error": err.Error(),
+					"hash":  data.WorkObject.Hash().Hex(),
+				}).Warn("Failed to process received workshare")
+			}
 			backend.SendRemoteTxs(data.WorkObject.Transactions())
 
 			workShareIngressCounter.Inc()
@@ -155,6 +161,23 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 				txCountersBySlice[sliceName] = newCounter
 			}
 		}
+	case *types.AuxTemplate:
+		backend := *qbe.GetBackend(nodeLocation)
+		if backend == nil {
+			log.Global.Error("no backend found")
+			return false
+		}
+
+		backend.Logger().WithFields(log.Fields{
+			"message id": Id,
+			"chainID":    data.PowID(),
+			"nbits":      data.Bits(),
+		}).Info("Received an aux template broadcast")
+
+		if backend.NodeCtx() == common.ZONE_CTX && backend.ProcessingState() {
+			backend.SendAuxPowTemplate(data)
+		}
+
 	default:
 		log.Global.WithFields(log.Fields{
 			"peer":     sourcePeer,

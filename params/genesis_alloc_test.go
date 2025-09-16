@@ -1,4 +1,4 @@
-package genallocs
+package params
 
 import (
 	"math/big"
@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/params"
 	"github.com/stretchr/testify/require"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
@@ -125,7 +124,7 @@ func calcExpectedValues(account *GenesisAccount) expectedAllocValues {
 		cliffAmount = account.Vested
 	}
 
-	cliffIndex := unlockSchedule.lumpSumMonth * params.BlocksPerMonth
+	cliffIndex := unlockSchedule.lumpSumMonth * BlocksPerMonth
 
 	var numUnlocks uint64 = 1 // Cliff index
 	var quaiPerUnlock *big.Int

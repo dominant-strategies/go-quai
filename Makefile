@@ -40,9 +40,3 @@ go-quai:
 	$(GORUN) build/ci.go build ./cmd/go-quai
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/go-quai\" to launch go-quai."
-
-## build the go-quai binary
-go-quai-race:
-	$(GORUN) build/ci.go build -race ./cmd/go-quai
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/go-quai\" to launch go-quai."

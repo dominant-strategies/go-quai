@@ -10,3 +10,7 @@ traces/
 *.sh
 **/testdata/
 *.cov
+chain-visualizer/node_modules*
+
+# Binary executables
+/go-quai

@@ -261,6 +261,220 @@ func (api *PublicFilterAPI) NewBlockFilter() rpc.ID {
 	return headerSub.ID
 }
 
+// NewWorkshares sends a notification each time a new workshare is received via P2P.
+func (api *PublicFilterAPI) NewWorkshares(ctx context.Context) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+		api.activeSubscriptions += 1
+		workshares := make(chan *types.WorkObject, 100) // Buffer to prevent blocking
+		worksharesSub := api.events.SubscribeNewWorkshares(workshares)
+		api.backend.Logger().Info("NewWorkshares subscription created")
+		for {
+			select {
+			case w := <-workshares:
+				// Check if this is actually a block (meets full difficulty target)
+				// A block meets the full difficulty, while a workshare only meets the lower threshold
+				header := w.WorkObjectHeader()
+
+				if header.AuxPow() != nil {
+					switch header.AuxPow().PowID() {
+					case types.SHA_BCH, types.SHA_BTC:
+						target := new(big.Int).Div(common.Big2e256, header.ShaDiffAndCount().Difficulty())
+						powHash := header.AuxPow().Header().PowHash()
+						// If it meets the full difficulty target, it's a block, not a workshare
+						if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) >= 0 {
+							api.backend.Logger().Error("Skipping block in workshare subscription", "hash", w.Hash().Hex())
+							continue
+						}
+					case types.Scrypt:
+						target := new(big.Int).Div(common.Big2e256, header.ScryptDiffAndCount().Difficulty())
+						powHash := header.AuxPow().Header().PowHash()
+						// If it meets the full difficulty target, it's a block, not a workshare
+						if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) >= 0 {
+							api.backend.Logger().Error("Skipping block in workshare subscription", "hash", w.Hash().Hex())
+							continue
+						}
+					default:
+						target := new(big.Int).Div(common.Big2e256, header.Difficulty())
+
+						// Get the PoW hash from the engine
+						powHash, err := api.backend.Engine(header).ComputePowHash(header)
+						if err != nil {
+							api.backend.Logger().Error("Failed to compute PoW hash for workshare", "hash", w.Hash().Hex(), "err", err)
+							continue
+						}
+
+						// If it meets the full difficulty target, it's a block, not a workshare
+						if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) <= 0 {
+							api.backend.Logger().Debug("Skipping block in workshare subscription", "hash", w.Hash().Hex())
+							continue
+						}
+					}
+				}
+
+				notifier.Notify(rpcSub.ID, w.RPCMarshalWorkObject(api.backend.RpcVersion()))
+			case <-rpcSub.Err():
+				worksharesSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				worksharesSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// NewWorkshares sends a notification each time a new workshare is received via P2P.
+func (api *PublicFilterAPI) NewWorksharesV2(ctx context.Context) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+		api.activeSubscriptions += 1
+		workshares := make(chan *types.WorkObject, 100) // Buffer to prevent blocking
+		worksharesSub := api.events.SubscribeNewWorkshares(workshares)
+		api.backend.Logger().Info("NewWorkshares subscription created")
+		for {
+			select {
+			case w := <-workshares:
+				// Check if this is actually a block (meets full difficulty target)
+				// A block meets the full difficulty, while a workshare only meets the lower threshold
+				header := w.WorkObjectHeader()
+
+				if header.AuxPow() != nil {
+					switch header.AuxPow().PowID() {
+					case types.SHA_BCH, types.SHA_BTC:
+						target := new(big.Int).Div(common.Big2e256, header.ShaDiffAndCount().Difficulty())
+						powHash := header.AuxPow().Header().PowHash()
+						// If it meets the full difficulty target, it's a block, not a workshare
+						if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) >= 0 {
+							api.backend.Logger().Error("Skipping block in workshare subscription", "hash", w.Hash().Hex())
+							continue
+						}
+					case types.Scrypt:
+						target := new(big.Int).Div(common.Big2e256, header.ScryptDiffAndCount().Difficulty())
+						powHash := header.AuxPow().Header().PowHash()
+						// If it meets the full difficulty target, it's a block, not a workshare
+						if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) >= 0 {
+							api.backend.Logger().Error("Skipping block in workshare subscription", "hash", w.Hash().Hex())
+							continue
+						}
+					default:
+						target := new(big.Int).Div(common.Big2e256, header.Difficulty())
+
+						// Get the PoW hash from the engine
+						powHash, err := api.backend.Engine(header).ComputePowHash(header)
+						if err != nil {
+							api.backend.Logger().Error("Failed to compute PoW hash for workshare", "hash", w.Hash().Hex(), "err", err)
+							continue
+						}
+
+						// If it meets the full difficulty target, it's a block, not a workshare
+						if new(big.Int).SetBytes(powHash.Bytes()).Cmp(target) <= 0 {
+							api.backend.Logger().Debug("Skipping block in workshare subscription", "hash", w.Hash().Hex())
+							continue
+						}
+					}
+				}
+
+				notifier.Notify(rpcSub.ID, w.RPCMarshalWorkObject("v2"))
+			case <-rpcSub.Err():
+				worksharesSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				worksharesSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// NewHeads send a notification each time a new (header) block is appended to the chain.
+func (api *PublicFilterAPI) NewHeadsV2(ctx context.Context) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+		api.activeSubscriptions += 1
+		headers := make(chan *types.WorkObject, 10) // Buffer to prevent blocking
+		headersSub := api.events.SubscribeNewHeads(headers)
+
+		for {
+			select {
+			case h := <-headers:
+				// Marshal the header data
+				marshalHeader := h.RPCMarshalWorkObject("v2")
+				notifier.Notify(rpcSub.ID, marshalHeader)
+			case <-rpcSub.Err():
+				headersSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				headersSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // NewHeads send a notification each time a new (header) block is appended to the chain.
 func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	if api.activeSubscriptions >= api.subscriptionLimit {
@@ -285,14 +499,14 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 			api.activeSubscriptions -= 1
 		}()
 		api.activeSubscriptions += 1
-		headers := make(chan *types.WorkObject)
+		headers := make(chan *types.WorkObject, 10) // Buffer to prevent blocking
 		headersSub := api.events.SubscribeNewHeads(headers)
 
 		for {
 			select {
 			case h := <-headers:
 				// Marshal the header data
-				marshalHeader := h.RPCMarshalWorkObject()
+				marshalHeader := h.RPCMarshalWorkObject(api.backend.RpcVersion())
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
@@ -325,6 +539,11 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 	}
 
 	go func() {
+
+		headers := make(chan *types.WorkObject)
+		headersSub := api.events.SubscribeChainHeadEvent(headers)
+		unlocks := make(chan core.UnlocksEvent)
+		unlocksSub := api.events.SubscribeUnlocks(unlocks)
 		defer func() {
 			if r := recover(); r != nil {
 				api.backend.Logger().WithFields(log.Fields{
@@ -332,13 +551,11 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 					"stacktrace": string(debug.Stack()),
 				}).Error("Go-Quai Panicked")
 			}
+			headersSub.Unsubscribe()
+			unlocksSub.Unsubscribe()
 			api.activeSubscriptions -= 1
 		}()
 		api.activeSubscriptions += 1
-		headers := make(chan *types.WorkObject)
-		headersSub := api.events.SubscribeChainHeadEvent(headers)
-		unlocks := make(chan core.UnlocksEvent)
-		unlocksSub := api.events.SubscribeUnlocks(unlocks)
 		for {
 			select {
 			case h := <-headers:
@@ -350,7 +567,7 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 					// Check for external accesses
 					switch tx.Type() {
 					case types.QuaiTxType:
-						if tx.To() != nil && tx.To().Equal(addr) || tx.From(nodeLocation).Equal(addr) {
+						if tx.To() != nil && tx.To().Equal(addr) || tx.From(nodeLocation) != nil && tx.From(nodeLocation).Equal(addr) {
 							notifier.Notify(rpcSub.ID, hash)
 							break
 						}
@@ -388,12 +605,8 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 					}
 				}
 			case <-rpcSub.Err():
-				headersSub.Unsubscribe()
-				unlocksSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				headersSub.Unsubscribe()
-				unlocksSub.Unsubscribe()
 				return
 			}
 		}
@@ -787,13 +1000,19 @@ func decodeTopic(s string) (common.Hash, error) {
 }
 
 // PendingHeader sends a notification each time a new pending header is created.
-func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscription, error) {
+func (api *PublicFilterAPI) PendingHeader(ctx context.Context, powId types.PowID) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
 	rpcSub := notifier.CreateSubscription()
+
+	switch powId {
+	case types.Progpow, types.Kawpow, types.SHA_BCH, types.SHA_BTC, types.Scrypt:
+	default:
+		return &rpc.Subscription{}, fmt.Errorf("unsupported powId %d for pending header subscription", powId)
+	}
 
 	go func() {
 		defer func() {
@@ -819,9 +1038,40 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context) (*rpc.Subscriptio
 							}).Error("Go-Quai Panicked")
 						}
 					}()
+
 					// Marshal the header data
 					// Only keep the Header in the body
 					pendingHeaderForMining := b.WithBody(b.Header(), nil, nil, nil, nil, nil)
+
+					if powId == types.Progpow {
+						pendingHeaderForMining.WorkObjectHeader().SetAuxPow(nil)
+					} else {
+						auxTemplate := api.backend.GetBestAuxTemplate(powId)
+						// If we have a KAWPOW template, we need to create a proper Ravencoin header
+						switch powId {
+						case types.Kawpow, types.SHA_BTC, types.SHA_BCH, types.Scrypt:
+							// If we have an auxpow template, we need to create a proper Ravencoin header
+							if api.backend.NodeCtx() == common.ZONE_CTX && auxTemplate != nil {
+
+								coinbaseTransaction := types.NewAuxPowCoinbaseTx(powId, auxTemplate.Height(), auxTemplate.CoinbaseOut(), pendingHeaderForMining.SealHash(), auxTemplate.SignatureTime())
+								merkleRoot := types.CalculateMerkleRoot(powId, coinbaseTransaction, auxTemplate.MerkleBranch())
+
+								// Create a properly configured Ravencoin header for KAWPOW mining
+								auxHeader := types.NewBlockHeader(powId, int32(auxTemplate.Version()), auxTemplate.PrevHash(), merkleRoot, auxTemplate.SignatureTime(), auxTemplate.Bits(), 0, auxTemplate.Height())
+								// Dont have the actual hash of the block yet
+								auxPow := types.NewAuxPow(powId, auxHeader, auxTemplate.AuxPow2(), auxTemplate.Sigs(), auxTemplate.MerkleBranch(), coinbaseTransaction)
+
+								// Update the auxpow in the best pending header
+								pendingHeaderForMining.WorkObjectHeader().SetAuxPow(auxPow)
+
+								api.backend.AddPendingAuxPow(powId, pendingHeaderForMining.SealHash(), auxPow)
+							} else {
+								return
+							}
+						default:
+							return
+						}
+					}
 					// Marshal the response.
 					protoWo, err := pendingHeaderForMining.ProtoEncode(types.PEtxObject)
 					if err != nil {

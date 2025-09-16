@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dominant-strategies/go-quai/cmd/genallocs"
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +41,7 @@ func generateAllocs(cmd *cobra.Command, args []string) error {
 	inputFilePath := filepath.Clean(args[0])
 	outputFilePath := filepath.Clean(args[1])
 
-	genesisAccounts, err := genallocs.GenerateGenesisUnlocks(inputFilePath)
+	genesisAccounts, err := params.GenerateGenesisUnlocks(inputFilePath)
 	if err != nil {
 		return err
 	}

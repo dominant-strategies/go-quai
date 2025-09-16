@@ -26,7 +26,7 @@ var (
 // the header's difficulty requirements.
 func (progpow *Progpow) Seal(header *types.WorkObject, results chan<- *types.WorkObject, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
-	if progpow.config.PowMode == ModeFake || progpow.config.PowMode == ModeFullFake {
+	if progpow.config.PowMode == params.ModeFake || progpow.config.PowMode == params.ModeFullFake {
 		header.WorkObjectHeader().SetNonce(types.BlockNonce{})
 		select {
 		case results <- header:

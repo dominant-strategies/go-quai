@@ -148,7 +148,7 @@ func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfi
 // RegisterQuaiStatsService configures the Quai Stats daemon and adds it to
 // the given node.
 func RegisterQuaiStatsService(stack *node.Node, backend quaiapi.Backend, url string, sendfullstats bool) {
-	if err := quaistats.New(stack, backend, backend.Engine(), url, sendfullstats); err != nil {
+	if err := quaistats.New(stack, backend, url, sendfullstats); err != nil {
 		Fatalf("Failed to register the Quai Stats service: %v", err)
 	}
 }

@@ -1,8 +1,11 @@
 package core
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"runtime/debug"
@@ -12,11 +15,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/wire"
+	ltcdwire "github.com/dominant-strategies/ltcd/wire"
+	bchdwire "github.com/gcash/bchd/wire"
 	lru "github.com/hashicorp/golang-lru/v2"
 	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
@@ -25,8 +32,10 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/telemetry"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
@@ -61,7 +70,7 @@ type blockNumberAndRetryCounter struct {
 
 type Core struct {
 	sl     *Slice
-	engine consensus.Engine
+	engine []consensus.Engine
 
 	appendQueue     *lru.Cache[common.Hash, blockNumberAndRetryCounter]
 	processingCache *expireLru.LRU[common.Hash, interface{}]
@@ -81,8 +90,8 @@ type Core struct {
 	logger *log.Logger
 }
 
-func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.WorkObject) bool, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Core, error) {
-	slice, err := NewSlice(db, config, txConfig, txLookupLimit, isLocalBlock, chainConfig, slicesRunning, currentExpansionNumber, genesisBlock, engine, cacheConfig, vmConfig, genesis, logger)
+func NewCore(db ethdb.Database, config *Config, powConfig params.PowConfig, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine []consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Core, error) {
+	slice, err := NewSlice(db, config, powConfig, txConfig, txLookupLimit, chainConfig, slicesRunning, currentExpansionNumber, genesisBlock, engine, cacheConfig, vmConfig, genesis, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +125,16 @@ func NewCore(db ethdb.Database, config *Config, isLocalBlock func(block *types.W
 	}
 
 	return c, nil
+}
+
+// GetEngineForPowID returns the consensus engine for the given PowID
+func (c *Core) GetEngineForPowID(powID types.PowID) consensus.Engine {
+	return c.sl.GetEngineForPowID(powID)
+}
+
+// GetEngineForHeader returns the consensus engine for the given header
+func (c *Core) GetEngineForHeader(header *types.WorkObjectHeader) consensus.Engine {
+	return c.sl.GetEngineForHeader(header)
 }
 
 // InsertChain attempts to append a list of blocks to the slice, optionally
@@ -276,13 +295,13 @@ func (c *Core) EntropyWindow() *big.Int {
 	}
 	powhash, exists := c.sl.hc.powHashCache.Peek(currentHeader.Hash())
 	if !exists {
-		powhash, err = c.engine.VerifySeal(currentHeader.WorkObjectHeader())
+		powhash, err = c.VerifySeal(currentHeader.WorkObjectHeader())
 		if err != nil {
 			return nil
 		}
 		c.sl.hc.powHashCache.Add(currentHeader.Hash(), powhash)
 	}
-	currentBlockIntrinsic := c.engine.IntrinsicLogEntropy(powhash)
+	currentBlockIntrinsic := common.IntrinsicLogEntropy(powhash)
 	MaxAllowableEntropyDist := new(big.Int).Mul(currentBlockIntrinsic, big.NewInt(c_maxFutureEntropyMultiple))
 	currentHeaderEntropy := c.CurrentHeader().ParentEntropy(common.ZONE_CTX)
 	return new(big.Int).Add(currentHeaderEntropy, MaxAllowableEntropyDist)
@@ -550,6 +569,387 @@ func (c *Core) BadHashExistsInChain() bool {
 	return false
 }
 
+func (c *Core) ReceiveWorkShare(workShare *types.WorkObjectHeader) (shareView *types.WorkObjectShareView, isBlock, isWorkShare bool, err error) {
+	return c.sl.ReceiveWorkShare(workShare)
+}
+
+func (c *Core) ReceiveMinedHeader(workObject *types.WorkObject) (*types.WorkObject, error) {
+	return c.sl.ReceiveMinedHeader(workObject)
+}
+
+func (c *Core) SubmitBlock(raw hexutil.Bytes, powId types.PowID) (*types.WorkObject, error) {
+	const (
+		bitcoinHeaderSize   = 80
+		ravencoinHeaderSize = 120
+		minPayloadSize      = bitcoinHeaderSize
+	)
+
+	if len(raw) < minPayloadSize {
+		return nil, fmt.Errorf("submitBlock payload too short: %d bytes (minimum %d)", len(raw), minPayloadSize)
+	}
+
+	data := []byte(raw)
+
+	c.logger.WithFields(log.Fields{
+		"data": hex.EncodeToString(data),
+	}).Info("SubmitBlock data")
+
+	var (
+		auxHeader          *types.AuxPowHeader
+		sealHash           common.Hash
+		powType            types.PowID
+		heightFromCoinbase uint32
+		err                error
+		coinbaseTx         []byte
+	)
+
+	switch powId {
+	case types.Scrypt:
+		litecoinHeaderBytes := data[:bitcoinHeaderSize]
+		litecoinHeader := &ltcdwire.BlockHeader{}
+		litecoinErr := litecoinHeader.Deserialize(bytes.NewReader(litecoinHeaderBytes))
+		if litecoinErr == nil {
+			// Successfully decoded as Bitcoin - parse coinbase to extract seal hash
+			extra := data[bitcoinHeaderSize:]
+			if len(extra) == 0 {
+				c.logger.Error("No transaction data after Litecoin header - must include coinbase transaction")
+				return nil, errors.New("Litecoin block submission must include coinbase transaction after 80-byte header")
+			}
+
+			// Parse the var_int transaction count (Bitcoin block format)
+			reader := bytes.NewReader(extra)
+			txCount, err := wire.ReadVarInt(reader, 0)
+			if err != nil {
+				c.logger.WithField("error", err.Error()).Error("Failed to read Litecoin transaction count")
+				return nil, errors.New("failed to read Litecoin transaction count: " + err.Error())
+			}
+			if txCount == 0 {
+				c.logger.Error("Litecoin block has zero transactions")
+				return nil, errors.New("Litecoin block must have at least one transaction (coinbase)")
+			}
+
+			// Now deserialize the first transaction (coinbase)
+			// Create an AuxPowTx with correct type (Litecoin) for deserialization
+			coinbaseTx = extra[1:] // Skip var_int byte(s)
+
+			scriptSig := types.ExtractScriptSigFromCoinbaseTx(coinbaseTx)
+			if len(scriptSig) == 0 {
+				c.logger.Error("Failed to extract scriptSig from KAWPOW coinbase transaction")
+				return nil, errors.New("failed to extract scriptSig from KAWPOW coinbase transaction")
+			}
+
+			// Extract seal hash from the parsed transaction
+			sealHash, err = types.ExtractSealHashFromCoinbase(scriptSig)
+			if err != nil {
+				c.logger.WithFields(log.Fields{
+					"type":  "Litecoin",
+					"error": err.Error(),
+				}).Error("Failed to extract seal hash from Litecoin block, will try KAWPOW")
+				return nil, errors.New("failed to extract seal hash from Litecoin block: " + err.Error())
+			}
+
+			heightFromCoinbase, err = types.ExtractHeightFromCoinbase(scriptSig)
+			if err != nil {
+				c.logger.WithFields(log.Fields{
+					"type":  "scrypt",
+					"error": err.Error(),
+				}).Error("Failed to extract height from scrypt block")
+			}
+
+			// Successfully parsed as Litecoin
+			// Create wrapped Litecoin header
+			litecoinHeaderWrapper := &types.LitecoinHeaderWrapper{BlockHeader: litecoinHeader}
+			auxHeader = types.NewAuxPowHeader(litecoinHeaderWrapper)
+			powType = types.Scrypt
+		}
+	case types.SHA_BCH:
+		shaHeaderBytes := data[:bitcoinHeaderSize]
+		// Decode using btcd wire protocol
+		shaHeader := &bchdwire.BlockHeader{}
+		shaErr := shaHeader.Deserialize(bytes.NewReader(shaHeaderBytes))
+		if shaErr == nil {
+			// Successfully decoded as Bitcoin - parse coinbase to extract seal hash
+			extra := data[bitcoinHeaderSize:]
+
+			if len(extra) == 0 {
+				c.logger.Error("No transaction data after SHA256d header - must include coinbase transaction")
+				return nil, errors.New("SHA256d block submission must include coinbase transaction after 80-byte header")
+			}
+
+			// Parse the var_int transaction count (Bitcoin block format)
+			reader := bytes.NewReader(extra)
+			txCount, err := wire.ReadVarInt(reader, 0)
+			if err != nil {
+				c.logger.WithField("error", err.Error()).Error("Failed to read SHA256d transaction count")
+				return nil, errors.New("failed to read SHA256d transaction count: " + err.Error())
+			}
+			if txCount == 0 {
+				c.logger.Error("SHA256d block has zero transactions")
+				return nil, errors.New("SHA256d block must have at least one transaction (coinbase)")
+			}
+
+			// Now deserialize the first transaction (coinbase)
+			// Create an AuxPowTx with correct type (Bitcoin) for deserialization
+			coinbaseTx = extra[1:] // Skip var_int byte(s)
+			scriptSig := types.ExtractScriptSigFromCoinbaseTx(coinbaseTx)
+			if len(scriptSig) == 0 {
+				c.logger.Error("Failed to extract scriptSig from SHA256d coinbase transaction, will try KAWPOW")
+				coinbaseTx = nil
+			} else {
+				// Extract seal hash from the parsed transaction
+				sealHash, err = types.ExtractSealHashFromCoinbase(scriptSig)
+				if err != nil {
+					c.logger.WithFields(log.Fields{
+						"type":  "SHA256d",
+						"error": err.Error(),
+					}).Error("Failed to extract seal hash from SHA256d block, will try KAWPOW")
+					coinbaseTx = nil
+				} else {
+					// Successfully parsed as SHA256d
+					// Create wrapped Bitcoin header
+					btcHeaderWrapper := &types.BitcoinCashHeaderWrapper{BlockHeader: shaHeader}
+					auxHeader = types.NewAuxPowHeader(btcHeaderWrapper)
+					powType = types.SHA_BCH
+
+					heightFromCoinbase, err = types.ExtractHeightFromCoinbase(scriptSig)
+					if err != nil {
+						c.logger.WithFields(log.Fields{
+							"type":  "SHA256d",
+							"error": err.Error(),
+						}).Error("Failed to extract height from SHA256d block")
+					}
+
+					c.logger.WithFields(log.Fields{
+						"type":       "SHA256d",
+						"version":    shaHeader.Version,
+						"nonce":      shaHeader.Nonce,
+						"bits":       shaHeader.Bits,
+						"headerHash": shaHeader.BlockHash().String(),
+						"height":     heightFromCoinbase,
+						"seal":       sealHash.Hex(),
+					}).Info("Received mined SHA256d block")
+				}
+			}
+		}
+	case types.Kawpow:
+		rvnHeaderBytes := data[:ravencoinHeaderSize]
+		ravencoinHeader, rvnErr := types.DecodeRavencoinHeader(rvnHeaderBytes)
+		if rvnErr == nil {
+			// Successfully decoded as Ravencoin - parse coinbase to extract seal hash
+			extra := data[ravencoinHeaderSize:]
+			c.logger.WithFields(log.Fields{
+				"totalBytes":  len(data),
+				"headerBytes": ravencoinHeaderSize,
+				"extraBytes":  len(extra),
+			}).Info("Parsing KAWPOW block")
+
+			if len(extra) == 0 {
+				c.logger.Error("No transaction data after KAWPOW header - stratum proxy must include coinbase transaction")
+				return nil, errors.New("KAWPOW block submission must include coinbase transaction after 120-byte header")
+			}
+
+			// Parse the var_int transaction count (Bitcoin block format)
+			reader := bytes.NewReader(extra)
+			txCount, err := wire.ReadVarInt(reader, 0) // 0 = protocol version (any version works for var_int)
+			if err != nil {
+				c.logger.WithField("error", err.Error()).Error("Failed to read transaction count")
+				return nil, errors.New("failed to read transaction count: " + err.Error())
+			}
+			if txCount == 0 {
+				c.logger.Error("KAWPOW block has zero transactions")
+				return nil, errors.New("KAWPOW block must have at least one transaction (coinbase)")
+			}
+
+			coinbaseTx = extra[1:] // Skip var_int byte(s)
+
+			scriptSig := types.ExtractScriptSigFromCoinbaseTx(coinbaseTx)
+			if len(scriptSig) == 0 {
+				c.logger.Error("Failed to extract scriptSig from KAWPOW coinbase transaction")
+				return nil, errors.New("failed to extract scriptSig from KAWPOW coinbase transaction")
+			}
+
+			// Extract seal hash from the parsed transaction
+			sealHash, err = types.ExtractSealHashFromCoinbase(scriptSig)
+			if err != nil {
+				c.logger.WithFields(log.Fields{
+					"type":  "KAWPOW",
+					"error": err.Error(),
+				}).Error("Failed to extract seal hash from KAWPOW block")
+				return nil, errors.New("failed to extract seal hash from KAWPOW block: " + err.Error())
+			}
+
+			heightFromCoinbase, err = types.ExtractHeightFromCoinbase(scriptSig)
+			if err != nil {
+				c.logger.WithFields(log.Fields{
+					"type":  "SHA256d",
+					"error": err.Error(),
+				}).Error("Failed to extract height from SHA256d block")
+			}
+
+			// Create wrapped header for the newer AuxPow API
+			auxHeader = types.NewAuxPowHeader(ravencoinHeader)
+			powType = types.Kawpow
+
+			c.logger.WithFields(log.Fields{
+				"type":       "KAWPOW",
+				"height":     ravencoinHeader.Height,
+				"nonce":      ravencoinHeader.Nonce64,
+				"mixHash":    ravencoinHeader.MixHash.Hex(),
+				"headerHash": ravencoinHeader.GetKAWPOWHeaderHash().Hex(),
+				"seal":       sealHash.Hex(),
+			}).Info("Received mined KAWPOW block")
+		} else {
+			c.logger.WithFields(log.Fields{
+				"type":  "KAWPOW",
+				"error": rvnErr.Error(),
+			}).Error("Failed to decode KAWPOW block")
+			return nil, errors.New("failed to decode KAWPOW block: " + rvnErr.Error())
+		}
+	}
+
+	// If both formats failed, return error
+	if auxHeader == nil {
+		return nil, errors.New("failed to decode block: not a valid KAWPOW (120 byte) or SHA256d (80 byte) header")
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract seal hash: %w", err)
+	}
+
+	// Extract ntimeMask from the submitted coinbase transaction
+	scriptSig := types.ExtractScriptSigFromCoinbaseTx(coinbaseTx)
+	if len(scriptSig) == 0 {
+		c.logger.Errorf("Failed to extract scriptSig from %s coinbase transaction", powType.String())
+		return nil, errors.New("failed to extract scriptSig from " + powType.String() + " coinbase transaction")
+	}
+
+	signatureTime, err := types.ExtractSignatureTimeFromCoinbase(scriptSig)
+	if err != nil {
+		c.logger.WithField("error", err.Error()).Error("Failed to extract signature time from " + powType.String() + " coinbase")
+		return nil, fmt.Errorf("failed to extract signature time from "+powType.String()+" coinbase: %w", err)
+	}
+
+	// Create composite key: hash(auxMerkleRoot || ntimeMask)
+	// sealHash for Scrypt is actually the auxMerkleRoot
+	cacheKey := crypto.Keccak256Hash(sealHash.Bytes(), common.BigToHash(big.NewInt(int64(signatureTime))).Bytes())
+
+	// Get the pending block body using the cache key
+	workObject := c.sl.GetPendingBlockBody(powType, cacheKey)
+	if workObject == nil {
+		return nil, fmt.Errorf("could not get the pending block body for cache key %s", cacheKey.Hex())
+	}
+
+	workObjectCopy := types.CopyWorkObject(workObject)
+
+	heightFromWorkObject, err := types.ExtractHeightFromCoinbase(scriptSig)
+	if err != nil {
+		c.logger.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Error("Failed to extract height from work object")
+		return nil, fmt.Errorf("failed to extract height from work object: %w", err)
+	}
+	if heightFromWorkObject != heightFromCoinbase {
+		c.logger.WithFields(log.Fields{
+			"heightFromWorkObject": heightFromWorkObject,
+			"heightFromCoinbase":   heightFromCoinbase,
+		}).Error("Height mismatch between work object and decoded height")
+		return nil, fmt.Errorf("height mismatch between work object and decoded height")
+	}
+
+	// Verify the AuxPow type matches what we decoded
+	if workObjectCopy.AuxPow() != nil && workObjectCopy.AuxPow().PowID() != powType {
+		c.logger.WithFields(log.Fields{
+			"expected": workObjectCopy.AuxPow().PowID(),
+			"received": powType,
+		}).Warn("Block PoW type mismatch - updating AuxPow")
+		workObjectCopy.AuxPow().SetPowID(powType)
+	}
+
+	// Update the header and transaction in the AuxPow with the mined data
+	// Note: PowID and MerkleBranch are already correct from the cached pending block body
+	workObjectCopy.AuxPow().SetHeader(auxHeader)
+	workObjectCopy.AuxPow().SetTransaction(coinbaseTx)
+	reconTemplate := workObjectCopy.AuxPow().ConvertToTemplate()
+	messageHash := reconTemplate.Hash()
+	prevHash := workObjectCopy.AuxPow().Header().PrevBlock()
+	templatePrevHash := reconTemplate.PrevHash()
+	merkleBranch := make([]string, len(workObjectCopy.AuxPow().MerkleBranch()))
+	for i, hash := range workObjectCopy.AuxPow().MerkleBranch() {
+		merkleBranch[i] = hex.EncodeToString(hash)
+	}
+	c.logger.WithFields(log.Fields{
+		"powID":                   workObjectCopy.AuxPow().PowID(),
+		"height":                  heightFromCoinbase,
+		"prevHash":                hex.EncodeToString(prevHash[:]),
+		"transaction":             hex.EncodeToString(workObjectCopy.AuxPow().Transaction()),
+		"merkleBranch":            merkleBranch,
+		"signature":               hex.EncodeToString(workObjectCopy.AuxPow().Signature()),
+		"messageHash":             hex.EncodeToString(messageHash[:]),
+		"auxPow2":                 hex.EncodeToString(workObjectCopy.AuxPow().AuxPow2()),
+		"template_chainId":        reconTemplate.PowID(),
+		"template_prevHash":       hex.EncodeToString(templatePrevHash[:]),
+		"template_auxPow2":        hex.EncodeToString(reconTemplate.AuxPow2()),
+		"template_version":        reconTemplate.Version(),
+		"template_nbits":          reconTemplate.Bits(),
+		"template_signatureTime":  reconTemplate.SignatureTime(),
+		"template_height":         reconTemplate.Height(),
+		"template_coinbaseOutLen": len(reconTemplate.CoinbaseOut()),
+		"template_coinbaseOut":    hex.EncodeToString(reconTemplate.CoinbaseOut()),
+	}).Info("Received work object with auxpow2")
+
+	// Add signature check and merkle root check
+	if !workObjectCopy.AuxPow().ConvertToTemplate().VerifySignature() && !workObjectCopy.WorkObjectHeader().IsShaOrScryptShareWithInvalidAddress() {
+		return nil, fmt.Errorf("invalid auxpow signature")
+	}
+
+	// Verify the merkle root as well
+	expectedMerkleRoot := types.CalculateMerkleRoot(workObjectCopy.AuxPow().PowID(), workObjectCopy.AuxPow().Transaction(), workObjectCopy.AuxPow().MerkleBranch())
+	if workObjectCopy.AuxPow().Header().MerkleRoot() != expectedMerkleRoot {
+		return nil, errors.New("invalid merkle root in auxpow")
+	}
+
+	scryptSig := types.ExtractScriptSigFromCoinbaseTx(workObjectCopy.AuxPow().Transaction())
+
+	coinbaseSealHash, err := types.ExtractSealHashFromCoinbase(scryptSig)
+	if err != nil {
+		return nil, fmt.Errorf("coinbase seal hash not found in the auxpow: %v", err)
+	}
+
+	if err := types.ValidatePrevOutPointIndexAndSequenceOfCoinbase(workObjectCopy.AuxPow().Transaction()); err != nil {
+		return nil, fmt.Errorf("invalid prev out point index and sequence in coinbase transaction: %v", err)
+	}
+
+	switch workObjectCopy.AuxPow().PowID() {
+	case types.Kawpow, types.SHA_BTC, types.SHA_BCH:
+		if workObjectCopy.SealHash() != coinbaseSealHash {
+			return nil, fmt.Errorf("coinbase seal hash does not match uncle seal hash, expected %v, got %v", workObjectCopy.SealHash(), coinbaseSealHash)
+		}
+	case types.Scrypt:
+		// Since litecoin is merged mined with dogecoin, merkle root
+		// needs to be calculated
+		dogeHash := common.Hash(workObjectCopy.AuxPow().AuxPow2())
+		if (dogeHash == common.Hash{}) {
+			return nil, fmt.Errorf("auxpow2 is empty for scrypt powid")
+		}
+		auxMerkleRoot := types.CreateAuxMerkleRoot(dogeHash, workObjectCopy.SealHash())
+		if auxMerkleRoot != coinbaseSealHash {
+			return nil, fmt.Errorf("coinbase seal hash does not match uncle aux merkle root, expected %v, got %v", auxMerkleRoot, coinbaseSealHash)
+		}
+		merkleSize, merkleNonce, err := types.ExtractMerkleSizeAndNonceFromCoinbase(scryptSig)
+		if err != nil {
+			return nil, err
+		}
+		if merkleSize != params.MerkleSize {
+			return nil, fmt.Errorf("invalid merkle size: have %v, want %v", merkleSize, params.MerkleSize)
+		}
+		if merkleNonce != params.MerkleNonce {
+			return nil, fmt.Errorf("invalid merkle nonce: have %v, want %v", merkleNonce, params.MerkleNonce)
+		}
+	}
+
+	return workObjectCopy, nil
+}
+
 func (c *Core) SubscribeMissingBlockEvent(ch chan<- types.BlockRequest) event.Subscription {
 	return c.sl.SubscribeMissingBlockEvent(ch)
 }
@@ -569,12 +969,8 @@ func (c *Core) Config() *params.ChainConfig {
 }
 
 // Engine retreives the blake3 consensus engine.
-func (c *Core) Engine() consensus.Engine {
-	return c.engine
-}
-
-func (c *Core) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
-	return c.engine.CheckIfValidWorkShare(workShare)
+func (c *Core) Engine(header *types.WorkObjectHeader) consensus.Engine {
+	return c.GetEngineForHeader(header)
 }
 
 // Slice retrieves the slice struct.
@@ -702,8 +1098,8 @@ func (c *Core) ConstructLocalMinedBlock(woHeader *types.WorkObject) (*types.Work
 	return c.sl.ConstructLocalMinedBlock(woHeader)
 }
 
-func (c *Core) GetPendingBlockBody(woHeader *types.WorkObjectHeader) *types.WorkObject {
-	return c.sl.GetPendingBlockBody(woHeader)
+func (c *Core) GetPendingBlockBody(powId types.PowID, sealHash common.Hash) *types.WorkObject {
+	return c.sl.GetPendingBlockBody(powId, sealHash)
 }
 
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {
@@ -718,8 +1114,8 @@ func (c *Core) WriteGenesisBlock(block *types.WorkObject, location common.Locati
 	c.sl.WriteGenesisBlock(block, location)
 }
 
-func (c *Core) GetPendingHeader() (*types.WorkObject, error) {
-	return c.sl.GetPendingHeader()
+func (c *Core) GetPendingHeader(powId types.PowID, coinbase common.Address) (*types.WorkObject, error) {
+	return c.sl.GetPendingHeader(powId, coinbase)
 }
 
 func (c *Core) GetManifest(blockHash common.Hash) (types.BlockManifest, error) {
@@ -834,6 +1230,10 @@ func (c *Core) GetPrimeBlock(blockHash common.Hash) *types.WorkObject {
 	return c.sl.GetPrimeBlock(blockHash)
 }
 
+func (c *Core) SendAuxPowTemplate(auxTemplate *types.AuxTemplate) error {
+	return c.sl.SendAuxPowTemplate(auxTemplate)
+}
+
 //---------------------//
 // HeaderChain methods //
 //---------------------//
@@ -911,17 +1311,56 @@ func (c *Core) ComputeMinerDifficulty(parent *types.WorkObject) *big.Int {
 
 // CurrentLogEntropy returns the logarithm of the total entropy reduction since genesis for our current head block
 func (c *Core) CurrentLogEntropy() *big.Int {
-	return c.engine.TotalLogEntropy(c, c.sl.hc.CurrentHeader())
+	currentHeader := c.sl.hc.CurrentHeader()
+	return c.sl.hc.TotalLogEntropy(currentHeader)
 }
 
 // TotalLogEntropy returns the total entropy reduction if the chain since genesis to the given header
 func (c *Core) TotalLogEntropy(header *types.WorkObject) *big.Int {
-	return c.engine.TotalLogEntropy(c, header)
+	return c.sl.hc.TotalLogEntropy(header)
+}
+
+func (c *Core) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
+	return c.sl.hc.ComputePowHash(header)
+}
+
+func (c *Core) CheckWorkThreshold(header *types.WorkObjectHeader, threshold int) bool {
+	return c.sl.hc.CheckWorkThreshold(header, threshold)
+}
+
+func (c *Core) VerifySeal(header *types.WorkObjectHeader) (common.Hash, error) {
+	return c.sl.hc.VerifySeal(header)
+}
+
+func (c *Core) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
+	return c.sl.hc.CheckIfValidWorkShare(workShare)
+}
+
+// CheckPowIdValidity checks whether the pow id specified in auxpow is valid
+func (c *Core) CheckPowIdValidity(header *types.WorkObjectHeader) error {
+	return c.sl.hc.CheckPowIdValidity(header)
+}
+
+// CheckPowIdValidityForWorkshare checks whether the pow id specified in auxpow is valid for workshares
+func (c *Core) CheckPowIdValidityForWorkshare(header *types.WorkObjectHeader) error {
+	return c.sl.hc.CheckPowIdValidityForWorkshare(header)
+}
+
+func (c *Core) CalculateShareTarget(parent, wo *types.WorkObject) *big.Int {
+	return c.sl.hc.CalculateShareTarget(parent, wo)
+}
+
+func (c *Core) CalculatePowDiffAndCount(parent *types.WorkObject, header *types.WorkObjectHeader, powId types.PowID) (*big.Int, *big.Int, *big.Int) {
+	return c.sl.hc.CalculatePowDiffAndCount(parent, header, powId)
+}
+
+func (c *Core) CountWorkSharesByAlgo(wo *types.WorkObject) (int, int, int, int, int) {
+	return c.sl.hc.CountWorkSharesByAlgo(wo)
 }
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (c *Core) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
-	return c.engine.CalcOrder(c, header)
+	return c.sl.hc.CalcOrder(header)
 }
 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
@@ -986,6 +1425,14 @@ func (c *Core) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscript
 	return c.sl.hc.SubscribeChainHeadEvent(ch)
 }
 
+func (c *Core) SubscribeNewWorkshareEvent(ch chan<- NewWorkshareEvent) event.Subscription {
+	return c.sl.hc.SubscribeNewWorkshareEvent(ch)
+}
+
+func (c *Core) SendNewWorkshareEvent(workshare *types.WorkObject) {
+	c.sl.hc.workshareFeed.Send(NewWorkshareEvent{Workshare: workshare})
+}
+
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (c *Core) GetBody(hash common.Hash) *types.WorkObject {
@@ -1046,6 +1493,10 @@ func (c *Core) GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, err
 	return c.sl.hc.GetKQuaiAndUpdateBit(blockHash)
 }
 
+func (c *Core) WorkShareLogEntropy(wo *types.WorkObject) (*big.Int, error) {
+	return c.sl.hc.WorkShareLogEntropy(wo)
+}
+
 func (c *Core) TxMiningEnabled() bool {
 	return c.workShareMining
 }
@@ -1056,6 +1507,17 @@ func (c *Core) GetWorkShareThreshold() int {
 
 func (c *Core) GetMinerEndpoints() []string {
 	return c.endpoints
+}
+
+func (c *Core) UncleWorkShareClassification(header *types.WorkObjectHeader) types.WorkShareValidity {
+	return c.sl.hc.UncleWorkShareClassification(header)
+}
+
+func (c *Core) GetWorkshareLRUDump(limit int) map[string]interface{} {
+	if !c.sl.config.TelemetryEnabled {
+		return make(map[string]interface{})
+	}
+	return telemetry.BuildWorkshareLRUDump(limit)
 }
 
 //--------------------//
@@ -1180,6 +1642,10 @@ func (c *Core) SetMinerPreference(minerPreference float64) {
 	c.sl.miner.worker.SetMinerPreference(minerPreference)
 }
 
+func (c *Core) GetBestAuxTemplate(powId types.PowID) *types.AuxTemplate {
+	return c.sl.miner.worker.GetBestAuxTemplate(powId)
+}
+
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
 func (c *Core) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
@@ -1199,6 +1665,10 @@ func (c *Core) IsMining() bool { return c.sl.miner.Mining() }
 
 func (c *Core) SendWorkShare(workShare *types.WorkObjectHeader) error {
 	return c.sl.miner.worker.AddWorkShare(workShare)
+}
+
+func (c *Core) AddPendingAuxPow(powId types.PowID, sealHash common.Hash, auxpow *types.AuxPow) {
+	c.sl.miner.worker.AddPendingAuxPow(powId, sealHash, auxpow)
 }
 
 //-------------------------//

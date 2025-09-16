@@ -109,7 +109,7 @@ var defaultCacheConfig = &CacheConfig{
 type StateProcessor struct {
 	config                              *params.ChainConfig // Chain configuration options
 	hc                                  *HeaderChain        // Canonical block chain
-	engine                              consensus.Engine    // Consensus engine used for block rewards
+	engine                              []consensus.Engine  // Consensus engines used for block rewards
 	logsFeed                            event.Feed
 	rmLogsFeed                          event.Feed
 	cacheConfig                         *CacheConfig                            // CacheConfig for StateProcessor
@@ -134,7 +134,7 @@ type StateProcessor struct {
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig, txLookupLimit *uint64) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, hc *HeaderChain, engine []consensus.Engine, vmConfig vm.Config, cacheConfig *CacheConfig, txLookupLimit *uint64) *StateProcessor {
 
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
@@ -1114,11 +1114,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		}
 
 		totalEntropy := big.NewInt(0)
-		powHash, err := p.engine.ComputePowHash(targetBlock.WorkObjectHeader())
+		engine := p.hc.GetEngineForHeader(targetBlock.WorkObjectHeader())
+		powHash, err := engine.ComputePowHash(targetBlock.WorkObjectHeader())
 		if err != nil {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, errors.New("cannot compute pow hash for the target block")
 		}
-		zoneThresholdEntropy := p.engine.IntrinsicLogEntropy(powHash)
+		zoneThresholdEntropy := common.IntrinsicLogEntropy(powHash)
 		totalEntropy = new(big.Int).Add(totalEntropy, zoneThresholdEntropy)
 
 		// First step is to collect all the workshares and uncles at this targetBlockNumber depth, then
@@ -1126,6 +1127,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		// unclesAtTargetBlockDepth has all the uncles, workshares that is there at the block height
 		var sharesAtTargetBlockDepth []*types.WorkObjectHeader
 		var entropyOfSharesAtTargetBlockDepth []*big.Int
+
 		sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, targetBlock.WorkObjectHeader())
 		entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
@@ -1141,21 +1143,29 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			for _, uncle := range uncles {
 				var uncleEntropy *big.Int
 				if uncle.NumberU64() == targetBlockNumber {
-					_, err := p.engine.VerifySeal(uncle)
-					if err != nil {
-						// uncle is a workshare
-						powHash, err := p.engine.ComputePowHash(uncle)
+					if block.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+						_, err := p.hc.VerifySeal(uncle)
 						if err != nil {
-							return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							powHash, err := p.hc.ComputePowHash(uncle)
+							if err != nil {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							}
+							uncleEntropy = common.IntrinsicLogEntropy(powHash)
+							totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
+						} else {
+							// Add the target weight into the uncles
+							target := new(big.Int).Div(common.Big2e256, uncle.Difficulty())
+							uncleEntropy = common.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
+							totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
 						}
-						uncleEntropy = new(big.Int).Set(p.engine.IntrinsicLogEntropy(powHash))
-						totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
-					} else {
-						// Add the target weight into the uncles
-						target := new(big.Int).Div(common.Big2e256, uncle.Difficulty())
-						uncleEntropy = p.engine.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
-						totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
 					}
+
+					if block.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
+						if _, err = uncle.PrimaryCoinbase().InternalAddress(); err != nil {
+							continue
+						}
+					}
+
 					sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, uncle)
 					entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, uncleEntropy)
 				}
@@ -1169,20 +1179,61 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		// Once the total entropy is calculated, the block reward is split
 		// between the blocks, uncles and workshares proportional to the block
 		// weight
-		blockRewardAtTargetBlock := misc.CalculateQuaiReward(targetBlock.Difficulty(), exchangeRate)
+		blockRewardAtTargetBlock := misc.CalculateQuaiReward(targetBlock.WorkObjectHeader(), targetBlock.Difficulty(), exchangeRate)
 		// add the fee capacitor value
 		blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
 		// add half the fees generated in the block
 		blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, new(big.Int).Div(targetBlock.TotalFees(), common.Big2))
 
+		rewardPerShare := new(big.Int).Div(blockRewardAtTargetBlock, big.NewInt(int64(params.ExpectedWorksharesPerBlock+1)))
+
 		// Add an etx for each workshare for it to be rewarded
 		for i, share := range sharesAtTargetBlockDepth {
 
-			shareReward := new(big.Int).Mul(blockRewardAtTargetBlock, entropyOfSharesAtTargetBlockDepth[i])
-			shareReward = new(big.Int).Div(shareReward, totalEntropy)
+			var shareReward *big.Int
+			if block.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+				shareReward = new(big.Int).Mul(blockRewardAtTargetBlock, entropyOfSharesAtTargetBlockDepth[i])
+				shareReward = new(big.Int).Div(shareReward, totalEntropy)
+				if shareReward.Cmp(blockRewardAtTargetBlock) > 0 {
+					return nil, nil, nil, nil, 0, 0, 0, nil, nil, errors.New("share reward cannot be greater than the total block reward")
+				}
+			} else {
 
-			if shareReward.Cmp(blockRewardAtTargetBlock) > 0 {
-				return nil, nil, nil, nil, 0, 0, 0, nil, nil, errors.New("share reward cannot be greater than the total block reward")
+				shareReward = new(big.Int).Set(rewardPerShare)
+
+				if share.AuxPow() != nil {
+					switch share.AuxPow().PowID() {
+					case types.SHA_BCH, types.SHA_BTC:
+						validCount := new(big.Int).Sub(block.ShaDiffAndCount().Count(), block.ShaDiffAndCount().Uncled())
+						if validCount.Cmp(common.Big0) > 0 {
+							shareReward = new(big.Int).Mul(shareReward, block.ShaDiffAndCount().Count())
+							shareReward = new(big.Int).Div(shareReward, validCount)
+						}
+					case types.Scrypt:
+						validCount := new(big.Int).Sub(block.ScryptDiffAndCount().Count(), block.ScryptDiffAndCount().Uncled())
+						if validCount.Cmp(common.Big0) > 0 {
+							shareReward = new(big.Int).Mul(shareReward, block.ScryptDiffAndCount().Count())
+							shareReward = new(big.Int).Div(shareReward, validCount)
+						}
+					}
+				}
+
+				// If mining progpow after the fork, 20% is deducted from the
+				// expectation
+				if share.AuxPow() == nil {
+					shareReward = new(big.Int).Mul(shareReward, params.ProgpowPenalty)
+					shareReward = new(big.Int).Div(shareReward, params.ShareRewardPenaltyDivisor)
+				} else {
+					// If the share hash unlively template, 10% is deducted from
+					// the expectation
+					scritSig := types.ExtractScriptSigFromCoinbaseTx(share.AuxPow().Transaction())
+					signatureTime, err := types.ExtractSignatureTimeFromCoinbase(scritSig)
+					if err != nil || signatureTime+params.ShareLivenessTime < share.AuxPow().Header().Timestamp() {
+						shareReward = new(big.Int).Mul(shareReward, params.UnlivelySharePenalty)
+						shareReward = new(big.Int).Div(shareReward, params.ShareRewardPenaltyDivisor)
+					}
+				}
+
 			}
 
 			uncleCoinbase := share.PrimaryCoinbase()
@@ -1203,7 +1254,7 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	time4 := common.PrettyDuration(time.Since(start))
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	multiSet, utxoSetSize, trimmedUtxos, err := p.engine.Finalize(p.hc, batch, block, statedb, false, parentUtxoSetSize, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes, supplyRemovedQi)
+	multiSet, utxoSetSize, trimmedUtxos, err := p.hc.Finalize(batch, block, statedb, false, parentUtxoSetSize, utxosCreatedDeleted.UtxosCreatedHashes, utxosCreatedDeleted.UtxosDeletedHashes, supplyRemovedQi)
 	if err != nil {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 	}
@@ -1687,6 +1738,10 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64())
 	}
+	if conversion && (currentHeader.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock &&
+		currentHeader.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock+params.KQuaiChangeHoldInterval) {
+		return nil, fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the kawpow fork block", tx.Hash(), params.KQuaiChangeHoldInterval)
+	}
 	if conversion || wrapping {
 		if conversion && wrapping {
 			return nil, fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash())
@@ -1968,6 +2023,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	txFeeInQuai := misc.QiToQuai(currentHeader, exchangeRate, currentHeader.Difficulty(), txFeeInQit)
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return nil, nil, nil, fmt.Errorf("tx %032x has insufficient fee for base fee, have %d want %d", tx.Hash(), txFeeInQuai.Uint64(), minimumFeeInQuai.Uint64()), nil
+	}
+	if conversion && (currentHeader.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock &&
+		currentHeader.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock+params.KQuaiChangeHoldInterval) {
+		return nil, nil, nil, fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the kawpow fork block", tx.Hash(), params.KQuaiChangeHoldInterval), nil
 	}
 	if conversion || wrapping {
 		if conversion && wrapping {

@@ -75,7 +75,7 @@ func TestBigMax(t *testing.T) {
 	b := big.NewInt(5)
 
 	max1 := BigMax(a, b)
-	if max1 != a {
+	if max1.Cmp(a) != 0 {
 		t.Errorf("Expected %d got %d", a, max1)
 	}
 
@@ -90,12 +90,12 @@ func TestBigMin(t *testing.T) {
 	b := big.NewInt(5)
 
 	min1 := BigMin(a, b)
-	if min1 != b {
+	if min1.Cmp(b) != 0 {
 		t.Errorf("Expected %d got %d", b, min1)
 	}
 
 	min2 := BigMin(b, a)
-	if min2 != b {
+	if min2.Cmp(b) != 0 {
 		t.Errorf("Expected %d got %d", b, min2)
 	}
 }

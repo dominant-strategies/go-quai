@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
-	"slices"
 	"sync"
 	"time"
 
@@ -63,7 +62,7 @@ type Quai struct {
 	chainDb ethdb.Database // Block chain database
 
 	eventMux *event.TypeMux
-	engine   consensus.Engine
+	engine   []consensus.Engine
 
 	bloomRequests     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -80,6 +79,8 @@ type Quai struct {
 
 	logger    *log.Logger
 	maxWsSubs int
+
+	rpcVersion string
 }
 
 // New creates a new Quai object (including the
@@ -166,6 +167,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		logger:            logger,
 		maxWsSubs:         maxWsSubs,
+		rpcVersion:        config.RpcVersion,
 	}
 
 	// Copy the chainConfig
@@ -182,25 +184,27 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	chainConfig.Location = config.NodeLocation // TODO: See why this is necessary
 	chainConfig.DefaultGenesisHash = config.DefaultGenesisHash
 	chainConfig.IndexAddressUtxos = config.IndexAddressUtxos
+	chainConfig.TelemetryEnabled = config.TelemetryEnabled
 	logger.WithFields(log.Fields{
 		"Ctx":          nodeCtx,
 		"NodeLocation": config.NodeLocation,
 		"Genesis":      config.Genesis.Config.Location,
 		"chainConfig":  chainConfig.Location,
 	}).Info("Node")
+
+	// powConfig holds config for pow
+	powConfig := config.PowConfig
+	powConfig.NodeLocation = config.NodeLocation
+	powConfig.NotifyFull = config.Miner.NotifyFull
+	powConfig.GenAllocs = config.GenesisAllocs
+
 	if config.ConsensusEngine == "blake3" {
-		blake3Config := config.Blake3Pow
-		blake3Config.NotifyFull = config.Miner.NotifyFull
-		blake3Config.NodeLocation = config.NodeLocation
-		blake3Config.GenAllocs = config.GenesisAllocs
-		quai.engine = quaiconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &blake3Config, config.Miner.Notify, config.Miner.Noverify, config.Miner.WorkShareThreshold, chainDb, logger)
+		quai.engine = make([]consensus.Engine, 1)
+		quai.engine[0] = quaiconfig.CreateBlake3ConsensusEngine(stack, config.NodeLocation, &powConfig, config.Miner.Notify, config.Miner.Noverify, config.Miner.WorkShareThreshold, chainDb, logger)
 	} else {
-		// Transfer mining-related config to the progpow config.
-		progpowConfig := config.Progpow
-		progpowConfig.NodeLocation = config.NodeLocation
-		progpowConfig.NotifyFull = config.Miner.NotifyFull
-		progpowConfig.GenAllocs = config.GenesisAllocs
-		quai.engine = quaiconfig.CreateProgpowConsensusEngine(stack, config.NodeLocation, &progpowConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, logger)
+		quai.engine = make([]consensus.Engine, params.TotalPowEngines)
+		quai.engine[types.Progpow] = quaiconfig.CreateProgpowConsensusEngine(stack, config.NodeLocation, &powConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, logger)
+		quai.engine[types.Kawpow] = quaiconfig.CreateKawPowConsensusEngine(stack, config.NodeLocation, &powConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, logger)
 	}
 	logger.WithField("config", config).Info("Initialized chain configuration")
 
@@ -249,7 +253,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 
-	quai.core, err = core.NewCore(chainDb, &config.Miner, quai.isLocalBlock, &config.TxPool, &config.TxLookupLimit, chainConfig, quai.config.SlicesRunning, currentExpansionNumber, genesisBlock, quai.engine, cacheConfig, vmConfig, config.Genesis, logger)
+	quai.core, err = core.NewCore(chainDb, &config.Miner, powConfig, &config.TxPool, &config.TxLookupLimit, chainConfig, quai.config.SlicesRunning, currentExpansionNumber, genesisBlock, quai.engine, cacheConfig, vmConfig, config.Genesis, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -325,48 +329,12 @@ func (s *Quai) APIs() []rpc.API {
 	}...)
 }
 
-// isLocalBlock checks whether the specified block is mined
-// by local miner accounts.
-//
-// We regard two types of accounts as local miner account: etherbase
-// and accounts specified via `txpool.locals` flag.
-func (s *Quai) isLocalBlock(header *types.WorkObject) bool {
-	author, err := s.engine.Author(header)
-	if err != nil {
-		s.logger.WithFields(log.Fields{
-			"number": header.NumberU64(s.core.NodeCtx()),
-			"hash":   header.Hash(),
-			"err":    err,
-		}).Warn("Failed to retrieve block author")
-		return false
-	}
-	// Check whether the given address is etherbase.
-	s.lock.RLock()
-	quaiBase := s.quaiCoinbase
-	qiBase := s.qiCoinbase
-	s.lock.RUnlock()
-	if author.Equal(quaiBase) || author.Equal(qiBase) {
-		return true
-	}
-	internal, err := author.InternalAddress()
-	if err != nil {
-		s.logger.WithField("err", err).Error("Failed to retrieve author internal address")
-	}
-	// Check whether the given address is specified by `txpool.local`
-	// CLI flag.
-	return slices.Contains(s.config.TxPool.Locals, internal)
+func (s *Quai) Core() *core.Core         { return s.core }
+func (s *Quai) EventMux() *event.TypeMux { return s.eventMux }
+func (s *Quai) Engine(header *types.WorkObjectHeader) consensus.Engine {
+	// Return the default engine (Progpow)
+	return s.core.GetEngineForHeader(header)
 }
-
-// shouldPreserve checks whether we should preserve the given block
-// during the chain reorg depending on whether the author of block
-// is a local account.
-func (s *Quai) shouldPreserve(block *types.WorkObject) bool {
-	return s.isLocalBlock(block)
-}
-
-func (s *Quai) Core() *core.Core                 { return s.core }
-func (s *Quai) EventMux() *event.TypeMux         { return s.eventMux }
-func (s *Quai) Engine() consensus.Engine         { return s.engine }
 func (s *Quai) ChainDb() ethdb.Database          { return s.chainDb }
 func (s *Quai) IsListening() bool                { return true } // Always listening
 func (s *Quai) ArchiveMode() bool                { return s.config.NoPruning }

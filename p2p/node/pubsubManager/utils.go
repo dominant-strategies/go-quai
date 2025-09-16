@@ -19,6 +19,7 @@ const (
 	C_transactionType                   = "transactions"
 	C_headerType                        = "headers"
 	C_workObjectShareType               = "worksharev2"
+	C_auxTemplateType                   = "auxtemplate"
 	C_workObjectRequestDegree           = 3
 	C_workObjectHeaderTypeRequestDegree = 3
 	C_defaultRequestDegree              = 3
@@ -47,6 +48,8 @@ func (t *Topic) buildTopicString() string {
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/")
 	case *types.WorkObjectShareView:
 		return strings.Join([]string{baseTopic, C_workObjectShareType}, "/")
+	case *types.AuxTemplate:
+		return strings.Join([]string{baseTopic, C_auxTemplateType}, "/")
 	default:
 		panic(ErrUnsupportedType)
 	}
@@ -78,6 +81,8 @@ func NewTopic(genesis common.Hash, location common.Location, data interface{}) (
 		requestDegree = C_workObjectHeaderTypeRequestDegree
 	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView:
 		requestDegree = C_workObjectRequestDegree
+	case *types.AuxTemplate:
+		requestDegree = C_defaultRequestDegree
 	default:
 		return nil, ErrUnsupportedType
 	}
@@ -135,6 +140,8 @@ func TopicFromString(topic string) (*Topic, error) {
 		return NewTopic(genHash, location, &types.WorkObjectBlockView{})
 	case C_workObjectShareType:
 		return NewTopic(genHash, location, &types.WorkObjectShareView{})
+	case C_auxTemplateType:
+		return NewTopic(genHash, location, &types.AuxTemplate{})
 	default:
 		return nil, ErrUnsupportedType
 	}

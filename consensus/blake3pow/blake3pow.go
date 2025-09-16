@@ -1,14 +1,14 @@
 package blake3pow
 
 import (
-	"math/big"
 	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/dominant-strategies/go-quai/cmd/genallocs"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 var (
@@ -27,34 +27,9 @@ const (
 	ModeFullFake
 )
 
-// Config are the configuration parameters of the blake3pow.
-type Config struct {
-	PowMode Mode
-
-	DurationLimit *big.Int
-
-	GasCeil uint64
-
-	GenAllocs []genallocs.GenesisAccount
-
-	NodeLocation common.Location
-
-	MinDifficulty *big.Int
-
-	WorkShareThreshold int
-
-	// When set, notifications sent by the remote sealer will
-	// be block header JSON objects instead of work package arrays.
-	NotifyFull bool
-
-	Log *log.Logger `toml:"-"`
-	// Number of threads to mine on if mining
-	NumThreads int
-}
-
 // Blake3pow is a proof-of-work consensus engine using the blake3 hash algorithm
 type Blake3pow struct {
-	config Config
+	config params.PowConfig
 
 	// Mining related fields
 	rand    *rand.Rand    // Properly seeded random source for nonces
@@ -75,7 +50,7 @@ type Blake3pow struct {
 // New creates a full sized blake3pow PoW scheme and starts a background thread for
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
-func New(config Config, notify []string, noverify bool, logger *log.Logger) *Blake3pow {
+func New(config params.PowConfig, notify []string, noverify bool, logger *log.Logger) *Blake3pow {
 	blake3pow := &Blake3pow{
 		config:  config,
 		update:  make(chan struct{}),
@@ -83,67 +58,10 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Bla
 		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 		threads: config.NumThreads,
 	}
-	if config.PowMode == ModeShared {
+	if config.PowMode == params.ModeShared {
 		blake3pow.shared = sharedBlake3pow
 	}
 	return blake3pow
-}
-
-// NewTester creates a small sized blake3pow PoW scheme useful only for testing
-// purposes.
-func NewTester(notify []string, noverify bool) *Blake3pow {
-	return New(Config{PowMode: ModeTest}, notify, noverify, log.NewLogger("test-blake3pow.log", "info", 500))
-}
-
-// NewFaker creates a blake3pow consensus engine with a fake PoW scheme that accepts
-// all blocks' seal as valid, though they still have to conform to the Quai
-// consensus rules.
-func NewFaker() *Blake3pow {
-	return &Blake3pow{
-		config: Config{
-			PowMode: ModeFake,
-		},
-	}
-}
-
-// NewFakeFailer creates a blake3pow consensus engine with a fake PoW scheme that
-// accepts all blocks as valid apart from the single one specified, though they
-// still have to conform to the Quai consensus rules.
-func NewFakeFailer(fail uint64) *Blake3pow {
-	return &Blake3pow{
-		config: Config{
-			PowMode: ModeFake,
-		},
-		fakeFail: fail,
-	}
-}
-
-// NewFakeDelayer creates a blake3pow consensus engine with a fake PoW scheme that
-// accepts all blocks as valid, but delays verifications by some time, though
-// they still have to conform to the Quai consensus rules.
-func NewFakeDelayer(delay time.Duration) *Blake3pow {
-	return &Blake3pow{
-		config: Config{
-			PowMode: ModeFake,
-		},
-		fakeDelay: delay,
-	}
-}
-
-// NewFullFaker creates an blake3pow consensus engine with a full fake scheme that
-// accepts all blocks as valid, without checking any consensus rules whatsoever.
-func NewFullFaker() *Blake3pow {
-	return &Blake3pow{
-		config: Config{
-			PowMode: ModeFullFake,
-		},
-	}
-}
-
-// NewShared creates a full sized blake3pow PoW shared between all requesters running
-// in the same process.
-func NewShared() *Blake3pow {
-	return &Blake3pow{shared: sharedBlake3pow}
 }
 
 // Threads returns the number of mining threads currently enabled. This doesn't
@@ -175,4 +93,12 @@ func (blake3pow *Blake3pow) SetThreads(threads int) {
 		default:
 		}
 	}
+}
+
+func (blake3pow *Blake3pow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
+	return header.Hash(), nil
+}
+
+func (blake3pow *Blake3pow) ComputePowLight(header *types.WorkObjectHeader) (common.Hash, common.Hash) {
+	return common.Hash{}, common.Hash{}
 }

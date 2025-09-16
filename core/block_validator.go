@@ -37,19 +37,25 @@ import (
 //
 // BlockValidator implements Validator.
 type BlockValidator struct {
-	config *params.ChainConfig // Chain configuration options
-	hc     *HeaderChain        // HeaderChain
-	engine consensus.Engine    // Consensus engine used for validating
+	config  *params.ChainConfig // Chain configuration options
+	hc      *HeaderChain        // HeaderChain
+	engines []consensus.Engine  // Consensus engines used for validating
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(config *params.ChainConfig, headerChain *HeaderChain, engine consensus.Engine) *BlockValidator {
+func NewBlockValidator(config *params.ChainConfig, headerChain *HeaderChain, engines []consensus.Engine) *BlockValidator {
 	validator := &BlockValidator{
-		config: config,
-		engine: engine,
-		hc:     headerChain,
+		config:  config,
+		engines: engines,
+		hc:      headerChain,
 	}
 	return validator
+}
+
+// getEngineForHeader returns the appropriate consensus engine for the given header
+func (v *BlockValidator) getEngineForHeader(header *types.WorkObjectHeader) consensus.Engine {
+	// Use HeaderChain's engine selection logic
+	return v.hc.GetEngineForHeader(header)
 }
 
 // ValidateBody validates the given block's uncles and verifies the block
@@ -84,7 +90,7 @@ func (v *BlockValidator) ValidateBody(block *types.WorkObject) error {
 		}
 	} else {
 		// Header validity is known at this point, check the uncles and transactions
-		if err := v.engine.VerifyUncles(v.hc, block); err != nil {
+		if err := v.hc.VerifyUncles(block); err != nil {
 			return err
 		}
 		if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash() {
@@ -126,6 +132,13 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 	if wo.Header() == nil {
 		return fmt.Errorf("wo header is nil")
 	}
+	if wo.WorkObjectHeader() == nil {
+		return fmt.Errorf("wo work object header is nil")
+	}
+	if err := v.hc.CheckPowIdValidity(wo.WorkObjectHeader()); err != nil {
+		return err
+	}
+
 	nodeCtx := v.config.Location.Context()
 	header := wo.Header()
 	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
@@ -180,13 +193,13 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 	var err error
 	powhash, exists := v.hc.powHashCache.Peek(wo.Hash())
 	if !exists {
-		powhash, err = v.engine.VerifySeal(wo.WorkObjectHeader())
+		powhash, err = v.hc.VerifySeal(wo.WorkObjectHeader())
 		if err != nil {
 			return pubsub.ValidationReject
 		}
 		v.hc.powHashCache.Add(wo.Hash(), powhash)
 	}
-	newBlockIntrinsic := v.engine.IntrinsicLogEntropy(powhash)
+	newBlockIntrinsic := common.IntrinsicLogEntropy(powhash)
 
 	currentHeader := v.hc.CurrentHeader()
 	currentHeaderHash := currentHeader.Hash()
@@ -197,13 +210,13 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 
 	currentHeaderPowHash, exists := v.hc.powHashCache.Peek(currentHeaderHash)
 	if !exists {
-		currentHeaderPowHash, err = v.engine.VerifySeal(currentHeader.WorkObjectHeader())
+		currentHeaderPowHash, err = v.hc.VerifySeal(currentHeader.WorkObjectHeader())
 		if err != nil {
 			return pubsub.ValidationReject
 		}
 		v.hc.powHashCache.Add(currentHeaderHash, currentHeaderPowHash)
 	}
-	currentHeaderIntrinsic := v.engine.IntrinsicLogEntropy(currentHeaderPowHash)
+	currentHeaderIntrinsic := common.IntrinsicLogEntropy(currentHeaderPowHash)
 
 	// Check if the Block is atleast half the current difficulty in Zone Context,
 	// this makes sure that the nodes don't listen to the forks with the PowHash
@@ -223,7 +236,7 @@ func (v *BlockValidator) ApplyPoWFilter(wo *types.WorkObject) pubsub.ValidationR
 	}
 
 	// Quickly validate the header and propagate the block if it passes
-	err = v.engine.VerifyHeader(v.hc, wo)
+	err = v.hc.VerifyHeader(wo)
 
 	// Including the ErrUnknownAncestor as well because a filter has already
 	// been applied for all the blocks that come until here. Since there
@@ -250,6 +263,13 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 	if wo.Header() == nil {
 		return fmt.Errorf("wo header is nil")
 	}
+	if wo.WorkObjectHeader() == nil {
+		return fmt.Errorf("wo work object header is nil")
+	}
+	if err := v.hc.CheckPowIdValidity(wo.WorkObjectHeader()); err != nil {
+		return err
+	}
+
 	header := wo.Header()
 	nodeCtx := v.config.Location.Context()
 	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
@@ -295,7 +315,6 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 			return fmt.Errorf("work object primary coinbase is in qi ledger scope before controller kick in block")
 		}
 	}
-
 	return nil
 }
 
@@ -312,12 +331,12 @@ func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 	if wo.WorkObjectHeader() == nil {
 		return fmt.Errorf("work object header is nil")
 	}
+	if err := v.hc.CheckPowIdValidityForWorkshare(wo.WorkObjectHeader()); err != nil {
+		return err
+	}
 	// Lockup byte for the first two months has to be zero
 	if wo.WorkObjectHeader().NumberU64() < 2*params.BlocksPerMonth && wo.WorkObjectHeader().Lock() != 0 {
 		return fmt.Errorf("work object header has invalid lockup byte")
-	}
-	if wo.Header() == nil {
-		return fmt.Errorf("wo header is nil")
 	}
 	// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
 	if len(wo.OutboundEtxs()) != 0 {
@@ -389,7 +408,7 @@ func (v *BlockValidator) ValidateState(block *types.WorkObject, statedb *state.S
 	}
 
 	// Check that the UncledEntropy in the header matches the S from the block
-	expectedUncledEntropy := v.engine.UncledLogEntropy(block)
+	expectedUncledEntropy := v.hc.UncledLogEntropy(block)
 	if expectedUncledEntropy.Cmp(header.UncledEntropy()) != 0 {
 		return fmt.Errorf("invalid uncledEntropy (remote: %x local: %x)", header.UncledEntropy(), expectedUncledEntropy)
 	}

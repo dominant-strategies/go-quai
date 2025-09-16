@@ -29,6 +29,8 @@ import (
 
 var Version CachedVersion
 
+var GitCommit string
+
 type version struct {
 	major int
 	minor int

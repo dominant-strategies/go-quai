@@ -1,4 +1,4 @@
-package genallocs
+package params
 
 import (
 	"bytes"
@@ -12,7 +12,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/params"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"lukechampine.com/blake3"
 )
@@ -157,7 +156,7 @@ func (account *GenesisAccount) calculateLockedBalances() {
 		// Otherwise, take it from the schedule definition.
 		lumpSumIndex = unlockSchedule.lumpSumMonth
 	}
-	account.BalanceSchedule.Set(lumpSumIndex*params.BlocksPerMonth, lumpSumAmount)
+	account.BalanceSchedule.Set(lumpSumIndex*BlocksPerMonth, lumpSumAmount)
 
 	// Accumulate total rewards.
 	var totalDistributed = new(big.Int)
@@ -180,13 +179,13 @@ func (account *GenesisAccount) calculateLockedBalances() {
 
 		// Calculate the unlock at each block height.
 		for unlockIndex := firstUnlockIndex; unlockIndex <= lastUnlockIndex; unlockIndex++ {
-			account.BalanceSchedule.Set(unlockIndex*params.BlocksPerMonth, quaiPerUnlock)
+			account.BalanceSchedule.Set(unlockIndex*BlocksPerMonth, quaiPerUnlock)
 			totalDistributed.Add(totalDistributed, quaiPerUnlock)
 		}
 
 		// Calculate total added vs expected total. Add rounding balance to final unlock.
 		roundingDifference := new(big.Int).Sub(account.Vested, totalDistributed)
-		lastUnlockBlock := lastUnlockIndex * params.BlocksPerMonth
+		lastUnlockBlock := lastUnlockIndex * BlocksPerMonth
 		finalUnlockAmount, ok := account.BalanceSchedule.Get(lastUnlockBlock)
 		if !ok {
 			log.Global.WithField("lastUnlockBlock", lastUnlockBlock).Fatal("Issue generating balance schedule")

@@ -89,8 +89,30 @@ func (ec *Client) Close() {
 }
 
 // SubscribePendingHeader subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- []byte) (quai.Subscription, error) {
-	return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader")
+func (ec *Client) SubscribePendingHeader(ctx context.Context, powId types.PowID, ch chan<- []byte) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader", powId)
+}
+
+// SubscribeNewWorkshares subscribes to notifications about new workshares received via P2P.
+func (ec *Client) SubscribeNewWorkshares(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, "newWorkshares")
+}
+
+// SubscribeNewHead subscribes to notifications about the current blockchain head
+// on the given channel.
+func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, "newHeads")
+}
+
+// SubscribeNewWorkshares subscribes to notifications about new workshares received via P2P.
+func (ec *Client) SubscribeNewWorksharesV2(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, "newWorksharesV2")
+}
+
+// SubscribeNewHead subscribes to notifications about the current blockchain head
+// on the given channel.
+func (ec *Client) SubscribeNewHeadV2(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, "newHeadsV2")
 }
 
 func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) *types.Header {
@@ -116,9 +138,9 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number string) *types.Head
 //// Miner APIS
 
 // GetPendingHeader gets the latest pending header from the chain.
-func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, error) {
+func (ec *Client) GetPendingHeader(ctx context.Context, powId types.PowID) (*types.WorkObject, error) {
 	var raw hexutil.Bytes
-	err := ec.c.CallContext(ctx, &raw, "quai_getPendingHeader")
+	err := ec.c.CallContext(ctx, &raw, "quai_getPendingHeader", powId)
 	if err != nil {
 		return nil, err
 	}
@@ -319,6 +341,23 @@ func (ec *Client) SubmitSubWorkshare(ctx context.Context, wo *types.WorkObject) 
 	return ec.c.CallContext(ctx, nil, "workshare_receiveSubWorkshare", hexutil.Bytes(bytesWo))
 }
 
+// Submits an AuxTemplate from a subsidy chain
+// SignAuxTemplate requests MuSig2 partial signature from go-quai
+func (ec *Client) SignAuxTemplate(ctx context.Context, chainID string, templateData hexutil.Bytes, otherParticipantPubKey hexutil.Bytes, subsidyNonce hexutil.Bytes) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := ec.c.CallContext(ctx, &result, "workshare_signAuxTemplate", chainID, templateData, otherParticipantPubKey, subsidyNonce)
+	return result, err
+}
+
+func (ec *Client) SubmitAuxTemplate(ctx context.Context, chainID string, auxTemplate *types.AuxTemplate) error {
+	protoTemplate := auxTemplate.ProtoEncode()
+	bytesTemplate, err := proto.Marshal(protoTemplate)
+	if err != nil {
+		return fmt.Errorf("unable to marshal AuxTemplate: %w", err)
+	}
+	return ec.c.CallContext(ctx, nil, "workshare_submitAuxTemplate", chainID, hexutil.Bytes(bytesTemplate))
+}
+
 func (ec *Client) CalcOrder(ctx context.Context, header *types.WorkObject) (int, error) {
 	protoWo, err := header.ProtoEncode(types.PEtxObject)
 	if err != nil {
@@ -359,4 +398,12 @@ func (ec *Client) GetWorkShareP2PThreshold(ctx context.Context) uint64 {
 		return uint64(params.WorkSharesThresholdDiff)
 	}
 	return uint64(threshold)
+}
+
+// GetWorkshareLRUDump returns a dump of all workshares in the LRU caches.
+// The limit parameter caps the number of entries returned per list (0 means no limit).
+func (ec *Client) GetWorkshareLRUDump(ctx context.Context, limit int) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := ec.c.CallContext(ctx, &result, "debug_getWorkshareLRUDump", limit)
+	return result, err
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state/snapshot"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -60,6 +61,7 @@ type CoreBackend interface {
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
+	ReceiveMinedHeader(header *types.WorkObject) error
 }
 
 type pEtxRetry struct {
@@ -76,7 +78,7 @@ type Slice struct {
 
 	sliceDb ethdb.Database
 	config  *params.ChainConfig
-	engine  consensus.Engine
+	engine  []consensus.Engine
 
 	quit chan struct{} // slice quit channel
 
@@ -105,7 +107,7 @@ type Slice struct {
 	recomputeRequired bool
 }
 
-func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLookupLimit *uint64, isLocalBlock func(block *types.WorkObject) bool, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
+func NewSlice(db ethdb.Database, config *Config, powConfig params.PowConfig, txConfig *TxPoolConfig, txLookupLimit *uint64, chainConfig *params.ChainConfig, slicesRunning []common.Location, currentExpansionNumber uint8, genesisBlock *types.WorkObject, engine []consensus.Engine, cacheConfig *CacheConfig, vmConfig vm.Config, genesis *Genesis, logger *log.Logger) (*Slice, error) {
 	nodeCtx := chainConfig.Location.Context()
 	sl := &Slice{
 		config:            chainConfig,
@@ -122,7 +124,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.AddGenesisHash(genesisBlock.Hash())
 	}
 	var err error
-	sl.hc, err = NewHeaderChain(db, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, sl.GetPrimeBlock, sl.GetKQuaiAndUpdateBit, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger)
+	sl.hc, err = NewHeaderChain(db, powConfig, engine, sl.GetPEtxRollupAfterRetryThreshold, sl.GetPEtxAfterRetryThreshold, sl.GetPrimeBlock, sl.GetKQuaiAndUpdateBit, chainConfig, cacheConfig, txLookupLimit, vmConfig, slicesRunning, currentExpansionNumber, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +136,7 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 		sl.txPool = NewTxPool(*txConfig, chainConfig, sl.hc, logger, sl.sliceDb)
 		sl.hc.pool = sl.txPool
 	}
-	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, isLocalBlock, sl.ProcessingState(), sl.logger)
+	sl.miner = New(sl.hc, sl.txPool, config, db, chainConfig, engine, sl.ProcessingState(), sl.logger)
 
 	pEtxRetryCache, _ := lru.New[common.Hash, pEtxRetry](c_pEtxRetryThreshold)
 	sl.pEtxRetryCache = pEtxRetryCache
@@ -164,6 +166,16 @@ func NewSlice(db ethdb.Database, config *Config, txConfig *TxPoolConfig, txLooku
 	return sl, nil
 }
 
+// GetEngineForPowID returns the consensus engine for the given PowID
+func (sl *Slice) GetEngineForPowID(powID types.PowID) consensus.Engine {
+	return sl.hc.GetEngineForPowID(powID)
+}
+
+// GetEngineForHeader returns the consensus engine for the given header
+func (sl *Slice) GetEngineForHeader(header *types.WorkObjectHeader) consensus.Engine {
+	return sl.hc.GetEngineForHeader(header)
+}
+
 func (sl *Slice) SetDomInterface(domInterface CoreBackend) {
 	sl.domInterface = domInterface
 }
@@ -177,6 +189,10 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 
 	if sl.hc.IsGenesisHash(header.Hash()) {
 		return nil, nil
+	}
+
+	if header.NumberU64(common.ZONE_CTX) > sl.hc.CurrentHeader().NumberU64(common.ZONE_CTX)+c_zoneHorizonThreshold {
+		return nil, ErrSubNotSyncedToDom
 	}
 
 	// Only print in Info level if block is c_startingPrintLimit behind or less
@@ -689,7 +705,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	time7 := common.PrettyDuration(time.Since(start))
 
 	if order == sl.NodeCtx() {
-		sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.engine.TotalLogEntropy(sl.hc, block)})
+		sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
 	}
 
 	if sl.NodeCtx() == common.ZONE_CTX && sl.ProcessingState() {
@@ -743,8 +759,8 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		"t5_3": time5_3,
 	}).Info("Times during sub append")
 
-	intrinsicS := sl.engine.IntrinsicLogEntropy(block.Hash())
-	workShare, err := sl.engine.WorkShareLogEntropy(sl.hc, block)
+	intrinsicS, _ := sl.hc.HeaderIntrinsicLogEntropy(block.WorkObjectHeader())
+	workShare, err := sl.hc.WorkShareLogEntropy(block)
 	if err != nil {
 		sl.logger.WithField("err", err).Error("Error calculating the work share log entropy")
 		workShare = big.NewInt(0)
@@ -760,24 +776,73 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	} else {
 		coinbaseType = "QiCoinbase"
 	}
+
+	_, shaDiff, scryptDiff := sl.hc.DifficultyByAlgo(block)
+	kawpowShares, shaShares, shaUncled, scryptShares, scryptUncled := sl.hc.CountWorkSharesByAlgo(block)
+
+	shaCount := big.NewInt(1)
+	scryptCount := big.NewInt(1)
+	shaTarget := big.NewInt(1)
+	scryptTarget := big.NewInt(1)
+
+	if shaDiffAndCount := block.ShaDiffAndCount(); shaDiffAndCount != nil && shaDiffAndCount.Count() != nil {
+		shaCount = shaDiffAndCount.Count()
+	}
+	if scryptDiffAndCount := block.ScryptDiffAndCount(); scryptDiffAndCount != nil && scryptDiffAndCount.Count() != nil {
+		scryptCount = scryptDiffAndCount.Count()
+	}
+	if shaShareTarget := block.ShaShareTarget(); shaShareTarget != nil {
+		shaTarget = new(big.Int).Set(shaShareTarget)
+	}
+	if scryptShareTarget := block.ScryptShareTarget(); scryptShareTarget != nil {
+		scryptTarget = new(big.Int).Set(scryptShareTarget)
+	}
+
+	var quaiDiffAsPercentOfRavencoin, quaiDiffAsPercentOfRavencoinInstantaneous *big.Int
+	if header.AuxPow() != nil {
+		// Compare the current kawpow difficulty with the subsidy chain difficulty
+		subsidyChainDiff := common.GetDifficultyFromBits(header.AuxPow().Header().Bits())
+		// Normalize the difficulty, to quai block time
+		subsidyChainDiff = new(big.Int).Div(subsidyChainDiff, params.RavenQuaiBlockTimeRatio)
+		quaiDiffAsPercentOfRavencoinInstantaneous = new(big.Int).Div(new(big.Int).Mul(header.Difficulty(), params.RavencoinDiffPercentage), subsidyChainDiff)
+	}
+
+	if header.KawpowDifficulty() != nil {
+		quaiDiffAsPercentOfRavencoin = new(big.Int).Div(new(big.Int).Mul(header.Difficulty(), params.RavencoinDiffPercentage), header.KawpowDifficulty())
+	}
+
 	sl.logger.WithFields(log.Fields{
-		"number":               block.NumberArray(),
-		"hash":                 block.Hash(),
-		"difficulty":           block.Difficulty(),
-		"uncles":               len(block.Uncles()),
-		"totalTxs":             len(block.Transactions()),
-		"iworkShare":           common.BigBitsToBitsFloat(workShare),
-		"intrinsicS":           common.BigBitsToBits(intrinsicS),
-		"inboundEtxs from dom": len(newInboundEtxs),
-		"gas":                  block.GasUsed(),
-		"gasLimit":             block.GasLimit(),
-		"evmRoot":              block.EVMRoot(),
-		"utxoRoot":             block.UTXORoot(),
-		"etxSetRoot":           block.EtxSetRoot(),
-		"order":                order,
-		"location":             block.Location(),
-		"elapsed":              common.PrettyDuration(time.Since(start)),
-		"coinbaseType":         coinbaseType,
+		"number":                        block.NumberArray(),
+		"hash":                          block.Hash(),
+		"difficulty":                    block.Difficulty(),
+		"shaDiff":                       shaDiff,
+		"scryptDiff":                    scryptDiff,
+		"workshares":                    len(block.Uncles()),
+		"kawpowShares":                  kawpowShares,
+		"kawpowShareDiff":               CalculateKawpowShareDiff(block.WorkObjectHeader()),
+		"shaShares":                     shaShares,
+		"scryptShares":                  scryptShares,
+		"shaUncled":                     shaUncled,
+		"scryptUncled":                  scryptUncled,
+		"shaAvgShares":                  new(big.Float).Quo(new(big.Float).SetInt(shaCount), new(big.Float).SetInt(common.Big2e32)),
+		"scryptAvgShares":               new(big.Float).Quo(new(big.Float).SetInt(scryptCount), new(big.Float).SetInt(common.Big2e32)),
+		"shaTarget":                     new(big.Float).Quo(new(big.Float).SetInt(shaTarget), new(big.Float).SetInt(common.Big2e32)),
+		"scryptTarget":                  new(big.Float).Quo(new(big.Float).SetInt(scryptTarget), new(big.Float).SetInt(common.Big2e32)),
+		"totalTxs":                      len(block.Transactions()),
+		"iworkShare":                    common.BigBitsToBitsFloat(workShare),
+		"intrinsicS":                    common.BigBitsToBits(intrinsicS),
+		"inboundEtxs from dom":          len(newInboundEtxs),
+		"quai diff % of ravencoin":      quaiDiffAsPercentOfRavencoin,
+		"quai diff % of ravencoin inst": quaiDiffAsPercentOfRavencoinInstantaneous,
+		"gas":                           block.GasUsed(),
+		"gasLimit":                      block.GasLimit(),
+		"evmRoot":                       block.EVMRoot(),
+		"utxoRoot":                      block.UTXORoot(),
+		"etxSetRoot":                    block.EtxSetRoot(),
+		"order":                         order,
+		"location":                      block.Location(),
+		"elapsed":                       common.PrettyDuration(time.Since(start)),
+		"coinbaseType":                  coinbaseType,
 	}).Info("Appended new block")
 
 	if nodeCtx == common.ZONE_CTX {
@@ -837,6 +902,14 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 	}
 }
 
+func (sl *Slice) SendAuxPowTemplate(auxTemplate *types.AuxTemplate) error {
+	err := sl.miner.worker.AddAuxPowTemplate(auxTemplate)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (sl *Slice) WriteBestPh(bestPh *types.WorkObject) {
 	if bestPh == nil {
 		return
@@ -846,11 +919,12 @@ func (sl *Slice) WriteBestPh(bestPh *types.WorkObject) {
 }
 
 func (sl *Slice) ReadBestPh() *types.WorkObject {
-	if sl.bestPh.Load() != nil {
-		return sl.bestPh.Load().(*types.WorkObject)
-	} else {
+	bestPh := sl.bestPh.Load()
+	if bestPh == nil {
 		return nil
 	}
+	phCopy := types.CopyWorkObject(bestPh.(*types.WorkObject))
+	return phCopy
 }
 
 // CollectNewlyConfirmedEtxs collects all newly confirmed ETXs since the last coincident with the given location
@@ -999,8 +1073,72 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.WorkObject, domTerminus c
 }
 
 // GetPendingHeader is used by the miner to request the current pending header
-func (sl *Slice) GetPendingHeader() (*types.WorkObject, error) {
+func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address) (*types.WorkObject, error) {
 	phCopy := types.CopyWorkObject(sl.ReadBestPh())
+	// set the auxpow to nil if its progpow
+	if powId == types.Progpow {
+		// Set the coinbase for the progpow header
+		if coinbase != (common.Address{}) {
+			phCopy.WorkObjectHeader().SetPrimaryCoinbase(coinbase)
+			sl.miner.worker.AddPendingWorkObjectBody(phCopy)
+		}
+
+		phCopy.WorkObjectHeader().SetAuxPow(nil)
+	} else {
+		auxTemplate := sl.miner.worker.GetBestAuxTemplate(powId)
+		// If we have a KAWPOW template, we need to create a proper Ravencoin header
+		switch powId {
+		case types.Kawpow, types.SHA_BTC, types.SHA_BCH, types.Scrypt:
+			// If we have an auxpow template, we need to create a proper Ravencoin header
+			if sl.NodeCtx() == common.ZONE_CTX && auxTemplate != nil {
+
+				// If the coinbase is set, update the pending header with the new coinbase
+				if coinbase != (common.Address{}) {
+					phCopy.WorkObjectHeader().SetPrimaryCoinbase(coinbase)
+				}
+
+				phCopy.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
+
+				auxMerkleRoot := phCopy.SealHash()
+				if powId == types.Scrypt {
+					if len(auxTemplate.AuxPow2()) == 0 {
+						return nil, errors.New("no auxpow2 available for scrypt mining")
+					}
+					dogeHash := common.Hash(auxTemplate.AuxPow2())
+					auxMerkleRoot = types.CreateAuxMerkleRoot(dogeHash, phCopy.SealHash())
+				}
+				coinbaseTransaction := types.NewAuxPowCoinbaseTx(powId, auxTemplate.Height(), auxTemplate.CoinbaseOut(), auxMerkleRoot, auxTemplate.SignatureTime())
+
+				merkleRoot := types.CalculateMerkleRoot(powId, coinbaseTransaction, auxTemplate.MerkleBranch())
+
+				// Create a properly configured Ravencoin header for KAWPOW mining
+				auxHeader := types.NewBlockHeader(powId, int32(auxTemplate.Version()), auxTemplate.PrevHash(), merkleRoot, auxTemplate.SignatureTime(), auxTemplate.Bits(), 0, auxTemplate.Height())
+
+				// Dont have the actual hash of the block yet
+				auxPow := types.NewAuxPow(powId, auxHeader, auxTemplate.AuxPow2(), auxTemplate.Sigs(), auxTemplate.MerkleBranch(), coinbaseTransaction)
+
+				// Update the auxpow in the best pending header
+				phCopy.WorkObjectHeader().SetAuxPow(auxPow)
+
+				// Create composite cache key: hash(auxMerkleRoot || signatureTime)
+				// This ensures each template with different signatureTime gets its own cache entry
+				compositeKey := crypto.Keccak256Hash(auxMerkleRoot.Bytes(), common.BigToHash(big.NewInt(int64(auxTemplate.SignatureTime()))).Bytes())
+
+				// Update the pending block body cache with the populated AuxPow
+				// This ensures SubmitBlock can retrieve the complete AuxPow including merkle branch
+				sl.miner.worker.AddPendingWorkObjectBody(phCopy)
+				sl.miner.worker.AddPendingWorkObjectBodyWithKey(phCopy, compositeKey)
+				sl.miner.worker.AddPendingAuxPow(powId, compositeKey, types.CopyAuxPow(auxPow))
+				sl.miner.worker.AddPendingAuxPow(powId, phCopy.SealHash(), types.CopyAuxPow(auxPow))
+
+			} else {
+				return nil, errors.New("no auxpow template available for " + powId.String() + " mining")
+			}
+		default:
+			return nil, errors.New("pending header requested for unknown pow id")
+		}
+	}
+
 	return phCopy, nil
 }
 
@@ -1008,6 +1146,7 @@ func (sl *Slice) SetBestPh(pendingHeader *types.WorkObject) {
 	pendingHeader.WorkObjectHeader().SetLocation(sl.NodeLocation())
 	pendingHeader.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
 	pendingHeader.WorkObjectHeader().SetHeaderHash(pendingHeader.Header().Hash())
+
 	sl.miner.worker.AddPendingWorkObjectBody(pendingHeader)
 	rawdb.WriteBestPendingHeader(sl.sliceDb, pendingHeader)
 	sl.WriteBestPh(pendingHeader)
@@ -1046,10 +1185,10 @@ func (sl *Slice) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, error)
 			if block != nil {
 				// In the case of this block being a region and state is not
 				// processed, send an update to the hierarchical coordinator
-				_, order, calcOrderErr := sl.engine.CalcOrder(sl.hc, block)
+				_, order, calcOrderErr := sl.hc.CalcOrder(block)
 				if calcOrderErr == nil {
 					if order == sl.NodeCtx() {
-						sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.engine.TotalLogEntropy(sl.hc, block)})
+						sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
 					}
 				}
 			}
@@ -1063,10 +1202,10 @@ func (sl *Slice) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, error)
 		kQuai, updateBit, err := sl.hc.bc.processor.GetKQuaiAndUpdateBit(block)
 		if err != nil && err.Error() == ErrSubNotSyncedToDom.Error() {
 			// send an update to the hierarchical coordinator
-			_, order, calcOrderErr := sl.engine.CalcOrder(sl.hc, block)
+			_, order, calcOrderErr := sl.hc.CalcOrder(block)
 			if calcOrderErr == nil {
 				if order == sl.NodeCtx() {
-					sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.engine.TotalLogEntropy(sl.hc, block)})
+					sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
 				}
 			}
 		}
@@ -1082,6 +1221,16 @@ func (sl *Slice) SendPendingEtxsToDom(pEtxs types.PendingEtxs) error {
 func (sl *Slice) GetPEtxRollupAfterRetryThreshold(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxsRollup, error) {
 	pEtx, exists := sl.pEtxRetryCache.Get(blockHash)
 	if !exists || pEtx.retries < c_pEtxRetryThreshold {
+		// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
+		// ask the sub for the pending etx/rollup data
+		val, exist := sl.pEtxRetryCache.Get(blockHash)
+		var retry uint64
+		if exist {
+			pEtxCurrent := val
+			retry = pEtxCurrent.retries + 1
+		}
+		pEtxNew := pEtxRetry{hash: blockHash, retries: retry}
+		sl.pEtxRetryCache.Add(blockHash, pEtxNew)
 		return types.PendingEtxsRollup{}, ErrPendingEtxNotFound
 	}
 	return sl.GetPendingEtxsRollupFromSub(hash, location)
@@ -1116,6 +1265,16 @@ func (sl *Slice) GetPendingEtxsRollupFromSub(hash common.Hash, location common.L
 func (sl *Slice) GetPEtxAfterRetryThreshold(blockHash common.Hash, hash common.Hash, location common.Location) (types.PendingEtxs, error) {
 	pEtx, exists := sl.pEtxRetryCache.Get(blockHash)
 	if !exists || pEtx.retries < c_pEtxRetryThreshold {
+		// Keeping track of the number of times pending etx fails and if it crossed the retry threshold
+		// ask the sub for the pending etx/rollup data
+		val, exist := sl.pEtxRetryCache.Get(blockHash)
+		var retry uint64
+		if exist {
+			pEtxCurrent := val
+			retry = pEtxCurrent.retries + 1
+		}
+		pEtxNew := pEtxRetry{hash: blockHash, retries: retry}
+		sl.pEtxRetryCache.Add(blockHash, pEtxNew)
 		return types.PendingEtxs{}, ErrPendingEtxNotFound
 	}
 	return sl.GetPendingEtxsFromSub(hash, location)
@@ -1226,7 +1385,16 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 	nodeCtx := sl.NodeLocation().Context()
 	var pendingBlockBody *types.WorkObject
 	if nodeCtx == common.ZONE_CTX {
-		pendingBlockBody = sl.GetPendingBlockBody(wo.WorkObjectHeader())
+		// do not include the tx hash while storing the body
+		woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
+		var powId types.PowID
+		if woHeaderCopy.AuxPow() == nil {
+			powId = types.Progpow
+		} else {
+			powId = woHeaderCopy.AuxPow().PowID()
+		}
+
+		pendingBlockBody = sl.GetPendingBlockBody(powId, woHeaderCopy.SealHash())
 		if pendingBlockBody == nil {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),
@@ -1332,6 +1500,27 @@ func (sl *Slice) combinePendingHeader(header *types.WorkObject, slPendingHeader 
 		combinedPendingHeader.WorkObjectHeader().SetLock(header.Lock())
 		combinedPendingHeader.WorkObjectHeader().SetPrimaryCoinbase(header.PrimaryCoinbase())
 		combinedPendingHeader.WorkObjectHeader().SetData(header.Data())
+
+		// These are the fields that were added on the kawpow fork block, so
+		// checking its not nil to preserve backwards compatibility
+		if header.AuxPow() != nil {
+			combinedPendingHeader.WorkObjectHeader().SetAuxPow(header.AuxPow())
+		}
+		if header.WorkObjectHeader().ShaDiffAndCount() != nil {
+			combinedPendingHeader.WorkObjectHeader().SetShaDiffAndCount(header.WorkObjectHeader().ShaDiffAndCount())
+		}
+		if header.WorkObjectHeader().ScryptDiffAndCount() != nil {
+			combinedPendingHeader.WorkObjectHeader().SetScryptDiffAndCount(header.WorkObjectHeader().ScryptDiffAndCount())
+		}
+		if header.WorkObjectHeader().ShaShareTarget() != nil {
+			combinedPendingHeader.WorkObjectHeader().SetShaShareTarget(header.WorkObjectHeader().ShaShareTarget())
+		}
+		if header.WorkObjectHeader().ScryptShareTarget() != nil {
+			combinedPendingHeader.WorkObjectHeader().SetScryptShareTarget(header.WorkObjectHeader().ScryptShareTarget())
+		}
+		if header.WorkObjectHeader().KawpowDifficulty() != nil {
+			combinedPendingHeader.WorkObjectHeader().SetKawpowDifficulty(header.WorkObjectHeader().KawpowDifficulty())
+		}
 
 		combinedPendingHeader.Header().SetEtxRollupHash(header.EtxRollupHash())
 		combinedPendingHeader.Header().SetUncledEntropy(header.Header().UncledEntropy())
@@ -1845,8 +2034,8 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	return pendingHeader, nil
 }
 
-func (sl *Slice) GetPendingBlockBody(wo *types.WorkObjectHeader) *types.WorkObject {
-	blockBody, _ := sl.miner.worker.GetPendingBlockBody(wo)
+func (sl *Slice) GetPendingBlockBody(powId types.PowID, sealHash common.Hash) *types.WorkObject {
+	blockBody, _ := sl.miner.worker.GetPendingBlockBody(powId, sealHash)
 	return blockBody
 }
 
@@ -1903,8 +2092,6 @@ func (sl *Slice) Stop() {
 }
 
 func (sl *Slice) Config() *params.ChainConfig { return sl.config }
-
-func (sl *Slice) Engine() consensus.Engine { return sl.engine }
 
 func (sl *Slice) HeaderChain() *HeaderChain { return sl.hc }
 
@@ -2182,7 +2369,7 @@ func (sl *Slice) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, e
 }
 
 func (sl *Slice) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
-	return sl.engine.CalcOrder(sl.hc, header)
+	return sl.hc.CalcOrder(header)
 }
 
 ////// Expansion related logic
@@ -2228,4 +2415,162 @@ func (sl *Slice) AddGenesisPendingEtxs(block *types.WorkObject) {
 // SubscribeExpansionEvent subscribes to the expansion feed
 func (sl *Slice) SubscribeExpansionEvent(ch chan<- ExpansionEvent) event.Subscription {
 	return sl.scope.Track(sl.expansionFeed.Subscribe(ch))
+}
+
+// This function returns bools for isBlock or isWorkShare.
+// If this is a subWorkShare, it will not return an error, but isBlock and isWorkShare will be false.
+// If an error is returned this means the workShare was invalid and/or did not meet the minimum p2p threshold.
+func (sl *Slice) ReceiveWorkShare(workShare *types.WorkObjectHeader) (shareView *types.WorkObjectShareView, isBlock, isWorkShare bool, err error) {
+	if workShare != nil {
+		// If the workshares are from sha or scrypt, we have to validate them separately
+		var isWorkShare, isSubShare bool
+		if workShare.AuxPow() != nil {
+			if workShare.AuxPow().PowID() == types.SHA_BCH ||
+				workShare.AuxPow().PowID() == types.SHA_BTC ||
+				workShare.AuxPow().PowID() == types.Scrypt {
+
+				var workShareTarget *big.Int
+				if workShare.AuxPow().PowID() == types.Scrypt {
+					workShareTarget = new(big.Int).Div(common.Big2e256, workShare.ScryptDiffAndCount().Difficulty())
+				} else {
+					workShareTarget = new(big.Int).Div(common.Big2e256, workShare.ShaDiffAndCount().Difficulty())
+				}
+				powHash := workShare.AuxPow().Header().PowHash()
+				powHashBigInt := new(big.Int).SetBytes(powHash.Bytes())
+
+				// Check if satisfies workShareTarget
+				if powHashBigInt.Cmp(workShareTarget) < 0 {
+					wo := types.NewWorkObject(workShare, nil, nil)
+					shareView := wo.ConvertToWorkObjectShareView([]*types.Transaction{})
+					return shareView, false, true, nil
+				} else {
+					return nil, false, false, errors.New("workshare does not satisfy the target")
+				}
+			}
+		}
+
+		engine := sl.GetEngineForHeader(workShare)
+		if engine == nil {
+			return nil, false, false, errors.New("could not get engine for workshare")
+		}
+
+		isSubShare = sl.hc.CheckWorkThreshold(workShare, params.WorkShareP2PThresholdDiff)
+		if !isSubShare {
+			// This cannot be a block or a workshare or even a subWorkShare since it didn't pass the minimum workShare threshold.
+			return nil, false, false, errors.New("workshare has less entropy than the workshare p2p threshold")
+		}
+		sl.logger.WithField("number", workShare.NumberU64()).Info("Received Work Share")
+
+		// Now check if this subWorkShare is a full block.
+		var isBlock bool
+		_, err := sl.hc.VerifySeal(workShare)
+		if err == nil {
+			isBlock = true
+		}
+
+		txs, err := sl.GetTxsFromBroadcastSet(workShare.TxHash())
+		if err != nil {
+			txs = types.Transactions{}
+			if workShare.TxHash() != types.EmptyRootHash {
+				sl.logger.Warn("Failed to get txs from the broadcastSetCache", "err", err)
+			}
+		}
+		// If the share qualifies is not a workshare and there are no transactions,
+		// there is no need to broadcast the share
+		isWorkShare = sl.hc.CheckIfValidWorkShare(workShare) == types.Valid
+		if !isWorkShare && len(txs) == 0 {
+			// This is a p2p workshare and has no transactions.
+			return nil, false, false, nil
+		}
+		var wo *types.WorkObject
+		// If progpow, since there is already a check in the p2p validation, to
+		// keep backwards compatibility
+		if workShare.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+			pendingBlockBody := sl.GetPendingBlockBody(types.Progpow, workShare.SealHash())
+			if pendingBlockBody == nil {
+				return nil, false, false, errors.New("could not find pending block body for progpow workshare")
+			}
+			wo = types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
+		} else {
+			wo = types.NewWorkObject(workShare, nil, nil)
+		}
+		shareView := wo.ConvertToWorkObjectShareView(txs)
+		return shareView, isBlock, isWorkShare, nil
+
+	}
+	return nil, false, false, errors.New("workshare is nil")
+}
+
+func (sl *Slice) ReceiveMinedHeader(woHeader *types.WorkObject) (*types.WorkObject, error) {
+
+	block, err := sl.ConstructLocalMinedBlock(woHeader)
+	if err != nil && err.Error() == ErrBadSubManifest.Error() && sl.NodeLocation().Context() < common.ZONE_CTX {
+		sl.logger.Info("filling sub manifest")
+		// If we just mined this block, and we have a subordinate chain, its possible
+		// the subordinate manifest in our block body is incorrect. If so, ask our sub
+		// for the correct manifest and reconstruct the block.
+		var err error
+		block, err = sl.fillSubordinateManifest(block)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	// Set the Auxpow
+	block.WorkObjectHeader().SetAuxPow(woHeader.AuxPow())
+
+	// Get the order of the block
+	_, order, err := sl.CalcOrder(block)
+	if err != nil {
+		return nil, err
+	}
+
+	// If its a dom block, call the ReceiveMinedHeader on the dom interface
+	if order < sl.NodeCtx() {
+		sl.domInterface.ReceiveMinedHeader(types.CopyWorkObject(block))
+	}
+
+	sl.logger.WithFields(log.Fields{
+		"number":   block.Number(sl.NodeCtx()),
+		"location": block.Location(),
+		"hash":     block.Hash(),
+	}).Info("Received mined header")
+
+	return block, nil
+}
+
+func (sl *Slice) fillSubordinateManifest(workObject *types.WorkObject) (*types.WorkObject, error) {
+	nodeCtx := sl.NodeCtx()
+	if workObject.ManifestHash(nodeCtx+1) == types.EmptyRootHash {
+		return nil, errors.New("cannot fill empty subordinate manifest")
+	} else if subManifestHash := types.DeriveSha(workObject.Manifest(), trie.NewStackTrie(nil)); subManifestHash == workObject.ManifestHash(nodeCtx+1) {
+		// If the manifest hashes match, nothing to do
+		return workObject, nil
+	} else {
+		subParentHash := workObject.ParentHash(nodeCtx + 1)
+		var subManifest types.BlockManifest
+		if subParent := sl.hc.GetBlockByHash(subParentHash); subParent != nil {
+			// If we have the the subordinate parent in our chain, that means that block
+			// was also coincident. In this case, the subordinate manifest resets, and
+			// only consists of the subordinate parent hash.
+			subManifest = types.BlockManifest{subParentHash}
+		} else {
+			// Otherwise we need to reconstruct the sub manifest, by getting the
+			// parent's sub manifest and appending the parent hash.
+			var err error
+			subManifest, err = sl.GetSubManifest(workObject.Location(), subParentHash)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(subManifest) == 0 {
+			return nil, errors.New("reconstructed sub manifest is empty")
+		}
+		if subManifest == nil || workObject.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
+			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
+		}
+		return types.NewWorkObjectWithHeaderAndTx(workObject.WorkObjectHeader(), workObject.Tx()).WithBody(workObject.Header(), workObject.Transactions(), workObject.OutboundEtxs(), workObject.Uncles(), subManifest, workObject.InterlinkHashes()), nil
+	}
 }

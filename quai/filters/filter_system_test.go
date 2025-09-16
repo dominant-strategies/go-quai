@@ -28,6 +28,7 @@ import (
 
 	quai "github.com/dominant-strategies/go-quai"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/bloombits"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -55,6 +56,7 @@ type testBackend struct {
 	chainHeadFeed     event.Feed
 	pendingHeaderFeed event.Feed
 	unlocksFeed       event.Feed
+	worksharesFeed    event.Feed
 }
 
 func (b *testBackend) ChainDb() ethdb.Database {
@@ -190,6 +192,26 @@ func (b *testBackend) SubscribePendingHeaderEvent(ch chan<- *types.WorkObject) e
 
 func (b *testBackend) SubscribeUnlocksEvent(ch chan<- core.UnlocksEvent) event.Subscription {
 	return b.unlocksFeed.Subscribe(ch)
+}
+
+func (b *testBackend) Engine(header *types.WorkObjectHeader) consensus.Engine {
+	return nil
+}
+
+func (b *testBackend) SubscribeNewWorkshareEvent(ch chan<- core.NewWorkshareEvent) event.Subscription {
+	return b.worksharesFeed.Subscribe(ch)
+}
+
+func (b *testBackend) GetBestAuxTemplate(powId types.PowID) *types.AuxTemplate {
+	return nil
+}
+
+func (b *testBackend) AddPendingAuxPow(powId types.PowID, sealHash common.Hash, auxPow *types.AuxPow) {
+	// Implementation goes here
+}
+
+func (b *testBackend) RpcVersion() string {
+	return "v1"
 }
 
 // TestPendingTxFilter tests whether pending tx filters retrieve all pending transactions that are posted to the event mux.

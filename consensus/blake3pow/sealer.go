@@ -25,7 +25,7 @@ var (
 // the header's difficulty requirements.
 func (blake3pow *Blake3pow) Seal(header *types.WorkObject, results chan<- *types.WorkObject, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
-	if blake3pow.config.PowMode == ModeFake || blake3pow.config.PowMode == ModeFullFake {
+	if blake3pow.config.PowMode == params.ModeFake || blake3pow.config.PowMode == params.ModeFullFake {
 		header.WorkObjectHeader().SetNonce(types.BlockNonce{})
 		select {
 		case results <- header:

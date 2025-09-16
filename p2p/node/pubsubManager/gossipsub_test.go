@@ -25,6 +25,8 @@ func setup(t *testing.T) (*mock_p2p.MockHost, *mock_p2p.MockPeerstore, crypto.Pr
 	ctrl := gomock.NewController(t)
 
 	viper.Set(utils.EnvironmentFlag.Name, params.LocalName)
+	// Set a valid genesis nonce to avoid "Genesis nonce is too short" error
+	viper.Set(utils.GenesisNonce.Name, "0x0123456789abcdef0123456789abcdef")
 
 	privKey, pubKey, err := crypto.GenerateKeyPair(crypto.Secp256k1, 256)
 	if err != nil {

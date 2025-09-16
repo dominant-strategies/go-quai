@@ -1,9 +1,9 @@
 package progpow
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -15,9 +15,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/dominant-strategies/go-quai/cmd/genallocs"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	mmap "github.com/edsrzf/mmap-go"
 
 	"github.com/hashicorp/golang-lru/simplelru"
@@ -145,31 +147,6 @@ const (
 	ModeFullFake
 )
 
-// Config are the configuration parameters of the progpow.
-type Config struct {
-	PowMode Mode
-
-	CacheDir       string
-	CachesInMem    int
-	CachesOnDisk   int
-	CachesLockMmap bool
-	DurationLimit  *big.Int
-	GasCeil        uint64
-	MinDifficulty  *big.Int
-	GenAllocs      []genallocs.GenesisAccount
-
-	NodeLocation common.Location
-
-	WorkShareThreshold int
-
-	// When set, notifications sent by the remote sealer will
-	// be block header JSON objects instead of work package arrays.
-	NotifyFull bool
-
-	Log *log.Logger `toml:"-"`
-	// Number of threads to mine on if mining
-	NumThreads int
-}
 type mixHashWorkHash struct {
 	mixHash  []byte
 	workHash []byte
@@ -177,7 +154,7 @@ type mixHashWorkHash struct {
 
 // Progpow is a proof-of-work consensus engine using the blake3 hash algorithm
 type Progpow struct {
-	config Config
+	config params.PowConfig
 
 	caches    *lru // In memory caches to avoid regenerating too often
 	hashCache *goLRU.Cache[common.Hash, mixHashWorkHash]
@@ -201,11 +178,11 @@ type Progpow struct {
 // New creates a full sized progpow PoW scheme and starts a background thread for
 // remote mining, also optionally notifying a batch of remote services of new work
 // packages.
-func New(config Config, notify []string, noverify bool, logger *log.Logger) *Progpow {
-	// if config.CachesInMem <= 0 {
-	logger.WithField("requested", config.CachesInMem).Warn("Invalid ethash caches in memory, defaulting to 1")
-	config.CachesInMem = 2
-	// }
+func New(config params.PowConfig, notify []string, noverify bool, logger *log.Logger) *Progpow {
+	if config.CachesInMem <= 0 {
+		logger.WithField("requested", config.CachesInMem).Warn("Invalid ethash caches in memory, defaulting to 1")
+		config.CachesInMem = 3
+	}
 	if config.CacheDir != "" && config.CachesOnDisk > 0 {
 		logger.WithFields(log.Fields{
 			"dir":   config.CacheDir,
@@ -227,7 +204,7 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
 		threads:   config.NumThreads,
 	}
-	if config.PowMode == ModeShared {
+	if config.PowMode == params.ModeShared {
 		progpow.shared = sharedProgpow
 	}
 	return progpow
@@ -236,7 +213,7 @@ func New(config Config, notify []string, noverify bool, logger *log.Logger) *Pro
 // NewTester creates a small sized progpow PoW scheme useful only for testing
 // purposes.
 func NewTester(notify []string, noverify bool) *Progpow {
-	return New(Config{PowMode: ModeTest}, notify, noverify, log.NewLogger("test-progpow.log", "info", 500))
+	return New(params.PowConfig{PowMode: params.ModeTest}, notify, noverify, log.NewLogger("test-progpow.log", "info", 500))
 }
 
 // NewFaker creates a progpow consensus engine with a fake PoW scheme that accepts
@@ -244,8 +221,8 @@ func NewTester(notify []string, noverify bool) *Progpow {
 // consensus rules.
 func NewFaker() *Progpow {
 	return &Progpow{
-		config: Config{
-			PowMode: ModeFake,
+		config: params.PowConfig{
+			PowMode: params.ModeFake,
 		},
 	}
 }
@@ -255,8 +232,8 @@ func NewFaker() *Progpow {
 // still have to conform to the Quai consensus rules.
 func NewFakeFailer(fail uint64) *Progpow {
 	return &Progpow{
-		config: Config{
-			PowMode: ModeFake,
+		config: params.PowConfig{
+			PowMode: params.ModeFake,
 		},
 		fakeFail: fail,
 	}
@@ -267,8 +244,8 @@ func NewFakeFailer(fail uint64) *Progpow {
 // they still have to conform to the Quai consensus rules.
 func NewFakeDelayer(delay time.Duration) *Progpow {
 	return &Progpow{
-		config: Config{
-			PowMode: ModeFake,
+		config: params.PowConfig{
+			PowMode: params.ModeFake,
 		},
 		fakeDelay: delay,
 	}
@@ -278,8 +255,8 @@ func NewFakeDelayer(delay time.Duration) *Progpow {
 // accepts all blocks as valid, without checking any consensus rules whatsoever.
 func NewFullFaker() *Progpow {
 	return &Progpow{
-		config: Config{
-			PowMode: ModeFullFake,
+		config: params.PowConfig{
+			PowMode: params.ModeFullFake,
 		},
 	}
 }
@@ -443,12 +420,12 @@ func (progpow *Progpow) cache(block uint64) *cache {
 	current := currentI.(*cache)
 
 	// Wait for generation finish.
-	current.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == ModeTest, progpow.logger)
+	current.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == params.ModeTest, progpow.logger)
 
 	// If we need a new future cache, now's a good time to regenerate it.
 	if futureI != nil {
 		future := futureI.(*cache)
-		go future.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == ModeTest, progpow.logger)
+		go future.generate(progpow.config.CacheDir, progpow.config.CachesOnDisk, progpow.config.CachesLockMmap, progpow.config.PowMode == params.ModeTest, progpow.logger)
 	}
 	return current
 }
@@ -482,4 +459,49 @@ func (progpow *Progpow) SetThreads(threads int) {
 		default:
 		}
 	}
+}
+
+func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
+	// Check progpow
+	mixHash := header.PowDigest.Load()
+	powHash := header.PowHash.Load()
+	if powHash == nil || mixHash == nil {
+		mixHash, powHash = progpow.ComputePowLight(header)
+	}
+	// Verify the calculated values against the ones provided in the header
+	if !bytes.Equal(header.MixHash().Bytes(), mixHash.(common.Hash).Bytes()) {
+		return common.Hash{}, consensus.ErrInvalidMixHash
+	}
+	return powHash.(common.Hash), nil
+}
+
+func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
+	hashes, ok := progpow.hashCache.Peek(header.Hash())
+	if ok {
+		return common.Hash(hashes.mixHash), common.Hash(hashes.workHash)
+	}
+	powLight := func(size uint64, cache []uint32, hash common.Hash, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+		ethashCache := progpow.cache(blockNumber)
+		if ethashCache.cDag == nil {
+			cDag := make([]uint32, progpowCacheWords)
+			generateCDag(cDag, ethashCache.cache, blockNumber/C_epochLength, progpow.logger)
+			ethashCache.cDag = cDag
+		}
+		return progpowLight(size, cache, hash.Bytes(), nonce, blockNumber, ethashCache.cDag)
+	}
+	cache := progpow.cache(header.PrimeTerminusNumber().Uint64())
+	size := datasetSize(header.PrimeTerminusNumber().Uint64())
+	digest, result := powLight(size, cache.cache, header.SealHash(), header.NonceU64(), header.PrimeTerminusNumber().Uint64())
+	mixHash = common.BytesToHash(digest)
+	powHash = common.BytesToHash(result)
+	header.PowDigest.Store(mixHash)
+	header.PowHash.Store(powHash)
+
+	// Cache the hash
+	progpow.hashCache.Add(header.Hash(), mixHashWorkHash{mixHash: mixHash.Bytes(), workHash: powHash.Bytes()})
+	// Caches are unmapped in a finalizer. Ensure that the cache stays alive
+	// until after the call to hashimotoLight so it's not unmapped while being used.
+	runtime.KeepAlive(cache)
+
+	return mixHash, powHash
 }

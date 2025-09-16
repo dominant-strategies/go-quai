@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -19,10 +20,12 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/telemetry"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"modernc.org/mathutil"
 )
 
 const (
@@ -37,6 +40,7 @@ const (
 
 var (
 	errInvalidEfficiencyScore = errors.New("unable to compute efficiency score")
+	errInvalidWorkShareDist   = errors.New("workshare is at distance more than WorkSharesInclusionDepth")
 )
 
 type calcOrderResponse struct {
@@ -55,10 +59,11 @@ type getPrimeBlock func(blockHash common.Hash) *types.WorkObject
 type getKQuaiAndUpdateBit func(blockHash common.Hash) (*big.Int, uint8, error)
 
 type HeaderChain struct {
-	config *params.ChainConfig
+	config    *params.ChainConfig
+	powConfig params.PowConfig
 
 	bc     *BodyDb
-	engine consensus.Engine
+	engine []consensus.Engine
 	pool   *TxPool
 
 	currentExpansionNumber uint8
@@ -66,6 +71,7 @@ type HeaderChain struct {
 	chainHeadFeed event.Feed
 	unlocksFeed   event.Feed
 	chainSideFeed event.Feed
+	workshareFeed event.Feed
 	scope         event.SubscriptionScope
 
 	headerDb      ethdb.Database
@@ -109,12 +115,13 @@ func NewTestHeaderChain() *HeaderChain {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, primeBlockFetcher getPrimeBlock, kQuaiAndUpdateBitGetter getKQuaiAndUpdateBit, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
+func NewHeaderChain(db ethdb.Database, powConfig params.PowConfig, engine []consensus.Engine, pEtxsRollupFetcher getPendingEtxsRollup, pEtxsFetcher getPendingEtxs, primeBlockFetcher getPrimeBlock, kQuaiAndUpdateBitGetter getKQuaiAndUpdateBit, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location, currentExpansionNumber uint8, logger *log.Logger) (*HeaderChain, error) {
 
 	nodeCtx := chainConfig.Location.Context()
 
 	hc := &HeaderChain{
 		config:                 chainConfig,
+		powConfig:              powConfig,
 		headerDb:               db,
 		engine:                 engine,
 		slicesRunning:          slicesRunning,
@@ -190,6 +197,314 @@ func NewHeaderChain(db ethdb.Database, engine consensus.Engine, pEtxsRollupFetch
 	hc.heads = heads
 
 	return hc, nil
+}
+
+// GetEngineForPowID returns the consensus engine for the given PowID
+func (hc *HeaderChain) GetEngineForPowID(powID types.PowID) consensus.Engine {
+	// Engine mapping:
+	// engine[0] = Progpow
+	// engine[1] = Kawpow
+	switch powID {
+	case types.Progpow:
+		if len(hc.engine) > 0 {
+			return hc.engine[0]
+		}
+	case types.Kawpow:
+		if len(hc.engine) > 1 {
+			return hc.engine[1]
+		}
+	}
+	// Default to first engine if not found
+	if len(hc.engine) > 0 {
+		return hc.engine[0]
+	}
+	return nil
+}
+
+// GetEngineForHeader returns the consensus engine for the given header
+func (hc *HeaderChain) GetEngineForHeader(header *types.WorkObjectHeader) consensus.Engine {
+	// Check if header has AuxPow to determine which engine to use
+	if header.AuxPow() != nil && header.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
+		return hc.GetEngineForPowID(types.Kawpow)
+	}
+	// Default to Progpow if no AuxPow
+	return hc.GetEngineForPowID(types.Progpow)
+}
+
+// NOTE: This function is only used in the append print
+func (hc *HeaderChain) HeaderIntrinsicLogEntropy(ws *types.WorkObjectHeader) (*big.Int, error) {
+	// If auxpow is not nil and its not kawpow or progpow, we need to compute it directly as
+	// we dont have engine interface for sha and scrypt
+	if ws.AuxPow() == nil || ws.AuxPow().PowID() <= types.Kawpow {
+		engine := hc.GetEngineForHeader(ws)
+		powHash, err := engine.ComputePowHash(ws)
+		if err != nil {
+			hc.logger.WithField("workshare", ws.Hash()).Error("Failed to compute pow hash for workshare")
+			return big.NewInt(0), err
+		}
+		return common.IntrinsicLogEntropy(powHash), nil
+	}
+
+	return big.NewInt(0), nil
+}
+
+func CalculateKawpowShareDiff(header *types.WorkObjectHeader) *big.Int {
+	if header.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+		return big.NewInt(0)
+	}
+	// kawpowsharetarget = max(0, 8 * 2^32 - (shaSharesAverage + scryptSharesAverage))
+	// kawpowShareDiff = difficulty * 2^32 / kawpowShareTarget
+
+	// If sha or scrypt target is less than the share target then use the count,
+	// otherwise use the target
+	shaSharesAverage := math.BigMin(header.ShaDiffAndCount().Count(), header.ShaShareTarget())
+	scryptSharesAverage := math.BigMin(header.ScryptDiffAndCount().Count(), header.ScryptShareTarget())
+
+	nonKawpowShareTarget := new(big.Int).Add(shaSharesAverage, scryptSharesAverage)
+
+	maxTarget := new(big.Int).Mul(big.NewInt(int64(params.ExpectedWorksharesPerBlock)), common.Big2e32)
+
+	// If the non-kawpow share target is greater than or equal to the max
+	// target, then the kawpow share diff is the block difficulty
+	if maxTarget.Cmp(nonKawpowShareTarget) <= 0 {
+		return header.Difficulty()
+	}
+
+	// Calculate the kawpow share target by subtracting the non-kawpow share
+	// target from the max target + 2^32 because on expectation to get x number
+	// of shares that are not block, the difficulty has to be divided by (x+1),
+	// so that on average the number of shares other than block is x and you
+	// have a normal block
+	kawpowShareTarget := new(big.Int).Sub(new(big.Int).Add(maxTarget, common.Big2e32), nonKawpowShareTarget)
+
+	// Precision is 1/100th of percent
+	// If the quai hash rate reaches 75% of the ravencoin hash rate then we
+	// start applying a discount to the kawpow share target, linearly decreasing
+	// it until it reaches 0 at 90%
+	quaiDiffAsPercentOfRavencoin := new(big.Int).Div(new(big.Int).Mul(header.Difficulty(), params.RavencoinDiffPercentage), header.KawpowDifficulty())
+	if quaiDiffAsPercentOfRavencoin.Cmp(params.RavencoinDiffCutoffStart) >= 0 {
+		// At the 90% threshold, no kawpow shares are allowed
+		var kawpowShareTargetWithDiscount *big.Int
+		if quaiDiffAsPercentOfRavencoin.Cmp(params.RavencoinDiffCutoffEnd) >= 0 {
+			kawpowShareTargetWithDiscount = new(big.Int).Set(common.Big2e32)
+		} else {
+			// Apply a linear discount
+			errInDiff := new(big.Int).Sub(params.RavencoinDiffCutoffEnd, quaiDiffAsPercentOfRavencoin)
+			kawpowShareTargetWithDiscount = new(big.Int).Mul(new(big.Int).Add(maxTarget, common.Big2e32), errInDiff)
+			kawpowShareTargetWithDiscount = new(big.Int).Div(kawpowShareTargetWithDiscount, params.RavencoinDiffCutoffRange)
+		}
+
+		kawpowShareTarget = new(big.Int).Set(math.BigMin(kawpowShareTarget, kawpowShareTargetWithDiscount))
+	}
+
+	// If the kawpow share target is less than 1, then the kawpow share diff is
+	// the block difficulty, This should never happen but adding it for sanity
+	// check
+	if kawpowShareTarget.Cmp(common.Big2e32) < 0 {
+		return header.Difficulty()
+	}
+
+	kawpowShareDiff := new(big.Int).Mul(header.Difficulty(), common.Big2e32)
+	kawpowShareDiff = new(big.Int).Div(kawpowShareDiff, kawpowShareTarget)
+
+	return kawpowShareDiff
+}
+
+// CalculateKawpowDifficulty calculates the average ravencoin difficulty
+// normalized to quai block time. This only updates if the auxpow used in the
+// block is lively
+func (hc *HeaderChain) CalculateKawpowDifficulty(parent, header *types.WorkObject) *big.Int {
+	if header.PrimeTerminusNumber().Uint64() == params.KawPowForkBlock {
+		return params.InitialKawpowDiff
+	}
+
+	if parent.AuxPow() != nil {
+		// Also need to make sure that the header auxtemplate is lively, only
+		// then update
+		scritSig := types.ExtractScriptSigFromCoinbaseTx(parent.AuxPow().Transaction())
+		signatureTime, err := types.ExtractSignatureTimeFromCoinbase(scritSig)
+		// If the share is unlive, return the previous difficulty
+		if err != nil || signatureTime+params.ShareLivenessTime < parent.AuxPow().Header().Timestamp() {
+			return parent.KawpowDifficulty()
+		}
+		// Compare the current kawpow difficulty with the subsidy chain difficulty
+		subsidyChainDiff := common.GetDifficultyFromBits(parent.AuxPow().Header().Bits())
+		// Normalize the difficulty, to quai block time
+		subsidyChainDiff = new(big.Int).Div(subsidyChainDiff, params.RavenQuaiBlockTimeRatio)
+
+		// Taking a long term average
+		newKawpowDiff := new(big.Int).Mul(parent.KawpowDifficulty(), new(big.Int).Sub(params.WorkShareEmaBlocks, common.Big1))
+		newKawpowDiff = new(big.Int).Add(newKawpowDiff, subsidyChainDiff)
+		newKawpowDiff = new(big.Int).Div(newKawpowDiff, params.WorkShareEmaBlocks)
+		return newKawpowDiff
+
+	} else {
+		// If the parent is a transition progpow block, there is no information
+		// to update the kawpow difficulty
+		return parent.KawpowDifficulty()
+	}
+}
+
+// WorkshareAllocation computes the number of shares available per algorithm
+func (hc *HeaderChain) CalculateShareTarget(parent, header *types.WorkObject) (nonKawpowShares *big.Int) {
+	if header.PrimeTerminusNumber().Uint64() == params.KawPowForkBlock {
+		return params.TargetShaShares
+	}
+
+	var newShareTarget *big.Int
+	// Compare the current kawpow difficulty with the subsidy chain difficulty
+	subsidyChainDiff := parent.KawpowDifficulty()
+	// maximum subsidy chain diff should be 75% of the parent difficulty
+	maximumSubsidyChainDiff := new(big.Int).Div(new(big.Int).Mul(subsidyChainDiff, params.MaxSubsidyNumerator), params.MaxSubsidyDenominator)
+
+	// calculate the difference
+	difference := new(big.Int).Sub(parent.Difficulty(), maximumSubsidyChainDiff)
+	// NOTE: Using shashare target in this calculation because sha and scrypt target
+	// are the same
+	newShareTarget = new(big.Int).Mul(difference, parent.ShaShareTarget())
+	newShareTarget = newShareTarget.Div(newShareTarget, parent.Difficulty())
+	newShareTarget = newShareTarget.Div(newShareTarget, new(big.Int).SetInt64(int64(params.BlocksPerDay)))
+	newShareTarget = newShareTarget.Add(newShareTarget, parent.ShaShareTarget())
+
+	// Make sure the new share target is within bounds
+	newShareTarget = math.BigMax(newShareTarget, params.TargetShaShares)
+	newShareTarget = math.BigMin(newShareTarget, params.MaxShaShares)
+
+	return newShareTarget
+}
+
+// CalculatePowDiffAndCount calculates the new PoW difficulty and average number of work shares
+func (hc *HeaderChain) CalculatePowDiffAndCount(parent *types.WorkObject, header *types.WorkObjectHeader, powId types.PowID) (newDiff, newAverageShares, newUncledShares *big.Int) {
+
+	if header.PrimeTerminusNumber().Uint64() == params.KawPowForkBlock {
+		switch powId {
+		case types.SHA_BTC, types.SHA_BCH:
+			return params.InitialShaDiff, params.TargetShaShares, big.NewInt(0)
+		case types.Scrypt:
+			return params.InitialScryptDiff, params.TargetShaShares, big.NewInt(0)
+		default:
+			return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+		}
+	}
+
+	// Get the sha and scrypt share counts from the tx pool
+	_, countSha, uncledSha, countScrypt, uncledScrypt := hc.CountWorkSharesByAlgo(parent)
+
+	var numShares, uncledShares *big.Int
+	var shares *types.PowShareDiffAndCount
+
+	switch powId {
+	case types.SHA_BTC, types.SHA_BCH:
+		shares = parent.ShaDiffAndCount()
+		numShares = new(big.Int).Mul(big.NewInt(int64(countSha)), common.Big2e32)
+		uncledShares = new(big.Int).Mul(big.NewInt(int64(uncledSha)), common.Big2e32)
+	case types.Scrypt:
+		shares = parent.ScryptDiffAndCount()
+		numShares = new(big.Int).Mul(big.NewInt(int64(countScrypt)), common.Big2e32)
+		uncledShares = new(big.Int).Mul(big.NewInt(int64(uncledScrypt)), common.Big2e32)
+	default:
+		return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+	}
+
+	// numShares is the EMA of the number of work shares over last N blocks * 2^32
+	// calculate the error between the target and actual number of work shares
+	var error *big.Int
+	switch powId {
+	case types.SHA_BTC, types.SHA_BCH:
+		error = new(big.Int).Sub(numShares, parent.ShaShareTarget())
+	case types.Scrypt:
+		error = new(big.Int).Sub(numShares, parent.ScryptShareTarget())
+	default:
+		return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+	}
+
+	// Calculate the new difficulty based on the error
+	// newDiff = prevDiff + (error * prevDiff)/(2^32 * c_difficultyAdjustDivisor)
+	newDiff = new(big.Int).Mul(error, shares.Difficulty())
+
+	// Multiplying by the binary log of the share diff, similar to the DAA, so
+	// that, the gain is correct for a several magnitudes of share difficulty
+	// Dividing by 30 here because the response of scrypt controller seems
+	// stable, so its a noop for scrypt, but for sha it scales appropriately
+	k, _ := mathutil.BinaryLog(new(big.Int).Set(shares.Difficulty()), common.MantBits)
+	newDiff = new(big.Int).Mul(newDiff, big.NewInt(int64(k)))
+	newDiff = new(big.Int).Div(newDiff, params.PowDiffAdjustmentFactor)
+
+	newDiff = newDiff.Div(newDiff, common.Big2e32)
+	newDiff = newDiff.Add(shares.Difficulty(), newDiff)
+
+	// Calculate the new workshares
+	newAverageShares = new(big.Int).Mul(shares.Count(), new(big.Int).Sub(params.WorkShareEmaBlocks, common.Big1))
+	newAverageShares = newAverageShares.Add(newAverageShares, numShares)
+	newAverageShares = newAverageShares.Div(newAverageShares, params.WorkShareEmaBlocks)
+
+	newUncledShares = new(big.Int).Mul(shares.Uncled(), new(big.Int).Sub(params.WorkShareEmaBlocks, common.Big1))
+	newUncledShares = newUncledShares.Add(newUncledShares, uncledShares)
+	newUncledShares = newUncledShares.Div(newUncledShares, params.WorkShareEmaBlocks)
+
+	// Ensure the new difficulty is within bounds
+	var lowerBound *big.Int
+	switch powId {
+	case types.SHA_BTC, types.SHA_BCH:
+		lowerBound = new(big.Int).Div(params.InitialShaDiff, params.MinPowDivisor)
+	case types.Scrypt:
+		lowerBound = new(big.Int).Div(params.InitialScryptDiff, params.MinPowDivisor)
+	default:
+		return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+	}
+
+	if newDiff.Cmp(lowerBound) < 0 {
+		newDiff = lowerBound
+	}
+	return newDiff, newAverageShares, newUncledShares
+}
+
+// CountWorkSharesByAlgo counts the number of work shares by each algo in the given block
+func (hc *HeaderChain) CountWorkSharesByAlgo(wo *types.WorkObject) (int, int, int, int, int) {
+	// Need to calculate the long term average count for the number of shares
+	uncles := wo.Body().Uncles()
+	countKawPow := 0
+	countSha := 0
+	uncledShaCount := 0
+	countScrypt := 0
+	uncledScryptCount := 0
+	for _, uncle := range uncles {
+		if uncle.AuxPow() != nil {
+			switch uncle.AuxPow().PowID() {
+			case types.Kawpow:
+				countKawPow++
+			case types.SHA_BTC, types.SHA_BCH:
+				countSha++
+				if _, err := uncle.PrimaryCoinbase().InternalAddress(); err != nil {
+					uncledShaCount++
+				}
+			case types.Scrypt:
+				countScrypt++
+				if _, err := uncle.PrimaryCoinbase().InternalAddress(); err != nil {
+					uncledScryptCount++
+				}
+			}
+		} else {
+			countKawPow++ // Progpow doesnt have the auxpow field
+		}
+	}
+	return countKawPow, countSha, uncledShaCount, countScrypt, uncledScryptCount
+}
+
+// DifficultyByAlgo(wo *types.WorkObject) returns the difficulty for each algo in the given block
+func (hc *HeaderChain) DifficultyByAlgo(wo *types.WorkObject) (kawpow, sha, scrypt *big.Int) {
+	kawpow = wo.Difficulty()
+	if wo.WorkObjectHeader().ShaDiffAndCount() != nil {
+		sha = wo.WorkObjectHeader().ShaDiffAndCount().Difficulty()
+	} else {
+		sha = big.NewInt(0)
+	}
+	if wo.WorkObjectHeader().ScryptDiffAndCount() != nil {
+		scrypt = wo.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
+	} else {
+		scrypt = big.NewInt(0)
+	}
+	return kawpow, sha, scrypt
 }
 
 // CollectSubRollup collects the rollup of ETXs emitted from the subordinate
@@ -290,7 +605,7 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.WorkObject) (types.Tra
 		return newEtxs, nil
 	}
 	// Terminate the search on coincidence with dom chain
-	if hc.engine.IsDomCoincident(hc, b) {
+	if hc.IsDomCoincident(b) {
 		return newEtxs, nil
 	}
 	// Recursively get the ancestor rollup, until a coincident ancestor is found
@@ -306,6 +621,68 @@ func (hc *HeaderChain) collectInclusiveEtxRollup(b *types.WorkObject) (types.Tra
 	return etxRollup, nil
 }
 
+// CheckPowIdValidity checks the validity of the pow id for the given  block
+// This check can only be used on a block/uncle
+// 1) Before the kawpow fork, the pow id must be nil
+// 2) After the kawpow fork and transition, the pow id must be kawpow
+// 3) During the transition, the pow id has to be kawpow or auxpow has to be nil(progpow)
+func (hc *HeaderChain) CheckPowIdValidity(wo *types.WorkObjectHeader) error {
+	if wo == nil {
+		return fmt.Errorf("wo is nil")
+	}
+	if wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+		if wo.AuxPow() != nil {
+			return fmt.Errorf("wo auxpow powid is not nil before kawpow fork")
+		}
+	}
+	if wo.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock &&
+		wo.AuxPow() != nil &&
+		wo.AuxPow().PowID() != types.Kawpow {
+		return fmt.Errorf("wo auxpow is not nil and not kawpow after the kawpow fork block")
+	}
+	if wo.PrimeTerminusNumber().Uint64() > params.KawPowForkBlock+params.KawPowTransitionPeriod {
+		if wo.AuxPow() == nil {
+			return fmt.Errorf("workshare auxpow powid is nil after kawpow transition")
+		}
+	}
+
+	return nil
+}
+
+// Workshare can only be of
+// 1) progpow pow before the kawpow fork
+// 2) progpow, kawpow, btc, bch, litecoin in the transition period
+// 3) kawpow, btc, bch, litecoin after the transition period
+func (hc *HeaderChain) CheckPowIdValidityForWorkshare(wo *types.WorkObjectHeader) error {
+	if wo == nil {
+		return fmt.Errorf("wo is nil")
+	}
+	if wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+		if wo.AuxPow() != nil {
+			return fmt.Errorf("workshare auxpow powid is not progpow before kawpow fork")
+		}
+	}
+	if wo.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock &&
+		wo.PrimeTerminusNumber().Uint64() <= params.KawPowForkBlock+params.KawPowTransitionPeriod {
+		if wo.AuxPow() != nil && wo.AuxPow().PowID() > types.Scrypt {
+			return fmt.Errorf("workshare auxpow powid is not valid during kawpow transition")
+		}
+	}
+	if wo.PrimeTerminusNumber().Uint64() > params.KawPowForkBlock+params.KawPowTransitionPeriod {
+		if wo.AuxPow() == nil {
+			return fmt.Errorf("workshare auxpow powid is nil after kawpow transition")
+		}
+		// This case is not possible but still dont want to allow progpow pow id
+		if wo.AuxPow() != nil && wo.AuxPow().PowID() == types.Progpow {
+			return fmt.Errorf("workshare auxpow powid is progpow after kawpow transition")
+		}
+		if wo.AuxPow() != nil && wo.AuxPow().PowID() > types.Scrypt {
+			return fmt.Errorf("workshare auxpow powid is not valid during kawpow transition")
+		}
+	}
+	return nil
+}
+
 // Append
 func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 	nodeCtx := hc.NodeCtx()
@@ -316,7 +693,7 @@ func (hc *HeaderChain) AppendHeader(header *types.WorkObject) error {
 		"Parent":   header.ParentHash(nodeCtx),
 	}).Debug("Headerchain Append")
 
-	err := hc.engine.VerifyHeader(hc, header)
+	err := hc.VerifyHeader(header)
 	if err != nil {
 		return err
 	}
@@ -358,7 +735,7 @@ func (hc *HeaderChain) CalculateInterlink(block *types.WorkObject) (common.Hashe
 		interlinkHashes = common.Hashes{header.Hash(), header.Hash(), header.Hash(), header.Hash()}
 	} else {
 		// check if parent belongs to any interlink level
-		rank, err := hc.engine.CalcRank(hc, header)
+		rank, err := hc.CalcRank(header)
 		if err != nil {
 			return nil, err
 		}
@@ -393,7 +770,7 @@ func (hc *HeaderChain) CalculateManifest(header *types.WorkObject) types.BlockMa
 		if nodeCtx == common.PRIME_CTX {
 			// Nothing to do for prime chain
 			manifest = types.BlockManifest{}
-		} else if hc.engine.IsDomCoincident(hc, header) {
+		} else if hc.IsDomCoincident(header) {
 			manifest = types.BlockManifest{header.Hash()}
 		} else {
 			parentManifest := rawdb.ReadManifest(hc.headerDb, header.ParentHash(nodeCtx))
@@ -436,6 +813,18 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 	if err != nil {
 		return err
 	}
+
+	if hc.NodeCtx() == common.ZONE_CTX {
+		// Telemetry: move candidate workshares to 'candidate' LRU
+		if hc.config.TelemetryEnabled {
+			for _, u := range block.Uncles() {
+				if hc.UncleWorkShareClassification(u) == types.Valid {
+					telemetry.RemoveCandidateShare(u.Hash())
+				}
+			}
+		}
+	}
+
 	if unlocks != nil && len(unlocks) > 0 {
 		hc.unlocksFeed.Send(UnlocksEvent{
 			Hash:    block.Hash(),
@@ -702,6 +1091,59 @@ func (hc *HeaderChain) findCommonAncestor(header *types.WorkObject) *types.WorkO
 	}
 
 }
+
+// UncleWorkShareClassification checks if the workobject header is a workshare
+// or uncle(block) or invalid and returns the appropriate validity
+func (hc *HeaderChain) UncleWorkShareClassification(wo *types.WorkObjectHeader) types.WorkShareValidity {
+	// If the kawpow activation hasnt happened, then if the pow is valid
+	if !wo.KawpowActivationHappened() || wo.IsTransitionProgPowBlock() {
+		// everything has to be progpow, also verify seal checks if the proof of
+		// work meets the block difficulty target
+		_, err := hc.VerifySeal(wo)
+		if err != nil {
+			return hc.CheckIfValidWorkShare(wo)
+		} else {
+			// Valid progpow block
+			return types.Block
+		}
+	} else if wo.AuxPow() != nil {
+		powId := wo.AuxPow().PowID()
+		switch powId {
+		case types.Kawpow:
+			_, err := hc.VerifySeal(wo)
+			if err != nil {
+				return hc.CheckIfValidWorkShare(wo)
+			} else {
+				// Valid kawpow block
+				return types.Block
+			}
+		case types.SHA_BCH, types.SHA_BTC:
+			workShareTarget := new(big.Int).Div(common.Big2e256, wo.ShaDiffAndCount().Difficulty())
+			powHash := wo.AuxPow().Header().PowHash()
+			powHashBigInt := new(big.Int).SetBytes(powHash.Bytes())
+
+			// Check if satisfies workShareTarget
+			if powHashBigInt.Cmp(workShareTarget) < 0 {
+				return types.Valid
+			}
+
+		case types.Scrypt:
+
+			workShareTarget := new(big.Int).Div(common.Big2e256, wo.ScryptDiffAndCount().Difficulty())
+			powHash := wo.AuxPow().Header().PowHash()
+			powHashBigInt := new(big.Int).SetBytes(powHash.Bytes())
+
+			// Check if satisfies workShareTarget
+			if powHashBigInt.Cmp(workShareTarget) < 0 {
+				return types.Valid
+			}
+
+		default:
+		}
+	}
+	return types.Invalid
+}
+
 func (hc *HeaderChain) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObjectHeader) (*big.Int, error) {
 	current := wo
 	// Create a list of ancestor blocks to the work object
@@ -738,7 +1180,7 @@ func (hc *HeaderChain) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObj
 
 	// If distance is greater than the WorkSharesInclusionDepth, reject the workshare
 	if distance > int64(params.WorkSharesInclusionDepth) {
-		return big.NewInt(0), errors.New("workshare is at distance more than WorkSharesInclusionDepth")
+		return big.NewInt(0), errInvalidWorkShareDist
 	}
 
 	return big.NewInt(distance), nil
@@ -1211,8 +1653,8 @@ func (hc *HeaderChain) NodeCtx() int {
 }
 
 // Engine reterives the consensus engine.
-func (hc *HeaderChain) Engine() consensus.Engine {
-	return hc.engine
+func (hc *HeaderChain) Engine(header *types.WorkObjectHeader) consensus.Engine {
+	return hc.GetEngineForHeader(header)
 }
 
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
@@ -1223,6 +1665,11 @@ func (hc *HeaderChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.S
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (hc *HeaderChain) SubscribeUnlocksEvent(ch chan<- UnlocksEvent) event.Subscription {
 	return hc.scope.Track(hc.unlocksFeed.Subscribe(ch))
+}
+
+// SubscribeNewWorkshareEvent registers a subscription of NewWorkshareEvent.
+func (hc *HeaderChain) SubscribeNewWorkshareEvent(ch chan<- NewWorkshareEvent) event.Subscription {
+	return hc.scope.Track(hc.workshareFeed.Subscribe(ch))
 }
 
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
@@ -1240,7 +1687,7 @@ func (hc *HeaderChain) SlicesRunning() []common.Location {
 
 func (hc *HeaderChain) ComputeExpansionNumber(parent *types.WorkObject) (uint8, error) {
 	// If the parent is a prime block, prime terminus is the parent hash
-	_, order, err := hc.engine.CalcOrder(hc, parent)
+	_, order, err := hc.CalcOrder(parent)
 	if err != nil {
 		return 0, err
 	}

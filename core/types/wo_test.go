@@ -7,8 +7,11 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"lukechampine.com/blake3"
 )
 
 var locations = []common.Location{
@@ -47,6 +50,26 @@ func woTestData() (*WorkObject, common.Hash) {
 	wo.woHeader.SetLock(0)
 	wo.woHeader.SetData([]byte{0, 1, 2, 3})
 	wo.woBody = EmptyWorkObjectBody()
+	return wo, wo.Hash()
+}
+
+func powDiffAndCountTestData() *PowShareDiffAndCount {
+	return NewPowShareDiffAndCount(
+		big.NewInt(123456789),
+		big.NewInt(42),
+		big.NewInt(43),
+	)
+}
+
+func woTestDataWithAuxPow() (*WorkObject, common.Hash) {
+	wo, _ := woTestData()
+	wo.WorkObjectHeader().SetPrimeTerminusNumber(big.NewInt(int64(params.KawPowForkBlock) + 1))
+	wo.WorkObjectHeader().SetAuxPow(testAuxPow())
+	wo.WorkObjectHeader().SetScryptDiffAndCount(powDiffAndCountTestData())
+	wo.WorkObjectHeader().SetShaDiffAndCount(powDiffAndCountTestData())
+	wo.WorkObjectHeader().SetShaShareTarget(big.NewInt(1000))
+	wo.WorkObjectHeader().SetScryptShareTarget(big.NewInt(1000))
+	wo.WorkObjectHeader().SetKawpowDifficulty(big.NewInt(10000))
 	return wo, wo.Hash()
 }
 
@@ -364,6 +387,341 @@ func FuzzDataHash(f *testing.F) {
 	})
 }
 
+// Fuzzing newly added fields to WorkObjectHeader to ensure they affect the hash.
+// If the auxpow is not updated with the hash, then the WorkObject hash should not change.
+func FuzzScryptDiffAndCountHash(f *testing.F) {
+	fuzzPowDiffAndCountAfterKawpowFork(f,
+		func(woh *WorkObjectHeader) *PowShareDiffAndCount { return woh.scryptDiffAndCount },
+		func(woh *WorkObjectHeader, val *PowShareDiffAndCount) { woh.scryptDiffAndCount = val })
+}
+
+func FuzzShaDiffAndCountHash(f *testing.F) {
+	fuzzPowDiffAndCountAfterKawpowFork(f,
+		func(woh *WorkObjectHeader) *PowShareDiffAndCount { return woh.shaDiffAndCount },
+		func(woh *WorkObjectHeader, val *PowShareDiffAndCount) { woh.shaDiffAndCount = val })
+}
+
+func FuzzShaShareTargetHash(f *testing.F) {
+	fuzzBigIntAfterKawpowFork(f,
+		func(woh *WorkObjectHeader) *big.Int { return woh.shaShareTarget },
+		func(woh *WorkObjectHeader, val *big.Int) { woh.shaShareTarget = val })
+}
+
+func FuzzScryptShareTargetHash(f *testing.F) {
+	fuzzBigIntAfterKawpowFork(f,
+		func(woh *WorkObjectHeader) *big.Int { return woh.scryptShareTarget },
+		func(woh *WorkObjectHeader, val *big.Int) { woh.scryptShareTarget = val })
+}
+
+func FuzzKawpowDifficultyHash(f *testing.F) {
+	fuzzBigIntAfterKawpowFork(f,
+		func(woh *WorkObjectHeader) *big.Int { return woh.kawpowDifficulty },
+		func(woh *WorkObjectHeader, val *big.Int) { woh.kawpowDifficulty = val })
+}
+
+func FuzzAuxPowHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	auxPow := CopyAuxPow(wo.WorkObjectHeader().AuxPow())
+	if auxPow == nil {
+		return
+	}
+	f.Add(auxPow.AuxPow2(), auxPow.Signature())
+	f.Fuzz(func(t *testing.T, auxPow2 []byte, signature []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		localAuxPow := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		if !bytes.Equal(localAuxPow.AuxPow2(), auxPow2) || !bytes.Equal(localAuxPow.Signature(), signature) {
+			localAuxPow.SetAuxPow2(auxPow2)
+			localAuxPow.SetSignature(signature)
+			localWo.WorkObjectHeader().SetAuxPow(localAuxPow)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow changes")
+		}
+	})
+}
+
+func getRavencoinHeader(t *testing.T, ap *AuxPow) *RavencoinBlockHeader {
+	require.NotNil(t, ap)
+	head := ap.Header()
+	require.NotNil(t, head)
+	rvh, ok := head.inner.(*RavencoinBlockHeader)
+	require.True(t, ok)
+	return rvh
+}
+
+func FuzzAuxPowPowIDHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := uint32(wo.WorkObjectHeader().AuxPow().PowID())
+	f.Add(seed)
+	f.Add(seed + 1)
+	f.Fuzz(func(t *testing.T, powID uint32) {
+		localWo, hash := woTestDataWithAuxPow()
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		if uint32(aux.PowID()) != powID {
+			aux.SetPowID(PowID(powID))
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow.PowID changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow.PowID is the same")
+		}
+	})
+}
+
+func FuzzAuxPowAuxPow2Hash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().AuxPow2()
+	f.Add(seed)
+	f.Add(testByte)
+	f.Fuzz(func(t *testing.T, auxPow2 []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		if !bytes.Equal(aux.AuxPow2(), auxPow2) {
+			aux.SetAuxPow2(auxPow2)
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow.auxPow2 changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow.auxPow2 is the same")
+		}
+	})
+}
+
+func FuzzAuxPowSignatureHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Signature()
+	f.Add(seed)
+	f.Add(testByte)
+	f.Fuzz(func(t *testing.T, sig []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		if !bytes.Equal(aux.Signature(), sig) {
+			aux.SetSignature(sig)
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow.signature changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow.signature is the same")
+		}
+	})
+}
+
+func FuzzAuxPowMerkleBranchHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	branches := wo.WorkObjectHeader().AuxPow().MerkleBranch()
+	seed := []byte{}
+	if len(branches) > 0 {
+		seed = branches[0]
+	}
+	f.Add(seed)
+	f.Add(testByte)
+	f.Fuzz(func(t *testing.T, branch []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		current := []byte{}
+		if len(aux.MerkleBranch()) > 0 {
+			current = aux.MerkleBranch()[0]
+		}
+		if !bytes.Equal(current, branch) {
+			aux.SetMerkleBranch([][]byte{branch})
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow.merkleBranch changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow.merkleBranch is the same")
+		}
+	})
+}
+
+func FuzzAuxPowTransactionHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Transaction()
+	f.Add(seed)
+	f.Add(testByte)
+	f.Fuzz(func(t *testing.T, tx []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		if !bytes.Equal(aux.Transaction(), tx) {
+			aux.SetTransaction(tx)
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow.transaction changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow.transaction is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderVersionHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Header().Version()
+	f.Add(seed)
+	f.Add(int32(100))
+	f.Fuzz(func(t *testing.T, version int32) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalVersion := localWo.WorkObjectHeader().AuxPow().Header().Version()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		header.Version = version // This is now safe as it's a fresh header copy
+		aux.SetHeader(NewAuxPowHeader(header))
+		localWo.WorkObjectHeader().SetAuxPow(aux)
+
+		if originalVersion != version {
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header version changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header version is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderPrevBlockHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	prevBlock := wo.WorkObjectHeader().AuxPow().Header().PrevBlock()
+	seed := prevBlock[:]
+	f.Add(seed)
+	f.Add(testByte)
+	f.Fuzz(func(t *testing.T, prev []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalPrevBlock := localWo.WorkObjectHeader().AuxPow().Header().PrevBlock()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		if !bytes.Equal(originalPrevBlock[:], prev) {
+			header.HashPrevBlock = common.BytesToHash(prev)
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header prev block changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header prev block is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderMerkleRootHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	merkleRoot := wo.WorkObjectHeader().AuxPow().Header().MerkleRoot()
+	seed := merkleRoot[:]
+	f.Add(seed)
+	f.Add(testByte)
+	f.Fuzz(func(t *testing.T, root []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalMerkleRoot := localWo.WorkObjectHeader().AuxPow().Header().MerkleRoot()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		if !bytes.Equal(originalMerkleRoot[:], root) {
+			header.HashMerkleRoot = common.BytesToHash(root)
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header merkle root changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header merkle root is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderTimestampHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Header().Timestamp()
+	f.Add(seed)
+	f.Add(uint32(100))
+	f.Add(uint32(101))
+	f.Fuzz(func(t *testing.T, ts uint32) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalTimestamp := localWo.WorkObjectHeader().AuxPow().Header().Timestamp()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		if originalTimestamp != ts {
+			header.Time = ts
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header timestamp changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header timestamp is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderBitsHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Header().Bits()
+	f.Add(seed)
+	f.Add(uint32(100))
+	f.Add(uint32(101))
+	f.Fuzz(func(t *testing.T, bits uint32) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalBits := localWo.WorkObjectHeader().AuxPow().Header().Bits()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		if originalBits != bits {
+			header.Bits = bits
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header bits changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header bits is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderHeightHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Header().Height()
+	f.Add(seed)
+	f.Add(uint32(100))
+	f.Add(uint32(101))
+	f.Fuzz(func(t *testing.T, height uint32) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalHeight := localWo.WorkObjectHeader().AuxPow().Header().Height()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		if originalHeight != height {
+			header.Height = height
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header height changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header height is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderNonce64Hash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Header().Nonce64()
+	f.Add(seed)
+	f.Add(uint64(0))
+	f.Add(uint64(1))
+	f.Fuzz(func(t *testing.T, nonce uint64) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalNonce := localWo.WorkObjectHeader().AuxPow().Header().Nonce64()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		if originalNonce != nonce {
+			header.Nonce64 = nonce
+			aux.SetHeader(NewAuxPowHeader(header))
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header nonce64 changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header nonce64 is the same")
+		}
+	})
+}
+
+func FuzzAuxPowHeaderMixHash(f *testing.F) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := wo.WorkObjectHeader().AuxPow().Header().MixHash().Bytes()
+	f.Add(seed)
+	f.Add(testByte)
+	f.Fuzz(func(t *testing.T, mix []byte) {
+		localWo, hash := woTestDataWithAuxPow()
+		originalMixHash := localWo.WorkObjectHeader().AuxPow().Header().MixHash()
+
+		aux := CopyAuxPow(localWo.WorkObjectHeader().AuxPow())
+		header := getRavencoinHeader(t, aux)
+		if !bytes.Equal(originalMixHash.Bytes(), mix) {
+			header.MixHash = common.BytesToHash(mix)
+			localWo.WorkObjectHeader().SetAuxPow(aux)
+			require.NotEqual(t, localWo.Hash(), hash, "Hash should change when auxpow header mixhash changes")
+		} else {
+			require.Equal(t, localWo.Hash(), hash, "Hash should not change when auxpow header mixhash is the same")
+		}
+	})
+}
+
 func fuzzHash(f *testing.F, getField func(*WorkObjectHeader) common.Hash, setField func(*WorkObjectHeader, common.Hash)) {
 	wo, _ := woTestData()
 	f.Add(testByte)
@@ -403,4 +761,112 @@ func fuzzBigInt(f *testing.F, getVal func(*WorkObjectHeader) *big.Int, setVal fu
 			require.NotEqual(t, localWo.Hash(), hash, "Hash collision\noriginal: %v, modified: %v", getVal(wo.woHeader), bi)
 		}
 	})
+}
+
+// testAuxPow creates a test AuxPow with default values
+func testAuxPow() *AuxPow {
+	ravencoinHeader := &RavencoinBlockHeader{
+		Version:        4,
+		HashPrevBlock:  EmptyRootHash,
+		HashMerkleRoot: EmptyRootHash,
+		Time:           34545,
+		Bits:           0x1d00ffff,
+		Nonce64:        367899,
+		Height:         298899,
+		MixHash:        EmptyRootHash,
+	}
+	header := NewAuxPowHeader(ravencoinHeader)
+	coinbaseOut := []byte{0x76, 0xa9, 0x14, 0x89, 0xab, 0xcd, 0xef, 0x88, 0xac}
+	coinbaseTx := NewAuxPowCoinbaseTx(Kawpow, 100, coinbaseOut, EmptyRootHash, 123)
+	return NewAuxPow(
+		Kawpow,
+		header,
+		[]byte{},
+		[]byte{0x03, 0x04},
+		[][]byte{},
+		coinbaseTx,
+	)
+}
+
+func fuzzBigIntAfterKawpowFork(f *testing.F, getVal func(*WorkObjectHeader) *big.Int, setVal func(*WorkObjectHeader, *big.Int)) {
+	wo, _ := woTestDataWithAuxPow()
+	f.Add(testInt64)
+	f.Add(getVal(wo.woHeader).Int64())
+	f.Fuzz(func(t *testing.T, i int64) {
+		localWo, hash := woTestDataWithAuxPow()
+		bi := big.NewInt(i)
+		if getVal(localWo.woHeader).Cmp(bi) != 0 {
+			setVal(localWo.woHeader, bi)
+			require.Equal(t, localWo.Hash(), hash, "Hash shouldnt change without changing the auxpow\noriginal: %v, modified: %v", getVal(wo.woHeader), bi)
+		}
+	})
+}
+
+func fuzzPowDiffAndCountAfterKawpowFork(f *testing.F, getVal func(*WorkObjectHeader) *PowShareDiffAndCount, setVal func(*WorkObjectHeader, *PowShareDiffAndCount)) {
+	wo, _ := woTestDataWithAuxPow()
+	seed := powDiffAndCountTestData()
+	f.Add(seed.Difficulty().Int64(), seed.Count().Int64())
+	current := getVal(wo.woHeader)
+	if current != nil && current.Difficulty() != nil && current.Count() != nil {
+		f.Add(current.Difficulty().Int64(), current.Count().Int64())
+	}
+	f.Fuzz(func(t *testing.T, diff int64, count int64) {
+		localWo, hash := woTestDataWithAuxPow()
+		powDiff := NewPowShareDiffAndCount(big.NewInt(diff), big.NewInt(count), big.NewInt(count))
+		if !getVal(localWo.woHeader).Cmp(powDiff) {
+			setVal(localWo.woHeader, powDiff)
+			require.Equal(t, localWo.Hash(), hash, "Hash shouldnt change without changing the auxpow\noriginal: %v, modified: %v", getVal(wo.woHeader), powDiff)
+		}
+	})
+}
+
+func TestSealHashChange(t *testing.T) {
+	wo, _ := woTestDataWithAuxPow()
+
+	// Changin the primary coinbase or setting it to nil should change the
+	// sealhash
+
+	woCopy := CopyWorkObject(wo)
+	woCopy.WorkObjectHeader().SetPrimaryCoinbase(common.BytesToAddress([]byte{0x0, 0x0, 0x1, 0x2}, common.Location{0, 0}))
+	require.NotEqual(t, woCopy.SealHash(), wo.SealHash(), "Seal hash didn't change when auxpow coinbase tx set to nil")
+
+	woCopy2 := CopyWorkObject(wo)
+	woCopy2.WorkObjectHeader().SetPrimaryCoinbase(common.BytesToAddress([]byte{0x0, 0x0, 0x1, 0x3}, common.Location{0, 0}))
+	require.NotEqual(t, woCopy2.SealHash(), wo.SealHash(), "Seal hash didn't change when auxpow coinbase tx changed")
+
+	_, intermediateWo1 := wo.WorkObjectHeader().SealHashWithIntermediateHash()
+	_, intermediateWo2 := woCopy.WorkObjectHeader().SealHashWithIntermediateHash()
+
+	require.Equal(t, intermediateWo1, intermediateWo2, "Intermediate seal hash changed when auxpow coinbase tx changed")
+}
+
+func (wh *WorkObjectHeader) SealHashWithIntermediateHash() (final, intermediate common.Hash) {
+	hasherMu.Lock()
+	defer hasherMu.Unlock()
+	hasher.Reset()
+	protoSealData := wh.SealEncode()
+	primaryCoinbase := wh.PrimaryCoinbase().Bytes()
+	// After the kawpow activation update the seal hash to be
+	// without the primary coinbase and then hash the coinbase
+	// with the sealhash
+	if wh.KawpowActivationHappened() {
+		protoSealData.PrimaryCoinbase = nil
+	}
+	data, err := proto.Marshal(protoSealData)
+	if err != nil {
+		log.Global.Error("Failed to marshal seal data ", "err", err)
+	}
+
+	sum := blake3.Sum256(data[:])
+
+	intermediate.SetBytes(sum[:])
+
+	if wh.KawpowActivationHappened() {
+		// Encode the primary coinbase separately
+		sum = blake3.Sum256(append(sum[:], primaryCoinbase...))
+	}
+
+	final.SetBytes(sum[:])
+
+	return final, intermediate
 }

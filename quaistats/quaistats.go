@@ -48,7 +48,6 @@ import (
 	"os/exec"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -103,6 +102,7 @@ type backend interface {
 	NodeLocation() common.Location
 	Logger() *log.Logger
 	Database() ethdb.Database
+	UncleWorkShareClassification(workshare *types.WorkObjectHeader) types.WorkShareValidity
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -119,7 +119,6 @@ type fullNodeBackend interface {
 // chain statistics up to a monitoring server.
 type Service struct {
 	backend backend
-	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
 	node          string // Name of the node to display on the monitoring page
 	pass          string // Password to authorize access to the monitoring page
@@ -254,7 +253,7 @@ func parseEthstatsURL(url string) (parts []string, err error) {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(node *node.Node, backend backend, engine consensus.Engine, url string, sendfullstats bool) error {
+func New(node *node.Node, backend backend, url string, sendfullstats bool) error {
 	parts, err := parseEthstatsURL(url)
 	if err != nil {
 		return err
@@ -286,7 +285,6 @@ func New(node *node.Node, backend backend, engine consensus.Engine, url string, 
 
 	quaistats := &Service{
 		backend:               backend,
-		engine:                engine,
 		node:                  parts[0],
 		pass:                  parts[1],
 		host:                  parts[2],
@@ -1273,10 +1271,11 @@ func (s *Service) assembleBlockDetailStats(block *types.WorkObject) *blockDetail
 	uncleCount := uint64(0)
 	woCount := uint64(0)
 	for _, uncle := range block.Uncles() {
-		_, err := s.engine.VerifySeal(uncle)
-		if err == nil {
+		validity := s.backend.UncleWorkShareClassification(uncle)
+		switch validity {
+		case types.Block:
 			uncleCount += 1
-		} else {
+		case types.Valid:
 			woCount += 1
 		}
 	}

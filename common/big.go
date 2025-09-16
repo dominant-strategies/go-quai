@@ -17,9 +17,11 @@
 package common
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/btcsuite/btcd/blockchain"
 	"github.com/dominant-strategies/go-quai/log"
 	"modernc.org/mathutil"
 )
@@ -51,6 +53,7 @@ var (
 	Big1024   = big.NewInt(1024)
 	Big3072   = big.NewInt(3072)
 	Big199680 = big.NewInt(199680)
+	Big2e32   = new(big.Int).Exp(big.NewInt(2), big.NewInt(32), big.NewInt(0))
 	Big2e64   = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
 	Big2e256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 	Big10e18  = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), big.NewInt(0))
@@ -92,6 +95,39 @@ func LogBig(diff *big.Int) *big.Int {
 	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(MantBits), nil))
 	bigBits = new(big.Int).Add(bigBits, m)
 	return bigBits
+}
+
+func IntrinsicLogEntropy(powHash Hash) *big.Int {
+	x := new(big.Int).SetBytes(powHash.Bytes())
+	d := new(big.Int).Div(Big2e256, x)
+	c, m := mathutil.BinaryLog(d, MantBits)
+	bigBits := new(big.Int).Mul(big.NewInt(int64(c)), new(big.Int).Exp(big.NewInt(2), big.NewInt(MantBits), nil))
+	bigBits = new(big.Int).Add(bigBits, m)
+	return bigBits
+}
+
+// GetDifficultyFromBits calculates the quai difficulty from the given bits
+func GetDifficultyFromBits(bits uint32) *big.Int {
+	// Conert to Big from compact
+	target := new(big.Int).Set(blockchain.CompactToBig(bits))
+
+	// Difficulty = 2^256 / target
+	diff := new(big.Int).Div(Big2e256, target)
+	return diff
+}
+
+// GetTargetInHex calculates the target from the given quai difficulty
+func GetTargetInHex(diff *big.Int) string {
+
+	target := new(big.Int).Div(new(big.Int).Lsh(big.NewInt(1), 256), diff)
+
+	// Convert to Bitcoin compact form using btcd's BigToCompact
+	compact := blockchain.BigToCompact(target)
+	// Conver back to the target to get the full 256-bit target
+	target = new(big.Int).Set(blockchain.CompactToBig(compact))
+
+	// Return as 64-character hex string (padded with leading zeros)
+	return fmt.Sprintf("%064x", target)
 }
 
 // Continously verify that the common values have not been overwritten.

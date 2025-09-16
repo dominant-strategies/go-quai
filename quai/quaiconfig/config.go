@@ -24,10 +24,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dominant-strategies/go-quai/cmd/genallocs"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/consensus/blake3pow"
+	"github.com/dominant-strategies/go-quai/consensus/kawpow"
 	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/ethdb"
@@ -50,7 +50,7 @@ type QuaiConfig struct {
 
 // Defaults contains default settings for use on the Quai main net.
 var Defaults = Config{
-	Progpow:                  progpow.Config{},
+	PowConfig:                params.PowConfig{},
 	NetworkId:                1,
 	TxLookupLimit:            2350000,
 	DatabaseCache:            512,
@@ -83,7 +83,7 @@ type Config struct {
 	GenesisNonce uint64 `toml:",omitempty"`
 	GenesisExtra []byte `toml:",omitempty"`
 	// Genesis Allocs for starting
-	GenesisAllocs []genallocs.GenesisAccount
+	GenesisAllocs []params.GenesisAccount
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
@@ -122,11 +122,8 @@ type Config struct {
 	// Consensus Engine
 	ConsensusEngine string
 
-	// Progpow options
-	Progpow progpow.Config
-
-	// Blake3 options
-	Blake3Pow blake3pow.Config
+	// Consensus Engine specific options
+	PowConfig params.PowConfig
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
@@ -167,22 +164,28 @@ type Config struct {
 	// IndexAddressUtxos enables or disables address utxo indexing
 	IndexAddressUtxos bool
 
+	// TelemetryEnabled enables or disables telemetry reporting
+	TelemetryEnabled bool
+
+	// RpcVersion is the RPC version to use
+	RpcVersion string
+
 	// DefaultGenesisHash is the hard coded genesis hash
 	DefaultGenesisHash common.Hash
 }
 
 // CreateProgpowConsensusEngine creates a progpow consensus engine for the given chain configuration.
-func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location, config *progpow.Config, notify []string, noverify bool, db ethdb.Database, logger *log.Logger) consensus.Engine {
+func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location, config *params.PowConfig, notify []string, noverify bool, db ethdb.Database, logger *log.Logger) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
-	case progpow.ModeFake:
+	case params.ModeFake:
 		logger.Warn("Progpow used in fake mode")
-	case progpow.ModeTest:
+	case params.ModeTest:
 		logger.Warn("Progpow used in test mode")
-	case progpow.ModeShared:
+	case params.ModeShared:
 		logger.Warn("Progpow used in shared mode")
 	}
-	engine := progpow.New(progpow.Config{
+	engine := progpow.New(params.PowConfig{
 		PowMode:            config.PowMode,
 		NotifyFull:         config.NotifyFull,
 		DurationLimit:      config.DurationLimit,
@@ -196,18 +199,42 @@ func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location
 	return engine
 }
 
-// CreateBlake3ConsensusEngine creates a progpow consensus engine for the given chain configuration.
-func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *blake3pow.Config, notify []string, noverify bool, workShareThreshold int, db ethdb.Database, logger *log.Logger) consensus.Engine {
+// CreateKawPowConsensusEngine creates a kawpow consensus engine for the given chain configuration.
+func CreateKawPowConsensusEngine(stack *node.Node, nodeLocation common.Location, config *params.PowConfig, notify []string, noverify bool, db ethdb.Database, logger *log.Logger) consensus.Engine {
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
-	case blake3pow.ModeFake:
+	case params.ModeFake:
+		logger.Warn("KawPow used in fake mode")
+	case params.ModeTest:
+		logger.Warn("KawPow used in test mode")
+	case params.ModeShared:
+		logger.Warn("KawPow used in shared mode")
+	}
+	engine := kawpow.New(params.PowConfig{
+		NotifyFull:         config.NotifyFull,
+		DurationLimit:      config.DurationLimit,
+		NodeLocation:       nodeLocation,
+		GasCeil:            config.GasCeil,
+		GenAllocs:          config.GenAllocs,
+		MinDifficulty:      config.MinDifficulty,
+		WorkShareThreshold: config.WorkShareThreshold,
+	}, notify, noverify, logger)
+	engine.SetThreads(-1) // Disable CPU mining
+	return engine
+}
+
+// CreateBlake3ConsensusEngine creates a progpow consensus engine for the given chain configuration.
+func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location, config *params.PowConfig, notify []string, noverify bool, workShareThreshold int, db ethdb.Database, logger *log.Logger) consensus.Engine {
+	// Otherwise assume proof-of-work
+	switch config.PowMode {
+	case params.ModeFake:
 		logger.Warn("Progpow used in fake mode")
-	case blake3pow.ModeTest:
+	case params.ModeTest:
 		logger.Warn("Progpow used in test mode")
-	case blake3pow.ModeShared:
+	case params.ModeShared:
 		logger.Warn("Progpow used in shared mode")
 	}
-	engine := blake3pow.New(blake3pow.Config{
+	engine := blake3pow.New(params.PowConfig{
 		PowMode:            config.PowMode,
 		NotifyFull:         config.NotifyFull,
 		DurationLimit:      config.DurationLimit,

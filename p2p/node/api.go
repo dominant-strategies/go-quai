@@ -388,6 +388,13 @@ func (p *P2PNode) handleBroadcast(sourcePeer peer.ID, Id string, topic string, d
 		dt := uint64(time.Now().Unix()) - v.Time()
 		blockPropagationHist.Observe(float64(dt))
 		p.cacheAdd(v.Hash(), &v, nodeLocation)
+	case types.AuxTemplate:
+		// AuxTemplate doesn't have a timestamp, so we skip time measurement
+		// We also don't cache it as it doesn't have a Hash() method
+		log.Global.WithFields(log.Fields{
+			"chainID": v.PowID(),
+			"nbits":   v.Bits(),
+		}).Debug("Received AuxTemplate broadcast")
 	}
 
 	// If we made it here, pass the data on to the consensus backend

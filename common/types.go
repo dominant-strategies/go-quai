@@ -99,6 +99,15 @@ func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 // Hex converts a hash to a hex string.
 func (h Hash) Hex() string { return hexutil.Encode(h[:]) }
 
+// Reverse returns a new Hash with the bytes in reverse order.
+func (h Hash) Reverse() Hash {
+	var reversed Hash
+	for i := 0; i < HashLength; i++ {
+		reversed[i] = h[HashLength-1-i]
+	}
+	return reversed
+}
+
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
 func (h Hash) TerminalString() string {

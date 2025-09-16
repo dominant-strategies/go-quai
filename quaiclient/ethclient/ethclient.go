@@ -104,6 +104,7 @@ type rpcBlock struct {
 	Header          *types.Header             `json:"header"`
 	Transactions    []rpcTransaction          `json:"transactions"`
 	UncleHashes     []*types.WorkObjectHeader `json:"uncles"`
+	WorkShares      []*types.WorkObjectHeader `json:"workshares"`
 	OutboundEtxs    []rpcTransaction          `json:"outboundEtxs"`
 	SubManifest     types.BlockManifest       `json:"manifest"`
 	InterlinkHashes common.Hashes             `json:"interlinkHashes"`
@@ -143,7 +144,12 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	copy(manifest, body.SubManifest)
 	var interlinkHashes common.Hashes
 	copy(interlinkHashes, body.InterlinkHashes)
-	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(body.Header, txs, etxs, body.UncleHashes, manifest, interlinkHashes), nil
+
+	uncles := make([]*types.WorkObjectHeader, len(body.UncleHashes)+len(body.WorkShares))
+	copy(uncles, body.UncleHashes)
+	copy(uncles[len(body.UncleHashes):], body.WorkShares)
+
+	return types.NewWorkObjectWithHeaderAndTx(head.WorkObjectHeader(), nil).WithBody(body.Header, txs, etxs, uncles, manifest, interlinkHashes), nil
 }
 
 // HeaderByHash returns the block header with the given hash.
@@ -305,6 +311,11 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.WorkObj
 // SubscribePendingHeader subscribes to notifications about the current pending block on the node.
 func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "pendingHeader")
+}
+
+// SubscribeNewWorkshares subscribes to notifications about new workshares received via P2P.
+func (ec *Client) SubscribeNewWorkshares(ctx context.Context, ch chan<- *types.WorkObject) (quai.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newWorkshares")
 }
 
 // State Access

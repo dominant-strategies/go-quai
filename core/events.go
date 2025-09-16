@@ -40,3 +40,7 @@ type ChainHeadEvent struct {
 type ExpansionEvent struct {
 	Block *types.WorkObject
 }
+
+type NewWorkshareEvent struct {
+	Workshare *types.WorkObject
+}

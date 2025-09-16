@@ -81,6 +81,45 @@ message ProtoManifest { repeated common.ProtoHash manifest = 1; }
 
 message ProtoAccessList { repeated ProtoAccessTuple access_tuples = 1; }
 
+message ProtoAuxPow {
+  optional uint32 chain_id = 1;
+  optional bytes header = 2;  // 120B donor header for KAWPOW (was 80B for pre-KAWPOW)
+  optional bytes signature = 3;  // Signature proving the work
+  repeated bytes merkle_branch = 4;  // Merkle branch for coinbase
+  optional bytes transaction = 5;  // Full coinbase transaction (serialized wire format, contains value in TxOut[0])
+  optional uint64 signature_time = 6;  // Timestamp when signature was created
+  optional bytes auxpow2 = 7; // Dogecoin block hash
+}
+
+message ProtoAuxTemplate {
+  // === Consensus-correspondence (signed; Quai validators check against AuxPoW) ===
+  optional uint32 chain_id = 1;            // must match ap.Chain (RVN)
+  optional bytes prev_hash = 2;            // 32 bytes - must equal donor_header.hashPrevBlock
+
+  // === Header/DAA knobs for job construction (signed) ===
+  optional uint32 version = 3;             // header.nVersion to use
+  optional uint32 bits = 4;               // header.nBits
+  optional uint32 signature_time = 5;          // time at which the aux template was signed
+  optional uint32 height = 6;              // BIP34 height (needed for scriptSig + KAWPOW epoch hint)
+
+  // CoinbaseOut is the coinbase payout
+  optional bytes coinbase_out = 7;        // full coinbase output script (scriptPubKey)
+
+  // Mode B: LOCKED TX SET (miners get fees; template is larger & updated more often)
+  repeated bytes merkle_branch = 8;       // siblings for coinbase index=0 up to root (little endian 32-byte hashes)
+
+  // === Quorum signatures over CanonicalEncode(template WITHOUT Sigs) ===
+  optional bytes sigs = 9;
+
+  optional bytes aux_pow2 = 10;            // auxiliary proof-of-work data
+}
+
+message ProtoPowShareDiffAndCount {
+  optional bytes difficulty = 1;
+  optional bytes count = 2;
+  optional bytes uncled = 3;
+}
+
 message ProtoWorkObjectHeader {
   optional common.ProtoHash header_hash = 1;
   optional common.ProtoHash parent_hash = 2;
@@ -95,6 +134,12 @@ message ProtoWorkObjectHeader {
   optional uint32 lock = 11;
   optional common.ProtoAddress primary_coinbase = 12;
   bytes data = 13;
+  optional ProtoAuxPow aux_pow = 14;  // New field for auxiliary proof-of-work
+  optional ProtoPowShareDiffAndCount scrypt_diff_and_count = 15;
+  optional ProtoPowShareDiffAndCount sha_diff_and_count = 16;
+  optional bytes sha_share_target = 17;
+  optional bytes scrypt_share_target = 18;
+  optional bytes kawpow_difficulty = 19;
 }
 
 message ProtoWorkObjectHeaders {

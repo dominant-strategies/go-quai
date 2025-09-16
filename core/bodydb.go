@@ -34,7 +34,7 @@ type BodyDb struct {
 	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
 
-	engine         consensus.Engine
+	engine         []consensus.Engine
 	blockCache     *lru.Cache[common.Hash, types.WorkObject]
 	bodyCache      *lru.Cache[common.Hash, types.WorkObject]
 	bodyProtoCache *lru.Cache[common.Hash, rlp.RawValue]
@@ -57,7 +57,7 @@ func NewTestBodyDb(db ethdb.Database) *BodyDb {
 	return bc
 }
 
-func NewBodyDb(db ethdb.Database, engine consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
+func NewBodyDb(db ethdb.Database, engine []consensus.Engine, hc *HeaderChain, chainConfig *params.ChainConfig, cacheConfig *CacheConfig, txLookupLimit *uint64, vmConfig vm.Config, slicesRunning []common.Location) (*BodyDb, error) {
 	nodeCtx := chainConfig.Location.Context()
 
 	bc := &BodyDb{
@@ -151,11 +151,6 @@ func (bc *BodyDb) HasBlock(hash common.Hash, number uint64) bool {
 		return true
 	}
 	return rawdb.HasBody(bc.db, hash, number)
-}
-
-// Engine retreives the BodyDb consensus engine.
-func (bc *BodyDb) Engine() consensus.Engine {
-	return bc.engine
 }
 
 // GetBlock retrieves a block from the database by hash and number,

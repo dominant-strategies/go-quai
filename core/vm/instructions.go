@@ -1006,6 +1006,13 @@ func opConvert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		log.Global.Errorf("%x opConvert error: not after controller kick in block\n", scope.Contract.self.Address())
 		return nil, nil
 	}
+	if interpreter.evm.Context.PrimeTerminusNumber >= params.KawPowForkBlock &&
+		interpreter.evm.Context.PrimeTerminusNumber < params.KawPowForkBlock+params.KQuaiChangeHoldInterval {
+		temp.Clear()
+		stack.push(&temp)
+		log.Global.Errorf("%x opConvert error: ETX is not eligible to be sent to %x until block %d\n", scope.Contract.self.Address(), toAddr, params.KawPowForkBlock+params.KQuaiChangeHoldInterval)
+		return nil, nil
+	}
 	sender := scope.Contract.self.Address()
 	internalSender, err := sender.InternalAndQuaiAddress()
 	if err != nil {

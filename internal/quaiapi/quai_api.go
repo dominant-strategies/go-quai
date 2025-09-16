@@ -17,13 +17,18 @@
 package quaiapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
@@ -32,11 +37,12 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto/musig2"
+	"github.com/dominant-strategies/go-quai/internal/telemetry"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
-	"github.com/dominant-strategies/go-quai/trie"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -44,6 +50,9 @@ var (
 	txPropagationMetrics = metrics_config.NewCounterVec("TxPropagation", "Transaction propagation counter")
 	txEgressCounter      = txPropagationMetrics.WithLabelValues("egress")
 	maxOutpointsRange    = uint32(1000)
+
+	// MuSig2 session management
+	musig2Manager musig2.MuSig2Manager
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -67,6 +76,14 @@ func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	blockBaseFee = new(big.Int).Mul(blockBaseFee, big.NewInt(120))
 	blockBaseFee = new(big.Int).Div(blockBaseFee, big.NewInt(100))
 	return (*hexutil.Big)(blockBaseFee), nil
+}
+
+func (s *PublicQuaiAPI) ClientVersion() string {
+	gitCommit := params.GitCommit
+	if len(gitCommit) > 8 {
+		gitCommit = gitCommit[:8]
+	}
+	return "go-quai/" + params.Version.Full() + "-" + gitCommit
 }
 
 // PublicBlockChainQuaiAPI provides an API to access the Quai blockchain.
@@ -581,7 +598,7 @@ func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.A
 func (s *PublicBlockChainQuaiAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := s.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
-		response := header.RPCMarshalHeader()
+		response := header.RPCMarshalHeader(s.b.RpcVersion())
 		if number == rpc.PendingBlockNumber {
 			// Pending header need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "coinbase"} {
@@ -597,7 +614,7 @@ func (s *PublicBlockChainQuaiAPI) GetHeaderByNumber(ctx context.Context, number 
 func (s *PublicBlockChainQuaiAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
 	header, _ := s.b.HeaderByHash(ctx, hash)
 	if header != nil {
-		return header.RPCMarshalHeader()
+		return header.RPCMarshalHeader(s.b.RpcVersion())
 	}
 	return nil
 }
@@ -656,7 +673,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockNumberAndIndex(ctx context.Cont
 			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
-		return uncles[index].RPCMarshalWorkObjectHeader(), nil
+		return uncles[index].RPCMarshalWorkObjectHeader(s.b.RpcVersion()), nil
 	}
 	return nil, err
 }
@@ -675,7 +692,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
-		return uncles[index].RPCMarshalWorkObjectHeader(), nil
+		return uncles[index].RPCMarshalWorkObjectHeader(s.b.RpcVersion()), nil
 	}
 	pendBlock, _ := s.b.PendingBlockAndReceipts()
 	if pendBlock != nil && pendBlock.Hash() == blockHash {
@@ -688,7 +705,7 @@ func (s *PublicBlockChainQuaiAPI) GetUncleByBlockHashAndIndex(ctx context.Contex
 			}).Debug("Requested uncle not found in pending block")
 			return nil, nil
 		}
-		return uncles[index].RPCMarshalWorkObjectHeader(), nil
+		return uncles[index].RPCMarshalWorkObjectHeader(s.b.RpcVersion()), nil
 	}
 	return nil, err
 }
@@ -951,9 +968,14 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 	fields := make(map[string]interface{})
 
 	fields["hash"] = block.Hash()
-	fields["woHeader"] = block.WorkObjectHeader().RPCMarshalWorkObjectHeader()
+	fields["woHeader"] = block.WorkObjectHeader().RPCMarshalWorkObjectHeader(backend.RpcVersion())
 	fields["header"] = block.Body().Header().RPCMarshalHeader()
 	fields["size"] = hexutil.Uint64(block.Size())
+	_, order, err := backend.CalcOrder(block)
+	if err != nil {
+		return nil, err
+	}
+	fields["order"] = order
 
 	if inclTx {
 		formatTx := func(tx *types.Transaction) (interface{}, error) {
@@ -990,11 +1012,13 @@ func RPCMarshalBlock(backend Backend, block *types.WorkObject, inclTx bool, full
 	marshalUncles := make([]map[string]interface{}, 0)
 	marshalWorkShares := make([]map[string]interface{}, 0)
 	for _, uncle := range block.Uncles() {
-		rpcMarshalUncle := uncle.RPCMarshalWorkObjectHeader()
-		_, err := backend.Engine().VerifySeal(uncle)
-		if err != nil {
+		rpcMarshalUncle := uncle.RPCMarshalWorkObjectHeader(backend.RpcVersion())
+		validity := backend.UncleWorkShareClassification(uncle)
+
+		switch validity {
+		case types.Valid:
 			marshalWorkShares = append(marshalWorkShares, rpcMarshalUncle)
-		} else {
+		case types.Block:
 			marshalUncles = append(marshalUncles, rpcMarshalUncle)
 		}
 	}
@@ -1048,42 +1072,418 @@ func (s *PublicBlockChainQuaiAPI) CreateAccessList(ctx context.Context, args Tra
 	return result, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) fillSubordinateManifest(b *types.WorkObject) (*types.WorkObject, error) {
-	nodeCtx := s.b.NodeCtx()
-	if b.ManifestHash(nodeCtx+1) == types.EmptyRootHash {
-		return nil, errors.New("cannot fill empty subordinate manifest")
-	} else if subManifestHash := types.DeriveSha(b.Manifest(), trie.NewStackTrie(nil)); subManifestHash == b.ManifestHash(nodeCtx+1) {
-		// If the manifest hashes match, nothing to do
-		return b, nil
-	} else {
-		subParentHash := b.ParentHash(nodeCtx + 1)
-		var subManifest types.BlockManifest
-		if subParent, err := s.b.BlockByHash(context.Background(), subParentHash); err == nil && subParent != nil {
-			// If we have the the subordinate parent in our chain, that means that block
-			// was also coincident. In this case, the subordinate manifest resets, and
-			// only consists of the subordinate parent hash.
-			subManifest = types.BlockManifest{subParentHash}
-		} else {
-			// Otherwise we need to reconstruct the sub manifest, by getting the
-			// parent's sub manifest and appending the parent hash.
-			subManifest, err = s.b.GetSubManifest(b.Location(), subParentHash)
-			if err != nil {
-				return nil, err
+// BlockTemplateRequest represents a getblocktemplate request
+type BlockTemplateRequest struct {
+	Rules       []string                `json:"rules,omitempty"`       // "kawpow", "sha", "scrypt"
+	ExtraNonce1 string                  `json:"extranonce1,omitempty"` // 4 byte hex string
+	ExtraNonce2 string                  `json:"extranonce2,omitempty"` // 8 byte hex string
+	ExtraData   string                  `json:"extradata,omitempty"`   // string less than 30 bytes
+	Coinbase    common.MixedcaseAddress `json:"coinbase,omitempty"`
+}
+
+// GetBlockTemplate retrieves a new block template to mine
+// Supports Bitcoin-compatible getblocktemplate API with PoW algorithm selection via "rules" parameter
+func (s *PublicBlockChainQuaiAPI) GetBlockTemplate(ctx context.Context, request *BlockTemplateRequest) (map[string]interface{}, error) {
+	// Default to KAWPOW if no request or rules specified
+	powId := types.Kawpow
+
+	// Parse rules to determine PoW algorithm
+	if request != nil && len(request.Rules) > 0 {
+		for _, rule := range request.Rules {
+			ruleLower := strings.ToLower(rule)
+			switch ruleLower {
+			case "kawpow":
+				powId = types.Kawpow
+			case "sha", "sha256d":
+				powId = types.SHA_BCH
+			case "scrypt":
+				powId = types.Scrypt
+			default:
+				return nil, fmt.Errorf("unsupported rule: %s", rule)
 			}
 		}
-		if len(subManifest) == 0 {
-			return nil, errors.New("reconstructed sub manifest is empty")
-		}
-		if subManifest == nil || b.ManifestHash(nodeCtx+1) != types.DeriveSha(subManifest, trie.NewStackTrie(nil)) {
-			return nil, errors.New("reconstructed sub manifest does not match manifest hash")
-		}
-		return types.NewWorkObjectWithHeaderAndTx(b.WorkObjectHeader(), b.Tx()).WithBody(b.Header(), b.Transactions(), b.OutboundEtxs(), b.Uncles(), subManifest, b.InterlinkHashes()), nil
 	}
+
+	var coinbase common.Address
+	if request != nil && request.Coinbase != (common.MixedcaseAddress{}) {
+		coinbase = common.Bytes20ToAddress(request.Coinbase.Address().Bytes20(), s.b.NodeLocation())
+
+		_, err := coinbase.InternalAddress()
+		if err != nil {
+			return nil, fmt.Errorf("out of scope or invalid coinbase address: %w", err)
+		}
+	}
+
+	// Get the pending header for the specified PoW algorithm
+	pendingHeader, err := s.b.GetPendingHeader(powId, coinbase)
+	if err != nil {
+		return nil, err
+	}
+	return s.marshalAuxPowTemplate(pendingHeader, request)
+}
+
+// marshalAuxPowTemplate formats a WorkObject as a SHA256d/Bitcoin getblocktemplate response
+func (s *PublicBlockChainQuaiAPI) marshalAuxPowTemplate(wo *types.WorkObject, request *BlockTemplateRequest) (map[string]interface{}, error) {
+	auxPow := wo.AuxPow()
+	if auxPow == nil {
+		return nil, errors.New("no AuxPow in pending header")
+	}
+
+	// Get the header first
+	auxHeader := auxPow.Header()
+	if auxHeader == nil {
+		return nil, errors.New("no header in AuxPow")
+	}
+
+	blockHeight := auxHeader.Height() // Default to header height
+
+	if tx := auxPow.Transaction(); tx != nil {
+		scriptSig := types.ExtractScriptSigFromCoinbaseTx(tx)
+		// Extract the block height from the coinbase scriptSig
+		extractedHeight, err := types.ExtractHeightFromCoinbase(scriptSig)
+		if err == nil {
+			// Use the extracted height from scriptSig if successful
+			blockHeight = extractedHeight
+		} else {
+			return nil, fmt.Errorf("failed to extract height from coinbase scriptSig: %w", err)
+		}
+
+	}
+
+	txBytes := auxPow.Transaction()
+
+	// Build coinb1/coinb2 following Stratum's mining.notify convention:
+	// - coinb1: entire start of the tx up to the start of the combined extranonce push data
+	// <12 bytes of data>
+	// - coinb2: everything after the combined extranonce push data (coinb2 includes the 32 bytes of extradata)
+	coinb1, coinb2, err := extractCoinb1AndCoinb2FromAuxPowTx(txBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract coinb1 and coinb2 from AuxPowTx: %w", err)
+	}
+
+	if len(txBytes) == 0 {
+		return nil, errors.New("empty coinbase tx bytes in AuxPow")
+	}
+
+	var updatedTxBytes []byte
+
+	// extranonce1, extranonce2, and extradata are optional fields
+	var extraNonce1 [4]byte
+	var extraNonce2 [8]byte
+	var extraData [30]byte
+	if request != nil && len(request.ExtraNonce1) > 0 {
+		extraNonce1Bytes, err := hex.DecodeString(request.ExtraNonce1)
+		if err != nil {
+			return nil, fmt.Errorf("invalid extranonce1: %w", err)
+		}
+		if len(extraNonce1Bytes) > 4 {
+			return nil, fmt.Errorf("extranonce1 length exceeds 4 bytes")
+		}
+		copy(extraNonce1[:], extraNonce1Bytes)
+	}
+	if request != nil && len(request.ExtraNonce2) > 0 {
+		extraNonce2Bytes, err := hex.DecodeString(request.ExtraNonce2)
+		if err != nil {
+			return nil, fmt.Errorf("invalid extranonce2: %w", err)
+		}
+		if len(extraNonce2Bytes) > 8 {
+			return nil, fmt.Errorf("extranonce2 length exceeds 8 bytes")
+		}
+		copy(extraNonce2[:], extraNonce2Bytes)
+	}
+	if request != nil && len(request.ExtraData) > 0 {
+		extraDataBytes := []byte(request.ExtraData)
+		if len(extraDataBytes) > 30 {
+			return nil, fmt.Errorf("input extraData length exceeds 30 bytes")
+		}
+		copy(extraData[:], extraDataBytes)
+		// update the first 30 bytes of the coinb2
+		copy(coinb2[:30], extraData[:])
+	}
+
+	// Build the updated transaction bytes by concatenating coinb1, extraNonce1, extraNonce2, and coinb2
+	updatedTxBytes = append(coinb1, extraNonce1[:]...)
+	updatedTxBytes = append(updatedTxBytes, extraNonce2[:]...)
+	updatedTxBytes = append(updatedTxBytes, coinb2...)
+
+	// Get header fields using the typed accessor methods
+	prevBlock := auxHeader.PrevBlock()
+	// prevBlock needs to be big-endian for getblocktemplate
+	for i := 0; i < len(prevBlock)/2; i++ {
+		prevBlock[i], prevBlock[len(prevBlock)-1-i] = prevBlock[len(prevBlock)-1-i], prevBlock[i]
+	}
+
+	// Convert previousblockhash to hex without 0x prefix
+	prevBlockHex := hex.EncodeToString(prevBlock[:])
+
+	// Marshal merkle branch
+	// Note: Internally stored in little-endian, but getblocktemplate expects big-endian (display order)
+	merkleBranch := make([]string, len(auxPow.MerkleBranch()))
+	for i, hash := range auxPow.MerkleBranch() {
+		// Reverse bytes from little-endian to big-endian for getblocktemplate compatibility
+		reversed := make([]byte, len(hash))
+		for j := range hash {
+			reversed[j] = hash[len(hash)-1-j]
+		}
+		merkleBranch[i] = hex.EncodeToString(reversed)
+	}
+
+	merkleRoot := types.CalculateMerkleRoot(auxPow.PowID(), updatedTxBytes, auxPow.MerkleBranch())
+
+	// Convert bits to hex without 0x prefix
+	bitsHex := fmt.Sprintf("%08x", auxHeader.Bits())
+
+	powId := auxPow.PowID()
+
+	var targetHex string
+	// Get target hex from Quai difficulty (not AuxPow bits)
+	// based on the powid need to use the correct target calculation
+	switch powId {
+	case types.SHA_BCH, types.SHA_BTC:
+		// Bitcoin-style target calculation
+		targetHex = common.GetTargetInHex(wo.WorkObjectHeader().ShaDiffAndCount().Difficulty())
+	case types.Scrypt:
+		targetHex = common.GetTargetInHex(wo.WorkObjectHeader().ScryptDiffAndCount().Difficulty())
+	case types.Kawpow:
+		// share diff
+		kawpowDiff := core.CalculateKawpowShareDiff(wo.WorkObjectHeader())
+		targetHex = common.GetTargetInHex(kawpowDiff)
+	}
+
+	if len(targetHex) > 2 && targetHex[:2] == "0x" {
+		targetHex = targetHex[2:]
+	}
+
+	// set the pendingheader time to empty
+	woCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
+	woCopy.SetTime(0)
+	sealHashString := hex.EncodeToString(wo.SealHash().Bytes()[:6])
+
+	return map[string]interface{}{
+		"version":           auxHeader.Version(),
+		"previousblockhash": prevBlockHex,
+		// Miner target aligned with AuxPow header nBits (BCH/BTC style)
+		"target":            targetHex,
+		"mintime":           auxHeader.Timestamp(),
+		"noncerange":        "00000000ffffffff", // 32-bit nonce
+		"sigoplimit":        80000,              // Bitcoin default
+		"sizelimit":         1000000,            // 1MB
+		"curtime":           auxHeader.Timestamp(),
+		"bits":              bitsHex,
+		"height":            uint64(blockHeight),
+		"coinb1":            hex.EncodeToString(coinb1),
+		"extranonce1Length": 4, // 4 bytes
+		"extranonce2Length": 8, // 8 bytes
+		// Keep the 30-byte aux extra data inside coinb2; miners do not fill it
+		"coinbaseAuxExtraBytesLength": 30, // 32 bytes
+		"coinb2":                      hex.EncodeToString(coinb2),
+		"merklebranch":                merkleBranch,
+		"merkleroot":                  hex.EncodeToString(common.Hash(merkleRoot).Reverse().Bytes()),
+		"quairoot":                    sealHashString,
+		"quaiheight":                  wo.WorkObjectHeader().NumberU64(),
+	}, nil
+}
+
+func extractCoinb1AndCoinb2FromAuxPowTx(txBytes []byte) ([]byte, []byte, error) {
+	// Helpers to parse CompactSize varints and script pushes
+	readVarInt := func(b []byte) (val uint64, size int, err error) {
+		if len(b) == 0 {
+			return 0, 0, errors.New("short varint")
+		}
+		prefix := b[0]
+		switch prefix {
+		case 0xFF:
+			if len(b) < 9 {
+				return 0, 0, errors.New("short varint 0xff")
+			}
+			return binary.LittleEndian.Uint64(b[1:9]), 9, nil
+		case 0xFE:
+			if len(b) < 5 {
+				return 0, 0, errors.New("short varint 0xfe")
+			}
+			return uint64(binary.LittleEndian.Uint32(b[1:5])), 5, nil
+		case 0xFD:
+			if len(b) < 3 {
+				return 0, 0, errors.New("short varint 0xfd")
+			}
+			return uint64(binary.LittleEndian.Uint16(b[1:3])), 3, nil
+		default:
+			return uint64(prefix), 1, nil
+		}
+	}
+
+	// Returns (dataStartOffset, dataLen, headerLen) for the next push
+	parsePushHeader := func(script []byte) (int, int, int, error) {
+		if len(script) == 0 {
+			return 0, 0, 0, errors.New("empty script segment")
+		}
+		opcode := script[0]
+		if opcode <= 75 {
+			return 1, int(opcode), 1, nil
+		}
+		if opcode == 0x4c { // OP_PUSHDATA1
+			if len(script) < 2 {
+				return 0, 0, 0, errors.New("short OP_PUSHDATA1")
+			}
+			return 2, int(script[1]), 2, nil
+		}
+		if opcode == 0x4d { // OP_PUSHDATA2
+			if len(script) < 3 {
+				return 0, 0, 0, errors.New("short OP_PUSHDATA2")
+			}
+			ln := int(binary.LittleEndian.Uint16(script[1:3]))
+			return 3, ln, 3, nil
+		}
+		return 0, 0, 0, fmt.Errorf("unsupported opcode 0x%x in coinbase script", opcode)
+	}
+
+	// Walk the transaction encoding to find scriptSig and split positions
+	pos := 0
+	// version (4 bytes)
+	if len(txBytes) < pos+4 {
+		return nil, nil, errors.New("tx too short for version")
+	}
+	pos += 4
+	// input count (varint)
+	vinCount, sz, err := readVarInt(txBytes[pos:])
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse vin count: %w", err)
+	}
+	pos += sz
+	if vinCount == 0 {
+		return nil, nil, errors.New("coinbase tx has zero vin")
+	}
+	// prevout (32 + 4)
+	if len(txBytes) < pos+36 {
+		return nil, nil, errors.New("tx too short for prevout")
+	}
+	pos += 36
+	// scriptSig length (varint)
+	scriptLenU64, sz2, err := readVarInt(txBytes[pos:])
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse scriptsig length: %w", err)
+	}
+	pos += sz2
+	scriptLen := int(scriptLenU64)
+	if scriptLen < 0 || len(txBytes) < pos+scriptLen {
+		return nil, nil, errors.New("tx too short for scriptsig bytes")
+	}
+	scriptStart := pos
+	script := txBytes[scriptStart : scriptStart+scriptLen]
+
+	// Parse pushes per our format
+	// 1) height
+	_, l, hdr, err := parsePushHeader(script)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse height push: %w", err)
+	}
+	cur := hdr + l
+	// 2) AuxPoW commitment as a single push: magic(4) | root(32) | size(4 LE) | nonce(4 LE)
+	if cur >= len(script) {
+		return nil, nil, errors.New("unexpected end after height push")
+	}
+	off, l, hdr, err := parsePushHeader(script[cur:])
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse auxpow commitment push: %w", err)
+	}
+	if l != 44 || cur+off+l > len(script) {
+		return nil, nil, errors.New("invalid auxpow commitment length; expected 44 bytes")
+	}
+	payload := script[cur+off : cur+off+l]
+	if !bytes.Equal(payload[0:4], []byte{0xfa, 0xbe, 0x6d, 0x6d}) {
+		return nil, nil, errors.New("unexpected magic marker in auxpow commitment")
+	}
+
+	cur += hdr + l
+	// 6) combined extranonces + extraData push
+	if cur >= len(script) {
+		return nil, nil, errors.New("unexpected end before extranonce push")
+	}
+	dataStartOff, dataLen, _, err := parsePushHeader(script[cur:])
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse extranonce push: %w", err)
+	}
+	if dataLen < 1 || cur+dataStartOff+dataLen > len(script) {
+		return nil, nil, errors.New("invalid extranonce push bounds")
+	}
+
+	pushDataAbsStart := scriptStart + cur + dataStartOff
+	pushDataAbsEnd := pushDataAbsStart + dataLen
+
+	if pushDataAbsStart < 0 || pushDataAbsEnd > len(txBytes) || pushDataAbsStart > pushDataAbsEnd {
+		return nil, nil, errors.New("computed coinbase split out of bounds")
+	}
+	// Only carve out extranonce1 (4B) and extranonce2 (8B). Keep the trailing 32B zeros in coinb2.
+	coinb1 := txBytes[:pushDataAbsStart]
+	coinb2Start := pushDataAbsStart + 4 + 8
+	if coinb2Start < 0 || coinb2Start > len(txBytes) {
+		return nil, nil, errors.New("computed coinb2 start out of bounds")
+	}
+	coinb2 := txBytes[coinb2Start:]
+	return coinb1, coinb2, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) SubmitScryptBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
+	hash, number, validity, err := s.b.SubmitBlock(raw, types.Scrypt)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["number"] = hexutil.Uint64(number)
+	fields["hash"] = hash.Hex()
+	switch validity {
+	case types.Sub:
+		fields["status"] = hexutil.Uint64(0)
+	case types.Valid:
+		fields["status"] = hexutil.Uint64(1)
+	case types.Block:
+		fields["status"] = hexutil.Uint64(2)
+	}
+	return fields, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) SubmitKawpowBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
+	hash, number, validity, err := s.b.SubmitBlock(raw, types.Kawpow)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["number"] = hexutil.Uint64(number)
+	fields["hash"] = hash.Hex()
+
+	switch validity {
+	case types.Sub:
+		fields["status"] = hexutil.Uint64(0)
+	case types.Valid:
+		fields["status"] = hexutil.Uint64(1)
+	case types.Block:
+		fields["status"] = hexutil.Uint64(2)
+	}
+	return fields, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) SubmitShaBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
+	hash, number, validity, err := s.b.SubmitBlock(raw, types.SHA_BCH)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["number"] = hexutil.Uint64(number)
+	fields["hash"] = hash.Hex()
+
+	switch validity {
+	case types.Sub:
+		fields["status"] = hexutil.Uint64(0)
+	case types.Valid:
+		fields["status"] = hexutil.Uint64(1)
+	case types.Block:
+		fields["status"] = hexutil.Uint64(2)
+	}
+	return fields, nil
 }
 
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
 func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw hexutil.Bytes) error {
-	nodeCtx := s.b.NodeCtx()
 	protoWorkObject := &types.ProtoWorkObject{}
 	err := proto.Unmarshal(raw, protoWorkObject)
 	if err != nil {
@@ -1095,43 +1495,11 @@ func (s *PublicBlockChainQuaiAPI) ReceiveMinedHeader(ctx context.Context, raw he
 	if err != nil {
 		return err
 	}
-	block, err := s.b.ConstructLocalMinedBlock(woHeader)
-	if err != nil && err.Error() == core.ErrBadSubManifest.Error() && nodeCtx < common.ZONE_CTX {
-		s.b.Logger().Info("filling sub manifest")
-		// If we just mined this block, and we have a subordinate chain, its possible
-		// the subordinate manifest in our block body is incorrect. If so, ask our sub
-		// for the correct manifest and reconstruct the block.
-		var err error
-		block, err = s.fillSubordinateManifest(block)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
 
-	// Broadcast the block and announce chain insertion event
-	if block.Header() != nil {
-		err := s.b.BroadcastBlock(block, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithField("err", err).Error("Error broadcasting block")
-		}
-		if nodeCtx == common.ZONE_CTX {
-			err = s.b.BroadcastHeader(block, s.b.NodeLocation())
-			if err != nil {
-				s.b.Logger().WithField("err", err).Error("Error broadcasting header")
-			}
-		}
-	}
-	s.b.Logger().WithFields(log.Fields{
-		"number":   block.Number(s.b.NodeCtx()),
-		"location": block.Location(),
-		"hash":     block.Hash(),
-	}).Info("Received mined header")
-
-	return nil
+	return s.b.ReceiveMinedHeader(woHeader)
 }
 
+// Receives a WorkObjectHeader in the form of bytes, decodes it, then calls ReceiveWorkShare.
 func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw hexutil.Bytes) error {
 	nodeCtx := s.b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -1143,64 +1511,31 @@ func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw h
 		return err
 	}
 
-	workShare := &types.WorkObjectHeader{}
-	err = workShare.ProtoDecode(protoWorkShare, s.b.NodeLocation())
+	workShareHeader := &types.WorkObjectHeader{}
+	err = workShareHeader.ProtoDecode(protoWorkShare, s.b.NodeLocation())
 	if err != nil {
 		return err
 	}
 
-	return s.ReceiveWorkShare(ctx, workShare)
+	if nodeCtx == common.ZONE_CTX && s.b.ChainConfig().TelemetryEnabled {
+		// Track mined workshare (mined LRU)
+		telemetry.RecordMinedHeader(workShareHeader)
+	}
+
+	return s.ReceiveWorkShare(ctx, workShareHeader)
 }
 
 func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShare *types.WorkObjectHeader) error {
-	if workShare != nil {
-		var isWorkShare, isSubShare bool
-		threshold := s.b.GetWorkShareP2PThreshold()
-		isSubShare = s.b.Engine().CheckWorkThreshold(workShare, threshold)
-		if !isSubShare {
-			return errors.New("workshare has less entropy than the workshare p2p threshold")
-		}
-
-		s.b.Logger().WithField("number", workShare.NumberU64()).Info("Received Work Share")
-		pendingBlockBody := s.b.GetPendingBlockBody(workShare)
-		txs, err := s.b.GetTxsFromBroadcastSet(workShare.TxHash())
-		if err != nil {
-			txs = types.Transactions{}
-			if workShare.TxHash() != types.EmptyRootHash {
-				s.b.Logger().Warn("Failed to get txs from the broadcastSetCache", "err", err)
-			}
-		}
-		// If the share qualifies is not a workshare and there are no transactions,
-		// there is no need to broadcast the share
-		isWorkShare = s.b.Engine().CheckWorkThreshold(workShare, params.WorkSharesThresholdDiff)
-		if !isWorkShare && len(txs) == 0 {
-			return nil
-		}
-		if pendingBlockBody == nil {
-			s.b.Logger().Warn("Could not get the pending Block body", "err", err)
-			return err
-		}
-		wo := types.NewWorkObject(workShare, pendingBlockBody.Body(), nil)
-		shareView := wo.ConvertToWorkObjectShareView(txs)
-		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
-		if err != nil {
-			s.b.Logger().WithFields(log.Fields{
-				"hash": shareView.Hash(),
-				"err":  err,
-			}).Error("Error broadcasting work share")
-			return err
-		}
-		txEgressCounter.Add(float64(len(shareView.WorkObject.Transactions())))
-		s.b.Logger().WithFields(log.Fields{"tx count": len(txs)}).Info("Broadcasted workshares with txs")
-	}
-	return nil
+	// Ensure record in mined LRU even if called directly
+	return s.b.ReceiveWorkShare(workShare)
 }
 
-func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {
+func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context, powId types.PowID) (hexutil.Bytes, error) {
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getPendingHeader call can only be made on chain processing the state")
 	}
-	pendingHeader, err := s.b.GetPendingHeader()
+
+	pendingHeader, err := s.b.GetPendingHeader(powId, common.Address{}) // 0 is default progpow
 	if err != nil {
 		return nil, err
 	} else if pendingHeader == nil {
@@ -1543,4 +1878,267 @@ func (s *PublicBlockChainQuaiAPI) GetTransactionReceipt(ctx context.Context, has
 		fields["contractAddress"] = receipt.ContractAddress.Hex()
 	}
 	return fields, nil
+}
+
+// InitializeMuSig2Manager initializes the global MuSig2 manager
+func InitializeMuSig2Manager(privKey *btcec.PrivateKey) error {
+	var err error
+	musig2Manager, err = musig2.NewManager(privKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize MuSig2 manager: %w", err)
+	}
+	return nil
+}
+
+// SignAuxTemplateResponse represents the response from signing an AuxTemplate
+type SignAuxTemplateResponse struct {
+	PublicNonce      string `json:"publicNonce"`
+	PartialSignature string `json:"partialSignature"`
+	MessageHash      string `json:"messageHash"`
+	PublicKey        string `json:"publicKey"`        // hex-encoded compressed pubkey (33 bytes)
+	ParticipantIndex int    `json:"participantIndex"` // local index in the agreed signer set
+}
+
+// SignAuxTemplate initiates MuSig2 signing for an AuxTemplate
+// otherParticipantPubKey: compressed pubkey (33 bytes) of the other signer
+func (s *PublicBlockChainQuaiAPI) SignAuxTemplate(ctx context.Context, templateData hexutil.Bytes, otherParticipantPubKey hexutil.Bytes, otherNonce hexutil.Bytes) (*SignAuxTemplateResponse, error) {
+	// Try direct fmt.Println to ensure we're hitting this method
+	fmt.Println("DEBUG: SignAuxTemplate called with dataSize:", len(templateData), "otherPubKeyLen:", len(otherParticipantPubKey), "nonceSize:", len(otherNonce))
+
+	s.b.Logger().WithFields(log.Fields{
+		"dataSize":       len(templateData),
+		"otherPubKeyLen": len(otherParticipantPubKey),
+		"nonceSize":      len(otherNonce),
+	}).Info("API: SignAuxTemplate called - START")
+
+	// Get the MuSig2 key manager
+	keyManager, err := GetMuSig2Keys()
+	if err != nil {
+		s.b.Logger().WithField("error", err).Error("Failed to get MuSig2 keys")
+		return nil, fmt.Errorf("failed to get MuSig2 keys: %w", err)
+	}
+	if keyManager == nil {
+		return nil, fmt.Errorf("MuSig2 keys not configured - set MUSIG2_PRIVKEY environment variable")
+	}
+
+	// Decode the protobuf encoded AuxTemplate
+	protoTemplate := &types.ProtoAuxTemplate{}
+	err = proto.Unmarshal(templateData, protoTemplate)
+	if err != nil {
+		s.b.Logger().WithField("error", err).Error("Failed to unmarshal AuxTemplate")
+		return nil, fmt.Errorf("failed to unmarshal AuxTemplate: %w", err)
+	}
+
+	// Convert ProtoAuxTemplate to AuxTemplate to use the Hash() method
+	auxTemplate := &types.AuxTemplate{}
+	if err := auxTemplate.ProtoDecode(protoTemplate); err != nil {
+		return nil, fmt.Errorf("failed to decode AuxTemplate: %w", err)
+	}
+	messageHash := auxTemplate.Hash()
+	message := messageHash[:]
+
+	s.b.Logger().WithFields(log.Fields{
+		"messageHash":  hex.EncodeToString(message[:]),
+		"templateSize": len(templateData),
+	}).Info("Creating signing message from AuxTemplate")
+
+	// Parse other participant pubkey and derive index from configured set
+	if len(otherParticipantPubKey) == 0 {
+		return nil, fmt.Errorf("other participant pubkey is required")
+	}
+	parsedOtherPK, err := btcec.ParsePubKey(otherParticipantPubKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse other participant pubkey: %w", err)
+	}
+	otherParticipantIndex := -1
+	for i := 0; i < len(keyManager.AllPublicKeys); i++ {
+		if keyManager.AllPublicKeys[i] != nil && keyManager.AllPublicKeys[i].IsEqual(parsedOtherPK) {
+			otherParticipantIndex = i
+			break
+		}
+	}
+	if otherParticipantIndex == -1 {
+		return nil, fmt.Errorf("other participant pubkey not found in configured MuSig2 public keys")
+	}
+	if otherParticipantIndex == keyManager.ParticipantIndex {
+		return nil, fmt.Errorf("other participant cannot be the same as this participant")
+	}
+
+	// Create a musig2.Manager from the key manager's private key
+	signingManager, err := musig2.NewManager(keyManager.PrivateKey)
+	if err != nil {
+		s.b.Logger().WithField("error", err).Error("Failed to create signing manager")
+		return nil, fmt.Errorf("failed to create signing manager: %w", err)
+	}
+
+	// Log the participant index to verify it's correct
+	s.b.Logger().WithFields(log.Fields{
+		"participantIndex": signingManager.GetParticipantIndex(),
+		"expectedIndex":    keyManager.ParticipantIndex,
+		"otherIndex":       otherParticipantIndex,
+	}).Info("Created MuSig2 signing manager")
+
+	// Create signing session
+	session, err := signingManager.NewSigningSession(message[:], otherParticipantIndex)
+	if err != nil {
+		s.b.Logger().WithField("error", err).Error("Failed to create signing session")
+		return nil, fmt.Errorf("failed to create signing session: %w", err)
+	}
+
+	// Get our public nonce
+	ourNonce := session.GetPublicNonce()
+
+	s.b.Logger().WithFields(log.Fields{
+		"ourNonce": hex.EncodeToString(ourNonce),
+	}).Info("Generated our nonce")
+
+	// If other nonce is provided, complete the partial signature
+	var partialSig []byte
+	if len(otherNonce) > 0 {
+		s.b.Logger().WithFields(log.Fields{
+			"otherNonce": hex.EncodeToString(otherNonce),
+		}).Info("Registering other party's nonce")
+
+		// Register the other party's nonce
+		err = session.RegisterOtherNonce(otherNonce)
+		if err != nil {
+			s.b.Logger().WithField("error", err).Error("Failed to register other nonce")
+			return nil, fmt.Errorf("failed to register other nonce: %w", err)
+		}
+
+		// Create our partial signature
+		partialSig, err = session.CreatePartialSignature()
+		if err != nil {
+			s.b.Logger().WithField("error", err).Error("Failed to create partial signature")
+			return nil, fmt.Errorf("failed to create partial signature: %w", err)
+		}
+
+		s.b.Logger().WithFields(log.Fields{
+			"partialSig": hex.EncodeToString(partialSig),
+			"sigLen":     len(partialSig),
+		}).Info("Created partial signature")
+	}
+
+	response := &SignAuxTemplateResponse{
+		PublicNonce:      hex.EncodeToString(ourNonce),
+		MessageHash:      hex.EncodeToString(message[:]),
+		PartialSignature: "",
+		// Expose our pubkey and local index to help the counterparty construct a canonical signer set
+		PublicKey:        hex.EncodeToString(keyManager.PublicKey.SerializeCompressed()),
+		ParticipantIndex: signingManager.GetParticipantIndex(),
+	}
+	if len(partialSig) > 0 {
+		response.PartialSignature = hex.EncodeToString(partialSig)
+	}
+
+	s.b.Logger().WithFields(log.Fields{
+		"nonceLen":      len(ourNonce),
+		"hasPartialSig": len(partialSig) > 0,
+	}).Info("SignAuxTemplate completed")
+
+	return response, nil
+}
+
+// SubmitAuxTemplate receives and processes a fully signed AuxTemplate
+func (s *PublicBlockChainQuaiAPI) SubmitAuxTemplate(ctx context.Context, templateData hexutil.Bytes) error {
+	s.b.Logger().WithFields(log.Fields{
+		"dataSize": len(templateData),
+	}).Debug("API: SubmitAuxTemplate called")
+
+	// Decode the protobuf encoded AuxTemplate
+	protoTemplate := &types.ProtoAuxTemplate{}
+	err := proto.Unmarshal(templateData, protoTemplate)
+	if err != nil {
+		s.b.Logger().WithField("error", err).Error("Failed to unmarshal AuxTemplate")
+		return fmt.Errorf("failed to unmarshal AuxTemplate: %w", err)
+	}
+
+	// Create AuxTemplate from proto for logging and broadcast
+	auxTemplate := &types.AuxTemplate{}
+	err = auxTemplate.ProtoDecode(protoTemplate)
+	if err != nil {
+		s.b.Logger().WithField("error", err).Error("Failed to decode AuxTemplate")
+		return fmt.Errorf("failed to decode AuxTemplate: %w", err)
+	}
+
+	// Verify the embedded MuSig2 composite signature in the AuxTemplate
+	if !auxTemplate.VerifySignature() {
+		s.b.Logger().Error("API: Invalid signature on AuxTemplate (embedded)")
+		return fmt.Errorf("invalid signature on AuxTemplate (embedded)")
+	}
+
+	// For observability and signing message
+	messageHash := auxTemplate.Hash()
+	messageHashHex := hex.EncodeToString(messageHash[:])
+	merkleBranch := make([]string, len(auxTemplate.MerkleBranch()))
+	for i, hash := range auxTemplate.MerkleBranch() {
+		merkleBranch[i] = hex.EncodeToString(hash)
+	}
+	s.b.Logger().WithFields(log.Fields{
+		"powID":          auxTemplate.PowID(),
+		"height":         auxTemplate.Height(),
+		"nBits":          fmt.Sprintf("0x%08x", auxTemplate.Bits()),
+		"prevHash":       fmt.Sprintf("%x", auxTemplate.PrevHash()),
+		"auxPow2":        hex.EncodeToString(auxTemplate.AuxPow2()),
+		"messageHash":    messageHashHex,
+		"signature":      hex.EncodeToString(auxTemplate.Sigs()),
+		"merkleBranch":   merkleBranch,
+		"version":        auxTemplate.Version(),
+		"signatureTime":  auxTemplate.SignatureTime(),
+		"coinbaseOutLen": len(auxTemplate.CoinbaseOut()),
+		"coinbaseOut":    hex.EncodeToString(auxTemplate.CoinbaseOut()),
+	}).Info("✅ Received signed AuxTemplate with valid Signature")
+
+	// Broadcast the template to the network. The final signature is embedded in the template.
+	err = s.b.BroadcastAuxTemplate(auxTemplate, s.b.NodeLocation())
+	if err != nil {
+		s.b.Logger().WithField("error", err).Error("Failed to broadcast AuxTemplate")
+		return fmt.Errorf("failed to broadcast AuxTemplate: %w", err)
+	}
+
+	s.b.Logger().Info("Successfully submitted and broadcast signed AuxTemplate")
+	return nil
+}
+
+// HashesPerQits returns the number of hashes needed to mine the given number of Qits at a given block.
+// This is calculated by multiplying the number of Qits by OneOverKqi (hashes per Qit).
+//
+// Parameters:
+//   - qiAmount: The number of Qits (note: 1 Qi = 1000 Qit)
+//   - blockNrOrHash: The block number or hash to query
+//
+// Returns:
+//   - The total number of hashes required
+//
+// Example:
+//
+//	// How many hashes to mine 1 Qi (1000 Qit)?
+//	hashes := HashesPerQits(ctx, 1000, "latest")
+//
+//	// How many hashes to mine 0.001 Qi (1 Qit)?
+//	hashes := HashesPerQits(ctx, 1, "latest")
+func (s *PublicBlockChainQuaiAPI) HashesPerQits(ctx context.Context, qiAmount hexutil.Big, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
+	// Handle zero or negative amounts
+	if qiAmount.ToInt().Sign() <= 0 {
+		return (*hexutil.Big)(big.NewInt(0)), nil
+	}
+	blockNumber, ok := blockNrOrHash.Number()
+	if !ok {
+		return nil, errors.New("invalid block number or hash")
+	}
+
+	// If "latest" (-1), get the current block number
+	var actualBlockNumber uint64
+	if blockNumber == rpc.LatestBlockNumber {
+		actualBlockNumber = s.b.CurrentHeader().NumberU64(s.b.NodeCtx())
+	} else {
+		actualBlockNumber = uint64(blockNumber)
+	}
+
+	// Calculate: qiAmount * OneOverKqi(blockNumber)
+	// OneOverKqi returns hashes per 1 Qit
+	hashesPerQit := params.OneOverKqi(actualBlockNumber)
+	totalHashes := new(big.Int).Mul(qiAmount.ToInt(), hashesPerQit)
+
+	return (*hexutil.Big)(totalHashes), nil
 }

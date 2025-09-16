@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/progpow"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/params"
 )
 
 // MarshalTOML marshals as TOML.
@@ -31,7 +31,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		SnapshotCache           int
 		Preimages               bool
 		Miner                   core.Config
-		Progpow                  progpow.Config
+		PowConfig               params.PowConfig
 		TxPool                  core.TxPoolConfig
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
@@ -57,7 +57,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.SnapshotCache = c.SnapshotCache
 	enc.Preimages = c.Preimages
 	enc.Miner = c.Miner
-	enc.Progpow = c.Progpow
+	enc.PowConfig = c.PowConfig
 	enc.TxPool = c.TxPool
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
@@ -96,7 +96,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		SnapshotCache           *int
 		Preimages               *bool
 		Miner                   *core.Config
-		Progpow                  *progpow.Config
+		PowConfig               *params.PowConfig
 		TxPool                  *core.TxPoolConfig
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
@@ -161,8 +161,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.Miner != nil {
 		c.Miner = *dec.Miner
 	}
-	if dec.Progpow != nil {
-		c.Progpow = *dec.Progpow
+	if dec.PowConfig != nil {
+		c.PowConfig = *dec.PowConfig
 	}
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool

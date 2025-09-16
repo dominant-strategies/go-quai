@@ -403,7 +403,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
-		return uncles[index].RPCMarshalWorkObjectHeader(), nil
+		return uncles[index].RPCMarshalWorkObjectHeader(s.b.RpcVersion()), nil
 	}
 	return nil, err
 }
@@ -422,7 +422,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 			}).Debug("Requested uncle not found")
 			return nil, nil
 		}
-		return uncles[index].RPCMarshalWorkObjectHeader(), nil
+		return uncles[index].RPCMarshalWorkObjectHeader(s.b.RpcVersion()), nil
 	}
 	return nil, err
 }
@@ -972,17 +972,6 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 	fields["uncles"] = uncleHashes
 
 	return fields, nil
-}
-
-// rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
-// a `PublicBlockchainAPI`.
-func (s *PublicBlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.WorkObject, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields, err := RPCMarshalBlock(s.b, b, inclTx, fullTx, s.b.NodeLocation())
-	if err != nil {
-		return nil, err
-	}
-	fields["totalEntropy"] = (*hexutil.Big)(s.b.TotalLogEntropy(b))
-	return fields, err
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
@@ -1630,6 +1619,16 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 	return fmt.Sprintf("0x%x", progpow.SeedHash(number)), nil
 }
 
+// GetWorkshareLRUDump returns a JSON-encoded dump of all workshares in the LRU caches.
+// The limit parameter caps the number of entries returned per list (0 or negative means no limit).
+func (s *PublicDebugAPI) GetWorkshareLRUDump(ctx context.Context, limit int) (map[string]interface{}, error) {
+	if limit <= 0 {
+		limit = 0 // No limit
+	}
+	dump := s.b.GetWorkshareLRUDump(limit)
+	return dump, nil
+}
+
 // PrivateDebugAPI is the collection of Quai APIs exposed over the private
 // debugging endpoint.
 type PrivateDebugAPI struct {
@@ -1709,9 +1708,8 @@ func toHexSlice(b [][]byte) []string {
 }
 
 type PublicWorkSharesAPI struct {
-	b        Backend
-	txPool   *PublicTransactionPoolAPI
-	txWorker *TxWorker
+	b      Backend
+	txPool *PublicTransactionPoolAPI
 }
 
 // NewPublicWorkSharesAPI creates a new RPC service with methods specific for the transaction pool.
@@ -1719,12 +1717,6 @@ func NewPublicWorkSharesAPI(txpoolAPi *PublicTransactionPoolAPI, b Backend) *Pub
 	api := &PublicWorkSharesAPI{
 		b,
 		txpoolAPi,
-		nil,
-	}
-	if b.TxMiningEnabled() {
-		// Start WorkShare workers
-		worker := StartTxWorker(b.Engine(), b.GetMinerEndpoints(), b.NodeLocation(), api, b.GetWorkShareThreshold())
-		api.txWorker = worker
 	}
 
 	return api
@@ -1752,22 +1744,6 @@ func (s *PublicWorkSharesAPI) GetWorkShareThreshold(ctx context.Context) (int, e
 	return s.b.GetWorkShareThreshold(), nil
 }
 
-// SendWorkedTransaction will check that the transaction in the form of a worked WorkObject
-// fufills the work threshold before adding it to the transaction pool.
-func (s *PublicWorkSharesAPI) SendUnworkedTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
-	tx := new(types.Transaction)
-	protoTransaction := new(types.ProtoTransaction)
-	err := proto.Unmarshal(input, protoTransaction)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return tx.Hash(), s.txWorker.AddTransaction(tx)
-}
-
 func (s *PublicWorkSharesAPI) ReceiveSubWorkshare(ctx context.Context, input hexutil.Bytes) error {
 	protoSubWorkshare := &types.ProtoWorkObject{}
 	err := proto.Unmarshal(input, protoSubWorkshare)
@@ -1782,6 +1758,10 @@ func (s *PublicWorkSharesAPI) ReceiveSubWorkshare(ctx context.Context, input hex
 	workShareValidity := s.b.CheckIfValidWorkShare(workShare.WorkObjectHeader())
 	if workShareValidity == types.Valid {
 		s.b.Logger().WithField("number", workShare.WorkObjectHeader().NumberU64()).Info("Received Work Share")
+
+		// Emit workshare event for real-time updates
+		s.b.SendNewWorkshareEvent(workShare)
+
 		shareView := workShare.ConvertToWorkObjectShareView(workShare.Transactions())
 		err = s.b.BroadcastWorkShare(shareView, s.b.NodeLocation())
 		if err != nil {

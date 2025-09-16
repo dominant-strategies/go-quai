@@ -6,26 +6,32 @@ import (
 	"math/big"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
+	"lukechampine.com/blake3"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/internal/telemetry"
 	"github.com/dominant-strategies/go-quai/log"
 	p2p "github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai"
+	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 const (
-	numWorkers         = 20  // Number of workers per stream
-	msgChanSize        = 500 // 500 requests per subscription
-	c_MaxWorkShareDist = 5
+	numWorkers                 = 20  // Number of workers per stream
+	msgChanSize                = 500 // 500 requests per subscription
+	c_MaxWorkShareDist         = 5
+	c_BroadcastCacheSize       = 1000
+	c_BroadcastCacheExpiryTime = 3 * time.Second
 )
 
 var (
@@ -42,6 +48,8 @@ type PubsubManager struct {
 	topics        *sync.Map
 	consensus     quai.ConsensusAPI
 	genesis       common.Hash
+
+	broadcastCache *expireLru.LRU[string, struct{}]
 
 	// Callback function to handle received data
 	onReceived func(peer.ID, string, string, interface{}, common.Location)
@@ -60,6 +68,10 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 	if err != nil {
 		return nil, err
 	}
+
+	// create a broadcast cache to not broadcast duplicate messages per topic
+	broadcastCache := expireLru.NewLRU[string, struct{}](c_BroadcastCacheSize, nil, c_BroadcastCacheExpiryTime)
+
 	return &PubsubManager{
 		ps,
 		ctx,
@@ -67,6 +79,7 @@ func NewGossipSubManager(ctx context.Context, h host.Host) (*PubsubManager, erro
 		new(sync.Map),
 		nil,
 		utils.MakeGenesis().ToBlock(0).Hash(),
+		broadcastCache,
 		nil,
 	}, nil
 }
@@ -283,6 +296,12 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				log.Global.WithField("err", err).Error("Work object block hash is a bad hash")
 				return pubsub.ValidationReject
 			}
+
+			if block.AuxPow() != nil && !block.WorkObject.AuxPow().ConvertToTemplate().VerifySignature() {
+				backend.Logger().Warn("Work share auxpow signature verification failed")
+				return pubsub.ValidationReject
+			}
+
 			return backend.ApplyPoWFilter(block.WorkObject)
 
 		case *types.WorkObjectHeaderView:
@@ -321,6 +340,11 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				return pubsub.ValidationIgnore
 			}
 
+			if block.AuxPow() != nil && !block.WorkObject.AuxPow().ConvertToTemplate().VerifySignature() {
+				backend.Logger().Warn("Work share auxpow signature verification failed")
+				return pubsub.ValidationReject
+			}
+
 			// If Block broadcasted by the peer exists in the bad block list drop the peer
 			if backend.IsBlockHashABadHash(block.WorkObject.WorkObjectHeader().Hash()) {
 				log.Global.WithField("err", err).Error("Work object header hash is a bad hash")
@@ -329,7 +353,6 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			return backend.ApplyPoWFilter(block.WorkObject)
 
 		case *types.WorkObjectShareView:
-
 			protoWo := new(types.ProtoWorkObjectShareView)
 			err := proto.Unmarshal(protoData, protoWo)
 			if err != nil {
@@ -355,35 +378,19 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 					"location": block.Location(),
 				}).Error("no backend found for this location")
 			}
+
+			if backend.NodeCtx() == common.ZONE_CTX && backend.ChainConfig().TelemetryEnabled {
+				// If broadcasting a workshare, track it as received (by network)
+				if wsv, ok := data.(*types.WorkObjectShareView); ok && wsv != nil && wsv.WorkObject != nil && wsv.WorkObject.WorkObjectHeader() != nil {
+					telemetry.RecordReceivedHeader(wsv.WorkObject.WorkObjectHeader())
+				}
+			}
+
 			// check if the work share is valid before accepting the transactions
 			// from the peer
 			err = backend.SanityCheckWorkObjectShareViewBody(block.WorkObject)
 			if err != nil {
 				backend.Logger().WithField("err", err).Warn("Sanity check of work object share view failed")
-				return pubsub.ValidationReject
-			}
-
-			threshold := backend.GetWorkShareP2PThreshold()
-			if !backend.Engine().CheckWorkThreshold(block.WorkObjectHeader(), threshold) {
-				backend.Logger().Error("workshare has less entropy than the workshare p2p threshold")
-				return pubsub.ValidationReject
-			}
-
-			// After the goldenage fork v3 if a share that is not a workshare is broadcasted without the
-			// transactions then throw an error
-			isWorkShare := backend.Engine().CheckWorkThreshold(block.WorkObjectHeader(), params.WorkSharesThresholdDiff)
-			if !isWorkShare && len(block.WorkObject.Transactions()) == 0 {
-				return pubsub.ValidationReject
-			}
-
-			if len(block.WorkObject.Transactions()) > int(backend.GetMaxTxInWorkShare()) {
-				backend.Logger().Errorf("workshare contains more transactions than allowed. Max allowed: %d, actual: %d", backend.GetMaxTxInWorkShare(), len(block.WorkObject.Transactions()))
-				return pubsub.ValidationReject
-			}
-
-			powHash, err := backend.Engine().ComputePowHash(block.WorkObject.WorkObjectHeader())
-			if err != nil {
-				backend.Logger().WithField("err", err).Error("Error computing the powHash of the work object header received from peer")
 				return pubsub.ValidationReject
 			}
 
@@ -399,30 +406,253 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				return pubsub.ValidationIgnore
 			}
 
-			currentHeaderHash := currentHeader.Hash()
-			// cannot have a pow filter when the current header is genesis
-			if backend.IsGenesisHash(currentHeaderHash) {
-				return pubsub.ValidationAccept
+			if len(block.WorkObject.Transactions()) > int(backend.GetMaxTxInWorkShare()) {
+				backend.Logger().Errorf("workshare contains more transactions than allowed. Max allowed: %d, actual: %d", backend.GetMaxTxInWorkShare(), len(block.WorkObject.Transactions()))
+				return pubsub.ValidationReject
 			}
 
-			currentHeaderPowHash, err := backend.Engine().VerifySeal(currentHeader.WorkObjectHeader())
+			if block.AuxPow() != nil {
+
+				scryptSig := types.ExtractScriptSigFromCoinbaseTx(block.WorkObject.AuxPow().Transaction())
+
+				signatureTime, err := types.ExtractSignatureTimeFromCoinbase(scryptSig)
+				if err != nil {
+					backend.Logger().WithField("err", err).Error("signature time not found in the auxpow")
+					return pubsub.ValidationReject
+				}
+				// auxpow header time and quai block time cannot be less than the
+				// signature time in the coinbase (time at which the template was
+				// signed)
+				if block.WorkObject.AuxPow().Header().Timestamp() < signatureTime {
+					backend.Logger().WithFields(log.Fields{
+						"auxpowHeaderTime": block.WorkObject.AuxPow().Header().Timestamp(),
+						"signatureTime":    signatureTime,
+					}).Error("auxpowheader time is less than signature time")
+					return pubsub.ValidationReject
+				}
+				if block.WorkObject.Time() < uint64(signatureTime) {
+					backend.Logger().WithFields(log.Fields{
+						"auxpowHeaderTime": block.WorkObject.Time(),
+						"signatureTime":    signatureTime,
+					}).Error("quai block time is less than signature time")
+					return pubsub.ValidationReject
+				}
+
+				coinbaseSealHash, err := types.ExtractSealHashFromCoinbase(scryptSig)
+				if err != nil {
+					backend.Logger().WithField("err", err).Error("coinbase seal hash not found in the auxpow")
+					return pubsub.ValidationReject
+				}
+
+				switch block.WorkObject.AuxPow().PowID() {
+				case types.Kawpow, types.SHA_BTC, types.SHA_BCH:
+					if block.WorkObject.SealHash() != coinbaseSealHash {
+						backend.Logger().WithFields(log.Fields{
+							"expectedSealHash": block.WorkObject.SealHash(),
+							"actualSealHash":   coinbaseSealHash,
+						}).Error("coinbase seal hash does not match uncle seal hash")
+						return pubsub.ValidationReject
+					}
+				case types.Scrypt:
+					// Since litecoin is merged mined with dogecoin, merkle root
+					// needs to be calculated
+					dogeHash := common.Hash(block.WorkObject.AuxPow().AuxPow2())
+					if (dogeHash == common.Hash{}) {
+						backend.Logger().Error("doge hash is nil in scrypt auxpow")
+						return pubsub.ValidationReject
+					}
+					auxMerkleRoot := types.CreateAuxMerkleRoot(dogeHash, block.WorkObject.SealHash())
+					if auxMerkleRoot != coinbaseSealHash {
+						backend.Logger().WithFields(log.Fields{
+							"expectedAuxMerkleRoot":  auxMerkleRoot,
+							"actualCoinbaseSealHash": coinbaseSealHash,
+						}).Error("coinbase seal hash does not match uncle aux merkle root")
+						return pubsub.ValidationReject
+					}
+					merkleSize, merkleNonce, err := types.ExtractMerkleSizeAndNonceFromCoinbase(scryptSig)
+					if err != nil {
+						backend.Logger().WithField("err", err).Error("failed to extract merkle size and nonce from coinbase")
+						return pubsub.ValidationReject
+					}
+					if merkleSize != params.MerkleSize {
+						backend.Logger().WithFields(log.Fields{
+							"expectedMerkleSize": params.MerkleSize,
+							"actualMerkleSize":   merkleSize,
+						}).Error("invalid merkle size in coinbase")
+						return pubsub.ValidationReject
+					}
+					if merkleNonce != params.MerkleNonce {
+						backend.Logger().WithFields(log.Fields{
+							"expectedMerkleNonce": params.MerkleNonce,
+							"actualMerkleNonce":   merkleNonce,
+						}).Error("invalid merkle nonce in coinbase")
+						return pubsub.ValidationReject
+					}
+				}
+
+				// Verify the merkle root as well
+				expectedMerkleRoot := types.CalculateMerkleRoot(block.WorkObject.AuxPow().PowID(), block.WorkObject.AuxPow().Transaction(), block.WorkObject.AuxPow().MerkleBranch())
+				if block.WorkObject.AuxPow().Header().MerkleRoot() != expectedMerkleRoot {
+					backend.Logger().WithFields(log.Fields{
+						"expectedMerkleRoot": expectedMerkleRoot,
+						"actualMerkleRoot":   block.WorkObject.AuxPow().Header().MerkleRoot(),
+					}).Error("invalid merkle root in auxpow")
+					return pubsub.ValidationReject
+				}
+
+				if err := types.ValidatePrevOutPointIndexAndSequenceOfCoinbase(block.WorkObject.AuxPow().Transaction()); err != nil {
+					backend.Logger().WithField("err", err).Error("invalid prev out point index and sequence in coinbase transaction")
+					return pubsub.ValidationReject
+				}
+
+				if !block.WorkObject.AuxPow().ConvertToTemplate().VerifySignature() && !block.WorkObjectHeader().IsShaOrScryptShareWithInvalidAddress() {
+					backend.Logger().Warn("Work share auxpow signature verification failed")
+					return pubsub.ValidationReject
+				}
+
+			}
+
+			// If the workshare is of sha or scrypt the work validation is different than the progpow or kawpow
+			if block.WorkObject.WorkObjectHeader().KawpowActivationHappened() &&
+				block.WorkObject.AuxPow() != nil &&
+				(block.WorkObject.AuxPow().PowID() == types.SHA_BCH ||
+					block.WorkObject.AuxPow().PowID() == types.SHA_BTC ||
+					block.WorkObject.AuxPow().PowID() == types.Scrypt) {
+
+				// If the current header is not a block after kawpow activation,
+				// node cannot do entropy checks
+				if !currentHeader.WorkObjectHeader().KawpowActivationHappened() {
+					return pubsub.ValidationIgnore
+				}
+
+				var powHash common.Hash
+				var workShareTarget *big.Int
+				var shareDiff, currentHeaderShareDiff, thresholdShareDiff *big.Int
+				if block.WorkObject.AuxPow().PowID() == types.Scrypt {
+					workShareTarget = new(big.Int).Div(common.Big2e256, block.WorkObject.WorkObjectHeader().ScryptDiffAndCount().Difficulty())
+					powHash = block.WorkObject.AuxPow().Header().PowHash()
+					shareDiff = block.WorkObject.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
+					currentHeaderShareDiff = currentHeader.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
+					thresholdShareDiff = new(big.Int).Div(new(big.Int).Mul(currentHeaderShareDiff, params.ShareDiffRelativeThreshold), big.NewInt(100))
+				} else {
+					workShareTarget = new(big.Int).Div(common.Big2e256, block.WorkObject.WorkObjectHeader().ShaDiffAndCount().Difficulty())
+					powHash = block.WorkObject.AuxPow().Header().PowHash()
+					shareDiff = block.WorkObject.WorkObjectHeader().ShaDiffAndCount().Difficulty()
+					currentHeaderShareDiff = currentHeader.WorkObjectHeader().ShaDiffAndCount().Difficulty()
+					thresholdShareDiff = new(big.Int).Div(new(big.Int).Mul(currentHeaderShareDiff, params.ShareDiffRelativeThreshold), big.NewInt(100))
+				}
+
+				if shareDiff.Cmp(thresholdShareDiff) < 0 {
+					backend.Logger().WithFields(log.Fields{
+						"peer":               id,
+						"workshareDiff":      shareDiff,
+						"currentHeaderDiff":  currentHeaderShareDiff,
+						"shareDiffThreshold": thresholdShareDiff,
+					}).Warn("workshare difficulty is too high")
+					return pubsub.ValidationReject
+				}
+
+				powHashBigInt := new(big.Int).SetBytes(powHash.Bytes())
+
+				// Check if satisfies workShareTarget
+				if powHashBigInt.Cmp(workShareTarget) > 0 {
+					backend.Logger().WithFields(log.Fields{
+						"peer":            id,
+						"workShareTarget": workShareTarget,
+						"powHash":         powHash.Hex(),
+						"powHashBigInt":   powHashBigInt.String(),
+					}).Warn("Workshare hash exceeds target")
+					return pubsub.ValidationReject
+				}
+
+			} else {
+				threshold := backend.GetWorkShareP2PThreshold()
+				if !backend.CheckWorkThreshold(block.WorkObjectHeader(), threshold) {
+					backend.Logger().Error("workshare has less entropy than the workshare p2p threshold")
+					return pubsub.ValidationReject
+				}
+
+				// After the goldenage fork v3 if a share that is not a workshare is broadcasted without the
+				// transactions then throw an error
+				isWorkShare := backend.CheckIfValidWorkShare(block.WorkObjectHeader()) == types.Valid
+				if !isWorkShare && len(block.WorkObject.Transactions()) == 0 {
+					return pubsub.ValidationReject
+				}
+
+				powHash, err := backend.ComputePowHash(block.WorkObject.WorkObjectHeader())
+				if err != nil {
+					backend.Logger().WithField("err", err).Error("Error computing the powHash of the work object header received from peer")
+					return pubsub.ValidationReject
+				}
+
+				currentHeaderHash := currentHeader.Hash()
+				// cannot have a pow filter when the current header is genesis
+				if backend.IsGenesisHash(currentHeaderHash) {
+					return pubsub.ValidationAccept
+				}
+
+				currentHeaderPowHash, err := backend.ComputePowHash(currentHeader.WorkObjectHeader())
+				if err != nil {
+					return pubsub.ValidationReject
+				}
+				currentHeaderIntrinsic := common.IntrinsicLogEntropy(currentHeaderPowHash)
+				if currentHeaderIntrinsic == nil {
+					return pubsub.ValidationIgnore
+				}
+
+				workShareIntrinsicEntropy := common.IntrinsicLogEntropy(powHash)
+				if workShareIntrinsicEntropy == nil {
+					return pubsub.ValidationIgnore
+				}
+
+				// Check if the Block is atleast half the current difficulty in Zone Context,
+				// this makes sure that the nodes don't listen to the forks with the PowHash
+				//	with less than 50% of current difficulty
+				if backend.NodeCtx() == common.ZONE_CTX && workShareIntrinsicEntropy.Cmp(new(big.Int).Div(currentHeaderIntrinsic, big.NewInt(2))) < 0 {
+					return pubsub.ValidationIgnore
+				}
+			}
+		case *types.AuxTemplate:
+			// Make sure no value in the template is nil, unless its specific
+			protoAuxTemplate := new(types.ProtoAuxTemplate)
+			err := proto.Unmarshal(protoData, protoAuxTemplate)
 			if err != nil {
 				return pubsub.ValidationReject
 			}
-			currentHeaderIntrinsic := backend.Engine().IntrinsicLogEntropy(currentHeaderPowHash)
-			if currentHeaderIntrinsic == nil {
-				return pubsub.ValidationIgnore
+
+			auxTemplate := &types.AuxTemplate{}
+			err = auxTemplate.ProtoDecode(protoAuxTemplate)
+			if err != nil {
+				return pubsub.ValidationReject
 			}
 
-			workShareIntrinsicEntropy := backend.Engine().IntrinsicLogEntropy(powHash)
-			if workShareIntrinsicEntropy == nil {
-				return pubsub.ValidationIgnore
+			// Verify using the embedded signature bytes (if present)
+			if !auxTemplate.VerifySignature() {
+				return pubsub.ValidationReject
 			}
 
-			// Check if the Block is atleast half the current difficulty in Zone Context,
-			// this makes sure that the nodes don't listen to the forks with the PowHash
-			//	with less than 50% of current difficulty
-			if backend.NodeCtx() == common.ZONE_CTX && workShareIntrinsicEntropy.Cmp(new(big.Int).Div(currentHeaderIntrinsic, big.NewInt(2))) < 0 {
+			// AuxTemplate specific checks
+
+			signatureTime := auxTemplate.SignatureTime()
+			backend := *g.consensus.GetBackend(topic.location)
+			if backend == nil {
+				log.Global.WithFields(log.Fields{
+					"peer": id,
+				}).Error("no backend found for this location")
+			}
+
+			currentTime := uint64(time.Now().Unix())
+
+			// If the signature time is too far in the future, reject the message
+			if currentTime+params.AuxTemplateLivenessTime < uint64(signatureTime) {
+				return pubsub.ValidationReject
+			}
+			// If the signature time is too old, reject the message
+			if currentTime > uint64(signatureTime)+params.AuxTemplateStaleTime {
+				return pubsub.ValidationReject
+			}
+			// If the signature time is older than the liveness time, ignore the message
+			if currentTime > uint64(signatureTime)+params.AuxTemplateLivenessTime {
 				return pubsub.ValidationIgnore
 			}
 		}
@@ -453,12 +683,33 @@ func (g *PubsubManager) Broadcast(location common.Location, data interface{}) er
 	if err != nil {
 		return err
 	}
+
+	backend := g.consensus.GetBackend(location)
+	if backend != nil {
+		apiBackend := *backend
+		if location.Context() == common.ZONE_CTX && backend != nil && apiBackend.ChainConfig().TelemetryEnabled {
+			// If broadcasting a workshare, track it as received (by network)
+			if wsv, ok := data.(*types.WorkObjectShareView); ok && wsv != nil && wsv.WorkObject != nil && wsv.WorkObject.WorkObjectHeader() != nil {
+				telemetry.RemoveMinedShare(wsv.WorkObject.WorkObjectHeader().Hash())
+			}
+		}
+	}
+
 	protoData, err := pb.ConvertAndMarshal(data)
 	if err != nil {
 		return err
 	}
+
+	// Check if this broadcast has already been sent recently
+	broadcastCacheKey := topicName.String() + common.Hash(blake3.Sum256(protoData)).String()
+	if _, ok := g.broadcastCache.Get(broadcastCacheKey); ok {
+		return nil
+	}
+	g.broadcastCache.Add(broadcastCacheKey, struct{}{})
+
 	if value, ok := g.topics.Load(topicName.String()); ok {
 		return value.(*pubsub.Topic).Publish(g.ctx, protoData)
 	}
+
 	return ErrNoTopic
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/telemetry"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
@@ -41,7 +42,7 @@ const (
 	minRecommitInterval = 1 * time.Second
 
 	// pendingBlockBodyLimit is maximum number of pending block bodies to be kept in cache.
-	pendingBlockBodyLimit = 100
+	pendingBlockBodyLimit = 300
 
 	// c_headerPrintsExpiryTime is how long a header hash is kept in the cache, so that currentInfo
 	// is not printed on a Proc frequency
@@ -51,6 +52,8 @@ const (
 	chainSideChanSize = 10
 
 	c_uncleCacheSize = 100
+
+	c_auxpowCacheKeySize = 33
 )
 
 // environment is the worker's current environment and holds all
@@ -131,7 +134,7 @@ type transactionOrderingInfo struct {
 type worker struct {
 	config       *Config
 	chainConfig  *params.ChainConfig
-	engine       consensus.Engine
+	engine       []consensus.Engine
 	hc           *HeaderChain
 	txPool       *TxPool
 	ephemeralKey *secp256k1.PrivateKey
@@ -142,6 +145,10 @@ type worker struct {
 	// Subscriptions
 	chainSideCh  chan ChainSideEvent
 	chainSideSub event.Subscription
+
+	// AuxPow Storage
+	auxpowCache map[types.PowID]*types.AuxTemplate
+	auxpowMu    sync.RWMutex
 
 	// Channels
 	resultCh                       chan *types.WorkObject
@@ -154,7 +161,10 @@ type worker struct {
 
 	wg sync.WaitGroup
 
-	uncles  *lru.Cache[common.Hash, types.WorkObjectHeader]
+	kawpowShares *lru.Cache[common.Hash, types.WorkObjectHeader]
+	shaShares    *lru.Cache[common.Hash, types.WorkObjectHeader]
+	scryptShares *lru.Cache[common.Hash, types.WorkObjectHeader]
+
 	uncleMu sync.RWMutex
 
 	mu                    sync.RWMutex // The lock used to protect the coinbase and extra fields
@@ -169,6 +179,7 @@ type worker struct {
 	workerDb ethdb.Database
 
 	pendingBlockBody *lru.Cache[common.Hash, types.WorkObject]
+	pendingAuxPow    *lru.Cache[[c_auxpowCacheKeySize]byte, types.AuxPow] // key is sealhash + powid
 
 	snapshotMu    sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock *types.WorkObject
@@ -184,9 +195,6 @@ type worker struct {
 	// in this case this feature will add all empty blocks into canonical chain
 	// non-stop and no real transaction will be included.
 	noempty uint32
-
-	// External functions
-	isLocalBlock func(header *types.WorkObject) bool // Function used to determine whether the specified block is mined by local miner.
 
 	logger *log.Logger
 }
@@ -221,7 +229,7 @@ func (ra *RollingAverage) Average() time.Duration {
 	return ra.sum / time.Duration(len(ra.durations))
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine consensus.Engine, headerchain *HeaderChain, txPool *TxPool, isLocalBlock func(header *types.WorkObject) bool, init bool, processingState bool, logger *log.Logger) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Database, engine []consensus.Engine, headerchain *HeaderChain, txPool *TxPool, init bool, processingState bool, logger *log.Logger) *worker {
 	worker := &worker{
 		config:                         config,
 		chainConfig:                    chainConfig,
@@ -231,7 +239,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		quaiCoinbase:                   config.QuaiCoinbase,
 		qiCoinbase:                     config.QiCoinbase,
 		lockupContractAddress:          config.LockupContractAddress,
-		isLocalBlock:                   isLocalBlock,
 		workerDb:                       db,
 		chainSideCh:                    make(chan ChainSideEvent, chainSideChanSize),
 		resultCh:                       make(chan *types.WorkObject, resultQueueSize),
@@ -241,6 +248,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		logger:                         logger,
 		coinbaseLockup:                 config.CoinbaseLockup,
 		minerPreference:                config.MinerPreference,
+		auxpowCache:                    CreateAuxPowCache(),
 	}
 	if worker.coinbaseLockup > uint8(len(params.LockupByteToBlockDepth))-1 {
 		logger.Errorf("Invalid coinbase lockup value %d, using default value %d", worker.coinbaseLockup, params.DefaultCoinbaseLockup)
@@ -250,13 +258,21 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 		logger.Infof("Using lockup contract address %s", worker.lockupContractAddress.String())
 	}
 	// initialize a uncle cache
-	uncles, _ := lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
-	worker.uncles = uncles
+	kawpowShares, _ := lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
+	shaShares, _ := lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
+	scryptShares, _ := lru.New[common.Hash, types.WorkObjectHeader](c_uncleCacheSize)
+	worker.kawpowShares = kawpowShares
+	worker.shaShares = shaShares
+	worker.scryptShares = scryptShares
+
 	// Set the GasFloor of the worker to the minGasLimit
 	worker.config.GasFloor = params.MinGasLimit(headerchain.CurrentHeader().NumberU64(common.ZONE_CTX))
 
 	phBodyCache, _ := lru.New[common.Hash, types.WorkObject](pendingBlockBodyLimit)
 	worker.pendingBlockBody = phBodyCache
+
+	auxPowCache, _ := lru.New[[c_auxpowCacheKeySize]byte, types.AuxPow](1000)
+	worker.pendingAuxPow = auxPowCache
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -283,6 +299,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	worker.start()
 
 	return worker
+}
+
+func CreateAuxPowCache() map[types.PowID]*types.AuxTemplate {
+	auxCache := make(map[types.PowID]*types.AuxTemplate)
+	return auxCache
 }
 
 func (w *worker) pickCoinbases() {
@@ -423,6 +444,12 @@ func (w *worker) close() {
 	w.wg.Wait()
 }
 
+func (w *worker) GetBestAuxTemplate(powID types.PowID) *types.AuxTemplate {
+	w.auxpowMu.RLock()
+	defer w.auxpowMu.RUnlock()
+	return w.auxpowCache[powID]
+}
+
 func (w *worker) LoadPendingBlockBody() {
 	pendingBlockBodykeys := rawdb.ReadPbBodyKeys(w.workerDb)
 	for _, key := range pendingBlockBodykeys {
@@ -511,10 +538,10 @@ func (w *worker) asyncStateLoop() {
 				}()
 				for _, wo := range side.Blocks {
 					// Short circuit for duplicate side blocks
-					if exists := w.uncles.Contains(wo.Hash()); exists {
+					if exists := w.kawpowShares.Contains(wo.Hash()); exists {
 						continue
 					}
-					w.uncles.Add(wo.Hash(), *wo.WorkObjectHeader())
+					w.kawpowShares.Add(wo.Hash(), *wo.WorkObjectHeader())
 				}
 			}()
 		case <-w.exitCh:
@@ -642,11 +669,12 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 				return nil, fmt.Errorf("target block number %v does not match the target block number %v", targetBlock.NumberU64(common.ZONE_CTX), targetBlockNumber)
 			}
 			totalEntropy := big.NewInt(0)
-			powHash, err := w.engine.ComputePowHash(targetBlock.WorkObjectHeader())
+			engine := w.hc.GetEngineForHeader(targetBlock.WorkObjectHeader())
+			powHash, err := engine.ComputePowHash(targetBlock.WorkObjectHeader())
 			if err != nil {
 				return nil, err
 			}
-			zoneThresholdEntropy := w.engine.IntrinsicLogEntropy(powHash)
+			zoneThresholdEntropy := common.IntrinsicLogEntropy(powHash)
 			totalEntropy = new(big.Int).Add(totalEntropy, zoneThresholdEntropy)
 
 			// First step is to collect all the workshares and uncles at this targetBlockNumber depth, then
@@ -654,6 +682,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			// unclesAtTargetBlockDepth has all the uncles, workshares that is there at the block height
 			var sharesAtTargetBlockDepth []*types.WorkObjectHeader
 			var entropyOfSharesAtTargetBlockDepth []*big.Int
+
 			sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, targetBlock.WorkObjectHeader())
 			entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, zoneThresholdEntropy)
 
@@ -669,20 +698,28 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 				for _, uncle := range uncles {
 					var uncleEntropy *big.Int
 					if uncle.NumberU64() == targetBlockNumber {
-						_, err := w.engine.VerifySeal(uncle)
-						if err != nil {
-							// uncle is a workshare
-							powHash, err := w.engine.ComputePowHash(uncle)
+						// Only run this before the fork
+						if work.wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+							_, err := w.hc.VerifySeal(uncle)
 							if err != nil {
-								return nil, err
+								powHash, err := w.hc.ComputePowHash(uncle)
+								if err != nil {
+									return nil, err
+								}
+								uncleEntropy = common.IntrinsicLogEntropy(powHash)
+								totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
+							} else {
+								// Add the target weight into the uncles
+								target := new(big.Int).Div(common.Big2e256, uncle.Difficulty())
+								uncleEntropy = common.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
+								totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
 							}
-							uncleEntropy = new(big.Int).Set(w.engine.IntrinsicLogEntropy(powHash))
-							totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
-						} else {
-							// Add the target weight into the uncles
-							target := new(big.Int).Div(common.Big2e256, uncle.Difficulty())
-							uncleEntropy = w.engine.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
-							totalEntropy = new(big.Int).Add(totalEntropy, uncleEntropy)
+						}
+
+						if work.wo.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
+							if _, err = uncle.PrimaryCoinbase().InternalAddress(); err != nil {
+								continue
+							}
 						}
 						sharesAtTargetBlockDepth = append(sharesAtTargetBlockDepth, uncle)
 						entropyOfSharesAtTargetBlockDepth = append(entropyOfSharesAtTargetBlockDepth, uncleEntropy)
@@ -698,20 +735,60 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 			// between the blocks, uncles and workshares proportional to the block
 			// weight
 			// get the reward in quai
-			blockRewardAtTargetBlock := misc.CalculateQuaiReward(targetBlock.Difficulty(), exchangeRate)
+			blockRewardAtTargetBlock := misc.CalculateQuaiReward(targetBlock.WorkObjectHeader(), targetBlock.Difficulty(), exchangeRate)
 			// add the fee capacitor value
 			blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
 			// add half the fees generated in the block
 			blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, new(big.Int).Div(targetBlock.TotalFees(), common.Big2))
 
+			rewardPerShare := new(big.Int).Div(blockRewardAtTargetBlock, big.NewInt(int64(params.ExpectedWorksharesPerBlock+1)))
+
 			// Add an etx for each workshare for it to be rewarded
 			for i, share := range sharesAtTargetBlockDepth {
 
-				shareReward := new(big.Int).Mul(blockRewardAtTargetBlock, entropyOfSharesAtTargetBlockDepth[i])
-				shareReward = new(big.Int).Div(shareReward, totalEntropy)
+				var shareReward *big.Int
+				if work.wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+					shareReward = new(big.Int).Mul(blockRewardAtTargetBlock, entropyOfSharesAtTargetBlockDepth[i])
+					shareReward = new(big.Int).Div(shareReward, totalEntropy)
+					if shareReward.Cmp(blockRewardAtTargetBlock) > 0 {
+						return nil, errors.New("share reward cannot be greater than the total block reward")
+					}
+				} else {
 
-				if shareReward.Cmp(blockRewardAtTargetBlock) > 0 {
-					return nil, errors.New("share reward cannot be greater than the total block reward")
+					shareReward = new(big.Int).Set(rewardPerShare)
+
+					if share.AuxPow() != nil {
+						switch share.AuxPow().PowID() {
+						case types.SHA_BCH, types.SHA_BTC:
+							validCount := new(big.Int).Sub(work.wo.ShaDiffAndCount().Count(), work.wo.ShaDiffAndCount().Uncled())
+							if validCount.Cmp(common.Big0) > 0 {
+								shareReward = new(big.Int).Mul(shareReward, work.wo.ShaDiffAndCount().Count())
+								shareReward = new(big.Int).Div(shareReward, validCount)
+							}
+						case types.Scrypt:
+							validCount := new(big.Int).Sub(work.wo.ScryptDiffAndCount().Count(), work.wo.ScryptDiffAndCount().Uncled())
+							if validCount.Cmp(common.Big0) > 0 {
+								shareReward = new(big.Int).Mul(shareReward, work.wo.ScryptDiffAndCount().Count())
+								shareReward = new(big.Int).Div(shareReward, validCount)
+							}
+						}
+					}
+
+					// If mining progpow after the fork, 20% is deducted from the
+					// expectation
+					if share.AuxPow() == nil {
+						shareReward = new(big.Int).Mul(shareReward, params.ProgpowPenalty)
+						shareReward = new(big.Int).Div(shareReward, params.ShareRewardPenaltyDivisor)
+					} else {
+						// If the share hash unlively template, 10% is deducted from
+						// the expectation
+						scritSig := types.ExtractScriptSigFromCoinbaseTx(share.AuxPow().Transaction())
+						signatureTime, err := types.ExtractSignatureTimeFromCoinbase(scritSig)
+						if err != nil || signatureTime+params.ShareLivenessTime < share.AuxPow().Header().Timestamp() {
+							shareReward = new(big.Int).Mul(shareReward, params.UnlivelySharePenalty)
+							shareReward = new(big.Int).Div(shareReward, params.ShareRewardPenaltyDivisor)
+						}
+					}
 				}
 
 				uncleCoinbase := share.PrimaryCoinbase()
@@ -740,8 +817,14 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 		work.batch.Reset()
 	}
 
+	// If there is no auxpow template, then just fill the pow id for now
+	auxPow := types.NewAuxPow(types.Kawpow, &types.AuxPowHeader{}, []byte{}, []byte{}, nil, []byte{})
+
+	// Setting the auxpow so that pow id is registered properly
+	work.wo.WorkObjectHeader().SetAuxPow(auxPow)
+
 	// Create a local environment copy, avoid the data race with snapshot state.
-	newWo, err := w.FinalizeAssemble(w.hc, work.wo, block, work.state, work.txs, uncles, work.etxs, work.subManifest, work.receipts, work.utxoSetSize, work.utxosCreate, work.utxosDelete)
+	newWo, err := w.FinalizeAssemble(work.wo, block, work.state, work.txs, uncles, work.etxs, work.subManifest, work.receipts, work.utxoSetSize, work.utxosCreate, work.utxosDelete)
 	if err != nil {
 		return nil, err
 	}
@@ -871,20 +954,38 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
 	}
-	var workShare bool
-	// If the uncle is a workshare, we should allow siblings
-	_, err := w.engine.VerifySeal(uncle)
+
+	_, err := w.hc.WorkShareDistance(env.wo, uncle)
 	if err != nil {
-		workShare = true
-	}
-	_, err = w.hc.WorkShareDistance(env.wo, uncle)
-	if err != nil {
+
+		if errors.Is(err, errInvalidWorkShareDist) {
+			// If uncle is found to be invalid because of distance, remove it from
+			// the share cache
+			var powid types.PowID
+			if uncle.AuxPow() == nil {
+				powid = types.Progpow
+			} else {
+				powid = uncle.AuxPow().PowID()
+			}
+
+			switch powid {
+			case types.Progpow, types.Kawpow:
+				w.kawpowShares.Remove(uncle.Hash())
+			case types.SHA_BCH, types.SHA_BTC:
+				w.shaShares.Remove(uncle.Hash())
+			case types.Scrypt:
+				w.scryptShares.Remove(uncle.Hash())
+			}
+		}
+
 		return err
 	}
 	if uncle.PrimaryCoinbase().IsInQiLedgerScope() && env.wo.PrimeTerminusNumber().Uint64() < params.ControllerKickInBlock {
 		return errors.New("workshare coinbase is in Qi, but Qi is disabled")
 	}
-	if !workShare && (env.wo.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash()) {
+	// If the uncle is a workshare, we should allow siblings
+	validity := w.hc.UncleWorkShareClassification(uncle)
+	if validity == types.Block && (env.wo.ParentHash(w.hc.NodeCtx()) == uncle.ParentHash()) {
 		return errors.New("uncle is sibling")
 	}
 	if !env.ancestors.Contains(uncle.ParentHash()) {
@@ -1686,10 +1787,10 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			if order < nodeCtx {
 				newWo.Header().SetParentDeltaEntropy(big.NewInt(0), nodeCtx)
 			} else {
-				newWo.Header().SetParentDeltaEntropy(w.engine.DeltaLogEntropy(w.hc, parent), nodeCtx)
+				newWo.Header().SetParentDeltaEntropy(w.hc.DeltaLogEntropy(parent), nodeCtx)
 			}
 		}
-		newWo.Header().SetParentEntropy(w.engine.TotalLogEntropy(w.hc, parent), nodeCtx)
+		newWo.Header().SetParentEntropy(w.hc.TotalLogEntropy(parent), nodeCtx)
 	} else {
 		newWo.Header().SetParentEntropy(big.NewInt(0), nodeCtx)
 		newWo.Header().SetParentDeltaEntropy(big.NewInt(0), nodeCtx)
@@ -1702,7 +1803,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 			if order < nodeCtx {
 				newWo.Header().SetParentUncledDeltaEntropy(big.NewInt(0), nodeCtx)
 			} else {
-				newWo.Header().SetParentUncledDeltaEntropy(w.engine.UncledDeltaLogEntropy(w.hc, parent), nodeCtx)
+				newWo.Header().SetParentUncledDeltaEntropy(w.hc.UncledDeltaLogEntropy(parent), nodeCtx)
 			}
 		}
 	} else {
@@ -2101,6 +2202,23 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		newWo.Header().SetBaseFee(baseFee)
 	}
 
+	if nodeCtx == common.ZONE_CTX && newWo.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
+
+		//Calculate the new diff and count values
+		newShaDiff, newShaCount, newShaUncled := w.hc.CalculatePowDiffAndCount(parent, newWo.WorkObjectHeader(), types.SHA_BTC)
+		newScryptDiff, newScryptCount, newScryptUncled := w.hc.CalculatePowDiffAndCount(parent, newWo.WorkObjectHeader(), types.Scrypt)
+
+		// Set the new diff and count values
+		newWo.WorkObjectHeader().SetShaDiffAndCount(types.NewPowShareDiffAndCount(newShaDiff, newShaCount, newShaUncled))
+		newWo.WorkObjectHeader().SetScryptDiffAndCount(types.NewPowShareDiffAndCount(newScryptDiff, newScryptCount, newScryptUncled))
+
+		newWo.WorkObjectHeader().SetKawpowDifficulty(w.hc.CalculateKawpowDifficulty(parent, newWo))
+
+		newWo.WorkObjectHeader().SetShaShareTarget(w.hc.CalculateShareTarget(parent, newWo))
+		newWo.WorkObjectHeader().SetScryptShareTarget(w.hc.CalculateShareTarget(parent, newWo))
+
+	}
+
 	// Only zone should calculate state
 	if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 		newWo.Header().SetExtra(w.extra)
@@ -2132,11 +2250,11 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 
 		// Run the consensus preparation with the default or customized consensus engine.
-		if err := w.engine.Prepare(w.hc, newWo, wo); err != nil {
+		if err := w.hc.Prepare(newWo, wo); err != nil {
 			w.logger.WithField("err", err).Error("Failed to prepare header for sealing")
 			return nil, err
 		}
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase(), newWo.Data())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase(), newWo.Data(), newWo.AuxPow(), newWo.ScryptDiffAndCount(), newWo.ShaDiffAndCount(), newWo.ShaShareTarget(), newWo.ScryptShareTarget(), newWo.KawpowDifficulty())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		env, err := w.makeEnv(parent, proposedWo, w.GetPrimaryCoinbase())
@@ -2156,27 +2274,84 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 
 		env.parentOrder = &order
 		// Accumulate the uncles for the sealing work.
-		commitUncles := func(wos *lru.Cache[common.Hash, types.WorkObjectHeader]) {
+		commitUncles := func(kawpowCache, shaCache, scryptCache *lru.Cache[common.Hash, types.WorkObjectHeader]) {
 			var uncles []*types.WorkObjectHeader
-			keys := wos.Keys()
-			for _, hash := range keys {
-				if value, exist := wos.Peek(hash); exist {
-					uncle := value
-					uncles = append(uncles, &uncle)
+			kawpowKeys := kawpowCache.Keys()
+			shaKeys := shaCache.Keys()
+			scryptKeys := scryptCache.Keys()
+
+			// Select uncles in a round robin fashion from the three caches
+			maxLen := len(kawpowKeys)
+			if len(shaKeys) > maxLen {
+				maxLen = len(shaKeys)
+			}
+			if len(scryptKeys) > maxLen {
+				maxLen = len(scryptKeys)
+			}
+
+			for i := 0; i < maxLen; i++ {
+				if i < len(kawpowKeys) {
+					if value, exist := kawpowCache.Peek(kawpowKeys[i]); exist {
+						uncle := value
+						if uncle.NumberU64()+uint64(params.WorkSharesInclusionDepth) < wo.NumberU64(common.ZONE_CTX) {
+							kawpowCache.Remove(kawpowKeys[i])
+						} else {
+							uncles = append(uncles, &uncle)
+						}
+					}
+				}
+				if i < len(shaKeys) {
+					if value, exist := shaCache.Peek(shaKeys[i]); exist {
+						uncle := value
+						if uncle.NumberU64()+uint64(params.WorkSharesInclusionDepth) < wo.NumberU64(common.ZONE_CTX) {
+							shaCache.Remove(shaKeys[i])
+						} else {
+							uncles = append(uncles, &uncle)
+						}
+					}
+				}
+				if i < len(scryptKeys) {
+					if value, exist := scryptCache.Peek(scryptKeys[i]); exist {
+						uncle := value
+						if uncle.NumberU64()+uint64(params.WorkSharesInclusionDepth) < wo.NumberU64(common.ZONE_CTX) {
+							scryptCache.Remove(scryptKeys[i])
+						} else {
+							uncles = append(uncles, &uncle)
+						}
+					}
 				}
 			}
-			// sort the uncles in the decreasing order of entropy
-			sort.Slice(uncles, func(i, j int) bool {
-				powHash1, _ := w.engine.ComputePowHash(uncles[i])
-				powHash2, _ := w.engine.ComputePowHash(uncles[j])
-				return new(big.Int).SetBytes(powHash1.Bytes()).Cmp(new(big.Int).SetBytes(powHash2.Bytes())) < 0
-			})
+
 			for _, uncle := range uncles {
 				env.uncleMu.RLock()
 				if len(env.uncles) == params.MaxWorkShareCount {
 					env.uncleMu.RUnlock()
 					break
 				}
+
+				if env.wo.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
+					// If the max number of sha and scrypt uncles is reached, skip
+					// sha and scrypt uncles
+					shaCount, scryptCount := CountNonKawpowWorkShares(env.uncles)
+
+					// If the max number of sha uncles is reached, skip sha uncles
+					if shaCount >= params.MaxShaSharesCount {
+						if uncle.AuxPow() != nil &&
+							(uncle.AuxPow().PowID() == types.SHA_BTC || uncle.AuxPow().PowID() == types.SHA_BCH) {
+							env.uncleMu.RUnlock()
+							continue
+						}
+					}
+
+					// If the max number of scrypt uncles is reached, skip scrypt uncles
+					if scryptCount >= params.MaxScryptSharesCount {
+						if uncle.AuxPow() != nil && uncle.AuxPow().PowID() == types.Scrypt {
+							env.uncleMu.RUnlock()
+							continue
+						}
+					}
+				}
+
 				env.uncleMu.RUnlock()
 				if err := w.commitUncle(env, uncle); err != nil {
 					w.logger.WithFields(log.Fields{
@@ -2191,17 +2366,33 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		if nodeCtx == common.ZONE_CTX && w.hc.ProcessingState() {
 			w.uncleMu.RLock()
 			// Prefer to locally generated uncle
-			commitUncles(w.uncles)
+			commitUncles(w.kawpowShares, w.shaShares, w.scryptShares)
 			w.uncleMu.RUnlock()
 		}
 		return env, nil
 	} else {
-		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase(), newWo.Data())
+		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase(), newWo.Data(), newWo.AuxPow(), newWo.ScryptDiffAndCount(), newWo.ShaDiffAndCount(), newWo.ShaShareTarget(), newWo.ScryptShareTarget(), newWo.KawpowDifficulty())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
 		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
 		return &environment{wo: proposedWo}, nil
 	}
 
+}
+
+func CountNonKawpowWorkShares(uncles map[common.Hash]*types.WorkObjectHeader) (int, int) {
+	shaCount := 0
+	scryptCount := 0
+	for _, uncle := range uncles {
+		if uncle.AuxPow() != nil {
+			switch uncle.AuxPow().PowID() {
+			case types.SHA_BTC, types.SHA_BCH:
+				shaCount++
+			case types.Scrypt:
+				scryptCount++
+			}
+		}
+	}
+	return shaCount, scryptCount
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
@@ -2294,16 +2485,16 @@ func (w *worker) ComputeManifestHash(header *types.WorkObject) common.Hash {
 	return manifestHash
 }
 
-func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *types.WorkObject, parent *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObjectHeader, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt, parentUtxoSetSize uint64, utxosCreate, utxosDelete []common.Hash) (*types.WorkObject, error) {
+func (w *worker) FinalizeAssemble(newWo *types.WorkObject, parent *types.WorkObject, state *state.StateDB, txs []*types.Transaction, uncles []*types.WorkObjectHeader, etxs []*types.Transaction, subManifest types.BlockManifest, receipts []*types.Receipt, parentUtxoSetSize uint64, utxosCreate, utxosDelete []common.Hash) (*types.WorkObject, error) {
 	nodeCtx := w.hc.NodeCtx()
-	wo, err := w.engine.FinalizeAndAssemble(chain, newWo, state, txs, uncles, etxs, subManifest, receipts, parentUtxoSetSize, utxosCreate, utxosDelete)
+	wo, err := w.hc.FinalizeAndAssemble(newWo, state, txs, uncles, etxs, subManifest, receipts, parentUtxoSetSize, utxosCreate, utxosDelete)
 	if err != nil {
 		return nil, err
 	}
 
 	// Once the uncles list is assembled in the block
 	if nodeCtx == common.ZONE_CTX {
-		wo.Header().SetUncledEntropy(w.engine.UncledLogEntropy(wo))
+		wo.Header().SetUncledEntropy(w.hc.UncledLogEntropy(wo))
 	}
 
 	manifestHash := w.ComputeManifestHash(parent)
@@ -2313,7 +2504,7 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 		if nodeCtx == common.ZONE_CTX {
 			// Compute and set etx rollup hash
 			var etxRollup types.Transactions
-			if w.engine.IsDomCoincident(w.hc, parent) {
+			if w.hc.IsDomCoincident(parent) {
 				etxRollup = parent.OutboundEtxs()
 			} else {
 				etxRollup, err = w.hc.CollectEtxRollup(parent)
@@ -2346,35 +2537,45 @@ func (w *worker) FinalizeAssemble(chain consensus.ChainHeaderReader, newWo *type
 func (w *worker) AddPendingWorkObjectBody(wo *types.WorkObject) {
 	// do not include the tx hash while storing the body
 	woHeaderCopy := types.CopyWorkObjectHeader(wo.WorkObjectHeader())
-	woHeaderCopy.SetTxHash(common.Hash{})
+
+	// Remove auxpow wo, because we want to be able to map multiple auxpows to
+	// the same sealhash, so storing the auxpow separately
+	woHeaderCopy.SetAuxPow(nil)
 	w.pendingBlockBody.Add(woHeaderCopy.SealHash(), *wo)
 }
 
+func (w *worker) AddPendingWorkObjectBodyWithKey(wo *types.WorkObject, key common.Hash) {
+	w.pendingBlockBody.Add(key, *wo)
+}
+
+func (w *worker) AddPendingAuxPow(powId types.PowID, sealHash common.Hash, auxpow *types.AuxPow) {
+	if w.hc.NodeCtx() == common.ZONE_CTX && powId != types.Progpow {
+		// Since auxpow can be unique per powid, we need to be able to map one sealhash to multiple auxpows
+		key := append(sealHash.Bytes(), byte(powId))
+		w.pendingAuxPow.Add([c_auxpowCacheKeySize]byte(key), *auxpow)
+	}
+}
+
 // GetPendingBlockBody gets the block body associated with the given header.
-func (w *worker) GetPendingBlockBody(woHeader *types.WorkObjectHeader) (*types.WorkObject, error) {
-	// do not include the tx hash while storing the body
-	woHeaderCopy := types.CopyWorkObjectHeader(woHeader)
-	woHeaderCopy.SetTxHash(common.Hash{})
-	body, ok := w.pendingBlockBody.Peek(woHeaderCopy.SealHash())
+func (w *worker) GetPendingBlockBody(powId types.PowID, sealHash common.Hash) (*types.WorkObject, error) {
+	body, ok := w.pendingBlockBody.Peek(sealHash)
 	if ok {
+		if w.hc.NodeCtx() == common.ZONE_CTX && powId != types.Progpow {
+			// Since auxpow can be unique per powid, we need to be able to map one sealhash to multiple auxpows
+			key := append(sealHash.Bytes(), byte(powId))
+			auxpow, ok := w.pendingAuxPow.Peek([c_auxpowCacheKeySize]byte(key))
+			if ok {
+				body.WorkObjectHeader().SetAuxPow(&auxpow)
+			}
+		}
 		return &body, nil
 	}
-	w.logger.WithField("key", woHeader.SealHash()).Warn("pending block body not found for header")
+	w.logger.WithField("key", sealHash).Warn("pending block body not found for header")
 	return nil, errors.New("pending block body not found")
 }
 
 func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.WorkObject) event.Subscription {
 	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
-}
-
-// copyReceipts makes a deep copy of the given receipts.
-func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
-	result := make([]*types.Receipt, len(receipts))
-	for i, l := range receipts {
-		cpy := *l
-		result[i] = &cpy
-	}
-	return result
 }
 
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
@@ -2392,18 +2593,71 @@ func totalFees(block *types.WorkObject, receipts []*types.Receipt) *big.Float {
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
 }
 
+func (w *worker) AddAuxPowTemplate(auxTemplate *types.AuxTemplate) error {
+	w.auxpowMu.Lock()
+	signatureTime := auxTemplate.SignatureTime()
+	oldAuxpow, exist := w.auxpowCache[auxTemplate.PowID()]
+	if exist && oldAuxpow.SignatureTime() >= signatureTime {
+		w.logger.WithFields(log.Fields{
+			"powId":            auxTemplate.PowID(),
+			"signatureTime":    signatureTime,
+			"oldSignatureTime": oldAuxpow.SignatureTime(),
+		}).Debug("Received an auxpow template with an older or equal signature time, ignoring")
+		w.auxpowMu.Unlock()
+		return nil
+	}
+	w.auxpowCache[auxTemplate.PowID()] = auxTemplate
+	w.auxpowMu.Unlock()
+	return nil
+}
+
 func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 	// Don't add the workshare into the list if its farther than the worksharefilterdist
-	if workShare.NumberU64()+uint64(params.WorkSharesInclusionDepth) < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
+	if workShare.NumberU64()+uint64(2*params.WorkSharesInclusionDepth) < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
 		return nil
 	}
 
-	// Dont add the workshare if its not valid
-	if valid := w.engine.CheckIfValidWorkShare(workShare); valid != types.Valid {
+	var powIdString string
+	if workShare.AuxPow() != nil {
+		powIdString = workShare.AuxPow().PowID().String()
+	} else {
+		powIdString = "progpow"
+	}
+
+	validity := w.hc.UncleWorkShareClassification(workShare)
+	if validity != types.Valid {
+		w.logger.WithFields(log.Fields{
+			"hash":     workShare.Hash().Hex(),
+			"number":   workShare.NumberU64(),
+			"powType":  powIdString,
+			"validity": validity,
+		}).Warn("Workshare failed validation - rejecting")
 		return errors.New("work share received from peer is not valid")
 	}
 
-	w.uncles.ContainsOrAdd(workShare.Hash(), *workShare)
+	if workShare.AuxPow() == nil || workShare.AuxPow().PowID() == types.Kawpow {
+		w.kawpowShares.ContainsOrAdd(workShare.Hash(), *workShare)
+	} else if workShare.AuxPow().PowID() == types.SHA_BTC || workShare.AuxPow().PowID() == types.SHA_BCH {
+		w.shaShares.ContainsOrAdd(workShare.Hash(), *workShare)
+	} else if workShare.AuxPow().PowID() == types.Scrypt {
+		w.scryptShares.ContainsOrAdd(workShare.Hash(), *workShare)
+	}
+
+	if w.hc.NodeCtx() == common.ZONE_CTX && w.hc.config.TelemetryEnabled {
+		telemetry.RecordCandidateHeader(workShare)
+	}
+
+	// Emit workshare event for real-time updates
+	workshareObj := types.NewWorkObjectWithHeaderAndTx(workShare, nil)
+	w.hc.workshareFeed.Send(NewWorkshareEvent{Workshare: workshareObj})
+
+	w.logger.WithFields(log.Fields{
+		"hash":     workShare.Hash().Hex(),
+		"number":   workShare.NumberU64(),
+		"powType":  powIdString,
+		"validity": validity,
+	}).Info("✓ Workshare accepted and sent to feed")
+
 	return nil
 }
 
@@ -2604,6 +2858,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if txFeeInQuai.Cmp(minimumFeeInQuai) < 0 {
 		return fmt.Errorf("tx %032x has insufficient fee for base fee * gas, have %d want %d", tx.Hash(), txFeeInQit.Uint64(), minimumFeeInQuai.Uint64())
 	}
+	if conversion && (env.wo.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock &&
+		env.wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock+params.KQuaiChangeHoldInterval) {
+		return fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the kawpow fork block", tx.Hash(), params.KQuaiChangeHoldInterval)
+	}
 	if conversion || wrapping {
 		if conversion && wrapping {
 			return fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash())
@@ -2664,5 +2922,5 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 }
 
 func (w *worker) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
-	return w.engine.CalcOrder(w.hc, header)
+	return w.hc.CalcOrder(header)
 }

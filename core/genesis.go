@@ -344,7 +344,7 @@ func DefaultGardenGenesisBlock(consensusEngine string, nonce uint64, extra []byt
 		Nonce:      nonce,
 		ExtraData:  extra,
 		GasLimit:   12000000,
-		Difficulty: big.NewInt(300000000),
+		Difficulty: big.NewInt(300000001),
 	}
 	if consensusEngine == "blake3" {
 		genesis.Config = params.Blake3PowGardenChainConfig
@@ -376,7 +376,7 @@ func DefaultLighthouseGenesisBlock(consensusEngine string, nonce uint64, extra [
 		Nonce:      nonce,
 		ExtraData:  extra,
 		GasLimit:   12000000,
-		Difficulty: big.NewInt(200000),
+		Difficulty: big.NewInt(750000000),
 	}
 	if consensusEngine == "blake3" {
 		genesis.Config = params.Blake3PowLighthouseChainConfig
@@ -392,7 +392,7 @@ func DefaultLocalGenesisBlock(consensusEngine string, nonce uint64, extra []byte
 		Nonce:      0,
 		ExtraData:  []byte{},
 		GasLimit:   12000000,
-		Difficulty: big.NewInt(2000),
+		Difficulty: big.NewInt(100000000),
 	}
 	if consensusEngine == "blake3" {
 		genesis.Config = params.Blake3PowLocalChainConfig

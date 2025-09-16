@@ -164,7 +164,7 @@ type blockChain interface {
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 	IsGenesisHash(hash common.Hash) bool
 	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
-	Engine() consensus.Engine
+	Engine(header *types.WorkObjectHeader) consensus.Engine
 	GetHeaderOrCandidateByHash(common.Hash) *types.WorkObject
 	NodeCtx() int
 	GetHeaderByHash(common.Hash) *types.WorkObject
@@ -173,6 +173,7 @@ type blockChain interface {
 	CheckInCalcOrderCache(common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(common.Hash, int, *big.Int)
 	CalcBaseFee(*types.WorkObject) *big.Int
+	CalcOrder(*types.WorkObject) (*big.Int, int, error)
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.

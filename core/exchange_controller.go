@@ -20,24 +20,36 @@ func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.W
 
 	// Apply KQuai changes based on the table
 	currentBlock := block.NumberU64(common.PRIME_CTX)
-	for _, entry := range params.KQuaiChangeTable {
-		blockNumber := entry[0]
-		reductionPercent := entry[1]
+	// Before the KawPow fork, the exchange rate is reduced based on the
+	// KQuaiChangeTable and held for the KQuaiChangeHoldInterval
+	if currentBlock < params.KawPowForkBlock {
+		for _, entry := range params.KQuaiChangeTable {
+			blockNumber := entry[0]
+			reductionPercent := entry[1]
 
-		// Apply the reduction at the exact block
-		if currentBlock == blockNumber {
-			// If the block number is the kquai reset the exchange rate back to
-			// the starting exchange rate
-			if currentBlock == params.KQuaiChangeBlock {
-				return params.ExchangeRate, nil
+			// Apply the reduction at the exact block
+			if currentBlock == blockNumber {
+				// If the block number is the kquai reset the exchange rate back to
+				// the starting exchange rate
+				if currentBlock == params.KQuaiChangeBlock {
+					return params.ExchangeRate, nil
+				}
+				exchangeRate := new(big.Int).Mul(parentExchangeRate, big.NewInt(int64(reductionPercent)))
+				exchangeRate = new(big.Int).Div(exchangeRate, big.NewInt(100))
+				return exchangeRate, nil
 			}
-			exchangeRate := new(big.Int).Mul(parentExchangeRate, big.NewInt(int64(reductionPercent)))
-			exchangeRate = new(big.Int).Div(exchangeRate, big.NewInt(100))
-			return exchangeRate, nil
-		}
 
-		// Hold the value during the hold interval after each reduction
-		if currentBlock > blockNumber && currentBlock < blockNumber+params.KQuaiChangeHoldInterval {
+			// Hold the value during the hold interval after each reduction
+			if currentBlock > blockNumber && currentBlock < blockNumber+params.KQuaiChangeHoldInterval {
+				exchangeRate := new(big.Int).Set(parentExchangeRate)
+				return exchangeRate, nil
+			}
+		}
+	} else {
+		// Resetting the exchange rate on the fork block and hold it for the kquai change hold interval
+		if currentBlock == params.KawPowForkBlock {
+			return params.ExchangeRate, nil
+		} else if currentBlock < params.KawPowForkBlock+params.KQuaiChangeHoldInterval {
 			exchangeRate := new(big.Int).Set(parentExchangeRate)
 			return exchangeRate, nil
 		}
@@ -168,7 +180,7 @@ func NormalizeConversionValueToBlock(block *types.WorkObject, exchangeRate *big.
 	if chooseQi {
 		reward = misc.CalculateQiReward(block.WorkObjectHeader(), block.MinerDifficulty())
 	} else {
-		reward = misc.CalculateQuaiReward(block.MinerDifficulty(), exchangeRate)
+		reward = misc.CalculateQuaiReward(block.WorkObjectHeader(), block.MinerDifficulty(), exchangeRate)
 	}
 
 	numBlocks := int(new(big.Int).Quo(value, reward).Uint64())
