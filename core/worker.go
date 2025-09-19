@@ -2138,7 +2138,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 		}
 		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), newWo.TxHash(), newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase(), newWo.Data())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
-		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
+		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody)
 		env, err := w.makeEnv(parent, proposedWo, w.GetPrimaryCoinbase())
 		if err != nil {
 			w.logger.WithField("err", err).Error("Failed to create sealing context")
@@ -2198,7 +2198,7 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 	} else {
 		proposedWoHeader := types.NewWorkObjectHeader(newWo.Hash(), newWo.ParentHash(nodeCtx), newWo.Number(nodeCtx), newWo.Difficulty(), newWo.WorkObjectHeader().PrimeTerminusNumber(), types.EmptyRootHash, newWo.Nonce(), newWo.Lock(), newWo.Time(), newWo.Location(), newWo.PrimaryCoinbase(), newWo.Data())
 		proposedWoBody := types.NewWoBody(newWo.Header(), nil, nil, nil, nil, nil)
-		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody, nil)
+		proposedWo := types.NewWorkObject(proposedWoHeader, proposedWoBody)
 		return &environment{wo: proposedWo}, nil
 	}
 
