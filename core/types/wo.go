@@ -407,6 +407,16 @@ func (wo *WorkObject) RegionStateRoot() common.Hash {
 	return wo.Header().RegionStateRoot()
 }
 
+func (wo *WorkObject) QuaiTransactions() []*Transaction {
+	quaiTxs := make([]*Transaction, 0)
+	for _, t := range wo.Transactions() {
+		if t.Type() == QuaiTxType {
+			quaiTxs = append(quaiTxs, t)
+		}
+	}
+	return quaiTxs
+}
+
 func (wo *WorkObject) QiTransactions() []*Transaction {
 	qiTxs := make([]*Transaction, 0)
 	for _, t := range wo.Transactions() {

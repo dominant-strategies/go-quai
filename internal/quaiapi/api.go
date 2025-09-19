@@ -243,6 +243,9 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 		}
 		return (*hexutil.Big)(balance), nil
 	} else {
+		if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+			blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if flag is set
+		}
 		state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if state == nil || err != nil {
 			return nil, err
@@ -365,15 +368,18 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
+	if number == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		number = rpc.PendingBlockNumber // Use pending state for API queries if latest is requested and flag is set
+	}
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
 		response, err := RPCMarshalETHBlock(block, true, fullTx, s.b.NodeLocation())
-		if err == nil && number == rpc.PendingBlockNumber {
+		/*if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
-		}
+		}*/
 		return response, err
 	}
 	return nil, err
@@ -383,6 +389,9 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 // detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByHash(ctx, hash)
+	if block == nil && s.b.UsePendingState() {
+		block = s.b.PendingBlockByHash(hash)
+	}
 	if block != nil {
 		return RPCMarshalETHBlock(block, true, fullTx, s.b.NodeLocation())
 	}
@@ -453,6 +462,9 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	}
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getCode call can only be made on chain processing the state")
+	}
+	if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if latest is requested and flag is set
 	}
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -684,6 +696,9 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if !s.b.ProcessingState() {
 		return nil, errors.New("evm call can only be made on chain processing the state")
 	}
+	if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if flag is set
+	}
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, 5*time.Second, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
@@ -846,11 +861,14 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionA
 	if !s.b.ProcessingState() {
 		return 0, errors.New("estimateGas call can only be made on chain processing the state")
 	}
-	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	bNrOrHashForGasEstimation := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
-		bNrOrHash = *blockNrOrHash
+		bNrOrHashForGasEstimation = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, s.b.RPCGasCap())
+	if num, ok := bNrOrHashForGasEstimation.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		bNrOrHashForGasEstimation = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for gas estimation if latest is requested and flag is set
+	}
+	return DoEstimateGas(ctx, s.b, args, bNrOrHashForGasEstimation, s.b.RPCGasCap())
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
@@ -954,7 +972,7 @@ func RPCMarshalETHBlock(block *types.WorkObject, inclTx bool, fullTx bool, nodeL
 				return newRPCTransactionFromBlockHash(block, tx.Hash(), false, nodeLocation), nil
 			}
 		}
-		txs := block.Transactions()
+		txs := block.QuaiTransactions()
 		transactions := make([]interface{}, len(txs))
 		var err error
 		for i, tx := range txs {
@@ -1187,6 +1205,9 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args Transac
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
+	if num, ok := bNrOrHash.Number(); ok && num == rpc.LatestBlockNumber && s.b.UsePendingState() {
+		bNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber) // Use pending state for API queries if latest is requested and flag is set
+	}
 	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
 	if err != nil {
 		return nil, err
@@ -1280,18 +1301,36 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 // Moved from PublicTransactionPoolAPI
 // eth_getTransactionReceipt
 func (s *PublicBlockChainAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	usePending := false
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
-	if err != nil {
-		return nil, nil
-	}
-	receipts, err := s.b.GetReceipts(ctx, blockHash)
-	if err != nil {
-		return nil, err
+	if err != nil || tx == nil {
+		// tx not confirmed in chain, check pending state
+		if s.b.UsePendingState() {
+			tx = s.b.GetPoolTransaction(hash)
+			if tx == nil {
+				return nil, nil
+			}
+			usePending = true
+			blockNumber = s.b.CurrentHeader().NumberU64(s.b.NodeCtx()) + 1
+		} else {
+			return nil, nil
+		}
 	}
 	receipt := &types.Receipt{}
-	for _, r := range receipts {
-		if r.TxHash == hash {
-			receipt = r
+	if usePending {
+		receipt, blockHash = s.b.GetPendingReceipt(hash)
+		if receipt == nil {
+			return nil, nil
+		}
+	} else {
+		receipts, err := s.b.GetReceipts(ctx, blockHash)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range receipts {
+			if r.TxHash == hash {
+				receipt = r
+			}
 		}
 	}
 

@@ -126,6 +126,12 @@ type transactionOrderingInfo struct {
 	block                   *types.WorkObject
 }
 
+type PendingState struct {
+	pendingBlock    *types.WorkObject
+	pendingState    *state.StateDB // Must always be a copy of the current state
+	pendingReceipts []*types.Receipt
+}
+
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
@@ -170,9 +176,6 @@ type worker struct {
 
 	pendingBlockBody *lru.Cache[common.Hash, types.WorkObject]
 
-	snapshotMu    sync.RWMutex // The lock used to protect the snapshots below
-	snapshotBlock *types.WorkObject
-
 	headerPrints *expireLru.LRU[common.Hash, interface{}]
 
 	// atomic status counters
@@ -189,6 +192,11 @@ type worker struct {
 	isLocalBlock func(header *types.WorkObject) bool // Function used to determine whether the specified block is mined by local miner.
 
 	logger *log.Logger
+
+	newPendingCh      chan *PendingState // newPendingCh is used to send new pending state, block and receipts to the worker
+	pendingBlockCache *lru.Cache[common.Hash, *types.WorkObject]
+	pendingMu         sync.RWMutex
+	pendingState      *PendingState
 }
 
 type RollingAverage struct {
@@ -275,7 +283,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, db ethdb.Databas
 	if headerchain.ProcessingState() && nodeCtx == common.ZONE_CTX {
 		worker.chainSideSub = worker.hc.SubscribeChainSideEvent(worker.chainSideCh)
 		worker.wg.Add(1)
+		worker.pendingBlockCache, _ = lru.New[common.Hash, *types.WorkObject](20)
 		go worker.asyncStateLoop()
+		go worker.PendingStateCache()
 	}
 
 	worker.ephemeralKey, _ = secp256k1.GeneratePrivateKey()
@@ -370,29 +380,99 @@ func (w *worker) enablePreseal() {
 	atomic.StoreUint32(&w.noempty, 0)
 }
 
+func (w *worker) PendingBlockByHash(blockHash common.Hash) *types.WorkObject {
+	pendingBlock, _ := w.pendingBlockCache.Get(blockHash)
+	return pendingBlock
+}
+
 // pending returns the pending state and corresponding block.
 func (w *worker) pending() *types.WorkObject {
-	// return a snapshot to avoid contention on currentMu mutex
-	w.snapshotMu.RLock()
-	defer w.snapshotMu.RUnlock()
-	return w.snapshotBlock
+	w.pendingMu.RLock()
+	defer w.pendingMu.RUnlock()
+	return w.pendingState.pendingBlock
 }
 
 // pendingBlock returns pending block.
 func (w *worker) pendingBlock() *types.WorkObject {
 	// return a snapshot to avoid contention on currentMu mutex
-	w.snapshotMu.RLock()
-	defer w.snapshotMu.RUnlock()
-	return w.snapshotBlock
+	w.pendingMu.RLock()
+	defer w.pendingMu.RUnlock()
+	return w.pendingState.pendingBlock
 }
 
 // pendingBlockAndReceipts returns pending block and corresponding receipts.
 func (w *worker) pendingBlockAndReceipts() (*types.WorkObject, types.Receipts) {
 	// return a snapshot to avoid contention on currentMu mutex
-	w.snapshotMu.RLock()
-	defer w.snapshotMu.RUnlock()
+	w.pendingMu.RLock()
+	defer w.pendingMu.RUnlock()
 	// snapshot receipts are not stored in the worker anymore, so pending receipts is nil
-	return w.snapshotBlock, nil
+	return w.pendingState.pendingBlock, w.pendingState.pendingReceipts
+}
+
+// GetPendingState returns the pending state, pending block and pending receipts
+func (w *worker) PendingStateAndBlock() (*state.StateDB, *types.WorkObject) {
+	w.pendingMu.RLock()
+	defer w.pendingMu.RUnlock()
+	copy := w.pendingState.pendingState.Copy()
+	return copy, w.pendingState.pendingBlock
+}
+
+func (w *worker) PendingState() *state.StateDB {
+	w.pendingMu.RLock()
+	defer w.pendingMu.RUnlock()
+	return w.pendingState.pendingState
+}
+
+func (w *worker) PendingReceipts() []*types.Receipt {
+	w.pendingMu.RLock()
+	defer w.pendingMu.RUnlock()
+	return w.pendingState.pendingReceipts
+}
+
+func (w *worker) PendingStateCache() {
+
+	w.newPendingCh = make(chan *PendingState, 10)
+
+	currentHeader := w.hc.CurrentHeader()
+	evmRoot := currentHeader.EVMRoot()
+	etxRoot := currentHeader.EtxSetRoot()
+	quaiStateSize := currentHeader.QuaiStateSize()
+	if w.hc.IsGenesisHash(currentHeader.Hash()) {
+		evmRoot = types.EmptyRootHash
+		etxRoot = types.EmptyRootHash
+		quaiStateSize = big.NewInt(0)
+	}
+
+	state, err := w.hc.bc.processor.StateAt(evmRoot, etxRoot, quaiStateSize)
+	if err != nil {
+		w.logger.WithField("err", err).Error("Error getting state")
+		return
+	}
+	w.pendingState = &PendingState{
+		pendingState:    state,
+		pendingBlock:    currentHeader,
+		pendingReceipts: make([]*types.Receipt, 0),
+	}
+	for {
+		select {
+		case newPendingState := <-w.newPendingCh:
+			w.pendingMu.Lock()
+			w.pendingState = newPendingState
+			w.pendingMu.Unlock()
+			w.pendingBlockCache.Add(newPendingState.pendingBlock.Hash(), newPendingState.pendingBlock)
+			for _, r := range newPendingState.pendingReceipts {
+				if r.Type == types.QuaiTxType {
+					w.logger.WithFields(log.Fields{
+						"txHash":      r.TxHash,
+						"blockHash":   newPendingState.pendingBlock.Hash(),
+						"blockNumber": newPendingState.pendingBlock.NumberU64(common.ZONE_CTX),
+					}).Debug("New receipt in pending block")
+				}
+			}
+		case <-w.exitCh:
+			return
+		}
+	}
 }
 
 // start sets the running status as 1 and triggers new work submitting.
@@ -465,7 +545,7 @@ func (w *worker) asyncStateLoop() {
 	}()
 	defer w.wg.Done() // decrement the wait group after the close of the loop
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(minRecommitInterval)
 	var prevHeader *types.WorkObject = nil
 	defer ticker.Stop()
 	for {
@@ -747,6 +827,16 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	}
 
 	work.wo = newWo
+
+	select {
+	case w.newPendingCh <- &PendingState{
+		pendingState:    work.state,
+		pendingBlock:    newWo,
+		pendingReceipts: work.receipts,
+	}:
+	default:
+		w.logger.WithField("err", "pending state channel is full").Error("Pending state channel is full")
+	}
 
 	w.printPendingHeaderInfo(work, newWo, start)
 	work.utxosCreate = nil

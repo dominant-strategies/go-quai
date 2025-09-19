@@ -1225,6 +1225,11 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
+		pool.logger.WithFields(log.Fields{
+			"tx":   tx.Hash(),
+			"from": tx.From(pool.chainconfig.Location),
+			"to":   tx.To(),
+		}).Debug("Added tx to pool")
 	}
 	if len(qiNews) > 0 {
 		qiErrs := pool.addQiTxs(qiNews)
@@ -1608,11 +1613,15 @@ func (pool *TxPool) SendTxToSharingClients(tx *types.Transaction) error {
 		}
 		return err
 	} else {
+		err := pool.AddLocal(tx)
+		if err != nil {
+			return err
+		}
 		// send to the first client, and then submit to the rest
 		client := pool.poolSharingClients[0]
 		ctx, cancel := context.WithTimeout(context.Background(), txSharingPoolTimeout)
 		defer cancel()
-		err := client.SendTransactionToPoolSharingClient(ctx, tx)
+		err = client.SendTransactionToPoolSharingClient(ctx, tx)
 		if err != nil {
 			pool.logger.WithField("err", err).Error("Error sending transaction to pool sharing client")
 		}
