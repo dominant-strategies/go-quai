@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	c_dagItemsInCache = 10000
+	c_dagItemsInCache = 30000
 )
 
 var (

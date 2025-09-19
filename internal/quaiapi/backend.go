@@ -83,7 +83,7 @@ type Backend interface {
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
 	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
 	GetPendingHeader() (*types.WorkObject, error)
-	GetPendingBlockBody(workShare *types.WorkObjectHeader) *types.WorkObject
+	GetPendingBlockBody(sealHash common.Hash) *types.WorkObject
 	GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error)
 	GetManifest(blockHash common.Hash) (types.BlockManifest, error)
 	GetSubManifest(slice common.Location, blockHash common.Hash) (types.BlockManifest, error)
@@ -99,10 +99,7 @@ type Backend interface {
 	AddGenesisPendingEtxs(block *types.WorkObject)
 	SubscribeExpansionEvent(ch chan<- core.ExpansionEvent) event.Subscription
 	WriteGenesisBlock(block *types.WorkObject, location common.Location)
-	SendWorkShare(workShare *types.WorkObjectHeader) error
-	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity
 	SetDomInterface(domInterface core.CoreBackend)
-	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 	GetMaxTxInWorkShare() uint64
 	GetExpansionNumber() uint8
 	SuggestFinalityDepth(ctx context.Context, qiValue *big.Int, correlatedRisk *big.Int) (*big.Int, error)
@@ -111,14 +108,21 @@ type Backend interface {
 	MakeFullPendingHeader(primePh, regionPh, zonePh *types.WorkObject) *types.WorkObject
 	CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool)
 	AddToCalcOrderCache(hash common.Hash, order int, intrinsicS *big.Int)
+	AddPendingWorkObjectBody(wo *types.WorkObject)
 	GetPrimeBlock(blockHash common.Hash) *types.WorkObject
 	GetKQuaiAndUpdateBit(blockHash common.Hash) (*big.Int, uint8, error)
 	consensus.ChainHeaderReader
-	TxMiningEnabled() bool
-	GetWorkShareThreshold() int
-	GetMinerEndpoints() []string
+	WorkSharePoolEnabled() bool
+
+	// Mining methods
+	CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity
+	SendWorkShare(workShare *types.WorkObjectHeader) error
 	GetWorkShareP2PThreshold() int
 	SetWorkShareP2PThreshold(threshold int)
+	ReceiveMinedHeader(woHeader *types.WorkObject) error
+	ReceiveWorkShare(workShare *types.WorkObjectHeader) error
+	ReceiveNonce(sealHash common.Hash, nonce types.BlockNonce) error
+	GenerateCustomWorkObject(original *types.WorkObject, lock uint8, minerPreference float64, quaiCoinbase, qiCoinbase common.Address) *types.WorkObject
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool
@@ -161,6 +165,7 @@ type Backend interface {
 	// P2P apis
 	BroadcastBlock(block *types.WorkObject, location common.Location) error
 	BroadcastHeader(header *types.WorkObject, location common.Location) error
+	BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {
@@ -224,9 +229,9 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Public:    true,
 		})
 		apis = append(apis, rpc.API{
-			Namespace: "workshare",
+			Namespace: "workshares",
 			Version:   "1.0",
-			Service:   NewPublicWorkSharesAPI(apis[7].Service.(*PublicTransactionPoolAPI), apiBackend),
+			Service:   NewPublicWorkSharesAPI(apiBackend),
 			Public:    true,
 		})
 	}
