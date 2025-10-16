@@ -301,12 +301,12 @@ func (s *Quai) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs),
+			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs, "eth"),
 			Public:    true,
 		}, {
 			Namespace: "quai",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs),
+			Service:   filters.NewPublicFilterAPI(s.APIBackend, 5*time.Minute, s.maxWsSubs, "quai"),
 			Public:    true,
 		}, {
 			Namespace: "admin",

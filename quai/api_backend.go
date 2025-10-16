@@ -119,15 +119,25 @@ func (b *QuaiAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*t
 
 func (b *QuaiAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.WorkObject, error) {
 	// Pending block is only known by the miner
-	if number == rpc.PendingBlockNumber {
+	switch number {
+	case rpc.PendingBlockNumber:
 		block := b.quai.core.PendingBlock()
 		return block, nil
+	case rpc.SafeBlockNumber:
+		latestNumber := rpc.BlockNumber(b.quai.core.CurrentHeader().NumberU64(b.NodeCtx()))
+		safeNumber := rpc.BlockNumber(latestNumber - 5) // TODO: make this a constant param
+		return b.quai.core.GetBlockByNumber(uint64(safeNumber)), nil
+	case rpc.FinalizedBlockNumber:
+		latestNumber := rpc.BlockNumber(b.quai.core.CurrentHeader().NumberU64(b.NodeCtx()))
+		finalizedNumber := rpc.BlockNumber(latestNumber - 5) // TODO: make this a constant param
+		return b.quai.core.GetBlockByNumber(uint64(finalizedNumber)), nil
+	case rpc.LatestBlockNumber:
+		latestNumber := rpc.BlockNumber(b.quai.core.CurrentHeader().NumberU64(b.NodeCtx()))
+		return b.quai.core.GetBlockByNumber(uint64(latestNumber)), nil
+	default:
+		// Otherwise resolve and return the block
+		return b.quai.core.GetBlockByNumber(uint64(number)), nil
 	}
-	// Otherwise resolve and return the block
-	if number == rpc.LatestBlockNumber {
-		number = rpc.BlockNumber(b.quai.core.CurrentHeader().NumberU64(b.NodeCtx()))
-	}
-	return b.quai.core.GetBlockByNumber(uint64(number)), nil
 }
 
 func (b *QuaiAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.WorkObject, error) {

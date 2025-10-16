@@ -33,6 +33,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"google.golang.org/protobuf/proto"
@@ -67,10 +68,11 @@ type PublicFilterAPI struct {
 	timeout             time.Duration
 	subscriptionLimit   int
 	activeSubscriptions int
+	namespace           string
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, timeout time.Duration, subscriptionLimit int) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, timeout time.Duration, subscriptionLimit int, namespace string) *PublicFilterAPI {
 	api := &PublicFilterAPI{
 		backend:             backend,
 		chainDb:             backend.ChainDb(),
@@ -79,6 +81,7 @@ func NewPublicFilterAPI(backend Backend, timeout time.Duration, subscriptionLimi
 		timeout:             timeout,
 		subscriptionLimit:   subscriptionLimit,
 		activeSubscriptions: 0,
+		namespace:           namespace,
 	}
 	go api.timeoutLoop(timeout)
 
@@ -291,8 +294,15 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 		for {
 			select {
 			case h := <-headers:
-				// Marshal the header data
-				marshalHeader := h.RPCMarshalWorkObject()
+				// Marshal the header data based on namespace
+				var marshalHeader interface{}
+				if api.namespace == "eth" {
+					// Use ETH-compatible header format for eth namespace
+					marshalHeader = quaiapi.RPCMarshalETHHeader(h.Header(), h.WorkObjectHeader())
+				} else {
+					// Use native Quai format for quai namespace
+					marshalHeader = h.RPCMarshalWorkObject()
+				}
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
