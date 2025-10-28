@@ -59,6 +59,8 @@ var Flags = [][]Flag{
 	RPCFlags,
 	PeersFlags,
 	MetricsFlags,
+	StratumFlags,
+	DashboardFlags,
 }
 
 var GlobalFlags = []Flag{
@@ -630,6 +632,60 @@ var (
 		Name:  c_NodeFlagPrefix + "telemetry",
 		Value: true,
 		Usage: "Enable telemetry reporting" + generateEnvDoc(c_NodeFlagPrefix+"telemetry"),
+	}
+)
+
+// ****************************************
+// **            STRATUM FLAGS           **
+// ****************************************
+var StratumFlags = []Flag{
+	StratumEnabledFlag,
+	StratumSHAAddrFlag,
+	StratumScryptAddrFlag,
+	StratumKawpowAddrFlag,
+}
+
+var (
+	StratumEnabledFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-enabled",
+		Value: false,
+		Usage: "enable TCP stratum endpoints for merged mining (one port per algorithm)",
+	}
+	StratumSHAAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-sha-addr",
+		Value: "0.0.0.0:3333",
+		Usage: "listen address for SHA256 stratum endpoint",
+	}
+	StratumScryptAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-scrypt-addr",
+		Value: "0.0.0.0:3334",
+		Usage: "listen address for Scrypt stratum endpoint",
+	}
+	StratumKawpowAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-kawpow-addr",
+		Value: "0.0.0.0:3335",
+		Usage: "listen address for Kawpow stratum endpoint",
+	}
+)
+
+// ****************************************
+// **          DASHBOARD FLAGS           **
+// ****************************************
+var DashboardFlags = []Flag{
+	DashboardEnabledFlag,
+	DashboardAddrFlag,
+}
+
+var (
+	DashboardEnabledFlag = Flag{
+		Name:  c_NodeFlagPrefix + "dashboard-enabled",
+		Value: false,
+		Usage: "enable the web dashboard for node monitoring",
+	}
+	DashboardAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "dashboard-addr",
+		Value: "0.0.0.0:8080",
+		Usage: "listen address for the web dashboard",
 	}
 )
 
@@ -1479,6 +1535,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
 		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
 	}
+	cfg.Miner.StratumEnabled = viper.GetBool(StratumEnabledFlag.Name)
 
 	cfg.WorkShareP2PThreshold = viper.GetInt(WorkShareP2PThreshold.Name)
 	// workshare p2p threshold cannot be less than the workshare threshold diff

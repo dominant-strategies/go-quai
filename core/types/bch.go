@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"io"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	bchhash "github.com/gcash/bchd/chaincfg/chainhash"
@@ -18,12 +19,13 @@ func NewBitcoinCashHeaderWrapper(header *bchdwire.BlockHeader) *BitcoinCashHeade
 	return &BitcoinCashHeaderWrapper{BlockHeader: header}
 }
 
-func NewBitcoinCashBlockHeader(version int32, prevBlockHash [32]byte, merkleRootHash [32]byte, time uint32, bits uint32, nonce uint32) *BitcoinCashHeaderWrapper {
+func NewBitcoinCashBlockHeader(version int32, prevBlockHash [32]byte, merkleRootHash [32]byte, timestamp uint32, bits uint32, nonce uint32) *BitcoinCashHeaderWrapper {
 	prevHash := bchhash.Hash{}
 	copy(prevHash[:], prevBlockHash[:])
 	merkleRoot := bchhash.Hash{}
 	copy(merkleRoot[:], merkleRootHash[:])
 	header := bchdwire.NewBlockHeader(version, &prevHash, &merkleRoot, bits, nonce)
+	header.Timestamp = time.Unix(int64(timestamp), 0)
 	return &BitcoinCashHeaderWrapper{BlockHeader: header}
 }
 
