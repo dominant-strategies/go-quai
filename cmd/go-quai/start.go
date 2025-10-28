@@ -12,15 +12,18 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/dominant-strategies/go-quai/dashboard"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/stratum"
 )
 
 var gitCommit, gitDate string
@@ -99,6 +102,94 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.Global.WithField("error", err).Fatal("error starting node")
 	}
 
+	// Find a processing zone backend for stratum and dashboard
+	var zoneBackend quaiapi.Backend
+	for i := 0; i < int(common.MaxRegions); i++ {
+		for j := 0; j < int(common.MaxZones); j++ {
+			backend := hc.GetBackend(common.Location{byte(i), byte(j)})
+			if backend != nil && backend.NodeCtx() == common.ZONE_CTX && backend.ProcessingState() {
+				zoneBackend = backend
+				break
+			}
+		}
+		if zoneBackend != nil {
+			break
+		}
+	}
+
+	// Optionally start stratum TCP servers when enabled and a zone backend is available
+	var stratumServer *stratum.Server
+	if viper.GetBool(utils.StratumEnabledFlag.Name) {
+		if zoneBackend == nil {
+			log.Global.Warn("Stratum endpoint enabled but no processing zone backend found; skipping start")
+		} else {
+			stratumConfig := stratum.StratumConfig{
+				SHAAddr:    viper.GetString(utils.StratumSHAAddrFlag.Name),
+				ScryptAddr: viper.GetString(utils.StratumScryptAddrFlag.Name),
+				KawpowAddr: viper.GetString(utils.StratumKawpowAddrFlag.Name),
+			}
+			stratumServer = stratum.NewServerWithConfig(stratumConfig, zoneBackend)
+			if err := stratumServer.Start(); err != nil {
+				log.Global.WithField("error", err).Error("failed to start stratum endpoints")
+			} else {
+				log.Global.WithFields(log.Fields{
+					"sha":    stratumConfig.SHAAddr,
+					"scrypt": stratumConfig.ScryptAddr,
+					"kawpow": stratumConfig.KawpowAddr,
+				}).Info("Stratum TCP endpoints started")
+			}
+		}
+	}
+
+	// Optionally start web dashboard when enabled
+	var dashboardServer *dashboard.Dashboard
+	if viper.GetBool(utils.DashboardEnabledFlag.Name) {
+		dashboardAddr := viper.GetString(utils.DashboardAddrFlag.Name)
+
+		// Build connection URLs
+		httpHost := viper.GetString(utils.HTTPListenAddrFlag.Name)
+		httpPort := viper.GetInt(utils.HTTPPortStartFlag.Name)
+		wsHost := viper.GetString(utils.WSListenAddrFlag.Name)
+		wsPort := viper.GetInt(utils.WSPortStartFlag.Name)
+		stratumSHAAddr := viper.GetString(utils.StratumSHAAddrFlag.Name)
+		stratumScryptAddr := viper.GetString(utils.StratumScryptAddrFlag.Name)
+		stratumKawpowAddr := viper.GetString(utils.StratumKawpowAddrFlag.Name)
+
+		rpcURL := "http://" + httpHost + ":" + strconv.Itoa(httpPort)
+		wsURL := "ws://" + wsHost + ":" + strconv.Itoa(wsPort)
+		stratumSHAURL := "stratum+tcp://" + stratumSHAAddr
+		stratumScryptURL := "stratum+tcp://" + stratumScryptAddr
+		stratumKawpowURL := "stratum+tcp://" + stratumKawpowAddr
+
+		// Get location string
+		locationStr := "-"
+		if zoneBackend != nil {
+			loc := zoneBackend.NodeLocation()
+			locationStr = loc.Name()
+		}
+
+		dashboardServer = dashboard.New(dashboard.Config{
+			Addr:              dashboardAddr,
+			Stratum:           stratumServer,
+			Blockchain:        zoneBackend,
+			RPCAddr:           rpcURL,
+			WSAddr:            wsURL,
+			StratumSHAAddr:    stratumSHAURL,
+			StratumScryptAddr: stratumScryptURL,
+			StratumKawpowAddr: stratumKawpowURL,
+			Version:           params.Version.Full(),
+			Network:           network,
+			Location:          locationStr,
+			ChainID:           9000, // TODO: get from chain config
+			// P2P and Node stats can be added here when interfaces are implemented
+		})
+		if err := dashboardServer.Start(); err != nil {
+			log.Global.WithField("error", err).Error("failed to start dashboard")
+		} else {
+			log.Global.WithField("addr", dashboardAddr).Info("Web dashboard started")
+		}
+	}
+
 	if viper.IsSet(utils.MetricsEnabledFlag.Name) {
 		log.Global.Info("Starting metrics")
 		var (
@@ -130,6 +221,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 	cancel()
 	// stop the hierarchical co-ordinator
 	hc.Stop()
+	if dashboardServer != nil {
+		_ = dashboardServer.Stop()
+	}
+	if stratumServer != nil {
+		_ = stratumServer.Stop()
+	}
 	if err := node.Stop(); err != nil {
 		panic(err)
 	}
