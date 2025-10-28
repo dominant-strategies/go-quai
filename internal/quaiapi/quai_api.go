@@ -1163,7 +1163,7 @@ func (s *PublicBlockChainQuaiAPI) marshalAuxPowTemplate(wo *types.WorkObject, re
 	// - coinb1: entire start of the tx up to the start of the combined extranonce push data
 	// <12 bytes of data>
 	// - coinb2: everything after the combined extranonce push data (coinb2 includes the 32 bytes of extradata)
-	coinb1, coinb2, err := extractCoinb1AndCoinb2FromAuxPowTx(txBytes)
+	coinb1, coinb2, err := types.ExtractCoinb1AndCoinb2FromAuxPowTx(txBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract coinb1 and coinb2 from AuxPowTx: %w", err)
 	}
