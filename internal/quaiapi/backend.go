@@ -86,7 +86,7 @@ type Backend interface {
 	GetPendingHeader(powID types.PowID) (*types.WorkObject, error)
 	GetPendingBlockBody(powId types.PowID, sealHash common.Hash) *types.WorkObject
 	AddPendingAuxPow(powId types.PowID, sealHash common.Hash, auxpow *types.AuxPow)
-	SubmitBlock(raw hexutil.Bytes, powId types.PowID) error
+	SubmitBlock(raw hexutil.Bytes, powId types.PowID) (common.Hash, uint64, error)
 	ReceiveMinedHeader(woHeader *types.WorkObject) error
 	ReceiveWorkShare(workShare *types.WorkObjectHeader) error
 	GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error)

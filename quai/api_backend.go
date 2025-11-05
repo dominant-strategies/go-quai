@@ -552,12 +552,12 @@ func (b *QuaiAPIBackend) AddPendingAuxPow(powId types.PowID, sealHash common.Has
 	b.quai.core.AddPendingAuxPow(powId, sealHash, auxpow)
 }
 
-func (b *QuaiAPIBackend) SubmitBlock(raw hexutil.Bytes, powId types.PowID) error {
+func (b *QuaiAPIBackend) SubmitBlock(raw hexutil.Bytes, powId types.PowID) (common.Hash, uint64, error) {
 	wo, err := b.quai.core.SubmitBlock(raw, powId)
 	if err != nil {
-		return err
+		return common.Hash{}, 0, err
 	}
-	return b.ReceiveMinedHeader(wo)
+	return wo.Hash(), wo.NumberU64(common.ZONE_CTX), b.ReceiveMinedHeader(wo)
 }
 
 func (b *QuaiAPIBackend) ReceiveMinedHeader(wo *types.WorkObject) error {

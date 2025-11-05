@@ -143,8 +143,10 @@ block (header + transactions) as a hex string prefixed with `0x`.
 | SHA | `quai_submitShaBlock` | Use when the template was requested with `powType = "sha"`. |
 | Scrypt | `quai_submitScryptBlock` | Use when the template was requested with `powType = "scrypt"`. |
 
-The RPC returns `null` on success. Errors are surfaced through standard JSON-RPC
-error objects; miners should retry with a fresh template if the node reports that
+On success the RPC returns a JSON object of the form
+`{"hash": "<workshare-or-block-hash>", "number": "<hex-encoded-block-number>"}`.
+Errors follow the standard JSON-RPC error object, and miners should retry with a
+fresh template if the node reports that
 the block is stale or the parent has changed.
 
 Upon successful submission, the node relays the block across the network and credits

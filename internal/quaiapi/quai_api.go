@@ -1413,20 +1413,37 @@ func extractCoinb1AndCoinb2FromAuxPowTx(txBytes []byte) ([]byte, []byte, error) 
 	return coinb1, coinb2, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) SubmitBlock(ctx context.Context, raw hexutil.Bytes) error {
-	return s.b.SubmitBlock(raw, types.Kawpow)
+func (s *PublicBlockChainQuaiAPI) SubmitScryptBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
+	hash, number, err := s.b.SubmitBlock(raw, types.Scrypt)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["number"] = hexutil.Uint64(number)
+	fields["hash"] = hash.Hex()
+	return fields, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) SubmitScryptBlock(ctx context.Context, raw hexutil.Bytes) error {
-	return s.b.SubmitBlock(raw, types.Scrypt)
+func (s *PublicBlockChainQuaiAPI) SubmitKawpowBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
+	hash, number, err := s.b.SubmitBlock(raw, types.Kawpow)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["number"] = hexutil.Uint64(number)
+	fields["hash"] = hash.Hex()
+	return fields, nil
 }
 
-func (s *PublicBlockChainQuaiAPI) SubmitKawpowBlock(ctx context.Context, raw hexutil.Bytes) error {
-	return s.b.SubmitBlock(raw, types.Kawpow)
-}
-
-func (s *PublicBlockChainQuaiAPI) SubmitShaBlock(ctx context.Context, raw hexutil.Bytes) error {
-	return s.b.SubmitBlock(raw, types.SHA_BCH)
+func (s *PublicBlockChainQuaiAPI) SubmitShaBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
+	hash, number, err := s.b.SubmitBlock(raw, types.SHA_BCH)
+	if err != nil {
+		return nil, err
+	}
+	fields := make(map[string]interface{})
+	fields["number"] = hexutil.Uint64(number)
+	fields["hash"] = hash.Hex()
+	return fields, nil
 }
 
 // ReceiveMinedHeader will run checks on the block and add to canonical chain if valid.
