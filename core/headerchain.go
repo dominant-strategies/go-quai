@@ -238,7 +238,7 @@ func (hc *HeaderChain) WorkShareLogEntropy(wo *types.WorkObject) (*big.Int, erro
 	totalWsEntropy := big.NewInt(0)
 	for _, ws := range workShares {
 		wsType := hc.UncleWorkShareClassification(ws)
-		if wsType == types.Invalid {
+		if wsType == types.Sub || wsType == types.Invalid {
 			return nil, errors.New("invalid workshare detected")
 		}
 		cBigBits, err := hc.IntrinsicLogEntropy(ws)
@@ -1020,11 +1020,7 @@ func (hc *HeaderChain) UncleWorkShareClassification(wo *types.WorkObjectHeader) 
 		progpowEngine := hc.engine[types.Progpow]
 		_, err := progpowEngine.VerifySeal(wo)
 		if err != nil {
-			wsType := progpowEngine.CheckIfValidWorkShare(wo)
-			if wsType == types.Valid {
-				return types.Valid
-			}
-			return types.Invalid
+			return progpowEngine.CheckIfValidWorkShare(wo)
 		} else {
 			// Valid progpow block
 			return types.Block
@@ -1036,11 +1032,7 @@ func (hc *HeaderChain) UncleWorkShareClassification(wo *types.WorkObjectHeader) 
 			kawpowEngine := hc.engine[types.Kawpow]
 			_, err := kawpowEngine.VerifySeal(wo)
 			if err != nil {
-				wsType := kawpowEngine.CheckIfValidWorkShare(wo)
-				if wsType == types.Valid {
-					return types.Valid
-				}
-				return types.Invalid
+				return kawpowEngine.CheckIfValidWorkShare(wo)
 			} else {
 				// Valid kawpow block
 				return types.Block

@@ -1414,35 +1414,61 @@ func extractCoinb1AndCoinb2FromAuxPowTx(txBytes []byte) ([]byte, []byte, error) 
 }
 
 func (s *PublicBlockChainQuaiAPI) SubmitScryptBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
-	hash, number, err := s.b.SubmitBlock(raw, types.Scrypt)
+	hash, number, validity, err := s.b.SubmitBlock(raw, types.Scrypt)
 	if err != nil {
 		return nil, err
 	}
 	fields := make(map[string]interface{})
 	fields["number"] = hexutil.Uint64(number)
 	fields["hash"] = hash.Hex()
+	switch validity {
+	case types.Sub:
+		fields["status"] = hexutil.Uint64(0)
+	case types.Valid:
+		fields["status"] = hexutil.Uint64(1)
+	case types.Block:
+		fields["status"] = hexutil.Uint64(2)
+	}
 	return fields, nil
 }
 
 func (s *PublicBlockChainQuaiAPI) SubmitKawpowBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
-	hash, number, err := s.b.SubmitBlock(raw, types.Kawpow)
+	hash, number, validity, err := s.b.SubmitBlock(raw, types.Kawpow)
 	if err != nil {
 		return nil, err
 	}
 	fields := make(map[string]interface{})
 	fields["number"] = hexutil.Uint64(number)
 	fields["hash"] = hash.Hex()
+
+	switch validity {
+	case types.Sub:
+		fields["status"] = hexutil.Uint64(0)
+	case types.Valid:
+		fields["status"] = hexutil.Uint64(1)
+	case types.Block:
+		fields["status"] = hexutil.Uint64(2)
+	}
 	return fields, nil
 }
 
 func (s *PublicBlockChainQuaiAPI) SubmitShaBlock(ctx context.Context, raw hexutil.Bytes) (map[string]interface{}, error) {
-	hash, number, err := s.b.SubmitBlock(raw, types.SHA_BCH)
+	hash, number, validity, err := s.b.SubmitBlock(raw, types.SHA_BCH)
 	if err != nil {
 		return nil, err
 	}
 	fields := make(map[string]interface{})
 	fields["number"] = hexutil.Uint64(number)
 	fields["hash"] = hash.Hex()
+
+	switch validity {
+	case types.Sub:
+		fields["status"] = hexutil.Uint64(0)
+	case types.Valid:
+		fields["status"] = hexutil.Uint64(1)
+	case types.Block:
+		fields["status"] = hexutil.Uint64(2)
+	}
 	return fields, nil
 }
 

@@ -1471,6 +1471,10 @@ func (c *Core) GetMinerEndpoints() []string {
 	return c.endpoints
 }
 
+func (c *Core) UncleWorkShareClassification(header *types.WorkObjectHeader) types.WorkShareValidity {
+	return c.sl.hc.UncleWorkShareClassification(header)
+}
+
 func (c *Core) GetWorkshareLRUDump(limit int) map[string]interface{} {
 	return telemetry.BuildWorkshareLRUDump(limit)
 }

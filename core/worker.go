@@ -2565,7 +2565,7 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 	}
 
 	validity := w.hc.UncleWorkShareClassification(workShare)
-	if validity == types.Invalid {
+	if validity != types.Valid {
 		w.logger.WithFields(log.Fields{
 			"hash":     workShare.Hash().Hex(),
 			"number":   workShare.NumberU64(),

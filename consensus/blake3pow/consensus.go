@@ -211,10 +211,10 @@ func (blake3pow *Blake3pow) VerifyUncles(chain consensus.ChainReader, block *typ
 		// uncle but can be if its a workshare
 		var workShare bool
 		validity := chain.UncleWorkShareClassification(uncle)
-		if validity == types.Valid {
+		switch validity {
+		case types.Valid:
 			workShare = true
-		}
-		if validity == types.Invalid {
+		case types.Sub, types.Invalid:
 			return errors.New("uncle in the block has invalid proof of work")
 		}
 
