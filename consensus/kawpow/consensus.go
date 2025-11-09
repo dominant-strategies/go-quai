@@ -675,7 +675,9 @@ func (kawpow *Kawpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, 
 	nonce64 := ravencoinHeader.Nonce64()
 
 	// Get the KAWPOW header hash (the input to the KAWPOW algorithm)
-	kawpowHeaderHash := ravencoinHeader.SealHash() // Already in little endian to be directly used for the mix hash calculation
+	// NOTE: SealHash() returns the hash in BIG-ENDIAN format (SHA256 natural output)
+	// This will be reversed to little-endian before passing to kawpowLight
+	kawpowHeaderHash := ravencoinHeader.SealHash()
 	blockNumber := uint64(ravencoinHeader.Height())
 
 	// Create a unique cache key using the RVN-compatible header hash + nonce so
@@ -700,7 +702,7 @@ func (kawpow *Kawpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, 
 
 	// Use the same kawpowLight function as the sealer, but feed the
 	// RVN-compatible (byte-reversed) header hash bytes, since the
-	// implementation expects the hash as big endian, it needs to be
+	// implementation expects the hash as little endian, it needs to be
 	size := datasetSize(blockNumber)
 	digest, result := kawpowLight(size, ethashCache.cache, reverseBytes32(kawpowHeaderHash.Bytes()), nonce64, blockNumber, ethashCache.cDag)
 	// MixHash stored in the header should be little endian, so reverse it back to little endian
@@ -963,4 +965,43 @@ func (kawpow *Kawpow) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 
 func (kawpow *Kawpow) NodeLocation() common.Location {
 	return kawpow.config.NodeLocation
+}
+
+// VerifyKawpowShare validates a Kawpow share for pool mining.
+// This function is used by mining pools to validate shares without requiring a full WorkObject.
+//
+// Parameters:
+// - headerHash: The Kawpow header hash (seal hash) from RavencoinBlockHeader.GetKAWPOWHeaderHash()
+// - nonce: The 64-bit nonce value
+// - mixHash: The mix hash submitted by the miner
+// - blockNumber: The block height for epoch calculation
+//
+// Returns:
+// - calculatedMixHash: The mix hash calculated by the Kawpow algorithm
+// - powHash: The proof-of-work hash to compare against the target
+// - error: Any error that occurred during calculation
+func (kawpow *Kawpow) VerifyKawpowShare(headerHash common.Hash, nonce uint64, blockNumber uint64) (common.Hash, common.Hash, error) {
+	// Get the cache for this block number
+	ethashCache := kawpow.cache(blockNumber)
+
+	// Generate cDag if not already present
+	if ethashCache.cDag == nil {
+		cDag := make([]uint32, kawpowCacheWords)
+		generateCDag(cDag, ethashCache.cache, blockNumber/C_epochLength, kawpow.logger)
+		ethashCache.cDag = cDag
+	}
+
+	// Get dataset size for this block
+	size := datasetSize(blockNumber)
+
+	// Compute Kawpow hash using kawpowLight
+	// The headerHash should be reversed to little-endian for the algorithm
+	digest, result := kawpowLight(size, ethashCache.cache, headerHash.Bytes(), nonce, blockNumber, ethashCache.cDag)
+
+	// Convert results to common.Hash
+	// MixHash should be reversed back to little-endian
+	calculatedMixHash := common.BytesToHash(reverseBytes32(digest))
+	powHash := common.BytesToHash(result)
+
+	return calculatedMixHash, powHash, nil
 }
