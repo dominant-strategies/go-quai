@@ -186,6 +186,13 @@ Payment for these shares will happen to Quai coinbase set in the go-quai node.
 There is no need to set coinbase in stratum. Quai block reward will follow the current
 structure after the soap/kawpow upgrade.
 
+## Template Updates
+To determine if you should update miners with a new template, poll quai_getBlockTemplate once per second and check the `previousblockhash`, `quairoot`, `quaiheight` and `merkleroot` fields in the template.
+- If the `previousblockhash` changes, immediately notify all miners with `clean=true`
+- If the `quaiheight` changes, immediately notify all miners with `clean=true`
+- If the `quairoot` changes, immediately notify all miners with `clean=false`
+- If the `merkleroot` changes, notify all miners with `clean=false`
+
 ## Reference Implementations
 
 Two public pool codebases already integrate these RPCs. Reviewing their diffs can
