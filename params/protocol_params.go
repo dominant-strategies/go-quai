@@ -212,8 +212,8 @@ var (
 
 	// Controller related constants
 	StartingKQuaiDiscount               = big.NewInt(100)
-	StartingConversionFlowAmount        = new(big.Int).Mul(big.NewInt(10000), big.NewInt(Ether)) // Starting conversion flow amount in Quai
-	MinConversionFlowAmount             = new(big.Int).Mul(big.NewInt(100), big.NewInt(Ether))   // Min conversion flow amount in Quai
+	StartingConversionFlowAmount        = new(big.Int).Mul(big.NewInt(50000), big.NewInt(Ether)) // Starting conversion flow amount in Quai
+	MinConversionFlowAmount             = new(big.Int).Mul(big.NewInt(500), big.NewInt(Ether))   // Min conversion flow amount in Quai
 	MinerDifficultyWindow        uint64 = 4000
 	KQuaiDiscountMultiplier      int64  = 100000
 	MinCubicDiscountBasisPoint   uint64 = 20
