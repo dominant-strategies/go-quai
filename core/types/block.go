@@ -32,7 +32,6 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
-	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rlp"
 )
 
@@ -199,8 +198,8 @@ func EmptyWorkObject(nodeCtx int) *WorkObject {
 	wo.woHeader.SetLock(0)
 	wo.woHeader.SetPrimaryCoinbase(common.Address{})
 	wo.woHeader.SetTime(0)
-	wo.woHeader.SetShaDiffAndCount(NewPowShareDiffAndCount(params.InitialShaDiff, big.NewInt(0), big.NewInt(0)))
-	wo.woHeader.SetScryptDiffAndCount(NewPowShareDiffAndCount(params.InitialScryptDiff, big.NewInt(0), big.NewInt(0)))
+	wo.woHeader.SetShaDiffAndCount(NewPowShareDiffAndCount(big.NewInt(0), big.NewInt(0), big.NewInt(0)))
+	wo.woHeader.SetScryptDiffAndCount(NewPowShareDiffAndCount(big.NewInt(0), big.NewInt(0), big.NewInt(0)))
 	wo.woHeader.SetShaShareTarget(big.NewInt(0))
 	wo.woHeader.SetScryptShareTarget(big.NewInt(0))
 	wo.woHeader.SetKawpowDifficulty(big.NewInt(0))

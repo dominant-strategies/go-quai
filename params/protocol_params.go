@@ -194,10 +194,10 @@ var (
 	WorkSharesInclusionDepth          = 3 // Number of blocks upto which the work shares can be referenced and this is protocol enforced
 	MaxLockupByte                     = 3 // Max lockup byte allowed in the transactions for coinbase
 	LockupByteToBlockDepth            = [4]uint64{
-		ConversionLockPeriod, // 100
-		200,                  // 200
-		300,                  // 300
-		400,                  // 400
+		ConversionLockPeriod, // 2 weeks
+		3 * BlocksPerMonth,   // 3 months
+		6 * BlocksPerMonth,   // 6 months
+		BlocksPerYear,        // 12 months
 	}
 	// The first value represents the multiplier that represents interest rate
 	// for the first year, the second value represents the terminal rate these
@@ -257,20 +257,23 @@ var (
 )
 
 var (
-	KawPowForkBlock            uint64 = 3  // Block at which KawPow activates
-	KawPowTransitionPeriod     uint64 = 10 // Number of blocks over which the transition happens
-	TotalPowEngines            uint64 = 2  // Total number of PoW engines supported (Progpow, Kawpow)
+	KawPowForkBlock            uint64 = 909000           // Block at which KawPow activates
+	KawPowTransitionPeriod     uint64 = BlocksPerDay / 4 // Progpow grace period after kawpow upgrade, 1 day for testnet
+	TotalPowEngines            uint64 = 2                // Total number of PoW engines supported (Progpow, Kawpow)
 	AuxTemplateLivenessTime    uint64 = 15
 	AuxTemplateStaleTime       uint64 = uint64(10 * time.Minute)
-	ShareLivenessTime          uint32 = 20             // The time in seconds that a share is considered live for the purposes of inclusion in the block reward calculation
+	ShareLivenessTime          uint32 = 18             // The time in seconds that a share is considered live for the purposes of inclusion in the block reward calculation
 	ShareDiffRelativeThreshold        = big.NewInt(90) // 90% of the current header diff
-	GammaInverse                      = big.NewInt(1)
 	AlphaInverse                      = big.NewInt(1)
 
+	ShaBlockTime    = big.NewInt(600) // btc/bch block time 10 mins in secs
+	ScryptBlockTime = big.NewInt(60)  // Doge block time 1 min in secs
+
 	// PoW share difficulty parameters
-	InitialShaDiff          = big.NewInt(8e12) // Minimum difficulty for a SHA work share, With 4TH/s, diff to get a share every 5 secs 20e12
-	InitialScryptDiff       = big.NewInt(8e8)  // Minimum difficulty for a Scrypt work share, With 1GH/s, diff to get a share every 5 secs is 5e9
-	MinPowDivisor           = big.NewInt(2)    // Minimum multiple of the target difficulty that a share must meet to be valid
+	InitialShaDiffMultiple    = big.NewInt(167000)
+	InitialScryptDiffMultiple = big.NewInt(12)
+
+	MinPowDivisor           = big.NewInt(2) // Minimum multiple of the target difficulty that a share must meet to be valid
 	PowDiffAdjustmentFactor = big.NewInt(300000)
 
 	// Target number of shares per algo times 2^32
@@ -287,8 +290,8 @@ var (
 	MaxSubsidyNumerator   = big.NewInt(3)
 	MaxSubsidyDenominator = big.NewInt(4)
 
-	InitialKawpowDiff       = big.NewInt(1300000000) // Ravencoin testnet has 260Mh/s
-	RavenQuaiBlockTimeRatio = big.NewInt(12)         // 60s/5s = 12
+	InitialKawpowDiff       = big.NewInt(21500000000000) // Ravencoin mainnet has 4.3Th/s
+	RavenQuaiBlockTimeRatio = big.NewInt(12)             // 60s/5s = 12
 
 	RavencoinDiffPercentage  = big.NewInt(10000) // 100% in basis points
 	RavencoinDiffCutoffEnd   = big.NewInt(9000)  // 90%
@@ -310,8 +313,8 @@ var (
 	MerkleNonce uint32 = 0
 	MerkleSize  uint32 = 2
 
-	UnlivelySharePenalty      = big.NewInt(90) // Amount of share reward left after applying the penalty for shares that are not included in the block reward calculation due to being stale
-	ProgpowPenalty            = big.NewInt(80) // Amount of share reward left after applying the penalty for shares that are not included in the block reward calculation due to share being progpow after the fork
+	UnlivelySharePenalty      = big.NewInt(70) // Amount of share reward left after applying the penalty for shares that are not included in the block reward calculation due to being stale
+	ProgpowPenalty            = big.NewInt(70) // Amount of share reward left after applying the penalty for shares that are not included in the block reward calculation due to share being progpow after the fork
 	ShareRewardPenaltyDivisor = big.NewInt(100)
 )
 
