@@ -377,7 +377,7 @@ func (hc *HeaderChain) CalculateShareTarget(parent, header *types.WorkObject) (n
 func (hc *HeaderChain) CalculatePowDiffAndCount(parent *types.WorkObject, header *types.WorkObjectHeader, powId types.PowID) (newDiff, newAverageShares, newUncledShares *big.Int) {
 
 	if header.PrimeTerminusNumber().Uint64() == params.KawPowForkBlock {
-		quaiDiff := header.Difficulty()
+		quaiDiff := parent.Difficulty()
 		quaiHashRate := new(big.Int).Div(quaiDiff, params.DurationLimit)
 		switch powId {
 		case types.SHA_BTC, types.SHA_BCH:
