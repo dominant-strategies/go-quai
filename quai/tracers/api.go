@@ -66,7 +66,7 @@ type Backend interface {
 	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
-	Engine() consensus.Engine
+	Engine(*types.WorkObjectHeader) consensus.Engine
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.WorkObject, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error)
 	StateAtTransaction(ctx context.Context, block *types.WorkObject, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
@@ -95,8 +95,8 @@ type chainContext struct {
 	ctx context.Context
 }
 
-func (context *chainContext) Engine() consensus.Engine {
-	return context.api.backend.Engine()
+func (context *chainContext) Engine(wh *types.WorkObjectHeader) consensus.Engine {
+	return context.api.backend.Engine(wh)
 }
 
 func (context *chainContext) GetHeader(hash common.Hash, number uint64) *types.WorkObject {
@@ -156,6 +156,10 @@ func (context *chainContext) CalcBaseFee(wo *types.WorkObject) *big.Int {
 
 func (context *chainContext) CheckInCalcOrderCache(hash common.Hash) (*big.Int, int, bool) {
 	return context.api.backend.CheckInCalcOrderCache(hash)
+}
+
+func (context *chainContext) CalcOrder(wo *types.WorkObject) (*big.Int, int, error) {
+	return nil, 0, nil
 }
 
 // chainContext construts the context reader which is used by the evm for reading
