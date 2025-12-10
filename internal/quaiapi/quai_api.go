@@ -2173,7 +2173,7 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context) (map[string
 	fields := make(map[string]interface{})
 
 	// Get difficulties per algorithm
-	kawpowDiff := currentHeader.WorkObjectHeader().KawpowDifficulty()
+	kawpowDiff := core.CalculateKawpowShareDiff(currentHeader.WorkObjectHeader())
 	shaDiff := currentHeader.WorkObjectHeader().ShaDiffAndCount().Difficulty()
 	scryptDiff := currentHeader.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
 
