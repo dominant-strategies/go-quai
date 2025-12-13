@@ -1044,8 +1044,8 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context, powId *types.PowI
 								"error":      r,
 								"stacktrace": string(debug.Stack()),
 							}).Error("Go-Quai Panicked")
+							headerSub.Unsubscribe()
 						}
-						headerSub.Unsubscribe()
 					}()
 
 					if b != nil && b.Number(api.backend.NodeCtx()).Uint64() < params.KawPowForkBlock {
