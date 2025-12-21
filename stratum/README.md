@@ -171,30 +171,99 @@ Verify your Quai address format is correct.
 ### Connection timeout
 The server sets a 60-second deadline on connections. Ensure your miner sends regular requests or the connection may be closed.
 
-## Web Dashboard
+## Pool API
 
-A web dashboard is available for monitoring your node and stratum server.
+The stratum server exposes an HTTP API for pool statistics, used by the React dashboard.
 
-### Enabling the Dashboard
+### Enabling the API
+
+The API starts automatically when stratum is enabled:
 
 ```bash
 go-quai start \
   --node.stratum-enabled \
-  --node.dashboard-enabled \
-  --node.dashboard-addr "0.0.0.0:8080"
+  --node.stratum-addr "0.0.0.0:3333" \
+  --node.stratum-api-addr "0.0.0.0:3334"
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--node.dashboard-enabled` | `false` | Enable the web dashboard |
-| `--node.dashboard-addr` | `0.0.0.0:8080` | Listen address for dashboard |
+| `--node.stratum-enabled` | `false` | Enable the stratum server |
+| `--node.stratum-addr` | `0.0.0.0:3333` | Listen address for stratum TCP |
+| `--node.stratum-api-addr` | `0.0.0.0:3334` | Listen address for HTTP API |
 
-Once enabled, open `http://localhost:8080` in your browser to view:
-- Connected workers and their hashrates
-- Share submission statistics
-- Blocks found
-- Network peer visualization (globe)
-- Sync status
+### API Endpoints
+
+#### Pool-wide (public)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/pool/stats` | Pool overview: hashrate, worker counts, shares, uptime |
+| `GET /api/pool/blocks` | Blocks found by the pool |
+
+#### Miner-specific (address-scoped)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/miner/{address}/stats` | Stats for a specific miner address |
+| `GET /api/miner/{address}/workers` | Workers connected for an address |
+
+#### Real-time
+
+| Endpoint | Description |
+|----------|-------------|
+| `WS /api/ws` | WebSocket for live updates (pushed every 1s) |
+| `GET /health` | Health check endpoint |
+
+### Example Responses
+
+**GET /api/pool/stats**
+```json
+{
+  "workersTotal": 5,
+  "workersConnected": 3,
+  "hashrate": 1250000000000,
+  "sharesValid": 1234,
+  "sharesStale": 12,
+  "sharesInvalid": 2,
+  "blocksFound": 1,
+  "uptime": 3600.5,
+  "startedAt": "2024-01-01T00:00:00Z"
+}
+```
+
+**GET /api/miner/{address}/workers**
+```json
+[
+  {
+    "address": "0x1234...",
+    "workerName": "rig1",
+    "algorithm": "sha",
+    "hashrate": 500000000000,
+    "sharesValid": 100,
+    "sharesStale": 1,
+    "sharesInvalid": 0,
+    "isConnected": true,
+    "lastShareAt": "2024-01-01T01:00:00Z"
+  }
+]
+```
+
+### React Dashboard
+
+A separate React dashboard is available in the `react-dashboard/` directory.
+
+```bash
+cd react-dashboard
+npm install
+npm run dev
+```
+
+The dashboard connects to the API at `http://localhost:3334` and provides:
+- Pool overview with hashrate, workers, shares
+- Worker table with per-miner stats
+- Blocks found table
+- Miner-specific view (enter your address to see your stats)
 
 ## Future Work
 

@@ -575,6 +575,8 @@ type job struct {
 // The algorithm is determined by which port the miner connected to.
 func (s *Server) handleConn(c net.Conn, algorithm string) {
 	defer c.Close()
+	// Set a longer initial deadline - will be extended on each message
+	_ = c.SetDeadline(time.Now().Add(5 * time.Minute))
 	dec := json.NewDecoder(bufio.NewReader(c))
 	enc := json.NewEncoder(c)
 	sess := &session{
@@ -615,6 +617,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 			return
 		}
+		// Extend deadline on each message received
+		_ = c.SetDeadline(time.Now().Add(5 * time.Minute))
+
 		switch req.Method {
 		case "mining.subscribe":
 			// Response differs by algorithm:
@@ -860,7 +865,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				s.stats.ShareSubmitted(sess.user, sess.workerName, sess.difficulty, false, false) // invalid share
 				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()})
 			} else {
-				s.stats.ShareSubmitted(sess.user, sess.workerName, sess.difficulty, true, false) // valid share
+				// Note: valid share is already recorded in submitAsWorkShare with difficulty info
 				s.logger.WithFields(log.Fields{"addr": sess.user, "chain": sess.chain, "nonce": nonceHex}).Info("submit accepted")
 				// Mark this job ID as consumed to prevent duplicate submissions
 				sess.mu.Lock()
@@ -969,6 +974,9 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 		// Kawpow uses sendKawpowJob() which doesn't use mining.set_difficulty
 		s.logger.WithFields(log.Fields{"chain": sess.chain, "fallback": d}).Debug("sendJobAndNotify: Non-SHA/Scrypt chain, using fallback")
 	}
+	sess.mu.Lock()
+	sess.mu.Unlock()
+	s.logger.WithFields(log.Fields{"chain": sess.chain, "poolDiff": sess.difficulty}).Debug("sendJobAndNotify using pool difficulty")
 
 	// Send set_difficulty (and set_target for miners that honor it) then the job notify
 	sess.mu.Lock()
@@ -1363,9 +1371,35 @@ func (s *Server) submitAsWorkShare(sess *session, ex2hex, ntimeHex, nonceHex, ve
 	}
 	sess.mu.Unlock()
 
-	s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes)}).Info("workshare received")
+	// Share is valid for pool stats (hashrate tracking)
+	s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String()}).Debug("pool share accepted")
 
-	return s.backend.ReceiveMinedHeader(pending)
+	// Get algorithm name for stats
+	var algoName string
+	switch pending.AuxPow().PowID() {
+	case types.Scrypt:
+		algoName = "scrypt"
+	case types.Kawpow:
+		algoName = "kawpow"
+	default:
+		algoName = "sha"
+	}
+
+	// Get workshare difficulty as float
+	workshareDiff := new(big.Float).SetInt(new(big.Int).Div(common.Big2e256, workShareTarget))
+	workshareDiffFloat, _ := workshareDiff.Float64()
+	achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
+
+	// Record the share with difficulty info for solo mining luck tracking
+	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.difficulty, achievedDiffFloat, workshareDiffFloat, true, false)
+
+	// Second check: does it also meet workshare target? If so, submit to network
+	if powHashBigInt.Cmp(workShareTarget) <= 0 {
+		s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes)}).Info("workshare received - submitting to network")
+		return s.backend.ReceiveMinedHeader(pending)
+	}
+
+	return nil
 }
 
 // submitKawpowShare handles kawpow share submissions
@@ -1520,6 +1554,14 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 
 	// Calculate achieved difficulty for logging
 	achievedDiff := new(big.Int).Div(common.Big2e256, powHashInt)
+
+	// Get workshare difficulty for stats
+	workshareDiffFloat, _ := new(big.Float).SetInt(pending.WorkObjectHeader().KawpowDifficulty()).Float64()
+	achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
+
+	// Record the share with difficulty info
+	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.difficulty, achievedDiffFloat, workshareDiffFloat, true, false)
+
 	s.logger.WithFields(log.Fields{
 		"powID":        types.Kawpow,
 		"height":       kawJob.height,

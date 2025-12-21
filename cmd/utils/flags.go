@@ -60,7 +60,6 @@ var Flags = [][]Flag{
 	PeersFlags,
 	MetricsFlags,
 	StratumFlags,
-	DashboardFlags,
 }
 
 var GlobalFlags = []Flag{
@@ -652,26 +651,20 @@ var (
 		Value: "0.0.0.0:3335",
 		Usage: "listen address for Kawpow stratum endpoint",
 	}
-)
-
-// ****************************************
-// **          DASHBOARD FLAGS           **
-// ****************************************
-var DashboardFlags = []Flag{
-	DashboardEnabledFlag,
-	DashboardAddrFlag,
-}
-
-var (
-	DashboardEnabledFlag = Flag{
-		Name:  c_NodeFlagPrefix + "dashboard-enabled",
-		Value: false,
-		Usage: "enable the web dashboard for node monitoring",
+	StratumKawPoWAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-kawpow-addr",
+		Value: "0.0.0.0:3335",
+		Usage: "listen address for KawPoW stratum endpoint",
 	}
-	DashboardAddrFlag = Flag{
-		Name:  c_NodeFlagPrefix + "dashboard-addr",
-		Value: "0.0.0.0:8080",
-		Usage: "listen address for the web dashboard",
+	StratumAPIAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-api-addr",
+		Value: "0.0.0.0:3336",
+		Usage: "listen address for stratum pool HTTP API (serves stats to dashboard)",
+	}
+	StratumNameFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-name",
+		Value: "",
+		Usage: "unique name identifying this stratum node (for multi-node aggregation)",
 	}
 )
 
