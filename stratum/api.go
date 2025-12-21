@@ -117,11 +117,6 @@ func (a *API) getExtendedOverview() PoolOverview {
 	// Add node name for multi-node aggregation
 	overview.NodeName = a.nodeName
 
-	// Add top miners
-	overview.TopMiners = a.stats.GetTopMiners(20)
-
-	// Network stats are fetched directly from the RPC by the frontend
-
 	return overview
 }
 

@@ -1,20 +1,9 @@
 package stratum
 
 import (
-	"sort"
 	"sync"
 	"time"
 )
-
-// TopMiner represents a miner's aggregated stats for leaderboard
-type TopMiner struct {
-	Address        string  `json:"address"`
-	Hashrate       float64 `json:"hashrate"`
-	HashrateSHA    float64 `json:"hashrateSha"`
-	HashrateScrypt float64 `json:"hashrateScrypt"`
-	HashrateKawPoW float64 `json:"hashrateKawpow"`
-	WorkerCount    int     `json:"workerCount"`
-}
 
 // WorkerStats tracks statistics for a connected miner
 type WorkerStats struct {
@@ -379,19 +368,18 @@ type AlgorithmStats struct {
 
 // PoolOverview contains summary statistics
 type PoolOverview struct {
-	NodeName          string     `json:"nodeName,omitempty"` // Unique identifier for this node
-	WorkersTotal      int        `json:"workersTotal"`
-	WorkersConnected  int        `json:"workersConnected"`
-	Hashrate          float64    `json:"hashrate"`
-	SharesValid       uint64     `json:"sharesValid"`
-	SharesStale       uint64     `json:"sharesStale"`
-	SharesInvalid     uint64     `json:"sharesInvalid"`
-	BlocksFound       int        `json:"blocksFound"`
-	Uptime            float64    `json:"uptime"`
-	StartedAt         time.Time  `json:"startedAt"`
-	NetworkHashrate   float64    `json:"networkHashrate,omitempty"`
-	NetworkDifficulty float64    `json:"networkDifficulty,omitempty"`
-	TopMiners         []TopMiner `json:"topMiners,omitempty"`
+	NodeName          string    `json:"nodeName,omitempty"` // Unique identifier for this node
+	WorkersTotal      int       `json:"workersTotal"`
+	WorkersConnected  int       `json:"workersConnected"`
+	Hashrate          float64   `json:"hashrate"`
+	SharesValid       uint64    `json:"sharesValid"`
+	SharesStale       uint64    `json:"sharesStale"`
+	SharesInvalid     uint64    `json:"sharesInvalid"`
+	BlocksFound       int       `json:"blocksFound"`
+	Uptime            float64   `json:"uptime"`
+	StartedAt         time.Time `json:"startedAt"`
+	NetworkHashrate   float64   `json:"networkHashrate,omitempty"`
+	NetworkDifficulty float64   `json:"networkDifficulty,omitempty"`
 
 	// Per-algorithm stats
 	SHA    AlgorithmStats `json:"sha"`
@@ -455,67 +443,3 @@ func (ps *PoolStats) GetTotalHashrate() float64 {
 	return total
 }
 
-// GetTopMiners returns miners sorted by hashrate (aggregated by address)
-func (ps *PoolStats) GetTopMiners(limit int) []TopMiner {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
-	// Aggregate workers by address
-	minerMap := make(map[string]*TopMiner)
-	for _, w := range ps.workers {
-		if !w.IsConnected {
-			continue
-		}
-		algo := w.Algorithm
-		if algo == "" {
-			algo = "sha" // default
-		}
-		if miner, exists := minerMap[w.Address]; exists {
-			miner.Hashrate += w.Hashrate
-			miner.WorkerCount++
-			// Add to algorithm-specific hashrate
-			switch algo {
-			case "sha":
-				miner.HashrateSHA += w.Hashrate
-			case "scrypt":
-				miner.HashrateScrypt += w.Hashrate
-			case "kawpow":
-				miner.HashrateKawPoW += w.Hashrate
-			}
-		} else {
-			m := &TopMiner{
-				Address:     w.Address,
-				Hashrate:    w.Hashrate,
-				WorkerCount: 1,
-			}
-			// Set initial algorithm-specific hashrate
-			switch algo {
-			case "sha":
-				m.HashrateSHA = w.Hashrate
-			case "scrypt":
-				m.HashrateScrypt = w.Hashrate
-			case "kawpow":
-				m.HashrateKawPoW = w.Hashrate
-			}
-			minerMap[w.Address] = m
-		}
-	}
-
-	// Convert to slice
-	miners := make([]TopMiner, 0, len(minerMap))
-	for _, m := range minerMap {
-		miners = append(miners, *m)
-	}
-
-	// Sort by hashrate descending
-	sort.Slice(miners, func(i, j int) bool {
-		return miners[i].Hashrate > miners[j].Hashrate
-	})
-
-	// Limit results
-	if limit > 0 && len(miners) > limit {
-		miners = miners[:limit]
-	}
-
-	return miners
-}
