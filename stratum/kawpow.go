@@ -8,6 +8,17 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus/kawpow"
 )
 
+// KawpowDiff1 is the reference target for stratum difficulty 1.
+// From kawpow-stratum-pool: 0x00000000ff000000000000000000000000000000000000000000000000000000
+// This means stratum difficulty 1 corresponds to ~2^32 hashes (similar to Bitcoin).
+// Used only when miner specifies custom difficulty via password field.
+var KawpowDiff1 *big.Int
+
+func init() {
+	KawpowDiff1 = new(big.Int)
+	KawpowDiff1.SetString("00000000ff000000000000000000000000000000000000000000000000000000", 16)
+}
+
 // kawpowJob holds kawpow-specific job data
 type kawpowJob struct {
 	id         string
