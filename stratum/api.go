@@ -50,6 +50,7 @@ func (a *API) Start() error {
 	mux.HandleFunc("/api/pool/stats", a.handlePoolStats)
 	mux.HandleFunc("/api/pool/blocks", a.handlePoolBlocks)
 	mux.HandleFunc("/api/pool/shares", a.handlePoolShares)
+	mux.HandleFunc("/api/pool/workers", a.handlePoolWorkers)
 
 	// Miner-specific endpoints (address-scoped)
 	mux.HandleFunc("/api/miner/", a.handleMiner)
@@ -203,6 +204,17 @@ func (a *API) handlePoolShares(w http.ResponseWriter, r *http.Request) {
 		BlocksFound:    blocksFound,
 		ExpectedShares: expectedShares,
 	})
+}
+
+// handlePoolWorkers returns all connected workers
+func (a *API) handlePoolWorkers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	workers := a.stats.GetConnectedWorkers()
+	writeJSON(w, workers)
 }
 
 // handleMiner routes miner-specific requests
