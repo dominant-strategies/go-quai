@@ -35,8 +35,9 @@ type kawpowJob struct {
 // Uses go-quai's kawpow.SeedHash which uses the correct epoch length (7500)
 func calculateSeedHash(epoch uint64) string {
 	// kawpow.SeedHash expects block number, not epoch
-	// epoch * epochLength gives us a block in that epoch
-	blockNum := epoch * kawpow.C_epochLength
+	// Use epoch * epochLength + 1 to match consensus/kawpow/kawpow.go:364
+	// (mathematically equivalent due to integer division, but consistent)
+	blockNum := epoch*kawpow.C_epochLength + 1
 	seed := kawpow.SeedHash(blockNum)
 	return hex.EncodeToString(seed)
 }
