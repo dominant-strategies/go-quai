@@ -60,7 +60,6 @@ var Flags = [][]Flag{
 	PeersFlags,
 	MetricsFlags,
 	StratumFlags,
-	DashboardFlags,
 }
 
 var GlobalFlags = []Flag{
@@ -643,6 +642,9 @@ var StratumFlags = []Flag{
 	StratumSHAAddrFlag,
 	StratumScryptAddrFlag,
 	StratumKawpowAddrFlag,
+	StratumVarDiffFlag,
+	StratumAPIAddrFlag,
+	StratumNameFlag,
 }
 
 var (
@@ -653,7 +655,7 @@ var (
 	}
 	StratumSHAAddrFlag = Flag{
 		Name:  c_NodeFlagPrefix + "stratum-sha-addr",
-		Value: "0.0.0.0:3333",
+		Value: "0.0.0.0:3335",
 		Usage: "listen address for SHA256 stratum endpoint",
 	}
 	StratumScryptAddrFlag = Flag{
@@ -663,29 +665,31 @@ var (
 	}
 	StratumKawpowAddrFlag = Flag{
 		Name:  c_NodeFlagPrefix + "stratum-kawpow-addr",
-		Value: "0.0.0.0:3335",
+		Value: "0.0.0.0:3333",
 		Usage: "listen address for Kawpow stratum endpoint",
+	}
+	StratumVarDiffFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-vardiff",
+		Value: true,
+		Usage: "enable automatic variable difficulty for miner liveness (targets 30s per share). If disabled, workshare difficulty is used unless miner specifies d=X in password",
 	}
 )
 
-// ****************************************
-// **          DASHBOARD FLAGS           **
-// ****************************************
-var DashboardFlags = []Flag{
-	DashboardEnabledFlag,
-	DashboardAddrFlag,
-}
-
 var (
-	DashboardEnabledFlag = Flag{
-		Name:  c_NodeFlagPrefix + "dashboard-enabled",
-		Value: false,
-		Usage: "enable the web dashboard for node monitoring",
+	StratumKawPoWAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-kawpow-addr",
+		Value: "0.0.0.0:3335",
+		Usage: "listen address for KawPoW stratum endpoint",
 	}
-	DashboardAddrFlag = Flag{
-		Name:  c_NodeFlagPrefix + "dashboard-addr",
-		Value: "0.0.0.0:8080",
-		Usage: "listen address for the web dashboard",
+	StratumAPIAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-api-addr",
+		Value: "0.0.0.0:3336",
+		Usage: "listen address for stratum pool HTTP API (serves stats to dashboard)",
+	}
+	StratumNameFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-name",
+		Value: "",
+		Usage: "unique name identifying this stratum node (for multi-node aggregation)",
 	}
 )
 
