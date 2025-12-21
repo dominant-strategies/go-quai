@@ -243,17 +243,26 @@ func (a *API) handleMiner(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleMinerStats(w http.ResponseWriter, address string) {
 	workers := a.stats.GetWorkersForAddress(address)
 
-	var totalHashrate float64
+	var hashrateSHA, hashrateScrypt, hashrateKawPoW float64
 	var totalValid, totalStale, totalInvalid uint64
 	var connected int
 
 	for _, worker := range workers {
-		totalHashrate += worker.Hashrate
 		totalValid += worker.SharesValid
 		totalStale += worker.SharesStale
 		totalInvalid += worker.SharesInvalid
 		if worker.IsConnected {
 			connected++
+		}
+
+		// Aggregate hashrate by algorithm
+		switch worker.Algorithm {
+		case "sha":
+			hashrateSHA += worker.Hashrate
+		case "scrypt":
+			hashrateScrypt += worker.Hashrate
+		case "kawpow":
+			hashrateKawPoW += worker.Hashrate
 		}
 	}
 
@@ -261,7 +270,9 @@ func (a *API) handleMinerStats(w http.ResponseWriter, address string) {
 		Address:          address,
 		WorkersTotal:     len(workers),
 		WorkersConnected: connected,
-		Hashrate:         totalHashrate,
+		HashrateSHA:      hashrateSHA,
+		HashrateScrypt:   hashrateScrypt,
+		HashrateKawPoW:   hashrateKawPoW,
 		SharesValid:      totalValid,
 		SharesStale:      totalStale,
 		SharesInvalid:    totalInvalid,
@@ -560,7 +571,9 @@ type MinerStats struct {
 	Address          string  `json:"address"`
 	WorkersTotal     int     `json:"workersTotal"`
 	WorkersConnected int     `json:"workersConnected"`
-	Hashrate         float64 `json:"hashrate"`
+	HashrateSHA      float64 `json:"hashrateSha"`
+	HashrateScrypt   float64 `json:"hashrateScrypt"`
+	HashrateKawPoW   float64 `json:"hashrateKawpow"`
 	SharesValid      uint64  `json:"sharesValid"`
 	SharesStale      uint64  `json:"sharesStale"`
 	SharesInvalid    uint64  `json:"sharesInvalid"`

@@ -136,6 +136,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 					"scrypt": stratumConfig.ScryptAddr,
 					"kawpow": stratumConfig.KawpowAddr,
 				}).Info("Stratum TCP endpoints started")
+
+				// Start the stratum HTTP API server for pool dashboard
+				apiAddr := viper.GetString(utils.StratumAPIAddrFlag.Name)
+				nodeName := viper.GetString(utils.StratumNameFlag.Name)
+				if apiAddr != "" {
+					stratumAPI := stratum.NewAPI(apiAddr, nodeName, stratumServer.Stats(), zoneBackend)
+					if err := stratumAPI.Start(); err != nil {
+						log.Global.WithField("error", err).Error("failed to start stratum API")
+					} else {
+						log.Global.WithFields(log.Fields{
+							"addr":     apiAddr,
+							"nodeName": nodeName,
+						}).Info("Stratum HTTP API started")
+					}
+				}
 			}
 		}
 	}

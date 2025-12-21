@@ -974,16 +974,20 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 		// Kawpow uses sendKawpowJob() which doesn't use mining.set_difficulty
 		s.logger.WithFields(log.Fields{"chain": sess.chain, "fallback": d}).Debug("sendJobAndNotify: Non-SHA/Scrypt chain, using fallback")
 	}
+	// Determine which difficulty to send to the miner:
+	// - If minerDifficulty is set (via d= password), use that for share submission rate
+	// - Otherwise use the workshare difficulty
 	sess.mu.Lock()
+	diffToSend := sess.difficulty // workshare-based difficulty
+	if sess.minerDifficulty != nil && *sess.minerDifficulty < sess.difficulty {
+		diffToSend = *sess.minerDifficulty
+	}
 	sess.mu.Unlock()
-	s.logger.WithFields(log.Fields{"chain": sess.chain, "poolDiff": sess.difficulty}).Debug("sendJobAndNotify using pool difficulty")
+	s.logger.WithFields(log.Fields{"chain": sess.chain, "workshareDiff": sess.difficulty, "sendingDiff": diffToSend}).Debug("sendJobAndNotify difficulty")
 
 	// Send set_difficulty (and set_target for miners that honor it) then the job notify
-	sess.mu.Lock()
-	minerDiff := sess.difficulty
-	sess.mu.Unlock()
-	s.logger.WithField("difficulty", minerDiff).Debug("Sending mining.set_difficulty to miner")
-	diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{minerDiff}}
+	s.logger.WithField("difficulty", diffToSend).Debug("Sending mining.set_difficulty to miner")
+	diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{diffToSend}}
 	_ = sess.sendJSON(diffNote)
 
 	params := []interface{}{j.id, j.prevHashLE, j.coinb1, j.coinb2, j.merkleBranch, fmt.Sprintf("%08x", j.version), fmt.Sprintf("%08x", j.nBits), fmt.Sprintf("%08x", j.nTime), clean}
@@ -1344,6 +1348,21 @@ func (s *Server) submitAsWorkShare(sess *session, ex2hex, ntimeHex, nonceHex, ve
 				"achievedDiff":    achievedStratumDiff,
 				"minerDifficulty": *sess.minerDifficulty,
 			}).Debug("share accepted for liveness (below workshare difficulty)")
+
+			// Record the share for hashrate calculation even though it won't be submitted to network
+			var algoName string
+			switch powID {
+			case types.Scrypt:
+				algoName = "scrypt"
+			case types.Kawpow:
+				algoName = "kawpow"
+			default:
+				algoName = "sha"
+			}
+			workshareDiffFloat, _ := new(big.Float).SetInt(new(big.Int).Div(common.Big2e256, workShareTarget)).Float64()
+			achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
+			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, *sess.minerDifficulty, achievedDiffFloat, workshareDiffFloat, true, false)
+
 			return nil // Accept share but don't submit to node
 		}
 	} else {
@@ -1390,8 +1409,16 @@ func (s *Server) submitAsWorkShare(sess *session, ex2hex, ntimeHex, nonceHex, ve
 	workshareDiffFloat, _ := workshareDiff.Float64()
 	achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
 
+	// Use the effective pool difficulty (minerDifficulty if set, otherwise workshare-based)
+	sess.mu.Lock()
+	effectiveDiff := sess.difficulty
+	if sess.minerDifficulty != nil && *sess.minerDifficulty < sess.difficulty {
+		effectiveDiff = *sess.minerDifficulty
+	}
+	sess.mu.Unlock()
+
 	// Record the share with difficulty info for solo mining luck tracking
-	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.difficulty, achievedDiffFloat, workshareDiffFloat, true, false)
+	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
 
 	// Second check: does it also meet workshare target? If so, submit to network
 	if powHashBigInt.Cmp(workShareTarget) <= 0 {

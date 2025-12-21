@@ -18,17 +18,18 @@ type TopMiner struct {
 
 // WorkerStats tracks statistics for a connected miner
 type WorkerStats struct {
-	Address       string    `json:"address"`
-	WorkerName    string    `json:"workerName"`
-	Algorithm     string    `json:"algorithm"`
-	ConnectedAt   time.Time `json:"connectedAt"`
-	LastShareAt   time.Time `json:"lastShareAt"`
-	SharesValid   uint64    `json:"sharesValid"`
-	SharesStale   uint64    `json:"sharesStale"`
-	SharesInvalid uint64    `json:"sharesInvalid"`
-	Difficulty    float64   `json:"difficulty"`
-	Hashrate      float64   `json:"hashrate"` // estimated from share rate
-	IsConnected   bool      `json:"isConnected"`
+	Address        string    `json:"address"`
+	WorkerName     string    `json:"workerName"`
+	Algorithm      string    `json:"algorithm"`
+	ConnectedAt    time.Time `json:"connectedAt"`
+	LastShareAt    time.Time `json:"lastShareAt"`
+	SharesValid    uint64    `json:"sharesValid"`
+	SharesStale    uint64    `json:"sharesStale"`
+	SharesInvalid  uint64    `json:"sharesInvalid"`
+	Difficulty     float64   `json:"difficulty"`
+	Hashrate       float64   `json:"hashrate"`       // estimated from share rate
+	CumulativeWork float64   `json:"-"`              // sum of (difficulty) for each valid share
+	IsConnected    bool      `json:"isConnected"`
 }
 
 // BlockFound represents a block discovered by the pool
@@ -106,6 +107,7 @@ func (ps *PoolStats) WorkerConnected(address, workerName, algorithm string) {
 		worker.SharesStale = 0
 		worker.SharesInvalid = 0
 		worker.Hashrate = 0
+		worker.CumulativeWork = 0
 		if algorithm != "" {
 			worker.Algorithm = algorithm
 		}
@@ -164,6 +166,7 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 		worker.Difficulty = poolDiff
 		if valid {
 			worker.SharesValid++
+			worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
 		} else if stale {
 			worker.SharesStale++
 		} else {
@@ -408,12 +411,12 @@ func (ps *PoolStats) pruneShareWindow() {
 	ps.shareWindow = newWindow
 }
 
-// calculateWorkerHashrate estimates hashrate based on recent shares
+// calculateWorkerHashrate estimates hashrate based on cumulative work done
 func (ps *PoolStats) calculateWorkerHashrate(address string) float64 {
-	// Simple estimation: (shares * difficulty * scale) / time_window
-	// Scale factor depends on algorithm
+	// Hashrate = (cumulative_work * scale) / time_window
+	// CumulativeWork tracks the sum of difficulty for each valid share
 	worker, exists := ps.workers[address]
-	if !exists || worker.SharesValid == 0 {
+	if !exists || worker.CumulativeWork == 0 {
 		return 0
 	}
 
@@ -434,8 +437,8 @@ func (ps *PoolStats) calculateWorkerHashrate(address string) float64 {
 		scale = 4294967296 // 2^32
 	}
 
-	// Hashrate = (shares * difficulty * scale) / time
-	return float64(worker.SharesValid) * worker.Difficulty * scale / elapsed
+	// Hashrate = (cumulative_work * scale) / time
+	return worker.CumulativeWork * scale / elapsed
 }
 
 // GetTotalHashrate calculates pool-wide hashrate

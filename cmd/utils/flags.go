@@ -628,6 +628,8 @@ var StratumFlags = []Flag{
 	StratumSHAAddrFlag,
 	StratumScryptAddrFlag,
 	StratumKawpowAddrFlag,
+	StratumAPIAddrFlag,
+	StratumNameFlag,
 }
 
 var (
