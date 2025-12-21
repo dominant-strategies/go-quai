@@ -12,7 +12,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/dominant-strategies/go-quai/dashboard"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -124,69 +123,37 @@ func runStart(cmd *cobra.Command, args []string) error {
 			log.Global.Warn("Stratum endpoint enabled but no processing zone backend found; skipping start")
 		} else {
 			stratumConfig := stratum.StratumConfig{
-				SHAAddr:    viper.GetString(utils.StratumSHAAddrFlag.Name),
-				ScryptAddr: viper.GetString(utils.StratumScryptAddrFlag.Name),
-				KawpowAddr: viper.GetString(utils.StratumKawpowAddrFlag.Name),
+				SHAAddr:        viper.GetString(utils.StratumSHAAddrFlag.Name),
+				ScryptAddr:     viper.GetString(utils.StratumScryptAddrFlag.Name),
+				KawpowAddr:     viper.GetString(utils.StratumKawpowAddrFlag.Name),
+				VarDiffEnabled: viper.GetBool(utils.StratumVarDiffFlag.Name),
 			}
 			stratumServer = stratum.NewServerWithConfig(stratumConfig, zoneBackend)
 			if err := stratumServer.Start(); err != nil {
 				log.Global.WithField("error", err).Error("failed to start stratum endpoints")
 			} else {
 				log.Global.WithFields(log.Fields{
-					"sha":    stratumConfig.SHAAddr,
-					"scrypt": stratumConfig.ScryptAddr,
-					"kawpow": stratumConfig.KawpowAddr,
+					"sha":     stratumConfig.SHAAddr,
+					"scrypt":  stratumConfig.ScryptAddr,
+					"kawpow":  stratumConfig.KawpowAddr,
+					"vardiff": stratumConfig.VarDiffEnabled,
 				}).Info("Stratum TCP endpoints started")
+
+				// Start the stratum HTTP API server for pool dashboard
+				apiAddr := viper.GetString(utils.StratumAPIAddrFlag.Name)
+				nodeName := viper.GetString(utils.StratumNameFlag.Name)
+				if apiAddr != "" {
+					stratumAPI := stratum.NewAPI(apiAddr, nodeName, stratumServer.Stats(), zoneBackend)
+					if err := stratumAPI.Start(); err != nil {
+						log.Global.WithField("error", err).Error("failed to start stratum API")
+					} else {
+						log.Global.WithFields(log.Fields{
+							"addr":     apiAddr,
+							"nodeName": nodeName,
+						}).Info("Stratum HTTP API started")
+					}
+				}
 			}
-		}
-	}
-
-	// Optionally start web dashboard when enabled
-	var dashboardServer *dashboard.Dashboard
-	if viper.GetBool(utils.DashboardEnabledFlag.Name) {
-		dashboardAddr := viper.GetString(utils.DashboardAddrFlag.Name)
-
-		// Build connection URLs
-		httpHost := viper.GetString(utils.HTTPListenAddrFlag.Name)
-		httpPort := viper.GetInt(utils.HTTPPortStartFlag.Name)
-		wsHost := viper.GetString(utils.WSListenAddrFlag.Name)
-		wsPort := viper.GetInt(utils.WSPortStartFlag.Name)
-		stratumSHAAddr := viper.GetString(utils.StratumSHAAddrFlag.Name)
-		stratumScryptAddr := viper.GetString(utils.StratumScryptAddrFlag.Name)
-		stratumKawpowAddr := viper.GetString(utils.StratumKawpowAddrFlag.Name)
-
-		rpcURL := "http://" + httpHost + ":" + strconv.Itoa(httpPort)
-		wsURL := "ws://" + wsHost + ":" + strconv.Itoa(wsPort)
-		stratumSHAURL := "stratum+tcp://" + stratumSHAAddr
-		stratumScryptURL := "stratum+tcp://" + stratumScryptAddr
-		stratumKawpowURL := "stratum+tcp://" + stratumKawpowAddr
-
-		// Get location string
-		locationStr := "-"
-		if zoneBackend != nil {
-			loc := zoneBackend.NodeLocation()
-			locationStr = loc.Name()
-		}
-
-		dashboardServer = dashboard.New(dashboard.Config{
-			Addr:              dashboardAddr,
-			Stratum:           stratumServer,
-			Blockchain:        zoneBackend,
-			RPCAddr:           rpcURL,
-			WSAddr:            wsURL,
-			StratumSHAAddr:    stratumSHAURL,
-			StratumScryptAddr: stratumScryptURL,
-			StratumKawpowAddr: stratumKawpowURL,
-			Version:           params.Version.Full(),
-			Network:           network,
-			Location:          locationStr,
-			ChainID:           9000, // TODO: get from chain config
-			// P2P and Node stats can be added here when interfaces are implemented
-		})
-		if err := dashboardServer.Start(); err != nil {
-			log.Global.WithField("error", err).Error("failed to start dashboard")
-		} else {
-			log.Global.WithField("addr", dashboardAddr).Info("Web dashboard started")
 		}
 	}
 
@@ -221,12 +188,6 @@ func runStart(cmd *cobra.Command, args []string) error {
 	cancel()
 	// stop the hierarchical co-ordinator
 	hc.Stop()
-	if dashboardServer != nil {
-		_ = dashboardServer.Stop()
-	}
-	if stratumServer != nil {
-		_ = stratumServer.Stop()
-	}
 	if err := node.Stop(); err != nil {
 		panic(err)
 	}
