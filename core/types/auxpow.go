@@ -844,11 +844,3 @@ func AuxPowTxHash(PowID PowID, tx []byte) common.Hash {
 	}
 	return common.Hash{}
 }
-
-func reverseBytesCopy(b []byte) []byte {
-	out := make([]byte, len(b))
-	for i := range b {
-		out[i] = b[len(b)-1-i]
-	}
-	return out
-}
