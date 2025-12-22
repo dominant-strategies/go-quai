@@ -1274,6 +1274,10 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 	p.minFee, p.maxFee, p.avgFee, p.numElements = calcRollingFeeInfo(p.minFee, p.maxFee, p.avgFee, p.numElements, blockMinFee, blockMaxFee, quaiFees, numTxsProcessed)
 
+	if p.config.IndexAddressUtxos {
+		rawdb.WriteBlockHashForWorkShareHash(batch, block)
+	}
+
 	p.logger.WithFields(log.Fields{
 		"signing time":       common.PrettyDuration(timeSign),
 		"prepare state time": common.PrettyDuration(timePrepare),

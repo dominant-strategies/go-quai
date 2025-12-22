@@ -1270,6 +1270,12 @@ func (c *Core) GetQuaiHeaderForDonorHash(donorHash common.Hash) *types.WorkObjec
 	return rawdb.ReadWorkShareForDonorHash(c.Database(), c.GetEngineForPowID(types.Kawpow), donorHash)
 }
 
+// GetBlockForWorkShareHash retrieves the block corresponding to the processing
+// of payment to the work share hash
+func (c *Core) GetBlockForWorkShareHash(workshareHash common.Hash) *types.WorkObject {
+	return rawdb.ReadBlockForWorkShareHash(c.Database(), workshareHash)
+}
+
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
 // [deprecated by eth/62]
 func (c *Core) GetBlocksFromHash(hash common.Hash, n int) []*types.WorkObject {

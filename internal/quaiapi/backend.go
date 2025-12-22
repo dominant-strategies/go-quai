@@ -137,6 +137,7 @@ type Backend interface {
 	GetHeaderByHash(hash common.Hash) *types.WorkObject
 	IsGenesisHash(hash common.Hash) bool
 	GetQuaiHeaderForDonorHash(donorHash common.Hash) *types.WorkObjectHeader
+	GetBlockForWorkShareHash(workshareHash common.Hash) *types.WorkObject
 
 	BadHashExistsInChain() bool
 	IsBlockHashABadHash(hash common.Hash) bool

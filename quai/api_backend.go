@@ -560,6 +560,10 @@ func (b *QuaiAPIBackend) GetQuaiHeaderForDonorHash(donorHash common.Hash) *types
 	return b.quai.core.GetQuaiHeaderForDonorHash(donorHash)
 }
 
+func (b *QuaiAPIBackend) GetBlockForWorkShareHash(workshareHash common.Hash) *types.WorkObject {
+	return b.quai.core.GetBlockForWorkShareHash(workshareHash)
+}
+
 func (b *QuaiAPIBackend) SubmitBlock(raw hexutil.Bytes, powId types.PowID) (common.Hash, uint64, types.WorkShareValidity, error) {
 	wo, err := b.quai.core.SubmitBlock(raw, powId)
 	if err != nil {

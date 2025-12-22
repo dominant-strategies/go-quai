@@ -437,6 +437,43 @@ func WriteWorkShareForDonorHash(db ethdb.KeyValueWriter, kawpowEngine consensus.
 	}
 }
 
+// WriteBlockHashForWorkShareHash stores the mapping of workshare hash to block
+// hash that processed the payment for the workshare
+func WriteBlockHashForWorkShareHash(db ethdb.KeyValueWriter, workObject *types.WorkObject) {
+	for _, tx := range workObject.Body().Transactions() {
+		if tx.Type() == types.ExternalTxType && tx.EtxType() == types.CoinbaseType {
+			// workshare hash is stored in the coinbase tx
+			if len(tx.Data()) < common.HashLength {
+				continue
+			}
+			workshareHash := tx.Data()[len(tx.Data())-common.HashLength:]
+			key := workShareHashToBlockHashKey(common.BytesToHash(workshareHash))
+			if err := db.Put(key, workObject.Hash().Bytes()); err != nil {
+				db.Logger().WithField("err", err).Warn("Failed to store workshare hash to block hash mapping")
+			}
+		}
+	}
+}
+
+// ReadBlockForWorkShareHash retreive's the block that processed the inbound
+// payment to the given workshare hash
+func ReadBlockForWorkShareHash(db ethdb.Reader, workshareHash common.Hash) *types.WorkObject {
+	key := workShareHashToBlockHashKey(workshareHash)
+	data, _ := db.Get(key)
+	if len(data) == 0 {
+		return nil
+	}
+	blockHash := common.BytesToHash(data)
+	blockNumber := ReadHeaderNumber(db, blockHash)
+	if blockNumber == nil {
+		return nil
+	}
+	if *blockNumber == 0 {
+		return nil
+	}
+	return ReadWorkObject(db, *blockNumber, blockHash, types.BlockObject)
+}
+
 // ReadWorkObjectHeader retreive's the work object header stored in hash.
 func ReadWorkObjectHeader(db ethdb.Reader, number uint64, hash common.Hash, woType types.WorkObjectView) *types.WorkObjectHeader {
 	var key []byte

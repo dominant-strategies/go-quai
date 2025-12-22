@@ -74,7 +74,8 @@ var (
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
 	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
-	donorHashPrefix = []byte("dh") // donorHashPrefix + hash -> header
+	donorHashPrefix                = []byte("dh")     // donorHashPrefix + hash -> header
+	workshareHashToBlockHashPrefix = []byte("wsh2bh") // workShareHashToBlockHashPrefix + hash -> block hash
 
 	pendingHeaderPrefix             = []byte("ph")    // pendingHeaderPrefix + hash -> header
 	pbBodyPrefix                    = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
@@ -191,6 +192,11 @@ func headerKey(number uint64, hash common.Hash) []byte {
 // donorHashKey = donorHashPrefix + hash
 func donorHashKey(hash common.Hash) []byte {
 	return append(donorHashPrefix, hash.Bytes()...)
+}
+
+// workShareHashToBlockHashKey = "wsh2bh" + hash
+func workShareHashToBlockHashKey(hash common.Hash) []byte {
+	return append(workshareHashToBlockHashPrefix, hash.Bytes()...)
 }
 
 // terminiKey = domPendingHeaderPrefix + hash

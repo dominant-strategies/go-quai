@@ -2053,6 +2053,26 @@ func (s *PublicBlockChainQuaiAPI) GetQuaiHeaderForDonorHash(ctx context.Context,
 	return header.RPCMarshalWorkObjectHeader("v2"), nil
 }
 
+func (s *PublicBlockChainQuaiAPI) GetCoinbaseTxForWorkShareHash(ctx context.Context, workShareHash common.Hash) (*RPCTransaction, error) {
+	block := s.b.GetBlockForWorkShareHash(workShareHash)
+	// go through the block and find the tx hash that has the workshare hash in the data
+	if block == nil {
+		return nil, errors.New("no block found for workshare hash")
+	}
+	for index, tx := range block.Transactions() {
+		if tx.Type() == types.ExternalTxType && tx.EtxType() == types.CoinbaseType {
+			if len(tx.Data()) < common.HashLength {
+				continue
+			}
+			shareHash := common.BytesToHash(tx.Data()[len(tx.Data())-common.HashLength:])
+			if shareHash == workShareHash {
+				return newRPCTransaction(tx, block.Hash(), block.NumberU64(s.b.NodeCtx()), uint64(index), block.BaseFee(), s.b.NodeLocation()), nil
+			}
+		}
+	}
+	return nil, errors.New("no coinbase transaction found for workshare hash")
+}
+
 func (s *PublicBlockChainQuaiAPI) GetSubsidyChainHeight(ctx context.Context) (map[string]interface{}, error) {
 	if !s.b.NodeLocation().Equal(common.Location{0, 0}) {
 		return nil, errors.New("cannot call GetSubsidyChainHeight in any other chain than cyprus-1")
