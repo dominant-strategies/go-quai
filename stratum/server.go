@@ -403,55 +403,30 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool) {
 		return false, false
 	}
 
-	// Check for changes based on algorithm
-	switch algorithm {
-	case "sha256", "scrypt":
-		// For sha256/scrypt: check if parent hash or height changed
-		// Always use clean=true for sha256/scrypt (simpler, matches pool behavior)
-		if lastState.parentHash != newState.parentHash {
-			s.logger.WithFields(log.Fields{
-				"algo":      algorithm,
-				"oldHeight": lastState.height,
-				"newHeight": newState.height,
-			}).Info("New block detected")
-			return true, true
-		}
+	if lastState.parentHash != newState.parentHash {
+		s.logger.WithFields(log.Fields{
+			"algo":      algorithm,
+			"oldHeight": lastState.height,
+			"newHeight": newState.height,
+		}).Info("New block detected")
+		return true, true
+	}
 
-		if lastState.quaiHeight != newState.quaiHeight {
-			s.logger.WithFields(log.Fields{
-				"algo":          algorithm,
-				"oldQuaiHeight": lastState.quaiHeight,
-				"newQuaiHeight": newState.quaiHeight,
-			}).Info("QuaiHeight changed")
-			return true, true
-		}
+	if lastState.quaiHeight != newState.quaiHeight {
+		s.logger.WithFields(log.Fields{
+			"algo":          algorithm,
+			"oldQuaiHeight": lastState.quaiHeight,
+			"newQuaiHeight": newState.quaiHeight,
+		}).Info("QuaiHeight changed")
+		return true, true
+	}
 
-	case "kawpow":
-		// For Kawpow: check parent hash and quai height
-		if lastState.parentHash != newState.parentHash {
-			s.logger.WithFields(log.Fields{
-				"algo":      algorithm,
-				"oldHeight": lastState.height,
-				"newHeight": newState.height,
-			}).Info("New block detected")
-			return true, true
-		}
-		if lastState.quaiHeight != newState.quaiHeight {
-			s.logger.WithFields(log.Fields{
-				"algo":          algorithm,
-				"oldQuaiHeight": lastState.quaiHeight,
-				"newQuaiHeight": newState.quaiHeight,
-			}).Info("QuaiHeight changed")
-			return true, true
-		}
-		// Seal hash change without parent/quaiHeight change - template update, clean=false
-		if lastState.sealHash != newState.sealHash {
-			s.logger.WithFields(log.Fields{
-				"algo":   algorithm,
-				"height": newState.height,
-			}).Trace("Template updated (sealhash changed)")
-			return true, true // Kawpow: clean=false for same-block updates
-		}
+	if algorithm == "kawpow" && lastState.sealHash != newState.sealHash {
+		s.logger.WithFields(log.Fields{
+			"algo":   algorithm,
+			"height": newState.height,
+		}).Trace("Template updated (sealhash changed)")
+		return true, true // Kawpow: clean=false for same-block updates
 	}
 
 	return false, false
@@ -1411,13 +1386,8 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 	nBits := auxPowHeader.Bits()
 	// SealHash() returns GetKAWPOWHeaderHash() for RavencoinBlockHeader
 	// which is the double SHA256 of the 80-byte header input fields
-	sealHash := auxPowHeader.SealHash()
-	// Reverse bytes for stratum (miners expect little-endian)
-	reversed := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		reversed[i] = sealHash[31-i]
-	}
-	headerHash := hex.EncodeToString(reversed)
+	sealHash := auxPowHeader.SealHash().Reverse()
+	headerHash := hex.EncodeToString(sealHash[:])
 
 	// Lock once for all session field access
 	sess.mu.Lock()
