@@ -921,6 +921,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				_ = sess.sendJSON(note)
 			}
 		case "mining.authorize":
+			// Track old worker name to handle re-authorization
+			oldUser, oldWorkerName := sess.user, sess.workerName
+			wasAuthorized := sess.authorized
+
 			if len(req.Params) >= 1 {
 				if u, ok := req.Params[0].(string); ok {
 					// Parse username format: address.workername.frequency=X
@@ -930,6 +934,11 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					//   0x1234....rig1.frequency=2.5 -> user=0x1234..., worker=rig1, freq=2.5s
 					sess.user, sess.workerName, sess.jobFrequency = parseUsername(u)
 				}
+			}
+
+			// If re-authorizing with different worker name, disconnect old worker first
+			if wasAuthorized && (oldUser != sess.user || oldWorkerName != sess.workerName) {
+				s.stats.WorkerDisconnected(oldUser, oldWorkerName)
 			}
 			// Parse password for optional difficulty and frequency settings
 			// Format: d=<difficulty>,frequency=<seconds> or just one of them
@@ -970,6 +979,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				"chain":        sess.chain,
 				"powID":        powIDFromChain(sess.chain),
 				"jobFrequency": sess.jobFrequency.Seconds(),
+				"remoteAddr":   sess.conn.RemoteAddr().String(),
 			}
 			if sess.minerDifficulty != nil {
 				logFields["minerDifficulty"] = *sess.minerDifficulty
