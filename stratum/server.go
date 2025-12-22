@@ -854,7 +854,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					nil,  // Session ID (not used for resuming)
 					"00", // extranonce1 - placeholder, not used
 				}
-				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil})
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil}); err != nil {
+					sess.conn.Close()
+					return
+				}
 			} else {
 				// SHA/Scrypt use extranonce for coinbase modification
 				x1 := []byte{0x01, 0x01, 0x01, 0x01} // All 1s instead of random
@@ -867,7 +870,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					hex.EncodeToString(x1), // Will send "01010101"
 					4,                      // extranonce2_size (4 bytes for wider miner compatibility)
 				}
-				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil})
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil}); err != nil {
+					sess.conn.Close()
+					return
+				}
 			}
 		case "mining.extranonce.subscribe":
 			_ = sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil})
@@ -966,7 +972,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					"user":  sess.user,
 					"error": err,
 				}).Warn("miner address is not internal to this zone")
-				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "address is not internal to this zone"})
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "address is not internal to this zone"}); err != nil {
+					sess.conn.Close()
+					return
+				}
 				continue
 			}
 			// Algorithm is determined by which port the miner connected to (set in handleConn)
@@ -988,7 +997,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				logFields["varDiffEnabled"] = true
 			}
 			s.logger.WithFields(logFields).Info("miner authorized")
-			_ = sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil})
+			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+				sess.conn.Close()
+				return
+			}
 			// Send a fresh job with miner difficulty based on workshare diff
 			if err := s.sendJobAndNotify(sess, true); err != nil {
 				s.logger.WithField("error", err).Error("makeJob error")
@@ -1053,7 +1065,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					sess.mu.Lock()
 					delete(sess.kawJobs, jobID)
 					sess.mu.Unlock()
-					_ = sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil})
+					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+						sess.conn.Close()
+						return
+					}
 					// Send fresh job via worker pool
 					s.jobPool.submit(sess, true)
 				}
@@ -1100,7 +1115,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				sess.mu.Lock()
 				delete(sess.jobs, jobID)
 				sess.mu.Unlock()
-				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil})
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+					sess.conn.Close()
+					return
+				}
 				// Send a fresh job after successful workshare to keep miner on latest work
 				// Skip for sub-shares (met miner difficulty but not workshare difficulty)
 				if refreshJob {
@@ -1223,12 +1241,14 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 	note := map[string]interface{}{"id": nil, "method": "mining.notify", "params": params}
 
 	err = sess.sendJSON(note)
-	if err == nil {
-		sess.mu.Lock()
-		sess.lastJobSent = time.Now()
-		sess.mu.Unlock()
+	if err != nil {
+		sess.conn.Close() // can't send jobs, session is dead
+		return err
 	}
-	return err
+	sess.mu.Lock()
+	sess.lastJobSent = time.Now()
+	sess.mu.Unlock()
+	return nil
 }
 
 // sendKawpowJob creates and sends a kawpow-specific job to the miner.
@@ -1364,12 +1384,14 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 
 	note := map[string]interface{}{"id": nil, "method": "mining.notify", "params": params}
 	err = sess.sendJSON(note)
-	if err == nil {
-		sess.mu.Lock()
-		sess.lastJobSent = time.Now()
-		sess.mu.Unlock()
+	if err != nil {
+		sess.conn.Close() // can't send jobs, session is dead
+		return err
 	}
-	return err
+	sess.mu.Lock()
+	sess.lastJobSent = time.Now()
+	sess.mu.Unlock()
+	return nil
 }
 
 func (s *Server) makeJob(sess *session) (*job, error) {
