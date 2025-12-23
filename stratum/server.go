@@ -23,8 +23,13 @@ import (
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+)
+
+const (
+	seenSharesSize = 1024 // Size of LRU cache for seen shares per session
 )
 
 // StratumConfig holds configuration for the stratum server
@@ -797,9 +802,7 @@ type session struct {
 	kawJob     *kawpowJob // kawpow-specific job data
 	xnonce1    []byte
 	// vardiff state (per-connection)
-	difficulty    float64   // last sent miner difficulty
-	vdWindowStart time.Time // window start for submit rate
-	vdSubmits     int       // submits counted in window
+	difficulty float64 // last sent miner difficulty
 	// version rolling state
 	versionRolling bool
 	versionMask    uint32
@@ -810,8 +813,7 @@ type session struct {
 	jobSeq     uint64
 	jobHistory []string // FIFO of recent job IDs for simple expiry
 	// share de-duplication (per-connection LRU)
-	seenShares map[string]struct{}
-	seenOrder  []string
+	seenShares *lru.Cache[string, struct{}]
 	// cleanup
 	done      chan struct{}
 	jobTicker *time.Ticker
@@ -868,6 +870,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 	_ = c.SetDeadline(time.Now().Add(5 * time.Minute))
 	dec := json.NewDecoder(bufio.NewReader(c))
 	enc := json.NewEncoder(c)
+
+	seenShares, _ := lru.New[string, struct{}](seenSharesSize)
+
 	sess := &session{
 		conn:         c,
 		enc:          enc,
@@ -875,8 +880,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 		chain:        algorithm, // Set algorithm from the port they connected to
 		jobs:         make(map[string]*job),
 		kawJobs:      make(map[string]*kawpowJob),
-		seenShares:   make(map[string]struct{}),
-		seenOrder:    make([]string, 0, 1024),
+		seenShares:   seenShares,
 		done:         make(chan struct{}),
 		jobFrequency: defaultJobFrequency, // Default 5 seconds, can be overridden via username
 	}
@@ -1777,20 +1781,12 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 
 	// LRU de-dup and submit workshare
 	shareKey := hex.EncodeToString(hashBytes)
-	sess.mu.Lock()
-	if _, seen := sess.seenShares[shareKey]; seen {
+	if _, seen := sess.seenShares.Peek(shareKey); seen {
 		sess.mu.Unlock()
 		return false, fmt.Errorf("duplicate share")
 	}
 	const lruCap = 1024
-	sess.seenShares[shareKey] = struct{}{}
-	sess.seenOrder = append(sess.seenOrder, shareKey)
-	if len(sess.seenOrder) > lruCap {
-		oldest := sess.seenOrder[0]
-		sess.seenOrder = sess.seenOrder[1:]
-		delete(sess.seenShares, oldest)
-	}
-	sess.mu.Unlock()
+	sess.seenShares.Add(shareKey, struct{}{})
 
 	s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedStratumDiff, "workshareDiff": workshareStratumDiff}).Info("submitting workshare to node")
 
@@ -1994,19 +1990,11 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 	// LRU de-dup and submit workshare
 	shareKey := hex.EncodeToString(powHash.Bytes())
 	sess.mu.Lock()
-	if _, seen := sess.seenShares[shareKey]; seen {
+	if _, seen := sess.seenShares.Peek(shareKey); seen {
 		sess.mu.Unlock()
 		return fmt.Errorf("duplicate share")
 	}
-	const lruCap = 1024
-	sess.seenShares[shareKey] = struct{}{}
-	sess.seenOrder = append(sess.seenOrder, shareKey)
-	if len(sess.seenOrder) > lruCap {
-		oldest := sess.seenOrder[0]
-		sess.seenOrder = sess.seenOrder[1:]
-		delete(sess.seenShares, oldest)
-	}
-	sess.mu.Unlock()
+	sess.seenShares.Add(shareKey, struct{}{})
 
 	// Set the nonce and mix hash on the AuxPow's Ravencoin header for submission.
 	// The kawpow validation path (ComputePowLight/ComputePowHash) reads from:
