@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
@@ -33,7 +34,14 @@ type StratumConfig struct {
 	KawpowAddr     string // Address for Kawpow miners (e.g., ":5555")
 	VarDiffEnabled bool   // Enable automatic variable difficulty for liveness (default true)
 	JobWorkerCount int    // Number of workers in the job broadcast pool (default 4)
+	MaxConnections int    // Maximum concurrent connections (default 10000, 0 = unlimited)
 }
+
+// Connection limits and liveness timeout constants
+const (
+	defaultMaxConnections = 10000           // Default max concurrent connections
+	livenessTimeout       = 5 * time.Minute // Close connection if no share within this time
+)
 
 // templateState tracks the last template sent for change detection
 type templateState struct {
@@ -109,11 +117,21 @@ func (p *jobWorkerPool) worker(_ int) {
 }
 
 // submit queues a job task for a worker to process.
-// Returns true if the task was queued, false if the queue is full.
+// Returns true if the task was queued, false if the queue is full or pool is stopped.
 func (p *jobWorkerPool) submit(sess *session, clean bool) bool {
+	select {
+	case <-p.stopped:
+		// Pool is stopped, don't attempt to send (would panic on closed channel)
+		return false
+	default:
+	}
+
 	select {
 	case p.tasks <- jobTask{sess: sess, clean: clean}:
 		return true
+	case <-p.stopped:
+		// Pool stopped while we were trying to send
+		return false
 	default:
 		// Queue full - log and drop to prevent blocking
 		p.server.logger.WithFields(log.Fields{
@@ -161,6 +179,12 @@ type Server struct {
 	passRelCount uint64
 	// Worker pool for job broadcasting (prevents unbounded goroutine growth)
 	jobPool *jobWorkerPool
+	// Connection limit tracking (DDoS protection)
+	activeConns    atomic.Int64
+	maxConnections int
+	// Shutdown signaling
+	stopped chan struct{}
+	wg      sync.WaitGroup // tracks background goroutines (template polling, force broadcast)
 }
 
 // NewServer creates a new stratum server with the given configuration.
@@ -182,6 +206,11 @@ func NewServerWithConfig(config StratumConfig, backend quaiapi.Backend) *Server 
 		CachesLockMmap: false,
 	}
 	kawpowEngine := kawpow.New(kawpowConfig, nil, false, kawpowLogger)
+	// Set max connections with default
+	maxConns := config.MaxConnections
+	if maxConns <= 0 {
+		maxConns = defaultMaxConnections
+	}
 	s := &Server{
 		config:         config,
 		backend:        backend,
@@ -191,6 +220,8 @@ func NewServerWithConfig(config StratumConfig, backend quaiapi.Backend) *Server 
 		sessionsSHA:    make(map[*session]struct{}),
 		sessionsScrypt: make(map[*session]struct{}),
 		sessionsKawpow: make(map[*session]struct{}),
+		maxConnections: maxConns,
+		stopped:        make(chan struct{}),
 	}
 	// Initialize worker pool for job broadcasting
 	s.jobPool = newJobWorkerPool(s, config.JobWorkerCount)
@@ -273,12 +304,15 @@ func (s *Server) Start() error {
 
 	// Start template polling loops for each algorithm (check every second)
 	if s.config.SHAAddr != "" {
+		s.wg.Add(1)
 		go s.templatePollingLoop("sha256")
 	}
 	if s.config.ScryptAddr != "" {
+		s.wg.Add(1)
 		go s.templatePollingLoop("scrypt")
 	}
 	if s.config.KawpowAddr != "" {
+		s.wg.Add(1)
 		go s.templatePollingLoop("kawpow")
 	}
 
@@ -287,31 +321,16 @@ func (s *Server) Start() error {
 	// individual jobFrequency setting. Miners can configure their frequency via username:
 	// address.workername.frequency=X (1-10 seconds, supports decimals, default 5s)
 	if s.config.SHAAddr != "" {
-		go func() {
-			ticker := time.NewTicker(1 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				s.forceBroadcastStale("sha256")
-			}
-		}()
+		s.wg.Add(1)
+		go s.forceBroadcastLoop("sha256")
 	}
 	if s.config.ScryptAddr != "" {
-		go func() {
-			ticker := time.NewTicker(1 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				s.forceBroadcastStale("scrypt")
-			}
-		}()
+		s.wg.Add(1)
+		go s.forceBroadcastLoop("scrypt")
 	}
 	if s.config.KawpowAddr != "" {
-		go func() {
-			ticker := time.NewTicker(1 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				s.forceBroadcastStale("kawpow")
-			}
-		}()
+		s.wg.Add(1)
+		go s.forceBroadcastLoop("kawpow")
 	}
 
 	return nil
@@ -319,13 +338,19 @@ func (s *Server) Start() error {
 
 // templatePollingLoop polls for new templates and broadcasts to connected miners
 func (s *Server) templatePollingLoop(algorithm string) {
+	defer s.wg.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		changed, clean := s.checkTemplateChanged(algorithm)
-		if changed {
-			s.broadcastJob(algorithm, clean)
+	for {
+		select {
+		case <-s.stopped:
+			return
+		case <-ticker.C:
+			changed, clean := s.checkTemplateChanged(algorithm)
+			if changed {
+				s.broadcastJob(algorithm, clean)
+			}
 		}
 	}
 }
@@ -469,12 +494,31 @@ func (s *Server) broadcastJob(algorithm string, clean bool) {
 	}
 }
 
+// forceBroadcastLoop runs the force broadcast check every second until shutdown
+func (s *Server) forceBroadcastLoop(algorithm string) {
+	defer s.wg.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopped:
+			return
+		case <-ticker.C:
+			s.forceBroadcastStale(algorithm)
+		}
+	}
+}
+
 // forceBroadcastStale checks all sessions for an algorithm and force-broadcasts
 // the latest template to any session that hasn't received a job within its configured
 // jobFrequency. Each miner can configure their own frequency via username format:
 // address.workername.frequency=X (1-10 seconds, supports decimals, default 5s)
 // Also handles vardiff timeout: decreases difficulty if no share within 60 seconds.
+// Also handles liveness timeout: closes connections with no share within 5 minutes.
 func (s *Server) forceBroadcastStale(algorithm string) {
+	// Copy session pointers under sessionsMu, then release before per-session locking
+	// to avoid blocking registerSession/unregisterSession during the scan
 	s.sessionsMu.RLock()
 	var sessions map[*session]struct{}
 	switch algorithm {
@@ -485,20 +529,32 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 	case "kawpow":
 		sessions = s.sessionsKawpow
 	}
-	// Copy stale sessions to avoid holding lock during broadcast
-	staleSessions := make([]*session, 0)
-	// Sessions that need vardiff decrease due to timeout
-	varDiffTimeoutSessions := make([]*session, 0)
-	now := time.Now()
+	sessionsCopy := make([]*session, 0, len(sessions))
 	for sess := range sessions {
+		sessionsCopy = append(sessionsCopy, sess)
+	}
+	s.sessionsMu.RUnlock()
+
+	// Now iterate without holding sessionsMu
+	staleSessions := make([]*session, 0)
+	varDiffTimeoutSessions := make([]*session, 0)
+	livenessTimeoutSessions := make([]*session, 0)
+	now := time.Now()
+	for _, sess := range sessionsCopy {
 		if !sess.authorized {
 			continue
 		}
 		sess.mu.Lock()
 		timeSinceLastJob := now.Sub(sess.lastJobSent)
+		timeSinceLastShare := now.Sub(sess.lastShareTime)
 		threshold := sess.jobFrequency
 		// Check for vardiff timeout
-		varDiffTimeout := sess.varDiffEnabled && now.Sub(sess.lastShareTime) >= varDiffRetargetAfter
+		varDiffTimeout := sess.varDiffEnabled && timeSinceLastShare >= varDiffRetargetAfter
+		// Check for liveness timeout (no share in 5 minutes)
+		// Only applies when miner has a liveness target (vardiff or d=X specified)
+		// In workshare-only mode, shares could take hours/days - don't timeout
+		hasLivenessTarget := sess.varDiffEnabled || sess.minerDifficulty != nil
+		livenessExpired := hasLivenessTarget && timeSinceLastShare >= livenessTimeout
 		sess.mu.Unlock()
 		// Use per-session threshold (configured via username)
 		if timeSinceLastJob >= threshold {
@@ -507,8 +563,20 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 		if varDiffTimeout {
 			varDiffTimeoutSessions = append(varDiffTimeoutSessions, sess)
 		}
+		if livenessExpired {
+			livenessTimeoutSessions = append(livenessTimeoutSessions, sess)
+		}
 	}
-	s.sessionsMu.RUnlock()
+
+	// Close connections that have been idle too long (no shares in 5 minutes)
+	for _, sess := range livenessTimeoutSessions {
+		s.logger.WithFields(log.Fields{
+			"user":   sess.user,
+			"worker": sess.workerName,
+			"algo":   algorithm,
+		}).Warn("Closing connection due to liveness timeout (no share in 5 minutes)")
+		sess.conn.Close() // This will cause handleConn to exit and clean up
+	}
 
 	// Handle vardiff timeout adjustments (decrease difficulty)
 	for _, sess := range varDiffTimeoutSessions {
@@ -555,6 +623,13 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 }
 
 func (s *Server) Stop() error {
+	// Signal all background goroutines to stop
+	close(s.stopped)
+
+	// Wait for template polling and force broadcast loops to exit
+	// This must happen BEFORE closing the job pool to prevent panic on send
+	s.wg.Wait()
+
 	var errs []error
 	if s.lnSHA != nil {
 		if err := s.lnSHA.Close(); err != nil {
@@ -571,7 +646,7 @@ func (s *Server) Stop() error {
 			errs = append(errs, err)
 		}
 	}
-	// Stop the job worker pool
+	// Stop the job worker pool (safe now that no goroutines are submitting)
 	if s.jobPool != nil {
 		s.jobPool.stop()
 	}
@@ -588,6 +663,21 @@ func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
 		if err != nil {
 			return
 		}
+
+		// Check connection limit (DDoS protection)
+		currentConns := s.activeConns.Add(1)
+		if s.maxConnections > 0 && currentConns > int64(s.maxConnections) {
+			s.activeConns.Add(-1)
+			s.logger.WithFields(log.Fields{
+				"algo":        algorithm,
+				"current":     currentConns - 1,
+				"max":         s.maxConnections,
+				"remote_addr": conn.RemoteAddr().String(),
+			}).Warn("Connection limit reached, rejecting new connection")
+			conn.Close()
+			continue
+		}
+
 		// Enable TCP keepalive to detect dead connections faster than OS default (2hrs)
 		if tcpConn, ok := conn.(*net.TCPConn); ok {
 			_ = tcpConn.SetKeepAlive(true)
@@ -798,6 +888,7 @@ type job struct {
 // The algorithm is determined by which port the miner connected to.
 func (s *Server) handleConn(c net.Conn, algorithm string) {
 	defer c.Close()
+	defer s.activeConns.Add(-1) // Decrement connection counter on exit
 	// Set a longer initial deadline - will be extended on each message
 	_ = c.SetDeadline(time.Now().Add(5 * time.Minute))
 	dec := json.NewDecoder(bufio.NewReader(c))
@@ -965,13 +1056,14 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					}
 				}
 			}
+			// Initialize lastShareTime for liveness tracking (all sessions, not just vardiff)
+			sess.lastShareTime = time.Now()
 			// Initialize vardiff if enabled and miner didn't specify a static difficulty
 			// If vardiff is disabled and no d=X, workshare difficulty will be used (handled in sendJobAndNotify)
 			if sess.minerDifficulty == nil && s.config.VarDiffEnabled {
 				sess.varDiffEnabled = true
 				defaultDiff, _ := getVarDiffDefaults(sess.chain)
 				sess.varDiff = defaultDiff
-				sess.lastShareTime = time.Now()
 			}
 			// Validate that the address is internal (belongs to this zone)
 			address := common.HexToAddress(sess.user, s.backend.NodeLocation())
@@ -1665,8 +1757,8 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			return false, fmt.Errorf("share difficulty %.4f below target %.4f", achievedStratumDiff, livenessTarget)
 		}
 
-		// Share meets liveness difficulty - adjust vardiff if enabled
-		// Note: adjustVarDiff takes the lock internally
+		// Share meets liveness difficulty - update lastShareTime for liveness tracking
+		// For vardiff, adjustVarDiff also updates lastShareTime internally
 		if usingVarDiff && s.adjustVarDiff(sess, workshareStratumDiff) {
 			sess.mu.Lock()
 			newDiff := sess.varDiff
@@ -1675,6 +1767,11 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			if err := sess.sendJSON(diffNote); err != nil {
 				s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send vardiff mining.set_difficulty (sha256/scrypt)")
 			}
+		} else if !usingVarDiff {
+			// For non-vardiff sessions, update lastShareTime explicitly for liveness tracking
+			sess.mu.Lock()
+			sess.lastShareTime = time.Now()
+			sess.mu.Unlock()
 		}
 
 		// If it doesn't meet workshare target, accept for liveness but don't submit
@@ -1753,6 +1850,14 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 
 	// Record the share with difficulty info for solo mining luck tracking
 	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+
+	// Update lastShareTime for workshare-only mode (livenessTarget was 0)
+	// In liveness mode, lastShareTime was already updated above
+	if livenessTarget == 0 {
+		sess.mu.Lock()
+		sess.lastShareTime = time.Now()
+		sess.mu.Unlock()
+	}
 
 	// Second check: does it also meet workshare target? If so, submit to network
 	if powHashBigInt.Cmp(workShareTarget) <= 0 {
@@ -1870,8 +1975,8 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			return fmt.Errorf("share difficulty %.4f below target %.4f", achievedStratumDiff, livenessTarget)
 		}
 
-		// Share meets liveness difficulty - adjust vardiff if enabled
-		// Note: adjustVarDiff takes the lock internally
+		// Share meets liveness difficulty - update lastShareTime for liveness tracking
+		// For vardiff, adjustVarDiff also updates lastShareTime internally
 		if usingVarDiff && s.adjustVarDiff(sess, workshareStratumDiff) {
 			sess.mu.Lock()
 			newDiff := sess.varDiff
@@ -1889,6 +1994,11 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			if err := sess.sendJSON(targetNote); err != nil {
 				s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send vardiff mining.set_target (kawpow)")
 			}
+		} else if !usingVarDiff {
+			// For non-vardiff sessions, update lastShareTime explicitly for liveness tracking
+			sess.mu.Lock()
+			sess.lastShareTime = time.Now()
+			sess.mu.Unlock()
 		}
 
 		// If it doesn't meet workshare target, accept for liveness but don't submit
@@ -1956,6 +2066,14 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 
 	// Record the share with difficulty info
 	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.difficulty, achievedDiffFloat, workshareDiffFloat, true, false)
+
+	// Update lastShareTime for workshare-only mode (livenessTarget was 0)
+	// In liveness mode, lastShareTime was already updated above
+	if livenessTarget == 0 {
+		sess.mu.Lock()
+		sess.lastShareTime = time.Now()
+		sess.mu.Unlock()
+	}
 
 	s.logger.WithFields(log.Fields{
 		"powID":         types.Kawpow,
