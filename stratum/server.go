@@ -799,7 +799,9 @@ type session struct {
 	kawJob     *kawpowJob // kawpow-specific job data
 	xnonce1    []byte
 	// vardiff state (per-connection)
-	difficulty float64 // last sent miner difficulty
+	difficulty         float64 // workshare stratum difficulty
+	lastSentDifficulty float64 // last difficulty actually sent to miner (to avoid redundant set_difficulty)
+	lastSentTarget     string  // last target sent to kawpow miner (to avoid redundant set_target)
 	// version rolling state
 	versionRolling bool
 	versionMask    uint32
@@ -1327,16 +1329,21 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 		diffSource = "workshare"
 	}
 
+	// Check if difficulty changed since last send
+	diffChanged := sess.lastSentDifficulty != minerDiff
+	if diffChanged {
+		sess.lastSentDifficulty = minerDiff
+	}
+
 	sess.mu.Unlock()
 
-	// Log difficulty source
-	s.logger.WithFields(log.Fields{"jobID": j.id, "chain": sess.chain}).Info("notify job")
-	s.logger.WithFields(log.Fields{diffSource: minerDiff, "workshareDiff": workshareStratumDiff}).Debug("Using " + diffSource + " for set_difficulty")
-
-	// Send set_difficulty then the job notify
-	diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{minerDiff}}
-	if err := sess.sendJSON(diffNote); err != nil {
-		s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.set_difficulty (sha256/scrypt)")
+	// Only send set_difficulty if the difficulty actually changed
+	if diffChanged {
+		s.logger.WithFields(log.Fields{diffSource: minerDiff, "workshareDiff": workshareStratumDiff}).Debug("Sending set_difficulty")
+		diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{minerDiff}}
+		if err := sess.sendJSON(diffNote); err != nil {
+			s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.set_difficulty (sha256/scrypt)")
+		}
 	}
 
 	// Prepend 4 zero bytes to coinb2 - miner sees this as part of coinb2, but we use it as ex2 padding
@@ -1455,15 +1462,24 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 	sess.kawJob = kawJob
 	sess.kawJobs.Add(jobID, kawJob)
 
+	// Check if target changed since last send
+	targetChanged := sess.lastSentTarget != targetHex
+	if targetChanged {
+		sess.lastSentTarget = targetHex
+	}
+
 	sess.mu.Unlock()
 
 	// Log job info
 	s.logger.WithFields(log.Fields{"jobID": jobID, "height": height, "epoch": epoch, "diffSource": diffSource}).Info("notify kawpow job")
 
-	// Send set_target for kawpow miners (some expect this)
-	targetNote := map[string]interface{}{"id": nil, "method": "mining.set_target", "params": []interface{}{targetHex}}
-	if err := sess.sendJSON(targetNote); err != nil {
-		s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.set_target (kawpow)")
+	// Only send set_target if the target actually changed
+	if targetChanged {
+		s.logger.WithFields(log.Fields{"target": targetHex}).Debug("Sending set_target")
+		targetNote := map[string]interface{}{"id": nil, "method": "mining.set_target", "params": []interface{}{targetHex}}
+		if err := sess.sendJSON(targetNote); err != nil {
+			s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.set_target (kawpow)")
+		}
 	}
 
 	// Kawpow mining.notify format: [job_id, header_hash, seed_hash, target, clean, height, bits]
@@ -1735,6 +1751,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 		if usingVarDiff && s.adjustVarDiff(sess, workshareStratumDiff) {
 			sess.mu.Lock()
 			newDiff := sess.varDiff
+			sess.lastSentDifficulty = newDiff // Track that we're sending this difficulty
 			sess.mu.Unlock()
 			diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{newDiff}}
 			if err := sess.sendJSON(diffNote); err != nil {
@@ -1945,7 +1962,6 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		if usingVarDiff && s.adjustVarDiff(sess, workshareStratumDiff) {
 			sess.mu.Lock()
 			newDiff := sess.varDiff
-			sess.mu.Unlock()
 			// For kawpow, convert difficulty to target: target = KawpowDiff1 / difficulty
 			minerDiffBig := new(big.Float).SetFloat64(newDiff)
 			diff1Float := new(big.Float).SetInt(KawpowDiff1)
@@ -1955,6 +1971,8 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			result := make([]byte, 32)
 			copy(result[32-len(targetBytes):], targetBytes)
 			targetHex := hex.EncodeToString(result)
+			sess.lastSentTarget = targetHex // Track that we're sending this target
+			sess.mu.Unlock()
 			targetNote := map[string]interface{}{"id": nil, "method": "mining.set_target", "params": []interface{}{targetHex}}
 			if err := sess.sendJSON(targetNote); err != nil {
 				s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send vardiff mining.set_target (kawpow)")
@@ -2081,13 +2099,13 @@ func powIDFromChain(chain string) types.PowID {
 	}
 }
 
-// parseUsername parses the stratum username format: address.workername.frequency=X
+// parseUsername parses the stratum username format: address.workername.frequency=X (or freq=X)
 // Returns the address, worker name, and job frequency.
 // Examples:
 //   - "0x1234..." -> ("0x1234...", "default", 5s)
 //   - "0x1234....rig1" -> ("0x1234...", "rig1", 5s)
-//   - "0x1234....rig1.frequency=2.5" -> ("0x1234...", "rig1", 2.5s)
-//   - "0x1234....frequency=3" -> ("0x1234...", "default", 3s)
+//   - "0x1234....rig1.frequency=2.5" or "0x1234....rig1.freq=2.5" -> ("0x1234...", "rig1", 2.5s)
+//   - "0x1234....freq=3" -> ("0x1234...", "default", 3s)
 func parseUsername(u string) (address string, workerName string, jobFreq time.Duration) {
 	jobFreq = defaultJobFrequency
 	workerName = "default"
@@ -2107,9 +2125,12 @@ func parseUsername(u string) (address string, workerName string, jobFreq time.Du
 	for i := 1; i < len(parts); i++ {
 		part := parts[i]
 
-		// Check if this part is a frequency setting
-		if strings.HasPrefix(part, "frequency=") {
-			freqStr := strings.TrimPrefix(part, "frequency=")
+		// Check if this part is a frequency setting (accept both "frequency=" and "freq=")
+		freqStr, isFreq := strings.CutPrefix(part, "frequency=")
+		if !isFreq {
+			freqStr, isFreq = strings.CutPrefix(part, "freq=")
+		}
+		if isFreq {
 			if freq, err := strconv.ParseFloat(freqStr, 64); err == nil {
 				// Convert seconds to duration and clamp to bounds
 				freqDuration := time.Duration(freq * float64(time.Second))
@@ -2130,13 +2151,13 @@ func parseUsername(u string) (address string, workerName string, jobFreq time.Du
 }
 
 // parsePassword parses the stratum password field for optional parameters.
-// Supports: d=<difficulty> and/or frequency=<seconds>
+// Supports: d=<difficulty> and/or frequency=<seconds> (or freq=<seconds>)
 // Parts are separated by ',' character (to allow decimal values).
 // Examples:
 //   - "x" or "" -> nil, 0 (use defaults)
 //   - "d=0.1" -> difficulty=0.1, frequency=0
-//   - "frequency=2.5" -> difficulty=nil, frequency=2.5s
-//   - "d=0.1,frequency=2" -> difficulty=0.1, frequency=2s
+//   - "frequency=2.5" or "freq=2.5" -> difficulty=nil, frequency=2.5s
+//   - "d=0.1,freq=2" -> difficulty=0.1, frequency=2s
 func parsePassword(password string) (*float64, time.Duration) {
 	if password == "" || password == "x" {
 		return nil, 0
@@ -2155,8 +2176,12 @@ func parsePassword(password string) (*float64, time.Duration) {
 			}
 			continue
 		}
-		// Check for frequency=<seconds> format
-		if freqStr, ok := strings.CutPrefix(part, "frequency="); ok {
+		// Check for frequency=<seconds> or freq=<seconds> format
+		freqStr, isFreq := strings.CutPrefix(part, "frequency=")
+		if !isFreq {
+			freqStr, isFreq = strings.CutPrefix(part, "freq=")
+		}
+		if isFreq {
 			if freq, err := strconv.ParseFloat(freqStr, 64); err == nil && freq >= 1 && freq <= 10 {
 				frequency = time.Duration(freq * float64(time.Second))
 			}
