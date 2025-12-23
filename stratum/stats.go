@@ -3,6 +3,8 @@ package stratum
 import (
 	"sync"
 	"time"
+
+	"github.com/dominant-strategies/go-quai/log"
 )
 
 // WorkerStats tracks statistics for a connected miner
@@ -11,7 +13,10 @@ type WorkerStats struct {
 	WorkerName     string    `json:"workerName"`
 	Algorithm      string    `json:"algorithm"`
 	ConnectedAt    time.Time `json:"connectedAt"`
+	FirstShareAt   time.Time `json:"firstShareAt"`   // time of first valid share
+	FirstShareDiff float64   `json:"firstShareDiff"` // difficulty of first valid share
 	LastShareAt    time.Time `json:"lastShareAt"`
+	LastShareDiff  float64   `json:"lastShareDiff"` // difficulty of last valid share
 	SharesValid    uint64    `json:"sharesValid"`
 	SharesStale    uint64    `json:"sharesStale"`
 	SharesInvalid  uint64    `json:"sharesInvalid"`
@@ -49,6 +54,7 @@ type PoolStats struct {
 	totalShares uint64
 	startedAt   time.Time
 	mu          sync.RWMutex
+	logger      *log.Logger
 
 	// Hashrate calculation
 	shareWindow    []shareEvent
@@ -64,7 +70,7 @@ type shareEvent struct {
 }
 
 // NewPoolStats creates a new pool statistics tracker
-func NewPoolStats() *PoolStats {
+func NewPoolStats(logger *log.Logger) *PoolStats {
 	return &PoolStats{
 		workers:        make(map[string]*WorkerStats),
 		blocks:         make([]BlockFound, 0),
@@ -72,6 +78,7 @@ func NewPoolStats() *PoolStats {
 		shareWindow:    make([]shareEvent, 0),
 		windowDuration: 10 * time.Minute,
 		shareHistory:   make([]ShareRecord, 0),
+		logger:         logger,
 	}
 }
 
@@ -151,9 +158,17 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 	}
 
 	if worker, exists := ps.workers[key]; exists {
-		worker.LastShareAt = time.Now()
+		now := time.Now()
+		worker.LastShareAt = now
 		worker.Difficulty = poolDiff
 		if valid {
+			// Track first share info
+			isFirstShare := worker.SharesValid == 0
+			if isFirstShare {
+				worker.FirstShareAt = now
+				worker.FirstShareDiff = poolDiff
+			}
+			worker.LastShareDiff = poolDiff
 			worker.SharesValid++
 			worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
 		} else if stale {
@@ -162,6 +177,24 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 			worker.SharesInvalid++
 		}
 		worker.Hashrate = ps.calculateWorkerHashrate(key)
+
+		// Log worker hashrate with first and last share info
+		if valid && ps.logger != nil {
+			elapsed := now.Sub(worker.ConnectedAt).Seconds()
+			ps.logger.WithFields(log.Fields{
+				"worker":         key,
+				"algorithm":      worker.Algorithm,
+				"hashrate":       worker.Hashrate,
+				"sharesValid":    worker.SharesValid,
+				"cumulativeWork": worker.CumulativeWork,
+				"elapsedSecs":    elapsed,
+				"firstShareAt":   worker.FirstShareAt.Format(time.RFC3339),
+				"firstShareDiff": worker.FirstShareDiff,
+				"lastShareAt":    worker.LastShareAt.Format(time.RFC3339),
+				"lastShareDiff":  worker.LastShareDiff,
+				"poolDiff":       poolDiff,
+			}).Info("Worker hashrate update")
+		}
 	}
 
 	// Record share in history for solo mining luck tracking (only valid shares)

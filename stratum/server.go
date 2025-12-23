@@ -186,7 +186,7 @@ func NewServerWithConfig(config StratumConfig, backend quaiapi.Backend) *Server 
 		config:         config,
 		backend:        backend,
 		logger:         logger,
-		stats:          NewPoolStats(),
+		stats:          NewPoolStats(logger),
 		kawpowEngine:   kawpowEngine,
 		sessionsSHA:    make(map[*session]struct{}),
 		sessionsScrypt: make(map[*session]struct{}),
