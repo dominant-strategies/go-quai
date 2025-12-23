@@ -855,6 +855,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					"00", // extranonce1 - placeholder, not used
 				}
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil}); err != nil {
+					s.logger.WithField("error", err).Error("failed to send mining.subscribe response (kawpow)")
 					sess.conn.Close()
 					return
 				}
@@ -871,12 +872,15 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					4,                      // extranonce2_size (4 bytes for wider miner compatibility)
 				}
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil}); err != nil {
+					s.logger.WithField("error", err).Error("failed to send mining.subscribe response (SHA/Scrypt)")
 					sess.conn.Close()
 					return
 				}
 			}
 		case "mining.extranonce.subscribe":
-			_ = sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil})
+			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+				s.logger.WithField("error", err).Debug("failed to send mining.extranonce.subscribe response")
+			}
 		case "mining.configure":
 			// BIP 310: params = [extensions_array, params_map]
 			// extensions_array: ["version-rolling", "minimum-difficulty", ...]
@@ -919,12 +923,16 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				resp["version-rolling.min-bit-count"] = 0
 				s.logger.WithField("mask", fmt.Sprintf("0x%08x", sess.versionMask)).Info("VERSION-ROLLING enabled")
 			}
-			_ = sess.sendJSON(stratumResp{ID: req.ID, Result: resp, Error: nil})
+			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: resp, Error: nil}); err != nil {
+				s.logger.WithField("error", err).Debug("failed to send mining.configure response")
+			}
 
 			// Send mining.set_version_mask for miners that expect it after configure
 			if sess.versionRolling {
 				note := map[string]interface{}{"id": nil, "method": "mining.set_version_mask", "params": []interface{}{fmt.Sprintf("%08x", sess.versionMask)}}
-				_ = sess.sendJSON(note)
+				if err := sess.sendJSON(note); err != nil {
+					s.logger.WithField("error", err).Debug("failed to send mining.set_version_mask")
+				}
 			}
 		case "mining.authorize":
 			// Track old worker name to handle re-authorization
@@ -973,6 +981,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					"error": err,
 				}).Warn("miner address is not internal to this zone")
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "address is not internal to this zone"}); err != nil {
+					s.logger.WithField("error", err).Error("failed to send mining.authorize rejection")
 					sess.conn.Close()
 					return
 				}
@@ -998,6 +1007,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 			s.logger.WithFields(logFields).Info("miner authorized")
 			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+				s.logger.WithField("error", err).Error("failed to send mining.authorize success")
 				sess.conn.Close()
 				return
 			}
@@ -1034,7 +1044,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// SHA/Scrypt uses: [worker, job_id, ex2, ntime, nonce, version_bits?]
 			if powIDFromChain(sess.chain) == types.Kawpow {
 				if len(req.Params) < 5 {
-					_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "bad kawpow params"})
+					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "bad kawpow params"}); err != nil {
+						s.logger.WithField("error", err).Debug("failed to send mining.submit bad params (kawpow)")
+					}
 					continue
 				}
 				// Kawpow params: [worker, job_id, nonce, header_hash, mix_hash]
@@ -1051,14 +1063,18 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				if !ok {
 					s.logger.WithFields(log.Fields{"jobID": jobID, "known": knownJobs}).Error("unknown kawpow jobID")
 					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
-					_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"})
+					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"}); err != nil {
+						s.logger.WithField("error", err).Debug("failed to send mining.submit stale job (kawpow)")
+					}
 					continue
 				}
 
 				// Submit kawpow share
 				if err := s.submitKawpowShare(sess, kawJob, nonceHex, headerHashHex, mixHashHex); err != nil {
 					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, false) // invalid share
-					_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()})
+					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
+						s.logger.WithField("error", err).Debug("failed to send mining.submit invalid share (kawpow)")
+					}
 				} else {
 					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, true, false) // valid share
 					s.logger.WithFields(log.Fields{"addr": sess.user, "nonce": nonceHex, "mixHash": mixHashHex}).Info("kawpow submit accepted")
@@ -1066,6 +1082,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					delete(sess.kawJobs, jobID)
 					sess.mu.Unlock()
 					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+						s.logger.WithField("error", err).Error("failed to send mining.submit accepted (kawpow)")
 						sess.conn.Close()
 						return
 					}
@@ -1077,7 +1094,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 
 			// SHA/Scrypt submit handling
 			if len(req.Params) < 5 {
-				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "bad params"})
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "bad params"}); err != nil {
+					s.logger.WithField("error", err).Debug("failed to send mining.submit bad params (SHA/Scrypt)")
+				}
 				continue
 			}
 			// params: [user, job_id, ex2, ntime, nonce, version_bits (optional)]
@@ -1099,7 +1118,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			if !ok {
 				s.logger.WithFields(log.Fields{"jobID": jobID, "known": knownJobs}).Error("unknown or stale jobID")
 				s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
-				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"})
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"}); err != nil {
+					s.logger.WithField("error", err).Debug("failed to send mining.submit stale job (SHA/Scrypt)")
+				}
 				continue
 			}
 			// apply nonce into AuxPow header and submit as workshare
@@ -1107,7 +1128,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			refreshJob, err := s.submitAsWorkShare(sess, j, ex2hex, ntimeHex, nonceHex, versionBits)
 			if err != nil {
 				s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, false) // invalid share
-				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()})
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
+					s.logger.WithField("error", err).Debug("failed to send mining.submit invalid share (SHA/Scrypt)")
+				}
 			} else {
 				// Note: valid share is already recorded in submitAsWorkShare with difficulty info
 				s.logger.WithFields(log.Fields{"addr": sess.user, "chain": sess.chain, "nonce": nonceHex}).Info("submit accepted")
@@ -1116,6 +1139,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				delete(sess.jobs, jobID)
 				sess.mu.Unlock()
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+					s.logger.WithField("error", err).Error("failed to send mining.submit accepted (SHA/Scrypt)")
 					sess.conn.Close()
 					return
 				}
@@ -1126,7 +1150,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				}
 			}
 		default:
-			_ = sess.sendJSON(stratumResp{ID: req.ID, Result: nil, Error: nil})
+			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: nil, Error: nil}); err != nil {
+				s.logger.WithFields(log.Fields{"error": err, "method": req.Method}).Debug("failed to send response for unknown method")
+			}
 		}
 	}
 }
@@ -1231,7 +1257,9 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 
 	// Send set_difficulty then the job notify
 	diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{minerDiff}}
-	_ = sess.sendJSON(diffNote)
+	if err := sess.sendJSON(diffNote); err != nil {
+		s.logger.WithField("error", err).Debug("failed to send mining.set_difficulty (SHA/Scrypt)")
+	}
 
 	// Prepend 4 zero bytes to coinb2 - miner sees this as part of coinb2, but we use it as ex2 padding
 	// This allows us to send 4-byte extranonce2 to miners while the node expects 8-byte extranonce2
@@ -1242,6 +1270,7 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 
 	err = sess.sendJSON(note)
 	if err != nil {
+		s.logger.WithField("error", err).Error("failed to send mining.notify (SHA/Scrypt)")
 		sess.conn.Close() // can't send jobs, session is dead
 		return err
 	}
@@ -1368,7 +1397,9 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 
 	// Send set_target for kawpow miners (some expect this)
 	targetNote := map[string]interface{}{"id": nil, "method": "mining.set_target", "params": []interface{}{targetHex}}
-	_ = sess.sendJSON(targetNote)
+	if err := sess.sendJSON(targetNote); err != nil {
+		s.logger.WithField("error", err).Debug("failed to send mining.set_target (kawpow)")
+	}
 
 	// Kawpow mining.notify format: [job_id, header_hash, seed_hash, target, clean, height, bits]
 	// Note: height is sent as integer (not hex), bits as hex string
@@ -1385,6 +1416,7 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 	note := map[string]interface{}{"id": nil, "method": "mining.notify", "params": params}
 	err = sess.sendJSON(note)
 	if err != nil {
+		s.logger.WithField("error", err).Error("failed to send mining.notify (kawpow)")
 		sess.conn.Close() // can't send jobs, session is dead
 		return err
 	}
@@ -1640,7 +1672,9 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			newDiff := sess.varDiff
 			sess.mu.Unlock()
 			diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{newDiff}}
-			_ = sess.sendJSON(diffNote)
+			if err := sess.sendJSON(diffNote); err != nil {
+				s.logger.WithField("error", err).Debug("failed to send vardiff mining.set_difficulty (SHA/Scrypt)")
+			}
 		}
 
 		// If it doesn't meet workshare target, accept for liveness but don't submit
@@ -1852,7 +1886,9 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			copy(result[32-len(targetBytes):], targetBytes)
 			targetHex := hex.EncodeToString(result)
 			targetNote := map[string]interface{}{"id": nil, "method": "mining.set_target", "params": []interface{}{targetHex}}
-			_ = sess.sendJSON(targetNote)
+			if err := sess.sendJSON(targetNote); err != nil {
+				s.logger.WithField("error", err).Debug("failed to send vardiff mining.set_target (kawpow)")
+			}
 		}
 
 		// If it doesn't meet workshare target, accept for liveness but don't submit
