@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/kawpow"
 )
 
@@ -26,8 +27,11 @@ type kawpowJob struct {
 	target     string // 32-byte target (256-bit)
 	height     uint64 // block height - critical for DAG calculation
 	bits       uint32 // nBits compact difficulty
-	// Store pending work object for submission
+	// Header-only pending (body is nil) - body is retrieved from pendingBodies cache
 	pending interface{}
+	// Key to look up the full block body in Server.pendingBodies cache
+	// This enables many-to-one mapping: many miners share one cached body
+	bodyCacheKey common.Hash
 }
 
 // calculateSeedHash computes the seed hash for a given block height
