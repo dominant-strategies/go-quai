@@ -30,6 +30,7 @@ import (
 
 const (
 	seenSharesSize = 1024 // Size of LRU cache for seen shares per session
+	jobsCacheSize  = 32
 )
 
 // StratumConfig holds configuration for the stratum server
@@ -178,10 +179,6 @@ type Server struct {
 	sessionsSHA    map[*session]struct{}
 	sessionsScrypt map[*session]struct{}
 	sessionsKawpow map[*session]struct{}
-	// simple counters for debugging submission quality
-	submits      uint64
-	passPowCount uint64
-	passRelCount uint64
 	// Worker pool for job broadcasting (prevents unbounded goroutine growth)
 	jobPool *jobWorkerPool
 	// Connection limit tracking (DDoS protection)
@@ -807,11 +804,10 @@ type session struct {
 	versionRolling bool
 	versionMask    uint32
 	// job tracking
-	mu         sync.Mutex // protects job, jobs, jobSeq, jobHistory, difficulty
-	jobs       map[string]*job
-	kawJobs    map[string]*kawpowJob // kawpow job tracking
-	jobSeq     uint64
-	jobHistory []string // FIFO of recent job IDs for simple expiry
+	mu      sync.Mutex // protects job, jobs, jobSeq, jobHistory, difficulty
+	jobs    *lru.Cache[string, *job]
+	kawJobs *lru.Cache[string, *kawpowJob] // kawpow job tracking
+	jobSeq  uint64
 	// share de-duplication (per-connection LRU)
 	seenShares *lru.Cache[string, struct{}]
 	// cleanup
@@ -866,20 +862,23 @@ type job struct {
 func (s *Server) handleConn(c net.Conn, algorithm string) {
 	defer c.Close()
 	defer s.activeConns.Add(-1) // Decrement connection counter on exit
-	// Set a longer initial deadline - will be extended on each message
-	_ = c.SetDeadline(time.Now().Add(5 * time.Minute))
+	// Set a longer initial read deadline - will be extended on each message
+	// Use SetReadDeadline (not SetDeadline) to avoid overriding the 10s write deadline in sendJSON
+	_ = c.SetReadDeadline(time.Now().Add(5 * time.Minute))
 	dec := json.NewDecoder(bufio.NewReader(c))
 	enc := json.NewEncoder(c)
 
 	seenShares, _ := lru.New[string, struct{}](seenSharesSize)
+	jobsCache, _ := lru.New[string, *job](jobsCacheSize)
+	kawJobsCache, _ := lru.New[string, *kawpowJob](jobsCacheSize)
 
 	sess := &session{
 		conn:         c,
 		enc:          enc,
 		dec:          dec,
 		chain:        algorithm, // Set algorithm from the port they connected to
-		jobs:         make(map[string]*job),
-		kawJobs:      make(map[string]*kawpowJob),
+		jobs:         jobsCache,
+		kawJobs:      kawJobsCache,
 		seenShares:   seenShares,
 		done:         make(chan struct{}),
 		jobFrequency: defaultJobFrequency, // Default 5 seconds, can be overridden via username
@@ -897,10 +896,6 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 		}
 	}()
 
-	// No read deadline - miners may go hours/days between shares with high workshare difficulty.
-	// Dead connections are detected via TCP keepalive or when writes fail.
-	// If explicit timeout is needed later, consider 24+ hours or implement ping/pong.
-
 	for {
 
 		var req stratumReq
@@ -910,8 +905,8 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 			return
 		}
-		// Extend deadline on each message received
-		_ = c.SetDeadline(time.Now().Add(5 * time.Minute))
+		// Extend read deadline on each message received
+		_ = c.SetReadDeadline(time.Now().Add(5 * time.Minute))
 
 		switch req.Method {
 		case "mining.subscribe":
@@ -986,8 +981,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// Build response - always indicate support for version-rolling if requested
 			resp := map[string]interface{}{}
 			if wantsVersionRolling {
+				sess.mu.Lock()
 				sess.versionRolling = true
 				sess.versionMask = 0x1fffe000 // Standard mask (bits 13-28)
+				sess.mu.Unlock()
 				resp["version-rolling"] = true
 				resp["version-rolling.mask"] = fmt.Sprintf("%08x", sess.versionMask)
 				resp["version-rolling.min-bit-count"] = 0
@@ -998,7 +995,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 
 			// Send mining.set_version_mask for miners that expect it after configure
-			if sess.versionRolling {
+			sess.mu.Lock()
+			vr := sess.versionRolling
+			sess.mu.Unlock()
+			if vr {
 				note := map[string]interface{}{"id": nil, "method": "mining.set_version_mask", "params": []interface{}{fmt.Sprintf("%08x", sess.versionMask)}}
 				if err := sess.sendJSON(note); err != nil {
 					s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.set_version_mask")
@@ -1094,7 +1094,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 						case <-time.After(2 * time.Second):
 							// Check if job was created successfully (under lock to avoid race)
 							sess.mu.Lock()
-							hasJob := sess.job != nil || len(sess.kawJobs) > 0
+							hasJob := sess.job != nil || sess.kawJobs.Len() > 0
 							sess.mu.Unlock()
 							if hasJob {
 								return // job was created successfully
@@ -1125,11 +1125,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				nonceHex, _ := req.Params[2].(string)
 				headerHashHex, _ := req.Params[3].(string)
 				mixHashHex, _ := req.Params[4].(string)
-
+				kawJob, ok := sess.kawJobs.Peek(jobID)
+				knownJobs := sess.kawJobs.Len() // snapshot for logging (avoid race)
 				sess.mu.Lock()
-				kawJob, ok := sess.kawJobs[jobID]
-				difficulty := sess.difficulty  // snapshot for stats
-				knownJobs := len(sess.kawJobs) // snapshot for logging (avoid race)
+				difficulty := sess.difficulty // snapshot for stats
 				sess.mu.Unlock()
 				if !ok {
 					s.logger.WithFields(log.Fields{"jobID": jobID, "known": knownJobs, "worker": sess.user + "." + sess.workerName}).Error("unknown kawpow jobID")
@@ -1149,9 +1148,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				} else {
 					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, true, false) // valid share
 					s.logger.WithFields(log.Fields{"addr": sess.user, "nonce": nonceHex, "mixHash": mixHashHex}).Info("kawpow submit accepted")
-					sess.mu.Lock()
-					delete(sess.kawJobs, jobID)
-					sess.mu.Unlock()
+					sess.kawJobs.Remove(jobID)
 					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
 						s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Error("failed to send mining.submit accepted (kawpow)")
 						sess.conn.Close()
@@ -1182,12 +1179,30 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 
 			// Look up the submitted job by ID under lock
 			sess.mu.Lock()
-			j, ok := sess.jobs[jobID]
 			difficulty := sess.difficulty // snapshot for stats
-			knownJobs := len(sess.jobs)   // snapshot for logging (avoid race)
 			sess.mu.Unlock()
+			j, ok := sess.jobs.Peek(jobID)
 			if !ok {
-				s.logger.WithFields(log.Fields{"jobID": jobID, "known": knownJobs, "worker": sess.user + "." + sess.workerName}).Error("unknown or stale jobID")
+				s.logger.WithFields(log.Fields{"jobID": jobID, "known": sess.jobs.Len(), "worker": sess.user + "." + sess.workerName}).Error("unknown or stale jobID")
+				sess.sendJSON(stratumResp{
+					ID:     req.ID,
+					Result: false,
+					Error:  fmt.Errorf("no such jobID %s", jobID).Error(),
+				})
+				continue
+			}
+			sess.mu.Lock()
+			sess.job = j
+			sess.mu.Unlock()
+			// Look up the submitted job by ID to avoid stale/current mismatches
+			sess.mu.Lock()
+			if j2, ok2 := sess.jobs.Peek(jobID); ok2 {
+				sess.job = j2
+				sess.mu.Unlock()
+			} else {
+				known := sess.jobs.Len()
+				sess.mu.Unlock()
+				s.logger.WithFields(log.Fields{"jobID": jobID, "known": known}).Error("unknown or stale jobID")
 				s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"}); err != nil {
 					s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.submit stale job (sha256/scrypt)")
@@ -1207,7 +1222,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				s.logger.WithFields(log.Fields{"addr": sess.user, "chain": sess.chain, "nonce": nonceHex}).Info("submit accepted")
 				// Mark this job ID as consumed to prevent duplicate submissions
 				sess.mu.Lock()
-				delete(sess.jobs, jobID)
+				sess.jobs.Remove(jobID)
 				sess.mu.Unlock()
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
 					s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Error("failed to send mining.submit accepted (sha256/scrypt)")
@@ -1249,6 +1264,14 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 	if err != nil {
 		return err
 	}
+	// Assign a unique job ID and track it (protected by session mutex)
+	sess.mu.Lock()
+	j.id = s.newJobID(sess)
+	sess.job = j
+	sess.jobs.Add(j.id, j)
+	// Maintain job history to allow stale shares; keep 32 jobs for solo mining
+	sess.mu.Unlock()
+	s.logger.WithFields(log.Fields{"jobID": j.id, "chain": sess.chain}).Info("notify job")
 
 	// Stratum difficulty mapping:
 	// - SHA256: stratumDiff = workshareDiff / 2^32 (diff1 = 4294967296 hashes)
@@ -1287,22 +1310,6 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 
 	// Lock once for all session field access
 	sess.mu.Lock()
-
-	// Assign job ID and track it
-	j.id = s.newJobID(sess)
-	sess.job = j
-	if sess.jobs == nil {
-		sess.jobs = make(map[string]*job)
-	}
-	sess.jobs[j.id] = j
-
-	// Maintain job history to allow stale shares; keep 32 jobs for solo mining
-	sess.jobHistory = append(sess.jobHistory, j.id)
-	if len(sess.jobHistory) > 32 {
-		old := sess.jobHistory[0]
-		sess.jobHistory = sess.jobHistory[1:]
-		delete(sess.jobs, old)
-	}
 
 	// Store workshare difficulty
 	sess.difficulty = workshareStratumDiff
@@ -1446,15 +1453,7 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 		pending:    types.CopyWorkObject(pending),
 	}
 	sess.kawJob = kawJob
-	sess.kawJobs[jobID] = kawJob
-
-	// Maintain job history to allow stale shares; keep 32 jobs for solo mining
-	sess.jobHistory = append(sess.jobHistory, jobID)
-	if len(sess.jobHistory) > 32 {
-		old := sess.jobHistory[0]
-		sess.jobHistory = sess.jobHistory[1:]
-		delete(sess.kawJobs, old)
-	}
+	sess.kawJobs.Add(jobID, kawJob)
 
 	sess.mu.Unlock()
 
@@ -1755,6 +1754,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 				"achievedDiff": achievedStratumDiff,
 				"targetDiff":   livenessTarget,
 				"vardiff":      usingVarDiff,
+				"workerName":   sess.workerName,
 			}).Debug("share accepted for liveness (below workshare difficulty)")
 
 			// Record the share for hashrate calculation even though it won't be submitted to network
@@ -1780,12 +1780,11 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	}
 
 	// LRU de-dup and submit workshare
+	// Note: seenShares LRU is thread-safe, no lock needed
 	shareKey := hex.EncodeToString(hashBytes)
 	if _, seen := sess.seenShares.Peek(shareKey); seen {
-		sess.mu.Unlock()
 		return false, fmt.Errorf("duplicate share")
 	}
-	const lruCap = 1024
 	sess.seenShares.Add(shareKey, struct{}{})
 
 	s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedStratumDiff, "workshareDiff": workshareStratumDiff}).Info("submitting workshare to node")
@@ -1988,10 +1987,9 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 	}
 
 	// LRU de-dup and submit workshare
+	// Note: seenShares LRU is thread-safe, no lock needed
 	shareKey := hex.EncodeToString(powHash.Bytes())
-	sess.mu.Lock()
 	if _, seen := sess.seenShares.Peek(shareKey); seen {
-		sess.mu.Unlock()
 		return fmt.Errorf("duplicate share")
 	}
 	sess.seenShares.Add(shareKey, struct{}{})
