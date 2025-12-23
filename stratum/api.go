@@ -1,15 +1,19 @@
 package stratum
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
+	"github.com/dominant-strategies/go-quai/params"
 	"github.com/gorilla/websocket"
 )
 
@@ -503,13 +507,16 @@ func (a *API) handleBlocks(w http.ResponseWriter, r *http.Request) {
 	var matured []BlockEntry
 
 	for _, b := range blocks {
+		// Calculate an estimate of the block reward
+		reward := a.calculateBlockReward()
+
 		matured = append(matured, BlockEntry{
 			Height:     b.Height,
 			Hash:       b.Hash,
 			Miner:      b.Worker, // Worker address is the miner
 			Worker:     b.Worker,
 			Difficulty: b.Difficulty,
-			Reward:     "5", // Block reward - adjust as needed
+			Reward:     reward,
 			Timestamp:  b.FoundAt.Unix(),
 			Confirmed:  true, // Non-custodial = immediate
 		})
@@ -530,6 +537,43 @@ func (a *API) handleBlocks(w http.ResponseWriter, r *http.Request) {
 		CandidatesTotal: 0,
 		Luck:            luck,
 	})
+}
+
+// calculateBlockReward calculates the estimated workshare reward for a block
+func (a *API) calculateBlockReward() string {
+	if a.backend == nil {
+		return "0"
+	}
+
+	// Get the block
+	ctx := context.Background()
+	currentHeader := a.backend.CurrentHeader()
+	if currentHeader == nil {
+		return "0"
+	}
+
+	// Get the prime terminus to get the exchange rate
+	primeTerminus, err := a.backend.BlockByHash(ctx, currentHeader.PrimeTerminusHash())
+	if err != nil || primeTerminus == nil {
+		return "0"
+	}
+
+	exchangeRate := primeTerminus.ExchangeRate()
+	difficulty := currentHeader.Difficulty()
+
+	// Calculate the base block reward
+	baseBlockReward := misc.CalculateReward(currentHeader.WorkObjectHeader(), difficulty, exchangeRate)
+
+	// Calculate workshare reward = baseBlockReward / (ExpectedWorksharesPerBlock + 1)
+	workshareReward := new(big.Int).Div(baseBlockReward, big.NewInt(int64(params.ExpectedWorksharesPerBlock+1)))
+
+	// Convert from "its" (10^-18) to human readable QUAI
+	// reward is in wei-equivalent, divide by 10^18 for display
+	rewardFloat := new(big.Float).SetInt(workshareReward)
+	divisor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+	rewardFloat.Quo(rewardFloat, divisor)
+
+	return rewardFloat.Text('f', 6)
 }
 
 // PaymentEntry represents a payment

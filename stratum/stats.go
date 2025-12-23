@@ -1,11 +1,31 @@
 package stratum
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/log"
 )
+
+// formatAlgoHashrate returns a human-readable hashrate string with fixed units per algorithm
+// SHA256: TH/s, Scrypt: GH/s, KawPoW: MH/s
+func formatAlgoHashrate(hashrate float64, algorithm string) string {
+	switch algorithm {
+	case "scrypt":
+		// Scrypt: display in GH/s
+		gh := hashrate / 1e9
+		return fmt.Sprintf("%.2f GH/s", gh)
+	case "kawpow":
+		// KawPoW: display in MH/s
+		mh := hashrate / 1e6
+		return fmt.Sprintf("%.2f MH/s", mh)
+	default:
+		// SHA256: display in TH/s
+		th := hashrate / 1e12
+		return fmt.Sprintf("%.2f TH/s", th)
+	}
+}
 
 // WorkerStats tracks statistics for a connected miner
 type WorkerStats struct {
@@ -184,7 +204,7 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 			ps.logger.WithFields(log.Fields{
 				"worker":         key,
 				"algorithm":      worker.Algorithm,
-				"hashrate":       worker.Hashrate,
+				"hashrate":       formatAlgoHashrate(worker.Hashrate, worker.Algorithm),
 				"sharesValid":    worker.SharesValid,
 				"cumulativeWork": worker.CumulativeWork,
 				"elapsedSecs":    elapsed,

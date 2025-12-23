@@ -673,23 +673,15 @@ var (
 		Value: true,
 		Usage: "enable automatic variable difficulty for miner liveness (targets 30s per share). If disabled, workshare difficulty is used unless miner specifies d=X in password",
 	}
-)
-
-var (
-	StratumKawPoWAddrFlag = Flag{
-		Name:  c_NodeFlagPrefix + "stratum-kawpow-addr",
-		Value: "0.0.0.0:3335",
-		Usage: "listen address for KawPoW stratum endpoint",
-	}
-	StratumAPIAddrFlag = Flag{
-		Name:  c_NodeFlagPrefix + "stratum-api-addr",
-		Value: "0.0.0.0:3336",
-		Usage: "listen address for stratum pool HTTP API (serves stats to dashboard)",
-	}
 	StratumNameFlag = Flag{
 		Name:  c_NodeFlagPrefix + "stratum-name",
 		Value: "",
 		Usage: "unique name identifying this stratum node (for multi-node aggregation)",
+	}
+	StratumAPIAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-api-addr",
+		Value: "0.0.0.0:3336",
+		Usage: "listen address for stratum API endpoint",
 	}
 )
 
