@@ -37,7 +37,7 @@ type StratumConfig struct {
 
 // templateState tracks the last template sent for change detection
 type templateState struct {
-	sealHash   common.Hash // For SHA/Scrypt: header seal hash
+	sealHash   common.Hash // For sha256/scrypt: header seal hash
 	parentHash common.Hash // For change detection (new block)
 	height     uint64      // Block height
 	quaiHeight int64       // Quai chain height (for kawpow stale detection)
@@ -207,7 +207,7 @@ func (s *Server) registerSession(sess *session) {
 	s.sessionsMu.Lock()
 	defer s.sessionsMu.Unlock()
 	switch sess.chain {
-	case "sha":
+	case "sha256":
 		s.sessionsSHA[sess] = struct{}{}
 	case "scrypt":
 		s.sessionsScrypt[sess] = struct{}{}
@@ -221,7 +221,7 @@ func (s *Server) unregisterSession(sess *session) {
 	s.sessionsMu.Lock()
 	defer s.sessionsMu.Unlock()
 	switch sess.chain {
-	case "sha":
+	case "sha256":
 		delete(s.sessionsSHA, sess)
 	case "scrypt":
 		delete(s.sessionsScrypt, sess)
@@ -245,8 +245,8 @@ func (s *Server) Start() error {
 			return fmt.Errorf("failed to start SHA listener on %s: %v", s.config.SHAAddr, err)
 		}
 		s.lnSHA = ln
-		s.logger.WithField("addr", s.config.SHAAddr).Info("SHA stratum listener started")
-		go s.acceptLoop(ln, "sha")
+		s.logger.WithField("addr", s.config.SHAAddr).Info("sha256 stratum listener started")
+		go s.acceptLoop(ln, "sha256")
 	}
 
 	// Start Scrypt listener if configured
@@ -273,7 +273,7 @@ func (s *Server) Start() error {
 
 	// Start template polling loops for each algorithm (check every second)
 	if s.config.SHAAddr != "" {
-		go s.templatePollingLoop("sha")
+		go s.templatePollingLoop("sha256")
 	}
 	if s.config.ScryptAddr != "" {
 		go s.templatePollingLoop("scrypt")
@@ -291,7 +291,7 @@ func (s *Server) Start() error {
 			ticker := time.NewTicker(1 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				s.forceBroadcastStale("sha")
+				s.forceBroadcastStale("sha256")
 			}
 		}()
 	}
@@ -362,7 +362,7 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool) {
 
 	var lastState *templateState
 	switch algorithm {
-	case "sha":
+	case "sha256":
 		lastState = s.lastTemplateSHA
 		s.lastTemplateSHA = newState
 	case "scrypt":
@@ -380,9 +380,9 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool) {
 
 	// Check for changes based on algorithm
 	switch algorithm {
-	case "sha", "scrypt":
-		// For SHA/Scrypt: check if parent hash or height changed
-		// Always use clean=true for SHA/Scrypt (simpler, matches pool behavior)
+	case "sha256", "scrypt":
+		// For sha256/scrypt: check if parent hash or height changed
+		// Always use clean=true for sha256/scrypt (simpler, matches pool behavior)
 		if lastState.parentHash != newState.parentHash {
 			s.logger.WithFields(log.Fields{
 				"algo":      algorithm,
@@ -437,7 +437,7 @@ func (s *Server) broadcastJob(algorithm string, clean bool) {
 	s.sessionsMu.RLock()
 	var sessions map[*session]struct{}
 	switch algorithm {
-	case "sha":
+	case "sha256":
 		sessions = s.sessionsSHA
 	case "scrypt":
 		sessions = s.sessionsScrypt
@@ -478,7 +478,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 	s.sessionsMu.RLock()
 	var sessions map[*session]struct{}
 	switch algorithm {
-	case "sha":
+	case "sha256":
 		sessions = s.sessionsSHA
 	case "scrypt":
 		sessions = s.sessionsScrypt
@@ -650,7 +650,7 @@ func getVarDiffDefaults(chain string) (defaultDiff, minDiff float64) {
 		return varDiffDefaultKawpow, varDiffMinKawpow
 	case "scrypt":
 		return varDiffDefaultScrypt, varDiffMinScrypt
-	default: // sha
+	default: // sha256
 		return varDiffDefaultSHA, varDiffMinSHA
 	}
 }
@@ -727,7 +727,7 @@ type session struct {
 	authorized bool
 	user       string // payout address
 	workerName string // worker name (from user.workerName format)
-	chain      string // sha|scrypt
+	chain      string // sha256|scrypt
 	job        *job
 	kawJob     *kawpowJob // kawpow-specific job data
 	xnonce1    []byte
@@ -847,7 +847,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 		case "mining.subscribe":
 			// Response differs by algorithm:
 			// - Kawpow: [nil, "00"] - extranonce not used (64-bit header nonce is sufficient)
-			// - SHA/Scrypt: [[subscriptions], extranonce1, extranonce2_size]
+			// - sha256/scrypt: [[subscriptions], extranonce1, extranonce2_size]
 			if sess.chain == "kawpow" {
 				// Kawpow doesn't use extranonce - the 64-bit header nonce provides enough search space
 				result := []interface{}{
@@ -860,7 +860,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					return
 				}
 			} else {
-				// SHA/Scrypt use extranonce for coinbase modification
+				// sha256/scrypt use extranonce for coinbase modification
 				x1 := []byte{0x01, 0x01, 0x01, 0x01} // All 1s instead of random
 				sess.xnonce1 = append([]byte{}, x1...)
 				result := []interface{}{
@@ -872,7 +872,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					4,                      // extranonce2_size (4 bytes for wider miner compatibility)
 				}
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil}); err != nil {
-					s.logger.WithFields(log.Fields{"error": err, "remoteAddr": sess.conn.RemoteAddr().String()}).Error("failed to send mining.subscribe response (SHA/Scrypt)")
+					s.logger.WithFields(log.Fields{"error": err, "remoteAddr": sess.conn.RemoteAddr().String()}).Error("failed to send mining.subscribe response (sha256/scrypt)")
 					sess.conn.Close()
 					return
 				}
@@ -1041,7 +1041,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// started in Server.Start(), not per-session tickers
 		case "mining.submit":
 			// Kawpow uses different submit format: [worker, job_id, nonce, header_hash, mix_hash]
-			// SHA/Scrypt uses: [worker, job_id, ex2, ntime, nonce, version_bits?]
+			// sha256/scrypt uses: [worker, job_id, ex2, ntime, nonce, version_bits?]
 			if powIDFromChain(sess.chain) == types.Kawpow {
 				if len(req.Params) < 5 {
 					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "bad kawpow params"}); err != nil {
@@ -1092,10 +1092,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				continue
 			}
 
-			// SHA/Scrypt submit handling
+			// sha256/scrypt submit handling
 			if len(req.Params) < 5 {
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "bad params"}); err != nil {
-					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.submit bad params (SHA/Scrypt)")
+					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.submit bad params (sha256/scrypt)")
 				}
 				continue
 			}
@@ -1119,7 +1119,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				s.logger.WithFields(log.Fields{"jobID": jobID, "known": knownJobs, "worker": sess.workerName}).Error("unknown or stale jobID")
 				s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"}); err != nil {
-					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.submit stale job (SHA/Scrypt)")
+					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.submit stale job (sha256/scrypt)")
 				}
 				continue
 			}
@@ -1129,7 +1129,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			if err != nil {
 				s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, false) // invalid share
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
-					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.submit invalid share (SHA/Scrypt)")
+					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.submit invalid share (sha256/scrypt)")
 				}
 			} else {
 				// Note: valid share is already recorded in submitAsWorkShare with difficulty info
@@ -1139,7 +1139,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				delete(sess.jobs, jobID)
 				sess.mu.Unlock()
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
-					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Error("failed to send mining.submit accepted (SHA/Scrypt)")
+					s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Error("failed to send mining.submit accepted (sha256/scrypt)")
 					sess.conn.Close()
 					return
 				}
@@ -1172,7 +1172,7 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 		s.logger.WithField("chain", sess.chain).Debug("routing to kawpow stratum")
 		return s.sendKawpowJob(sess, clean)
 	}
-	s.logger.WithField("chain", sess.chain).Debug("routing to SHA/Scrypt stratum")
+	s.logger.WithField("chain", sess.chain).Debug("routing to sha256/scrypt stratum")
 
 	j, err := s.makeJob(sess)
 	if err != nil {
@@ -1197,9 +1197,9 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 			if diffF > 0 {
 				workshareStratumDiff = diffF
 			}
-			s.logger.WithFields(log.Fields{"ShaDiff": sd.String(), "minerDiff": workshareStratumDiff}).Debug("sendJobAndNotify SHA diff")
+			s.logger.WithFields(log.Fields{"sha256Diff": sd.String(), "minerDiff": workshareStratumDiff}).Debug("sendJobAndNotify sha256 diff")
 		} else {
-			s.logger.WithField("fallback", workshareStratumDiff).Debug("sendJobAndNotify: No SHA diff available, using fallback")
+			s.logger.WithField("fallback", workshareStratumDiff).Debug("sendJobAndNotify: no sha256 diff available, using fallback")
 		}
 	case types.Scrypt:
 		if j.pending != nil && j.pending.WorkObjectHeader() != nil && j.pending.WorkObjectHeader().ScryptDiffAndCount() != nil && j.pending.WorkObjectHeader().ScryptDiffAndCount().Difficulty() != nil {
@@ -1258,7 +1258,7 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 	// Send set_difficulty then the job notify
 	diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{minerDiff}}
 	if err := sess.sendJSON(diffNote); err != nil {
-		s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.set_difficulty (SHA/Scrypt)")
+		s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send mining.set_difficulty (sha256/scrypt)")
 	}
 
 	// Prepend 4 zero bytes to coinb2 - miner sees this as part of coinb2, but we use it as ex2 padding
@@ -1270,7 +1270,7 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 
 	err = sess.sendJSON(note)
 	if err != nil {
-		s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Error("failed to send mining.notify (SHA/Scrypt)")
+		s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Error("failed to send mining.notify (sha256/scrypt)")
 		sess.conn.Close() // can't send jobs, session is dead
 		return err
 	}
@@ -1498,7 +1498,7 @@ func (s *Server) newJobID(sess *session) string {
 	return fmt.Sprintf("%08x", sess.jobSeq)
 }
 
-// submitAsWorkShare validates and submits a SHA/Scrypt share.
+// submitAsWorkShare validates and submits a sha256/scrypt share.
 // Returns (refreshJob, error) where refreshJob indicates whether to send a new job after acceptance.
 // refreshJob is false for sub-shares (met miner difficulty but not workshare difficulty).
 // The job parameter is the looked-up job from the caller, avoiding TOCTOU races with sess.job.
@@ -1673,7 +1673,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			sess.mu.Unlock()
 			diffNote := map[string]interface{}{"id": nil, "method": "mining.set_difficulty", "params": []interface{}{newDiff}}
 			if err := sess.sendJSON(diffNote); err != nil {
-				s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send vardiff mining.set_difficulty (SHA/Scrypt)")
+				s.logger.WithFields(log.Fields{"error": err, "worker": sess.workerName}).Debug("failed to send vardiff mining.set_difficulty (sha256/scrypt)")
 			}
 		}
 
@@ -1694,7 +1694,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			case types.Kawpow:
 				algoName = "kawpow"
 			default:
-				algoName = "sha"
+				algoName = "sha256"
 			}
 			workshareDiffFloat, _ := new(big.Float).SetInt(new(big.Int).Div(common.Big2e256, workShareTarget)).Float64()
 			achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
@@ -1735,7 +1735,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	case types.Kawpow:
 		algoName = "kawpow"
 	default:
-		algoName = "sha"
+		algoName = "sha256"
 	}
 
 	// Get workshare difficulty as float
@@ -1996,7 +1996,7 @@ func fullReverse(b []byte) []byte {
 
 func powIDFromChain(chain string) types.PowID {
 	switch strings.ToLower(chain) {
-	case "sha":
+	case "sha256":
 		return types.SHA_BCH
 	case "scrypt":
 		return types.Scrypt

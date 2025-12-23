@@ -312,7 +312,7 @@ func (ps *PoolStats) GetOverview() PoolOverview {
 
 	// Per-algorithm stats
 	algoStats := map[string]*AlgorithmStats{
-		"sha":    {},
+		"sha256": {},
 		"scrypt": {},
 		"kawpow": {},
 	}
@@ -320,7 +320,7 @@ func (ps *PoolStats) GetOverview() PoolOverview {
 	for _, w := range ps.workers {
 		algo := w.Algorithm
 		if algo == "" {
-			algo = "sha" // default
+			algo = "sha256" // default
 		}
 		if stats, ok := algoStats[algo]; ok {
 			if w.IsConnected {
@@ -351,7 +351,7 @@ func (ps *PoolStats) GetOverview() PoolOverview {
 		BlocksFound:      len(ps.blocks),
 		Uptime:           time.Since(ps.startedAt).Seconds(),
 		StartedAt:        ps.startedAt,
-		SHA:              *algoStats["sha"],
+		SHA256:           *algoStats["sha256"],
 		Scrypt:           *algoStats["scrypt"],
 		KawPoW:           *algoStats["kawpow"],
 	}
@@ -383,7 +383,7 @@ type PoolOverview struct {
 	BlockHeight       uint64    `json:"blockHeight,omitempty"` // Current block height
 
 	// Per-algorithm stats
-	SHA    AlgorithmStats `json:"sha"`
+	SHA256 AlgorithmStats `json:"sha256"`
 	Scrypt AlgorithmStats `json:"scrypt"`
 	KawPoW AlgorithmStats `json:"kawpow"`
 }

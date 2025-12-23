@@ -272,7 +272,7 @@ func (a *API) handleMinerStats(w http.ResponseWriter, address string) {
 
 		// Aggregate hashrate by algorithm
 		switch worker.Algorithm {
-		case "sha":
+		case "sha256":
 			hashrateSHA += worker.Hashrate
 		case "scrypt":
 			hashrateScrypt += worker.Hashrate
