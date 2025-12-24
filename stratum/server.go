@@ -1491,10 +1491,22 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 		result := make([]byte, 32)
 		copy(result[32-len(targetBytes):], targetBytes)
 		targetHex = hex.EncodeToString(result)
+		// Store difficulty for stats tracking
+		sess.difficulty = usedDiff
 	} else if pending.WorkObjectHeader().KawpowDifficulty() != nil {
 		kawpowDiff := core.CalculateKawpowShareDiff(pending.WorkObjectHeader())
 		targetHex = common.GetTargetInHex(kawpowDiff)
 		diffSource = "workshare"
+		// Calculate stratum difficulty for stats tracking
+		// Same formula as in submitKawpowShare: stratumDiff = KawpowDiff1 / (2^256 / kawpowDiff)
+		// Which simplifies to: stratumDiff = KawpowDiff1 * kawpowDiff / 2^256
+		workShareTarget := new(big.Int).Div(common.Big2e256, kawpowDiff)
+		if workShareTarget.Sign() > 0 {
+			sess.difficulty, _ = new(big.Float).Quo(
+				new(big.Float).SetInt(KawpowDiff1),
+				new(big.Float).SetInt(workShareTarget),
+			).Float64()
+		}
 	} else {
 		// Fallback to max target
 		targetHex = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
