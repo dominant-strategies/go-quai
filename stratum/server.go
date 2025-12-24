@@ -1900,6 +1900,20 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	// Second check: does it also meet workshare target? If so, submit to network
 	if powHashBigInt.Cmp(workShareTarget) <= 0 {
 		s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes), "workshareHash": pending.Hash().Hex()}).Info("workshare received - submitting to network")
+
+		// Record the block discovery for pool stats
+		workerKey := sess.user
+		if sess.workerName != "" {
+			workerKey = sess.user + "." + sess.workerName
+		}
+		s.stats.BlockDiscovered(
+			pending.NumberU64(common.ZONE_CTX),
+			pending.Hash().Hex(),
+			workerKey,
+			algoName,
+			achievedDiff.String(),
+		)
+
 		return true, s.backend.ReceiveMinedHeader(pending)
 	}
 
@@ -2117,6 +2131,19 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		s.logger.WithFields(log.Fields{"powID": types.Kawpow, "height": kawJob.height, "worker": sess.user + "." + sess.workerName, "error": err}).Error("kawpow workshare rejected by node")
 	} else {
 		s.logger.WithFields(log.Fields{"powID": types.Kawpow, "height": kawJob.height, "worker": sess.user + "." + sess.workerName, "hash": pending.Hash().Hex()}).Info("kawpow workshare accepted by node")
+
+		// Record the block discovery for pool stats
+		workerKey := sess.user
+		if sess.workerName != "" {
+			workerKey = sess.user + "." + sess.workerName
+		}
+		s.stats.BlockDiscovered(
+			pending.NumberU64(common.ZONE_CTX),
+			pending.Hash().Hex(),
+			workerKey,
+			"kawpow",
+			achievedDiff.String(),
+		)
 	}
 	return err
 }
