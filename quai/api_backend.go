@@ -20,6 +20,9 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sort"
+
+	"github.com/spf13/viper"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
@@ -34,6 +37,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/vm"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/rpc"
@@ -50,6 +54,47 @@ type QuaiAPIBackend struct {
 	extRPCEnabled                      bool
 	quai                               *Quai
 	uncleWorkShareClassificationCache  *lru.Cache[common.Hash, types.WorkShareValidity]
+}
+
+func (b *QuaiAPIBackend) PeerInfo() (*quaiapi.PeerInfoResult, error) {
+	// The core Quai service keeps its p2p backend behind an interface; for peer
+	// introspection (RPC), we only require a narrow method surface.
+	type peerInfoProvider interface {
+		PeerInfo() ([]string, map[string][]string, error)
+	}
+
+	provider, ok := b.quai.p2p.(peerInfoProvider)
+	if !ok {
+		return nil, errors.New("p2p backend does not support peer introspection")
+	}
+	self, peersMap, err := provider.PeerInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	// By default, only return the peer count to avoid leaking IP addresses
+	// (which could bypass Cloudflare or other privacy protections).
+	// Full details are only returned when --node.debug-peer-info is enabled.
+	if !viper.GetBool("node.debug-peer-info") {
+		return &quaiapi.PeerInfoResult{
+			PeerCount: hexutil.Uint64(len(peersMap)),
+		}, nil
+	}
+
+	peers := make([]quaiapi.PeerInfoPeer, 0, len(peersMap))
+	for peerID, addrs := range peersMap {
+		peers = append(peers, quaiapi.PeerInfoPeer{
+			PeerID:     peerID,
+			Multiaddrs: addrs,
+		})
+	}
+	sort.Slice(peers, func(i, j int) bool { return peers[i].PeerID < peers[j].PeerID })
+
+	return &quaiapi.PeerInfoResult{
+		PeerCount: hexutil.Uint64(len(peersMap)),
+		Self:      self,
+		Peers:     peers,
+	}, nil
 }
 
 func (b *QuaiAPIBackend) RpcVersion() string {

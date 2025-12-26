@@ -186,6 +186,9 @@ type Backend interface {
 	BroadcastBlock(block *types.WorkObject, location common.Location) error
 	BroadcastHeader(header *types.WorkObject, location common.Location) error
 	BroadcastAuxTemplate(auxTemplate *types.AuxTemplate, location common.Location) error
+
+	// PeerInfo returns libp2p connectivity information for RPC.
+	PeerInfo() (*PeerInfoResult, error)
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {
