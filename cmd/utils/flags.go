@@ -75,6 +75,9 @@ var NodeFlags = []Flag{
 	P2PPortFlag,
 	BootPeersFlag,
 	NonPenalizedPeersFlag,
+	StaticPeersFlag,
+	StaticPeersOnlyFlag,
+	DebugPeerInfoFlag,
 	PortMapFlag,
 	ExternalAddrFlag,
 	ForcePublicFlag,
@@ -257,6 +260,23 @@ var (
 		Name:  c_NodeFlagPrefix + "non-penalized-peers",
 		Value: []string{},
 		Usage: "list of peer multiaddrs to protect from pruning and local penalties/bans. Syntax: <multiaddress1>,<multiaddress2>,..." + generateEnvDoc(c_NodeFlagPrefix+"non-penalized-peers"),
+	}
+	StaticPeersFlag = Flag{
+		Name:  c_NodeFlagPrefix + "staticpeers",
+		Value: []string{},
+		Usage: "list of static peers to dial and prefer for request/response. Each multiaddr must include /p2p/<peerID>. Use spaces to separate multiple peers, or specify the flag multiple times. Unlike bootpeers, static peers are maintained and prioritized for block/header requests." + generateEnvDoc(c_NodeFlagPrefix+"staticpeers"),
+	}
+
+	StaticPeersOnlyFlag = Flag{
+		Name:  c_NodeFlagPrefix + "staticpeers-only",
+		Value: false,
+		Usage: "use only static peers for request/response (still participates in pubsub gossip)" + generateEnvDoc(c_NodeFlagPrefix+"staticpeers-only"),
+	}
+
+	DebugPeerInfoFlag = Flag{
+		Name:  c_NodeFlagPrefix + "debug-peer-info",
+		Value: false,
+		Usage: "enable full peer info in quai_peerInfo RPC (includes IP addresses; disabled by default for privacy)" + generateEnvDoc(c_NodeFlagPrefix+"debug-peer-info"),
 	}
 
 	PortMapFlag = Flag{

@@ -50,6 +50,8 @@ func (p *P2PNode) Start() error {
 	// Start the pubsub manager
 	p.pubsub.SetReceiveHandler(p.handleBroadcast)
 
+	p.startStaticPeerConnector()
+
 	return nil
 }
 
@@ -166,19 +168,55 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			// Use stream peers if the node has accumulated
-			// c_streamPeerThreshold number of streams otherwise look up peers
-			// from the database and create streams with them
-			peers := p.peerManager.GetStreamPeers()
-			if len(peers) < c_streamPeerThreshold {
-				peersMap := p.peerManager.GetPeers(topic)
-				peers = make([]peer.ID, 0)
-				for peer := range peersMap {
-					peers = append(peers, peer)
+			desiredPeers := topic.GetRequestDegree()
+
+			peers := make([]peer.ID, 0, desiredPeers)
+			seen := make(map[peer.ID]struct{}, desiredPeers)
+
+			// Prefer configured static peers first.
+			// These are explicit dial targets and are typically more reliable
+			// than opportunistically discovered peers in restricted networking
+			// environments (Docker/K8s/firewalled NATs).
+			for _, staticPeer := range p.staticPeers {
+				if staticPeer.ID == "" || staticPeer.ID == p.peerManager.GetSelfID() {
+					continue
 				}
-			} else {
-				peers = peers[:pubsubManager.C_defaultRequestDegree]
+				if _, ok := seen[staticPeer.ID]; ok {
+					continue
+				}
+				peers = append(peers, staticPeer.ID)
+				seen[staticPeer.ID] = struct{}{}
 			}
+
+			// Optionally restrict request/response to static peers only.
+			if !p.staticPeersOnly || len(peers) == 0 {
+				// Use stream peers if the node has accumulated c_streamPeerThreshold number of
+				// streams, otherwise look up peers from the database/DHT and create streams with them.
+				candidates := p.peerManager.GetStreamPeers()
+				if len(candidates) < c_streamPeerThreshold {
+					peersMap := p.peerManager.GetPeers(topic)
+					candidates = make([]peer.ID, 0, len(peersMap))
+					for candidate := range peersMap {
+						candidates = append(candidates, candidate)
+					}
+				}
+
+				for _, candidate := range candidates {
+					if len(peers) >= desiredPeers {
+						break
+					}
+					if _, ok := seen[candidate]; ok {
+						continue
+					}
+					peers = append(peers, candidate)
+					seen[candidate] = struct{}{}
+				}
+			}
+
+			if len(peers) > desiredPeers {
+				peers = peers[:desiredPeers]
+			}
+
 			log.Global.WithFields(log.Fields{
 				"peers": peers,
 				"topic": topic,
