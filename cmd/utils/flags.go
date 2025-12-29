@@ -652,6 +652,7 @@ var StratumFlags = []Flag{
 	StratumVarDiffFlag,
 	StratumAPIAddrFlag,
 	StratumNameFlag,
+	StratumProxyProtocolFlag,
 }
 
 var (
@@ -689,6 +690,11 @@ var (
 		Name:  c_NodeFlagPrefix + "stratum-api-addr",
 		Value: "0.0.0.0:3336",
 		Usage: "listen address for stratum API endpoint",
+	}
+	StratumProxyProtocolFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-proxy-protocol",
+		Value: false,
+		Usage: "enable PROXY protocol support for stratum endpoints (for use behind load balancers like GCP Network LB)",
 	}
 )
 
