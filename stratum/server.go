@@ -24,6 +24,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	lru "github.com/hashicorp/golang-lru/v2"
+	proxyproto "github.com/pires/go-proxyproto"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -42,13 +43,14 @@ type StratumConfig struct {
 	VarDiffEnabled bool   // Enable automatic variable difficulty for liveness (default true)
 	JobWorkerCount int    // Number of workers in the job broadcast pool (default 4)
 	MaxConnections int    // Maximum concurrent connections (default 10000, 0 = unlimited)
+	ProxyProtocol  bool   // Enable PROXY protocol support for load balancer (default false)
 }
 
 // Connection limits and liveness timeout constants
 const (
-	defaultMaxConnections = 10000           // Default max concurrent connections
-	livenessTimeout       = 5 * time.Minute // Close connection if no share within this time
-	tickerInterval        = 1 * time.Second // Interval for template polling and force broadcast loops
+	defaultMaxConnections = 10000            // Default max concurrent connections
+	livenessTimeout       = 10 * time.Minute // Close connection if no share within this time
+	tickerInterval        = 1 * time.Second  // Interval for template polling and force broadcast loops
 )
 
 // templateState tracks the last template sent for change detection
@@ -395,12 +397,13 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
 	if auxPow == nil || auxPow.Header() == nil {
 		return false, false, false
 	}
-
+	pendingCopy := types.CopyWorkObjectHeader(pending.WorkObjectHeader())
+	pendingCopy.SetTime(0)
 	// Use AuxPow header's PrevBlock (donor chain parent) for change detection,
 	// not Quai's ParentHash. Miners need new work when the donor chain advances.
 	auxParentHash := auxPow.Header().PrevBlock()
 	newState := &templateState{
-		sealHash:   header.SealHash(),
+		sealHash:   pendingCopy.SealHash(),
 		parentHash: common.BytesToHash(auxParentHash[:]),
 		height:     header.NumberU64(),
 		quaiHeight: int64(pending.NumberU64(common.ZONE_CTX)),
@@ -582,7 +585,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 			varDiffTimeoutThreshold = varDiffEstablishedTimeout
 		}
 		varDiffTimeout := sess.varDiffEnabled && timeSinceLastShare >= varDiffTimeoutThreshold
-		// Check for liveness timeout (no share in 5 minutes)
+		// Check for liveness timeout (no share in 10 minutes)
 		// Only applies when miner has a liveness target (vardiff or d=X specified)
 		// In workshare-only mode, shares could take hours/days - don't timeout
 		hasLivenessTarget := sess.varDiffEnabled || sess.minerDifficulty != nil
@@ -600,13 +603,13 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 		}
 	}
 
-	// Close connections that have been idle too long (no shares in 5 minutes)
+	// Close connections that have been idle too long (no shares in 10 minutes)
 	for _, sess := range livenessTimeoutSessions {
 		s.logger.WithFields(log.Fields{
 			"user":   sess.user,
 			"worker": sess.workerName,
 			"algo":   algorithm,
-		}).Warn("Closing connection due to liveness timeout (no share in 5 minutes)")
+		}).Warn("Closing connection due to liveness timeout (no share in 10 minutes)")
 		sess.conn.Close() // This will cause handleConn to exit and clean up
 	}
 
@@ -696,8 +699,20 @@ func (s *Server) Stop() error {
 
 // acceptLoop accepts connections on a listener and assigns them the specified algorithm
 func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
+	// Wrap listener with PROXY protocol support if enabled
+	// This allows the server to sit behind a load balancer (like GCP Network LB)
+	// and still see the real client IP via conn.RemoteAddr()
+	var listener net.Listener = ln
+	if s.config.ProxyProtocol {
+		listener = &proxyproto.Listener{
+			Listener:          ln,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+		s.logger.WithField("algo", algorithm).Info("PROXY protocol enabled for listener")
+	}
+
 	for {
-		conn, err := ln.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			return
 		}
@@ -751,7 +766,7 @@ const (
 // - Scrypt: ~65k hashes per stratum diff 1 (ASIC miners at high hashrate)
 const (
 	// Kawpow vardiff (diff1 = ~2^32 hashes)
-	varDiffDefaultKawpow = 1   // Starting difficulty
+	varDiffDefaultKawpow = 50  // Starting difficulty
 	varDiffMinKawpow     = 0.1 // Minimum difficulty
 
 	// SHA256 vardiff (diff1 = 2^32 hashes)
@@ -2060,9 +2075,6 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	}
 	sess.mu.Unlock()
 
-	// Record the share with difficulty info for solo mining luck tracking
-	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
-
 	// Update lastShareTime for workshare-only mode (livenessTarget was 0)
 	// In liveness mode, lastShareTime was already updated above
 	if livenessTarget == 0 {
@@ -2071,33 +2083,34 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 		sess.mu.Unlock()
 	}
 
-	// Second check: does it also meet workshare target? If so, submit to network
-	if powHashBigInt.Cmp(workShareTarget) <= 0 {
-		// Reconstruct full WorkObject from header + cached body
-		cachedBody, ok := s.pendingBodies.Peek(curJob.bodyCacheKey)
-		if !ok {
-			s.logger.WithField("bodyCacheKey", curJob.bodyCacheKey.Hex()).Error("pending body not found in cache")
-			return false, fmt.Errorf("pending body not found in cache")
-		}
-		// Create full WorkObject: job's header (with updated AuxPow) + cached body
-		fullPending := types.NewWorkObject(pending.WorkObjectHeader(), cachedBody.Body(), nil)
-
-		s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes), "workshareHash": fullPending.Hash().Hex()}).Info("workshare received - submitting to network")
-		// Record the block discovery for pool stats
-		workerKey := sess.user
-		if sess.workerName != "" {
-			workerKey = sess.user + "." + sess.workerName
-		}
-		s.stats.BlockDiscovered(
-			pending.NumberU64(common.ZONE_CTX),
-			pending.Hash().Hex(),
-			workerKey,
-			algoName,
-			achievedDiff.String(),
-		)
-		return true, s.backend.ReceiveMinedHeader(fullPending)
+	// Reconstruct full WorkObject from header + cached body
+	cachedBody, ok := s.pendingBodies.Peek(curJob.bodyCacheKey)
+	if !ok {
+		s.logger.WithField("bodyCacheKey", curJob.bodyCacheKey.Hex()).Error("pending body not found in cache")
+		return false, fmt.Errorf("pending body not found in cache")
 	}
+	// Create full WorkObject: job's header (with updated AuxPow) + cached body
+	fullPending := types.NewWorkObject(pending.WorkObjectHeader(), cachedBody.Body(), nil)
 
+	s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes), "workshareHash": fullPending.Hash().Hex()}).Info("workshare received - submitting to network")
+	// Record the block discovery for pool stats
+	workerKey := sess.user
+	if sess.workerName != "" {
+		workerKey = sess.user + "." + sess.workerName
+	}
+	err = s.backend.ReceiveMinedHeader(fullPending)
+	if err != nil {
+		return false, fmt.Errorf("failed to receive mined header: %v", err)
+	}
+	s.stats.BlockDiscovered(
+		pending.NumberU64(common.ZONE_CTX),
+		pending.Hash().Hex(),
+		workerKey,
+		algoName,
+		achievedDiff.String(),
+	)
+	// Record the share with difficulty info for solo mining luck tracking
+	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
 	return true, nil
 }
 
@@ -2326,9 +2339,6 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		effectiveDiff = varDiff
 	}
 
-	// Record the share with difficulty info
-	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
-
 	// Update lastShareTime for workshare-only mode (livenessTarget was 0)
 	// In liveness mode, lastShareTime was already updated above
 	if livenessTarget == 0 {
@@ -2370,6 +2380,8 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			"kawpow",
 			achievedDiff.String(),
 		)
+		// Record the share with difficulty info
+		s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
 	}
 	return err
 }
