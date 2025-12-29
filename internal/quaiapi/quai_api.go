@@ -2307,10 +2307,55 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 	var blockCount int64
 	var oldestBlockTime uint64
 
+	var startKawpowTime, endKawpowTime uint64
+	var startShaTime, endShaTime uint64
+	var startScryptTime, endScryptTime uint64
+
+	var totalKawpowShares, totalShaShares, totalScryptShares uint64
+
 	block := currentHeader
+
 	for block != nil && block.Time() > cutoffTime {
 		blockCount++
 		oldestBlockTime = block.Time()
+
+		if startKawpowTime == 0 || block.Time() <= startKawpowTime {
+			startKawpowTime = block.Time()
+		}
+		if endKawpowTime == 0 || block.Time() >= endKawpowTime {
+			endKawpowTime = block.Time()
+		}
+		totalKawpowShares++
+		for _, share := range block.Uncles() {
+			if share.AuxPow() != nil {
+				switch share.AuxPow().PowID() {
+				case types.Kawpow:
+					if startKawpowTime == 0 || share.Time() <= startKawpowTime {
+						startKawpowTime = share.Time()
+					}
+					if endKawpowTime == 0 || share.Time() >= endKawpowTime {
+						endKawpowTime = share.Time()
+					}
+					totalKawpowShares++
+				case types.SHA_BCH, types.SHA_BTC:
+					if startShaTime == 0 || share.Time() <= startShaTime {
+						startShaTime = share.Time()
+					}
+					if endShaTime == 0 || share.Time() >= endShaTime {
+						endShaTime = share.Time()
+					}
+					totalShaShares++
+				case types.Scrypt:
+					if startScryptTime == 0 || share.Time() <= startScryptTime {
+						startScryptTime = share.Time()
+					}
+					if endScryptTime == 0 || share.Time() >= endScryptTime {
+						endScryptTime = share.Time()
+					}
+					totalScryptShares++
+				}
+			}
+		}
 
 		// Get parent block
 		parentHash := block.ParentHash(common.ZONE_CTX)
@@ -2318,6 +2363,7 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 			break
 		}
 		block = s.b.GetBlockByHash(parentHash)
+
 	}
 
 	var avgBlockTime float64
@@ -2415,33 +2461,22 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 
 	// Hash rate = difficulty / average share time (hashes per second)
 	// Returns string to avoid float64 overflow with petahash-scale values
-	calcHashRate := func(diff *big.Int, avgTime float64) string {
-		if diff == nil || avgTime <= 0 {
+	calcHashRate := func(diff *big.Int, totalShares uint64, timeDiff int64) string {
+		if diff == nil || totalShares == 0 || timeDiff <= 0 {
 			return "0"
 		}
 		diffFloat := new(big.Float).SetInt(diff)
-		timeFloat := new(big.Float).SetFloat64(avgTime)
-		hashRate := new(big.Float).Quo(diffFloat, timeFloat)
+		totalDiff := new(big.Float).Mul(diffFloat, new(big.Float).SetUint64(totalShares))
+		timeFloat := new(big.Float).SetFloat64(float64(timeDiff))
+		hashRate := new(big.Float).Quo(totalDiff, timeFloat)
 		// Format as integer string (truncate decimals)
 		intPart, _ := hashRate.Int(nil)
 		return intPart.String()
 	}
 
-	if avgTime, ok := fields["avgKawpowShareTime"].(float64); ok {
-		fields["kawpowHashRate"] = calcHashRate(kawpowDiff, avgTime)
-	} else {
-		fields["kawpowHashRate"] = "0"
-	}
-	if avgTime, ok := fields["avgShaShareTime"].(float64); ok {
-		fields["shaHashRate"] = calcHashRate(shaDiff, avgTime)
-	} else {
-		fields["shaHashRate"] = "0"
-	}
-	if avgTime, ok := fields["avgScryptShareTime"].(float64); ok {
-		fields["scryptHashRate"] = calcHashRate(scryptDiff, avgTime)
-	} else {
-		fields["scryptHashRate"] = "0"
-	}
+	fields["kawpowHashRate"] = calcHashRate(kawpowDiff, totalKawpowShares, int64(endKawpowTime)-int64(startKawpowTime))
+	fields["shaHashRate"] = calcHashRate(shaDiff, totalShaShares, int64(endShaTime)-int64(startShaTime))
+	fields["scryptHashRate"] = calcHashRate(scryptDiff, totalScryptShares, int64(endScryptTime)-int64(startScryptTime))
 
 	// Include current block number and hash for reference
 	if decimal != nil && *decimal {
