@@ -1008,7 +1008,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 	defer s.activeConns.Add(-1) // Decrement connection counter on exit
 	// Set a longer initial read deadline - will be extended on each message
 	// Use SetReadDeadline (not SetDeadline) to avoid overriding the 10s write deadline in sendJSON
-	_ = c.SetReadDeadline(time.Now().Add(5 * time.Minute))
+	_ = c.SetReadDeadline(time.Now().Add(livenessTimeout))
 	dec := json.NewDecoder(bufio.NewReader(c))
 	enc := json.NewEncoder(c)
 
@@ -1052,7 +1052,6 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 						"algo":   algorithm,
 					}).Debug("Miner disconnected (EOF)")
 				}
-				return
 			}
 			if sess.authorized {
 				s.logger.WithFields(log.Fields{
@@ -1065,8 +1064,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			return
 		}
 		// Extend read deadline on each message received
-		_ = c.SetReadDeadline(time.Now().Add(5 * time.Minute))
-
+		_ = c.SetReadDeadline(time.Now().Add(livenessTimeout))
 		switch req.Method {
 		case "mining.subscribe":
 			// Response differs by algorithm:
@@ -1398,6 +1396,11 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					s.jobPool.submit(sess, true)
 				}
 			}
+		case "mining.get_transactions":
+			// Return empty array - AuxPoW mining has no user transactions in the template
+			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: []interface{}{}, Error: nil}); err != nil {
+				s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.get_transactions response")
+			}
 		default:
 			s.logger.WithFields(log.Fields{
 				"user":   sess.user,
@@ -1465,6 +1468,7 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 			s.logger.WithField("fallback", workshareStratumDiff).Debug("sendJobAndNotify: no sha256 diff available, using fallback")
 		}
 	case types.Scrypt:
+		workshareStratumDiff = minScryptDiff
 		if j.pending != nil && j.pending.WorkObjectHeader() != nil && j.pending.WorkObjectHeader().ScryptDiffAndCount() != nil && j.pending.WorkObjectHeader().ScryptDiffAndCount().Difficulty() != nil {
 			sd := j.pending.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
 			diffF, _ := new(big.Float).Quo(new(big.Float).SetInt(sd), big.NewFloat(scryptDiff1)).Float64()
@@ -2275,7 +2279,8 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			}).Debug("share accepted for liveness (below workshare difficulty)")
 
 			// Record share for hashrate calculation even though it won't be submitted
-			workshareDiffFloat, _ := new(big.Float).SetInt(pending.WorkObjectHeader().KawpowDifficulty()).Float64()
+			workshareDiff := core.CalculateKawpowShareDiff(pending.WorkObjectHeader())
+			workshareDiffFloat, _ := new(big.Float).SetInt(workshareDiff).Float64()
 			achievedDiff := new(big.Int).Div(common.Big2e256, powHashInt)
 			achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
 			poolDiff := float64(1)
@@ -2327,7 +2332,8 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 	achievedDiff := new(big.Int).Div(common.Big2e256, powHashInt)
 
 	// Get workshare difficulty for stats
-	workshareDiffFloat, _ := new(big.Float).SetInt(pending.WorkObjectHeader().KawpowDifficulty()).Float64()
+	workshareDiff := core.CalculateKawpowShareDiff(pending.WorkObjectHeader())
+	workshareDiffFloat, _ := new(big.Float).SetInt(workshareDiff).Float64()
 	achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
 
 	// Use the effective pool difficulty for stats
