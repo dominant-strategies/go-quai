@@ -41,19 +41,19 @@ type WorkerStats struct {
 	SharesStale    uint64    `json:"sharesStale"`
 	SharesInvalid  uint64    `json:"sharesInvalid"`
 	Difficulty     float64   `json:"difficulty"`
-	Hashrate       float64   `json:"hashrate"`       // estimated from share rate
-	CumulativeWork float64   `json:"-"`              // sum of (difficulty) for each valid share
+	Hashrate       float64   `json:"hashrate"` // estimated from share rate
+	CumulativeWork float64   `json:"-"`        // sum of (difficulty) for each valid share
 	IsConnected    bool      `json:"isConnected"`
 }
 
 // BlockFound represents a block discovered by the pool
 type BlockFound struct {
-	Height      uint64    `json:"height"`
-	Hash        string    `json:"hash"`
-	Worker      string    `json:"worker"`
-	Algorithm   string    `json:"algorithm"`
-	Difficulty  string    `json:"difficulty"`
-	FoundAt     time.Time `json:"foundAt"`
+	Height     uint64    `json:"height"`
+	Hash       string    `json:"hash"`
+	Worker     string    `json:"worker"`
+	Algorithm  string    `json:"algorithm"`
+	Difficulty string    `json:"difficulty"`
+	FoundAt    time.Time `json:"foundAt"`
 }
 
 // ShareRecord tracks an individual share submission with difficulty info
@@ -115,6 +115,12 @@ func (ps *PoolStats) WorkerConnected(address, workerName, algorithm string) {
 	}
 
 	if worker, exists := ps.workers[key]; exists {
+		// If worker is already connected, this is a redundant authorization.
+		// Do nothing to prevent resetting stats for an active session.
+		if worker.IsConnected {
+			return
+		}
+
 		worker.IsConnected = true
 		worker.ConnectedAt = time.Now()
 		// Reset stats on reconnect to avoid hashrate spikes
@@ -177,44 +183,68 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 		key = address + "." + workerName
 	}
 
-	if worker, exists := ps.workers[key]; exists {
-		now := time.Now()
-		worker.LastShareAt = now
-		worker.Difficulty = poolDiff
-		if valid {
-			// Track first share info
-			isFirstShare := worker.SharesValid == 0
-			if isFirstShare {
-				worker.FirstShareAt = now
-				worker.FirstShareDiff = poolDiff
-			}
-			worker.LastShareDiff = poolDiff
-			worker.SharesValid++
-			worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
-		} else if stale {
-			worker.SharesStale++
-		} else {
-			worker.SharesInvalid++
-		}
-		worker.Hashrate = ps.calculateWorkerHashrate(key)
+	now := time.Now()
 
-		// Log worker hashrate with first and last share info
-		if valid && ps.logger != nil {
-			elapsed := now.Sub(worker.ConnectedAt).Seconds()
-			ps.logger.WithFields(log.Fields{
-				"worker":         key,
-				"algorithm":      worker.Algorithm,
-				"hashrate":       formatAlgoHashrate(worker.Hashrate, worker.Algorithm),
-				"sharesValid":    worker.SharesValid,
-				"cumulativeWork": worker.CumulativeWork,
-				"elapsedSecs":    elapsed,
-				"firstShareAt":   worker.FirstShareAt.Format(time.RFC3339),
-				"firstShareDiff": worker.FirstShareDiff,
-				"lastShareAt":    worker.LastShareAt.Format(time.RFC3339),
-				"lastShareDiff":  worker.LastShareDiff,
-				"poolDiff":       poolDiff,
-			}).Info("Worker hashrate update")
+	// Ensure worker exists and is connected (handles reconnects without authorize)
+	worker, exists := ps.workers[key]
+	if !exists {
+		worker = &WorkerStats{
+			Address:     address,
+			WorkerName:  workerName,
+			Algorithm:   algorithm,
+			ConnectedAt: now,
+			IsConnected: true,
 		}
+		ps.workers[key] = worker
+	} else if !worker.IsConnected {
+		worker.IsConnected = true
+		worker.ConnectedAt = now
+		// Reset stats on reconnect to avoid hashrate spikes
+		worker.SharesValid = 0
+		worker.SharesStale = 0
+		worker.SharesInvalid = 0
+		worker.Hashrate = 0
+		worker.CumulativeWork = 0
+		if algorithm != "" {
+			worker.Algorithm = algorithm
+		}
+	}
+
+	worker.LastShareAt = now
+	worker.Difficulty = poolDiff
+	if valid {
+		// Track first share info
+		isFirstShare := worker.SharesValid == 0
+		if isFirstShare {
+			worker.FirstShareAt = now
+			worker.FirstShareDiff = poolDiff
+		}
+		worker.LastShareDiff = poolDiff
+		worker.SharesValid++
+		worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
+	} else if stale {
+		worker.SharesStale++
+	} else {
+		worker.SharesInvalid++
+	}
+	worker.Hashrate = ps.calculateWorkerHashrate(key)
+
+	// Log worker hashrate with first and last share info
+	if valid && ps.logger != nil {
+		elapsed := now.Sub(worker.ConnectedAt).Seconds()
+		ps.logger.WithFields(log.Fields{
+			"worker":         key,
+			"algorithm":      worker.Algorithm,
+			"hashrate":       formatAlgoHashrate(worker.Hashrate, worker.Algorithm),
+			"sharesValid":    worker.SharesValid,
+			"cumulativeWork": worker.CumulativeWork,
+			"elapsedSecs":    elapsed,
+			"firstShareAt":   worker.FirstShareAt.Format(time.RFC3339),
+			"firstShareDiff": worker.FirstShareDiff,
+			"lastShareAt":    worker.LastShareAt.Format(time.RFC3339),
+			"lastShareDiff":  worker.LastShareDiff,
+			"poolDiff":       poolDiff,
+		}).Info("Worker hashrate update")
 	}
 
 	// Record share in history for solo mining luck tracking (only valid shares)
@@ -496,4 +526,3 @@ func (ps *PoolStats) GetTotalHashrate() float64 {
 	}
 	return total
 }
-

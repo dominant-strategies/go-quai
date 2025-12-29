@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 	"google.golang.org/protobuf/proto"
@@ -196,6 +198,7 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 		api.activeSubscriptions += 1
 		txHashes := make(chan []common.Hash, 128)
 		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
+		defer pendingTxSub.Unsubscribe()
 
 		for {
 			select {
@@ -206,10 +209,8 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 					notifier.Notify(rpcSub.ID, h)
 				}
 			case <-rpcSub.Err():
-				pendingTxSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				pendingTxSub.Unsubscribe()
 				return
 			}
 		}
@@ -287,6 +288,7 @@ func (api *PublicFilterAPI) NewWorkshares(ctx context.Context) (*rpc.Subscriptio
 		api.activeSubscriptions += 1
 		workshares := make(chan *types.WorkObject, 100) // Buffer to prevent blocking
 		worksharesSub := api.events.SubscribeNewWorkshares(workshares)
+		defer worksharesSub.Unsubscribe()
 		api.backend.Logger().Info("NewWorkshares subscription created")
 		for {
 			select {
@@ -333,10 +335,8 @@ func (api *PublicFilterAPI) NewWorkshares(ctx context.Context) (*rpc.Subscriptio
 
 				notifier.Notify(rpcSub.ID, w.RPCMarshalWorkObject(api.backend.RpcVersion()))
 			case <-rpcSub.Err():
-				worksharesSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				worksharesSub.Unsubscribe()
 				return
 			}
 		}
@@ -371,6 +371,7 @@ func (api *PublicFilterAPI) NewWorksharesV2(ctx context.Context) (*rpc.Subscript
 		api.activeSubscriptions += 1
 		workshares := make(chan *types.WorkObject, 100) // Buffer to prevent blocking
 		worksharesSub := api.events.SubscribeNewWorkshares(workshares)
+		defer worksharesSub.Unsubscribe()
 		api.backend.Logger().Info("NewWorkshares subscription created")
 		for {
 			select {
@@ -417,10 +418,8 @@ func (api *PublicFilterAPI) NewWorksharesV2(ctx context.Context) (*rpc.Subscript
 
 				notifier.Notify(rpcSub.ID, w.RPCMarshalWorkObject("v2"))
 			case <-rpcSub.Err():
-				worksharesSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				worksharesSub.Unsubscribe()
 				return
 			}
 		}
@@ -543,6 +542,7 @@ func (api *PublicFilterAPI) NewHeadsV2(ctx context.Context) (*rpc.Subscription, 
 		api.activeSubscriptions += 1
 		headers := make(chan *types.WorkObject, 10) // Buffer to prevent blocking
 		headersSub := api.events.SubscribeNewHeads(headers)
+		defer headersSub.Unsubscribe()
 
 		for {
 			select {
@@ -551,10 +551,8 @@ func (api *PublicFilterAPI) NewHeadsV2(ctx context.Context) (*rpc.Subscription, 
 				marshalHeader := h.RPCMarshalWorkObject("v2")
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
-				headersSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				headersSub.Unsubscribe()
 				return
 			}
 		}
@@ -589,6 +587,7 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 		api.activeSubscriptions += 1
 		headers := make(chan *types.WorkObject, 10) // Buffer to prevent blocking
 		headersSub := api.events.SubscribeNewHeads(headers)
+		defer headersSub.Unsubscribe()
 
 		for {
 			select {
@@ -597,10 +596,8 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 				marshalHeader := h.RPCMarshalWorkObject(api.backend.RpcVersion())
 				notifier.Notify(rpcSub.ID, marshalHeader)
 			case <-rpcSub.Err():
-				headersSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				headersSub.Unsubscribe()
 				return
 			}
 		}
@@ -733,6 +730,7 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 			}
 			api.activeSubscriptions -= 1
 		}()
+		defer logsSub.Unsubscribe()
 		api.activeSubscriptions += 1
 		for {
 			select {
@@ -741,10 +739,8 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 					notifier.Notify(rpcSub.ID, &log)
 				}
 			case <-rpcSub.Err(): // client send an unsubscribe request
-				logsSub.Unsubscribe()
 				return
 			case <-notifier.Closed(): // connection dropped
-				logsSub.Unsubscribe()
 				return
 			}
 		}
@@ -1115,6 +1111,7 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context, powId types.PowID
 		}()
 		header := make(chan *types.WorkObject, c_pendingHeaderChSize)
 		headerSub := api.backend.SubscribePendingHeaderEvent(header)
+		defer headerSub.Unsubscribe()
 
 		for {
 			select {
@@ -1175,10 +1172,153 @@ func (api *PublicFilterAPI) PendingHeader(ctx context.Context, powId types.PowID
 					notifier.Notify(rpcSub.ID, data)
 				}()
 			case <-rpcSub.Err():
-				headerSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
-				headerSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// BlockTemplateUpdatesCriteria specifies parameters for block template subscription
+type BlockTemplateUpdatesCriteria struct {
+	Algorithm string `json:"algorithm"` // "kawpow", "sha", "scrypt"
+}
+
+// templateState tracks template changes for update detection
+type templateState struct {
+	sealHash      common.Hash
+	parentHash    common.Hash
+	height        uint64
+	quaiHeight    uint64
+	signatureTime uint32
+}
+
+// parsePowID converts algorithm string to types.PowID
+func parsePowID(algorithm string) (types.PowID, error) {
+	switch strings.ToLower(algorithm) {
+	case "kawpow":
+		return types.Kawpow, nil
+	case "sha", "sha256", "sha256d", "sha_bch":
+		return types.SHA_BCH, nil
+	case "scrypt":
+		return types.Scrypt, nil
+	default:
+		return 0, fmt.Errorf("unsupported algorithm: %s", algorithm)
+	}
+}
+
+// BlockTemplateUpdates sends a notification when the block template changes.
+// Triggers: quaiHeight change, prevHash change, sealHash change (kawpow only)
+// Heartbeat: sends current template every 5 seconds if no change occurred
+func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit BlockTemplateUpdatesCriteria) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	powID, err := parsePowID(crit.Algorithm)
+	if err != nil {
+		return &rpc.Subscription{}, err
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+		api.activeSubscriptions += 1
+
+		var lastState *templateState
+		heartbeatTicker := time.NewTicker(5 * time.Second)
+		defer heartbeatTicker.Stop()
+
+		pendingHeaders := make(chan *types.WorkObject, c_pendingHeaderChSize)
+		pendingHeaderSub := api.backend.SubscribePendingHeaderEvent(pendingHeaders)
+		defer pendingHeaderSub.Unsubscribe()
+
+		// Helper to get template and check for changes
+		checkAndSendTemplate := func(forceUpdate bool) {
+			pending, err := api.backend.GetPendingHeader(powID, common.Address{})
+			if err != nil {
+				api.backend.Logger().WithField("err", err).Debug("Failed to get pending header for template subscription")
+				return
+			}
+			if pending == nil {
+				return
+			}
+
+			auxPow := pending.AuxPow()
+			if auxPow == nil || auxPow.Header() == nil {
+				return
+			}
+			signatureTime, err := types.ExtractSignatureTimeFromCoinbase(types.ExtractScriptSigFromCoinbaseTx(auxPow.Transaction()))
+			if err != nil {
+				api.backend.Logger().WithField("err", err).Debug("Failed to extract signature time from coinbase")
+				signatureTime = 0
+			}
+			pendingCopy := types.CopyWorkObjectHeader(pending.WorkObjectHeader())
+			pendingCopy.SetTime(0)
+
+			newState := &templateState{
+				sealHash:      pendingCopy.SealHash(),
+				parentHash:    auxPow.Header().PrevBlock(),
+				height:        pending.NumberU64(common.ZONE_CTX),
+				quaiHeight:    pending.WorkObjectHeader().NumberU64(),
+				signatureTime: signatureTime,
+			}
+
+			var changed bool
+			if lastState == nil {
+				changed = true // First template
+			} else if lastState.parentHash != newState.parentHash {
+				changed = true // New block
+			} else if lastState.quaiHeight != newState.quaiHeight {
+				changed = true // QuaiHeight changed
+			} else if lastState.signatureTime != newState.signatureTime {
+				changed = true // Signature time changed
+			} else if powID == types.Kawpow && lastState.sealHash != newState.sealHash {
+				changed = true // Kawpow: sealHash changed (epoch change)
+			}
+
+			if changed || forceUpdate {
+				template, err := quaiapi.MarshalAuxPowTemplate(pending, powID, "", "", 8, "")
+				if err != nil {
+					api.backend.Logger().WithField("err", err).Debug("Failed to marshal block template")
+					return
+				}
+				notifier.Notify(rpcSub.ID, template)
+				lastState = newState
+				heartbeatTicker.Reset(5 * time.Second)
+			}
+		}
+
+		// Send initial template immediately
+		checkAndSendTemplate(true)
+
+		for {
+			select {
+			case <-pendingHeaders:
+				checkAndSendTemplate(false)
+			case <-heartbeatTicker.C:
+				// 5s heartbeat - send current template
+				checkAndSendTemplate(true)
+			case <-rpcSub.Err():
+				return
+			case <-notifier.Closed():
 				return
 			}
 		}
