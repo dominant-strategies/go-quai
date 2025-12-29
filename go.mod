@@ -1,8 +1,6 @@
 module github.com/dominant-strategies/go-quai
 
-go 1.23.4
-
-toolchain go1.23.6
+go 1.24
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
@@ -37,6 +35,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pelletier/go-toml/v2 v2.1.0
+	github.com/pires/go-proxyproto v0.8.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/tsdb v0.10.0
 	github.com/rs/cors v1.11.1
@@ -48,7 +47,6 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	go.uber.org/mock v0.3.0
 	golang.org/x/crypto v0.38.0
-	golang.org/x/tools v0.22.0
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.2.1
@@ -186,6 +184,7 @@ require (
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/tools v0.22.0 // indirect
 	gonum.org/v1/gonum v0.14.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
