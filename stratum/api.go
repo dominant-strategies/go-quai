@@ -704,15 +704,25 @@ func (a *API) broadcastUpdate() {
 		return
 	}
 
+	// Collect failed connections while holding read lock
 	a.wsMu.RLock()
-	defer a.wsMu.RUnlock()
-
+	var failedConns []*websocket.Conn
 	for conn := range a.wsClients {
 		err := conn.WriteMessage(websocket.TextMessage, data)
 		if err != nil {
 			conn.Close()
+			failedConns = append(failedConns, conn)
+		}
+	}
+	a.wsMu.RUnlock()
+
+	// Delete failed connections with write lock
+	if len(failedConns) > 0 {
+		a.wsMu.Lock()
+		for _, conn := range failedConns {
 			delete(a.wsClients, conn)
 		}
+		a.wsMu.Unlock()
 	}
 }
 
