@@ -161,11 +161,11 @@ func (ps *PoolStats) WorkerDisconnected(address, workerName string) {
 
 // ShareSubmitted records a share submission
 func (ps *PoolStats) ShareSubmitted(address, workerName string, difficulty float64, valid bool, stale bool) {
-	ps.ShareSubmittedWithDiff(address, workerName, "", difficulty, 0, 0, valid, stale)
+	ps.ShareSubmittedWithDiff(address, workerName, "", 0, 0, 0, difficulty, 0, 0, valid, stale)
 }
 
 // ShareSubmittedWithDiff records a share with detailed difficulty information for solo mining
-func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm string, poolDiff, achievedDiff, workshareDiff float64, valid bool, stale bool) {
+func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm string, totalShares, invalidShares, staleShares uint64, poolDiff, achievedDiff, workshareDiff float64, valid bool, stale bool) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -223,6 +223,7 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 		worker.SharesValid++
 		worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
 	} else if stale {
+		worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
 		worker.SharesStale++
 	} else {
 		worker.SharesInvalid++
@@ -234,6 +235,9 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 		elapsed := now.Sub(worker.ConnectedAt).Seconds()
 		ps.logger.WithFields(log.Fields{
 			"worker":         key,
+			"totalShares":    totalShares,
+			"invalidShares":  invalidShares,
+			"staleShares":    staleShares,
 			"algorithm":      worker.Algorithm,
 			"hashrate":       formatAlgoHashrate(worker.Hashrate, worker.Algorithm),
 			"sharesValid":    worker.SharesValid,

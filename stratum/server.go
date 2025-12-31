@@ -3,6 +3,7 @@ package stratum
 import (
 	"bufio"
 	"bytes"
+	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -188,6 +189,8 @@ type Server struct {
 	// Connection limit tracking (DDoS protection)
 	activeConns    atomic.Int64
 	maxConnections int
+	// Session ID counter for unique connection identification in logs
+	sessionIDCounter atomic.Uint64
 	// Shutdown signaling
 	stopped chan struct{}
 	wg      sync.WaitGroup // tracks background goroutines (template polling, force broadcast)
@@ -507,6 +510,7 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
 			sess.mu.Unlock()
 			if shouldSkip {
 				s.logger.WithFields(log.Fields{
+					"sid":     sess.id,
 					"user":    sess.user,
 					"worker":  sess.workerName,
 					"counter": counter,
@@ -514,6 +518,7 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
 				continue
 			}
 			s.logger.WithFields(log.Fields{
+				"sid":     sess.id,
 				"user":    sess.user,
 				"worker":  sess.workerName,
 				"counter": counter,
@@ -606,6 +611,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 	// Close connections that have been idle too long (no shares in 10 minutes)
 	for _, sess := range livenessTimeoutSessions {
 		s.logger.WithFields(log.Fields{
+			"sid":    sess.id,
 			"user":   sess.user,
 			"worker": sess.workerName,
 			"algo":   algorithm,
@@ -624,7 +630,9 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 		// Only decrease if still past the timeout (double-check after lock)
 		if now.Sub(sess.lastShareTime) >= timeoutThreshold {
 			oldDiff := sess.varDiff
-			sess.varDiff *= varDiffAdjustDown
+			if sess.varDiffTotalShares < 10 {
+				sess.varDiff *= varDiffAdjustDown
+			}
 			// Enforce algorithm-specific minimum
 			_, minDiff := getVarDiffDefaults(sess.chain)
 			if sess.varDiff < minDiff {
@@ -636,6 +644,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 			sess.varDiffTimeoutReset = true
 			if sess.varDiff != oldDiff {
 				s.logger.WithFields(log.Fields{
+					"sid":         sess.id,
 					"user":        sess.user,
 					"worker":      sess.workerName,
 					"oldDiff":     oldDiff,
@@ -734,7 +743,7 @@ func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
 		// Enable TCP keepalive to detect dead connections faster than OS default (2hrs)
 		if tcpConn, ok := conn.(*net.TCPConn); ok {
 			_ = tcpConn.SetKeepAlive(true)
-			_ = tcpConn.SetKeepAlivePeriod(5 * time.Minute) // Probe every 5 min after idle
+			_ = tcpConn.SetKeepAlivePeriod(10 * time.Minute) // Probe every 5 min after idle
 		}
 		go s.handleConn(conn, algorithm)
 	}
@@ -832,6 +841,7 @@ func (s *Server) adjustVarDiff(sess *session, workshareStratumDiff float64, shar
 		sess.varDiffShares = sess.varDiffShares[:0]
 		sess.mu.Unlock()
 		s.logger.WithFields(log.Fields{
+			"sid":     sess.id,
 			"user":    sess.user,
 			"worker":  sess.workerName,
 			"varDiff": sess.varDiff,
@@ -848,7 +858,7 @@ func (s *Server) adjustVarDiff(sess *session, workshareStratumDiff float64, shar
 	sess.varDiffTotalShares++
 
 	// Check if we should adjust (every 30 shares)
-	if len(sess.varDiffShares)%varDiffAdjustEvery == 0 && len(sess.varDiffShares) > 0 {
+	if (sess.varDiffTotalShares == 10) || (len(sess.varDiffShares)%varDiffAdjustEvery == 0 && len(sess.varDiffShares) > 0) {
 		// Calculate hashrate from share timing and difficulties
 		// Hashrate = sum(difficulty * scale) / total_time
 		firstShare := sess.varDiffShares[0]
@@ -895,6 +905,7 @@ func (s *Server) adjustVarDiff(sess *session, workshareStratumDiff float64, shar
 			sess.varDiff = newDiff
 
 			s.logger.WithFields(log.Fields{
+				"sid":               sess.id,
 				"user":              sess.user,
 				"worker":            sess.workerName,
 				"oldDiff":           oldDiff,
@@ -920,6 +931,7 @@ func (s *Server) adjustVarDiff(sess *session, workshareStratumDiff float64, shar
 }
 
 type session struct {
+	id         uint64 // unique session ID for log correlation
 	conn       net.Conn
 	enc        *json.Encoder
 	dec        *json.Decoder
@@ -969,6 +981,9 @@ type session struct {
 	varDiffTimeoutReset bool                 // true if lastShareTime was reset due to timeout (not a real share)
 	varDiffShares       []varDiffShareRecord // queue of last N shares for hashrate calculation (max 60)
 	varDiffTotalShares  uint64               // total shares ever received (to determine if "established")
+	totalShares         uint64               // total shares submitted by this miner (for stats)
+	invalidShares       uint64               // total invalid shares submitted by this miner (for stats)
+	staleShares         uint64               // total stale shares submitted by this miner (for stats)
 	// Skip blocks mode - only send every other block (for debugging fast block times)
 	skipBlocks       bool // true if miner wants to skip every other block
 	skipBlockCounter int  // counter to track which blocks to skip
@@ -1017,6 +1032,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 	kawJobsCache, _ := lru.New[string, *kawpowJob](jobsCacheSize)
 
 	sess := &session{
+		id:           s.sessionIDCounter.Add(1),
 		conn:         c,
 		enc:          enc,
 		dec:          dec,
@@ -1047,6 +1063,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			if err == io.EOF {
 				if sess.authorized {
 					s.logger.WithFields(log.Fields{
+						"sid":    sess.id,
 						"user":   sess.user,
 						"worker": sess.workerName,
 						"algo":   algorithm,
@@ -1055,6 +1072,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 			if sess.authorized {
 				s.logger.WithFields(log.Fields{
+					"sid":    sess.id,
 					"user":   sess.user,
 					"worker": sess.workerName,
 					"algo":   algorithm,
@@ -1072,9 +1090,16 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// - sha256/scrypt: [[subscriptions], extranonce1, extranonce2_size]
 			if sess.chain == "kawpow" {
 				// Kawpow doesn't use extranonce - the 64-bit header nonce provides enough search space
+				// Random byte for session identification (not used in mining)
+				x1 := make([]byte, 1)
+				if _, err := crand.Read(x1); err != nil {
+					s.logger.WithField("error", err).Error("failed to generate random extranonce1 (kawpow)")
+					sess.conn.Close()
+					return
+				}
 				result := []interface{}{
-					nil,  // Session ID (not used for resuming)
-					"00", // extranonce1 - placeholder, not used
+					nil,                    // Session ID (not used for resuming)
+					hex.EncodeToString(x1), // extranonce1 - random, for session identification
 				}
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil}); err != nil {
 					s.logger.WithFields(log.Fields{"error": err, "remoteAddr": sess.conn.RemoteAddr().String()}).Error("failed to send mining.subscribe response (kawpow)")
@@ -1083,15 +1108,21 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				}
 			} else {
 				// sha256/scrypt use extranonce for coinbase modification
-				x1 := []byte{0x01, 0x01, 0x01, 0x01} // All 1s instead of random
-				sess.xnonce1 = append([]byte{}, x1...)
+				// Random 4 bytes ensures each session has unique coinbase search space
+				x1 := make([]byte, 4)
+				if _, err := crand.Read(x1); err != nil {
+					s.logger.WithField("error", err).Error("failed to generate random extranonce1")
+					sess.conn.Close()
+					return
+				}
+				sess.xnonce1 = x1
 				result := []interface{}{
 					[]interface{}{
 						[]interface{}{"mining.set_difficulty", "1"},
 						[]interface{}{"mining.notify", "1"},
 					},
-					hex.EncodeToString(x1), // Will send "01010101"
-					4,                      // extranonce2_size (4 bytes for wider miner compatibility)
+					hex.EncodeToString(x1),
+					4, // extranonce2_size (4 bytes for wider miner compatibility)
 				}
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: result, Error: nil}); err != nil {
 					s.logger.WithFields(log.Fields{"error": err, "remoteAddr": sess.conn.RemoteAddr().String()}).Error("failed to send mining.subscribe response (sha256/scrypt)")
@@ -1214,6 +1245,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			address := common.HexToAddress(sess.user, s.backend.NodeLocation())
 			if _, err := address.InternalAddress(); err != nil {
 				s.logger.WithFields(log.Fields{
+					"sid":   sess.id,
 					"user":  sess.user,
 					"error": err,
 				}).Warn("miner address is not internal to this zone")
@@ -1229,6 +1261,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			s.registerSession(sess)                                         // Register for broadcasts
 			s.stats.WorkerConnected(sess.user, sess.workerName, sess.chain) // Track worker in stats
 			logFields := log.Fields{
+				"sid":          sess.id,
 				"user":         sess.user,
 				"worker":       sess.workerName,
 				"chain":        sess.chain,
@@ -1303,6 +1336,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					// Fallback to global cache (handles reconnecting miners)
 					kawJob, ok = s.globalKawJobs.Peek(jobID)
 					if !ok {
+						sess.mu.Lock()
+						sess.staleShares++
+						sess.mu.Unlock()
 						s.logger.WithFields(log.Fields{"jobID": jobID, "sessionKnown": sess.kawJobs.Len(), "globalKnown": s.globalKawJobs.Len(), "worker": sess.user + "." + sess.workerName}).Error("unknown or stale kawpow jobID")
 						s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
 						if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"}); err != nil {
@@ -1315,6 +1351,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 
 				// Submit kawpow share
 				if err := s.submitKawpowShare(sess, kawJob, nonceHex, headerHashHex, mixHashHex); err != nil {
+					sess.mu.Lock()
+					sess.invalidShares++
+					sess.mu.Unlock()
 					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, false) // invalid share
 					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
 						s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.submit invalid share (kawpow)")
@@ -1361,6 +1400,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				// Fallback to global cache (handles reconnecting miners)
 				j, ok = s.globalJobs.Peek(jobID)
 				if !ok {
+					sess.mu.Lock()
+					sess.staleShares++
+					sess.mu.Unlock()
 					s.logger.WithFields(log.Fields{"jobID": jobID, "sessionKnown": sess.jobs.Len(), "globalKnown": s.globalJobs.Len(), "worker": sess.user + "." + sess.workerName}).Error("unknown or stale jobID")
 					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
 					sess.sendJSON(stratumResp{
@@ -1376,6 +1418,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// Pass j directly to avoid TOCTOU race where sess.job could be replaced by concurrent sendJobAndNotify
 			refreshJob, err := s.submitAsWorkShare(sess, j, ex2hex, ntimeHex, nonceHex, versionBits)
 			if err != nil {
+				sess.mu.Lock()
+				sess.invalidShares++
+				sess.mu.Unlock()
 				s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, false) // invalid share
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
 					s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.submit invalid share (sha256/scrypt)")
@@ -1403,6 +1448,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 		default:
 			s.logger.WithFields(log.Fields{
+				"sid":    sess.id,
 				"user":   sess.user,
 				"worker": sess.workerName,
 				"method": req.Method,
@@ -1594,11 +1640,19 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 	var usedDiff float64
 	var diffSource string
 
-	// Calculate workshare difficulty for capping vardiff
-	var workshareDiff float64
+	// Calculate workshare difficulty in stratum units for capping vardiff
+	// CalculateKawpowShareDiff returns raw difficulty (expected hashes), need to convert to stratum diff
+	var workshareStratumDiff float64
 	if pending.WorkObjectHeader().KawpowDifficulty() != nil {
-		workshareDiffBig := core.CalculateKawpowShareDiff(pending.WorkObjectHeader())
-		workshareDiff, _ = new(big.Float).SetInt(workshareDiffBig).Float64()
+		kawpowShareDiffRaw := core.CalculateKawpowShareDiff(pending.WorkObjectHeader())
+		// Convert to stratum difficulty: stratumDiff = KawpowDiff1 / (2^256 / rawDiff)
+		workShareTarget := new(big.Int).Div(common.Big2e256, kawpowShareDiffRaw)
+		if workShareTarget.Sign() > 0 {
+			workshareStratumDiff, _ = new(big.Float).Quo(
+				new(big.Float).SetInt(KawpowDiff1),
+				new(big.Float).SetInt(workShareTarget),
+			).Float64()
+		}
 	}
 
 	if sess.minerDifficulty != nil && *sess.minerDifficulty > 0 {
@@ -1607,8 +1661,8 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 	} else if sess.varDiffEnabled {
 		usedDiff = sess.varDiff
 		// Cap vardiff at workshare difficulty - no point making miners work harder than network requires
-		if workshareDiff > 0 && usedDiff > workshareDiff {
-			usedDiff = workshareDiff
+		if workshareStratumDiff > 0 && usedDiff > workshareStratumDiff {
+			usedDiff = workshareStratumDiff
 		}
 		diffSource = "vardiff"
 	}
@@ -2011,6 +2065,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 		// If it doesn't meet workshare target, accept for liveness but don't submit
 		if !meetsWorkshareTarget {
 			s.logger.WithFields(log.Fields{
+				"sid":          sess.id,
 				"powID":        powID,
 				"achievedDiff": achievedStratumDiff,
 				"targetDiff":   livenessTarget,
@@ -2036,7 +2091,10 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			} else if usingVarDiff {
 				poolDiff = shareDiff // Use the difficulty the share actually met
 			}
-			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, poolDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+			sess.mu.Lock()
+			sess.totalShares++
+			sess.mu.Unlock()
+			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.totalShares, sess.invalidShares, sess.staleShares, poolDiff, achievedDiffFloat, workshareDiffFloat, true, false)
 
 			return false, nil // Accept share but don't submit to node
 		}
@@ -2050,7 +2108,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	}
 	sess.seenShares.Add(shareKey, struct{}{})
 
-	s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedStratumDiff, "workshareDiff": workshareStratumDiff}).Info("submitting workshare to node")
+	s.logger.WithFields(log.Fields{"sid": sess.id, "powID": pending.AuxPow().PowID(), "achievedDiff": achievedStratumDiff, "workshareDiff": workshareStratumDiff}).Info("submitting workshare to node")
 
 	// Get algorithm name for stats
 	var algoName string
@@ -2096,7 +2154,10 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	// Create full WorkObject: job's header (with updated AuxPow) + cached body
 	fullPending := types.NewWorkObject(pending.WorkObjectHeader(), cachedBody.Body(), nil)
 
-	s.logger.WithFields(log.Fields{"powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes), "workshareHash": fullPending.Hash().Hex()}).Info("workshare received - submitting to network")
+	sess.mu.Lock()
+	sess.totalShares++
+	sess.mu.Unlock()
+	s.logger.WithFields(log.Fields{"sid": sess.id, "totalShares": sess.totalShares, "invalidShares": sess.invalidShares, "powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes), "workshareHash": fullPending.Hash().Hex()}).Info("workshare received - submitting to network")
 	// Record the block discovery for pool stats
 	workerKey := sess.user
 	if sess.workerName != "" {
@@ -2114,7 +2175,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 		achievedDiff.String(),
 	)
 	// Record the share with difficulty info for solo mining luck tracking
-	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
 	return true, nil
 }
 
@@ -2270,6 +2331,7 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		// If it doesn't meet workshare target, accept for liveness but don't submit
 		if !meetsWorkshareTarget {
 			s.logger.WithFields(log.Fields{
+				"sid":           sess.id,
 				"powID":         types.Kawpow,
 				"height":        kawJob.height,
 				"achievedDiff":  achievedStratumDiff,
@@ -2289,7 +2351,10 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			} else if usingVarDiff {
 				poolDiff = shareDiff // Use the difficulty the share actually met
 			}
-			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", poolDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+			sess.mu.Lock()
+			sess.totalShares++
+			sess.mu.Unlock()
+			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.totalShares, sess.invalidShares, sess.staleShares, poolDiff, achievedDiffFloat, workshareDiffFloat, true, false)
 
 			return nil
 		}
@@ -2354,6 +2419,7 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 	}
 
 	s.logger.WithFields(log.Fields{
+		"sid":           sess.id,
 		"powID":         types.Kawpow,
 		"height":        kawJob.height,
 		"achievedDiff":  achievedStratumDiff,
@@ -2371,9 +2437,9 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 
 	err = s.backend.ReceiveMinedHeader(fullPending)
 	if err != nil {
-		s.logger.WithFields(log.Fields{"powID": types.Kawpow, "height": kawJob.height, "worker": sess.user + "." + sess.workerName, "error": err}).Error("kawpow workshare rejected by node")
+		s.logger.WithFields(log.Fields{"sid": sess.id, "powID": types.Kawpow, "height": kawJob.height, "worker": sess.user + "." + sess.workerName, "error": err}).Error("kawpow workshare rejected by node")
 	} else {
-		s.logger.WithFields(log.Fields{"powID": types.Kawpow, "height": kawJob.height, "worker": sess.user + "." + sess.workerName, "hash": fullPending.Hash().Hex()}).Info("kawpow workshare accepted by node")
+		s.logger.WithFields(log.Fields{"sid": sess.id, "powID": types.Kawpow, "height": kawJob.height, "worker": sess.user + "." + sess.workerName, "hash": fullPending.Hash().Hex()}).Info("kawpow workshare accepted by node")
 		// Record the block discovery for pool stats
 		workerKey := sess.user
 		if sess.workerName != "" {
@@ -2386,8 +2452,11 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			"kawpow",
 			achievedDiff.String(),
 		)
+		sess.mu.Lock()
+		sess.totalShares++
+		sess.mu.Unlock()
 		// Record the share with difficulty info
-		s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+		s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
 	}
 	return err
 }
