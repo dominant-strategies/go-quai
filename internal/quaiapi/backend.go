@@ -84,7 +84,7 @@ type Backend interface {
 	PendingBlock() *types.WorkObject
 	RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, order int)
 	NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, hash common.Hash) error
-	GetPendingHeader(powID types.PowID, coinbase common.Address) (*types.WorkObject, error)
+	GetPendingHeader(powID types.PowID, coinbase common.Address, extraData []byte) (*types.WorkObject, error)
 	GetPendingBlockBody(powId types.PowID, sealHash common.Hash) *types.WorkObject
 	AddPendingAuxPow(powId types.PowID, sealHash common.Hash, auxpow *types.AuxPow)
 	SubmitBlock(raw hexutil.Bytes, powId types.PowID) (common.Hash, uint64, types.WorkShareValidity, error)
