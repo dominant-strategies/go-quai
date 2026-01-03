@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,13 +46,15 @@ type StratumConfig struct {
 	JobWorkerCount int    // Number of workers in the job broadcast pool (default 4)
 	MaxConnections int    // Maximum concurrent connections (default 10000, 0 = unlimited)
 	ProxyProtocol  bool   // Enable PROXY protocol support for load balancer (default false)
+	PoolTag        string // Tag to identify the mining pool that is set in the coinbase
 }
 
 // Connection limits and liveness timeout constants
 const (
-	defaultMaxConnections = 10000            // Default max concurrent connections
-	livenessTimeout       = 10 * time.Minute // Close connection if no share within this time
-	tickerInterval        = 1 * time.Second  // Interval for template polling and force broadcast loops
+	defaultMaxConnections  = 10000            // Default max concurrent connections
+	livenessTimeout        = 10 * time.Minute // Close connection if no share within this time
+	tickerInterval         = 1 * time.Second  // Interval for template polling and force broadcast loops
+	forceBroadcastInterval = 5 * time.Second  // Interval for forced update of the workers
 )
 
 // templateState tracks the last template sent for change detection
@@ -79,7 +82,7 @@ type jobWorkerPool struct {
 }
 
 const (
-	defaultJobWorkerCount  = 4
+	defaultJobWorkerCount  = 50
 	jobWorkerPoolQueueSize = 10000 // Buffered channel size
 )
 
@@ -107,6 +110,12 @@ func (p *jobWorkerPool) start() {
 
 // worker processes job tasks from the queue.
 func (p *jobWorkerPool) worker() {
+	defer func() {
+		if r := recover(); r != nil {
+			p.server.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack())}).Error("Stratum job worker panic")
+		}
+	}()
+
 	defer p.wg.Done()
 	for {
 		select {
@@ -189,6 +198,9 @@ type Server struct {
 	// Connection limit tracking (DDoS protection)
 	activeConns    atomic.Int64
 	maxConnections int
+	// Connection tracking for clean shutdown
+	connsMu sync.Mutex
+	conns   map[net.Conn]struct{}
 	// Session ID counter for unique connection identification in logs
 	sessionIDCounter atomic.Uint64
 	// Shutdown signaling
@@ -202,6 +214,10 @@ type Server struct {
 	// Body cache - many-to-one mapping from jobs to block bodies
 	// Key is BodyCacheKey (excludes coinbase), so all miners on same template share one body
 	pendingBodies *lru.Cache[common.Hash, *types.WorkObject]
+
+	lastSealHashChangeTime time.Time
+	lastHeightChangeTime   time.Time
+	lastUpdateTime         time.Time
 }
 
 // NewServer creates a new stratum server with the given configuration.
@@ -244,6 +260,7 @@ func NewServerWithConfig(config StratumConfig, backend quaiapi.Backend) *Server 
 		sessionsScrypt: make(map[*session]struct{}),
 		sessionsKawpow: make(map[*session]struct{}),
 		maxConnections: maxConns,
+		conns:          make(map[net.Conn]struct{}),
 		stopped:        make(chan struct{}),
 		globalJobs:     globalJobs,
 		globalKawJobs:  globalKawJobs,
@@ -303,6 +320,7 @@ func (s *Server) Start() error {
 		}
 		s.lnSHA = ln
 		s.logger.WithField("addr", s.config.SHAAddr).Info("sha256 stratum listener started")
+		s.wg.Add(1)
 		go s.acceptLoop(ln, "sha256")
 	}
 
@@ -314,6 +332,7 @@ func (s *Server) Start() error {
 		}
 		s.lnScrypt = ln
 		s.logger.WithField("addr", s.config.ScryptAddr).Info("Scrypt stratum listener started")
+		s.wg.Add(1)
 		go s.acceptLoop(ln, "scrypt")
 	}
 
@@ -325,6 +344,7 @@ func (s *Server) Start() error {
 		}
 		s.lnKawpow = ln
 		s.logger.WithField("addr", s.config.KawpowAddr).Info("Kawpow stratum listener started")
+		s.wg.Add(1)
 		go s.acceptLoop(ln, "kawpow")
 	}
 
@@ -364,6 +384,12 @@ func (s *Server) Start() error {
 
 // templatePollingLoop polls for new templates and broadcasts to connected miners
 func (s *Server) templatePollingLoop(algorithm string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum template polling loop panic")
+		}
+	}()
+
 	defer s.wg.Done()
 	ticker := time.NewTicker(tickerInterval)
 	defer ticker.Stop()
@@ -375,6 +401,7 @@ func (s *Server) templatePollingLoop(algorithm string) {
 		case <-ticker.C:
 			changed, clean, isNewBlock := s.checkTemplateChanged(algorithm)
 			if changed {
+				s.lastUpdateTime = time.Now()
 				s.broadcastJob(algorithm, clean, isNewBlock)
 			}
 		}
@@ -390,7 +417,7 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
 	powID := powIDFromChain(algorithm)
 
 	// Get pending header (using a dummy address since we just need to check for changes)
-	pending, err := s.backend.GetPendingHeader(types.PowID(powID), common.Address{})
+	pending, err := s.backend.GetPendingHeader(types.PowID(powID), common.Address{}, []byte{})
 	if err != nil || pending == nil || pending.WorkObjectHeader() == nil {
 		return false, false, false
 	}
@@ -443,20 +470,32 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
 	}
 
 	if lastState.quaiHeight != newState.quaiHeight {
+		currentTime := time.Now()
+		clean := false
+		if currentTime.Sub(s.lastHeightChangeTime) < 3*time.Second {
+			clean = true
+		}
+		s.lastHeightChangeTime = time.Now()
 		s.logger.WithFields(log.Fields{
 			"algo":          algorithm,
 			"oldQuaiHeight": lastState.quaiHeight,
 			"newQuaiHeight": newState.quaiHeight,
 		}).Info("QuaiHeight changed")
-		return true, true, false // isNewBlock=false: only quaiHeight changed
+		return true, clean, false // isNewBlock=false: only quaiHeight changed
 	}
 
 	if algorithm == "kawpow" && lastState.sealHash != newState.sealHash {
+		currentTime := time.Now()
+		if currentTime.Sub(s.lastHeightChangeTime) < 3*time.Second {
+			s.lastSealHashChangeTime = currentTime
+			return false, false, false
+		}
+		s.lastSealHashChangeTime = currentTime
 		s.logger.WithFields(log.Fields{
 			"algo":   algorithm,
 			"height": newState.height,
 		}).Trace("Template updated (sealhash changed)")
-		return true, true, false
+		return true, false, false
 	}
 
 	return false, false, false
@@ -530,8 +569,14 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
 
 // forceBroadcastLoop runs the force broadcast check every tickerInterval until shutdown
 func (s *Server) forceBroadcastLoop(algorithm string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum force broadcast loop panic")
+		}
+	}()
+
 	defer s.wg.Done()
-	ticker := time.NewTicker(tickerInterval)
+	ticker := time.NewTicker(forceBroadcastInterval)
 	defer ticker.Stop()
 
 	for {
@@ -574,6 +619,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 	varDiffTimeoutSessions := make([]*session, 0)
 	livenessTimeoutSessions := make([]*session, 0)
 	now := time.Now()
+
 	for _, sess := range sessionsCopy {
 		if !sess.authorized {
 			continue
@@ -666,6 +712,11 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 		"miners": len(staleSessions),
 	}).Debug("Force broadcasting to stale sessions")
 
+	// Dont force update if the last update happened less than 5 secs ago
+	if now.Sub(s.lastUpdateTime) < 5*time.Second {
+		return
+	}
+
 	// Broadcast with clean=true to stale sessions via worker pool
 	for _, sess := range staleSessions {
 		s.jobPool.submit(sess, true)
@@ -676,9 +727,12 @@ func (s *Server) Stop() error {
 	// Signal all background goroutines to stop
 	close(s.stopped)
 
-	// Wait for template polling and force broadcast loops to exit
-	// This must happen BEFORE closing the job pool to prevent panic on send
-	s.wg.Wait()
+	// Close all active connections to terminate handleConn goroutines
+	s.connsMu.Lock()
+	for c := range s.conns {
+		c.Close()
+	}
+	s.connsMu.Unlock()
 
 	var errs []error
 	if s.lnSHA != nil {
@@ -696,6 +750,11 @@ func (s *Server) Stop() error {
 			errs = append(errs, err)
 		}
 	}
+
+	// Wait for all goroutines (accept loops, connection handlers, polling loops) to exit
+	// This must happen BEFORE closing the job pool to prevent panic on send
+	s.wg.Wait()
+
 	// Stop the job worker pool (safe now that no goroutines are submitting)
 	if s.jobPool != nil {
 		s.jobPool.stop()
@@ -708,6 +767,13 @@ func (s *Server) Stop() error {
 
 // acceptLoop accepts connections on a listener and assigns them the specified algorithm
 func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
+	defer func() {
+		s.wg.Done()
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum accept loop panic")
+		}
+	}()
+
 	// Wrap listener with PROXY protocol support if enabled
 	// This allows the server to sit behind a load balancer (like GCP Network LB)
 	// and still see the real client IP via conn.RemoteAddr()
@@ -745,7 +811,9 @@ func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
 			_ = tcpConn.SetKeepAlive(true)
 			_ = tcpConn.SetKeepAlivePeriod(10 * time.Minute) // Probe every 5 min after idle
 		}
-		go s.handleConn(conn, algorithm)
+		s.trackConn(conn, true)
+		s.wg.Add(1)
+		go func() { defer s.wg.Done(); s.handleConn(conn, algorithm) }()
 	}
 }
 
@@ -758,6 +826,17 @@ type stratumResp struct {
 	ID     interface{} `json:"id"`
 	Result interface{} `json:"result"`
 	Error  interface{} `json:"error"`
+}
+
+// trackConn adds or removes a connection from the tracking map
+func (s *Server) trackConn(c net.Conn, add bool) {
+	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
+	if add {
+		s.conns[c] = struct{}{}
+	} else {
+		delete(s.conns, c)
+	}
 }
 
 // Default and bounds for job frequency (force broadcast interval)
@@ -775,8 +854,9 @@ const (
 // - Scrypt: ~65k hashes per stratum diff 1 (ASIC miners at high hashrate)
 const (
 	// Kawpow vardiff (diff1 = ~2^32 hashes)
-	varDiffDefaultKawpow = 50  // Starting difficulty
-	varDiffMinKawpow     = 0.1 // Minimum difficulty
+	varDiffDefaultKawpow               = 50  // Starting difficulty
+	varDiffMinKawpow                   = 0.1 // Minimum difficulty
+	diffHashesInterpretationThresholdD = 1000000
 
 	// SHA256 vardiff (diff1 = 2^32 hashes)
 	// default=230,000 (one petahash), min=2300 (ten terahash)
@@ -1019,6 +1099,13 @@ type job struct {
 // handleConn handles a stratum connection for a specific algorithm.
 // The algorithm is determined by which port the miner connected to.
 func (s *Server) handleConn(c net.Conn, algorithm string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum handle connection panic")
+		}
+	}()
+
+	defer s.trackConn(c, false)
 	defer c.Close()
 	defer s.activeConns.Add(-1) // Decrement connection counter on exit
 	// Set a longer initial read deadline - will be extended on each message
@@ -1048,7 +1135,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 	defer func() {
 		s.unregisterSession(sess)
 		if sess.authorized && sess.user != "" {
-			s.stats.WorkerDisconnected(sess.user, sess.workerName)
+			s.stats.WorkerDisconnected(sess.user, sess.workerName, algorithm)
 		}
 		close(sess.done)
 		if sess.jobTicker != nil {
@@ -1210,7 +1297,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 
 			// If re-authorizing with different worker name, disconnect old worker first
 			if wasAuthorized && (oldUser != sess.user || oldWorkerName != sess.workerName) {
-				s.stats.WorkerDisconnected(oldUser, oldWorkerName)
+				s.stats.WorkerDisconnected(oldUser, oldWorkerName, sess.chain)
 			}
 			// Parse password for optional difficulty, frequency, and skip settings
 			// Format: d=<difficulty>,frequency=<seconds>,skip=<true|false>
@@ -1225,6 +1312,18 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					if sess.minerDifficulty != nil && *sess.minerDifficulty < minScryptDiff && sess.chain == "scrypt" {
 						minScryptDiff_ := minScryptDiff
 						sess.minerDifficulty = &minScryptDiff_
+					}
+					if sess.minerDifficulty != nil && sess.chain == "kawpow" {
+						diff := *sess.minerDifficulty
+						minKawpowDiff_ := varDiffMinKawpow
+						// If *sess.minerDifficulty is greater than million, interpret as number of hashes,
+						// otherwise treat is as scaled down value
+						if diff > diffHashesInterpretationThresholdD {
+							diff = *sess.minerDifficulty / 4294967296
+						}
+						if diff < varDiffMinKawpow {
+							sess.minerDifficulty = &minKawpowDiff_
+						}
 					}
 					if pwFreq > 0 {
 						sess.jobFrequency = pwFreq // Password frequency overrides username frequency
@@ -1287,8 +1386,10 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// Send a fresh job with miner difficulty based on workshare diff
 			if err := s.sendJobAndNotify(sess, true); err != nil {
 				s.logger.WithField("error", err).Error("makeJob error")
+				s.wg.Add(1)
 				// Keep trying to send a job every few seconds if it fails
 				go func() {
+					defer s.wg.Done()
 					for i := 0; i < 10; i++ {
 						select {
 						case <-sess.done:
@@ -1340,7 +1441,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 						sess.staleShares++
 						sess.mu.Unlock()
 						s.logger.WithFields(log.Fields{"jobID": jobID, "sessionKnown": sess.kawJobs.Len(), "globalKnown": s.globalKawJobs.Len(), "worker": sess.user + "." + sess.workerName}).Error("unknown or stale kawpow jobID")
-						s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
+						s.stats.ShareSubmitted(sess.user, sess.workerName, sess.chain, difficulty, false, true) // stale share
 						if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "nojob"}); err != nil {
 							s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.submit stale job (kawpow)")
 						}
@@ -1353,8 +1454,17 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				if err := s.submitKawpowShare(sess, kawJob, nonceHex, headerHashHex, mixHashHex); err != nil {
 					sess.mu.Lock()
 					sess.invalidShares++
+					invalidCount := sess.invalidShares
 					sess.mu.Unlock()
-					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, false) // invalid share
+					s.stats.ShareSubmitted(sess.user, sess.workerName, sess.chain, difficulty, false, false) // invalid share
+					s.logger.WithFields(log.Fields{
+						"sid":           sess.id,
+						"worker":        sess.user + "." + sess.workerName,
+						"reason":        err.Error(),
+						"nonce":         nonceHex,
+						"jobID":         jobID,
+						"invalidShares": invalidCount,
+					}).Warn("invalid share rejected (kawpow)")
 					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
 						s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.submit invalid share (kawpow)")
 					}
@@ -1404,7 +1514,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					sess.staleShares++
 					sess.mu.Unlock()
 					s.logger.WithFields(log.Fields{"jobID": jobID, "sessionKnown": sess.jobs.Len(), "globalKnown": s.globalJobs.Len(), "worker": sess.user + "." + sess.workerName}).Error("unknown or stale jobID")
-					s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, true) // stale share
+					s.stats.ShareSubmitted(sess.user, sess.workerName, sess.chain, difficulty, false, true) // stale share
 					sess.sendJSON(stratumResp{
 						ID:     req.ID,
 						Result: false,
@@ -1418,10 +1528,28 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// Pass j directly to avoid TOCTOU race where sess.job could be replaced by concurrent sendJobAndNotify
 			refreshJob, err := s.submitAsWorkShare(sess, j, ex2hex, ntimeHex, nonceHex, versionBits)
 			if err != nil {
+				if strings.Contains(err.Error(), "below target") {
+					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+						s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Error("failed to send mining.submit accepted (sha256/scrypt)")
+						sess.conn.Close()
+						return
+					}
+					continue
+				}
 				sess.mu.Lock()
 				sess.invalidShares++
+				invalidCount := sess.invalidShares
 				sess.mu.Unlock()
-				s.stats.ShareSubmitted(sess.user, sess.workerName, difficulty, false, false) // invalid share
+				s.stats.ShareSubmitted(sess.user, sess.workerName, sess.chain, difficulty, false, false) // invalid share
+				s.logger.WithFields(log.Fields{
+					"sid":           sess.id,
+					"worker":        sess.user + "." + sess.workerName,
+					"chain":         sess.chain,
+					"reason":        err.Error(),
+					"nonce":         nonceHex,
+					"jobID":         jobID,
+					"invalidShares": invalidCount,
+				}).Warn("invalid share rejected (sha256/scrypt)")
 				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
 					s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send mining.submit invalid share (sha256/scrypt)")
 				}
@@ -1458,7 +1586,6 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 						"hashrateHR": formatAlgoHashrate(float64(hashrate), "kawpow"),
 						"workerID":   workerID,
 					}).Info("eth_submitHashrate received")
-					s.stats.SetReportedHashrate(sess.user, sess.workerName, float64(hashrate))
 				}
 			}
 			// Always respond with success
@@ -1617,7 +1744,7 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 // Kawpow stratum notify format: [job_id, header_hash, seed_hash, target, clean, height, bits]
 func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 	address := common.HexToAddress(sess.user, s.backend.NodeLocation())
-	pending, err := s.backend.GetPendingHeader(types.Kawpow, address)
+	pending, err := s.backend.GetPendingHeader(types.Kawpow, address, []byte(s.config.PoolTag))
 	if err != nil || pending == nil || pending.WorkObjectHeader() == nil {
 		if err == nil {
 			err = fmt.Errorf("no pending header for kawpow")
@@ -1804,7 +1931,7 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 func (s *Server) makeJob(sess *session) (*job, error) {
 	powID := powIDFromChain(sess.chain)
 	address := common.HexToAddress(sess.user, s.backend.NodeLocation())
-	pending, err := s.backend.GetPendingHeader(types.PowID(powID), address)
+	pending, err := s.backend.GetPendingHeader(types.PowID(powID), address, []byte(s.config.PoolTag))
 
 	if err != nil || pending == nil || pending.WorkObjectHeader() == nil || pending.WorkObjectHeader().AuxPow() == nil {
 		if err == nil {
@@ -2179,7 +2306,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	sess.mu.Lock()
 	sess.totalShares++
 	sess.mu.Unlock()
-	s.logger.WithFields(log.Fields{"sid": sess.id, "totalShares": sess.totalShares, "invalidShares": sess.invalidShares, "powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes), "workshareHash": fullPending.Hash().Hex()}).Info("workshare received - submitting to network")
+	s.logger.WithFields(log.Fields{"sid": sess.id, "user": sess.user, "quai height": fullPending.NumberU64(common.ZONE_CTX), "totalShares": sess.totalShares, "invalidShares": sess.invalidShares, "powID": pending.AuxPow().PowID(), "achievedDiff": achievedDiff.String(), "hashBytes": hex.EncodeToString(hashBytes), "workshareHash": fullPending.Hash().Hex()}).Info("workshare received - submitting to network")
 	// Record the block discovery for pool stats
 	workerKey := sess.user
 	if sess.workerName != "" {

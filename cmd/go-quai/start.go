@@ -128,18 +128,20 @@ func runStart(cmd *cobra.Command, args []string) error {
 				KawpowAddr:     viper.GetString(utils.StratumKawpowAddrFlag.Name),
 				VarDiffEnabled: viper.GetBool(utils.StratumVarDiffFlag.Name),
 				ProxyProtocol:  viper.GetBool(utils.StratumProxyProtocolFlag.Name),
+				PoolTag:        viper.GetString(utils.StratumPoolTagFlag.Name),
 			}
 			stratumServer = stratum.NewServerWithConfig(stratumConfig, zoneBackend)
 			if err := stratumServer.Start(); err != nil {
 				log.Global.WithField("error", err).Error("failed to start stratum endpoints")
 			} else {
 				log.Global.WithFields(log.Fields{
-					"sha":           stratumConfig.SHAAddr,
-					"scrypt":        stratumConfig.ScryptAddr,
-					"kawpow":        stratumConfig.KawpowAddr,
-					"vardiff":       stratumConfig.VarDiffEnabled,
+					"sha":            stratumConfig.SHAAddr,
+					"scrypt":         stratumConfig.ScryptAddr,
+					"kawpow":         stratumConfig.KawpowAddr,
+					"vardiff":        stratumConfig.VarDiffEnabled,
 					"proxy-protocol": stratumConfig.ProxyProtocol,
-				}).Info("Stratum TCP endpoints started")
+					"pool-tag":       stratumConfig.PoolTag,
+				}).Info("Stratum endpoints started")
 
 				// Start the stratum HTTP API server for pool dashboard
 				apiAddr := viper.GetString(utils.StratumAPIAddrFlag.Name)

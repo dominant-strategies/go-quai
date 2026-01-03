@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -13,8 +14,13 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
+	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/gorilla/websocket"
+)
+
+const (
+	miningPoolStatsLookupDepth = 1000
 )
 
 // API serves HTTP endpoints for the pool dashboard
@@ -80,6 +86,12 @@ func (a *API) Start() error {
 	go a.broadcastLoop()
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{"error": r, "stack": string(debug.Stack())}).Error("Stratum API server panic")
+			}
+		}()
+
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			// Log error but don't crash
 		}
@@ -478,7 +490,7 @@ type BlockEntry struct {
 	Height     uint64 `json:"height"`
 	Hash       string `json:"hash"`
 	Miner      string `json:"miner"`
-	Worker     string `json:"worker"`
+	Worker     string `json:"worker,omitempty"`
 	Difficulty string `json:"difficulty"`
 	Reward     string `json:"reward"`
 	Timestamp  int64  `json:"timestamp"`
@@ -661,6 +673,12 @@ func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Read loop (handles ping/pong and client disconnect)
 	go func() {
 		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{"error": r, "stack": string(debug.Stack())}).Error("Stratum API websocket panic")
+			}
+		}()
+
+		defer func() {
 			a.wsMu.Lock()
 			delete(a.wsClients, conn)
 			a.wsMu.Unlock()
@@ -678,6 +696,12 @@ func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // broadcastLoop sends periodic updates to all WebSocket clients
 func (a *API) broadcastLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Global.WithFields(log.Fields{"error": r, "stack": string(debug.Stack())}).Error("Stratum API broadcast loop panic")
+		}
+	}()
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 

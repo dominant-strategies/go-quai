@@ -8,6 +8,10 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 )
 
+const (
+	c_hashRateEmaSamples = 50
+)
+
 // formatAlgoHashrate returns a human-readable hashrate string with fixed units per algorithm
 // SHA256: TH/s, Scrypt: GH/s, KawPoW: MH/s
 func formatAlgoHashrate(hashrate float64, algorithm string) string {
@@ -29,22 +33,21 @@ func formatAlgoHashrate(hashrate float64, algorithm string) string {
 
 // WorkerStats tracks statistics for a connected miner
 type WorkerStats struct {
-	Address          string    `json:"address"`
-	WorkerName       string    `json:"workerName"`
-	Algorithm        string    `json:"algorithm"`
-	ConnectedAt      time.Time `json:"connectedAt"`
-	FirstShareAt     time.Time `json:"firstShareAt"`   // time of first valid share
-	FirstShareDiff   float64   `json:"firstShareDiff"` // difficulty of first valid share
-	LastShareAt      time.Time `json:"lastShareAt"`
-	LastShareDiff    float64   `json:"lastShareDiff"` // difficulty of last valid share
-	SharesValid      uint64    `json:"sharesValid"`
-	SharesStale      uint64    `json:"sharesStale"`
-	SharesInvalid    uint64    `json:"sharesInvalid"`
-	Difficulty       float64   `json:"difficulty"`
-	Hashrate         float64   `json:"hashrate"` // estimated from share rate
-	ReportedHashrate float64   `json:"reportedHashrate"`
-	CumulativeWork   float64   `json:"-"` // sum of (difficulty) for each valid share
-	IsConnected      bool      `json:"isConnected"`
+	Address        string    `json:"address"`
+	WorkerName     string    `json:"workerName"`
+	Algorithm      string    `json:"algorithm"`
+	ConnectedAt    time.Time `json:"connectedAt"`
+	FirstShareAt   time.Time `json:"firstShareAt"`   // time of first valid share
+	FirstShareDiff float64   `json:"firstShareDiff"` // difficulty of first valid share
+	LastShareAt    time.Time `json:"lastShareAt"`
+	LastShareDiff  float64   `json:"lastShareDiff"` // difficulty of last valid share
+	SharesValid    uint64    `json:"sharesValid"`
+	SharesStale    uint64    `json:"sharesStale"`
+	SharesInvalid  uint64    `json:"sharesInvalid"`
+	Difficulty     float64   `json:"difficulty"`
+	Hashrate       float64   `json:"hashrate"` // estimated from share rate
+	CumulativeWork float64   `json:"-"`        // sum of (difficulty) for each valid share
+	IsConnected    bool      `json:"isConnected"`
 }
 
 // BlockFound represents a block discovered by the pool
@@ -112,7 +115,7 @@ func (ps *PoolStats) WorkerConnected(address, workerName, algorithm string) {
 	// Use address.workerName as key to support multiple workers per address
 	key := address
 	if workerName != "" {
-		key = address + "." + workerName
+		key = address + "." + workerName + "." + algorithm
 	}
 
 	if worker, exists := ps.workers[key]; exists {
@@ -120,19 +123,6 @@ func (ps *PoolStats) WorkerConnected(address, workerName, algorithm string) {
 		// Do nothing to prevent resetting stats for an active session.
 		if worker.IsConnected {
 			return
-		}
-
-		worker.IsConnected = true
-		worker.ConnectedAt = time.Now()
-		// Reset stats on reconnect to avoid hashrate spikes
-		// (old shares with new short time window = inflated hashrate)
-		worker.SharesValid = 0
-		worker.SharesStale = 0
-		worker.SharesInvalid = 0
-		worker.Hashrate = 0
-		worker.CumulativeWork = 0
-		if algorithm != "" {
-			worker.Algorithm = algorithm
 		}
 	} else {
 		ps.workers[key] = &WorkerStats{
@@ -146,13 +136,13 @@ func (ps *PoolStats) WorkerConnected(address, workerName, algorithm string) {
 }
 
 // WorkerDisconnected marks a worker as disconnected
-func (ps *PoolStats) WorkerDisconnected(address, workerName string) {
+func (ps *PoolStats) WorkerDisconnected(address, workerName, algorithm string) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
 	key := address
 	if workerName != "" {
-		key = address + "." + workerName
+		key = address + "." + workerName + "." + algorithm
 	}
 
 	if worker, exists := ps.workers[key]; exists {
@@ -160,24 +150,9 @@ func (ps *PoolStats) WorkerDisconnected(address, workerName string) {
 	}
 }
 
-// SetReportedHashrate updates the miner-reported hashrate for a worker
-func (ps *PoolStats) SetReportedHashrate(address, workerName string, hashrate float64) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-
-	key := address
-	if workerName != "" {
-		key = address + "." + workerName
-	}
-
-	if worker, exists := ps.workers[key]; exists {
-		worker.ReportedHashrate = hashrate
-	}
-}
-
 // ShareSubmitted records a share submission
-func (ps *PoolStats) ShareSubmitted(address, workerName string, difficulty float64, valid bool, stale bool) {
-	ps.ShareSubmittedWithDiff(address, workerName, "", 0, 0, 0, difficulty, 0, 0, valid, stale)
+func (ps *PoolStats) ShareSubmitted(address, workerName, algorithm string, difficulty float64, valid bool, stale bool) {
+	ps.ShareSubmittedWithDiff(address, workerName, algorithm, 0, 0, 0, difficulty, 0, 0, valid, stale)
 }
 
 // ShareSubmittedWithDiff records a share with detailed difficulty information for solo mining
@@ -196,7 +171,7 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 
 	key := address
 	if workerName != "" {
-		key = address + "." + workerName
+		key = address + "." + workerName + "." + algorithm
 	}
 
 	now := time.Now()
@@ -214,16 +189,6 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 		ps.workers[key] = worker
 	} else if !worker.IsConnected {
 		worker.IsConnected = true
-		worker.ConnectedAt = now
-		// Reset stats on reconnect to avoid hashrate spikes
-		worker.SharesValid = 0
-		worker.SharesStale = 0
-		worker.SharesInvalid = 0
-		worker.Hashrate = 0
-		worker.CumulativeWork = 0
-		if algorithm != "" {
-			worker.Algorithm = algorithm
-		}
 	}
 
 	worker.LastShareAt = now
@@ -512,10 +477,6 @@ func (ps *PoolStats) calculateWorkerHashrate(address string) float64 {
 		return 0
 	}
 
-	if worker.ReportedHashrate > 0 {
-		return worker.ReportedHashrate
-	}
-
 	elapsed := time.Since(worker.ConnectedAt).Seconds()
 	if elapsed < 1 {
 		elapsed = 1
@@ -534,7 +495,9 @@ func (ps *PoolStats) calculateWorkerHashrate(address string) float64 {
 	}
 
 	// Hashrate = (cumulative_work * scale) / time
-	return worker.CumulativeWork * scale / elapsed
+	newHashRate := worker.CumulativeWork * scale / elapsed
+
+	return (float64(c_hashRateEmaSamples-1)*worker.Hashrate + newHashRate) / float64(c_hashRateEmaSamples)
 }
 
 // GetTotalHashrate calculates pool-wide hashrate

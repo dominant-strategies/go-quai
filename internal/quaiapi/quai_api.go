@@ -18,7 +18,6 @@ package quaiapi
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -1121,7 +1120,7 @@ func (s *PublicBlockChainQuaiAPI) GetBlockTemplate(ctx context.Context, request 
 	}
 
 	// Get the pending header for the specified PoW algorithm
-	pendingHeader, err := s.b.GetPendingHeader(powId, coinbase)
+	pendingHeader, err := s.b.GetPendingHeader(powId, coinbase, []byte{})
 	if err != nil {
 		return nil, err
 	}
@@ -1425,7 +1424,7 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context, powId ty
 		return nil, errors.New("getPendingHeader call can only be made on chain processing the state")
 	}
 
-	pendingHeader, err := s.b.GetPendingHeader(powId, common.Address{}) // 0 is default progpow
+	pendingHeader, err := s.b.GetPendingHeader(powId, common.Address{}, []byte{}) // 0 is default progpow
 	if err != nil {
 		return nil, err
 	} else if pendingHeader == nil {

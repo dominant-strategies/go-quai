@@ -56,7 +56,7 @@ type Backend interface {
 	Engine(header *types.WorkObjectHeader) consensus.Engine
 	GetBestAuxTemplate(powId types.PowID) *types.AuxTemplate
 	AddPendingAuxPow(powId types.PowID, sealHash common.Hash, auxpow *types.AuxPow)
-	GetPendingHeader(powID types.PowID, coinbase common.Address) (*types.WorkObject, error)
+	GetPendingHeader(powID types.PowID, coinbase common.Address, extraData []byte) (*types.WorkObject, error)
 
 	RpcVersion() string
 
