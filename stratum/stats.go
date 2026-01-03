@@ -29,21 +29,22 @@ func formatAlgoHashrate(hashrate float64, algorithm string) string {
 
 // WorkerStats tracks statistics for a connected miner
 type WorkerStats struct {
-	Address        string    `json:"address"`
-	WorkerName     string    `json:"workerName"`
-	Algorithm      string    `json:"algorithm"`
-	ConnectedAt    time.Time `json:"connectedAt"`
-	FirstShareAt   time.Time `json:"firstShareAt"`   // time of first valid share
-	FirstShareDiff float64   `json:"firstShareDiff"` // difficulty of first valid share
-	LastShareAt    time.Time `json:"lastShareAt"`
-	LastShareDiff  float64   `json:"lastShareDiff"` // difficulty of last valid share
-	SharesValid    uint64    `json:"sharesValid"`
-	SharesStale    uint64    `json:"sharesStale"`
-	SharesInvalid  uint64    `json:"sharesInvalid"`
-	Difficulty     float64   `json:"difficulty"`
-	Hashrate       float64   `json:"hashrate"` // estimated from share rate
-	CumulativeWork float64   `json:"-"`        // sum of (difficulty) for each valid share
-	IsConnected    bool      `json:"isConnected"`
+	Address          string    `json:"address"`
+	WorkerName       string    `json:"workerName"`
+	Algorithm        string    `json:"algorithm"`
+	ConnectedAt      time.Time `json:"connectedAt"`
+	FirstShareAt     time.Time `json:"firstShareAt"`   // time of first valid share
+	FirstShareDiff   float64   `json:"firstShareDiff"` // difficulty of first valid share
+	LastShareAt      time.Time `json:"lastShareAt"`
+	LastShareDiff    float64   `json:"lastShareDiff"` // difficulty of last valid share
+	SharesValid      uint64    `json:"sharesValid"`
+	SharesStale      uint64    `json:"sharesStale"`
+	SharesInvalid    uint64    `json:"sharesInvalid"`
+	Difficulty       float64   `json:"difficulty"`
+	Hashrate         float64   `json:"hashrate"` // estimated from share rate
+	ReportedHashrate float64   `json:"reportedHashrate"`
+	CumulativeWork   float64   `json:"-"` // sum of (difficulty) for each valid share
+	IsConnected      bool      `json:"isConnected"`
 }
 
 // BlockFound represents a block discovered by the pool
@@ -156,6 +157,21 @@ func (ps *PoolStats) WorkerDisconnected(address, workerName string) {
 
 	if worker, exists := ps.workers[key]; exists {
 		worker.IsConnected = false
+	}
+}
+
+// SetReportedHashrate updates the miner-reported hashrate for a worker
+func (ps *PoolStats) SetReportedHashrate(address, workerName string, hashrate float64) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	key := address
+	if workerName != "" {
+		key = address + "." + workerName
+	}
+
+	if worker, exists := ps.workers[key]; exists {
+		worker.ReportedHashrate = hashrate
 	}
 }
 
@@ -494,6 +510,10 @@ func (ps *PoolStats) calculateWorkerHashrate(address string) float64 {
 	worker, exists := ps.workers[address]
 	if !exists || worker.CumulativeWork == 0 {
 		return 0
+	}
+
+	if worker.ReportedHashrate > 0 {
+		return worker.ReportedHashrate
 	}
 
 	elapsed := time.Since(worker.ConnectedAt).Seconds()
