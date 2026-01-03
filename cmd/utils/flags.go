@@ -632,6 +632,7 @@ var StratumFlags = []Flag{
 	StratumAPIAddrFlag,
 	StratumNameFlag,
 	StratumProxyProtocolFlag,
+	StratumPoolTagFlag,
 }
 
 var (
@@ -674,6 +675,11 @@ var (
 		Name:  c_NodeFlagPrefix + "stratum-proxy-protocol",
 		Value: false,
 		Usage: "enable PROXY protocol support for stratum endpoints (for use behind load balancers like GCP Network LB)",
+	}
+	StratumPoolTagFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-pool-tag",
+		Value: "",
+		Usage: "tag to identify the mining pool this stratum server belongs to (for multi-pool aggregation)",
 	}
 )
 

@@ -1079,7 +1079,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.WorkObject, domTerminus c
 }
 
 // GetPendingHeader is used by the miner to request the current pending header
-func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address) (*types.WorkObject, error) {
+func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address, extraData []byte) (*types.WorkObject, error) {
 	phCopy := types.CopyWorkObject(sl.ReadBestPh())
 	if phCopy == nil {
 		return nil, errors.New("no pending header available")
@@ -1125,6 +1125,21 @@ func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address) (*
 				}
 				coinbaseTransaction := types.NewAuxPowCoinbaseTx(powId, auxTemplate.Height(), auxTemplate.CoinbaseOut(), auxMerkleRoot, auxTemplate.SignatureTime())
 
+				if len(extraData) > 0 {
+					// split the coinbase into part 1 and 2 and include the extra data in it
+					coinb1, coinb2, err := types.ExtractCoinb1AndCoinb2FromAuxPowTx(coinbaseTransaction)
+					if err != nil {
+						return nil, err
+					}
+					copy(coinb2[:30], extraData)
+
+					var extraNonce1 [4]byte
+					var extraNonce2 [8]byte
+					// update the coinbaseTransaction
+					coinbaseTransaction = append(coinb1, extraNonce1[:]...)
+					coinbaseTransaction = append(coinbaseTransaction, extraNonce2[:]...)
+					coinbaseTransaction = append(coinbaseTransaction, coinb2...)
+				}
 				merkleRoot := types.CalculateMerkleRoot(powId, coinbaseTransaction, auxTemplate.MerkleBranch())
 
 				// Create a properly configured Ravencoin header for KAWPOW mining

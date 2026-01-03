@@ -660,8 +660,8 @@ func (b *QuaiAPIBackend) WriteGenesisBlock(block *types.WorkObject, location com
 	b.quai.core.WriteGenesisBlock(block, location)
 }
 
-func (b *QuaiAPIBackend) GetPendingHeader(powID types.PowID, coinbase common.Address) (*types.WorkObject, error) {
-	return b.quai.core.GetPendingHeader(powID, coinbase)
+func (b *QuaiAPIBackend) GetPendingHeader(powID types.PowID, coinbase common.Address, extraData []byte) (*types.WorkObject, error) {
+	return b.quai.core.GetPendingHeader(powID, coinbase, extraData)
 }
 
 func (b *QuaiAPIBackend) WorkShareLogEntropy(wo *types.WorkObject) (*big.Int, error) {

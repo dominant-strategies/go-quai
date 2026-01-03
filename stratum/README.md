@@ -32,6 +32,8 @@ go-quai start \
 | `--node.stratum-kawpow-addr` | `0.0.0.0:3335` | Listen address for KawPoW miners |
 | `--node.stratum-api-addr` | `0.0.0.0:3336` | Listen address for HTTP API |
 | `--node.stratum-name` | `""` | Unique node identifier (for multi-node pools) |
+| `--node.stratum-pool-tag` | `""` | Optional tagging the shares/blocks with a string |
+
 
 ## Supported Algorithms
 

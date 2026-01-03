@@ -17,6 +17,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	miningPoolStatsLookupDepth = 1000
+)
+
 // API serves HTTP endpoints for the pool dashboard
 type API struct {
 	addr      string
@@ -478,7 +482,7 @@ type BlockEntry struct {
 	Height     uint64 `json:"height"`
 	Hash       string `json:"hash"`
 	Miner      string `json:"miner"`
-	Worker     string `json:"worker"`
+	Worker     string `json:"worker,omitempty"`
 	Difficulty string `json:"difficulty"`
 	Reward     string `json:"reward"`
 	Timestamp  int64  `json:"timestamp"`

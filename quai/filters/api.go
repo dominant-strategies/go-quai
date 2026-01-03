@@ -1127,7 +1127,7 @@ func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit Block
 
 		// Helper to get template and check for changes
 		checkAndSendTemplate := func(forceUpdate bool) {
-			pending, err := api.backend.GetPendingHeader(powID, common.Address{})
+			pending, err := api.backend.GetPendingHeader(powID, common.Address{}, []byte{})
 			if err != nil {
 				api.backend.Logger().WithField("err", err).Debug("Failed to get pending header for template subscription")
 				return
