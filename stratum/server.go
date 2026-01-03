@@ -1441,6 +1441,30 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					s.jobPool.submit(sess, true)
 				}
 			}
+		case "eth_submitHashrate":
+			// Kawpow miners (e.g., kawpowminer) submit hashrate reports
+			// Params: [hashrate_hex (0x-prefixed), worker_id_hex (0x-prefixed)]
+			if len(req.Params) >= 2 {
+				hashrateHex, _ := req.Params[0].(string)
+				workerID, _ := req.Params[1].(string)
+				// Parse hashrate from hex (strip 0x prefix if present)
+				hashrateHex = strings.TrimPrefix(hashrateHex, "0x")
+				hashrate, err := strconv.ParseUint(hashrateHex, 16, 64)
+				if err == nil {
+					s.logger.WithFields(log.Fields{
+						"sid":        sess.id,
+						"worker":     sess.user + "." + sess.workerName,
+						"hashrate":   hashrate,
+						"hashrateHR": formatAlgoHashrate(float64(hashrate), "kawpow"),
+						"workerID":   workerID,
+					}).Info("eth_submitHashrate received")
+					s.stats.SetReportedHashrate(sess.user, sess.workerName, float64(hashrate))
+				}
+			}
+			// Always respond with success
+			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
+				s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Debug("failed to send eth_submitHashrate response")
+			}
 		case "mining.get_transactions":
 			// Return empty array - AuxPoW mining has no user transactions in the template
 			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: []interface{}{}, Error: nil}); err != nil {
@@ -2083,8 +2107,8 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			default:
 				algoName = "sha256"
 			}
-			workshareDiffFloat, _ := new(big.Float).SetInt(new(big.Int).Div(common.Big2e256, workShareTarget)).Float64()
-			achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
+			// Use stratum difficulty values (already computed above) instead of raw difficulty
+			// Raw difficulty can exceed float64 precision (> 2^53)
 			poolDiff := float64(1)
 			if sess.minerDifficulty != nil {
 				poolDiff = *sess.minerDifficulty
@@ -2094,7 +2118,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			sess.mu.Lock()
 			sess.totalShares++
 			sess.mu.Unlock()
-			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.totalShares, sess.invalidShares, sess.staleShares, poolDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.totalShares, sess.invalidShares, sess.staleShares, poolDiff, achievedStratumDiff, workshareStratumDiff, true, false)
 
 			return false, nil // Accept share but don't submit to node
 		}
@@ -2121,10 +2145,8 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 		algoName = "sha256"
 	}
 
-	// Get workshare difficulty as float
-	workshareDiff := new(big.Float).SetInt(new(big.Int).Div(common.Big2e256, workShareTarget))
-	workshareDiffFloat, _ := workshareDiff.Float64()
-	achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
+	// Use stratum difficulty values (already computed above) instead of raw difficulty
+	// Raw difficulty can exceed float64 precision (> 2^53)
 
 	// Use the effective pool difficulty for stats
 	// Priority: minerDifficulty (if set) > varDiff (if enabled) > session difficulty
@@ -2175,7 +2197,7 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 		achievedDiff.String(),
 	)
 	// Record the share with difficulty info for solo mining luck tracking
-	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedStratumDiff, workshareStratumDiff, true, false)
 	return true, nil
 }
 
@@ -2341,10 +2363,8 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			}).Debug("share accepted for liveness (below workshare difficulty)")
 
 			// Record share for hashrate calculation even though it won't be submitted
-			workshareDiff := core.CalculateKawpowShareDiff(pending.WorkObjectHeader())
-			workshareDiffFloat, _ := new(big.Float).SetInt(workshareDiff).Float64()
-			achievedDiff := new(big.Int).Div(common.Big2e256, powHashInt)
-			achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
+			// Use stratum difficulty values (already computed above) instead of raw difficulty
+			// Raw difficulty can exceed float64 precision (> 2^53)
 			poolDiff := float64(1)
 			if minerDifficulty != nil {
 				poolDiff = *minerDifficulty
@@ -2354,7 +2374,7 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			sess.mu.Lock()
 			sess.totalShares++
 			sess.mu.Unlock()
-			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.totalShares, sess.invalidShares, sess.staleShares, poolDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+			s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.totalShares, sess.invalidShares, sess.staleShares, poolDiff, achievedStratumDiff, workshareStratumDiff, true, false)
 
 			return nil
 		}
@@ -2393,13 +2413,8 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 	// Note: mixHashLE was already computed above for verification, reuse it here
 	auxPowHeader.SetMixHash(common.BytesToHash(mixHashLE))
 
-	// Calculate achieved difficulty for logging
-	achievedDiff := new(big.Int).Div(common.Big2e256, powHashInt)
-
-	// Get workshare difficulty for stats
-	workshareDiff := core.CalculateKawpowShareDiff(pending.WorkObjectHeader())
-	workshareDiffFloat, _ := new(big.Float).SetInt(workshareDiff).Float64()
-	achievedDiffFloat, _ := new(big.Float).SetInt(achievedDiff).Float64()
+	// Use stratum difficulty values (already computed above) instead of raw difficulty
+	// Raw difficulty can exceed float64 precision (> 2^53)
 
 	// Use the effective pool difficulty for stats
 	// Priority: minerDifficulty (if set) > varDiff (if enabled) > session difficulty
@@ -2450,13 +2465,13 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			pending.Hash().Hex(),
 			workerKey,
 			"kawpow",
-			achievedDiff.String(),
+			fmt.Sprintf("%.2f", achievedStratumDiff),
 		)
 		sess.mu.Lock()
 		sess.totalShares++
 		sess.mu.Unlock()
 		// Record the share with difficulty info
-		s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedDiffFloat, workshareDiffFloat, true, false)
+		s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedStratumDiff, workshareStratumDiff, true, false)
 	}
 	return err
 }
