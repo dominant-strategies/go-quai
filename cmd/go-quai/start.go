@@ -190,6 +190,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	cancel()
+	// If the stratum server is running, stop it
+	if stratumServer != nil {
+		stratumServer.Stop()
+		log.Global.Info("Stratum endpoints stopped")
+	}
 	// stop the hierarchical co-ordinator
 	hc.Stop()
 	if err := node.Stop(); err != nil {
