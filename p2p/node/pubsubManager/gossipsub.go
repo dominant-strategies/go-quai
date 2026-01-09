@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	numWorkers                 = 20  // Number of workers per stream
-	msgChanSize                = 500 // 500 requests per subscription
+	numWorkers                 = 20   // Number of workers per stream
+	msgChanSize                = 1000 // 1000 requests per subscription
 	c_MaxWorkShareDist         = 5
 	c_BroadcastCacheSize       = 1000
 	c_BroadcastCacheExpiryTime = 3 * time.Second
@@ -155,7 +155,7 @@ func (g *PubsubManager) Subscribe(topicSub *Topic, location common.Location, dat
 	}
 
 	// subscribe to the topic
-	subscription, err := topic.Subscribe()
+	subscription, err := topic.Subscribe(pubsub.WithBufferSize(msgChanSize))
 	if err != nil {
 		return err
 	}
