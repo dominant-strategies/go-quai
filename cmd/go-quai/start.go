@@ -118,6 +118,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Optionally start stratum TCP servers when enabled and a zone backend is available
 	var stratumServer *stratum.Server
+	var stratumAPI *stratum.API
 	if viper.GetBool(utils.StratumEnabledFlag.Name) {
 		if zoneBackend == nil {
 			log.Global.Warn("Stratum endpoint enabled but no processing zone backend found; skipping start")
@@ -147,7 +148,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 				apiAddr := viper.GetString(utils.StratumAPIAddrFlag.Name)
 				nodeName := viper.GetString(utils.StratumNameFlag.Name)
 				if apiAddr != "" {
-					stratumAPI := stratum.NewAPI(apiAddr, nodeName, stratumServer.Stats(), zoneBackend)
+					stratumAPI = stratum.NewAPI(apiAddr, nodeName, stratumServer.Stats(), zoneBackend)
 					if err := stratumAPI.Start(); err != nil {
 						log.Global.WithField("error", err).Error("failed to start stratum API")
 					} else {
@@ -190,6 +191,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	cancel()
+	// If the stratum API is running, stop it first
+	if stratumAPI != nil {
+		if err := stratumAPI.Stop(); err != nil {
+			log.Global.WithField("error", err).Error("Error stopping stratum API")
+		}
+		log.Global.Info("Stratum API stopped")
+	}
+	// If the stratum server is running, stop it
+	if stratumServer != nil {
+		stratumServer.Stop()
+		log.Global.Info("Stratum endpoints stopped")
+	}
 	// stop the hierarchical co-ordinator
 	hc.Stop()
 	if err := node.Stop(); err != nil {
