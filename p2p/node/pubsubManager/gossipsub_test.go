@@ -228,25 +228,22 @@ func TestMultipleRequests(t *testing.T) {
 	}
 
 	// VERIFY receiving concurrently
-	var mu sync.Mutex
 	receivedMessages := make([]interface{}, 0, n*len(topics))
 
-	for i := 0; i < (n * len(topics)); i++ {
-		wg.Add(1)
-		go func(j int) {
-			defer wg.Done()
-			select {
-			case receivedMessage := <-testCh:
-				mu.Lock()
-				receivedMessages = append(receivedMessages, receivedMessage)
-				mu.Unlock()
-			case <-ctx.Done():
-				t.Error("context done before receive message at index: ", j)
-			}
-		}(i)
-	}
 	// Wait for all broadcasts to complete
 	wg.Wait()
+
+	// Read all messages from the channel
+loop:
+	for i := 0; i < n*len(topics); i++ {
+		select {
+		case receivedMessage := <-testCh:
+			receivedMessages = append(receivedMessages, receivedMessage)
+		case <-ctx.Done():
+			// If context is done, we stop reading and let the assertion fail
+			break loop
+		}
+	}
 
 	// Ensure all broadcasted messages were received
 	require.Len(t, receivedMessages, len(messages), "The number of received messages does not match the number of broadcasted messages. sent: %d, received: %d", len(messages), len(receivedMessages))
