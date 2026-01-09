@@ -48,6 +48,7 @@ func New(hc *HeaderChain, txPool *TxPool, config *Config, db ethdb.Database, cha
 		engines: engines,
 		startCh: make(chan []common.Address, 2),
 		worker:  newWorker(config, chainConfig, db, engines, hc, txPool, true, processingState, logger),
+		logger:  logger,
 	}
 
 	miner.SetExtra(miner.MakeExtraData(config.ExtraData))
