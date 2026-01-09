@@ -112,7 +112,10 @@ func (a *API) Stop() error {
 	a.wsMu.Unlock()
 
 	if a.server != nil {
-		return a.server.Close()
+		// Use graceful shutdown with a 5 second timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return a.server.Shutdown(ctx)
 	}
 	return nil
 }
@@ -660,6 +663,13 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+const (
+	// Time allowed to read the next pong message from the peer
+	wsPongWait = 60 * time.Second
+	// Send pings to peer with this period (must be less than pongWait)
+	wsPingPeriod = 30 * time.Second
+)
+
 func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -669,6 +679,13 @@ func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	a.wsMu.Lock()
 	a.wsClients[conn] = true
 	a.wsMu.Unlock()
+
+	// Set initial read deadline and pong handler to renew it
+	conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(wsPongWait))
+		return nil
+	})
 
 	// Read loop (handles ping/pong and client disconnect)
 	go func() {
@@ -705,13 +722,40 @@ func (a *API) broadcastLoop() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	pingTicker := time.NewTicker(wsPingPeriod)
+	defer pingTicker.Stop()
+
 	for {
 		select {
 		case <-a.quit:
 			return
 		case <-ticker.C:
 			a.broadcastUpdate()
+		case <-pingTicker.C:
+			a.sendPings()
 		}
+	}
+}
+
+// sendPings sends WebSocket ping frames to all connected clients
+func (a *API) sendPings() {
+	a.wsMu.RLock()
+	var failedConns []*websocket.Conn
+	for conn := range a.wsClients {
+		if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second)); err != nil {
+			conn.Close()
+			failedConns = append(failedConns, conn)
+		}
+	}
+	a.wsMu.RUnlock()
+
+	// Delete failed connections with write lock
+	if len(failedConns) > 0 {
+		a.wsMu.Lock()
+		for _, conn := range failedConns {
+			delete(a.wsClients, conn)
+		}
+		a.wsMu.Unlock()
 	}
 }
 

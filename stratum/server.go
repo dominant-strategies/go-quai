@@ -167,8 +167,27 @@ func (p *jobWorkerPool) submit(sess *session, clean bool) bool {
 func (p *jobWorkerPool) stop() {
 	close(p.stopped)
 	close(p.tasks)
-	p.wg.Wait()
+	// Wait up to 5 seconds for workers to finish, then give up
+	if !waitWithTimeout(&p.wg, 5*time.Second) {
+		p.server.logger.Warn("Job worker pool shutdown timed out, some workers still running")
+	}
 	p.server.logger.Info("Job worker pool stopped")
+}
+
+// waitWithTimeout waits for a WaitGroup with a timeout.
+// Returns true if the WaitGroup finished, false if timeout occurred.
+func waitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
 }
 
 // Stratum v1 server implementing subscribe/authorize/notify/submit using AuxPow from getPendingHeader.
@@ -753,7 +772,10 @@ func (s *Server) Stop() error {
 
 	// Wait for all goroutines (accept loops, connection handlers, polling loops) to exit
 	// This must happen BEFORE closing the job pool to prevent panic on send
-	s.wg.Wait()
+	// Use a timeout to avoid blocking shutdown indefinitely
+	if !waitWithTimeout(&s.wg, 10*time.Second) {
+		s.logger.Warn("Stratum server shutdown timed out waiting for goroutines, forcing stop")
+	}
 
 	// Stop the job worker pool (safe now that no goroutines are submitting)
 	if s.jobPool != nil {
