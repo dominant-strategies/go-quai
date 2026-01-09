@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,6 +110,12 @@ func (p *jobWorkerPool) start() {
 
 // worker processes job tasks from the queue.
 func (p *jobWorkerPool) worker() {
+	defer func() {
+		if r := recover(); r != nil {
+			p.server.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack())}).Error("Stratum job worker panic")
+		}
+	}()
+
 	defer p.wg.Done()
 	for {
 		select {
@@ -370,6 +377,12 @@ func (s *Server) Start() error {
 
 // templatePollingLoop polls for new templates and broadcasts to connected miners
 func (s *Server) templatePollingLoop(algorithm string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum template polling loop panic")
+		}
+	}()
+
 	defer s.wg.Done()
 	ticker := time.NewTicker(tickerInterval)
 	defer ticker.Stop()
@@ -549,6 +562,12 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
 
 // forceBroadcastLoop runs the force broadcast check every tickerInterval until shutdown
 func (s *Server) forceBroadcastLoop(algorithm string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum force broadcast loop panic")
+		}
+	}()
+
 	defer s.wg.Done()
 	ticker := time.NewTicker(forceBroadcastInterval)
 	defer ticker.Stop()
@@ -733,6 +752,12 @@ func (s *Server) Stop() error {
 
 // acceptLoop accepts connections on a listener and assigns them the specified algorithm
 func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum accept loop panic")
+		}
+	}()
+
 	// Wrap listener with PROXY protocol support if enabled
 	// This allows the server to sit behind a load balancer (like GCP Network LB)
 	// and still see the real client IP via conn.RemoteAddr()
@@ -1045,6 +1070,12 @@ type job struct {
 // handleConn handles a stratum connection for a specific algorithm.
 // The algorithm is determined by which port the miner connected to.
 func (s *Server) handleConn(c net.Conn, algorithm string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(log.Fields{"error": r, "stack": string(debug.Stack()), "algo": algorithm}).Error("Stratum handle connection panic")
+		}
+	}()
+
 	defer c.Close()
 	defer s.activeConns.Add(-1) // Decrement connection counter on exit
 	// Set a longer initial read deadline - will be extended on each message
