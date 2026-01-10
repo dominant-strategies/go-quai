@@ -2718,6 +2718,7 @@ func parseUsername(u string) (address string, workerName string, jobFreq time.Du
 //   - "d=0.1" -> difficulty=0.1, frequency=0, skip=false
 //   - "frequency=2.5" or "freq=2.5" -> difficulty=nil, frequency=2.5s, skip=false
 //   - "d=0.1,freq=2,skip=true" -> difficulty=0.1, frequency=2s, skip=true
+//   - "d=0.1_freq=2_skip=true" -> same (underscore also accepted as separator)
 func parsePassword(password string) (*float64, time.Duration, bool) {
 	if password == "" || password == "x" {
 		return nil, 0, false
@@ -2727,8 +2728,9 @@ func parsePassword(password string) (*float64, time.Duration, bool) {
 	var frequency time.Duration
 	var skipBlocks bool
 
-	// Split by ',' to allow decimal values in parameters
-	parts := strings.Split(password, ",")
+	// Normalize separators: allow both ',' and '_' as parameter separators
+	normalized := strings.ReplaceAll(password, "_", ",")
+	parts := strings.Split(normalized, ",")
 	for _, part := range parts {
 		// Check for d=<difficulty> format
 		if diffStr, ok := strings.CutPrefix(part, "d="); ok {
