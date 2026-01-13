@@ -217,6 +217,33 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 			return fmt.Errorf("uncle inclusion is not allowed before block %v", params.ControllerKickInBlock)
 		}
 
+		uncleDataLen := len(uncle.Data())
+		if uncleDataLen == 0 {
+			return fmt.Errorf("header data field is empty")
+		}
+		if uncleDataLen >= 1 {
+			lock := uncle.Data()[0]
+			if lock > uint8(len(params.LockupByteToBlockDepth)-1) {
+				return fmt.Errorf("lock byte in header data: %v is invalid", lock)
+			}
+		}
+		if uncleDataLen >= 1+common.AddressLength {
+			lockupContract := uncle.Data()[1 : 1+common.AddressLength]
+			lockupContractAddress := common.BytesToAddress(lockupContract, uncle.Location())
+			_, err := lockupContractAddress.InternalAndQuaiAddress()
+			if err != nil {
+				return fmt.Errorf("out-of-scope lockup contract in the header: %v location: %v nodeLocation: %v, err %s", lockupContractAddress, uncle.Location(), hc.powConfig.NodeLocation, err)
+			}
+		}
+		if uncleDataLen == 1+2*common.AddressLength {
+			beneficiary := uncle.Data()[1+common.AddressLength : 1+2*common.AddressLength]
+			beneficiaryAddress := common.BytesToAddress(beneficiary, uncle.Location())
+			_, err := beneficiaryAddress.InternalAddress()
+			if err != nil {
+				return fmt.Errorf("out-of-scope beneficiary in the header: %v location: %v nodeLocation: %v, err %s", beneficiaryAddress, uncle.Location(), hc.powConfig.NodeLocation, err)
+			}
+		}
+
 		// Make sure the uncle has a valid ancestry
 		if ancestors[hash] != nil {
 			return consensus.ErrUncleIsAncestor
@@ -655,6 +682,33 @@ func (hc *HeaderChain) verifyHeader(header, parent *types.WorkObject, uncle bool
 		if header.NumberU64(common.ZONE_CTX) < 2*params.BlocksPerMonth && header.Lock() != 0 {
 			return fmt.Errorf("header lock byte: %v is not valid: it has to be %v for the first two months", header.Lock(), 0)
 		}
+		headerDataLen := len(header.Data())
+		if headerDataLen == 0 {
+			return fmt.Errorf("header data field is empty")
+		}
+		if headerDataLen >= 1 {
+			lock := header.Data()[0]
+			if lock > uint8(len(params.LockupByteToBlockDepth)-1) {
+				return fmt.Errorf("lock byte header data: %v is invalid", lock)
+			}
+		}
+		if headerDataLen >= 1+common.AddressLength {
+			lockupContract := header.Data()[1 : 1+common.AddressLength]
+			lockupContractAddress := common.BytesToAddress(lockupContract, header.Location())
+			_, err := lockupContractAddress.InternalAndQuaiAddress()
+			if err != nil {
+				return fmt.Errorf("out-of-scope lockup contract in the header: %v location: %v nodeLocation: %v, err %s", lockupContractAddress, header.Location(), hc.powConfig.NodeLocation, err)
+			}
+		}
+		if headerDataLen == 1+2*common.AddressLength {
+			beneficiary := header.Data()[1+common.AddressLength : 1+2*common.AddressLength]
+			beneficiaryAddress := common.BytesToAddress(beneficiary, header.Location())
+			_, err := beneficiaryAddress.InternalAddress()
+			if err != nil {
+				return fmt.Errorf("out-of-scope beneficiary in the header: %v location: %v nodeLocation: %v, err %s", beneficiaryAddress, header.Location(), hc.powConfig.NodeLocation, err)
+			}
+		}
+
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)
 		if header.GasLimit() > cap {

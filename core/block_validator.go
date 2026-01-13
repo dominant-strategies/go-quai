@@ -138,6 +138,9 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 	if err := v.hc.CheckPowIdValidity(wo.WorkObjectHeader()); err != nil {
 		return err
 	}
+	if wo.WorkObjectHeader().Lock() > uint8(len(params.LockupByteToBlockDepth)-1) {
+		return fmt.Errorf("work object header has invalid lockup byte")
+	}
 
 	nodeCtx := v.config.Location.Context()
 	header := wo.Header()
@@ -269,7 +272,9 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 	if err := v.hc.CheckPowIdValidity(wo.WorkObjectHeader()); err != nil {
 		return err
 	}
-
+	if wo.WorkObjectHeader().Lock() > uint8(len(params.LockupByteToBlockDepth)-1) {
+		return fmt.Errorf("work object header has invalid lockup byte")
+	}
 	header := wo.Header()
 	nodeCtx := v.config.Location.Context()
 	// Subordinate manifest must match ManifestHash in subordinate context, _iff_
@@ -336,6 +341,9 @@ func (v *BlockValidator) SanityCheckWorkObjectShareViewBody(wo *types.WorkObject
 	}
 	// Lockup byte for the first two months has to be zero
 	if wo.WorkObjectHeader().NumberU64() < 2*params.BlocksPerMonth && wo.WorkObjectHeader().Lock() != 0 {
+		return fmt.Errorf("work object header has invalid lockup byte")
+	}
+	if wo.WorkObjectHeader().Lock() > uint8(len(params.LockupByteToBlockDepth)-1) {
 		return fmt.Errorf("work object header has invalid lockup byte")
 	}
 	// Transactions, SubManifestHash, InterlinkHashes should be nil in the workshare in Zone context
