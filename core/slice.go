@@ -1074,7 +1074,7 @@ func (sl *Slice) pcrc(batch ethdb.Batch, header *types.WorkObject, domTerminus c
 }
 
 // GetPendingHeader is used by the miner to request the current pending header
-func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address, extraData []byte) (*types.WorkObject, error) {
+func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address, extraData []byte, lock uint8) (*types.WorkObject, error) {
 	phCopy := types.CopyWorkObject(sl.ReadBestPh())
 	if phCopy == nil {
 		return nil, errors.New("no pending header available")
@@ -1103,6 +1103,9 @@ func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address, ex
 				// If the coinbase is set, update the pending header with the new coinbase
 				if !coinbase.Equal(common.Address{}) {
 					phCopy.WorkObjectHeader().SetPrimaryCoinbase(coinbase)
+				}
+				if lock != 0 {
+					phCopy.WorkObjectHeader().SetLock(lock)
 				}
 
 				phCopy.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
