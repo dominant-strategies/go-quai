@@ -6,6 +6,7 @@ import (
 	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -436,7 +437,7 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
 	powID := powIDFromChain(algorithm)
 
 	// Get pending header (using a dummy address since we just need to check for changes)
-	pending, err := s.backend.GetPendingHeader(types.PowID(powID), common.Address{}, []byte{})
+	pending, err := s.backend.GetPendingHeader(types.PowID(powID), common.Address{}, []byte{}, 0)
 	if err != nil || pending == nil || pending.WorkObjectHeader() == nil {
 		return false, false, false
 	}
@@ -1089,6 +1090,7 @@ type session struct {
 	// Skip blocks mode - only send every other block (for debugging fast block times)
 	skipBlocks       bool // true if miner wants to skip every other block
 	skipBlockCounter int  // counter to track which blocks to skip
+	lock             uint8
 }
 
 // sendJSON safely encodes and sends JSON to the miner (thread-safe).
@@ -1326,7 +1328,20 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			if len(req.Params) >= 2 {
 				if p, ok := req.Params[1].(string); ok {
 					var pwFreq time.Duration
-					sess.minerDifficulty, pwFreq, sess.skipBlocks = parsePassword(p)
+					var err error
+					sess.minerDifficulty, pwFreq, sess.skipBlocks, sess.lock, err = parsePassword(p)
+					if err != nil {
+						s.logger.WithFields(log.Fields{
+							"sid":   sess.id,
+							"user":  sess.user,
+							"error": err,
+						}).Warn("Error parsing password")
+						if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
+							s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Error("failed to send mining.authorize rejection")
+							sess.conn.Close()
+							return
+						}
+					}
 					if sess.minerDifficulty != nil && *sess.minerDifficulty < minShaDiff && sess.chain == "sha256" {
 						minShaDiff_ := minShaDiff
 						sess.minerDifficulty = &minShaDiff_
@@ -1766,7 +1781,7 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 // Kawpow stratum notify format: [job_id, header_hash, seed_hash, target, clean, height, bits]
 func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 	address := common.HexToAddress(sess.user, s.backend.NodeLocation())
-	pending, err := s.backend.GetPendingHeader(types.Kawpow, address, []byte(s.config.PoolTag))
+	pending, err := s.backend.GetPendingHeader(types.Kawpow, address, []byte(s.config.PoolTag), sess.lock)
 	if err != nil || pending == nil || pending.WorkObjectHeader() == nil {
 		if err == nil {
 			err = fmt.Errorf("no pending header for kawpow")
@@ -1953,7 +1968,7 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 func (s *Server) makeJob(sess *session) (*job, error) {
 	powID := powIDFromChain(sess.chain)
 	address := common.HexToAddress(sess.user, s.backend.NodeLocation())
-	pending, err := s.backend.GetPendingHeader(types.PowID(powID), address, []byte(s.config.PoolTag))
+	pending, err := s.backend.GetPendingHeader(types.PowID(powID), address, []byte(s.config.PoolTag), sess.lock)
 
 	if err != nil || pending == nil || pending.WorkObjectHeader() == nil || pending.WorkObjectHeader().AuxPow() == nil {
 		if err == nil {
@@ -2719,14 +2734,15 @@ func parseUsername(u string) (address string, workerName string, jobFreq time.Du
 //   - "frequency=2.5" or "freq=2.5" -> difficulty=nil, frequency=2.5s, skip=false
 //   - "d=0.1,freq=2,skip=true" -> difficulty=0.1, frequency=2s, skip=true
 //   - "d=0.1_freq=2_skip=true" -> same (underscore also accepted as separator)
-func parsePassword(password string) (*float64, time.Duration, bool) {
+func parsePassword(password string) (*float64, time.Duration, bool, uint8, error) {
 	if password == "" || password == "x" {
-		return nil, 0, false
+		return nil, 0, false, 0, nil
 	}
 
 	var difficulty *float64
 	var frequency time.Duration
 	var skipBlocks bool
+	var lock uint8
 
 	// Normalize separators: allow both ',' and '_' as parameter separators
 	normalized := strings.ReplaceAll(password, "_", ",")
@@ -2755,7 +2771,17 @@ func parsePassword(password string) (*float64, time.Duration, bool) {
 			skipBlocks = skipStr == "true" || skipStr == "1"
 			continue
 		}
+		if lockStr, ok := strings.CutPrefix(part, "lock="); ok {
+			lockUint64, err := strconv.ParseUint(lockStr, 10, 64)
+			if err == nil && lockUint64 <= 3 {
+				lock = uint8(lockUint64)
+			}
+			if err != nil || lockUint64 > 3 {
+				return nil, 0, false, 0, errors.New("invalid lock value")
+			}
+			continue
+		}
 	}
 
-	return difficulty, frequency, skipBlocks
+	return difficulty, frequency, skipBlocks, lock, nil
 }

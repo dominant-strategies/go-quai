@@ -210,7 +210,7 @@ func (b *testBackend) AddPendingAuxPow(powId types.PowID, sealHash common.Hash, 
 	// Implementation goes here
 }
 
-func (b *testBackend) GetPendingHeader(powID types.PowID, coinbase common.Address) (*types.WorkObject, error) {
+func (b *testBackend) GetPendingHeader(powID types.PowID, coinbase common.Address, extraData []byte, lock uint8) (*types.WorkObject, error) {
 	return nil, nil
 }
 
