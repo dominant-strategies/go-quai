@@ -124,6 +124,8 @@ func (ps *PoolStats) WorkerConnected(address, workerName, algorithm string) {
 		if worker.IsConnected {
 			return
 		}
+		worker.ConnectedAt = time.Now()
+		worker.CumulativeWork = 0
 	} else {
 		ps.workers[key] = &WorkerStats{
 			Address:     address,
