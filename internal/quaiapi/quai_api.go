@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
@@ -2227,6 +2228,124 @@ func (s *PublicBlockChainQuaiAPI) GetCoinbaseTxForWorkShareHash(ctx context.Cont
 		}
 	}
 	return nil, errors.New("no coinbase transaction found for workshare hash")
+}
+
+// GetDonorChainInfoForWorkShare returns the donor chain PoW hash and difficulty info for a workshare.
+// This can be used to determine if a workshare is also a valid block on the donor chain (BCH, LTC, RVN).
+func (s *PublicBlockChainQuaiAPI) GetDonorChainInfoForWorkshare(ctx context.Context, workShareHash common.Hash) (map[string]interface{}, error) {
+	var workshare *types.WorkObjectHeader
+
+	// Helper function to find workshare in a block
+	findWorkshareInBlock := func(block *types.WorkObject) *types.WorkObjectHeader {
+		if block == nil {
+			return nil
+		}
+		// Check if the hash matches the block itself
+		if block.Hash() == workShareHash {
+			return block.WorkObjectHeader()
+		}
+		// Check the block's uncles/workshares
+		for _, uncle := range block.Uncles() {
+			if uncle.Hash() == workShareHash {
+				return uncle
+			}
+		}
+		return nil
+	}
+
+	// First try the direct lookup
+	block := s.b.GetBlockForWorkShareHash(workShareHash)
+	if block == nil {
+		return nil, errors.New("block not found for work share hash")
+	}
+	workshare = findWorkshareInBlock(block)
+
+	// If not found, search the last 20 blocks
+	if workshare == nil {
+		currentHeader := s.b.CurrentHeader()
+		if currentHeader != nil {
+			nodeCtx := s.b.NodeCtx()
+			currentNum := block.NumberU64(nodeCtx)
+			for i := uint64(0); i < 20 && currentNum >= i; i++ {
+				blockNum := currentNum - i
+				block, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
+				workshare = findWorkshareInBlock(block)
+				if workshare != nil {
+					break
+				}
+			}
+		}
+	}
+
+	if workshare == nil {
+		return nil, errors.New("workshare not found in recent blocks")
+	}
+
+	// Get AuxPow from the workshare
+	auxPow := workshare.AuxPow()
+	if auxPow == nil {
+		return nil, errors.New("workshare has no AuxPoW (Progpow workshare)")
+	}
+
+	// PowID to name mapping
+	powIdNames := map[types.PowID]string{
+		types.Progpow: "Progpow",
+		types.Kawpow:  "Kawpow",
+		types.SHA_BTC: "SHA_BTC",
+		types.SHA_BCH: "SHA_BCH",
+		types.Scrypt:  "Scrypt",
+	}
+
+	powID := auxPow.PowID()
+	auxPowBits := auxPow.Header().Bits()
+
+	// Get powHash - for SHA/Scrypt it's computed from header, for Kawpow we need the engine
+	var powHash common.Hash
+	if powID == types.Kawpow {
+		// For Kawpow, the powHash cannot be computed from the header alone.
+		// We need to use the consensus engine which has access to the DAG cache.
+		engine := s.b.Engine(workshare)
+		if computedHash, err := engine.ComputePowHash(workshare); err == nil {
+			powHash = computedHash
+		}
+		// If computation fails, powHash remains zero
+	} else {
+		// For SHA_BCH, SHA_BTC, Scrypt - powHash is computed directly from header
+		powHash = auxPow.Header().PowHash()
+	}
+
+	result := make(map[string]interface{})
+	result["powHash"] = powHash
+	result["powId"] = uint8(powID)
+	result["powIdName"] = powIdNames[powID]
+	result["bits"] = auxPowBits
+
+	// Calculate block difficulty percentage (blockTarget / powHash * 100)
+	// Values > 100 mean the hash beat the block target (could be a valid parent chain block)
+	// Values < 100 mean the hash didn't meet the target (e.g., 50% = halfway there)
+	if auxPowBits > 0 {
+		blockTarget := blockchain.CompactToBig(auxPowBits)
+		powHashInt := new(big.Int).SetBytes(powHash.Bytes())
+
+		result["blockTarget"] = (*hexutil.Big)(blockTarget)
+
+		if powHashInt.Sign() > 0 && blockTarget.Sign() > 0 {
+			// meetsBlockDifficulty: powHash <= blockTarget
+			meetsBlockDifficulty := powHashInt.Cmp(blockTarget) <= 0
+			result["meetsBlockDifficulty"] = meetsBlockDifficulty
+
+			// ratio = (blockTarget / powHash) * 100
+			ratio := new(big.Float).Quo(
+				new(big.Float).SetInt(blockTarget),
+				new(big.Float).SetInt(powHashInt),
+			)
+			ratio.Mul(ratio, big.NewFloat(100))
+			pct, _ := ratio.Float64()
+			result["difficultyPct"] = pct
+		}
+	}
+
+	return result, nil
 }
 
 func (s *PublicBlockChainQuaiAPI) GetSubsidyChainHeight(ctx context.Context) (map[string]interface{}, error) {
