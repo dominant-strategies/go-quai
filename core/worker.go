@@ -492,7 +492,7 @@ func (w *worker) asyncStateLoop() {
 	}()
 	defer w.wg.Done() // decrement the wait group after the close of the loop
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	var prevHeader *types.WorkObject = nil
 	defer ticker.Stop()
 	for {
