@@ -321,6 +321,10 @@ func (b *QuaiAPIBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Su
 	return b.quai.Core().SubscribeChainEvent(ch)
 }
 
+func (b *QuaiAPIBackend) SubscribeChainEventForHC(ch chan<- core.ChainEvent) event.Subscription {
+	return b.quai.Core().SubscribeChainEventForHC(ch)
+}
+
 func (b *QuaiAPIBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return b.quai.Core().SubscribeChainHeadEvent(ch)
 }

@@ -1544,6 +1544,10 @@ func (c *Core) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return c.sl.hc.bc.SubscribeChainEvent(ch)
 }
 
+func (c *Core) SubscribeChainEventForHC(ch chan<- ChainEvent) event.Subscription {
+	return c.sl.hc.bc.SubscribeChainEventForHC(ch)
+}
+
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (c *Core) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return c.sl.hc.bc.SubscribeRemovedLogsEvent(ch)

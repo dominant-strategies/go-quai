@@ -711,7 +711,8 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 	time7 := common.PrettyDuration(time.Since(start))
 
 	if order == sl.NodeCtx() {
-		sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
+		sl.hc.bc.chainFeedForHC.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
+		go sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
 	}
 
 	if sl.NodeCtx() == common.ZONE_CTX && sl.ProcessingState() {
@@ -1204,7 +1205,7 @@ func (sl *Slice) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, error)
 				_, order, calcOrderErr := sl.hc.CalcOrder(block)
 				if calcOrderErr == nil {
 					if order == sl.NodeCtx() {
-						sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
+						sl.hc.bc.chainFeedForHC.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
 					}
 				}
 			}
@@ -1221,7 +1222,7 @@ func (sl *Slice) GetKQuaiAndUpdateBit(hash common.Hash) (*big.Int, uint8, error)
 			_, order, calcOrderErr := sl.hc.CalcOrder(block)
 			if calcOrderErr == nil {
 				if order == sl.NodeCtx() {
-					sl.hc.bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
+					sl.hc.bc.chainFeedForHC.Send(ChainEvent{Block: block, Hash: block.Hash(), Order: order, Entropy: sl.hc.TotalLogEntropy(block)})
 				}
 			}
 		}

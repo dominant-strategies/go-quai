@@ -27,12 +27,13 @@ type BodyDb struct {
 
 	db ethdb.Database // Low level persistent database to store final content in
 
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	rmLogsFeed    event.Feed
-	logsFeed      event.Feed
-	blockProcFeed event.Feed
-	scope         event.SubscriptionScope
+	chainFeed      event.Feed
+	chainFeedForHC event.Feed
+	chainSideFeed  event.Feed
+	rmLogsFeed     event.Feed
+	logsFeed       event.Feed
+	blockProcFeed  event.Feed
+	scope          event.SubscriptionScope
 
 	engine         []consensus.Engine
 	blockCache     *lru.Cache[common.Hash, types.WorkObject]
@@ -251,6 +252,10 @@ func (bc *BodyDb) Config() *params.ChainConfig { return bc.chainConfig }
 // SubscribeChainEvent registers a subscription of ChainEvent.
 func (bc *BodyDb) SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription {
 	return bc.scope.Track(bc.chainFeed.Subscribe(ch))
+}
+
+func (bc *BodyDb) SubscribeChainEventForHC(ch chan<- ChainEvent) event.Subscription {
+	return bc.scope.Track(bc.chainFeedForHC.Subscribe(ch))
 }
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
