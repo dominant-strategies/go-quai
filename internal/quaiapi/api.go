@@ -214,7 +214,15 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 			return nil, err
 		}
 
+		if header == nil {
+			return nil, errors.New("block header not found")
+		}
+
 		currHeader := s.b.CurrentHeader()
+		if currHeader == nil {
+			return nil, errors.New("current header not found")
+		}
+
 		if header.Hash() != currHeader.Hash() {
 			return (*hexutil.Big)(big.NewInt(0)), errors.New("qi balance query is only supported for the current block")
 		}
