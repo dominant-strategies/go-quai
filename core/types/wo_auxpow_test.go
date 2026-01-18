@@ -453,9 +453,6 @@ func (wh *OldWorkObjectHeader) OldSealEncode() *ProtoWorkObjectHeader {
 func (wh *OldWorkObjectHeader) OldSealHash() (hash common.Hash) {
 	// Manually compute the seal hash like the original did
 	// This uses the same logic as SealHash but without AuxPow
-	hasherMu.Lock()
-	defer hasherMu.Unlock()
-	hasher.Reset()
 	protoSealData := wh.OldSealEncode()
 	data, err := proto.Marshal(protoSealData)
 	if err != nil {
@@ -473,9 +470,6 @@ func (wh *OldWorkObjectHeader) OldHash() (hash common.Hash) {
 	sealHash := wh.OldSealHash().Bytes()
 	mixHash := wh.mixHash.Bytes()
 	nonce := wh.nonce.Bytes()
-	hasherMu.Lock()
-	defer hasherMu.Unlock()
-	hasher.Reset()
 	var hData [common.HashLength + common.HashLength + NonceLength]byte
 	copy(hData[:], mixHash)
 	copy(hData[common.HashLength:], sealHash)

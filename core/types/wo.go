@@ -1447,9 +1447,6 @@ func (wh *WorkObjectHeader) WoProgpowHash() (hash common.Hash) {
 	sealHash := wh.SealHash().Bytes()
 	mixHash := wh.MixHash().Bytes()
 	nonce := wh.Nonce().Bytes()
-	hasherMu.Lock()
-	defer hasherMu.Unlock()
-	hasher.Reset()
 	var hData [common.HashLength + common.HashLength + NonceLength]byte
 	copy(hData[:], mixHash)
 	copy(hData[common.HashLength:], sealHash)
@@ -1460,9 +1457,6 @@ func (wh *WorkObjectHeader) WoProgpowHash() (hash common.Hash) {
 }
 
 func (wh *WorkObjectHeader) WoCustomPowHash() (hash common.Hash) {
-	hasherMu.Lock()
-	defer hasherMu.Unlock()
-	hasher.Reset()
 	protoAuxPow := wh.AuxPow().ProtoEncode()
 	data, _ := proto.Marshal(protoAuxPow)
 	sum := blake3.Sum256(data[:])
@@ -1471,9 +1465,6 @@ func (wh *WorkObjectHeader) WoCustomPowHash() (hash common.Hash) {
 }
 
 func (wh *WorkObjectHeader) SealHash() (hash common.Hash) {
-	hasherMu.Lock()
-	defer hasherMu.Unlock()
-	hasher.Reset()
 	protoSealData := wh.SealEncode()
 	primaryCoinbase := wh.PrimaryCoinbase().Bytes()
 	// After the kawpow activation update the seal hash to be

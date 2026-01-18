@@ -561,19 +561,18 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 			case h := <-headers:
 
 				// Marshal the header data
-				hash := h.Hash()
 				nodeLocation := api.backend.NodeLocation()
 				for _, tx := range h.Transactions() {
 					// Check for external accesses
 					switch tx.Type() {
 					case types.QuaiTxType:
 						if tx.To() != nil && tx.To().Equal(addr) || tx.From(nodeLocation) != nil && tx.From(nodeLocation).Equal(addr) {
-							notifier.Notify(rpcSub.ID, hash)
+							notifier.Notify(rpcSub.ID, h.Hash())
 							break
 						}
 					case types.ExternalTxType:
 						if tx.To().Equal(addr) || tx.ETXSender().Equal(addr) {
-							notifier.Notify(rpcSub.ID, hash)
+							notifier.Notify(rpcSub.ID, h.Hash())
 							break
 						}
 					case types.QiTxType:
@@ -581,7 +580,7 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 						// address matches the subscription address
 						for _, out := range tx.TxOut() {
 							if common.BytesToAddress(out.Address, api.backend.NodeLocation()).Equal(addr) {
-								notifier.Notify(rpcSub.ID, hash)
+								notifier.Notify(rpcSub.ID, h.Hash())
 								break
 							}
 						}
@@ -591,7 +590,7 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 						// Check for EVM accesses
 						for _, access := range tx.AccessList() {
 							if access.Address.Equal(addr) {
-								notifier.Notify(rpcSub.ID, hash)
+								notifier.Notify(rpcSub.ID, h.Hash())
 								break
 							}
 						}
@@ -843,7 +842,10 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		if !f.deadline.Stop() {
 			// timer expired but filter is not yet removed in timeout loop
 			// receive timer value and reset timer
-			<-f.deadline.C
+			select {
+			case <-f.deadline.C:
+			default:
+			}
 		}
 		f.deadline.Reset(api.timeout)
 

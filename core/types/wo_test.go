@@ -841,9 +841,6 @@ func TestSealHashChange(t *testing.T) {
 }
 
 func (wh *WorkObjectHeader) SealHashWithIntermediateHash() (final, intermediate common.Hash) {
-	hasherMu.Lock()
-	defer hasherMu.Unlock()
-	hasher.Reset()
 	protoSealData := wh.SealEncode()
 	primaryCoinbase := wh.PrimaryCoinbase().Bytes()
 	// After the kawpow activation update the seal hash to be

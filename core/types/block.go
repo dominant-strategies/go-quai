@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
-	"sync"
 	"sync/atomic"
 
 	"google.golang.org/protobuf/proto"
@@ -45,8 +44,6 @@ var (
 	EmptyUncleHash = RlpHash([]*Header(nil))
 	EmptyBodyHash  = common.HexToHash("51e1b9c1426a03bf73da3d98d9f384a49ded6a4d705dcdf25433915c3306826c")
 	EmptyHash      = common.Hash{}
-	hasher         = blake3.New(32, nil)
-	hasherMu       sync.RWMutex
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -904,9 +901,6 @@ func (h *Header) SealEncode() *ProtoHeader {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (h *Header) Hash() (hash common.Hash) {
-	hasherMu.Lock()
-	defer hasherMu.Unlock()
-	hasher.Reset()
 	protoSealData := h.SealEncode()
 	data, err := proto.Marshal(protoSealData)
 	if err != nil {
