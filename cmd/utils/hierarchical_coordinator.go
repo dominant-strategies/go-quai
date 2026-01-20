@@ -420,6 +420,9 @@ func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.Co
 		hc.p2p.Subscribe(location, &types.AuxTemplate{})
 	}
 
+	if location.Context() == common.ZONE_CTX {
+		stack.SetZoneBackend(apiBackend)
+	}
 	StartNode(stack)
 
 	go func() {

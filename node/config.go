@@ -146,6 +146,27 @@ type Config struct {
 	// private APIs to untrusted users is a major security risk.
 	WSExposeAll bool `toml:",omitempty"`
 
+	// StratumEnabled adds stratum info on the health check endpoint
+	StratumEnabled bool `toml:",omitempty"`
+
+	// StratumUrl is used for checking the stratum health
+	StratumUrl string `toml:",omitempty"`
+
+	// HealthEnabled enables the health check HTTP endpoint.
+	HealthEnabled bool `toml:",omitempty"`
+
+	// HealthPort is the TCP port number for the health check endpoint.
+	// Default is 8080.
+	HealthPort int `toml:",omitempty"`
+
+	// HealthReferenceURLs is a list of URLs to check block heights against.
+	// Default is https://rpc.quai.network/cyprus1
+	HealthReferenceURLs []string `toml:",omitempty"`
+
+	// HealthMaxBlocksBehind is the maximum number of blocks the node can be
+	// behind reference nodes before returning unhealthy (503). Default is 5.
+	HealthMaxBlocksBehind int `toml:",omitempty"`
+
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger *log.Logger `toml:",omitempty"`
 

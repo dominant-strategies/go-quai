@@ -168,6 +168,10 @@ var RPCFlags = []Flag{
 	RPCGlobalTxFeeCapFlag,
 	RPCGlobalGasCapFlag,
 	RpcVersion,
+	HealthEnabledFlag,
+	HealthPortFlag,
+	HealthReferenceURLsFlag,
+	HealthMaxBlocksBehindFlag,
 }
 
 var PeersFlags = []Flag{
@@ -810,6 +814,30 @@ var (
 		Value: "v1",
 		Usage: "RPC version to use (v1)" + generateEnvDoc(c_RPCFlagPrefix+"version"),
 	}
+
+	HealthEnabledFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health",
+		Value: false,
+		Usage: "Enable the health check HTTP endpoint" + generateEnvDoc(c_RPCFlagPrefix+"health"),
+	}
+
+	HealthPortFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health-port",
+		Value: 8081,
+		Usage: "Health check HTTP endpoint port" + generateEnvDoc(c_RPCFlagPrefix+"health-port"),
+	}
+
+	HealthReferenceURLsFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health-urls",
+		Value: "https://rpc.quai.network/cyprus1",
+		Usage: "Comma-separated list of reference node URLs to check block heights against" + generateEnvDoc(c_RPCFlagPrefix+"health-urls"),
+	}
+
+	HealthMaxBlocksBehindFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health-max-behind",
+		Value: 5,
+		Usage: "Maximum blocks behind reference nodes before returning unhealthy (503)" + generateEnvDoc(c_RPCFlagPrefix+"health-max-behind"),
+	}
 )
 
 var (
@@ -1055,6 +1083,32 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 	cfg.WSPathPrefix = viper.GetString(WSPathPrefixFlag.Name)
 }
 
+func setHealth(cfg *node.Config) {
+	cfg.StratumEnabled = viper.GetBool(StratumEnabledFlag.Name)
+	// StratumUrl is used to see if the stratum is running fine
+	cfg.StratumUrl = viper.GetString(StratumSHAAddrFlag.Name)
+
+	cfg.HealthEnabled = viper.GetBool(HealthEnabledFlag.Name)
+
+	if viper.IsSet(HealthPortFlag.Name) {
+		cfg.HealthPort = viper.GetInt(HealthPortFlag.Name)
+	} else {
+		cfg.HealthPort = HealthPortFlag.Value.(int)
+	}
+
+	if viper.IsSet(HealthReferenceURLsFlag.Name) {
+		cfg.HealthReferenceURLs = SplitAndTrim(viper.GetString(HealthReferenceURLsFlag.Name))
+	} else {
+		cfg.HealthReferenceURLs = []string{HealthReferenceURLsFlag.Value.(string)}
+	}
+
+	if viper.IsSet(HealthMaxBlocksBehindFlag.Name) {
+		cfg.HealthMaxBlocksBehind = viper.GetInt(HealthMaxBlocksBehindFlag.Name)
+	} else {
+		cfg.HealthMaxBlocksBehind = HealthMaxBlocksBehindFlag.Value.(int)
+	}
+}
+
 func GetWSPort(nodeLocation common.Location) int {
 	var startPort int
 	if viper.IsSet(WSPortStartFlag.Name) {
@@ -1169,6 +1223,7 @@ func MakePasswordList() []string {
 func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *log.Logger) {
 	setHTTP(cfg, nodeLocation)
 	setWS(cfg, nodeLocation)
+	setHealth(cfg)
 	setNodeUserIdent(cfg)
 	setDataDir(cfg)
 
