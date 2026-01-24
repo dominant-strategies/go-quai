@@ -309,6 +309,9 @@ func (s *Server) registerSession(sess *session) {
 	case "kawpow":
 		s.sessionsKawpow[sess] = struct{}{}
 	}
+	// Record worker connection metrics
+	RecordWorkerConnected(sess.chain)
+	RecordWorkerOnline(sess.user, sess.workerName, sess.chain, true)
 }
 
 // unregisterSession removes a session from the appropriate algorithm's session map
@@ -322,6 +325,11 @@ func (s *Server) unregisterSession(sess *session) {
 		delete(s.sessionsScrypt, sess)
 	case "kawpow":
 		delete(s.sessionsKawpow, sess)
+	}
+	// Record worker disconnection metrics (only if session was registered)
+	if sess.authorized {
+		RecordWorkerDisconnected(sess.chain)
+		RecordWorkerOnline(sess.user, sess.workerName, sess.chain, false)
 	}
 }
 
@@ -843,6 +851,9 @@ func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
 			return
 		}
 
+		// Record connection metrics
+		RecordConnectionAccepted()
+
 		// Check connection limit (DDoS protection)
 		currentConns := s.activeConns.Add(1)
 		if s.maxConnections > 0 && currentConns > int64(s.maxConnections) {
@@ -1162,7 +1173,8 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 
 	defer s.trackConn(c, false)
 	defer c.Close()
-	defer s.activeConns.Add(-1) // Decrement connection counter on exit
+	defer s.activeConns.Add(-1)        // Decrement connection counter on exit
+	defer RecordConnectionClosed()     // Record connection close for metrics
 	// Set a longer initial read deadline - will be extended on each message
 	// Use SetReadDeadline (not SetDeadline) to avoid overriding the 10s write deadline in sendJSON
 	_ = c.SetReadDeadline(time.Now().Add(livenessTimeout))
@@ -2394,6 +2406,9 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 		algoName,
 		achievedDiff.String(),
 	)
+	// Record workshare found for Prometheus metrics
+	RecordWorkshareFound(algoName)
+	RecordWorkerWorkshare(sess.user, sess.workerName, algoName)
 	// Record the share with difficulty info for solo mining luck tracking
 	s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, algoName, sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedStratumDiff, workshareStratumDiff, true, false)
 	return true, nil
@@ -2665,6 +2680,9 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 			"kawpow",
 			fmt.Sprintf("%.2f", achievedStratumDiff),
 		)
+		// Record workshare found for Prometheus metrics
+		RecordWorkshareFound("kawpow")
+		RecordWorkerWorkshare(sess.user, sess.workerName, "kawpow")
 		sess.mu.Lock()
 		sess.totalShares++
 		sess.mu.Unlock()
