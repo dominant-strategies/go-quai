@@ -60,10 +60,11 @@ const (
 
 // templateState tracks the last template sent for change detection
 type templateState struct {
-	sealHash   common.Hash // For sha256/scrypt: header seal hash
-	parentHash common.Hash // For change detection (new block)
-	height     uint64      // Block height
-	quaiHeight int64       // Quai chain height (for kawpow stale detection)
+	sealHash       common.Hash // For sha256/scrypt: header seal hash
+	parentHash     common.Hash // For change detection (new block on donor chain)
+	height         uint64      // Block height
+	quaiHeight     uint64      // Quai chain height
+	quaiParentHash common.Hash // Quai chain parent hash (detects reorgs at same height)
 }
 
 // jobTask represents a task to send a job to a session
@@ -419,33 +420,34 @@ func (s *Server) templatePollingLoop(algorithm string) {
 		case <-s.stopped:
 			return
 		case <-ticker.C:
-			changed, clean, isNewBlock := s.checkTemplateChanged(algorithm)
+			changed, clean, isNewBlock, quaiParentChangedOnly := s.checkTemplateChanged(algorithm)
 			if changed {
 				s.lastUpdateTime = time.Now()
-				s.broadcastJob(algorithm, clean, isNewBlock)
+				s.broadcastJob(algorithm, clean, isNewBlock, quaiParentChangedOnly)
 			}
 		}
 	}
 }
 
 // checkTemplateChanged checks if the template has changed for the given algorithm.
-// Returns (changed bool, clean bool, isNewBlock bool):
+// Returns (changed bool, clean bool, isNewBlock bool, quaiParentChangedOnly bool):
 //   - changed: true if template changed and broadcast is needed
 //   - clean: true if miners should abandon current work
-//   - isNewBlock: true if parentHash changed (new block on donor chain), false if only quaiHeight changed
-func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
+//   - isNewBlock: true if parentHash changed (new block on donor chain), false if only Quai chain changed
+//   - quaiParentChangedOnly: true if only quaiParentHash changed (reorg at same height), not quaiHeight
+func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool, bool) {
 	powID := powIDFromChain(algorithm)
 
 	// Get pending header (using a dummy address since we just need to check for changes)
 	pending, err := s.backend.GetPendingHeader(types.PowID(powID), common.Address{}, []byte{}, 0)
 	if err != nil || pending == nil || pending.WorkObjectHeader() == nil {
-		return false, false, false
+		return false, false, false, false
 	}
 
 	header := pending.WorkObjectHeader()
 	auxPow := header.AuxPow()
 	if auxPow == nil || auxPow.Header() == nil {
-		return false, false, false
+		return false, false, false, false
 	}
 	pendingCopy := types.CopyWorkObjectHeader(pending.WorkObjectHeader())
 	pendingCopy.SetTime(0)
@@ -453,10 +455,11 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
 	// not Quai's ParentHash. Miners need new work when the donor chain advances.
 	auxParentHash := auxPow.Header().PrevBlock()
 	newState := &templateState{
-		sealHash:   pendingCopy.SealHash(),
-		parentHash: common.BytesToHash(auxParentHash[:]),
-		height:     header.NumberU64(),
-		quaiHeight: int64(pending.NumberU64(common.ZONE_CTX)),
+		sealHash:       pendingCopy.SealHash(),
+		parentHash:     common.BytesToHash(auxParentHash[:]),
+		height:         header.NumberU64(),
+		quaiHeight:     pending.NumberU64(common.ZONE_CTX),
+		quaiParentHash: pending.ParentHash(common.ZONE_CTX),
 	}
 
 	s.templateMu.Lock()
@@ -477,7 +480,7 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
 
 	// First template - no change to broadcast (miners get job on authorize)
 	if lastState == nil {
-		return false, false, false
+		return false, false, false, false
 	}
 
 	if lastState.parentHash != newState.parentHash {
@@ -486,45 +489,56 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool) {
 			"oldHeight": lastState.height,
 			"newHeight": newState.height,
 		}).Info("New block detected")
-		return true, true, true // isNewBlock=true: parentHash changed
+		return true, true, true, false // isNewBlock=true: parentHash changed
 	}
 
-	if lastState.quaiHeight != newState.quaiHeight {
+	// Check for Quai chain changes: either height or parent hash
+	// Height change = new block, parent hash change without height change = reorg at same height
+	quaiHeightChanged := lastState.quaiHeight != newState.quaiHeight
+	quaiParentChanged := lastState.quaiParentHash != newState.quaiParentHash
+	if quaiHeightChanged || quaiParentChanged {
 		currentTime := time.Now()
 		clean := false
 		if currentTime.Sub(s.lastHeightChangeTime) < 3*time.Second {
 			clean = true
 		}
 		s.lastHeightChangeTime = time.Now()
+		quaiParentChangedOnly := quaiParentChanged && !quaiHeightChanged
 		s.logger.WithFields(log.Fields{
-			"algo":          algorithm,
-			"oldQuaiHeight": lastState.quaiHeight,
-			"newQuaiHeight": newState.quaiHeight,
-		}).Info("QuaiHeight changed")
-		return true, clean, false // isNewBlock=false: only quaiHeight changed
+			"algo":              algorithm,
+			"oldQuaiHeight":     lastState.quaiHeight,
+			"newQuaiHeight":     newState.quaiHeight,
+			"heightChanged":     quaiHeightChanged,
+			"parentHashChanged": quaiParentChanged,
+			"quaiParentChangedOnly":  quaiParentChangedOnly,
+		}).Info("Quai chain changed")
+		return true, clean, false, quaiParentChangedOnly // isNewBlock=false: only Quai chain changed (not donor chain)
 	}
 
 	if algorithm == "kawpow" && lastState.sealHash != newState.sealHash {
 		currentTime := time.Now()
 		if currentTime.Sub(s.lastHeightChangeTime) < 3*time.Second {
 			s.lastSealHashChangeTime = currentTime
-			return false, false, false
+			return false, false, false, false
 		}
 		s.lastSealHashChangeTime = currentTime
 		s.logger.WithFields(log.Fields{
 			"algo":   algorithm,
 			"height": newState.height,
 		}).Trace("Template updated (sealhash changed)")
-		return true, false, false
+		return true, false, false, false
 	}
 
-	return false, false, false
+	return false, false, false, false
 }
 
 // broadcastJob sends a new job to all connected miners for the given algorithm.
-// isNewBlock indicates if this is a new block (parentHash changed) vs just a quaiHeight change.
-// Miners with skip=true receive every other quaiHeight change, but always receive new blocks.
-func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
+// isNewBlock indicates if this is a new block (parentHash changed) vs just a Quai chain change.
+// quaiParentChangedOnly indicates if only the Quai parent hash changed (reorg at same height), not the height.
+// Miners with skip=true receive every other Quai chain change, but always receive new blocks.
+// ASIC miners (sha256/scrypt) only receive quaiParentChangedOnly updates if they have parentupdate=true in password.
+// Kawpow miners always receive all updates.
+func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool, quaiParentChangedOnly bool) {
 	s.sessionsMu.RLock()
 	var sessions map[*session]struct{}
 	switch algorithm {
@@ -549,16 +563,30 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
 	}
 
 	s.logger.WithFields(log.Fields{
-		"algo":       algorithm,
-		"miners":     len(sessionList),
-		"clean":      clean,
-		"isNewBlock": isNewBlock,
+		"algo":             algorithm,
+		"miners":           len(sessionList),
+		"clean":            clean,
+		"isNewBlock":       isNewBlock,
+		"quaiParentChangedOnly": quaiParentChangedOnly,
 	}).Info("Broadcasting new job")
 
 	// Broadcast to all sessions via worker pool
 	for _, sess := range sessionList {
-		// Handle skip blocks mode - skip every other quaiHeight change,
-		// but always send new blocks (parentHash changes)
+		// For Quai parent-hash-only changes (reorgs at same height):
+		// - Kawpow miners always receive these updates
+		// - ASIC miners (sha256/scrypt) only receive them if parentupdate=true
+		if quaiParentChangedOnly && algorithm != "kawpow" && !sess.parentUpdate {
+			s.logger.WithFields(log.Fields{
+				"sid":    sess.id,
+				"user":   sess.user,
+				"worker": sess.workerName,
+				"algo":   algorithm,
+			}).Debug("Skipping Quai parent-only update for ASIC miner (parentupdate not enabled)")
+			continue
+		}
+
+		// Handle skip blocks mode - skip every other Quai chain change,
+		// but always send new blocks (donor chain parentHash changes)
 		if sess.skipBlocks && !isNewBlock {
 			sess.mu.Lock()
 			sess.skipBlockCounter++
@@ -573,7 +601,7 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
 					"user":    sess.user,
 					"worker":  sess.workerName,
 					"counter": counter,
-				}).Debug("Skipping quaiHeight change for miner (skip=true mode)")
+				}).Debug("Skipping Quai chain change for miner (skip=true mode)")
 				continue
 			}
 			s.logger.WithFields(log.Fields{
@@ -581,7 +609,7 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool) {
 				"user":    sess.user,
 				"worker":  sess.workerName,
 				"counter": counter,
-			}).Debug("Sending quaiHeight change to miner (skip=true mode)")
+			}).Debug("Sending Quai chain change to miner (skip=true mode)")
 		}
 		s.jobPool.submit(sess, clean)
 	}
@@ -1090,6 +1118,9 @@ type session struct {
 	// Skip blocks mode - only send every other block (for debugging fast block times)
 	skipBlocks       bool // true if miner wants to skip every other block
 	skipBlockCounter int  // counter to track which blocks to skip
+	// parentUpdate enables ASIC miners to receive Quai parent hash updates (reorgs at same height)
+	// Kawpow miners always receive these updates. ASICs only receive them if parentupdate=true in password.
+	parentUpdate bool
 	lock             uint8
 }
 
@@ -1323,13 +1354,13 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			if wasAuthorized && (oldUser != sess.user || oldWorkerName != sess.workerName) {
 				s.stats.WorkerDisconnected(oldUser, oldWorkerName, sess.chain)
 			}
-			// Parse password for optional difficulty, frequency, and skip settings
-			// Format: d=<difficulty>,frequency=<seconds>,skip=<true|false>
+			// Parse password for optional difficulty, frequency, skip, and parentupdate settings
+			// Format: d=<difficulty>,frequency=<seconds>,skip=<true|false>,parentupdate=<true|false>
 			if len(req.Params) >= 2 {
 				if p, ok := req.Params[1].(string); ok {
 					var pwFreq time.Duration
 					var err error
-					sess.minerDifficulty, pwFreq, sess.skipBlocks, sess.lock, err = parsePassword(p)
+					sess.minerDifficulty, pwFreq, sess.skipBlocks, sess.lock, sess.parentUpdate, err = parsePassword(p)
 					if err != nil {
 						s.logger.WithFields(log.Fields{
 							"sid":   sess.id,
@@ -1413,6 +1444,9 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 			if sess.skipBlocks {
 				logFields["skipBlocks"] = true
+			}
+			if sess.parentUpdate {
+				logFields["parentUpdate"] = true
 			}
 			s.logger.WithFields(logFields).Info("miner authorized")
 			if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
@@ -2726,23 +2760,24 @@ func parseUsername(u string) (address string, workerName string, jobFreq time.Du
 }
 
 // parsePassword parses the stratum password field for optional parameters.
-// Supports: d=<difficulty>, frequency=<seconds> (or freq=<seconds>), skip=<true|false>
+// Supports: d=<difficulty>, frequency=<seconds> (or freq=<seconds>), skip=<true|false>, parentupdate=<true|false>
 // Parts are separated by ',' character (to allow decimal values).
 // Examples:
-//   - "x" or "" -> nil, 0, false (use defaults)
-//   - "d=0.1" -> difficulty=0.1, frequency=0, skip=false
-//   - "frequency=2.5" or "freq=2.5" -> difficulty=nil, frequency=2.5s, skip=false
-//   - "d=0.1,freq=2,skip=true" -> difficulty=0.1, frequency=2s, skip=true
-//   - "d=0.1_freq=2_skip=true" -> same (underscore also accepted as separator)
-func parsePassword(password string) (*float64, time.Duration, bool, uint8, error) {
+//   - "x" or "" -> nil, 0, false, false (use defaults)
+//   - "d=0.1" -> difficulty=0.1, frequency=0, skip=false, parentupdate=false
+//   - "frequency=2.5" or "freq=2.5" -> difficulty=nil, frequency=2.5s, skip=false, parentupdate=false
+//   - "d=0.1,freq=2,skip=true" -> difficulty=0.1, frequency=2s, skip=true, parentupdate=false
+//   - "d=0.1_freq=2_parentupdate=true" -> same (underscore also accepted as separator)
+func parsePassword(password string) (*float64, time.Duration, bool, uint8, bool, error) {
 	if password == "" || password == "x" {
-		return nil, 0, false, 0, nil
+		return nil, 0, false, 0, false, nil
 	}
 
 	var difficulty *float64
 	var frequency time.Duration
 	var skipBlocks bool
 	var lock uint8
+	var parentUpdate bool
 
 	// Normalize separators: allow both ',' and '_' as parameter separators
 	normalized := strings.ReplaceAll(password, "_", ",")
@@ -2777,11 +2812,16 @@ func parsePassword(password string) (*float64, time.Duration, bool, uint8, error
 				lock = uint8(lockUint64)
 			}
 			if err != nil || lockUint64 > 3 {
-				return nil, 0, false, 0, errors.New("invalid lock value")
+				return nil, 0, false, 0, false, errors.New("invalid lock value")
 			}
+			continue
+		}
+		// Check for parentupdate=<true|false> format (for ASIC miners to receive Quai parent hash updates)
+		if parentStr, ok := strings.CutPrefix(part, "parentupdate="); ok {
+			parentUpdate = parentStr == "true" || parentStr == "1"
 			continue
 		}
 	}
 
-	return difficulty, frequency, skipBlocks, lock, nil
+	return difficulty, frequency, skipBlocks, lock, parentUpdate, nil
 }
