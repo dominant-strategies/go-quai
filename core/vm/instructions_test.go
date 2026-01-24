@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"math/big"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/holiman/uint256"
@@ -254,5 +256,296 @@ func TestOpTstore(t *testing.T) {
 	val := stack.peek()
 	if !bytes.Equal(val.Bytes(), value) {
 		t.Fatal("incorrect element read from transient storage")
+	}
+}
+
+// --- BLOCKHASH and POWHASH tests and benchmarks ---
+
+// mockGetHash returns a simple deterministic hash for block numbers in range
+func mockGetHash(n uint64) common.Hash {
+	return common.BytesToHash(crypto.Keccak256(new(big.Int).SetUint64(n).Bytes()))
+}
+
+// mockGetPowHashCached simulates a cache-hit PoW hash lookup (just returns a hash)
+func mockGetPowHashCached(n uint64) common.Hash {
+	return common.BytesToHash(crypto.Keccak256(append([]byte("pow"), new(big.Int).SetUint64(n).Bytes()...)))
+}
+
+// mockGetPowHashCold simulates the cost of a kawpow light verification cache miss.
+// KawPow light does ~64 rounds of memory-hard hashing over a 16MB cache.
+// We approximate this with repeated SHA256 rounds to measure relative cost.
+func mockGetPowHashCold(rounds int) func(uint64) common.Hash {
+	return func(n uint64) common.Hash {
+		h := crypto.Keccak256(new(big.Int).SetUint64(n).Bytes())
+		for i := 0; i < rounds; i++ {
+			s := sha256.Sum256(h)
+			h = s[:]
+		}
+		return common.BytesToHash(h)
+	}
+}
+
+func setupBlockhashTest(blockNumber uint64, getHash GetHashFunc, getPowHash GetHashFunc) (*EVMInterpreter, *ScopeContext) {
+	env := NewEVM(BlockContext{
+		BlockNumber: new(big.Int).SetUint64(blockNumber),
+		GetHash:     getHash,
+		GetPowHash:  getPowHash,
+	}, TxContext{}, nil, params.TestChainConfig, Config{}, nil)
+
+	stack := newstack()
+	mem := NewMemory()
+	evmInterpreter := NewEVMInterpreter(env, env.Config)
+	env.interpreter = evmInterpreter
+	contract := NewContract(
+		AccountRef(common.ZeroAddress(common.Location{0, 0})),
+		AccountRef(common.ZeroAddress(common.Location{0, 0})),
+		new(big.Int), 100000,
+	)
+	scopeContext := &ScopeContext{mem, stack, contract}
+	return evmInterpreter, scopeContext
+}
+
+func TestOpBlockhash(t *testing.T) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetPowHashCached)
+	pc := uint64(0)
+
+	tests := []struct {
+		name      string
+		queryBlock uint64
+		expectZero bool
+	}{
+		{"valid recent block", 999, false},
+		{"valid oldest block", 744, false},   // 1000 - 256 = 744
+		{"too old", 743, true},               // below lower bound
+		{"current block", 1000, true},        // can't get current block hash
+		{"future block", 1001, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scope.Stack.push(new(uint256.Int).SetUint64(tc.queryBlock))
+			opBlockhash(&pc, interp, scope)
+
+			result := scope.Stack.pop()
+			if tc.expectZero {
+				if !result.IsZero() {
+					t.Errorf("expected zero, got %x", result.Bytes())
+				}
+			} else {
+				expected := mockGetHash(tc.queryBlock)
+				if !bytes.Equal(result.Bytes(), expected.Bytes()) {
+					t.Errorf("expected %x, got %x", expected.Bytes(), result.Bytes())
+				}
+			}
+		})
+	}
+}
+
+func TestOpPowhash(t *testing.T) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetPowHashCached)
+	pc := uint64(0)
+
+	tests := []struct {
+		name       string
+		queryBlock uint64
+		expectZero bool
+	}{
+		{"valid recent block", 999, false},
+		{"valid oldest block", 744, false},
+		{"too old", 743, true},
+		{"current block", 1000, true},
+		{"future block", 1001, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scope.Stack.push(new(uint256.Int).SetUint64(tc.queryBlock))
+			opPowhash(&pc, interp, scope)
+
+			result := scope.Stack.pop()
+			if tc.expectZero {
+				if !result.IsZero() {
+					t.Errorf("expected zero, got %x", result.Bytes())
+				}
+			} else {
+				expected := mockGetPowHashCached(tc.queryBlock)
+				if !bytes.Equal(result.Bytes(), expected.Bytes()) {
+					t.Errorf("expected %x, got %x", expected.Bytes(), result.Bytes())
+				}
+			}
+		})
+	}
+
+	// Test overflow: push a value > uint64 max
+	t.Run("overflow", func(t *testing.T) {
+		overflow := new(uint256.Int).SetBytes(common.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+		scope.Stack.push(overflow)
+		opPowhash(&pc, interp, scope)
+		result := scope.Stack.pop()
+		if !result.IsZero() {
+			t.Errorf("expected zero for overflow, got %x", result.Bytes())
+		}
+	})
+}
+
+func TestOpPowhashDiffersFromBlockhash(t *testing.T) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetPowHashCached)
+	pc := uint64(0)
+
+	// Get blockhash for block 999
+	scope.Stack.push(new(uint256.Int).SetUint64(999))
+	opBlockhash(&pc, interp, scope)
+	blockhashResult := scope.Stack.pop()
+
+	// Get powhash for block 999
+	scope.Stack.push(new(uint256.Int).SetUint64(999))
+	opPowhash(&pc, interp, scope)
+	powhashResult := scope.Stack.pop()
+
+	// They should be different (since mock functions produce different hashes)
+	if bytes.Equal(blockhashResult.Bytes(), powhashResult.Bytes()) {
+		t.Error("BLOCKHASH and POWHASH should return different values")
+	}
+
+	// Neither should be zero
+	if blockhashResult.IsZero() {
+		t.Error("BLOCKHASH should not be zero for valid block")
+	}
+	if powhashResult.IsZero() {
+		t.Error("POWHASH should not be zero for valid block")
+	}
+}
+
+// BenchmarkOpBlockhash measures the cost of the BLOCKHASH opcode with a trivial hash lookup
+func BenchmarkOpBlockhash(b *testing.B) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetPowHashCached)
+	pc := uint64(0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		scope.Stack.push(new(uint256.Int).SetUint64(999))
+		opBlockhash(&pc, interp, scope)
+		scope.Stack.pop()
+	}
+}
+
+// BenchmarkOpPowhashCached measures POWHASH with the same mock as BenchmarkOpBlockhash
+// for an apples-to-apples comparison of opcode execution overhead.
+func BenchmarkOpPowhashCached(b *testing.B) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetHash)
+	pc := uint64(0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		scope.Stack.push(new(uint256.Int).SetUint64(999))
+		opPowhash(&pc, interp, scope)
+		scope.Stack.pop()
+	}
+}
+
+// BenchmarkOpPowhashCold_100 simulates a cache miss with 100 SHA256 rounds (~progpow light cost).
+func BenchmarkOpPowhashCold_100(b *testing.B) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetPowHashCold(100))
+	pc := uint64(0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		scope.Stack.push(new(uint256.Int).SetUint64(999))
+		opPowhash(&pc, interp, scope)
+		scope.Stack.pop()
+	}
+}
+
+// BenchmarkOpPowhashCold_1000 simulates a heavier cache miss with 1000 SHA256 rounds.
+func BenchmarkOpPowhashCold_1000(b *testing.B) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetPowHashCold(1000))
+	pc := uint64(0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		scope.Stack.push(new(uint256.Int).SetUint64(999))
+		opPowhash(&pc, interp, scope)
+		scope.Stack.pop()
+	}
+}
+
+// BenchmarkOpPowhashCold_10000 simulates a very heavy cache miss with 10000 SHA256 rounds.
+// KawPow light verification is roughly in this ballpark.
+func BenchmarkOpPowhashCold_10000(b *testing.B) {
+	currentBlock := uint64(1000)
+	interp, scope := setupBlockhashTest(currentBlock, mockGetHash, mockGetPowHashCold(10000))
+	pc := uint64(0)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		scope.Stack.push(new(uint256.Int).SetUint64(999))
+		opPowhash(&pc, interp, scope)
+		scope.Stack.pop()
+	}
+}
+
+// TestPowhashForkActivation verifies that POWHASH is rejected before PowHashForkHeight
+// and accepted at/after PowHashForkHeight.
+func TestPowhashForkActivation(t *testing.T) {
+	tests := []struct {
+		name        string
+		blockNumber uint64
+		expectError bool
+	}{
+		{"rejected before fork", uint64(params.PowHashForkHeight) - 1, true},
+		{"accepted at fork", uint64(params.PowHashForkHeight), false},
+		{"accepted after fork", uint64(params.PowHashForkHeight) + 1000, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build bytecode: PUSH3 <queryBlock> POWHASH STOP
+			queryBlock := tt.blockNumber - 1
+			b0 := byte((queryBlock >> 16) & 0xFF)
+			b1 := byte((queryBlock >> 8) & 0xFF)
+			b2 := byte(queryBlock & 0xFF)
+			code := []byte{
+				byte(PUSH3), b0, b1, b2, // push query block number
+				byte(POWHASH), // 0xf9
+				byte(STOP),
+			}
+
+			env := NewEVM(BlockContext{
+				BlockNumber: new(big.Int).SetUint64(tt.blockNumber),
+				GetPowHash:  mockGetPowHashCached,
+			}, TxContext{}, nil, params.TestChainConfig, Config{}, nil)
+
+			evmInterpreter := NewEVMInterpreter(env, env.Config)
+			env.interpreter = evmInterpreter
+
+			contract := NewContract(
+				AccountRef(common.ZeroAddress(common.Location{0, 0})),
+				AccountRef(common.ZeroAddress(common.Location{0, 0})),
+				new(big.Int), 10000,
+			)
+			contract.Code = code
+
+			_, err := evmInterpreter.Run(contract, nil, false)
+
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected ErrInvalidOpCode before fork height, got nil")
+				}
+				if _, ok := err.(*ErrInvalidOpCode); !ok {
+					t.Fatalf("expected *ErrInvalidOpCode, got %T: %v", err, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected no error at/after fork height, got: %v", err)
+				}
+			}
+		})
 	}
 }

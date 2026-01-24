@@ -113,6 +113,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 		CanTransfer:         CanTransfer,
 		Transfer:            Transfer,
 		GetHash:             GetHashFn(header, chain),
+		GetPowHash:          GetPowHashFn(header, chain),
 		PrimaryCoinbase:     beneficiary,
 		BlockNumber:         new(big.Int).Set(header.Number(chain.NodeCtx())),
 		Time:                new(big.Int).SetUint64(timestamp),
@@ -166,6 +167,54 @@ func GetHashFn(ref *types.WorkObject, chain ChainContext) func(n uint64) common.
 			lastKnownNumber = header.NumberU64(chain.NodeCtx()) - 1
 			if n == lastKnownNumber {
 				return lastKnownHash
+			}
+		}
+		return common.Hash{}
+	}
+}
+
+// GetPowHashFn returns a GetHashFunc which retrieves PoW hashes by block number
+func GetPowHashFn(ref *types.WorkObject, chain ChainContext) func(n uint64) common.Hash {
+	// Cache will initially contain [powHash(refParent)],
+	// Then fill up with [powHash(ref.p), powHash(ref.pp), powHash(ref.ppp), ...]
+	var cache []common.Hash
+	// lastBlockHash tracks the next block hash to look up when walking backwards
+	var lastBlockHash common.Hash
+
+	return func(n uint64) common.Hash {
+		// If there's no hash cache yet, make one
+		if len(cache) == 0 {
+			lastBlockHash = ref.ParentHash(chain.NodeCtx())
+			parent := chain.GetHeaderOrCandidateByHash(lastBlockHash)
+			if parent == nil {
+				return common.Hash{}
+			}
+			engine := chain.Engine(parent.WorkObjectHeader())
+			powHash, err := engine.ComputePowHash(parent.WorkObjectHeader())
+			if err != nil {
+				powHash = common.Hash{}
+			}
+			cache = append(cache, powHash)
+			lastBlockHash = parent.ParentHash(chain.NodeCtx())
+		}
+		if idx := ref.NumberU64(chain.NodeCtx()) - n - 1; idx < uint64(len(cache)) {
+			return cache[idx]
+		}
+		// No luck in the cache, but we can start iterating from the last element we already know
+		for {
+			header := chain.GetHeaderOrCandidateByHash(lastBlockHash)
+			if header == nil {
+				break
+			}
+			engine := chain.Engine(header.WorkObjectHeader())
+			powHash, err := engine.ComputePowHash(header.WorkObjectHeader())
+			if err != nil {
+				powHash = common.Hash{}
+			}
+			cache = append(cache, powHash)
+			lastBlockHash = header.ParentHash(chain.NodeCtx())
+			if n == header.NumberU64(chain.NodeCtx()) {
+				return powHash
 			}
 		}
 		return common.Hash{}

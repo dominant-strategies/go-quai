@@ -106,6 +106,7 @@ const (
 	MaxCodeSize           = 24576   // Maximum bytecode to permit for a contract (24KB)
 	NewMaxCodeSize        = 32768   // Maximum bytecode to permit for a contract after fork (32KB)
 	MaxCodeSizeForkHeight = 3490000 // Block height at which the new 32KB code size limit activates
+	PowHashForkHeight     = 6100000 // Block height at which the POWHASH opcode activates
 
 	// Precompiled contract gas prices
 
