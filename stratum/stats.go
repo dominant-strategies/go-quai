@@ -205,13 +205,24 @@ func (ps *PoolStats) ShareSubmittedWithDiff(address, workerName, algorithm strin
 		worker.LastShareDiff = poolDiff
 		worker.SharesValid++
 		worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
+		// Record Prometheus metrics for valid share
+		RecordShareSubmitted(algorithm, "valid")
+		RecordWorkerShare(address, workerName, algorithm, "valid")
 	} else if stale {
 		worker.CumulativeWork += poolDiff // Track actual work done at each share's difficulty
 		worker.SharesStale++
+		// Record Prometheus metrics for stale share
+		RecordShareSubmitted(algorithm, "stale")
+		RecordWorkerShare(address, workerName, algorithm, "stale")
 	} else {
 		worker.SharesInvalid++
+		// Record Prometheus metrics for invalid share
+		RecordShareSubmitted(algorithm, "invalid")
+		RecordWorkerShare(address, workerName, algorithm, "invalid")
 	}
 	worker.Hashrate = ps.calculateWorkerHashrate(key)
+	// Record per-worker hashrate for Prometheus
+	RecordWorkerHashrate(address, workerName, algorithm, worker.Hashrate)
 
 	// Log worker hashrate with first and last share info
 	if valid && ps.logger != nil {
@@ -410,6 +421,11 @@ func (ps *PoolStats) GetOverview() PoolOverview {
 	}
 
 	// Network stats are fetched via RPC in the API layer, not calculated here
+
+	// Record aggregate hashrate metrics for Prometheus (per-algorithm)
+	RecordHashrate("sha256", algoStats["sha256"].Hashrate)
+	RecordHashrate("scrypt", algoStats["scrypt"].Hashrate)
+	RecordHashrate("kawpow", algoStats["kawpow"].Hashrate)
 
 	return PoolOverview{
 		WorkersTotal:     len(ps.workers),
