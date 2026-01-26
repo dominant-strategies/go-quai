@@ -393,8 +393,8 @@ func (s *Server) Start() error {
 
 	// Start force broadcast loops to ensure miners always have work.
 	// Runs every 1 second (minimum frequency granularity) and checks each session's
-	// individual jobFrequency setting. Miners can configure their frequency via username:
-	// address.workername.frequency=X (1-10 seconds, supports decimals, default 5s)
+	// individual jobFrequency setting. Miners can configure their frequency via password:
+	// frequency=X (1-20 seconds, supports decimals, default 5s)
 	if s.config.SHAAddr != "" {
 		s.wg.Add(1)
 		go s.forceBroadcastLoop("sha256")
@@ -513,12 +513,12 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool, bool)
 		s.lastHeightChangeTime = time.Now()
 		quaiParentChangedOnly := quaiParentChanged && !quaiHeightChanged
 		s.logger.WithFields(log.Fields{
-			"algo":              algorithm,
-			"oldQuaiHeight":     lastState.quaiHeight,
-			"newQuaiHeight":     newState.quaiHeight,
-			"heightChanged":     quaiHeightChanged,
-			"parentHashChanged": quaiParentChanged,
-			"quaiParentChangedOnly":  quaiParentChangedOnly,
+			"algo":                  algorithm,
+			"oldQuaiHeight":         lastState.quaiHeight,
+			"newQuaiHeight":         newState.quaiHeight,
+			"heightChanged":         quaiHeightChanged,
+			"parentHashChanged":     quaiParentChanged,
+			"quaiParentChangedOnly": quaiParentChangedOnly,
 		}).Info("Quai chain changed")
 		return true, clean, false, quaiParentChangedOnly // isNewBlock=false: only Quai chain changed (not donor chain)
 	}
@@ -541,12 +541,22 @@ func (s *Server) checkTemplateChanged(algorithm string) (bool, bool, bool, bool)
 }
 
 // broadcastJob sends a new job to all connected miners for the given algorithm.
-// isNewBlock indicates if this is a new block (parentHash changed) vs just a Quai chain change.
+// isNewBlock indicates if this is a new block (auxParentHash changed on donor chain).
 // quaiParentChangedOnly indicates if only the Quai parent hash changed (reorg at same height), not the height.
+//
+// ASIC miners (sha256/scrypt) update logic:
+//   - isNewBlock=true (auxParentHash changed): ALWAYS send to ALL miners immediately
+//   - hasCustomFreq=true: Skip - they receive updates only via forceBroadcastStale timer
+//   - hasCustomFreq=false (default): Send on quaiHeight changes
+//   - hasCustomFreq=false + parentUpdate=true: Also send on quaiParent changes
+//
+// Kawpow miners always receive all updates immediately.
+// The freq setting only controls the forceBroadcastStale interval (acts as backup/guarantee).
+//
 // Miners with skip=true receive every other Quai chain change, but always receive new blocks.
-// ASIC miners (sha256/scrypt) only receive quaiParentChangedOnly updates if they have parentupdate=true in password.
-// Kawpow miners always receive all updates.
 func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool, quaiParentChangedOnly bool) {
+	// Note: isNewBlock=true means auxParentHash changed (donor chain new block)
+	// quaiParentChangedOnly=true means only Quai parent hash changed (not height) - typically a reorg
 	s.sessionsMu.RLock()
 	var sessions map[*session]struct{}
 	switch algorithm {
@@ -571,26 +581,47 @@ func (s *Server) broadcastJob(algorithm string, clean bool, isNewBlock bool, qua
 	}
 
 	s.logger.WithFields(log.Fields{
-		"algo":             algorithm,
-		"miners":           len(sessionList),
-		"clean":            clean,
-		"isNewBlock":       isNewBlock,
+		"algo":                  algorithm,
+		"miners":                len(sessionList),
+		"clean":                 clean,
+		"isNewBlock":            isNewBlock,
 		"quaiParentChangedOnly": quaiParentChangedOnly,
 	}).Info("Broadcasting new job")
 
 	// Broadcast to all sessions via worker pool
 	for _, sess := range sessionList {
-		// For Quai parent-hash-only changes (reorgs at same height):
-		// - Kawpow miners always receive these updates
-		// - ASIC miners (sha256/scrypt) only receive them if parentupdate=true
-		if quaiParentChangedOnly && algorithm != "kawpow" && !sess.parentUpdate {
-			s.logger.WithFields(log.Fields{
-				"sid":    sess.id,
-				"user":   sess.user,
-				"worker": sess.workerName,
-				"algo":   algorithm,
-			}).Debug("Skipping Quai parent-only update for ASIC miner (parentupdate not enabled)")
-			continue
+		// ASIC miner (sha256/scrypt) update logic:
+		// 1. isNewBlock=true (auxParentHash changed): ALWAYS send immediately to ALL miners
+		// 2. hasCustomFreq=true: Skip - they receive updates only via forceBroadcastStale timer
+		// 3. hasCustomFreq=false: Send based on quaiHeight (default) or quaiParent (if parentUpdate=true)
+		if algorithm == "sha256" || algorithm == "scrypt" {
+			// AuxParentHash changes (isNewBlock=true) always go to ALL miners immediately
+			if !isNewBlock {
+				// Miner has explicit frequency - skip (they get updates via forceBroadcastStale)
+				if sess.hasCustomFreq {
+					s.logger.WithFields(log.Fields{
+						"sid":                   sess.id,
+						"user":                  sess.user,
+						"worker":                sess.workerName,
+						"algo":                  algorithm,
+						"freq":                  sess.jobFrequency.Seconds(),
+						"quaiParentChangedOnly": quaiParentChangedOnly,
+					}).Debug("Skipping update for ASIC miner with custom freq - updates via forceBroadcastStale only")
+					continue
+				}
+				// No custom freq: check if this is a quaiParent-only change
+				// Default behavior: only send on quaiHeight changes
+				// With parentUpdate=true: also send on quaiParent changes
+				if quaiParentChangedOnly && !sess.parentUpdate {
+					s.logger.WithFields(log.Fields{
+						"sid":    sess.id,
+						"user":   sess.user,
+						"worker": sess.workerName,
+						"algo":   algorithm,
+					}).Debug("Skipping Quai parent-only update for ASIC miner (parentupdate not enabled)")
+					continue
+				}
+			}
 		}
 
 		// Handle skip blocks mode - skip every other Quai chain change,
@@ -768,13 +799,12 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 		"miners": len(staleSessions),
 	}).Debug("Force broadcasting to stale sessions")
 
-	// Dont force update if the last update happened less than 5 secs ago
-	if now.Sub(s.lastUpdateTime) < 5*time.Second {
-		return
-	}
-
 	// Broadcast with clean=true to stale sessions via worker pool
 	for _, sess := range staleSessions {
+		// Dont force update if the last update happened less than 5 secs ago
+		if now.Sub(s.lastUpdateTime) < 5*time.Second && !sess.hasCustomFreq {
+			return
+		}
 		s.jobPool.submit(sess, true)
 	}
 }
@@ -905,7 +935,7 @@ func (s *Server) trackConn(c net.Conn, add bool) {
 const (
 	defaultJobFrequency = 5 * time.Second
 	minJobFrequency     = 1 * time.Second
-	maxJobFrequency     = 10 * time.Second
+	maxJobFrequency     = 20 * time.Second // ASICs can set freq up to 20s to reduce update frequency
 )
 
 // Vardiff constants for automatic difficulty adjustment
@@ -1106,8 +1136,12 @@ type session struct {
 	// last job sent time for stale broadcast detection
 	lastJobSent time.Time
 	// jobFrequency controls how often force broadcasts are sent to this miner
-	// Configured via username: address.workername.frequency=X (1-10 seconds, supports decimals)
+	// Configured via username: address.workername.frequency=X (1-20 seconds, supports decimals)
 	jobFrequency time.Duration
+	// hasCustomFreq is true if the miner explicitly set a frequency via password field
+	// When true, ASIC miners only receive updates at that frequency (except auxParentHash changes)
+	// When false, ASIC miners receive immediate updates on quaiHeight changes (or quaiParent if parentUpdate=true)
+	hasCustomFreq bool
 	// jobSendMu serializes sendJobAndNotify calls to prevent concurrent job sends
 	// This avoids race conditions between post-submit job refresh, forceBroadcastStale, and broadcastJob
 	jobSendMu sync.Mutex
@@ -1132,7 +1166,7 @@ type session struct {
 	// parentUpdate enables ASIC miners to receive Quai parent hash updates (reorgs at same height)
 	// Kawpow miners always receive these updates. ASICs only receive them if parentupdate=true in password.
 	parentUpdate bool
-	lock             uint8
+	lock         uint8
 }
 
 // sendJSON safely encodes and sends JSON to the miner (thread-safe).
@@ -1173,8 +1207,8 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 
 	defer s.trackConn(c, false)
 	defer c.Close()
-	defer s.activeConns.Add(-1)        // Decrement connection counter on exit
-	defer RecordConnectionClosed()     // Record connection close for metrics
+	defer s.activeConns.Add(-1)    // Decrement connection counter on exit
+	defer RecordConnectionClosed() // Record connection close for metrics
 	// Set a longer initial read deadline - will be extended on each message
 	// Use SetReadDeadline (not SetDeadline) to avoid overriding the 10s write deadline in sendJSON
 	_ = c.SetReadDeadline(time.Now().Add(livenessTimeout))
@@ -1353,12 +1387,11 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 
 			if len(req.Params) >= 1 {
 				if u, ok := req.Params[0].(string); ok {
-					// Parse username format: address.workername.frequency=X
+					// Parse username format: address.workername
 					// Examples:
-					//   0x1234...          -> user=0x1234..., worker=default, freq=5s
-					//   0x1234....rig1     -> user=0x1234..., worker=rig1, freq=5s
-					//   0x1234....rig1.frequency=2.5 -> user=0x1234..., worker=rig1, freq=2.5s
-					sess.user, sess.workerName, sess.jobFrequency = parseUsername(u)
+					//   0x1234...          -> user=0x1234..., worker=default
+					//   0x1234...rig1      -> user=0x1234..., worker=rig1
+					sess.user, sess.workerName = parseUsername(u)
 				}
 			}
 
@@ -1407,6 +1440,7 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 					}
 					if pwFreq > 0 {
 						sess.jobFrequency = pwFreq // Password frequency overrides username frequency
+						sess.hasCustomFreq = true  // Track that freq was explicitly set
 					}
 				}
 			}
@@ -2726,55 +2760,30 @@ func powIDFromChain(chain string) types.PowID {
 	}
 }
 
-// parseUsername parses the stratum username format: address.workername.frequency=X (or freq=X)
-// Returns the address, worker name, and job frequency.
+// parseUsername parses the stratum username format: address.workername
+// Returns the address and worker name.
 // Examples:
-//   - "0x1234..." -> ("0x1234...", "default", 5s)
-//   - "0x1234....rig1" -> ("0x1234...", "rig1", 5s)
-//   - "0x1234....rig1.frequency=2.5" or "0x1234....rig1.freq=2.5" -> ("0x1234...", "rig1", 2.5s)
-//   - "0x1234....freq=3" -> ("0x1234...", "default", 3s)
-func parseUsername(u string) (address string, workerName string, jobFreq time.Duration) {
-	jobFreq = defaultJobFrequency
+//   - "0x1234..." -> ("0x1234...", "default")
+//   - "0x1234...rig1" -> ("0x1234...", "rig1")
+func parseUsername(u string) (address string, workerName string) {
 	workerName = "default"
 
-	// Split by dots, but be careful with addresses that may contain dots
-	// Format: address.workername.frequency=X or address.frequency=X
+	// Split by dots - format: address.workername
 	parts := strings.Split(u, ".")
 
 	if len(parts) == 0 {
-		return u, workerName, jobFreq
+		return u, workerName
 	}
 
 	// First part is always the address
 	address = parts[0]
 
-	// Process remaining parts
-	for i := 1; i < len(parts); i++ {
-		part := parts[i]
-
-		// Check if this part is a frequency setting (accept both "frequency=" and "freq=")
-		freqStr, isFreq := strings.CutPrefix(part, "frequency=")
-		if !isFreq {
-			freqStr, isFreq = strings.CutPrefix(part, "freq=")
-		}
-		if isFreq {
-			if freq, err := strconv.ParseFloat(freqStr, 64); err == nil {
-				// Convert seconds to duration and clamp to bounds
-				freqDuration := time.Duration(freq * float64(time.Second))
-				if freqDuration < minJobFrequency {
-					freqDuration = defaultJobFrequency
-				} else if freqDuration > maxJobFrequency {
-					freqDuration = defaultJobFrequency
-				}
-				jobFreq = freqDuration
-			}
-		} else if workerName == "default" {
-			// First non-frequency part after address is the worker name
-			workerName = part
-		}
+	// Second part (if present) is the worker name
+	if len(parts) > 1 && parts[1] != "" {
+		workerName = parts[1]
 	}
 
-	return address, workerName, jobFreq
+	return address, workerName
 }
 
 // parsePassword parses the stratum password field for optional parameters.
@@ -2814,8 +2823,15 @@ func parsePassword(password string) (*float64, time.Duration, bool, uint8, bool,
 			freqStr, isFreq = strings.CutPrefix(part, "freq=")
 		}
 		if isFreq {
-			if freq, err := strconv.ParseFloat(freqStr, 64); err == nil && freq >= 1 && freq <= 10 {
-				frequency = time.Duration(freq * float64(time.Second))
+			if freq, err := strconv.ParseFloat(freqStr, 64); err == nil && freq >= 1 {
+				freqDuration := time.Duration(freq * float64(time.Second))
+				// Clamp to bounds (minJobFrequency and maxJobFrequency)
+				if freqDuration < minJobFrequency {
+					freqDuration = minJobFrequency
+				} else if freqDuration > maxJobFrequency {
+					freqDuration = maxJobFrequency
+				}
+				frequency = freqDuration
 			}
 			continue
 		}
