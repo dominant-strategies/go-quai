@@ -1154,11 +1154,12 @@ type BlockTemplateUpdatesCriteria struct {
 
 // templateState tracks template changes for update detection
 type templateState struct {
-	sealHash      common.Hash
-	parentHash    common.Hash
-	height        uint64
-	quaiHeight    uint64
-	signatureTime uint32
+	sealHash       common.Hash
+	parentHash     common.Hash
+	quaiParentHash common.Hash
+	height         uint64
+	quaiHeight     uint64
+	signatureTime  uint32
 }
 
 // parsePowID converts algorithm string to types.PowID
@@ -1239,11 +1240,12 @@ func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit Block
 			pendingCopy.SetTime(0)
 
 			newState := &templateState{
-				sealHash:      pendingCopy.SealHash(),
-				parentHash:    auxPow.Header().PrevBlock(),
-				height:        pending.NumberU64(common.ZONE_CTX),
-				quaiHeight:    pending.WorkObjectHeader().NumberU64(),
-				signatureTime: signatureTime,
+				sealHash:       pendingCopy.SealHash(),
+				parentHash:     auxPow.Header().PrevBlock(),
+				quaiParentHash: pendingCopy.ParentHash(),
+				height:         pending.NumberU64(common.ZONE_CTX),
+				quaiHeight:     pending.WorkObjectHeader().NumberU64(),
+				signatureTime:  signatureTime,
 			}
 
 			var changed bool
@@ -1257,6 +1259,8 @@ func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit Block
 				changed = true // Signature time changed
 			} else if powID == types.Kawpow && lastState.sealHash != newState.sealHash {
 				changed = true // Kawpow: sealHash changed (epoch change)
+			} else if powID == types.Kawpow && lastState.quaiParentHash != newState.quaiParentHash {
+				changed = true
 			}
 
 			if changed || forceUpdate {
