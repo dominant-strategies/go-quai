@@ -109,6 +109,11 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 	}
 	etxEligibleSlices := primeTerminusHeader.EtxEligibleSlices()
 
+	var exchangeRate *big.Int
+	if header.ExchangeRate() != nil {
+		exchangeRate = new(big.Int).Set(header.ExchangeRate())
+	}
+
 	return vm.BlockContext{
 		CanTransfer:         CanTransfer,
 		Transfer:            Transfer,
@@ -123,6 +128,7 @@ func NewEVMBlockContext(header *types.WorkObject, parent *types.WorkObject, chai
 		EtxEligibleSlices:   etxEligibleSlices,
 		PrimeTerminusNumber: header.PrimeTerminusNumber().Uint64(),
 		QuaiStateSize:       parent.QuaiStateSize(), // using the state size at the parent for all the gas calculations
+		ExchangeRate:        exchangeRate,
 	}, nil
 }
 

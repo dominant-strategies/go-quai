@@ -50,9 +50,10 @@ type PrecompiledContract interface {
 }
 
 var (
-	PrecompiledContracts    map[common.AddressBytes]PrecompiledContract = make(map[common.AddressBytes]PrecompiledContract)
-	PrecompiledAddresses    map[string][]common.Address                 = make(map[string][]common.Address)
-	LockupContractAddresses map[[2]byte]common.Address                  = make(map[[2]byte]common.Address) // LockupContractAddress is not of type PrecompiledContract
+	PrecompiledContracts             map[common.AddressBytes]PrecompiledContract = make(map[common.AddressBytes]PrecompiledContract)
+	PrecompiledAddresses             map[string][]common.Address                 = make(map[string][]common.Address)
+	LockupContractAddresses          map[[2]byte]common.Address                  = make(map[[2]byte]common.Address) // LockupContractAddress is not of type PrecompiledContract
+	ExchangeRateContractAddresses    map[[2]byte]common.Address                  = make(map[[2]byte]common.Address) // ExchangeRate precompile address
 )
 
 func InitializePrecompiles(nodeLocation common.Location) {
@@ -66,6 +67,7 @@ func InitializePrecompiles(nodeLocation common.Location) {
 	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000008", nodeLocation.BytePrefix()))] = &bn256Pairing{}
 	PrecompiledContracts[common.HexToAddressBytes(fmt.Sprintf("0x%02x00000000000000000000000000000000000009", nodeLocation.BytePrefix()))] = &blake2F{}
 	LockupContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}] = common.HexToAddress(fmt.Sprintf("0x%02x0000000000000000000000000000000000000A", nodeLocation.BytePrefix()), nodeLocation)
+	ExchangeRateContractAddresses[[2]byte{nodeLocation[0], nodeLocation[1]}] = common.HexToAddress(fmt.Sprintf("0x%02x0000000000000000000000000000000000000B", nodeLocation.BytePrefix()), nodeLocation)
 
 	for address, _ := range PrecompiledContracts {
 		if address.Location().Equal(nodeLocation) {
@@ -963,4 +965,24 @@ func GetWrappedQiContractBalance(statedb StateDB, ownerContract common.Address, 
 		return nil, errors.New("no wrapped Qi balance")
 	}
 	return balanceHash.Big(), nil
+}
+
+// RunExchangeRateContract returns the current block's Qi/Quai exchange rate
+// as an ABI-encoded uint256. This is a read-only precompile at address 0x0B.
+// Input: empty (no arguments needed)
+// Output: 32 bytes (ABI-encoded uint256 exchange rate)
+// Gas cost: GasQuickStep (2 gas)
+func RunExchangeRateContract(evm *EVM, gas *uint64) ([]byte, error) {
+	if *gas < GasQuickStep {
+		return nil, ErrOutOfGas
+	}
+	*gas -= GasQuickStep
+
+	exchangeRate := evm.Context.ExchangeRate
+	if exchangeRate == nil {
+		exchangeRate = new(big.Int)
+	}
+
+	// ABI-encode as uint256 (left-padded to 32 bytes)
+	return common.LeftPadBytes(exchangeRate.Bytes(), 32), nil
 }

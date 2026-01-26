@@ -67,6 +67,19 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool, comm
 	return p, ok, addr
 }
 
+// isExchangeRateContract checks if the given address matches the exchange rate
+// precompile, trying both the raw address and a location-translated address.
+func (evm *EVM) isExchangeRateContract(addr common.Address) bool {
+	exchangeRateAddr := ExchangeRateContractAddresses[[2]byte(evm.chainConfig.Location)]
+	if addr.Equal(exchangeRateAddr) {
+		return true
+	}
+	// Try translating: set the location-specific byte prefix
+	translatedAddress := addr.Bytes20()
+	translatedAddress[0] = evm.chainConfig.Location.BytePrefix()
+	return common.Bytes20ToAddress(translatedAddress, evm.chainConfig.Location).Equal(exchangeRateAddr)
+}
+
 // BlockContext provides the EVM with auxiliary information. Once provided
 // it shouldn't be modified.
 type BlockContext struct {
@@ -88,6 +101,7 @@ type BlockContext struct {
 	Difficulty      *big.Int       // Provides information for DIFFICULTY
 	BaseFee         *big.Int       // Provides information for BASEFEE
 	QuaiStateSize   *big.Int       // Provides information for QUAISTATESIZE
+	ExchangeRate    *big.Int       // Provides Qi/Quai exchange rate for precompile
 
 	// Prime Terminus information for the given block
 	EtxEligibleSlices   common.Hash
@@ -214,6 +228,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	if addr.Equal(LockupContractAddresses[[2]byte(evm.chainConfig.Location)]) {
 		ret, err = RunLockupContract(evm, caller.Address(), &gas, input)
+		return ret, gas, 0, err
+	}
+	if evm.isExchangeRateContract(addr) {
+		ret, err = RunExchangeRateContract(evm, &gas)
 		return ret, gas, 0, err
 	}
 	snapshot := evm.StateDB.Snapshot()
@@ -395,6 +413,15 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
+	}
+
+	// Exchange rate precompile (0x0B) — read-only, safe for staticcall
+	if evm.isExchangeRateContract(addr) {
+		ret, err = RunExchangeRateContract(evm, &gas)
+		if err != nil {
+			return nil, 0, err
+		}
+		return ret, gas, nil
 	}
 
 	// We take a snapshot here. This is a bit counter-intuitive, and could probably be skipped.
