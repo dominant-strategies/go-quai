@@ -75,6 +75,8 @@ var NodeFlags = []Flag{
 	P2PPortFlag,
 	BootPeersFlag,
 	PortMapFlag,
+	ExternalAddrFlag,
+	ForcePublicFlag,
 	KeyFileFlag,
 	MinPeersFlag,
 	MaxPeersFlag,
@@ -254,6 +256,18 @@ var (
 		Name:  c_NodeFlagPrefix + "portmap",
 		Value: true,
 		Usage: "enable NAT portmap" + generateEnvDoc(c_NodeFlagPrefix+"portmap"),
+	}
+
+	ExternalAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "external-addr",
+		Value: "",
+		Usage: "external multiaddr to announce (e.g., /ip4/1.2.3.4/tcp/4002)" + generateEnvDoc(c_NodeFlagPrefix+"external-addr"),
+	}
+
+	ForcePublicFlag = Flag{
+		Name:  c_NodeFlagPrefix + "force-public",
+		Value: false,
+		Usage: "force public reachability, skip NAT detection (for K8s)" + generateEnvDoc(c_NodeFlagPrefix+"force-public"),
 	}
 
 	KeyFileFlag = Flag{
