@@ -77,11 +77,31 @@ type P2PNode struct {
 	bandwidthCounter *libp2pmetrics.BandwidthCounter
 }
 
+// buildAddrsFactory creates an AddrsFactory that replaces announced addresses
+// with the specified external address. Used for Kubernetes deployments where
+// the pod's internal IP is not externally routable.
+func buildAddrsFactory(externalAddr string) (libp2p.Option, error) {
+	if externalAddr == "" {
+		return nil, nil
+	}
+
+	addr, err := multiaddr.NewMultiaddr(externalAddr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid external-addr %q: %w", externalAddr, err)
+	}
+
+	return libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+		return []multiaddr.Multiaddr{addr}
+	}), nil
+}
+
 // Returns a new libp2p node.
 // The node is created with the given context and options passed as arguments.
 func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	ipAddr := viper.GetString(utils.IPAddrFlag.Name)
 	port := viper.GetString(utils.P2PPortFlag.Name)
+	externalAddr := viper.GetString(utils.ExternalAddrFlag.Name)
+	forcePublic := viper.GetBool(utils.ForcePublicFlag.Name)
 
 	// Peer manager handles both connection management and connection gating
 	peerMgr, err := peerManager.NewManager(
@@ -113,6 +133,13 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	log.Global.Info("listen addrs quic ", fmt.Sprintf("/ip4/%s/udp/%s/quic", ipAddr, port))
 	// Create the libp2p host
 
+	// Build AddrsFactory for external address announcement (K8s support)
+	addrsFactoryOpt, err := buildAddrsFactory(externalAddr)
+	if err != nil {
+		log.Global.Fatalf("error building address factory: %s", err)
+		return nil, err
+	}
+
 	peerKey := getNodeKey()
 	var dht *kaddht.IpfsDHT
 	host, err := libp2p.New(
@@ -130,6 +157,22 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 			fmt.Sprintf("/ip4/%s/tcp/%s", ipAddr, port),
 		),
 
+		// Custom address factory for K8s external addresses
+		func() libp2p.Option {
+			if addrsFactoryOpt != nil {
+				return addrsFactoryOpt
+			}
+			return nil
+		}(),
+
+		// Force public reachability (skip NAT detection) for K8s
+		func() libp2p.Option {
+			if forcePublic {
+				return libp2p.ForceReachabilityPublic()
+			}
+			return nil
+		}(),
+
 		// support all transports
 		libp2p.DefaultTransports,
 
@@ -137,12 +180,15 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 		libp2p.Security(noise.ID, noise.New),
 
 		// Optionally attempt to configure network port mapping with UPnP
+		// Skip when force-public is set (UPnP not needed in K8s)
 		func() libp2p.Option {
-			if viper.GetBool(utils.PortMapFlag.Name) {
-				return libp2p.NATPortMap()
-			} else {
+			if forcePublic {
 				return nil
 			}
+			if viper.GetBool(utils.PortMapFlag.Name) {
+				return libp2p.NATPortMap()
+			}
+			return nil
 		}(),
 
 		// Enable NAT detection service
@@ -200,6 +246,13 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	// log the p2p node's ID
 	nodeID := host.ID()
 	log.Global.Infof("node created: %s", nodeID)
+
+	// Log address configuration for debugging K8s deployments
+	log.Global.WithFields(log.Fields{
+		"listenAddrs":  host.Addrs(),
+		"externalAddr": externalAddr,
+		"forcePublic":  forcePublic,
+	}).Info("P2P node address configuration")
 
 	// Set peer manager's self ID
 	peerMgr.SetSelfID(nodeID)
