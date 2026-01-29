@@ -1112,6 +1112,12 @@ func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address, ex
 				}
 				if lock != 0 {
 					phCopy.WorkObjectHeader().SetLock(lock)
+					data := phCopy.WorkObjectHeader().Data()
+					// Update the data field in the header
+					if len(data) > 0 && lock > 0 && lock <= uint8(len(params.LockupByteToBlockDepth)-1) {
+						data[0] = lock
+						phCopy.WorkObjectHeader().SetData(data)
+					}
 				}
 
 				phCopy.WorkObjectHeader().SetTime(uint64(time.Now().Unix()))
