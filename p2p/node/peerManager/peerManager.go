@@ -628,13 +628,20 @@ func (pm *BasicPeerManager) BanPeer(peer p2p.PeerID) {
 }
 
 func (pm *BasicPeerManager) Stop() error {
+	// Cancel the context to signal all goroutines to stop
+	pm.cancel()
+
+	// Stop the stream manager
+	if pm.streamManager != nil {
+		pm.streamManager.Stop()
+	}
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var closeErrors []string
 
 	closeFuncs := []func() error{
 		pm.BasicConnMgr.Close,
-		pm.dht.Close,
 	}
 
 	wg.Add(len(closeFuncs))

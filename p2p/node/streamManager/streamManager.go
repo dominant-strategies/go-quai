@@ -61,6 +61,9 @@ type StreamManager interface {
 
 	// WriteMessageToStream writes the given message into the given stream
 	WriteMessageToStream(peerID p2p.PeerID, stream network.Stream, msg []byte, protoversion protocol.ID, reporter libp2pmetrics.Reporter) error
+
+	// Stop cancels the stream manager's context and stops all goroutines
+	Stop() error
 }
 
 type basicStreamManager struct {
@@ -122,8 +125,10 @@ func (sm *basicStreamManager) Start() {
 	go sm.listenForNewStreamRequest()
 }
 
-func (sm *basicStreamManager) Stop() {
+func (sm *basicStreamManager) Stop() error {
 	sm.cancel()
+	sm.streamCache.Purge()
+	return nil
 }
 
 func (sm *basicStreamManager) listenForNewStreamRequest() {
@@ -191,10 +196,7 @@ func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	wrappedStream, ok := sm.streamCache.Get(peerID)
-	if ok {
-		severStream(peerID, wrappedStream)
-		sm.streamCache.Remove(peerID)
+	if sm.streamCache.Remove(peerID) {
 		log.Global.WithField("peerID", peerID).Debug("Pruned connection with peer")
 		return nil
 	}
