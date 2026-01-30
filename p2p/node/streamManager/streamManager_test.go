@@ -195,3 +195,48 @@ func TestWriteMessageToStream(t *testing.T) {
 		require.NoError(t, err, "Expected no error when writing message to stream")
 	})
 }
+
+func TestCloseStreamClosesUnderlyingStreamOnce(t *testing.T) {
+	ctrl, mockNode, mockHost, sm := setup(t)
+	defer ctrl.Finish()
+	defer sm.Stop()
+
+	peerID := peer.ID("close-peer")
+	mockHost.EXPECT().ID().Return(peerID).Times(1)
+
+	mockLibp2pStream := mock_p2p.NewMockStream(ctrl)
+	mockConn := mock_p2p.NewMockConn(ctrl)
+
+	mockNode.EXPECT().GetBandwidthCounter().Return(nil).AnyTimes()
+	mockLibp2pStream.EXPECT().Close().Return(nil).Times(1)
+	mockLibp2pStream.EXPECT().Conn().Return(mockConn).AnyTimes()
+	mockLibp2pStream.EXPECT().Protocol().Return(protocol.ProtocolVersion).AnyTimes()
+	mockLibp2pStream.EXPECT().Read(gomock.Any()).Return(0, nil).AnyTimes()
+	mockConn.EXPECT().RemotePeer().Return(peerID).AnyTimes()
+	mockHost.EXPECT().NewStream(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLibp2pStream, nil).Times(1)
+
+	require.NoError(t, sm.OpenStream(mockHost.ID()))
+	require.NoError(t, sm.CloseStream(peerID))
+}
+
+func TestStopPurgesCachedStreams(t *testing.T) {
+	ctrl, mockNode, mockHost, sm := setup(t)
+	defer ctrl.Finish()
+
+	peerID := peer.ID("stop-peer")
+	mockHost.EXPECT().ID().Return(peerID).Times(1)
+
+	mockLibp2pStream := mock_p2p.NewMockStream(ctrl)
+	mockConn := mock_p2p.NewMockConn(ctrl)
+
+	mockNode.EXPECT().GetBandwidthCounter().Return(nil).AnyTimes()
+	mockLibp2pStream.EXPECT().Close().Return(nil).Times(1)
+	mockLibp2pStream.EXPECT().Conn().Return(mockConn).AnyTimes()
+	mockLibp2pStream.EXPECT().Protocol().Return(protocol.ProtocolVersion).AnyTimes()
+	mockLibp2pStream.EXPECT().Read(gomock.Any()).Return(0, nil).AnyTimes()
+	mockConn.EXPECT().RemotePeer().Return(peerID).AnyTimes()
+	mockHost.EXPECT().NewStream(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockLibp2pStream, nil).Times(1)
+
+	require.NoError(t, sm.OpenStream(mockHost.ID()))
+	require.NoError(t, sm.Stop())
+}
