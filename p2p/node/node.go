@@ -299,6 +299,9 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 
 // Close performs cleanup of resources used by P2PNode
 func (p *P2PNode) Close() error {
+	// Cancel the context to signal all goroutines to stop
+	p.cancel()
+
 	// Close PubSub manager
 	if err := p.pubsub.Stop(); err != nil {
 		log.Global.Errorf("error closing pubsub manager: %s", err)
