@@ -21,6 +21,8 @@ import (
 	"errors"
 	"math/big"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/consensus"
@@ -38,10 +40,16 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
+const (
+	// Cache size for UncleWorkShareClassification results
+	uncleWorkShareClassificationCacheSize = 100000
+)
+
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
-	extRPCEnabled bool
-	quai          *Quai
+	extRPCEnabled                      bool
+	quai                               *Quai
+	uncleWorkShareClassificationCache  *lru.Cache[common.Hash, types.WorkShareValidity]
 }
 
 func (b *QuaiAPIBackend) RpcVersion() string {
@@ -889,7 +897,13 @@ func (b *QuaiAPIBackend) GetBestAuxTemplate(powId types.PowID) *types.AuxTemplat
 }
 
 func (b *QuaiAPIBackend) UncleWorkShareClassification(workshare *types.WorkObjectHeader) types.WorkShareValidity {
-	return b.quai.core.UncleWorkShareClassification(workshare)
+	hash := workshare.Hash()
+	if validity, ok := b.uncleWorkShareClassificationCache.Get(hash); ok {
+		return validity
+	}
+	validity := b.quai.core.UncleWorkShareClassification(workshare)
+	b.uncleWorkShareClassificationCache.Add(hash, validity)
+	return validity
 }
 
 func (b *QuaiAPIBackend) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
