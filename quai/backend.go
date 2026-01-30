@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
@@ -271,7 +273,12 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	// Start the handler
 	quai.handler.Start()
 
-	quai.APIBackend = &QuaiAPIBackend{stack.Config().ExtRPCEnabled(), quai}
+	uncleWorkShareClassificationCache, _ := lru.New[common.Hash, types.WorkShareValidity](uncleWorkShareClassificationCacheSize)
+	quai.APIBackend = &QuaiAPIBackend{
+		extRPCEnabled:                     stack.Config().ExtRPCEnabled(),
+		quai:                              quai,
+		uncleWorkShareClassificationCache: uncleWorkShareClassificationCache,
+	}
 
 	// Register the backend on the node
 	stack.RegisterAPIs(quai.APIs())
