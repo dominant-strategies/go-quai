@@ -792,6 +792,19 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	cap = hi
 
+	// If no access list was provided and this is a contract call, generate one.
+	// Quai enforces access lists for all non-trivial EVM transactions, so the
+	// gas estimate must account for the intrinsic gas of access list entries
+	// (2400 per address + 1900 per storage key). Without this, the binary search
+	// finds the correct EVM execution gas but misses the access list overhead,
+	// causing the estimate to be too low.
+	if args.AccessList == nil && args.To != nil && len(args.data()) > 0 {
+		acl, _, _, aclErr := AccessList(ctx, b, blockNrOrHash, args)
+		if aclErr == nil {
+			args.AccessList = &acl
+		}
+	}
+
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
