@@ -355,6 +355,22 @@ func (es *EventSystem) SubscribeUnlocks(unlocks chan core.UnlocksEvent) *Subscri
 	return es.subscribe(sub)
 }
 
+// SubscribeChainBlocks creates a subscription that writes the block for every
+// chain event (all blocks appended to the chain, not just the head).
+func (es *EventSystem) SubscribeChainBlocks(headers chan *types.WorkObject) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       BlocksSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		hashes:    make(chan []common.Hash),
+		headers:   headers,
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
 // SubscribeChainHeadEvent subscribes to the chain head feed
 func (es *EventSystem) SubscribeChainHeadEvent(headers chan *types.WorkObject) *Subscription {
 	sub := &subscription{
