@@ -429,6 +429,94 @@ func (api *PublicFilterAPI) NewWorksharesV2(ctx context.Context) (*rpc.Subscript
 	return rpcSub, nil
 }
 
+// NewChainBlocks sends a notification for every block in the chain event (all blocks, not just the head).
+func (api *PublicFilterAPI) NewChainBlocks(ctx context.Context) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+		api.activeSubscriptions += 1
+		blocks := make(chan *types.WorkObject, 10)
+		blocksSub := api.events.SubscribeChainBlocks(blocks)
+		defer blocksSub.Unsubscribe()
+
+		for {
+			select {
+			case b := <-blocks:
+				marshalBlock := b.RPCMarshalWorkObject(api.backend.RpcVersion())
+				notifier.Notify(rpcSub.ID, marshalBlock)
+			case <-rpcSub.Err():
+				return
+			case <-notifier.Closed():
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// NewChainBlocksV2 sends a notification for every block in the chain event using v2 marshaling.
+func (api *PublicFilterAPI) NewChainBlocksV2(ctx context.Context) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+		api.activeSubscriptions += 1
+		blocks := make(chan *types.WorkObject, 10)
+		blocksSub := api.events.SubscribeChainBlocks(blocks)
+		defer blocksSub.Unsubscribe()
+
+		for {
+			select {
+			case b := <-blocks:
+				marshalBlock := b.RPCMarshalWorkObject("v2")
+				notifier.Notify(rpcSub.ID, marshalBlock)
+			case <-rpcSub.Err():
+				return
+			case <-notifier.Closed():
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // NewHeads send a notification each time a new (header) block is appended to the chain.
 func (api *PublicFilterAPI) NewHeadsV2(ctx context.Context) (*rpc.Subscription, error) {
 	if api.activeSubscriptions >= api.subscriptionLimit {
