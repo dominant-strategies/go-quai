@@ -83,7 +83,8 @@ type Config struct {
 	GenesisNonce uint64 `toml:",omitempty"`
 	GenesisExtra []byte `toml:",omitempty"`
 	// Genesis Allocs for starting
-	GenesisAllocs []params.GenesisAccount
+	GenesisAllocs       []params.GenesisAccount
+	ForfeitureAddresses map[common.AddressBytes]bool
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
@@ -186,14 +187,15 @@ func CreateProgpowConsensusEngine(stack *node.Node, nodeLocation common.Location
 		logger.Warn("Progpow used in shared mode")
 	}
 	engine := progpow.New(params.PowConfig{
-		PowMode:            config.PowMode,
-		NotifyFull:         config.NotifyFull,
-		DurationLimit:      config.DurationLimit,
-		NodeLocation:       nodeLocation,
-		GasCeil:            config.GasCeil,
-		GenAllocs:          config.GenAllocs,
-		MinDifficulty:      config.MinDifficulty,
-		WorkShareThreshold: config.WorkShareThreshold,
+		PowMode:             config.PowMode,
+		NotifyFull:          config.NotifyFull,
+		DurationLimit:       config.DurationLimit,
+		NodeLocation:        nodeLocation,
+		GasCeil:             config.GasCeil,
+		GenAllocs:           config.GenAllocs,
+		ForfeitureAddresses: config.ForfeitureAddresses,
+		MinDifficulty:       config.MinDifficulty,
+		WorkShareThreshold:  config.WorkShareThreshold,
 	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
@@ -211,13 +213,14 @@ func CreateKawPowConsensusEngine(stack *node.Node, nodeLocation common.Location,
 		logger.Warn("KawPow used in shared mode")
 	}
 	engine := kawpow.New(params.PowConfig{
-		NotifyFull:         config.NotifyFull,
-		DurationLimit:      config.DurationLimit,
-		NodeLocation:       nodeLocation,
-		GasCeil:            config.GasCeil,
-		GenAllocs:          config.GenAllocs,
-		MinDifficulty:      config.MinDifficulty,
-		WorkShareThreshold: config.WorkShareThreshold,
+		NotifyFull:          config.NotifyFull,
+		DurationLimit:       config.DurationLimit,
+		NodeLocation:        nodeLocation,
+		GasCeil:             config.GasCeil,
+		GenAllocs:           config.GenAllocs,
+		ForfeitureAddresses: config.ForfeitureAddresses,
+		MinDifficulty:       config.MinDifficulty,
+		WorkShareThreshold:  config.WorkShareThreshold,
 	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
@@ -235,14 +238,15 @@ func CreateBlake3ConsensusEngine(stack *node.Node, nodeLocation common.Location,
 		logger.Warn("Progpow used in shared mode")
 	}
 	engine := blake3pow.New(params.PowConfig{
-		PowMode:            config.PowMode,
-		NotifyFull:         config.NotifyFull,
-		DurationLimit:      config.DurationLimit,
-		NodeLocation:       nodeLocation,
-		GasCeil:            config.GasCeil,
-		GenAllocs:          config.GenAllocs,
-		MinDifficulty:      config.MinDifficulty,
-		WorkShareThreshold: workShareThreshold,
+		PowMode:             config.PowMode,
+		NotifyFull:          config.NotifyFull,
+		DurationLimit:       config.DurationLimit,
+		NodeLocation:        nodeLocation,
+		GasCeil:             config.GasCeil,
+		GenAllocs:           config.GenAllocs,
+		ForfeitureAddresses: config.ForfeitureAddresses,
+		MinDifficulty:       config.MinDifficulty,
+		WorkShareThreshold:  workShareThreshold,
 	}, notify, noverify, logger)
 	engine.SetThreads(-1) // Disable CPU mining
 	return engine
@@ -253,7 +257,7 @@ func (c Config) String() string {
 	v := reflect.ValueOf(c)
 	t := reflect.TypeOf(c)
 	for i := 0; i < t.NumField(); i++ {
-		if t.Field(i).Name == "GenesisAllocs" {
+		if t.Field(i).Name == "GenesisAllocs" || t.Field(i).Name == "ForfeitureAddresses" {
 			continue
 		}
 		fields = append(fields, fmt.Sprintf("%s: %v", t.Field(i).Name, v.Field(i).Interface()))

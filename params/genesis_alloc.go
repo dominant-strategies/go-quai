@@ -132,6 +132,29 @@ func decodeGenesisAllocs(r io.Reader) ([]GenesisAccount, error) {
 	return accounts, nil
 }
 
+// LoadForfeitureAddresses reads a JSON file containing a flat array of hex
+// address strings and returns them as a map for O(1) lookup.
+func LoadForfeitureAddresses(filename string) (map[common.AddressBytes]bool, error) {
+	path := filepath.Clean(filename)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open forfeiture file: %w", err)
+	}
+	defer file.Close()
+
+	var addresses []common.Address
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&addresses); err != nil {
+		return nil, fmt.Errorf("failed to decode forfeiture addresses: %w", err)
+	}
+
+	addrMap := make(map[common.AddressBytes]bool, len(addresses))
+	for _, addr := range addresses {
+		addrMap[addr.Bytes20()] = true
+	}
+	return addrMap, nil
+}
+
 // Will calculate the unlock heights according to the pre-defined unlocking schedule.
 func (account *GenesisAccount) calculateLockedBalances() {
 	account.BalanceSchedule = orderedmap.New[uint64, *big.Int]()
