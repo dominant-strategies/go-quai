@@ -1587,6 +1587,10 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 				log.Global.WithField("err", err).Fatal("Unable to allocate genesis accounts")
 			}
 		}
+		cfg.ForfeitureAddresses, err = params.LoadForfeitureAddresses("params/forfeiture_addresses.json")
+		if err != nil {
+			log.Global.WithField("err", err).Fatal("Unable to load forfeiture addresses")
+		}
 	}
 
 	cfg.Genesis.Config.Location = nodeLocation

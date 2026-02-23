@@ -154,14 +154,15 @@ const (
 type PowConfig struct {
 	PowMode Mode
 
-	CacheDir       string
-	CachesInMem    int
-	CachesOnDisk   int
-	CachesLockMmap bool
-	DurationLimit  *big.Int
-	GasCeil        uint64
-	MinDifficulty  *big.Int
-	GenAllocs      []GenesisAccount
+	CacheDir            string
+	CachesInMem         int
+	CachesOnDisk        int
+	CachesLockMmap      bool
+	DurationLimit       *big.Int
+	GasCeil             uint64
+	MinDifficulty       *big.Int
+	GenAllocs           []GenesisAccount
+	ForfeitureAddresses map[common.AddressBytes]bool
 
 	NodeLocation common.Location
 

@@ -2,6 +2,8 @@ package params
 
 import (
 	"math/big"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -187,4 +189,18 @@ func TestCalculatingGenallocs(t *testing.T) {
 		require.Zero(t, expectedAllocValues.account.Vested.Cmp(totalAdded))
 		require.Zero(t, actualAlloc.Vested.Cmp(totalAdded))
 	}
+}
+
+func TestLoadForfeitureAddresses(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "forfeiture_addresses.json")
+	content := `[
+		"0x0000000000000000000000000000000000000001",
+		"0x0000000000000000000000000000000000000002"
+	]`
+	require.NoError(t, os.WriteFile(file, []byte(content), 0o600))
+
+	addresses, err := LoadForfeitureAddresses(file)
+	require.NoError(t, err)
+	require.True(t, addresses[common.HexToAddress("0x0000000000000000000000000000000000000001", common.Location{0, 0}).Bytes20()])
+	require.True(t, addresses[common.HexToAddress("0x0000000000000000000000000000000000000002", common.Location{0, 0}).Bytes20()])
 }
