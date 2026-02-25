@@ -62,16 +62,16 @@ type privateKeyOutput struct {
 }
 
 type signQuaiTxInput struct {
-	WalletID string   `json:"walletId"`
-	Address  string   `json:"address"`
-	ChainID  int64    `json:"chainId"`
-	Nonce    uint64   `json:"nonce"`
-	GasPrice string   `json:"gasPrice"`
-	Gas      uint64   `json:"gas"`
-	To       string   `json:"to"`
-	Value    string   `json:"value"`
-	Data     string   `json:"data"`
-	Zone     []byte   `json:"zone"`
+	WalletID string `json:"walletId"`
+	Address  string `json:"address"`
+	ChainID  int64  `json:"chainId"`
+	Nonce    uint64 `json:"nonce"`
+	GasPrice string `json:"gasPrice"`
+	Gas      uint64 `json:"gas"`
+	To       string `json:"to"`
+	Value    string `json:"value"`
+	Data     string `json:"data"`
+	Zone     []byte `json:"zone"`
 }
 
 type signQiTxInput struct {
@@ -96,12 +96,32 @@ type mnemonicInput struct {
 	Phrase string `json:"phrase"`
 }
 
+type encryptKeystoreInput struct {
+	PrivateKey string `json:"privateKey"`
+	Password   string `json:"password"`
+	Zone       []byte `json:"zone"`
+}
+
+type decryptKeystoreInput struct {
+	KeystoreJSON string `json:"keystoreJson"`
+	Password     string `json:"password"`
+}
+
 type validOutput struct {
 	Valid bool `json:"valid"`
 }
 
 type signedTxOutput struct {
 	TxHex string `json:"txHex"`
+}
+
+type keystoreOutput struct {
+	KeystoreJSON string `json:"keystoreJson"`
+}
+
+type decryptKeystoreOutput struct {
+	PrivateKey string `json:"privateKey"`
+	Address    string `json:"address"`
 }
 
 // --- Helper functions ---
@@ -388,6 +408,42 @@ func ValidateMnemonic(jsonInput *C.char) *C.char {
 	}
 
 	return returnJSON(validOutput{Valid: hdwallet.IsValidMnemonic(input.Phrase)})
+}
+
+//export EncryptPrivateKeyToKeystore
+func EncryptPrivateKeyToKeystore(jsonInput *C.char) *C.char {
+	var input encryptKeystoreInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+
+	zone := common.Location(input.Zone)
+	if len(zone) < 2 {
+		zone = common.Location{0, 0}
+	}
+
+	keystoreJSON, err := hdwallet.EncryptPrivateKeyHexToKeystoreJSON(input.PrivateKey, input.Password, zone)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	return returnJSON(keystoreOutput{KeystoreJSON: keystoreJSON})
+}
+
+//export DecryptKeystoreToPrivateKey
+func DecryptKeystoreToPrivateKey(jsonInput *C.char) *C.char {
+	var input decryptKeystoreInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+
+	privateKey, address, err := hdwallet.DecryptKeystoreJSONToPrivateKeyHex(input.KeystoreJSON, input.Password)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	return returnJSON(decryptKeystoreOutput{
+		PrivateKey: privateKey,
+		Address:    address,
+	})
 }
 
 //export FreeString
