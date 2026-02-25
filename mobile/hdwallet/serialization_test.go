@@ -1,10 +1,13 @@
 package hdwallet
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 func TestSerializeDeserialize(t *testing.T) {
@@ -67,6 +70,49 @@ func TestSerializeDeserialize(t *testing.T) {
 	}
 	if restored2.Index != info2.Index {
 		t.Fatalf("index mismatch: got %d, want %d", restored2.Index, info2.Index)
+	}
+}
+
+func TestSerializeDeserialize_ChangeAddressPreservesKeyPath(t *testing.T) {
+	w, _ := NewHDWalletFromPhrase(testPhrase, "", CoinTypeQuai)
+
+	index := findIndexForLedgerScope(t, w, 0, true, false)
+	info, err := w.DeriveAddressAtIndex(0, true, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := w.Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	w2, err := DeserializeWallet(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restoredInfo, err := w2.GetAddressInfo(info.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !restoredInfo.Change {
+		t.Fatal("expected change branch metadata to survive serialization")
+	}
+
+	gotPriv, err := w2.GetPrivateKeyForAddress(info.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNode, err := w2.root.DerivePath("0'/1/" + fmt.Sprint(index))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPriv, err := wantNode.PrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(crypto.FromECDSA(gotPriv), crypto.FromECDSA(wantPriv)) {
+		t.Fatal("restored wallet returned wrong private key for change address")
 	}
 }
 

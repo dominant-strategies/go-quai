@@ -1,13 +1,46 @@
 package hdwallet
 
 import (
+	"bytes"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/crypto"
 )
 
 const testPhrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+
+func findIndexForLedgerScope(t *testing.T, w *HDWallet, account uint32, change bool, wantQi bool) uint32 {
+	t.Helper()
+
+	changeBit := uint32(0)
+	if change {
+		changeBit = 1
+	}
+	branchNode, err := w.root.DerivePath(fmt.Sprintf("%d'/%d", account, changeBit))
+	if err != nil {
+		t.Fatalf("failed to derive branch node: %v", err)
+	}
+
+	for i := uint32(0); i < 4096; i++ {
+		child, err := branchNode.DeriveChild(i)
+		if err != nil {
+			continue
+		}
+		addrBytes, err := child.AddressBytes()
+		if err != nil {
+			continue
+		}
+		if IsQiAddress(addrBytes) == wantQi {
+			return i
+		}
+	}
+	t.Fatalf("failed to find index for ledger scope (wantQi=%v)", wantQi)
+	return 0
+}
 
 func TestNewHDWallet(t *testing.T) {
 	w, err := NewHDWalletFromPhrase(testPhrase, "", CoinTypeQuai)
@@ -209,17 +242,82 @@ func TestGetAddressesForZone(t *testing.T) {
 func TestDeriveAddressAtIndex(t *testing.T) {
 	w, _ := NewHDWalletFromPhrase(testPhrase, "", CoinTypeQuai)
 
-	info, err := w.DeriveAddressAtIndex(0, false, 5)
+	index := findIndexForLedgerScope(t, w, 0, false, false)
+	info, err := w.DeriveAddressAtIndex(0, false, index)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Index != 5 {
-		t.Fatalf("expected index 5, got %d", info.Index)
+	if info.Index != index {
+		t.Fatalf("expected index %d, got %d", index, info.Index)
 	}
 	if info.Account != 0 {
 		t.Fatalf("expected account 0, got %d", info.Account)
 	}
+	if info.Change {
+		t.Fatal("expected external (non-change) branch address")
+	}
 	t.Logf("Index 5 address: %s, zone: %v, isQi: %v", info.Address, info.Zone, info.IsQi)
+}
+
+func TestDeriveAddressAtIndex_RejectsWrongLedgerForWalletCoinType(t *testing.T) {
+	w, _ := NewHDWalletFromPhrase(testPhrase, "", CoinTypeQuai)
+
+	qiIndex := findIndexForLedgerScope(t, w, 0, false, true)
+	if _, err := w.DeriveAddressAtIndex(0, false, qiIndex); err == nil {
+		t.Fatalf("expected error deriving Qi-ledger address for Quai wallet at index %d", qiIndex)
+	}
+}
+
+func TestGetPrivateKeyForAddress_ChangeBranch(t *testing.T) {
+	w, _ := NewHDWalletFromPhrase(testPhrase, "", CoinTypeQuai)
+
+	index := findIndexForLedgerScope(t, w, 0, true, false)
+	info, err := w.DeriveAddressAtIndex(0, true, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotPriv, err := w.GetPrivateKeyForAddress(info.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNode, err := w.root.DerivePath(fmt.Sprintf("0'/1/%d", index))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPriv, err := wantNode.PrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(crypto.FromECDSA(gotPriv), crypto.FromECDSA(wantPriv)) {
+		t.Fatal("change-branch private key lookup returned the wrong key")
+	}
+}
+
+func TestGetPrivateKeyForAddress_MixedCaseLookup(t *testing.T) {
+	w, _ := NewHDWalletFromPhrase(testPhrase, "", CoinTypeQuai)
+	zone := common.Location{0, 0}
+
+	info, err := w.DeriveAddress(0, zone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mixed := common.HexToAddressBytes(info.Address).Hex()
+	if mixed == info.Address {
+		for i := 2; i < len(mixed); i++ {
+			if mixed[i] >= 'a' && mixed[i] <= 'f' {
+				mixed = mixed[:i] + strings.ToUpper(string(mixed[i])) + mixed[i+1:]
+				break
+			}
+		}
+	}
+	if _, err := w.GetPrivateKeyForAddress(mixed); err != nil {
+		t.Fatalf("mixed-case lookup should succeed: %v", err)
+	}
+	if _, err := w.GetAddressInfo(mixed); err != nil {
+		t.Fatalf("mixed-case address info lookup should succeed: %v", err)
+	}
 }
 
 func TestAddresses(t *testing.T) {

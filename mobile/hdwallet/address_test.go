@@ -34,7 +34,7 @@ func TestLocationFromAddress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			loc := LocationFromAddress(tt.addr)
+			loc := common.LocationFromAddressBytes(tt.addr)
 			if loc.Region() != tt.wantReg {
 				t.Errorf("region = %d, want %d", loc.Region(), tt.wantReg)
 			}

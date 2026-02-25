@@ -53,9 +53,11 @@ func DeserializeWallet(data []byte) (*HDWallet, error) {
 
 	// Restore address records
 	for _, info := range sw.Addresses {
-		w.addresses[info.Address] = info
+		if err := w.storeAddressInfo(info); err != nil {
+			return nil, fmt.Errorf("invalid stored address %q: %w", info.Address, err)
+		}
 		// Update nextIndex to be past the highest known index for each account
-		key := accountKey{account: info.Account, change: false}
+		key := accountKey{account: info.Account, change: info.Change}
 		if info.Index+1 > w.nextIndex[key] {
 			w.nextIndex[key] = info.Index + 1
 		}

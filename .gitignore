@@ -1,5 +1,6 @@
 build/bin/
 build/mobile/
+**/xcuserdata/
 nodelogs/
 traces/
 /data/
