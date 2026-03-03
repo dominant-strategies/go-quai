@@ -24,6 +24,15 @@ type QuaiTxParams struct {
 	To       string // hex address, empty for contract creation
 	Value    *big.Int
 	Data     []byte
+	// AccessList is an optional EIP-2930 access list. Quai contract interactions
+	// require this to be present on chain.
+	AccessList []QuaiAccessListTupleParam
+}
+
+// QuaiAccessListTupleParam represents one access-list entry.
+type QuaiAccessListTupleParam struct {
+	Address     string
+	StorageKeys []string
 }
 
 // QiTxParams holds parameters for creating a Qi (UTXO-based) transaction.
@@ -35,9 +44,14 @@ type QiTxParams struct {
 
 // QiTxInputParam represents a UTXO input.
 type QiTxInputParam struct {
-	TxHash string // hex-encoded previous tx hash
-	Index  uint16
-	PubKey []byte // 33 or 65 byte public key
+	TxHash                  string // hex-encoded previous tx hash
+	Index                   uint16
+	PubKey                  []byte // 33 or 65 byte public key
+	DerivationKind          string
+	Account                 uint32
+	Change                  bool
+	DerivationIndex         uint32
+	CounterpartyPaymentCode string
 }
 
 // QiTxOutputParam represents a UTXO output.
@@ -55,14 +69,35 @@ func SignQuaiTx(params *QuaiTxParams, privKey *ecdsa.PrivateKey, location common
 		to = &addr
 	}
 
+	accessList := make(types.AccessList, 0, len(params.AccessList))
+	for i, tuple := range params.AccessList {
+		if !common.IsHexAddress(tuple.Address) {
+			return nil, fmt.Errorf("invalid accessList[%d].address", i)
+		}
+		storageKeys := make([]common.Hash, len(tuple.StorageKeys))
+		for j, keyHex := range tuple.StorageKeys {
+			keyHex = strings.TrimPrefix(strings.TrimPrefix(keyHex, "0x"), "0X")
+			keyBytes, err := hex.DecodeString(keyHex)
+			if err != nil || len(keyBytes) != 32 {
+				return nil, fmt.Errorf("invalid accessList[%d].storageKeys[%d]", i, j)
+			}
+			storageKeys[j] = common.BytesToHash(keyBytes)
+		}
+		accessList = append(accessList, types.AccessTuple{
+			Address:     common.HexToAddress(tuple.Address, location),
+			StorageKeys: storageKeys,
+		})
+	}
+
 	inner := &types.QuaiTx{
-		ChainID:  params.ChainID,
-		Nonce:    params.Nonce,
-		GasPrice: params.GasPrice,
-		Gas:      params.Gas,
-		To:       to,
-		Value:    params.Value,
-		Data:     params.Data,
+		ChainID:    params.ChainID,
+		Nonce:      params.Nonce,
+		GasPrice:   params.GasPrice,
+		Gas:        params.Gas,
+		To:         to,
+		Value:      params.Value,
+		Data:       params.Data,
+		AccessList: accessList,
 	}
 
 	tx := types.NewTx(inner)

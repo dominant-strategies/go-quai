@@ -38,8 +38,9 @@ type HDWallet struct {
 	coinType uint32
 
 	// Track derived addresses and the next index per account/change
-	addresses map[string]*AddressInfo // address hex -> info
-	nextIndex map[accountKey]uint32   // track next derivation index
+	addresses          map[string]*AddressInfo // address hex -> info
+	qiPaymentAddresses map[string]*QiPaymentAddressInfo
+	nextIndex          map[accountKey]uint32 // track next derivation index
 }
 
 type accountKey struct {
@@ -89,11 +90,12 @@ func NewHDWallet(mnemonic *Mnemonic, coinType uint32) (*HDWallet, error) {
 	}
 
 	return &HDWallet{
-		root:      root,
-		mnemonic:  mnemonic,
-		coinType:  coinType,
-		addresses: make(map[string]*AddressInfo),
-		nextIndex: make(map[accountKey]uint32),
+		root:               root,
+		mnemonic:           mnemonic,
+		coinType:           coinType,
+		addresses:          make(map[string]*AddressInfo),
+		qiPaymentAddresses: make(map[string]*QiPaymentAddressInfo),
+		nextIndex:          make(map[accountKey]uint32),
 	}, nil
 }
 
@@ -233,9 +235,13 @@ func (w *HDWallet) GetPrivateKeyForAddress(address string) (*ecdsa.PrivateKey, e
 
 	w.mu.RLock()
 	info, ok := w.addresses[key]
+	qiInfo, qiOK := w.qiPaymentAddresses[key]
 	w.mu.RUnlock()
-	if !ok {
+	if !ok && !qiOK {
 		return nil, fmt.Errorf("address %s not found in wallet", address)
+	}
+	if qiOK {
+		return w.getPrivateKeyForQiPaymentInfo(qiInfo)
 	}
 
 	changeBit := uint32(0)
