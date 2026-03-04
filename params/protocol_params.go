@@ -331,7 +331,7 @@ var (
 
 	KQuaiResetAfterKawPowForkBlock        uint64 = 934560
 	ExchangeRateResetValueAfterKawpowFork        = new(big.Int).Mul(big.NewInt(100), ExchangeRate)
-	ExchangeRateHoldInterval              uint64 = 3 * BlocksPerMonth / 4 // 3 months in prime block terms
+	ExchangeRateHoldInterval              uint64 = 5 * BlocksPerMonth / 4 // 5 months in prime block terms
 	MinDifficulty                         uint64 = 250000000              // Minimum difficulty after kawpow fork for the reward calculation
 
 	SingularityForkBlock uint64 = 1265025
