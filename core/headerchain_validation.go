@@ -169,7 +169,11 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 		return nil
 	}
 	// Verify that there are at most params.MaxWorkShareCount uncles included in this block
-	if len(block.Uncles()) > params.MaxWorkShareCount {
+	maxWorkSharesCount := params.MaxWorkShareCount
+	if block.PrimeTerminusNumber().Uint64() >= params.SingularityForkBlock {
+		maxWorkSharesCount = params.NewMaxWorkShareCount
+	}
+	if len(block.Uncles()) > maxWorkSharesCount {
 		return consensus.ErrTooManyUncles
 	}
 	if len(block.Uncles()) == 0 {
@@ -294,12 +298,20 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 				case types.Scrypt:
 					scryptCount++
 				}
-				if shaCount > params.MaxShaSharesCount {
-					return fmt.Errorf("too many sha shares in the block: have %v, want %v", shaCount, params.MaxShaSharesCount)
+				maxShaSharesCount := params.MaxShaSharesCount
+				if block.PrimeTerminusNumber().Uint64() >= params.SingularityForkBlock {
+					maxShaSharesCount = params.NewMaxShaSharesCount
+				}
+				if shaCount > maxShaSharesCount {
+					return fmt.Errorf("too many sha shares in the block: have %v, want %v", shaCount, maxShaSharesCount)
 				}
 
-				if scryptCount > params.MaxScryptSharesCount {
-					return fmt.Errorf("too many scrypt shares in the block: have %v, want %v", scryptCount, params.MaxScryptSharesCount)
+				maxScryptSharesCount := params.MaxScryptSharesCount
+				if block.PrimeTerminusNumber().Uint64() >= params.SingularityForkBlock {
+					maxScryptSharesCount = params.NewMaxScryptSharesCount
+				}
+				if scryptCount > maxScryptSharesCount {
+					return fmt.Errorf("too many scrypt shares in the block: have %v, want %v", scryptCount, maxScryptSharesCount)
 				}
 			}
 		}

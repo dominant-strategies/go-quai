@@ -188,6 +188,7 @@ var (
 	DifficultyAdjustmentFactor int64  = 40                                                          // This is the factor that divides the log of the change in the difficulty
 	MinQuaiConversionAmount           = new(big.Int).Mul(big.NewInt(10000000000), big.NewInt(GWei)) // 0.000000001 Quai
 	MaxWorkShareCount                 = 16
+	NewMaxWorkShareCount              = 32
 	WorkSharesThresholdDiff           = 3 // Number of bits lower than the target that the default consensus engine uses
 	ExpectedWorksharesPerBlock        = 8 // The expected number of work shares per block
 	WorkShareP2PThresholdDiff         = 7 // Default value in bits lower than the target
@@ -294,8 +295,10 @@ var (
 	// Maximum number of shares that can be included in a block for each algo.
 	// This is to prevent a single block from being filled with shares from one
 	// specific algo
-	MaxShaSharesCount    = 8
-	MaxScryptSharesCount = 8
+	MaxShaSharesCount       = 8
+	NewMaxShaSharesCount    = 16
+	MaxScryptSharesCount    = 8
+	NewMaxScryptSharesCount = 16
 
 	// Maximum amount of hashrate allowed on subsidy chain
 	MaxSubsidyNumerator   = big.NewInt(3)
