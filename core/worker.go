@@ -2374,7 +2374,11 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 
 			for _, uncle := range uncles {
 				env.uncleMu.RLock()
-				if len(env.uncles) == params.MaxWorkShareCount {
+				maxWorkSharesCount := params.MaxWorkShareCount
+				if env.wo.PrimeTerminusNumber().Uint64() >= params.SingularityForkBlock {
+					maxWorkSharesCount = params.NewMaxWorkShareCount
+				}
+				if len(env.uncles) == maxWorkSharesCount {
 					env.uncleMu.RUnlock()
 					break
 				}
@@ -2385,7 +2389,11 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 					shaCount, scryptCount := CountNonKawpowWorkShares(env.uncles)
 
 					// If the max number of sha uncles is reached, skip sha uncles
-					if shaCount >= params.MaxShaSharesCount {
+					maxShaSharesCount := params.MaxShaSharesCount
+					if env.wo.PrimeTerminusNumber().Uint64() >= params.SingularityForkBlock {
+						maxShaSharesCount = params.NewMaxShaSharesCount
+					}
+					if shaCount >= maxShaSharesCount {
 						if uncle.AuxPow() != nil &&
 							(uncle.AuxPow().PowID() == types.SHA_BTC || uncle.AuxPow().PowID() == types.SHA_BCH) {
 							env.uncleMu.RUnlock()
@@ -2394,7 +2402,11 @@ func (w *worker) prepareWork(genParams *generateParams, wo *types.WorkObject) (*
 					}
 
 					// If the max number of scrypt uncles is reached, skip scrypt uncles
-					if scryptCount >= params.MaxScryptSharesCount {
+					maxScryptSharesCount := params.MaxScryptSharesCount
+					if env.wo.PrimeTerminusNumber().Uint64() >= params.SingularityForkBlock {
+						maxScryptSharesCount = params.NewMaxScryptSharesCount
+					}
+					if scryptCount >= maxScryptSharesCount {
 						if uncle.AuxPow() != nil && uncle.AuxPow().PowID() == types.Scrypt {
 							env.uncleMu.RUnlock()
 							continue
