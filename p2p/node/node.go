@@ -37,8 +37,7 @@ import (
 
 const (
 	// c_defaultCacheSize is the default size for the p2p cache
-	c_defaultCacheSize    = 32
-	c_streamPeerThreshold = 25
+	c_defaultCacheSize = 32
 )
 
 // P2PNode represents a libp2p node
@@ -86,8 +85,8 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	// Peer manager handles both connection management and connection gating
 	peerMgr, err := peerManager.NewManager(
 		ctx,
-		viper.GetInt(utils.MaxPeersFlag.Name), // LowWater
-		2*viper.GetInt(utils.MaxPeersFlag.Name), // HighWater
+		viper.GetInt(utils.MinPeersFlag.Name), // LowWater
+		viper.GetInt(utils.MaxPeersFlag.Name), // HighWater
 		nil,
 	)
 	if err != nil {

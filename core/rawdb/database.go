@@ -231,6 +231,27 @@ const (
 	dbLeveldb = "leveldb"
 )
 
+func resolveDbType(requested string, existing string) (string, error) {
+	if len(existing) != 0 {
+		if len(requested) != 0 && requested != existing {
+			return "", fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", requested, existing)
+		}
+		return existing, nil
+	}
+	if len(requested) == 0 {
+		if PebbleEnabled {
+			return dbPebble, nil
+		}
+		return dbLeveldb, nil
+	}
+	switch requested {
+	case dbLeveldb, dbPebble:
+		return requested, nil
+	default:
+		return "", fmt.Errorf("unknown db.engine %v", requested)
+	}
+}
+
 // hasPreexistingDb checks the given data directory whether a database is already
 // instantiated at that location, and if so, returns the type of database (or the
 // empty string).
@@ -263,14 +284,15 @@ type OpenOptions struct {
 //
 //	                      type == null          type != null
 //	                   +----------------------------------------
-//	db is non-existent |  leveldb default  |  specified type
-//	db is existent     |  from db          |  specified type (if compatible)
+//	db is non-existent |  pebble if supported | specified type
+//	db is existent     |  from db             | specified type (if compatible)
 func openKeyValueDatabase(o OpenOptions, logger *log.Logger, location common.Location) (ethdb.Database, error) {
 	existingDb := hasPreexistingDb(o.Directory)
-	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
-		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
+	dbType, err := resolveDbType(o.Type, existingDb)
+	if err != nil {
+		return nil, err
 	}
-	if o.Type == dbPebble || existingDb == dbPebble {
+	if dbType == dbPebble {
 		if PebbleEnabled {
 			logger.Info("Using pebble as the backing database")
 			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, logger, location)
@@ -278,11 +300,9 @@ func openKeyValueDatabase(o OpenOptions, logger *log.Logger, location common.Loc
 			return nil, errors.New("db.engine 'pebble' not supported on this platform")
 		}
 	}
-	if len(o.Type) != 0 && o.Type != dbLeveldb {
-		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
-	}
 	logger.Info("Using leveldb as the backing database")
-	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
+	// Use leveldb when explicitly chosen, when reopening an existing leveldb
+	// database, or on platforms where pebble isn't supported.
 	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, logger, location)
 }
 

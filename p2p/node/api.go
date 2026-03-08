@@ -2,6 +2,7 @@ package node
 
 import (
 	"math/big"
+	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -15,7 +16,6 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
-	"github.com/dominant-strategies/go-quai/p2p/protocol"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/dominant-strategies/go-quai/quai"
 
@@ -31,7 +31,79 @@ var (
 	headerPropagationHist = propagationTimes.WithLabelValues("header propagation time (sec)")
 )
 
-const requestTimeout = 10 * time.Second
+const (
+	requestTimeout            = 10 * time.Second
+	c_requestPeerDivisor      = 10
+	c_maxRequestFanout        = 8
+	c_streamOpenRetryCount    = 5
+	c_streamOpenRetryInterval = 100 * time.Millisecond
+)
+
+func requestFanout(base int, available int) int {
+	if available <= 0 {
+		return 0
+	}
+	if base < 1 {
+		base = 1
+	}
+	limit := base + available/c_requestPeerDivisor
+	if limit > c_maxRequestFanout {
+		limit = c_maxRequestFanout
+	}
+	if limit > available {
+		return available
+	}
+	return limit
+}
+
+func selectRequestPeers(streamPeers []peer.ID, fallbackPeers map[peer.ID]struct{}, baseFanout int) []peer.ID {
+	streamPool := append([]peer.ID(nil), streamPeers...)
+	rand.Shuffle(len(streamPool), func(i, j int) {
+		streamPool[i], streamPool[j] = streamPool[j], streamPool[i]
+	})
+
+	fallbackPool := make([]peer.ID, 0, len(fallbackPeers))
+	for peerID := range fallbackPeers {
+		fallbackPool = append(fallbackPool, peerID)
+	}
+	rand.Shuffle(len(fallbackPool), func(i, j int) {
+		fallbackPool[i], fallbackPool[j] = fallbackPool[j], fallbackPool[i]
+	})
+
+	seen := make(map[peer.ID]struct{}, len(streamPool)+len(fallbackPool))
+	for _, peerID := range streamPool {
+		seen[peerID] = struct{}{}
+	}
+	for _, peerID := range fallbackPool {
+		seen[peerID] = struct{}{}
+	}
+
+	limit := requestFanout(baseFanout, len(seen))
+	selected := make([]peer.ID, 0, limit)
+	seen = make(map[peer.ID]struct{}, limit)
+
+	for _, peerID := range streamPool {
+		if len(selected) == limit {
+			return selected
+		}
+		if _, exists := seen[peerID]; exists {
+			continue
+		}
+		seen[peerID] = struct{}{}
+		selected = append(selected, peerID)
+	}
+	for _, peerID := range fallbackPool {
+		if len(selected) == limit {
+			return selected
+		}
+		if _, exists := seen[peerID]; exists {
+			continue
+		}
+		seen[peerID] = struct{}{}
+		selected = append(selected, peerID)
+	}
+	return selected
+}
 
 // Starts the node and all of its services
 func (p *P2PNode) Start() error {
@@ -166,19 +238,12 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			// Use stream peers if the node has accumulated
-			// c_streamPeerThreshold number of streams otherwise look up peers
-			// from the database and create streams with them
-			peers := p.peerManager.GetStreamPeers()
-			if len(peers) < c_streamPeerThreshold {
-				peersMap := p.peerManager.GetPeers(topic)
-				peers = make([]peer.ID, 0)
-				for peer := range peersMap {
-					peers = append(peers, peer)
-				}
-			} else {
-				peers = peers[:pubsubManager.C_defaultRequestDegree]
+			streamPeers := p.peerManager.GetStreamPeers()
+			fallbackPeers := map[peer.ID]struct{}{}
+			if len(streamPeers) < c_maxRequestFanout {
+				fallbackPeers = p.peerManager.GetPeers(topic)
 			}
+			peers := selectRequestPeers(streamPeers, fallbackPeers, topic.GetRequestDegree())
 			log.Global.WithFields(log.Fields{
 				"peers": peers,
 				"topic": topic,
@@ -186,11 +251,6 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 
 			var requestWg sync.WaitGroup
 			for _, peerID := range peers {
-				// if we have exceeded the outbound rate limit for this peer, skip them for now
-				if err := protocol.ProcRequestRate(peerID, false); err != nil {
-					log.Global.Warnf("Exceeded request rate to peer %s", peerID)
-					continue
-				}
 				requestWg.Add(1)
 				go func(peerID peer.ID) {
 					defer func() {
@@ -248,7 +308,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			}).Info("Success Missed data send")
 		}
 	} else {
-		if err.Error() == streamManager.ErrStreamNotFound.Error() {
+		if err == streamManager.ErrStreamNotFound {
 			return
 		}
 		log.Global.WithFields(log.Fields{
@@ -271,7 +331,7 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 		panic(err)
 	}
 
-	resultChan := make(chan interface{}, 10)
+	resultChan := make(chan interface{}, max(10, topic.GetRequestDegree()))
 	// If it is a hash, first check to see if it is contained in the caches
 	if hash, ok := requestData.(common.Hash); ok {
 		result, ok := p.cacheGet(hash, responseDataType, location)

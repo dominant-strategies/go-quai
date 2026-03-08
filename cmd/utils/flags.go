@@ -265,13 +265,13 @@ var (
 
 	MinPeersFlag = Flag{
 		Name:  c_NodeFlagPrefix + "min-peers",
-		Value: "5",
+		Value: "20",
 		Usage: "minimum number of peers to maintain connectivity with" + generateEnvDoc(c_NodeFlagPrefix+"min-peers"),
 	}
 
 	MaxPeersFlag = Flag{
 		Name:  c_NodeFlagPrefix + "max-peers",
-		Value: "50",
+		Value: "100",
 		Usage: "maximum number of peers to maintain connectivity with" + generateEnvDoc(c_NodeFlagPrefix+"max-peers"),
 	}
 
@@ -290,8 +290,8 @@ var (
 
 	DBEngineFlag = Flag{
 		Name:  c_NodeFlagPrefix + "db-engine",
-		Value: "leveldb",
-		Usage: "Backing database implementation to use ('leveldb' or 'pebble')" + generateEnvDoc(c_NodeFlagPrefix+"db-engine"),
+		Value: "auto",
+		Usage: "Backing database implementation to use ('auto', 'leveldb' or 'pebble')" + generateEnvDoc(c_NodeFlagPrefix+"db-engine"),
 	}
 
 	NetworkIdFlag = Flag{
@@ -428,7 +428,7 @@ var (
 
 	CacheFlag = Flag{
 		Name:  c_NodeFlagPrefix + "cache",
-		Value: 1024,
+		Value: 4096,
 		Usage: "Megabytes of memory allocated to internal caching (default = 4096 quai full node, 128 light mode)" + generateEnvDoc(c_NodeFlagPrefix+"cache"),
 	}
 
@@ -1104,12 +1104,17 @@ func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *log.L
 		cfg.InsecureUnlockAllowed = viper.GetBool(InsecureUnlockAllowedFlag.Name)
 	}
 	if viper.IsSet(DBEngineFlag.Name) {
-		dbEngine := viper.GetString(DBEngineFlag.Name)
-		if dbEngine != "leveldb" && dbEngine != "pebble" {
-			Fatalf("Invalid choice for db-engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
+		dbEngine := strings.ToLower(strings.TrimSpace(viper.GetString(DBEngineFlag.Name)))
+		if dbEngine != "" && dbEngine != "auto" && dbEngine != "leveldb" && dbEngine != "pebble" {
+			Fatalf("Invalid choice for db-engine '%s', allowed 'auto', 'leveldb' or 'pebble'", dbEngine)
 		}
-		logger.WithField("db-engine", dbEngine).Info("Using db engine")
-		cfg.DBEngine = dbEngine
+		if dbEngine == "" || dbEngine == "auto" {
+			logger.WithField("db-engine", "auto").Info("Using db engine")
+			cfg.DBEngine = ""
+		} else {
+			logger.WithField("db-engine", dbEngine).Info("Using db engine")
+			cfg.DBEngine = dbEngine
+		}
 	}
 }
 
