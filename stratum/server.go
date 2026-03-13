@@ -946,20 +946,20 @@ const (
 // - Scrypt: ~65k hashes per stratum diff 1 (ASIC miners at high hashrate)
 const (
 	// Kawpow vardiff (diff1 = ~2^32 hashes)
-	varDiffDefaultKawpow               = 50  // Starting difficulty
-	varDiffMinKawpow                   = 0.1 // Minimum difficulty
+	varDiffDefaultKawpow               = 1    // Starting difficulty
+	varDiffMinKawpow                   = 0.01 // Minimum difficulty
 	diffHashesInterpretationThresholdD = 1000000
 
 	// SHA256 vardiff (diff1 = 2^32 hashes)
 	// default=230,000 (one petahash), min=2300 (ten terahash)
-	varDiffDefaultSHA = 230000.0 // Starting difficulty
-	varDiffMinSHA     = 10000.0  // Minimum difficulty
-	minShaDiff        = 10000.0  // Minimum difficulty
+	varDiffDefaultSHA = 230.0 // Starting difficulty
+	varDiffMinSHA     = 100.0 // Minimum difficulty
+	minShaDiff        = 100.0 // Minimum difficulty
 
 	// Scrypt vardiff (diff1 = 2^16 hashes)
-	varDiffDefaultScrypt = 500000.0 // Starting difficulty
-	varDiffMinScrypt     = 200000.0 // Minimum difficulty
-	minScryptDiff        = 200000.0 // Minimum difficulty
+	varDiffDefaultScrypt = 5000.0 // Starting difficulty
+	varDiffMinScrypt     = 2000.0 // Minimum difficulty
+	minScryptDiff        = 2000.0 // Minimum difficulty
 
 	// Common vardiff timing constants
 	varDiffTargetTime             = 30 * time.Second  // Target time between shares (30 seconds per share)
