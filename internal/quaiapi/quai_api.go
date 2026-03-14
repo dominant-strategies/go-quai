@@ -2378,18 +2378,37 @@ func (s *PublicBlockChainQuaiAPI) GetSubsidyChainHeight(ctx context.Context) (ma
 // GetMiningInfo returns the current mining difficulty per algorithm and the reward per workshare.
 // This is useful for miners to understand the current mining parameters.
 // If decimal is true, big integer values are returned as decimal strings instead of hex.
-func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bool) (map[string]interface{}, error) {
+func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, blockNrOrHash *rpc.BlockNumberOrHash, decimal *bool) (map[string]interface{}, error) {
 	if s.b.NodeLocation().Context() != common.ZONE_CTX {
 		return nil, errors.New("getMiningInfo can only be called in zone chain")
 	}
 
-	currentHeader := s.b.CurrentHeader()
-	if currentHeader == nil {
-		return nil, errors.New("cannot get current header")
+	// Default to latest block if not specified
+	var header *types.WorkObject
+	var err error
+	if blockNrOrHash == nil {
+		header = s.b.CurrentHeader()
+	} else if blockNr, ok := blockNrOrHash.Number(); ok {
+		if blockNr == rpc.LatestBlockNumber {
+			header = s.b.CurrentHeader()
+		} else {
+			header, err = s.b.HeaderByNumber(ctx, blockNr)
+		}
+	} else if hash, ok := blockNrOrHash.Hash(); ok {
+		header, err = s.b.HeaderByHash(ctx, hash)
+	} else {
+		return nil, errors.New("invalid block number or hash")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	if header == nil {
+		return nil, errors.New("block not found")
 	}
 
 	// Check if we're past the KawPow fork
-	if currentHeader.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
+	if header.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
 		return nil, errors.New("getMiningInfo is only available after the KawPow fork")
 	}
 
@@ -2404,28 +2423,28 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 	fields := make(map[string]interface{})
 
 	// Get difficulties per algorithm
-	kawpowDiff := core.CalculateKawpowShareDiff(currentHeader.WorkObjectHeader())
-	shaDiff := currentHeader.WorkObjectHeader().ShaDiffAndCount().Difficulty()
-	scryptDiff := currentHeader.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
+	kawpowDiff := core.CalculateKawpowShareDiff(header.WorkObjectHeader())
+	shaDiff := header.WorkObjectHeader().ShaDiffAndCount().Difficulty()
+	scryptDiff := header.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
 
 	fields["kawpowDifficulty"] = formatBigInt(kawpowDiff)
 	fields["shaDifficulty"] = formatBigInt(shaDiff)
 	fields["scryptDifficulty"] = formatBigInt(scryptDiff)
 
 	// Get exchange rate from prime terminus for reward calculation
-	primeTerminus := s.b.GetBlockByHash(currentHeader.PrimeTerminusHash())
+	primeTerminus := s.b.GetBlockByHash(header.PrimeTerminusHash())
 	if primeTerminus == nil {
 		return nil, errors.New("cannot find the prime terminus")
 	}
 	exchangeRate := primeTerminus.ExchangeRate()
 
 	// Calculate base block reward (in Quai) without fees
-	baseBlockReward := misc.CalculateQuaiReward(currentHeader.WorkObjectHeader(), currentHeader.Difficulty(), exchangeRate)
+	baseBlockReward := misc.CalculateQuaiReward(header.WorkObjectHeader(), header.Difficulty(), exchangeRate)
 
-	// Calculate average block time and total fees over the last 15 minutes
+	// Calculate average block time and total fees over the last 15 minutes from the target block
 	const targetDuration = 15 * 60 // 15 minutes in seconds
-	currentTime := currentHeader.Time()
-	cutoffTime := currentTime - uint64(targetDuration)
+	targetTime := header.Time()
+	cutoffTime := targetTime - uint64(targetDuration)
 
 	var blockCount int64
 	var oldestBlockTime uint64
@@ -2436,7 +2455,7 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 
 	var totalKawpowShares, totalShaShares, totalScryptShares uint64
 
-	block := currentHeader
+	block := header
 
 	for block != nil && block.Time() > cutoffTime {
 		blockCount++
@@ -2492,20 +2511,20 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 	var avgBlockTime float64
 	if blockCount > 1 {
 		// Average block time = time span / (number of blocks - 1)
-		timeSpan := currentTime - oldestBlockTime
+		timeSpan := targetTime - oldestBlockTime
 		avgBlockTime = float64(timeSpan) / float64(blockCount-1)
 	} else {
 		avgBlockTime = 5.0 // Default to target block time
 	}
 
 	fields["avgBlockTime"] = math.Round(avgBlockTime*1000) / 1000 // Round to 3 decimal places
-	fields["avgTxFees"] = formatBigInt(currentHeader.AvgTxFees())
+	fields["avgTxFees"] = formatBigInt(header.AvgTxFees())
 	fields["blocksAnalyzed"] = blockCount
 
 	// Calculate estimated workshare reward including average fees
 	// Workshare reward = (baseReward + avgTxFees) / (ExpectedWorksharesPerBlock + 1)
 	estimatedBlockReward := new(big.Int).Set(baseBlockReward)
-	estimatedBlockReward = new(big.Int).Add(estimatedBlockReward, new(big.Int).Mul(currentHeader.AvgTxFees(), common.Big2))
+	estimatedBlockReward = new(big.Int).Add(estimatedBlockReward, new(big.Int).Mul(header.AvgTxFees(), common.Big2))
 
 	workshareReward := new(big.Int).Div(estimatedBlockReward, big.NewInt(int64(params.ExpectedWorksharesPerBlock+1)))
 
@@ -2516,8 +2535,8 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 	// Calculate average share timing for each algorithm
 	// SHA and Scrypt: Count is the EMA of shares per block in 2^32 units
 	// avgShareTime = avgBlockTime / (Count / 2^32) = avgBlockTime * 2^32 / Count
-	shaShareCount := currentHeader.WorkObjectHeader().ShaDiffAndCount().Count()
-	scryptShareCount := currentHeader.WorkObjectHeader().ScryptDiffAndCount().Count()
+	shaShareCount := header.WorkObjectHeader().ShaDiffAndCount().Count()
+	scryptShareCount := header.WorkObjectHeader().ScryptDiffAndCount().Count()
 
 	// SHA average share time
 	if shaShareCount != nil && shaShareCount.Cmp(common.Big0) > 0 {
@@ -2546,8 +2565,8 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 	}
 
 	// Get share targets and convert to expected shares per block (divide by 2^32)
-	shaShareTarget := currentHeader.WorkObjectHeader().ShaShareTarget()
-	scryptShareTarget := currentHeader.WorkObjectHeader().ScryptShareTarget()
+	shaShareTarget := header.WorkObjectHeader().ShaShareTarget()
+	scryptShareTarget := header.WorkObjectHeader().ScryptShareTarget()
 
 	// KawPow average share time
 	// Uses same logic as CalculateKawpowShareDiff in headerchain.go:
@@ -2603,14 +2622,14 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 
 	// Include current block number and hash for reference
 	if decimal != nil && *decimal {
-		fields["blockNumber"] = currentHeader.NumberU64(common.ZONE_CTX)
+		fields["blockNumber"] = header.NumberU64(common.ZONE_CTX)
 	} else {
-		fields["blockNumber"] = hexutil.Uint64(currentHeader.NumberU64(common.ZONE_CTX))
+		fields["blockNumber"] = hexutil.Uint64(header.NumberU64(common.ZONE_CTX))
 	}
-	fields["blockHash"] = currentHeader.Hash()
+	fields["blockHash"] = header.Hash()
 
 	// Get quaiSupplyTotal from the database for the current block
-	_, _, totalSupplyQuai, _, _, _, err := rawdb.ReadSupplyAnalyticsForBlock(s.b.Database(), currentHeader.Hash())
+	_, _, totalSupplyQuai, _, _, _, err := rawdb.ReadSupplyAnalyticsForBlock(s.b.Database(), header.Hash())
 	if err == nil && totalSupplyQuai != nil {
 		fields["quaiSupplyTotal"] = formatBigInt(totalSupplyQuai)
 	}
