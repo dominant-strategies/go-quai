@@ -55,6 +55,7 @@ var (
 
 	// MuSig2 session management
 	musig2Manager musig2.MuSig2Manager
+	burnAddress   = common.HexToAddress("0x0050AF0000000000000000000000000000000000", common.Location{0, 0})
 )
 
 // PublicQuaiAPI provides an API to access Quai related information.
@@ -266,6 +267,10 @@ func (s *PublicBlockChainQuaiAPI) GetSupplyAnalyticsForBlock(ctx context.Context
 	supplyAddedQuai, supplyRemovedQuai, totalSupplyQuai, supplyAddedQi, supplyRemovedQi, totalSupplyQi, err := rawdb.ReadSupplyAnalyticsForBlock(s.b.Database(), header.Hash())
 	if err != nil {
 		return nil, err
+	}
+	burnedQuai, err := s.GetBalance(ctx, burnAddress.MixedcaseAddress(), blockNrOrHash)
+	if err == nil {
+		totalSupplyQuai.Sub((*big.Int)(totalSupplyQuai), (*big.Int)(burnedQuai))
 	}
 	return map[string]interface{}{
 		"quaiSupplyAdded":   (*hexutil.Big)(supplyAddedQuai),
@@ -2611,6 +2616,12 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 
 	// Get quaiSupplyTotal from the database for the current block
 	_, _, totalSupplyQuai, _, _, _, err := rawdb.ReadSupplyAnalyticsForBlock(s.b.Database(), currentHeader.Hash())
+	latestNumber := rpc.BlockNumber(s.b.CurrentHeader().NumberU64(s.b.NodeCtx()))
+	rpcBlockOrHash := rpc.BlockNumberOrHash{BlockNumber: &latestNumber}
+	burnedQuai, err := s.GetBalance(ctx, burnAddress.MixedcaseAddress(), rpcBlockOrHash)
+	if err == nil {
+		totalSupplyQuai.Sub((*big.Int)(totalSupplyQuai), (*big.Int)(burnedQuai))
+	}
 	if err == nil && totalSupplyQuai != nil {
 		fields["quaiSupplyTotal"] = formatBigInt(totalSupplyQuai)
 	}
