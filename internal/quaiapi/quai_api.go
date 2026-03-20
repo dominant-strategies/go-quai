@@ -2628,3 +2628,20 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 
 	return fields, nil
 }
+
+func (s *PublicBlockChainQuaiAPI) GetP2PWorkShare(ctx context.Context, workShareHash common.Hash) (map[string]interface{}, error) {
+	if s.b.NodeLocation().Context() != common.ZONE_CTX {
+		return nil, errors.New("getWorkShare can only be called in zone chain")
+	}
+
+	workShare := rawdb.ReadP2PWorkShare(s.b.Database(), workShareHash)
+	if workShare == nil {
+		return nil, errors.New("p2p workshare not found")
+	}
+
+	fields := map[string]interface{}{
+		"hash":     workShare.Hash(),
+		"woHeader": workShare.WorkObjectHeader().RPCMarshalWorkObjectHeader(s.b.RpcVersion()),
+	}
+	return fields, nil
+}

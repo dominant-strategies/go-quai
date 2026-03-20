@@ -146,6 +146,7 @@ var WorkShareFlags = []Flag{
 	WorkShareThresholdFlag,
 	WorkShareMinerEndpoints,
 	WorkShareP2PThreshold,
+	StoreP2PWorkSharesFlag,
 }
 
 var RPCFlags = []Flag{
@@ -775,6 +776,11 @@ var (
 		Name:  c_WorkShareFlagPrefix + "p2pthreshold",
 		Value: 7,
 		Usage: "This is the workshares to be accepted by the node through the p2p layer" + generateEnvDoc(c_WorkShareFlagPrefix+"ws-percent"),
+	}
+	StoreP2PWorkSharesFlag = Flag{
+		Name:  c_WorkShareFlagPrefix + "store-p2p",
+		Value: false,
+		Usage: "Persist outbound P2P workshares before broadcasting them" + generateEnvDoc(c_WorkShareFlagPrefix+"store-p2p"),
 	}
 )
 
@@ -1485,6 +1491,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if cfg.WorkShareP2PThreshold < params.WorkSharesThresholdDiff {
 		cfg.WorkShareP2PThreshold = params.WorkSharesThresholdDiff
 	}
+	cfg.StoreP2PWorkShares = viper.GetBool(StoreP2PWorkSharesFlag.Name)
 
 	minerPreference := viper.GetFloat64(MinerPreferenceFlag.Name)
 	if minerPreference < 0 || minerPreference > 1 {
