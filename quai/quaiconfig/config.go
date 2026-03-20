@@ -162,6 +162,9 @@ type Config struct {
 	// NodeLocation of the node
 	NodeLocation common.Location
 
+	// StoreP2PWorkShares persists outbound P2P workshares before broadcast.
+	StoreP2PWorkShares bool
+
 	// IndexAddressUtxos enables or disables address utxo indexing
 	IndexAddressUtxos bool
 
