@@ -76,6 +76,7 @@ var (
 
 	donorHashPrefix                = []byte("dh")     // donorHashPrefix + hash -> header
 	workshareHashToBlockHashPrefix = []byte("wsh2bh") // workShareHashToBlockHashPrefix + hash -> block hash
+	p2pWorkSharePrefix             = []byte("p2pws")  // p2pWorkSharePrefix + hash -> workshare
 
 	pendingHeaderPrefix             = []byte("ph")    // pendingHeaderPrefix + hash -> header
 	pbBodyPrefix                    = []byte("pb")    // pbBodyPrefix + hash -> *types.Body
@@ -197,6 +198,10 @@ func donorHashKey(hash common.Hash) []byte {
 // workShareHashToBlockHashKey = "wsh2bh" + hash
 func workShareHashToBlockHashKey(hash common.Hash) []byte {
 	return append(workshareHashToBlockHashPrefix, hash.Bytes()...)
+}
+
+func p2pWorkShareKey(hash common.Hash) []byte {
+	return append(p2pWorkSharePrefix, hash.Bytes()...)
 }
 
 // terminiKey = domPendingHeaderPrefix + hash

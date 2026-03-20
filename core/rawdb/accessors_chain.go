@@ -474,6 +474,45 @@ func ReadBlockForWorkShareHash(db ethdb.Reader, workshareHash common.Hash) *type
 	return ReadWorkObject(db, *blockNumber, blockHash, types.BlockObject)
 }
 
+// WriteP2PWorkShare stores a p2p-broadcast workshare by its hash.
+func WriteP2PWorkShare(db ethdb.KeyValueWriter, workObject *types.WorkObject) {
+	protoWorkObject, err := workObject.ProtoEncode(types.WorkShareTxObject)
+	if err != nil {
+		db.Logger().WithField("err", err).Warn("Failed to proto encode p2p workshare")
+		return
+	}
+	data, err := proto.Marshal(protoWorkObject)
+	if err != nil {
+		db.Logger().WithField("err", err).Warn("Failed to proto marshal p2p workshare")
+		return
+	}
+	if err := db.Put(p2pWorkShareKey(workObject.Hash()), data); err != nil {
+		db.Logger().WithField("err", err).Warn("Failed to store p2p workshare")
+	}
+}
+
+// ReadP2PWorkShare retrieves a p2p-broadcast workshare by its hash.
+func ReadP2PWorkShare(db ethdb.Reader, hash common.Hash) *types.WorkObject {
+	data, _ := db.Get(p2pWorkShareKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	protoWorkObject := new(types.ProtoWorkObject)
+	if err := proto.Unmarshal(data, protoWorkObject); err != nil {
+		db.Logger().WithField("err", err).Warn("Failed to proto unmarshal p2p workshare")
+		return nil
+	}
+	workObject := new(types.WorkObject)
+	if err := workObject.ProtoDecode(protoWorkObject, db.Location(), types.WorkShareTxObject); err != nil {
+		db.Logger().WithFields(log.Fields{
+			"hash": hash,
+			"err":  err,
+		}).Warn("Invalid p2p workshare proto")
+		return nil
+	}
+	return workObject
+}
+
 // ReadWorkObjectHeader retreive's the work object header stored in hash.
 func ReadWorkObjectHeader(db ethdb.Reader, number uint64, hash common.Hash, woType types.WorkObjectView) *types.WorkObjectHeader {
 	var key []byte

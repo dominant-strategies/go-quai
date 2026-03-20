@@ -47,9 +47,9 @@ const (
 
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
-	extRPCEnabled                      bool
-	quai                               *Quai
-	uncleWorkShareClassificationCache  *lru.Cache[common.Hash, types.WorkShareValidity]
+	extRPCEnabled                     bool
+	quai                              *Quai
+	uncleWorkShareClassificationCache *lru.Cache[common.Hash, types.WorkShareValidity]
 }
 
 func (b *QuaiAPIBackend) RpcVersion() string {
@@ -939,5 +939,8 @@ func (b *QuaiAPIBackend) BroadcastAuxTemplate(auxTemplate *types.AuxTemplate, lo
 }
 
 func (b *QuaiAPIBackend) BroadcastWorkShare(workShare *types.WorkObjectShareView, location common.Location) error {
+	if b.quai.config.StoreP2PWorkShares && b.ChainConfig().Location.Context() == common.ZONE_CTX {
+		rawdb.WriteP2PWorkShare(b.quai.ChainDb(), workShare.WorkObject)
+	}
 	return b.quai.p2p.Broadcast(location, workShare)
 }
