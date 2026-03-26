@@ -768,6 +768,9 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 					}
 					statedb.AddBalance(senderInternal, etx.Value())
+					if err := gp.SubGas(params.QiToQuaiConversionGas); err != nil {
+						return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+					}
 					*usedGas += params.QiToQuaiConversionGas
 					totalEtxGas += params.QiToQuaiConversionGas
 					receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
@@ -1598,6 +1601,9 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 			return nil, fmt.Errorf("tx %032x spends locked UTXO %032x:%d locked until %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo.Lock.String())
 		}
 		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
+		if !address.IsInQiLedgerScope() {
+			return nil, fmt.Errorf("UTXO is owned by Quai address: %s", address.String())
+		}
 		entryAddr := common.BytesToAddress(utxo.Address, location)
 		if !address.Equal(entryAddr) {
 			return nil, fmt.Errorf("tx %032x spends UTXO %032x:%d with invalid pubkey, have %s want %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, address.String(), entryAddr.String())
@@ -1703,6 +1709,7 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 			wrapping = true
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
 			delete(addresses, toAddr.Bytes20())
+			continue
 		} else if toAddr.IsInQuaiLedgerScope() {
 			return nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
 		}
@@ -1740,7 +1747,7 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		}
 	}
 	// Ensure the transaction does not spend more than its inputs.
-	if totalQitOut.Cmp(totalQitIn) > 1 {
+	if totalQitOut.Cmp(totalQitIn) == 1 {
 		str := fmt.Sprintf("total value of all transaction inputs for "+
 			"transaction %v is %v which is less than the amount "+
 			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
@@ -1870,6 +1877,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		}
 		// Verify the pubkey
 		address := crypto.PubkeyBytesToAddress(txIn.PubKey, location)
+		if !address.IsInQiLedgerScope() {
+			return nil, nil, nil, fmt.Errorf("UTXO is owned by Quai address: %s", address.String()), nil
+		}
 		entryAddr := common.BytesToAddress(utxo.Address, location)
 		if !address.Equal(entryAddr) {
 			return nil, nil, nil, fmt.Errorf("tx %032x spends UTXO %032x:%d with invalid pubkey, have %s want %s", tx.Hash(), txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, address.String(), entryAddr.String()), nil
@@ -1966,6 +1976,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
+			continue
 		} else if toAddr.IsInQuaiLedgerScope() {
 			return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
 		}
@@ -2025,7 +2036,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	// Start timing for fee verification
 	stepStart = time.Now()
 	// Ensure the transaction does not spend more than its inputs.
-	if totalQitOut.Cmp(totalQitIn) > 1 {
+	if totalQitOut.Cmp(totalQitIn) == 1 {
 		str := fmt.Sprintf("total value of all transaction inputs for "+
 			"transaction %v is %v which is less than the amount "+
 			"spent of %v", tx.Hash(), totalQitIn, totalQitOut)
