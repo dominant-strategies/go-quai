@@ -865,6 +865,10 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 
 	work.wo = newWo
 
+	if len(newWo.Transactions()) != len(work.receipts) {
+		return nil, fmt.Errorf("number of transactions and receipts in pending block do not match: %d != %d", len(block.Transactions()), len(work.receipts))
+	}
+
 	w.printPendingHeaderInfo(work, newWo, start)
 	work.utxosCreate = nil
 	work.utxosDelete = nil
@@ -1293,6 +1297,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			}
 			// refund the sender
 			env.state.AddBalance(senderInternal, tx.Value())
+			if err := env.gasPool.SubGas(params.QiToQuaiConversionGas); err != nil {
+				return nil, false, err
+			}
 			gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
 			env.wo.Header().SetGasUsed(gasUsed)
 			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
@@ -1429,6 +1436,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 				}
 			}
 			if txGas < params.TxGas {
+				if err := env.gasPool.SubGas(txGas); err != nil {
+					return nil, false, err
+				}
 				receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: txGas, TxHash: tx.Hash()}
 				gasUsed += txGas
 				env.wo.Header().SetGasUsed(gasUsed)
@@ -1504,6 +1514,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		}
 
 	} else if tx.Type() == types.ExternalTxType && types.IsConversionTx(tx) && tx.To().IsInQuaiLedgerScope() { // Qi->Quai Conversion
+		if err := env.gasPool.SubGas(params.QiToQuaiConversionGas); err != nil {
+			return nil, false, err
+		}
 		receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusLocked, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
 		gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
 		env.wo.Header().SetGasUsed(gasUsed)
@@ -1521,6 +1534,9 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 		ownerContractAddr := common.BytesToAddress(tx.Data(), w.chainConfig.Location)
 		if err := vm.WrapQi(env.state, ownerContractAddr, *tx.To(), common.OneInternal(w.chainConfig.Location), tx.Value(), w.chainConfig.Location); err != nil {
 			return nil, false, fmt.Errorf("could not wrap Qi: %w", err)
+		}
+		if err := env.gasPool.SubGas(params.QiToQuaiConversionGas); err != nil {
+			return nil, false, err
 		}
 		receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.QiToQuaiConversionGas, TxHash: tx.Hash()}
 		gasUsed := env.wo.GasUsed() + params.QiToQuaiConversionGas
@@ -2743,7 +2759,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
-	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) == params.MaxQiTxDataLength) {
+	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) != common.AddressLength) {
 		return fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength)
 	}
 	// Wrap Qi Transaction
@@ -2784,7 +2800,11 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 				types.MaxDenomination)
 			return errors.New(str)
 		}
-		addresses[common.AddressBytes(utxo.Address)] = struct{}{}
+		fromAddr := common.AddressBytes(utxo.Address)
+		if !fromAddr.IsInQiLedgerScope() {
+			return fmt.Errorf("tx %032x has input from Quai address %s", tx.Hash(), fromAddr.String())
+		}
+		addresses[fromAddr] = struct{}{}
 		totalQitIn.Add(totalQitIn, types.Denominations[denomination])
 		utxoHash := types.UTXOHash(txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index, utxo)
 		if _, exists := env.deletedUtxos[utxoHash]; exists {
@@ -2846,6 +2866,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
+			continue
 		} else if toAddr.IsInQuaiLedgerScope() {
 			return fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash())
 		}
@@ -2959,6 +2980,11 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if gasUsed > env.wo.GasLimit() {
 		return fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), gasUsed, env.wo.GasLimit())
 	}
+	if !firstQiTx { // The first transaction in the block can skip denominations check
+		if err := CheckDenominations(inputs, outputs); err != nil {
+			return err
+		}
+	}
 	env.wo.Header().SetGasUsed(gasUsed)
 	env.etxRLimit -= ETXRGas
 	env.etxPLimit -= ETXPGas
@@ -2972,11 +2998,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	env.utxosCreate = append(env.utxosCreate, utxosCreateHashes...)
 	env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 
-	if !firstQiTx { // The first transaction in the block can skip denominations check
-		if err := CheckDenominations(inputs, outputs); err != nil {
-			return err
-		}
-	}
 	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: gasUsed - env.wo.GasUsed(), TxHash: tx.Hash(), OutboundEtxs: env.etxs[len(env.etxs)-len(etxs):]}
 	env.receipts = append(env.receipts, receipt)
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
