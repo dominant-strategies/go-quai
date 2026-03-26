@@ -403,6 +403,10 @@ func (a AddressBytes) IsInQuaiLedgerScope() bool {
 	return a[1] <= 127
 }
 
+func (a AddressBytes) IsInQiLedgerScope() bool {
+	return a[1] > 127
+}
+
 func MakeErrQiAddress(addr string) error {
 	return fmt.Errorf("expected Quai address, but found Qi address: %s", addr)
 }
