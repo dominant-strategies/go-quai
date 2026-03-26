@@ -865,6 +865,10 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 
 	work.wo = newWo
 
+	if len(block.Transactions()) != len(work.receipts) {
+		return nil, fmt.Errorf("number of transactions and receipts in pending block do not match: %d != %d", len(block.Transactions()), len(work.receipts))
+	}
+
 	w.printPendingHeaderInfo(work, newWo, start)
 	work.utxosCreate = nil
 	work.utxosDelete = nil
@@ -2743,7 +2747,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
-	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) == params.MaxQiTxDataLength) {
+	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) != common.AddressLength) {
 		return fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength)
 	}
 	// Wrap Qi Transaction
@@ -2959,6 +2963,11 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if gasUsed > env.wo.GasLimit() {
 		return fmt.Errorf("tx %032x uses too much gas, have used %d out of %d", tx.Hash(), gasUsed, env.wo.GasLimit())
 	}
+	if !firstQiTx { // The first transaction in the block can skip denominations check
+		if err := CheckDenominations(inputs, outputs); err != nil {
+			return err
+		}
+	}
 	env.wo.Header().SetGasUsed(gasUsed)
 	env.etxRLimit -= ETXRGas
 	env.etxPLimit -= ETXPGas
@@ -2972,11 +2981,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	env.utxosCreate = append(env.utxosCreate, utxosCreateHashes...)
 	env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 
-	if !firstQiTx { // The first transaction in the block can skip denominations check
-		if err := CheckDenominations(inputs, outputs); err != nil {
-			return err
-		}
-	}
 	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: gasUsed - env.wo.GasUsed(), TxHash: tx.Hash(), OutboundEtxs: env.etxs[len(env.etxs)-len(etxs):]}
 	env.receipts = append(env.receipts, receipt)
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
