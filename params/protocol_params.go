@@ -335,6 +335,8 @@ var (
 	MinDifficulty                         uint64 = 250000000              // Minimum difficulty after kawpow fork for the reward calculation
 
 	SingularityForkBlock uint64 = 1265025
+
+	QiWrappingChangeBlock uint64 = 1320000
 )
 
 const (
