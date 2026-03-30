@@ -1979,7 +1979,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
-			continue
+			if currentHeader.PrimeTerminusNumber().Uint64() >= params.QiWrappingChangeBlock {
+				continue
+			}
 		} else if toAddr.IsInQuaiLedgerScope() {
 			return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex()), nil
 		}
