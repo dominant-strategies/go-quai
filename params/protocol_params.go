@@ -337,6 +337,8 @@ var (
 	KQuaiDifficultyDivisor                uint64 = 300000000000           // Minimum difficulty after kawpow fork for the reward calculation
 
 	SingularityForkBlock uint64 = 1530500
+
+	QiWrappingChangeBlock uint64 = 1570000
 )
 
 const (
