@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/dominant-strategies/go-quai/common"
@@ -22,6 +23,17 @@ import (
 
 // walletStore holds wallets keyed by UUID handle.
 var walletStore sync.Map
+
+type qiMuSigBundleHandle struct {
+	session   *hdwallet.QiMuSigBundleSession
+	createdAt time.Time
+}
+
+// qiMuSigBundleStore keeps short-lived interactive bundle sessions keyed by a
+// UUID handle. The store lives at the FFI boundary because Swift only exchanges
+// opaque session IDs, while the underlying Go session contains non-serializable
+// MuSig contexts and nonce-registration state.
+var qiMuSigBundleStore sync.Map
 
 // --- Helper types for JSON input/output ---
 
@@ -92,6 +104,57 @@ type signQiTxWithAddressesInput struct {
 	TxInputs         []hdwallet.QiTxInputParam  `json:"txInputs"`
 	TxOutputs        []hdwallet.QiTxOutputParam `json:"txOutputs"`
 	Zone             []byte                     `json:"zone"`
+}
+
+type qiMuSigBundleCreateInput struct {
+	WalletID            string                     `json:"walletId"`
+	ChainID             int64                      `json:"chainId"`
+	TxInputs            []hdwallet.QiTxInputParam  `json:"txInputs"`
+	TxOutputs           []hdwallet.QiTxOutputParam `json:"txOutputs"`
+	LocalOwnedInputRefs []string                   `json:"localOwnedInputRefs"`
+	Zone                []byte                     `json:"zone"`
+}
+
+type qiMuSigNonceJSON struct {
+	SignerPosition int    `json:"signerPosition"`
+	PublicNonce    string `json:"publicNonce"`
+}
+
+type qiMuSigPartialJSON struct {
+	SignerPosition   int    `json:"signerPosition"`
+	PartialSignature string `json:"partialSignature"`
+}
+
+type qiMuSigBundleCreateOutput struct {
+	SessionID            string             `json:"sessionId"`
+	SigningHash          string             `json:"signingHash"`
+	OrderedSignerPubKeys []string           `json:"orderedSignerPubKeys"`
+	LocalPublicNonces    []qiMuSigNonceJSON `json:"localPublicNonces"`
+}
+
+type qiMuSigLocalPartialBundleInput struct {
+	SessionID          string             `json:"sessionId"`
+	RemotePublicNonces []qiMuSigNonceJSON `json:"remotePublicNonces"`
+}
+
+type qiMuSigLocalPartialBundleOutput struct {
+	LocalPartialSignatures []qiMuSigPartialJSON `json:"localPartialSignatures"`
+}
+
+type qiMuSigFinalizeInput struct {
+	SessionID               string               `json:"sessionId"`
+	RemotePublicNonces      []qiMuSigNonceJSON   `json:"remotePublicNonces"`
+	RemotePartialSignatures []qiMuSigPartialJSON `json:"remotePartialSignatures"`
+}
+
+type qiMuSigFinalizeOutput struct {
+	TxHex     string `json:"txHex"`
+	Signature string `json:"signature"`
+}
+
+type verifySignedQiTransactionInput struct {
+	TxHex string `json:"txHex"`
+	Zone  []byte `json:"zone"`
 }
 
 type qiPaymentCodeInput struct {
@@ -334,6 +397,94 @@ func toHDWalletAccessList(entries []accessListEntryInput) []hdwallet.QuaiAccessL
 	return out
 }
 
+func cleanupExpiredQiMuSigBundles() {
+	now := time.Now()
+	qiMuSigBundleStore.Range(func(key, value any) bool {
+		handle, ok := value.(*qiMuSigBundleHandle)
+		if !ok || now.Sub(handle.createdAt) > 10*time.Minute {
+			qiMuSigBundleStore.Delete(key)
+		}
+		return true
+	})
+}
+
+func getQiMuSigBundle(id string) (*hdwallet.QiMuSigBundleSession, error) {
+	value, ok := qiMuSigBundleStore.Load(id)
+	if !ok {
+		return nil, fmt.Errorf("qi musig bundle %s not found", id)
+	}
+	handle, ok := value.(*qiMuSigBundleHandle)
+	if !ok {
+		qiMuSigBundleStore.Delete(id)
+		return nil, fmt.Errorf("qi musig bundle %s is invalid", id)
+	}
+	if time.Since(handle.createdAt) > 10*time.Minute {
+		qiMuSigBundleStore.Delete(id)
+		return nil, fmt.Errorf("qi musig bundle %s expired", id)
+	}
+	return handle.session, nil
+}
+
+func normalizeQiInputRef(input hdwallet.QiTxInputParam) string {
+	txHash := strings.TrimSpace(input.TxHash)
+	txHash = strings.TrimPrefix(strings.TrimPrefix(txHash, "0x"), "0X")
+	return strings.ToLower(txHash) + fmt.Sprintf(":%d", input.Index)
+}
+
+func parseQiMuSigNonceBundle(entries []qiMuSigNonceJSON) ([]hdwallet.QiMuSigNonceParam, error) {
+	bundle := make([]hdwallet.QiMuSigNonceParam, len(entries))
+	for i, entry := range entries {
+		nonceHex := strings.TrimPrefix(strings.TrimPrefix(entry.PublicNonce, "0x"), "0X")
+		nonceBytes, err := hex.DecodeString(nonceHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid remote public nonce %d: %w", i, err)
+		}
+		bundle[i] = hdwallet.QiMuSigNonceParam{
+			SignerPosition: entry.SignerPosition,
+			PublicNonce:    nonceBytes,
+		}
+	}
+	return bundle, nil
+}
+
+func parseQiMuSigPartialBundle(entries []qiMuSigPartialJSON) ([]hdwallet.QiMuSigPartialParam, error) {
+	bundle := make([]hdwallet.QiMuSigPartialParam, len(entries))
+	for i, entry := range entries {
+		partialHex := strings.TrimPrefix(strings.TrimPrefix(entry.PartialSignature, "0x"), "0X")
+		partialBytes, err := hex.DecodeString(partialHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid remote partial signature %d: %w", i, err)
+		}
+		bundle[i] = hdwallet.QiMuSigPartialParam{
+			SignerPosition:   entry.SignerPosition,
+			PartialSignature: partialBytes,
+		}
+	}
+	return bundle, nil
+}
+
+func encodeQiMuSigNonceBundle(entries []hdwallet.QiMuSigNonceParam) []qiMuSigNonceJSON {
+	bundle := make([]qiMuSigNonceJSON, len(entries))
+	for i, entry := range entries {
+		bundle[i] = qiMuSigNonceJSON{
+			SignerPosition: entry.SignerPosition,
+			PublicNonce:    "0x" + hex.EncodeToString(entry.PublicNonce),
+		}
+	}
+	return bundle
+}
+
+func encodeQiMuSigPartialBundle(entries []hdwallet.QiMuSigPartialParam) []qiMuSigPartialJSON {
+	bundle := make([]qiMuSigPartialJSON, len(entries))
+	for i, entry := range entries {
+		bundle[i] = qiMuSigPartialJSON{
+			SignerPosition:   entry.SignerPosition,
+			PartialSignature: "0x" + hex.EncodeToString(entry.PartialSignature),
+		}
+	}
+	return bundle
+}
+
 // --- Exported C functions ---
 
 //export CreateWalletFromPhrase
@@ -448,6 +599,7 @@ func ValidateQiPaymentCode(jsonInput *C.char) *C.char {
 
 //export DeriveQiPaymentChannelSendAddress
 func DeriveQiPaymentChannelSendAddress(jsonInput *C.char) *C.char {
+	start := time.Now()
 	var input deriveQiPaymentCodeAddressInput
 	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
 		return returnError(err.Error())
@@ -467,6 +619,16 @@ func DeriveQiPaymentChannelSendAddress(jsonInput *C.char) *C.char {
 	if err != nil {
 		return returnError(err.Error())
 	}
+
+	fmt.Printf(
+		"[WalletInfo] FFI DeriveQiPaymentChannelSendAddress walletId=%s startIndex=%d resolvedIndex=%d goElapsedMs=%d ffiElapsedMs=%d attempts=%d\n",
+		input.WalletID,
+		input.Index,
+		info.Index,
+		info.DerivationElapsedMs,
+		time.Since(start).Milliseconds(),
+		info.DerivationAttempts,
+	)
 
 	return returnJSON(info)
 }
@@ -600,6 +762,13 @@ func SignQiTransaction(jsonInput *C.char) *C.char {
 	if err != nil {
 		return returnError(err.Error())
 	}
+	valid, err := hdwallet.VerifySignedQiTransaction(signedBytes, zone)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	if !valid {
+		return returnError("failed local verification for signed Qi transaction")
+	}
 
 	return returnJSON(signedTxOutput{TxHex: "0x" + hex.EncodeToString(signedBytes)})
 }
@@ -653,8 +822,176 @@ func SignQiTransactionWithAddresses(jsonInput *C.char) *C.char {
 	if err != nil {
 		return returnError(err.Error())
 	}
+	valid, err := hdwallet.VerifySignedQiTransaction(signedBytes, zone)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	if !valid {
+		return returnError("failed local verification for signed Qi transaction")
+	}
 
 	return returnJSON(signedTxOutput{TxHex: "0x" + hex.EncodeToString(signedBytes)})
+}
+
+//export CreateQiMuSigBundleSession
+func CreateQiMuSigBundleSession(jsonInput *C.char) *C.char {
+	var input qiMuSigBundleCreateInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+
+	w, err := getWallet(input.WalletID)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	if len(input.TxInputs) == 0 {
+		return returnError("at least one Qi input is required")
+	}
+	if len(input.LocalOwnedInputRefs) == 0 {
+		return returnError("at least one localOwnedInputRef is required")
+	}
+
+	params := &hdwallet.QiTxParams{
+		ChainID:   big.NewInt(input.ChainID),
+		TxInputs:  input.TxInputs,
+		TxOutputs: input.TxOutputs,
+	}
+
+	localRefSet := make(map[string]struct{}, len(input.LocalOwnedInputRefs))
+	for _, ref := range input.LocalOwnedInputRefs {
+		normalized := strings.ToLower(strings.TrimSpace(ref))
+		if normalized == "" {
+			continue
+		}
+		normalized = strings.TrimPrefix(strings.TrimPrefix(normalized, "0x"), "0X")
+		localRefSet[normalized] = struct{}{}
+	}
+	if len(localRefSet) == 0 {
+		return returnError("at least one valid localOwnedInputRef is required")
+	}
+
+	localSigners := make(map[int]*ecdsa.PrivateKey, len(localRefSet))
+	for position, txInput := range input.TxInputs {
+		if _, ok := localRefSet[normalizeQiInputRef(txInput)]; !ok {
+			continue
+		}
+		privKey, err := w.GetPrivateKeyForQiInput(txInput)
+		if err != nil {
+			return returnError(err.Error())
+		}
+		localSigners[position] = privKey
+	}
+	if len(localSigners) == 0 {
+		return returnError("no localOwnedInputRefs matched the supplied txInputs")
+	}
+
+	session, signingHash, nonceBundle, orderedPubKeys, err := hdwallet.NewQiMuSigBundleSession(params, localSigners)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	cleanupExpiredQiMuSigBundles()
+	sessionID := newID()
+	qiMuSigBundleStore.Store(sessionID, &qiMuSigBundleHandle{
+		session:   session,
+		createdAt: time.Now(),
+	})
+
+	orderedPubKeyHex := make([]string, len(orderedPubKeys))
+	for i, pubKey := range orderedPubKeys {
+		orderedPubKeyHex[i] = "0x" + hex.EncodeToString(pubKey)
+	}
+
+	return returnJSON(qiMuSigBundleCreateOutput{
+		SessionID:            sessionID,
+		SigningHash:          "0x" + hex.EncodeToString(signingHash[:]),
+		OrderedSignerPubKeys: orderedPubKeyHex,
+		LocalPublicNonces:    encodeQiMuSigNonceBundle(nonceBundle),
+	})
+}
+
+//export CreateQiMuSigLocalPartialBundle
+func CreateQiMuSigLocalPartialBundle(jsonInput *C.char) *C.char {
+	var input qiMuSigLocalPartialBundleInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+
+	session, err := getQiMuSigBundle(input.SessionID)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	remoteNonces, err := parseQiMuSigNonceBundle(input.RemotePublicNonces)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	partials, err := session.CreateLocalPartialBundle(remoteNonces)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	return returnJSON(qiMuSigLocalPartialBundleOutput{
+		LocalPartialSignatures: encodeQiMuSigPartialBundle(partials),
+	})
+}
+
+//export FinalizeQiMuSigSignedTransaction
+func FinalizeQiMuSigSignedTransaction(jsonInput *C.char) *C.char {
+	var input qiMuSigFinalizeInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+
+	session, err := getQiMuSigBundle(input.SessionID)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	remoteNonces, err := parseQiMuSigNonceBundle(input.RemotePublicNonces)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	remotePartials, err := parseQiMuSigPartialBundle(input.RemotePartialSignatures)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	txBytes, signatureBytes, err := session.FinalizeSignedTransaction(remoteNonces, remotePartials)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	valid, err := hdwallet.VerifySignedQiTransaction(txBytes, common.Location{0, 0})
+	if err != nil {
+		return returnError(err.Error())
+	}
+	if !valid {
+		return returnError("failed local verification for finalized Qi transaction")
+	}
+	qiMuSigBundleStore.Delete(input.SessionID)
+
+	return returnJSON(qiMuSigFinalizeOutput{
+		TxHex:     "0x" + hex.EncodeToString(txBytes),
+		Signature: "0x" + hex.EncodeToString(signatureBytes),
+	})
+}
+
+//export VerifySignedQiTransaction
+func VerifySignedQiTransaction(jsonInput *C.char) *C.char {
+	var input verifySignedQiTransactionInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+
+	txHex := strings.TrimPrefix(strings.TrimPrefix(input.TxHex, "0x"), "0X")
+	txBytes, err := hex.DecodeString(txHex)
+	if err != nil {
+		return returnError("invalid tx hex: " + err.Error())
+	}
+	valid, err := hdwallet.VerifySignedQiTransaction(txBytes, normalizeZone(input.Zone))
+	if err != nil {
+		return returnError(err.Error())
+	}
+	return returnJSON(validOutput{Valid: valid})
 }
 
 //export DecodeProtoTransaction

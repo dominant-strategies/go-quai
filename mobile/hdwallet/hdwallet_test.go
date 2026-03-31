@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
 )
@@ -355,4 +356,223 @@ func TestBenchmark100Addresses(t *testing.T) {
 	perAddr := elapsed / count
 
 	t.Logf("Derived %d addresses in %s (%.2f ms/addr)", count, elapsed, float64(perAddr.Microseconds())/1000.0)
+}
+
+func TestBenchmarkQiPaymentChannelAddressDerivation(t *testing.T) {
+	const count = 100
+
+	// Create two random wallets (Alice and Bob) with independent payment codes.
+	alice, err := NewRandomHDWallet(CoinTypeQi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := NewRandomHDWallet(CoinTypeQi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	aliceCode, err := alice.GetQiPaymentCode(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bobCode, err := bob.GetQiPaymentCode(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !ValidateQiPaymentCode(aliceCode) {
+		t.Fatal("alice payment code is invalid")
+	}
+	if !ValidateQiPaymentCode(bobCode) {
+		t.Fatal("bob payment code is invalid")
+	}
+
+	zone := common.Location{0, 0} // Cyprus1
+
+	// Alice derives 24 send addresses (addresses she will send TO Bob).
+	// These must match what Bob derives as receive addresses.
+	t.Run("AliceSendToBob", func(t *testing.T) {
+		start := time.Now()
+		var totalAttempts uint32
+		nextIndex := uint32(0)
+		for i := 0; i < count; i++ {
+			info, err := alice.DeriveQiPaymentChannelSendAddress(bobCode, zone, 0, nextIndex)
+			if err != nil {
+				t.Fatalf("alice send address %d: %v", i, err)
+			}
+			totalAttempts += info.DerivationAttempts
+			nextIndex = info.Index + 1
+		}
+		elapsed := time.Since(start)
+		perAddr := elapsed / count
+		t.Logf("Alice->Bob SEND: %d addrs in %s (%.2f ms/addr, avg %.1f attempts/addr)",
+			count, elapsed, float64(perAddr.Microseconds())/1000.0, float64(totalAttempts)/float64(count))
+	})
+
+	// Bob derives 24 receive addresses (addresses he receives AT from Alice).
+	t.Run("BobReceiveFromAlice", func(t *testing.T) {
+		start := time.Now()
+		nextIndex := uint32(0)
+		for i := 0; i < count; i++ {
+			info, err := bob.DeriveQiPaymentChannelReceiveAddress(aliceCode, zone, 0, nextIndex)
+			if err != nil {
+				t.Fatalf("bob receive address %d: %v", i, err)
+			}
+			nextIndex = info.Index + 1
+		}
+		elapsed := time.Since(start)
+		perAddr := elapsed / count
+		t.Logf("Bob<-Alice RECV: %d addrs in %s (%.2f ms/addr)",
+			count, elapsed, float64(perAddr.Microseconds())/1000.0)
+	})
+
+	// Verify determinism: Alice's send addresses must equal Bob's receive addresses.
+	t.Run("Determinism", func(t *testing.T) {
+		alice2, _ := NewHDWalletFromPhrase(alice.Phrase(), "", CoinTypeQi)
+		bob2, _ := NewHDWalletFromPhrase(bob.Phrase(), "", CoinTypeQi)
+
+		sendIdx := uint32(0)
+		recvIdx := uint32(0)
+		for i := 0; i < count; i++ {
+			sendInfo, err := alice2.DeriveQiPaymentChannelSendAddress(bobCode, zone, 0, sendIdx)
+			if err != nil {
+				t.Fatalf("determinism send %d: %v", i, err)
+			}
+			recvInfo, err := bob2.DeriveQiPaymentChannelReceiveAddress(aliceCode, zone, 0, recvIdx)
+			if err != nil {
+				t.Fatalf("determinism recv %d: %v", i, err)
+			}
+			if sendInfo.Address != recvInfo.Address {
+				t.Fatalf("address mismatch at channel index %d:\n  send: %s (idx=%d)\n  recv: %s (idx=%d)",
+					i, sendInfo.Address, sendInfo.Index, recvInfo.Address, recvInfo.Index)
+			}
+			sendIdx = sendInfo.Index + 1
+			recvIdx = recvInfo.Index + 1
+		}
+		t.Logf("All %d send/receive address pairs match", count)
+	})
+
+	// Benchmark the reverse direction: Bob sends to Alice.
+	t.Run("BobSendToAlice", func(t *testing.T) {
+		start := time.Now()
+		var totalAttempts uint32
+		nextIndex := uint32(0)
+		for i := 0; i < count; i++ {
+			info, err := bob.DeriveQiPaymentChannelSendAddress(aliceCode, zone, 0, nextIndex)
+			if err != nil {
+				t.Fatalf("bob send address %d: %v", i, err)
+			}
+			totalAttempts += info.DerivationAttempts
+			nextIndex = info.Index + 1
+		}
+		elapsed := time.Since(start)
+		perAddr := elapsed / count
+		t.Logf("Bob->Alice SEND: %d addrs in %s (%.2f ms/addr, avg %.1f attempts/addr)",
+			count, elapsed, float64(perAddr.Microseconds())/1000.0, float64(totalAttempts)/float64(count))
+	})
+}
+
+// TestBenchmarkPerAttemptCost isolates the per-attempt cost of BIP44 vs BIP47
+// derivation by running a fixed number of raw derivation iterations (no zone
+// filtering) so the attempt count is identical for both paths.
+func TestBenchmarkPerAttemptCost(t *testing.T) {
+	const iterations = 2000
+
+	alice, err := NewRandomHDWallet(CoinTypeQi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := NewRandomHDWallet(CoinTypeQi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bobCode, err := bob.GetQiPaymentCode(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// --- BIP44 per-attempt cost ---
+	t.Run("BIP44_DeriveChild+AddressBytes", func(t *testing.T) {
+		branchNode, err := alice.root.DerivePath("0'/0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		for i := uint32(0); i < iterations; i++ {
+			child, err := branchNode.DeriveChild(i)
+			if err != nil {
+				continue
+			}
+			_, _ = child.AddressBytes()
+		}
+		elapsed := time.Since(start)
+		t.Logf("BIP44 %d iterations in %s (%.3f ms/iter)",
+			iterations, elapsed, float64(elapsed.Microseconds())/float64(iterations)/1000.0)
+	})
+
+	// --- BIP47 per-attempt cost, broken into steps ---
+	t.Run("BIP47_StepByStep", func(t *testing.T) {
+		accountNode, err := alice.bip47AccountNode(0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		counterparty, err := decodePaymentCode(bobCode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		notificationPrivEcdsa, err := derivePrivateKeyAt(accountNode, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		btcNotifPriv, _ := btcec.PrivKeyFromBytes(crypto.FromECDSA(notificationPrivEcdsa))
+
+		var durChildDerive, durECPubKey, durECDH, durKeccak time.Duration
+
+		for i := uint32(0); i < iterations; i++ {
+			// Step 1: HD child derivation from counterparty root
+			t1 := time.Now()
+			receiverNode, err := derivePaymentCodeChild(counterparty.root, i)
+			durChildDerive += time.Since(t1)
+			if err != nil {
+				continue
+			}
+
+			// Step 2: Extract EC public key
+			t2 := time.Now()
+			receiverPub, err := receiverNode.ECPubKey()
+			durECPubKey += time.Since(t2)
+			if err != nil {
+				continue
+			}
+
+			// Step 3: ECDH + SHA256 + ScalarBaseMult + Point Add
+			t3 := time.Now()
+			derivedPub, err := derivePaymentPublicKeyFromPrivate(receiverPub, btcNotifPriv)
+			durECDH += time.Since(t3)
+			if err != nil {
+				continue
+			}
+
+			// Step 4: Keccak256 address
+			t4 := time.Now()
+			_ = crypto.Keccak256(crypto.FromECDSAPub(derivedPub)[1:])[12:]
+			durKeccak += time.Since(t4)
+		}
+
+		total := durChildDerive + durECPubKey + durECDH + durKeccak
+		t.Logf("BIP47 %d iterations in %s (%.3f ms/iter)", iterations, total,
+			float64(total.Microseconds())/float64(iterations)/1000.0)
+		t.Logf("  HD child derive:    %s (%.3f ms/iter, %.1f%%)",
+			durChildDerive, float64(durChildDerive.Microseconds())/float64(iterations)/1000.0,
+			float64(durChildDerive)*100/float64(total))
+		t.Logf("  ECPubKey extract:   %s (%.3f ms/iter, %.1f%%)",
+			durECPubKey, float64(durECPubKey.Microseconds())/float64(iterations)/1000.0,
+			float64(durECPubKey)*100/float64(total))
+		t.Logf("  ECDH+SHA256+Scalar: %s (%.3f ms/iter, %.1f%%)",
+			durECDH, float64(durECDH.Microseconds())/float64(iterations)/1000.0,
+			float64(durECDH)*100/float64(total))
+		t.Logf("  Keccak256 address:  %s (%.3f ms/iter, %.1f%%)",
+			durKeccak, float64(durKeccak.Microseconds())/float64(iterations)/1000.0,
+			float64(durKeccak)*100/float64(total))
+	})
 }

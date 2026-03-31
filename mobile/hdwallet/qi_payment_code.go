@@ -6,9 +6,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
 	base58 "github.com/mr-tron/base58/base58"
@@ -44,6 +50,17 @@ type QiPaymentAddressInfo struct {
 type paymentCodeNode struct {
 	body []byte
 	root *hdkeychain.ExtendedKey
+}
+
+func paymentCodeDerivationWorkerCount() int {
+	workers := runtime.NumCPU()
+	if workers > 8 {
+		workers = 8
+	}
+	if workers < 1 {
+		workers = 1
+	}
+	return workers
 }
 
 func (w *HDWallet) storeQiPaymentAddressInfo(info *QiPaymentAddressInfo) error {
@@ -115,11 +132,12 @@ func ValidateQiPaymentCode(paymentCode string) bool {
 }
 
 func (w *HDWallet) DeriveQiPaymentChannelSendAddress(counterpartyPaymentCode string, zone common.Location, account, startIndex uint32) (*AddressInfo, error) {
-	accountNode, err := w.bip47AccountNode(account)
+	start := time.Now()
+	counterparty, err := decodePaymentCode(counterpartyPaymentCode)
 	if err != nil {
 		return nil, err
 	}
-	counterparty, err := decodePaymentCode(counterpartyPaymentCode)
+	accountNode, err := w.bip47AccountNode(account)
 	if err != nil {
 		return nil, err
 	}
@@ -127,60 +145,140 @@ func (w *HDWallet) DeriveQiPaymentChannelSendAddress(counterpartyPaymentCode str
 	if err != nil {
 		return nil, err
 	}
+	btcNotifPriv, _ := btcec.PrivKeyFromBytes(crypto.FromECDSA(notificationPriv))
 
-	for attempts := uint32(0); attempts < MaxDerivationAttempts; attempts++ {
-		index := startIndex + attempts
-		// BIP47 derivation is zone-agnostic, so we scan forward until the derived
-		// address lands in the requested Qi zone.
-		receiverNode, err := derivePaymentCodeChild(counterparty.root, index)
-		if err != nil {
-			continue
-		}
-		receiverPub, err := receiverNode.ECPubKey()
-		if err != nil {
-			continue
-		}
-		derivedPub, err := derivePaymentPublicKeyFromPrivate(receiverPub.ToECDSA(), notificationPriv)
-		if err != nil {
-			continue
-		}
-		addrBytes := crypto.Keccak256(crypto.FromECDSAPub(derivedPub)[1:])[12:]
-		if !IsValidAddressForZone(CoinTypeQi, addrBytes, zone) {
-			continue
-		}
-		pubBytes := crypto.CompressPubkey(derivedPub)
-		info := &AddressInfo{
-			PubKey:  "0x" + hex.EncodeToString(pubBytes),
-			Address: "0x" + hex.EncodeToString(addrBytes),
-			Account: account,
-			Change:  false,
-			Index:   index,
-			Zone:    zone,
-			IsQi:    true,
-		}
-		// Persist the derivation metadata so later signing can recover the exact
-		// private key that controls this payment-code-derived address.
-		w.mu.Lock()
-		storeErr := w.storeQiPaymentAddressInfo(&QiPaymentAddressInfo{
-			Address:          info.Address,
-			PubKey:           info.PubKey,
-			CounterpartyCode: counterpartyPaymentCode,
-			Account:          account,
-			Index:            index,
-			Zone:             zone,
-			Kind:             QiPaymentAddressSend,
-		})
-		w.mu.Unlock()
-		if storeErr != nil {
-			return nil, storeErr
-		}
-		return info, nil
+	type sendResult struct {
+		index    uint32
+		pubBytes []byte
+		addr     []byte
 	}
 
-	return nil, fmt.Errorf("no valid payment-code send address found after %d attempts", MaxDerivationAttempts)
+	workers := paymentCodeDerivationWorkerCount()
+
+	// bestIndex tracks the lowest valid index found so far. Workers
+	// abort once they pass this value since any result they find would
+	// be higher.
+	var bestIndex atomic.Uint64
+	bestIndex.Store(uint64(startIndex) + uint64(MaxDerivationAttempts))
+
+	var wg sync.WaitGroup
+	results := make(chan sendResult, workers)
+	attemptCounts := make([]uint32, workers)
+
+	for wk := 0; wk < workers; wk++ {
+		wg.Add(1)
+		go func(workerIndex int) {
+			localAttempts := uint32(0)
+			defer func() {
+				attemptCounts[workerIndex] = localAttempts
+				wg.Done()
+			}()
+			workerOffset := uint32(workerIndex)
+			for i := workerOffset; i < MaxDerivationAttempts; i += uint32(workers) {
+				index := startIndex + i
+				if uint64(index) >= bestIndex.Load() {
+					return
+				}
+				localAttempts++
+				receiverNode, err := derivePaymentCodeChild(counterparty.root, index)
+				if err != nil {
+					continue
+				}
+				receiverPub, err := receiverNode.ECPubKey()
+				if err != nil {
+					continue
+				}
+				derivedPub, err := derivePaymentPublicKeyFromPrivate(receiverPub, btcNotifPriv)
+				if err != nil {
+					continue
+				}
+				addrBytes := crypto.Keccak256(crypto.FromECDSAPub(derivedPub)[1:])[12:]
+				if !IsValidAddressForZone(CoinTypeQi, addrBytes, zone) {
+					continue
+				}
+				// Atomically update bestIndex so other workers can abort early.
+				for {
+					cur := bestIndex.Load()
+					if uint64(index) >= cur {
+						break
+					}
+					if bestIndex.CompareAndSwap(cur, uint64(index)) {
+						break
+					}
+				}
+				results <- sendResult{
+					index:    index,
+					pubBytes: crypto.CompressPubkey(derivedPub),
+					addr:     addrBytes,
+				}
+				return
+			}
+		}(wk)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect all results and pick the lowest index.
+	var best *sendResult
+	for r := range results {
+		if best == nil || r.index < best.index {
+			best = &r
+		}
+	}
+	totalAttempts := uint32(0)
+	for _, attempts := range attemptCounts {
+		totalAttempts += attempts
+	}
+
+	if best == nil {
+		return nil, fmt.Errorf("no valid payment-code send address found after %d attempts", MaxDerivationAttempts)
+	}
+
+	info := &AddressInfo{
+		PubKey:  "0x" + hex.EncodeToString(best.pubBytes),
+		Address: "0x" + hex.EncodeToString(best.addr),
+		Account: account,
+		Change:  false,
+		Index:   best.index,
+		Zone:    zone,
+		IsQi:    true,
+		// In the parallel search this reflects the true number of candidate
+		// indices examined across all workers, not merely the winning index span.
+		DerivationAttempts:  totalAttempts,
+		DerivationElapsedMs: time.Since(start).Milliseconds(),
+	}
+
+	w.mu.Lock()
+	storeErr := w.storeQiPaymentAddressInfo(&QiPaymentAddressInfo{
+		Address:          info.Address,
+		PubKey:           info.PubKey,
+		CounterpartyCode: counterpartyPaymentCode,
+		Account:          account,
+		Index:            best.index,
+		Zone:             zone,
+		Kind:             QiPaymentAddressSend,
+	})
+	w.mu.Unlock()
+	if storeErr != nil {
+		return nil, storeErr
+	}
+	fmt.Printf(
+		"[WalletInfo] Go DeriveQiPaymentChannelSendAddress startIndex=%d resolvedIndex=%d attempts=%d elapsedMs=%d zone=%v workers=%d\n",
+		startIndex,
+		best.index,
+		info.DerivationAttempts,
+		info.DerivationElapsedMs,
+		zone,
+		workers,
+	)
+	return info, nil
 }
 
 func (w *HDWallet) DeriveQiPaymentChannelReceiveAddress(counterpartyPaymentCode string, zone common.Location, account, startIndex uint32) (*AddressInfo, error) {
+	start := time.Now()
 	accountNode, err := w.bip47AccountNode(account)
 	if err != nil {
 		return nil, err
@@ -194,49 +292,110 @@ func (w *HDWallet) DeriveQiPaymentChannelReceiveAddress(counterpartyPaymentCode 
 		return nil, err
 	}
 
-	for attempts := uint32(0); attempts < MaxDerivationAttempts; attempts++ {
-		index := startIndex + attempts
-		// Receiving addresses are derived from our payment code private branch and
-		// the counterparty notification pubkey, then filtered to the target zone.
-		derivedPriv, derivedPub, err := derivePaymentKeyPair(accountNode, notificationPub, index)
-		if err != nil {
-			continue
-		}
-		_ = derivedPriv
-		addrBytes := crypto.Keccak256(crypto.FromECDSAPub(derivedPub)[1:])[12:]
-		if !IsValidAddressForZone(CoinTypeQi, addrBytes, zone) {
-			continue
-		}
-		pubBytes := crypto.CompressPubkey(derivedPub)
-		info := &AddressInfo{
-			PubKey:  "0x" + hex.EncodeToString(pubBytes),
-			Address: "0x" + hex.EncodeToString(addrBytes),
-			Account: account,
-			Change:  false,
-			Index:   index,
-			Zone:    zone,
-			IsQi:    true,
-		}
-		// Only receive-side payment-code addresses are spendable by this wallet, so
-		// we retain their metadata for later key recovery during input signing.
-		w.mu.Lock()
-		storeErr := w.storeQiPaymentAddressInfo(&QiPaymentAddressInfo{
-			Address:          info.Address,
-			PubKey:           info.PubKey,
-			CounterpartyCode: counterpartyPaymentCode,
-			Account:          account,
-			Index:            index,
-			Zone:             zone,
-			Kind:             QiPaymentAddressReceive,
-		})
-		w.mu.Unlock()
-		if storeErr != nil {
-			return nil, storeErr
-		}
-		return info, nil
+	type recvResult struct {
+		index    uint32
+		pubBytes []byte
+		addr     []byte
 	}
 
-	return nil, fmt.Errorf("no valid payment-code receive address found after %d attempts", MaxDerivationAttempts)
+	workers := paymentCodeDerivationWorkerCount()
+
+	var bestIndex atomic.Uint64
+	bestIndex.Store(uint64(startIndex) + uint64(MaxDerivationAttempts))
+
+	var wg sync.WaitGroup
+	results := make(chan recvResult, workers)
+	attemptCounts := make([]uint32, workers)
+
+	for wk := 0; wk < workers; wk++ {
+		wg.Add(1)
+		go func(workerIndex int) {
+			localAttempts := uint32(0)
+			defer func() {
+				attemptCounts[workerIndex] = localAttempts
+				wg.Done()
+			}()
+			workerOffset := uint32(workerIndex)
+			for i := workerOffset; i < MaxDerivationAttempts; i += uint32(workers) {
+				index := startIndex + i
+				if uint64(index) >= bestIndex.Load() {
+					return
+				}
+				localAttempts++
+				_, derivedPub, err := derivePaymentKeyPair(accountNode, notificationPub, index)
+				if err != nil {
+					continue
+				}
+				addrBytes := crypto.Keccak256(crypto.FromECDSAPub(derivedPub)[1:])[12:]
+				if !IsValidAddressForZone(CoinTypeQi, addrBytes, zone) {
+					continue
+				}
+				for {
+					cur := bestIndex.Load()
+					if uint64(index) >= cur {
+						break
+					}
+					if bestIndex.CompareAndSwap(cur, uint64(index)) {
+						break
+					}
+				}
+				results <- recvResult{
+					index:    index,
+					pubBytes: crypto.CompressPubkey(derivedPub),
+					addr:     addrBytes,
+				}
+				return
+			}
+		}(wk)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var best *recvResult
+	for r := range results {
+		if best == nil || r.index < best.index {
+			best = &r
+		}
+	}
+	totalAttempts := uint32(0)
+	for _, attempts := range attemptCounts {
+		totalAttempts += attempts
+	}
+
+	if best == nil {
+		return nil, fmt.Errorf("no valid payment-code receive address found after %d attempts", MaxDerivationAttempts)
+	}
+
+	info := &AddressInfo{
+		PubKey:              "0x" + hex.EncodeToString(best.pubBytes),
+		Address:             "0x" + hex.EncodeToString(best.addr),
+		Account:             account,
+		Change:              false,
+		Index:               best.index,
+		Zone:                zone,
+		IsQi:                true,
+		DerivationAttempts:  totalAttempts,
+		DerivationElapsedMs: time.Since(start).Milliseconds(),
+	}
+
+	w.mu.Lock()
+	storeErr := w.storeQiPaymentAddressInfo(&QiPaymentAddressInfo{
+		Address:          info.Address,
+		PubKey:           info.PubKey,
+		CounterpartyCode: counterpartyPaymentCode,
+		Account:          account,
+		Index:            best.index,
+		Zone:             zone,
+		Kind:             QiPaymentAddressReceive,
+	})
+	w.mu.Unlock()
+	if storeErr != nil {
+		return nil, storeErr
+	}
+	return info, nil
 }
 
 func (w *HDWallet) GetQiPaymentReceivePrivateKey(counterpartyPaymentCode string, account, index uint32) (*ecdsa.PrivateKey, error) {
@@ -286,16 +445,12 @@ func derivePaymentCodeChild(root *hdkeychain.ExtendedKey, index uint32) (*hdkeyc
 	return root.Derive(index)
 }
 
-func paymentCodeNotificationPubKey(root *hdkeychain.ExtendedKey) (*ecdsa.PublicKey, error) {
+func paymentCodeNotificationPubKey(root *hdkeychain.ExtendedKey) (*btcec.PublicKey, error) {
 	child, err := derivePaymentCodeChild(root, 0)
 	if err != nil {
 		return nil, err
 	}
-	pub, err := child.ECPubKey()
-	if err != nil {
-		return nil, err
-	}
-	return pub.ToECDSA(), nil
+	return child.ECPubKey()
 }
 
 func derivePrivateKeyAt(root *HDNode, index uint32) (*ecdsa.PrivateKey, error) {
@@ -306,17 +461,13 @@ func derivePrivateKeyAt(root *HDNode, index uint32) (*ecdsa.PrivateKey, error) {
 	return child.PrivateKey()
 }
 
-func derivePaymentPublicKeyFromPrivate(derivedPub *ecdsa.PublicKey, notificationPriv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
-	curve := crypto.S256()
-	sx, sy := curve.ScalarMult(derivedPub.X, derivedPub.Y, crypto.FromECDSA(notificationPriv))
-	if sx == nil || sy == nil {
-		return nil, fmt.Errorf("failed to compute shared secret")
-	}
-	sharedScalar := sha256.Sum256(padTo32Bytes(sx.Bytes()))
+func derivePaymentPublicKeyFromPrivate(derivedPub *btcec.PublicKey, notifPriv *btcec.PrivateKey) (*ecdsa.PublicKey, error) {
+	sharedX := btcec.GenerateSharedSecret(notifPriv, derivedPub)
+	sharedScalar := sha256.Sum256(padTo32Bytes(sharedX))
 	return addScalarToPublicKey(derivedPub, sharedScalar[:])
 }
 
-func derivePaymentKeyPair(accountNode *HDNode, notificationPub *ecdsa.PublicKey, index uint32) (*ecdsa.PrivateKey, *ecdsa.PublicKey, error) {
+func derivePaymentKeyPair(accountNode *HDNode, notificationPub *btcec.PublicKey, index uint32) (*ecdsa.PrivateKey, *ecdsa.PublicKey, error) {
 	bNode, err := accountNode.DeriveChild(index)
 	if err != nil {
 		return nil, nil, err
@@ -325,11 +476,9 @@ func derivePaymentKeyPair(accountNode *HDNode, notificationPub *ecdsa.PublicKey,
 	if err != nil {
 		return nil, nil, err
 	}
-	sx, sy := crypto.S256().ScalarMult(notificationPub.X, notificationPub.Y, crypto.FromECDSA(bPriv))
-	if sx == nil || sy == nil {
-		return nil, nil, fmt.Errorf("failed to compute shared secret")
-	}
-	sharedScalar := sha256.Sum256(padTo32Bytes(sx.Bytes()))
+	btcPriv, _ := btcec.PrivKeyFromBytes(crypto.FromECDSA(bPriv))
+	sharedX := btcec.GenerateSharedSecret(btcPriv, notificationPub)
+	sharedScalar := sha256.Sum256(padTo32Bytes(sharedX))
 	derivedPriv, err := addScalarToPrivateKey(bPriv, sharedScalar[:])
 	if err != nil {
 		return nil, nil, err
@@ -347,17 +496,27 @@ func addScalarToPrivateKey(basePriv *ecdsa.PrivateKey, scalar []byte) (*ecdsa.Pr
 	return crypto.ToECDSA(padTo32Bytes(sum.Bytes()))
 }
 
-func addScalarToPublicKey(basePub *ecdsa.PublicKey, scalar []byte) (*ecdsa.PublicKey, error) {
-	curve := crypto.S256()
-	sx, sy := curve.ScalarBaseMult(scalar)
-	if sx == nil || sy == nil {
-		return nil, fmt.Errorf("failed to derive scalar point")
-	}
-	x, y := curve.Add(basePub.X, basePub.Y, sx, sy)
-	if x == nil || y == nil {
-		return nil, fmt.Errorf("failed to add scalar to public key")
-	}
-	return &ecdsa.PublicKey{Curve: curve, X: x, Y: y}, nil
+func addScalarToPublicKey(basePub *btcec.PublicKey, scalar []byte) (*ecdsa.PublicKey, error) {
+	var k secp.ModNScalar
+	k.SetByteSlice(scalar)
+
+	var scalarPoint secp.JacobianPoint
+	secp.ScalarBaseMultNonConst(&k, &scalarPoint)
+
+	var basePoint secp.JacobianPoint
+	basePub.AsJacobian(&basePoint)
+
+	var result secp.JacobianPoint
+	secp.AddNonConst(&basePoint, &scalarPoint, &result)
+	result.ToAffine()
+
+	xBytes := result.X.Bytes()
+	yBytes := result.Y.Bytes()
+	return &ecdsa.PublicKey{
+		Curve: crypto.S256(),
+		X:     new(big.Int).SetBytes(xBytes[:]),
+		Y:     new(big.Int).SetBytes(yBytes[:]),
+	}, nil
 }
 
 func decodePaymentCode(paymentCode string) (*paymentCodeNode, error) {

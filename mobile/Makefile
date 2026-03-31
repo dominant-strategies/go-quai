@@ -1,6 +1,7 @@
 MODULE = github.com/dominant-strategies/go-quai
 EXPORT_PKG = $(MODULE)/mobile/export
 BUILD_DIR = ../build/mobile
+XCODE_LIB_DIR = ios-test/QuaiWalletTest/QuaiWalletTest
 
 # ---- macOS (native, for testing) ----
 macos:
@@ -31,6 +32,17 @@ ios-sim:
 	go build -buildmode=c-archive -tags mobile \
 	  -o $(BUILD_DIR)/ios-sim/libquaiwallet.a $(EXPORT_PKG)
 
+# ---- XCFramework (device + simulator) ----
+xcframework: ios ios-sim
+	rm -rf $(BUILD_DIR)/QuaiWallet.xcframework
+	mkdir -p $(BUILD_DIR)/headers
+	cp $(BUILD_DIR)/ios/libquaiwallet.h $(BUILD_DIR)/headers/
+	printf 'module QuaiWallet {\n    header "libquaiwallet.h"\n    export *\n}\n' > $(BUILD_DIR)/headers/module.modulemap
+	xcodebuild -create-xcframework \
+	  -library $(BUILD_DIR)/ios/libquaiwallet.a -headers $(BUILD_DIR)/headers \
+	  -library $(BUILD_DIR)/ios-sim/libquaiwallet.a -headers $(BUILD_DIR)/headers \
+	  -output $(BUILD_DIR)/QuaiWallet.xcframework
+
 # ---- Android (arm64, c-shared) ----
 ANDROID_NDK ?= $(ANDROID_HOME)/ndk/$(shell ls $(ANDROID_HOME)/ndk/ 2>/dev/null | sort -V | tail -1)
 ANDROID_API ?= 21
@@ -54,7 +66,7 @@ android-x86_64:
 android: android-arm64 android-x86_64
 
 # ---- All platforms ----
-all: macos ios ios-sim android
+all: macos xcframework android
 
 # ---- Tests ----
 test:
@@ -64,4 +76,4 @@ test:
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: macos ios ios-sim android-arm64 android-x86_64 android all test clean
+.PHONY: macos ios ios-sim xcframework android-arm64 android-x86_64 android all test clean

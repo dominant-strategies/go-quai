@@ -21,13 +21,15 @@ const MaxDerivationAttempts = 10_000_000
 
 // AddressInfo represents a derived address with its metadata.
 type AddressInfo struct {
-	PubKey  string          `json:"pubKey"`  // hex compressed public key
-	Address string          `json:"address"` // 0x-prefixed hex address
-	Account uint32          `json:"account"`
-	Change  bool            `json:"change,omitempty"`
-	Index   uint32          `json:"index"`
-	Zone    common.Location `json:"zone"`
-	IsQi    bool            `json:"isQi"`
+	PubKey              string          `json:"pubKey"`  // hex compressed public key
+	Address             string          `json:"address"` // 0x-prefixed hex address
+	Account             uint32          `json:"account"`
+	Change              bool            `json:"change,omitempty"`
+	Index               uint32          `json:"index"`
+	Zone                common.Location `json:"zone"`
+	IsQi                bool            `json:"isQi"`
+	DerivationAttempts  uint32          `json:"derivationAttempts,omitempty"`
+	DerivationElapsedMs int64           `json:"derivationElapsedMs,omitempty"`
 }
 
 // HDWallet is the top-level HD wallet supporting zone-aware address derivation.
@@ -335,7 +337,7 @@ func IsQiAddress(addr []byte) bool {
 	if !ok {
 		return false
 	}
-	return !b.IsInQuaiLedgerScope()
+	return b.IsInQiLedgerScope()
 }
 
 // IsQuaiAddress returns true if the address is in the Quai ledger scope.
@@ -355,19 +357,21 @@ func IsValidAddressForZone(coinType uint32, addr []byte, zone common.Location) b
 	if len(zone) < 2 {
 		return false
 	}
-	if _, ok := asAddressBytes(addr); !ok {
+	// BytesToAddress normalizes/pads input, so malformed short slices can look
+	// superficially valid unless we preserve the historical 20-byte invariant.
+	if len(addr) != common.AddressLength {
 		return false
 	}
-	// Check zone match: addr[0] must equal the zone's byte prefix
-	if addr[0] != zone.BytePrefix() {
+	address := common.BytesToAddress(addr, zone)
+	if _, err := address.InternalAddress(); err != nil {
 		return false
 	}
 	// Check ledger scope
 	switch coinType {
 	case CoinTypeQuai:
-		return IsQuaiAddress(addr)
+		return address.IsInQuaiLedgerScope()
 	case CoinTypeQi:
-		return IsQiAddress(addr)
+		return address.IsInQiLedgerScope()
 	default:
 		return false
 	}
