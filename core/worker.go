@@ -2643,6 +2643,55 @@ func (w *worker) GetPendingBlockBody(powId types.PowID, sealHash common.Hash) (*
 	return nil, errors.New("pending block body not found")
 }
 
+// PendingWorkShares returns workshares that are still eligible for inclusion.
+func (w *worker) PendingWorkShares() []*types.WorkObjectHeader {
+	currentHeader := w.hc.CurrentHeader()
+	if currentHeader == nil {
+		return nil
+	}
+
+	// worksharesIncluded creates a map of workshare hashes that are included in
+	// the current block and its recent ancestors within the inclusion depth, so
+	// that they can be filtered out from the pending workshares list
+	worksharesIncluded := make(map[common.Hash]bool)
+	for _, ws := range currentHeader.Uncles() {
+		worksharesIncluded[ws.Hash()] = true
+	}
+	if currentHeader.NumberU64(common.ZONE_CTX) > uint64(params.NewWorkSharesInclusionDepth) {
+		for _, ancestor := range w.hc.GetBlocksFromHash(currentHeader.ParentHash(common.ZONE_CTX), params.NewWorkSharesInclusionDepth) {
+			for _, uncle := range ancestor.Uncles() {
+				worksharesIncluded[uncle.Hash()] = true
+			}
+			worksharesIncluded[ancestor.Hash()] = true
+		}
+	}
+
+	currentNumber := currentHeader.NumberU64(common.ZONE_CTX)
+	pending := make([]*types.WorkObjectHeader, 0)
+	collect := func(cache *lru.Cache[common.Hash, types.WorkObjectHeader]) {
+		for _, key := range cache.Keys() {
+			workshare, ok := cache.Peek(key)
+			if !ok {
+				continue
+			}
+			if workshare.NumberU64()+uint64(params.NewWorkSharesInclusionDepth) < currentNumber {
+				continue
+			}
+			if worksharesIncluded[workshare.Hash()] {
+				continue
+			}
+			workshareCopy := workshare
+			pending = append(pending, &workshareCopy)
+		}
+	}
+
+	collect(w.kawpowShares)
+	collect(w.shaShares)
+	collect(w.scryptShares)
+
+	return pending
+}
+
 func (w *worker) SubscribeAsyncPendingHeader(ch chan *types.WorkObject) event.Subscription {
 	return w.scope.Track(w.asyncPhFeed.Subscribe(ch))
 }

@@ -230,6 +230,25 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	return jsonOutpoints, nil
 }
 
+func pendingWorkSharePowString(workShare *types.WorkObjectHeader) string {
+	if workShare == nil || workShare.AuxPow() == nil {
+		return types.Progpow.String()
+	}
+	return workShare.AuxPow().PowID().String()
+}
+
+func marshalPendingWorkSharesByPow(workShares []*types.WorkObjectHeader, rpcVersion string) map[string][]map[string]interface{} {
+	marshaled := make(map[string][]map[string]interface{})
+	for _, workShare := range workShares {
+		if workShare == nil {
+			continue
+		}
+		powString := pendingWorkSharePowString(workShare)
+		marshaled[powString] = append(marshaled[powString], workShare.RPCMarshalWorkObjectHeader(rpcVersion))
+	}
+	return marshaled
+}
+
 func (s *PublicBlockChainQuaiAPI) GetLockupsForContractAndMiner(ctx context.Context, ownerContract, beneficiaryMiner common.Address) (map[string]map[string][]interface{}, error) {
 	_, err := ownerContract.InternalAndQuaiAddress()
 	if err != nil {
@@ -1596,6 +1615,13 @@ func (s *PublicBlockChainQuaiAPI) ReceiveRawWorkShare(ctx context.Context, raw h
 func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShare *types.WorkObjectHeader) error {
 	// Ensure record in mined LRU even if called directly
 	return s.b.ReceiveWorkShare(workShare)
+}
+
+func (s *PublicBlockChainQuaiAPI) GetPendingWorkShares(ctx context.Context) (map[string][]map[string]interface{}, error) {
+	if s.b.NodeCtx() != common.ZONE_CTX {
+		return nil, errors.New("getPendingWorkShares call can only be made in zone chain")
+	}
+	return marshalPendingWorkSharesByPow(s.b.GetPendingWorkShares(), s.b.RpcVersion()), nil
 }
 
 func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {

@@ -2056,6 +2056,10 @@ func (sl *Slice) GetPendingBlockBody(powId types.PowID, sealHash common.Hash) *t
 	return blockBody
 }
 
+func (sl *Slice) GetPendingWorkShares() []*types.WorkObjectHeader {
+	return sl.miner.PendingWorkShares()
+}
+
 func (sl *Slice) SubscribeMissingBlockEvent(ch chan<- types.BlockRequest) event.Subscription {
 	return sl.scope.Track(sl.missingBlockFeed.Subscribe(ch))
 }

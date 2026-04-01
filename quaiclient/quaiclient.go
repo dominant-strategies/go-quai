@@ -171,6 +171,17 @@ func (ec *Client) GetWorkShareThreshold(ctx context.Context) (int, error) {
 	return threshold, nil
 }
 
+func (ec *Client) GetPendingWorkShares(ctx context.Context) (map[string][]map[string]interface{}, error) {
+	var result map[string][]map[string]interface{}
+	if err := ec.c.CallContext(ctx, &result, "quai_getPendingWorkShares"); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return make(map[string][]map[string]interface{}), nil
+	}
+	return result, nil
+}
+
 // ReceiveMinedHeader sends a mined block back to the node
 func (ec *Client) ReceiveMinedHeader(ctx context.Context, header *types.WorkObject) error {
 	protoWo, err := header.ProtoEncode(types.PEtxObject)

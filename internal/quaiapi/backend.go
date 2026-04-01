@@ -125,6 +125,7 @@ type Backend interface {
 	GetMinerEndpoints() []string
 	GetWorkShareP2PThreshold() int
 	SetWorkShareP2PThreshold(threshold int)
+	GetPendingWorkShares() []*types.WorkObjectHeader
 	GetWorkshareLRUDump(limit int) map[string]interface{}
 	UncleWorkShareClassification(workshare *types.WorkObjectHeader) types.WorkShareValidity
 	CheckWorkThreshold(header *types.WorkObjectHeader, threshold int) bool

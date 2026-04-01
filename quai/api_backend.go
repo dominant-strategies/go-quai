@@ -47,9 +47,9 @@ const (
 
 // QuaiAPIBackend implements quaiapi.Backend for full nodes
 type QuaiAPIBackend struct {
-	extRPCEnabled                      bool
-	quai                               *Quai
-	uncleWorkShareClassificationCache  *lru.Cache[common.Hash, types.WorkShareValidity]
+	extRPCEnabled                     bool
+	quai                              *Quai
+	uncleWorkShareClassificationCache *lru.Cache[common.Hash, types.WorkShareValidity]
 }
 
 func (b *QuaiAPIBackend) RpcVersion() string {
@@ -762,6 +762,10 @@ func (b *QuaiAPIBackend) TxMiningEnabled() bool {
 
 func (b *QuaiAPIBackend) GetWorkShareThreshold() int {
 	return b.quai.core.GetWorkShareThreshold()
+}
+
+func (b *QuaiAPIBackend) GetPendingWorkShares() []*types.WorkObjectHeader {
+	return b.quai.core.GetPendingWorkShares()
 }
 
 func (b *QuaiAPIBackend) GetWorkshareLRUDump(limit int) map[string]interface{} {
