@@ -130,6 +130,10 @@ func (miner *Miner) PendingBlockAndReceipts() (*types.WorkObject, types.Receipts
 	return miner.worker.pendingBlockAndReceipts()
 }
 
+func (miner *Miner) PendingWorkShares() []*types.WorkObjectHeader {
+	return miner.worker.PendingWorkShares()
+}
+
 func (miner *Miner) SetPrimaryCoinbase(addr common.Address) {
 	miner.worker.setPrimaryCoinbase(addr)
 }

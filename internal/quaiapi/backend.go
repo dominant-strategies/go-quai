@@ -129,6 +129,7 @@ type Backend interface {
 	CheckIfEtxIsEligible(hash common.Hash, location common.Location) bool
 	StateAtBlock(context.Context, *types.WorkObject, uint64, *state.StateDB, bool) (*state.StateDB, error)
 	StateAtTransaction(context.Context, *types.WorkObject, int, uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
+	GetPendingWorkShares() []*types.WorkObjectHeader
 	GetWorkshareLRUDump(limit int) map[string]interface{}
 	UncleWorkShareClassification(workshare *types.WorkObjectHeader) types.WorkShareValidity
 	CheckWorkThreshold(header *types.WorkObjectHeader, threshold int) bool

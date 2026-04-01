@@ -1102,6 +1102,10 @@ func (c *Core) GetPendingBlockBody(powId types.PowID, sealHash common.Hash) *typ
 	return c.sl.GetPendingBlockBody(powId, sealHash)
 }
 
+func (c *Core) GetPendingWorkShares() []*types.WorkObjectHeader {
+	return c.sl.GetPendingWorkShares()
+}
+
 func (c *Core) NewGenesisPendigHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {
 	return c.sl.NewGenesisPendingHeader(pendingHeader, domTerminus, genesisHash)
 }
