@@ -230,6 +230,54 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddress(ctx context.Context, add
 	return jsonOutpoints, nil
 }
 
+// GetOutpointsByAddresses returns UTXOs for multiple addresses in a single call.
+// This is more efficient than calling GetOutpointsByAddress multiple times,
+// as it reduces RPC round-trips for wallet scanning operations.
+func (s *PublicBlockChainQuaiAPI) GetOutpointsByAddresses(ctx context.Context, addresses []common.Address) (map[string][]interface{}, error) {
+	if len(addresses) > 10000 {
+		return nil, fmt.Errorf("too many addresses, max 10000 per request")
+	}
+
+	results := make(map[string][]interface{})
+
+	for _, address := range addresses {
+		if address.IsInQuaiLedgerScope() {
+			// Skip Quai addresses silently - they don't have UTXOs
+			continue
+		}
+
+		outpoints, err := s.b.AddressOutpoints(ctx, address)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get outpoints for %s: %w", address.Hex(), err)
+		}
+
+		jsonOutpoints := make([]interface{}, 0, len(outpoints))
+		for _, outpoint := range outpoints {
+			if outpoint == nil {
+				continue
+			}
+			if rawdb.GetUTXO(s.b.Database(), outpoint.TxHash, outpoint.Index) == nil {
+				continue
+			}
+			lock := big.NewInt(0)
+			if outpoint.Lock != nil {
+				lock = outpoint.Lock
+			}
+			jsonOutpoint := map[string]interface{}{
+				"txHash":       outpoint.TxHash.Hex(),
+				"index":        hexutil.Uint64(outpoint.Index),
+				"denomination": hexutil.Uint64(outpoint.Denomination),
+				"lock":         hexutil.Big(*lock),
+			}
+			jsonOutpoints = append(jsonOutpoints, jsonOutpoint)
+		}
+
+		results[address.Hex()] = jsonOutpoints
+	}
+
+	return results, nil
+}
+
 func (s *PublicBlockChainQuaiAPI) GetLockupsForContractAndMiner(ctx context.Context, ownerContract, beneficiaryMiner common.Address) (map[string]map[string][]interface{}, error) {
 	_, err := ownerContract.InternalAndQuaiAddress()
 	if err != nil {
