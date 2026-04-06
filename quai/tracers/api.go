@@ -567,6 +567,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.WorkObject, config 
 			defer pend.Done()
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
+				// Qi transactions are UTXO-based and have no EVM execution; skip them
+				if txs[task.index].Type() == types.QiTxType {
+					continue
+				}
 				msg, _ := txs[task.index].AsMessage(signer, block.BaseFee())
 				txctx := &Context{
 					BlockHash: blockHash,
@@ -585,6 +589,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.WorkObject, config 
 	// Feed the transactions into the tracers and return
 	var failed error
 	for i, tx := range txs {
+		// Qi transactions are UTXO-based and have no EVM execution; skip them
+		if tx.Type() == types.QiTxType {
+			continue
+		}
 		// Send the trace task over for execution
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
 
