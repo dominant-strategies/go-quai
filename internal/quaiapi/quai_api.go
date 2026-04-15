@@ -1598,12 +1598,21 @@ func (s *PublicBlockChainQuaiAPI) ReceiveWorkShare(ctx context.Context, workShar
 	return s.b.ReceiveWorkShare(workShare)
 }
 
-func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil.Bytes, error) {
+func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context, powId *types.PowID) (hexutil.Bytes, error) {
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getPendingHeader call can only be made on chain processing the state")
 	}
+	effectivePowId := types.Progpow
+	if powId != nil {
+		effectivePowId = *powId
+		switch effectivePowId {
+		case types.Progpow, types.Kawpow, types.SHA_BCH, types.SHA_BTC, types.Scrypt:
+		default:
+			return nil, errors.New("unsupported powId for getPendingHeader")
+		}
+	}
 
-	pendingHeader, err := s.b.GetPendingHeader(types.Progpow, common.Address{}) // 0 is default progpow
+	pendingHeader, err := s.b.GetPendingHeader(effectivePowId, common.Address{})
 	if err != nil {
 		return nil, err
 	} else if pendingHeader == nil {
@@ -1611,6 +1620,24 @@ func (s *PublicBlockChainQuaiAPI) GetPendingHeader(ctx context.Context) (hexutil
 	}
 	// Only keep the Header in the body
 	pendingHeaderForMining := pendingHeader.WithBody(pendingHeader.Header(), nil, nil, nil, nil, nil)
+	pendingHeaderForMining.WorkObjectHeader().SetAuxPow(nil)
+	if effectivePowId != types.Progpow {
+		auxTemplate := s.b.GetBestAuxTemplate(effectivePowId)
+		if s.b.NodeCtx() == common.ZONE_CTX && auxTemplate != nil {
+			coinbaseTransaction := types.NewAuxPowCoinbaseTx(effectivePowId, auxTemplate.Height(), auxTemplate.CoinbaseOut(), pendingHeaderForMining.SealHash(), auxTemplate.SignatureTime())
+			merkleRoot := types.CalculateMerkleRoot(effectivePowId, coinbaseTransaction, auxTemplate.MerkleBranch())
+
+			// Create a properly configured Ravencoin header for KAWPOW mining
+			auxHeader := types.NewBlockHeader(effectivePowId, int32(auxTemplate.Version()), auxTemplate.PrevHash(), merkleRoot, auxTemplate.SignatureTime(), auxTemplate.Bits(), 0, auxTemplate.Height())
+			// Dont have the actual hash of the block yet
+			auxPow := types.NewAuxPow(effectivePowId, auxHeader, auxTemplate.AuxPow2(), auxTemplate.Sigs(), auxTemplate.MerkleBranch(), coinbaseTransaction)
+
+			// Update the auxpow in the best pending header
+			pendingHeaderForMining.WorkObjectHeader().SetAuxPow(auxPow)
+
+			s.b.AddPendingAuxPow(effectivePowId, pendingHeaderForMining.SealHash(), auxPow)
+		}
+	}
 	// Marshal the response.
 	protoWo, err := pendingHeaderForMining.ProtoEncode(types.PEtxObject)
 	if err != nil {

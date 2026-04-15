@@ -89,7 +89,12 @@ func (ec *Client) Close() {
 }
 
 // SubscribePendingHeader subscribes to notifications about the current pending block on the node.
-func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- []byte) (quai.Subscription, error) {
+// If powId is provided, subscribes to pending headers for that specific PoW algorithm.
+// If not provided, defaults to Progpow on the server side.
+func (ec *Client) SubscribePendingHeader(ctx context.Context, ch chan<- []byte, powId ...types.PowID) (quai.Subscription, error) {
+	if len(powId) > 0 {
+		return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader", powId[0])
+	}
 	return ec.c.QuaiSubscribe(ctx, ch, "pendingHeader")
 }
 
@@ -138,14 +143,21 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number string) *types.Head
 //// Miner APIS
 
 // GetPendingHeader gets the latest pending header from the chain.
-func (ec *Client) GetPendingHeader(ctx context.Context) (*types.WorkObject, error) {
+func (ec *Client) GetPendingHeader(ctx context.Context, powId ...types.PowID) (*types.WorkObject, error) {
 	var raw hexutil.Bytes
-	err := ec.c.CallContext(ctx, &raw, "quai_getPendingHeader")
-	if err != nil {
-		return nil, err
+	if len(powId) > 0 {
+		err := ec.c.CallContext(ctx, &raw, "quai_getPendingHeader", powId[0])
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err := ec.c.CallContext(ctx, &raw, "quai_getPendingHeader")
+		if err != nil {
+			return nil, err
+		}
 	}
 	protoWo := &types.ProtoWorkObject{}
-	err = proto.Unmarshal(raw, protoWo)
+	err := proto.Unmarshal(raw, protoWo)
 	if err != nil {
 		return nil, err
 	}
