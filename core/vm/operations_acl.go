@@ -113,7 +113,7 @@ func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySiz
 func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, uint64, error) {
 	// memory expansion first
 	// TODO: check the stateGas value
-	gas, stateGas, err := gasExtCodeCopy(evm, contract, stack, mem, memorySize)
+	gas, stateGas, err := gasExtCodeCopyBase(evm, contract, stack, mem, memorySize)
 	if err != nil {
 		return 0, 0, err
 	}
