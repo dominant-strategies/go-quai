@@ -18,9 +18,11 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/node"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/stratum"
 )
 
 var gitCommit, gitDate string
@@ -99,6 +101,67 @@ func runStart(cmd *cobra.Command, args []string) error {
 		log.Global.WithField("error", err).Fatal("error starting node")
 	}
 
+	// Find a processing zone backend for stratum and dashboard
+	var zoneBackend quaiapi.Backend
+	for i := 0; i < int(common.MaxRegions); i++ {
+		for j := 0; j < int(common.MaxZones); j++ {
+			backend := hc.GetBackend(common.Location{byte(i), byte(j)})
+			if backend != nil && backend.NodeCtx() == common.ZONE_CTX && backend.ProcessingState() {
+				zoneBackend = backend
+				break
+			}
+		}
+		if zoneBackend != nil {
+			break
+		}
+	}
+
+	// Optionally start stratum TCP servers when enabled and a zone backend is available
+	var stratumServer *stratum.Server
+	var stratumAPI *stratum.API
+	if viper.GetBool(utils.StratumEnabledFlag.Name) {
+		if zoneBackend == nil {
+			log.Global.Warn("Stratum endpoint enabled but no processing zone backend found; skipping start")
+		} else {
+			stratumConfig := stratum.StratumConfig{
+				SHAAddr:        viper.GetString(utils.StratumSHAAddrFlag.Name),
+				ScryptAddr:     viper.GetString(utils.StratumScryptAddrFlag.Name),
+				KawpowAddr:     viper.GetString(utils.StratumKawpowAddrFlag.Name),
+				VarDiffEnabled: viper.GetBool(utils.StratumVarDiffFlag.Name),
+				ProxyProtocol:  viper.GetBool(utils.StratumProxyProtocolFlag.Name),
+				PoolTag:        viper.GetString(utils.StratumPoolTagFlag.Name),
+			}
+			stratumServer = stratum.NewServerWithConfig(stratumConfig, zoneBackend)
+			if err := stratumServer.Start(); err != nil {
+				log.Global.WithField("error", err).Error("failed to start stratum endpoints")
+			} else {
+				log.Global.WithFields(log.Fields{
+					"sha":            stratumConfig.SHAAddr,
+					"scrypt":         stratumConfig.ScryptAddr,
+					"kawpow":         stratumConfig.KawpowAddr,
+					"vardiff":        stratumConfig.VarDiffEnabled,
+					"proxy-protocol": stratumConfig.ProxyProtocol,
+					"pool-tag":       stratumConfig.PoolTag,
+				}).Info("Stratum endpoints started")
+
+				// Start the stratum HTTP API server for pool dashboard
+				apiAddr := viper.GetString(utils.StratumAPIAddrFlag.Name)
+				nodeName := viper.GetString(utils.StratumNameFlag.Name)
+				if apiAddr != "" {
+					stratumAPI = stratum.NewAPI(apiAddr, nodeName, stratumServer.Stats(), zoneBackend)
+					if err := stratumAPI.Start(); err != nil {
+						log.Global.WithField("error", err).Error("failed to start stratum API")
+					} else {
+						log.Global.WithFields(log.Fields{
+							"addr":     apiAddr,
+							"nodeName": nodeName,
+						}).Info("Stratum HTTP API started")
+					}
+				}
+			}
+		}
+	}
+
 	if viper.IsSet(utils.MetricsEnabledFlag.Name) {
 		log.Global.Info("Starting metrics")
 		var (
@@ -128,6 +191,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	cancel()
+	// If the stratum API is running, stop it first
+	if stratumAPI != nil {
+		if err := stratumAPI.Stop(); err != nil {
+			log.Global.WithField("error", err).Error("Error stopping stratum API")
+		}
+		log.Global.Info("Stratum API stopped")
+	}
+	// If the stratum server is running, stop it
+	if stratumServer != nil {
+		stratumServer.Stop()
+		log.Global.Info("Stratum endpoints stopped")
+	}
 	// stop the hierarchical co-ordinator
 	hc.Stop()
 	if err := node.Stop(); err != nil {

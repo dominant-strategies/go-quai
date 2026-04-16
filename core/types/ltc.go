@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"io"
+	"time"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/params"
@@ -38,15 +39,15 @@ func (ltc *LitecoinHeaderWrapper) Deserialize(r io.Reader) error {
 	return ltc.BlockHeader.Deserialize(r)
 }
 
-func NewLitecoinBlockHeader(version int32, prevBlockHash [32]byte, merkleRootHash [32]byte, time uint32, bits uint32, nonce uint32) *LitecoinHeaderWrapper {
+func NewLitecoinBlockHeader(version int32, prevBlockHash [32]byte, merkleRootHash [32]byte, timestamp uint32, bits uint32, nonce uint32) *LitecoinHeaderWrapper {
 	prevHash := ltchash.Hash{}
 	copy(prevHash[:], prevBlockHash[:])
 	merkleRoot := ltchash.Hash{}
 	copy(merkleRoot[:], merkleRootHash[:])
 	header := ltcdwire.NewBlockHeader(version, &prevHash, &merkleRoot, bits, nonce)
+	header.Timestamp = time.Unix(int64(timestamp), 0)
 	return &LitecoinHeaderWrapper{BlockHeader: header}
 }
-
 func (ltc *LitecoinHeaderWrapper) GetVersion() int32 {
 	return ltc.BlockHeader.Version
 }

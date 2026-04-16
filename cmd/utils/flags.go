@@ -59,6 +59,7 @@ var Flags = [][]Flag{
 	RPCFlags,
 	PeersFlags,
 	MetricsFlags,
+	StratumFlags,
 }
 
 var GlobalFlags = []Flag{
@@ -167,6 +168,10 @@ var RPCFlags = []Flag{
 	RPCGlobalTxFeeCapFlag,
 	RPCGlobalGasCapFlag,
 	RpcVersion,
+	HealthEnabledFlag,
+	HealthPortFlag,
+	HealthReferenceURLsFlag,
+	HealthMaxBlocksBehindFlag,
 }
 
 var PeersFlags = []Flag{
@@ -633,6 +638,69 @@ var (
 	}
 )
 
+// ****************************************
+// **            STRATUM FLAGS           **
+// ****************************************
+var StratumFlags = []Flag{
+	StratumEnabledFlag,
+	StratumSHAAddrFlag,
+	StratumScryptAddrFlag,
+	StratumKawpowAddrFlag,
+	StratumVarDiffFlag,
+	StratumAPIAddrFlag,
+	StratumNameFlag,
+	StratumProxyProtocolFlag,
+	StratumPoolTagFlag,
+}
+
+var (
+	StratumEnabledFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-enabled",
+		Value: false,
+		Usage: "enable TCP stratum endpoints for merged mining (one port per algorithm)",
+	}
+	StratumSHAAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-sha-addr",
+		Value: "0.0.0.0:3335",
+		Usage: "listen address for SHA256 stratum endpoint",
+	}
+	StratumScryptAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-scrypt-addr",
+		Value: "0.0.0.0:3334",
+		Usage: "listen address for Scrypt stratum endpoint",
+	}
+	StratumKawpowAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-kawpow-addr",
+		Value: "0.0.0.0:3333",
+		Usage: "listen address for Kawpow stratum endpoint",
+	}
+	StratumVarDiffFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-vardiff",
+		Value: true,
+		Usage: "enable automatic variable difficulty for miner liveness (targets 30s per share). If disabled, workshare difficulty is used unless miner specifies d=X in password",
+	}
+	StratumNameFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-name",
+		Value: "",
+		Usage: "unique name identifying this stratum node (for multi-node aggregation)",
+	}
+	StratumAPIAddrFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-api-addr",
+		Value: "0.0.0.0:3336",
+		Usage: "listen address for stratum API endpoint",
+	}
+	StratumProxyProtocolFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-proxy-protocol",
+		Value: false,
+		Usage: "enable PROXY protocol support for stratum endpoints (for use behind load balancers like GCP Network LB)",
+	}
+	StratumPoolTagFlag = Flag{
+		Name:  c_NodeFlagPrefix + "stratum-pool-tag",
+		Value: "",
+		Usage: "tag to identify the mining pool this stratum server belongs to (for multi-pool aggregation)",
+	}
+)
+
 var (
 	// ****************************************
 	// **                                    **
@@ -745,6 +813,30 @@ var (
 		Name:  c_RPCFlagPrefix + "version",
 		Value: "v1",
 		Usage: "RPC version to use (v1)" + generateEnvDoc(c_RPCFlagPrefix+"version"),
+	}
+
+	HealthEnabledFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health",
+		Value: false,
+		Usage: "Enable the health check HTTP endpoint" + generateEnvDoc(c_RPCFlagPrefix+"health"),
+	}
+
+	HealthPortFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health-port",
+		Value: 8081,
+		Usage: "Health check HTTP endpoint port" + generateEnvDoc(c_RPCFlagPrefix+"health-port"),
+	}
+
+	HealthReferenceURLsFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health-urls",
+		Value: "https://rpc.quai.network/cyprus1",
+		Usage: "Comma-separated list of reference node URLs to check block heights against" + generateEnvDoc(c_RPCFlagPrefix+"health-urls"),
+	}
+
+	HealthMaxBlocksBehindFlag = Flag{
+		Name:  c_RPCFlagPrefix + "health-max-behind",
+		Value: 5,
+		Usage: "Maximum blocks behind reference nodes before returning unhealthy (503)" + generateEnvDoc(c_RPCFlagPrefix+"health-max-behind"),
 	}
 )
 
@@ -991,6 +1083,32 @@ func setWS(cfg *node.Config, nodeLocation common.Location) {
 	cfg.WSPathPrefix = viper.GetString(WSPathPrefixFlag.Name)
 }
 
+func setHealth(cfg *node.Config) {
+	cfg.StratumEnabled = viper.GetBool(StratumEnabledFlag.Name)
+	// StratumUrl is used to see if the stratum is running fine
+	cfg.StratumUrl = viper.GetString(StratumSHAAddrFlag.Name)
+
+	cfg.HealthEnabled = viper.GetBool(HealthEnabledFlag.Name)
+
+	if viper.IsSet(HealthPortFlag.Name) {
+		cfg.HealthPort = viper.GetInt(HealthPortFlag.Name)
+	} else {
+		cfg.HealthPort = HealthPortFlag.Value.(int)
+	}
+
+	if viper.IsSet(HealthReferenceURLsFlag.Name) {
+		cfg.HealthReferenceURLs = SplitAndTrim(viper.GetString(HealthReferenceURLsFlag.Name))
+	} else {
+		cfg.HealthReferenceURLs = []string{HealthReferenceURLsFlag.Value.(string)}
+	}
+
+	if viper.IsSet(HealthMaxBlocksBehindFlag.Name) {
+		cfg.HealthMaxBlocksBehind = viper.GetInt(HealthMaxBlocksBehindFlag.Name)
+	} else {
+		cfg.HealthMaxBlocksBehind = HealthMaxBlocksBehindFlag.Value.(int)
+	}
+}
+
 func GetWSPort(nodeLocation common.Location) int {
 	var startPort int
 	if viper.IsSet(WSPortStartFlag.Name) {
@@ -1105,6 +1223,7 @@ func MakePasswordList() []string {
 func SetNodeConfig(cfg *node.Config, nodeLocation common.Location, logger *log.Logger) {
 	setHTTP(cfg, nodeLocation)
 	setWS(cfg, nodeLocation)
+	setHealth(cfg)
 	setNodeUserIdent(cfg)
 	setDataDir(cfg)
 
@@ -1479,6 +1598,7 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if viper.GetString(WorkShareMinerEndpoints.Name) != "" {
 		cfg.Miner.Endpoints = []string{viper.GetString(WorkShareMinerEndpoints.Name)}
 	}
+	cfg.Miner.StratumEnabled = viper.GetBool(StratumEnabledFlag.Name)
 
 	cfg.WorkShareP2PThreshold = viper.GetInt(WorkShareP2PThreshold.Name)
 	// workshare p2p threshold cannot be less than the workshare threshold diff

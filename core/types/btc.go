@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"io"
+	"time"
 
 	btchash "github.com/btcsuite/btcd/chaincfg/chainhash"
 	btcdwire "github.com/btcsuite/btcd/wire"
@@ -37,12 +38,13 @@ func (bth *BitcoinHeaderWrapper) Deserialize(r io.Reader) error {
 	return bth.BlockHeader.Deserialize(r)
 }
 
-func NewBitcoinBlockHeader(version int32, prevBlockHash [32]byte, merkleRootHash [32]byte, time uint32, bits uint32, nonce uint32) *BitcoinHeaderWrapper {
+func NewBitcoinBlockHeader(version int32, prevBlockHash [32]byte, merkleRootHash [32]byte, timestamp uint32, bits uint32, nonce uint32) *BitcoinHeaderWrapper {
 	prevHash := btchash.Hash{}
 	copy(prevHash[:], prevBlockHash[:])
 	merkleRoot := btchash.Hash{}
 	copy(merkleRoot[:], merkleRootHash[:])
 	header := btcdwire.NewBlockHeader(version, &prevHash, &merkleRoot, bits, nonce)
+	header.Timestamp = time.Unix(int64(timestamp), 0)
 	return &BitcoinHeaderWrapper{BlockHeader: header}
 }
 

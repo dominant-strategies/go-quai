@@ -115,6 +115,14 @@ func (ec *Client) SubscribeNewHeadV2(ctx context.Context, ch chan<- *types.WorkO
 	return ec.c.QuaiSubscribe(ctx, ch, "newHeadsV2")
 }
 
+// SubscribeBlockTemplateUpdates subscribes to block template updates for mining.
+// The algorithm parameter specifies which PoW algorithm to use: "kawpow", "sha", or "scrypt".
+// Triggers on: quaiHeight change, prevHash change, sealHash change (kawpow only).
+// Also sends a heartbeat every 5 seconds with the current template.
+func (ec *Client) SubscribeBlockTemplateUpdates(ctx context.Context, algorithm string, ch chan<- map[string]interface{}) (quai.Subscription, error) {
+	return ec.c.QuaiSubscribe(ctx, ch, "blockTemplateUpdates", map[string]string{"algorithm": algorithm})
+}
+
 func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) *types.Header {
 	var raw json.RawMessage
 	ec.c.CallContext(ctx, &raw, "quai_getHeaderByHash", hash)

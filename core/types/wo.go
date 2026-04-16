@@ -1358,7 +1358,11 @@ func CopyWorkObjectHeader(wh *WorkObjectHeader) *WorkObjectHeader {
 	cpy.SetPrimeTerminusNumber(wh.primeTerminusNumber)
 	cpy.SetLock(wh.Lock())
 	cpy.SetPrimaryCoinbase(wh.PrimaryCoinbase())
-	cpy.SetData(wh.Data())
+	data := make([]byte, len(wh.Data()))
+	if len(wh.Data()) > 0 {
+		copy(data, wh.Data())
+	}
+	cpy.SetData(data)
 
 	if wh.ScryptDiffAndCount() != nil {
 		cpy.SetScryptDiffAndCount(wh.ScryptDiffAndCount())

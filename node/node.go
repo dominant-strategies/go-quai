@@ -32,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
+	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	log "github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/rpc"
 )
@@ -47,14 +48,17 @@ type Node struct {
 	state         int               // Tracks state of node lifecycle
 
 	lock          sync.Mutex
-	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
-	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
-	http          *httpServer //
-	ws            *httpServer //
-	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
+	lifecycles    []Lifecycle   // All registered backends, services, and auxiliary services that have a lifecycle
+	rpcAPIs       []rpc.API     // List of APIs currently provided by the node
+	http          *httpServer   //
+	ws            *httpServer   //
+	health        *HealthServer // Health check server
+	inprocHandler *rpc.Server   // In-process RPC request handler to process the API requests
 	location      []byte
 
 	databases map[*closeTrackingDB]struct{} // All open databases
+
+	zoneBackend quaiapi.Backend
 }
 
 const (
@@ -217,8 +221,19 @@ func (n *Node) openEndpoints() error {
 	err := n.startRPC()
 	if err != nil {
 		n.stopRPC()
+		return err
 	}
-	return err
+
+	// start health check server if enabled
+	if n.config.HealthEnabled && n.config.NodeLocation.Context() == common.ZONE_CTX {
+		n.health = NewHealthServer(n.config, n.logger, n.zoneBackend)
+		if err := n.health.Start(); err != nil {
+			n.logger.WithField("err", err).Error("Failed to start health server")
+			// Don't fail startup if health server fails, just log it
+		}
+	}
+
+	return nil
 }
 
 // containsLifecycle checks if 'lfs' contains 'l'.
@@ -336,6 +351,9 @@ func (n *Node) stopRPC() {
 	n.http.stop()
 	n.ws.stop()
 	n.stopInProc()
+	if n.health != nil {
+		n.health.Stop()
+	}
 }
 
 // startInProc registers all RPC APIs on the inproc server.
@@ -418,6 +436,13 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 // Config returns the configuration of node.
 func (n *Node) Config() *Config {
 	return n.config
+}
+
+// SetZoneBackend sets the zone backend that can be used to get the block number
+func (n *Node) SetZoneBackend(backend quaiapi.Backend) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	n.zoneBackend = backend
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.
