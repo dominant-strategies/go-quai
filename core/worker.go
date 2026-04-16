@@ -504,7 +504,6 @@ func (w *worker) asyncStateLoop() {
 	defer w.wg.Done() // decrement the wait group after the close of the loop
 
 	ticker := time.NewTicker(1 * time.Second)
-	var prevHeader *types.WorkObject = nil
 	defer ticker.Stop()
 	for {
 		select {
@@ -518,14 +517,6 @@ func (w *worker) asyncStateLoop() {
 						}).Error("Go-Quai Panicked")
 					}
 				}()
-				// Dont run the proc if the current header hasnt changed
-				if prevHeader == nil {
-					prevHeader = w.hc.CurrentBlock()
-				} else {
-					if prevHeader.Hash() == w.hc.CurrentBlock().Hash() {
-						return
-					}
-				}
 				wo := w.hc.CurrentBlock()
 				w.hc.headermu.Lock()
 				defer w.hc.headermu.Unlock()
