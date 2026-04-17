@@ -88,6 +88,20 @@ type signQuaiTxInput struct {
 	Zone       []byte                 `json:"zone"`
 }
 
+type signEthereumTxInput struct {
+	WalletID             string                 `json:"walletId"`
+	Address              string                 `json:"address"`
+	ChainID              int64                  `json:"chainId"`
+	Nonce                uint64                 `json:"nonce"`
+	MaxPriorityFeePerGas string                 `json:"maxPriorityFeePerGas"`
+	MaxFeePerGas         string                 `json:"maxFeePerGas"`
+	GasLimit             uint64                 `json:"gasLimit"`
+	To                   string                 `json:"to"`
+	Value                string                 `json:"value"`
+	Data                 string                 `json:"data"`
+	AccessList           []accessListEntryInput `json:"accessList,omitempty"`
+}
+
 type signQiTxInput struct {
 	WalletID  string                     `json:"walletId"`
 	Address   string                     `json:"address"`
@@ -225,6 +239,19 @@ type signQuaiTxPrivateKeyInput struct {
 	Zone       []byte                 `json:"zone"`
 }
 
+type signEthereumTxPrivateKeyInput struct {
+	PrivateKey           string                 `json:"privateKey"`
+	ChainID              int64                  `json:"chainId"`
+	Nonce                uint64                 `json:"nonce"`
+	MaxPriorityFeePerGas string                 `json:"maxPriorityFeePerGas"`
+	MaxFeePerGas         string                 `json:"maxFeePerGas"`
+	GasLimit             uint64                 `json:"gasLimit"`
+	To                   string                 `json:"to"`
+	Value                string                 `json:"value"`
+	Data                 string                 `json:"data"`
+	AccessList           []accessListEntryInput `json:"accessList,omitempty"`
+}
+
 type accessListEntryInput struct {
 	Address     string   `json:"address"`
 	StorageKeys []string `json:"storageKeys"`
@@ -263,7 +290,8 @@ type validOutput struct {
 }
 
 type signedTxOutput struct {
-	TxHex string `json:"txHex"`
+	TxHex  string `json:"txHex"`
+	TxHash string `json:"txHash,omitempty"`
 }
 
 type signatureOutput struct {
@@ -305,6 +333,37 @@ func getWallet(id string) (*hdwallet.HDWallet, error) {
 		return nil, fmt.Errorf("wallet %s not found", id)
 	}
 	return val.(*hdwallet.HDWallet), nil
+}
+
+func parseDecimalBigInt(value string, field string) (*big.Int, error) {
+	parsed, ok := new(big.Int).SetString(value, 10)
+	if !ok {
+		return nil, fmt.Errorf("invalid %s", field)
+	}
+	return parsed, nil
+}
+
+func parseOptionalHexData(value string) ([]byte, error) {
+	if value == "" {
+		return nil, nil
+	}
+	dataHex := strings.TrimPrefix(strings.TrimPrefix(value, "0x"), "0X")
+	data, err := hex.DecodeString(dataHex)
+	if err != nil {
+		return nil, fmt.Errorf("invalid data hex: %w", err)
+	}
+	return data, nil
+}
+
+func toEthereumAccessList(entries []accessListEntryInput) []hdwallet.EthereumAccessListTupleParam {
+	result := make([]hdwallet.EthereumAccessListTupleParam, 0, len(entries))
+	for _, entry := range entries {
+		result = append(result, hdwallet.EthereumAccessListTupleParam{
+			Address:     entry.Address,
+			StorageKeys: entry.StorageKeys,
+		})
+	}
+	return result
 }
 
 func newID() string {
@@ -696,22 +755,17 @@ func SignQuaiTransaction(jsonInput *C.char) *C.char {
 		return returnError(err.Error())
 	}
 
-	gasPrice, ok := new(big.Int).SetString(input.GasPrice, 10)
-	if !ok {
-		return returnError("invalid gasPrice")
+	gasPrice, err := parseDecimalBigInt(input.GasPrice, "gasPrice")
+	if err != nil {
+		return returnError(err.Error())
 	}
-	value, ok := new(big.Int).SetString(input.Value, 10)
-	if !ok {
-		return returnError("invalid value")
+	value, err := parseDecimalBigInt(input.Value, "value")
+	if err != nil {
+		return returnError(err.Error())
 	}
-
-	var data []byte
-	if input.Data != "" {
-		dataHex := strings.TrimPrefix(input.Data, "0x")
-		data, err = hex.DecodeString(dataHex)
-		if err != nil {
-			return returnError("invalid data hex: " + err.Error())
-		}
+	data, err := parseOptionalHexData(input.Data)
+	if err != nil {
+		return returnError(err.Error())
 	}
 
 	zone := common.Location(input.Zone)
@@ -732,6 +786,60 @@ func SignQuaiTransaction(jsonInput *C.char) *C.char {
 	}
 
 	return returnJSON(signedTxOutput{TxHex: "0x" + hex.EncodeToString(signedBytes)})
+}
+
+//export SignEthereumTransaction
+func SignEthereumTransaction(jsonInput *C.char) *C.char {
+	var input signEthereumTxInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+
+	w, err := getWallet(input.WalletID)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	privKey, err := w.GetPrivateKeyForAddress(input.Address)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	maxPriorityFeePerGas, err := parseDecimalBigInt(input.MaxPriorityFeePerGas, "maxPriorityFeePerGas")
+	if err != nil {
+		return returnError(err.Error())
+	}
+	maxFeePerGas, err := parseDecimalBigInt(input.MaxFeePerGas, "maxFeePerGas")
+	if err != nil {
+		return returnError(err.Error())
+	}
+	value, err := parseDecimalBigInt(input.Value, "value")
+	if err != nil {
+		return returnError(err.Error())
+	}
+	data, err := parseOptionalHexData(input.Data)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	params := &hdwallet.EthereumDynamicFeeTxParams{
+		ChainID:              big.NewInt(input.ChainID),
+		Nonce:                input.Nonce,
+		MaxPriorityFeePerGas: maxPriorityFeePerGas,
+		MaxFeePerGas:         maxFeePerGas,
+		GasLimit:             input.GasLimit,
+		To:                   input.To,
+		Value:                value,
+		Data:                 data,
+		AccessList:           toEthereumAccessList(input.AccessList),
+	}
+	rawTx, txHash, err := hdwallet.SignEthereumDynamicFeeTx(params, privKey)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	return returnJSON(signedTxOutput{
+		TxHex:  "0x" + hex.EncodeToString(rawTx),
+		TxHash: "0x" + hex.EncodeToString(txHash),
+	})
 }
 
 //export SignQiTransaction
@@ -1139,22 +1247,17 @@ func SignQuaiTransactionWithPrivateKey(jsonInput *C.char) *C.char {
 		return returnError(err.Error())
 	}
 
-	gasPrice, ok := new(big.Int).SetString(input.GasPrice, 10)
-	if !ok {
-		return returnError("invalid gasPrice")
+	gasPrice, err := parseDecimalBigInt(input.GasPrice, "gasPrice")
+	if err != nil {
+		return returnError(err.Error())
 	}
-	value, ok := new(big.Int).SetString(input.Value, 10)
-	if !ok {
-		return returnError("invalid value")
+	value, err := parseDecimalBigInt(input.Value, "value")
+	if err != nil {
+		return returnError(err.Error())
 	}
-
-	var data []byte
-	if input.Data != "" {
-		dataHex := strings.TrimPrefix(strings.TrimPrefix(input.Data, "0x"), "0X")
-		data, err = hex.DecodeString(dataHex)
-		if err != nil {
-			return returnError("invalid data hex: " + err.Error())
-		}
+	data, err := parseOptionalHexData(input.Data)
+	if err != nil {
+		return returnError(err.Error())
 	}
 
 	params := &hdwallet.QuaiTxParams{
@@ -1173,6 +1276,56 @@ func SignQuaiTransactionWithPrivateKey(jsonInput *C.char) *C.char {
 		return returnError(err.Error())
 	}
 	return returnJSON(signedTxOutput{TxHex: "0x" + hex.EncodeToString(signedBytes)})
+}
+
+//export SignEthereumTransactionWithPrivateKey
+func SignEthereumTransactionWithPrivateKey(jsonInput *C.char) *C.char {
+	var input signEthereumTxPrivateKeyInput
+	if err := json.Unmarshal([]byte(C.GoString(jsonInput)), &input); err != nil {
+		return returnError(err.Error())
+	}
+	keyHex := strings.TrimPrefix(strings.TrimPrefix(input.PrivateKey, "0x"), "0X")
+	privKey, err := crypto.HexToECDSA(keyHex)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	maxPriorityFeePerGas, err := parseDecimalBigInt(input.MaxPriorityFeePerGas, "maxPriorityFeePerGas")
+	if err != nil {
+		return returnError(err.Error())
+	}
+	maxFeePerGas, err := parseDecimalBigInt(input.MaxFeePerGas, "maxFeePerGas")
+	if err != nil {
+		return returnError(err.Error())
+	}
+	value, err := parseDecimalBigInt(input.Value, "value")
+	if err != nil {
+		return returnError(err.Error())
+	}
+	data, err := parseOptionalHexData(input.Data)
+	if err != nil {
+		return returnError(err.Error())
+	}
+
+	params := &hdwallet.EthereumDynamicFeeTxParams{
+		ChainID:              big.NewInt(input.ChainID),
+		Nonce:                input.Nonce,
+		MaxPriorityFeePerGas: maxPriorityFeePerGas,
+		MaxFeePerGas:         maxFeePerGas,
+		GasLimit:             input.GasLimit,
+		To:                   input.To,
+		Value:                value,
+		Data:                 data,
+		AccessList:           toEthereumAccessList(input.AccessList),
+	}
+	rawTx, txHash, err := hdwallet.SignEthereumDynamicFeeTx(params, privKey)
+	if err != nil {
+		return returnError(err.Error())
+	}
+	return returnJSON(signedTxOutput{
+		TxHex:  "0x" + hex.EncodeToString(rawTx),
+		TxHash: "0x" + hex.EncodeToString(txHash),
+	})
 }
 
 //export SignPersonalMessage

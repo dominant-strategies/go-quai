@@ -63,6 +63,28 @@ func TestNewHDWallet_InvalidCoinType(t *testing.T) {
 	}
 }
 
+func TestDeriveAddressAtIndex_EthereumPath(t *testing.T) {
+	w, err := NewHDWalletFromPhrase(testPhrase, "", CoinTypeEthereum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := w.DeriveAddressAtIndex(0, false, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if info.Address != "0x6fac4d18c912343bf86fa7049364dd4e424ab9c0" {
+		t.Fatalf("unexpected Base address: %s", info.Address)
+	}
+	if len(info.Zone) < 2 || info.Zone[0] != 0 || info.Zone[1] != 0 {
+		t.Fatalf("expected zeroed EVM zone metadata, got %v", info.Zone)
+	}
+	if info.IsQi {
+		t.Fatal("ethereum/base address must not be marked as qi")
+	}
+}
+
 func TestNewRandomHDWallet(t *testing.T) {
 	w, err := NewRandomHDWallet(CoinTypeQuai)
 	if err != nil {

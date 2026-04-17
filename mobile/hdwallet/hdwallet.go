@@ -12,8 +12,9 @@ import (
 
 // Coin type constants matching quais.js AllowedCoinType.
 const (
-	CoinTypeQuai uint32 = 994
-	CoinTypeQi   uint32 = 969
+	CoinTypeQuai     uint32 = 994
+	CoinTypeQi       uint32 = 969
+	CoinTypeEthereum uint32 = 60
 )
 
 // MaxDerivationAttempts matches quais.js MAX_ADDRESS_DERIVATION_ATTEMPTS.
@@ -71,8 +72,14 @@ func (w *HDWallet) storeAddressInfo(info *AddressInfo) error {
 
 // NewHDWallet creates a wallet from a mnemonic for the given coin type.
 func NewHDWallet(mnemonic *Mnemonic, coinType uint32) (*HDWallet, error) {
-	if coinType != CoinTypeQuai && coinType != CoinTypeQi {
-		return nil, fmt.Errorf("unsupported coin type %d (must be %d or %d)", coinType, CoinTypeQuai, CoinTypeQi)
+	if coinType != CoinTypeQuai && coinType != CoinTypeQi && coinType != CoinTypeEthereum {
+		return nil, fmt.Errorf(
+			"unsupported coin type %d (must be %d, %d, or %d)",
+			coinType,
+			CoinTypeQuai,
+			CoinTypeQi,
+			CoinTypeEthereum,
+		)
 	}
 
 	seed, err := mnemonic.ComputeSeed()
@@ -99,6 +106,10 @@ func NewHDWallet(mnemonic *Mnemonic, coinType uint32) (*HDWallet, error) {
 		qiPaymentAddresses: make(map[string]*QiPaymentAddressInfo),
 		nextIndex:          make(map[accountKey]uint32),
 	}, nil
+}
+
+func (w *HDWallet) usesZoneFilteredDerivation() bool {
+	return w.coinType == CoinTypeQuai || w.coinType == CoinTypeQi
 }
 
 // NewHDWalletFromPhrase is a convenience constructor.
@@ -128,6 +139,18 @@ func (w *HDWallet) DeriveAddress(account uint32, zone common.Location) (*Address
 
 	key := accountKey{account: account, change: false}
 	startIndex := w.nextIndex[key]
+
+	// Quai and Qi scan forward until they find an address in the requested
+	// zone/ledger scope. EVM chains such as Base use plain BIP44 derivation and
+	// must not inherit that Quai-specific filtering logic.
+	if !w.usesZoneFilteredDerivation() {
+		info, err := w.deriveAddressAtPath(account, false, startIndex)
+		if err != nil {
+			return nil, err
+		}
+		w.nextIndex[key] = startIndex + 1
+		return info, nil
+	}
 
 	// Derive the account node: m/44'/<coinType>'/<account>'/0
 	accountNode, err := w.root.DerivePath(fmt.Sprintf("%d'/0", account))
@@ -180,6 +203,10 @@ func (w *HDWallet) DeriveAddressAtIndex(account uint32, change bool, index uint3
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	return w.deriveAddressAtPath(account, change, index)
+}
+
+func (w *HDWallet) deriveAddressAtPath(account uint32, change bool, index uint32) (*AddressInfo, error) {
 	changeBit := uint32(0)
 	if change {
 		changeBit = 1
@@ -194,18 +221,26 @@ func (w *HDWallet) DeriveAddressAtIndex(account uint32, change bool, index uint3
 	if err != nil {
 		return nil, err
 	}
+
+	loc := common.Location{0, 0}
 	switch w.coinType {
 	case CoinTypeQuai:
 		if !IsQuaiAddress(addrBytes) {
 			return nil, fmt.Errorf("derived address at account=%d change=%t index=%d is not a Quai-ledger address", account, change, index)
 		}
+		loc = common.LocationFromAddressBytes(addrBytes)
 	case CoinTypeQi:
 		if !IsQiAddress(addrBytes) {
 			return nil, fmt.Errorf("derived address at account=%d change=%t index=%d is not a Qi-ledger address", account, change, index)
 		}
+		loc = common.LocationFromAddressBytes(addrBytes)
+	case CoinTypeEthereum:
+		// Base uses standard Ethereum addresses, so the wallet must preserve the
+		// raw BIP44 path without trying to reinterpret the address as a Quai zone.
+	default:
+		return nil, fmt.Errorf("unsupported coin type %d", w.coinType)
 	}
 
-	loc := common.LocationFromAddressBytes(addrBytes)
 	addrHex := fmt.Sprintf("0x%x", addrBytes)
 	pubBytes, err := node.PublicKeyBytes()
 	if err != nil {

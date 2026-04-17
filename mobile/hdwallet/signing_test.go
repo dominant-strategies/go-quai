@@ -1,6 +1,7 @@
 package hdwallet
 
 import (
+	"encoding/hex"
 	"math/big"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ func TestSignQuaiTx(t *testing.T) {
 		Nonce:    0,
 		GasPrice: big.NewInt(1000000000), // 1 Gwei
 		Gas:      21000,
-		To:       info.Address, // send to self
+		To:       info.Address,                    // send to self
 		Value:    big.NewInt(1000000000000000000), // 1 QUAI
 		Data:     nil,
 	}
@@ -180,6 +181,96 @@ func TestSignQiTx(t *testing.T) {
 	}
 
 	t.Logf("Signed QiTx: %d bytes", len(signedBytes))
+}
+
+func TestSignEthereumDynamicFeeTx(t *testing.T) {
+	w, err := NewHDWalletFromPhrase(testPhrase, "", CoinTypeEthereum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := w.DeriveAddressAtIndex(0, false, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Address != "0x6fac4d18c912343bf86fa7049364dd4e424ab9c0" {
+		t.Fatalf("unexpected derived address %s", info.Address)
+	}
+
+	privKey, err := w.GetPrivateKeyForAddress(info.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := &EthereumDynamicFeeTxParams{
+		ChainID:              big.NewInt(8453),
+		Nonce:                7,
+		MaxPriorityFeePerGas: big.NewInt(1_000_000_000),
+		MaxFeePerGas:         big.NewInt(2_000_000_000),
+		GasLimit:             21000,
+		To:                   "0x1111111111111111111111111111111111111111",
+		Value:                big.NewInt(123456789),
+	}
+
+	rawTx, txHash, err := SignEthereumDynamicFeeTx(params, privKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantRawTx := "02f87082210507843b9aca00847735940082520894111111111111111111111111111111111111111184075bcd1580c001a00c7a18f339ef3a2fcb8e78b929b20477cb4db6e7d38fcd6c618099fffc7b173fa05b1de246d9947e75ed9d975755d6d6404e58fbdc8e1e2f31d2be085400b70558"
+	if hex.EncodeToString(rawTx) != wantRawTx {
+		t.Fatalf("unexpected raw tx:\n got  %s\n want %s", hex.EncodeToString(rawTx), wantRawTx)
+	}
+	wantHash := "f07a3b5cde40cd4193ab35343bc900104448e53e12bf25529f8ffe15f07a5e68"
+	if hex.EncodeToString(txHash) != wantHash {
+		t.Fatalf("unexpected tx hash:\n got  %s\n want %s", hex.EncodeToString(txHash), wantHash)
+	}
+}
+
+func TestSignEthereumDynamicFeeTx_WithData(t *testing.T) {
+	w, err := NewHDWalletFromPhrase(testPhrase, "", CoinTypeEthereum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := w.DeriveAddressAtIndex(0, false, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privKey, err := w.GetPrivateKeyForAddress(info.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := hex.DecodeString("a9059cbb0000000000000000000000003333333333333333333333333333333333333333000000000000000000000000000000000000000000000000000000000000007b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := &EthereumDynamicFeeTxParams{
+		ChainID:              big.NewInt(8453),
+		Nonce:                8,
+		MaxPriorityFeePerGas: big.NewInt(1_500_000_000),
+		MaxFeePerGas:         big.NewInt(2_500_000_000),
+		GasLimit:             100000,
+		To:                   "0x2222222222222222222222222222222222222222",
+		Value:                big.NewInt(0),
+		Data:                 data,
+	}
+
+	rawTx, txHash, err := SignEthereumDynamicFeeTx(params, privKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantRawTx := "02f8b2822105088459682f00849502f900830186a094222222222222222222222222222222222222222280b844a9059cbb0000000000000000000000003333333333333333333333333333333333333333000000000000000000000000000000000000000000000000000000000000007bc001a0f33e10cac60aff3b90efb9c21d92ad3ce196de2927dc66c0700f167f17ed85a8a022d4b4d3de88a9cdca47339dc873637b5f1d225c6935b5356bda67f9834f9b55"
+	if hex.EncodeToString(rawTx) != wantRawTx {
+		t.Fatalf("unexpected raw tx with data:\n got  %s\n want %s", hex.EncodeToString(rawTx), wantRawTx)
+	}
+	wantHash := "b70a9c20d7034907305e852e55924b0e892c07ead4cb14b55f907fd4f9fdde4b"
+	if hex.EncodeToString(txHash) != wantHash {
+		t.Fatalf("unexpected tx hash with data:\n got  %s\n want %s", hex.EncodeToString(txHash), wantHash)
+	}
 }
 
 func TestDecodeTransaction_Invalid(t *testing.T) {
