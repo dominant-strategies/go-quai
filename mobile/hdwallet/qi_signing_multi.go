@@ -56,6 +56,7 @@ func buildUnsignedQiTx(params *QiTxParams) (*types.QiTx, [32]byte, error) {
 		ChainID: params.ChainID,
 		TxIn:    txIns,
 		TxOut:   txOuts,
+		Data:    params.Data,
 	}
 
 	tx := types.NewTx(inner)

@@ -36,10 +36,18 @@ type QuaiAccessListTupleParam struct {
 }
 
 // QiTxParams holds parameters for creating a Qi (UTXO-based) transaction.
+//
+// Data is optional; when set, it populates the tx-level Data field on the
+// resulting QiTx. The state processor classifies the tx by Data length:
+//   - 20 bytes  → Qi wrapping (owner contract address for wrapping balance)
+//   - MaxQiTxDataLength → Qi→Quai conversion with slippage/refund payload
+//
+// Leave nil for ordinary Qi-to-Qi UTXO transfers.
 type QiTxParams struct {
 	ChainID   *big.Int
 	TxInputs  []QiTxInputParam
 	TxOutputs []QiTxOutputParam
+	Data      []byte
 }
 
 // QiTxInputParam represents a UTXO input.
@@ -157,6 +165,7 @@ func SignQiTx(params *QiTxParams, privKey *ecdsa.PrivateKey, location common.Loc
 		ChainID: params.ChainID,
 		TxIn:    txIns,
 		TxOut:   txOuts,
+		Data:    params.Data,
 	}
 
 	tx := types.NewTx(inner)

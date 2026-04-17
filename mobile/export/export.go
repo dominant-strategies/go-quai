@@ -6,6 +6,7 @@ package main
 import "C"
 import (
 	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,18 @@ import (
 	"github.com/dominant-strategies/go-quai/mobile/hdwallet"
 	"github.com/google/uuid"
 )
+
+// decodeQiTxData decodes the optional base64-encoded Data field passed from
+// mobile clients. Empty string returns nil (ordinary Qi transfer). This keeps
+// the signer parameter `Data` nil when callers don't set it so the tx Data
+// byte slice stays nil rather than becoming an empty []byte{}.
+func decodeQiTxData(encoded string) ([]byte, error) {
+	trimmed := strings.TrimSpace(encoded)
+	if trimmed == "" {
+		return nil, nil
+	}
+	return base64.StdEncoding.DecodeString(trimmed)
+}
 
 // walletStore holds wallets keyed by UUID handle.
 var walletStore sync.Map
@@ -109,6 +122,7 @@ type signQiTxInput struct {
 	TxInputs  []hdwallet.QiTxInputParam  `json:"txInputs"`
 	TxOutputs []hdwallet.QiTxOutputParam `json:"txOutputs"`
 	Zone      []byte                     `json:"zone"`
+	Data      string                     `json:"data,omitempty"` // base64-encoded tx Data field
 }
 
 type signQiTxWithAddressesInput struct {
@@ -118,6 +132,7 @@ type signQiTxWithAddressesInput struct {
 	TxInputs         []hdwallet.QiTxInputParam  `json:"txInputs"`
 	TxOutputs        []hdwallet.QiTxOutputParam `json:"txOutputs"`
 	Zone             []byte                     `json:"zone"`
+	Data             string                     `json:"data,omitempty"` // base64-encoded tx Data field
 }
 
 type qiMuSigBundleCreateInput struct {
@@ -859,11 +874,17 @@ func SignQiTransaction(jsonInput *C.char) *C.char {
 		return returnError(err.Error())
 	}
 
+	data, err := decodeQiTxData(input.Data)
+	if err != nil {
+		return returnError(fmt.Sprintf("invalid base64 data field: %v", err))
+	}
+
 	zone := common.Location(input.Zone)
 	params := &hdwallet.QiTxParams{
 		ChainID:   big.NewInt(input.ChainID),
 		TxInputs:  input.TxInputs,
 		TxOutputs: input.TxOutputs,
+		Data:      data,
 	}
 
 	signedBytes, err := hdwallet.SignQiTx(params, privKey, zone)
@@ -919,11 +940,17 @@ func SignQiTransactionWithAddresses(jsonInput *C.char) *C.char {
 		}
 	}
 
+	data, err := decodeQiTxData(input.Data)
+	if err != nil {
+		return returnError(fmt.Sprintf("invalid base64 data field: %v", err))
+	}
+
 	zone := common.Location(input.Zone)
 	params := &hdwallet.QiTxParams{
 		ChainID:   big.NewInt(input.ChainID),
 		TxInputs:  input.TxInputs,
 		TxOutputs: input.TxOutputs,
+		Data:      data,
 	}
 
 	signedBytes, err := hdwallet.SignQiTxWithKeys(params, privKeys, zone)
