@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/common/hexutil"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
@@ -80,4 +81,40 @@ func newTestAuxPow(powID types.PowID, seed byte) *types.AuxPow {
 		nil,
 		nil,
 	)
+}
+
+func TestValidateRewardPercentiles(t *testing.T) {
+	tests := []struct {
+		name        string
+		percentiles []float64
+		wantErr     bool
+	}{
+		{name: "valid empty", percentiles: nil},
+		{name: "valid sorted", percentiles: []float64{0, 10, 50, 100}},
+		{name: "invalid descending", percentiles: []float64{10, 5}, wantErr: true},
+		{name: "invalid low", percentiles: []float64{-1}, wantErr: true},
+		{name: "invalid high", percentiles: []float64{101}, wantErr: true},
+	}
+
+	for _, test := range tests {
+		err := validateRewardPercentiles(test.percentiles)
+		if test.wantErr && err == nil {
+			t.Fatalf("%s: expected error", test.name)
+		}
+		if !test.wantErr && err != nil {
+			t.Fatalf("%s: unexpected error: %v", test.name, err)
+		}
+	}
+}
+
+func TestFeeHistoryResultJSONTypes(t *testing.T) {
+	result := &feeHistoryResult{
+		OldestBlock:  (*hexutil.Big)(big.NewInt(1)),
+		BaseFee:      []*hexutil.Big{(*hexutil.Big)(big.NewInt(2)), (*hexutil.Big)(big.NewInt(3))},
+		GasUsedRatio: []float64{0.5},
+		Reward:       [][]*hexutil.Big{{(*hexutil.Big)(big.NewInt(4))}},
+	}
+	if result.OldestBlock == nil || len(result.BaseFee) != 2 || len(result.Reward) != 1 {
+		t.Fatal("unexpected fee history result shape")
+	}
 }

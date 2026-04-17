@@ -64,6 +64,15 @@ type PublicQuaiAPI struct {
 	b Backend
 }
 
+const maxFeeHistoryBlockCount = 1024
+
+type feeHistoryResult struct {
+	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
+	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
+	BaseFee      []*hexutil.Big   `json:"baseFeePerGas"`
+	GasUsedRatio []float64        `json:"gasUsedRatio"`
+}
+
 // NewPublicQuaiAPI creates a new Quai protocol API.
 func NewPublicQuaiAPI(b Backend) *PublicQuaiAPI {
 	return &PublicQuaiAPI{b}
@@ -79,6 +88,164 @@ func (s *PublicQuaiAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	blockBaseFee = new(big.Int).Mul(blockBaseFee, big.NewInt(120))
 	blockBaseFee = new(big.Int).Div(blockBaseFee, big.NewInt(100))
 	return (*hexutil.Big)(blockBaseFee), nil
+}
+
+// FeeHistory returns a fee history similar to go-ethereum's feeHistory response.
+func (s *PublicQuaiAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHex, newestBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	if s.b.NodeLocation().Context() != common.ZONE_CTX {
+		return nil, errors.New("feeHistory call can only be made in zone chain")
+	}
+	if err := validateRewardPercentiles(rewardPercentiles); err != nil {
+		return nil, err
+	}
+
+	count := uint64(blockCount)
+	if count == 0 {
+		return &feeHistoryResult{
+			OldestBlock:  (*hexutil.Big)(big.NewInt(0)),
+			BaseFee:      []*hexutil.Big{},
+			GasUsedRatio: []float64{},
+		}, nil
+	}
+	if count > maxFeeHistoryBlockCount {
+		count = maxFeeHistoryBlockCount
+	}
+
+	newest, pendingRequest, err := s.resolveFeeHistoryNewestBlock(ctx, newestBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	newestNumber := newest.NumberU64(s.b.NodeCtx())
+	oldestNumber := uint64(0)
+	if count > newestNumber+1 {
+		count = newestNumber + 1
+	} else {
+		oldestNumber = newestNumber - count + 1
+	}
+
+	blocks := make([]*types.WorkObject, count)
+	block := newest
+	for i := int(count) - 1; i >= 0; i-- {
+		if block == nil {
+			return nil, errors.New("incomplete fee history block range")
+		}
+		blocks[i] = block
+		if i == 0 {
+			break
+		}
+		block, err = s.b.BlockByHash(ctx, block.ParentHash(s.b.NodeCtx()))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	result := &feeHistoryResult{
+		OldestBlock:  (*hexutil.Big)(new(big.Int).SetUint64(oldestNumber)),
+		BaseFee:      make([]*hexutil.Big, 0, len(blocks)+1),
+		GasUsedRatio: make([]float64, 0, len(blocks)),
+	}
+	if len(rewardPercentiles) > 0 {
+		result.Reward = make([][]*hexutil.Big, 0, len(blocks))
+	}
+
+	for _, block := range blocks {
+		result.BaseFee = append(result.BaseFee, (*hexutil.Big)(new(big.Int).Set(block.BaseFee())))
+		if block.GasLimit() == 0 {
+			result.GasUsedRatio = append(result.GasUsedRatio, 0)
+		} else {
+			result.GasUsedRatio = append(result.GasUsedRatio, float64(block.GasUsed())/float64(block.GasLimit()))
+		}
+		if len(rewardPercentiles) > 0 {
+			reward, err := s.blockRewards(ctx, block, rewardPercentiles)
+			if err != nil {
+				return nil, err
+			}
+			result.Reward = append(result.Reward, reward)
+		}
+	}
+
+	nextBaseFee := blocks[len(blocks)-1].BaseFee()
+	if pendingRequest {
+		nextBaseFee = s.b.CalcBaseFee(blocks[len(blocks)-1])
+		if nextBaseFee == nil {
+			return nil, errors.New("failed to calculate pending base fee")
+		}
+	}
+	result.BaseFee = append(result.BaseFee, (*hexutil.Big)(new(big.Int).Set(nextBaseFee)))
+
+	return result, nil
+}
+
+func (s *PublicQuaiAPI) resolveFeeHistoryNewestBlock(ctx context.Context, newestBlock rpc.BlockNumber) (*types.WorkObject, bool, error) {
+	if newestBlock == rpc.PendingBlockNumber {
+		pending, err := s.b.GetPendingHeader(types.Progpow, common.Address{})
+		if err == nil && pending != nil {
+			return pending, true, nil
+		}
+		if pending := s.b.PendingBlock(); pending != nil {
+			return pending, true, nil
+		}
+		if current := s.b.CurrentBlock(); current != nil {
+			return current, true, nil
+		}
+		if current := s.b.CurrentHeader(); current != nil {
+			return current, true, nil
+		}
+		return nil, true, errors.New("pending block not available")
+	}
+
+	newest, err := s.b.BlockByNumber(ctx, newestBlock)
+	if err != nil {
+		return nil, false, err
+	}
+	if newest == nil {
+		return nil, false, fmt.Errorf("block %v not found", newestBlock)
+	}
+	return newest, false, nil
+}
+
+func validateRewardPercentiles(percentiles []float64) error {
+	for i, p := range percentiles {
+		if math.IsNaN(p) || math.IsInf(p, 0) {
+			return fmt.Errorf("invalid reward percentile: %v", p)
+		}
+		if p < 0 || p > 100 {
+			return fmt.Errorf("reward percentile %f out of range", p)
+		}
+		if i > 0 && p < percentiles[i-1] {
+			return errors.New("reward percentiles must be in ascending order")
+		}
+	}
+	return nil
+}
+
+func (s *PublicQuaiAPI) blockRewards(ctx context.Context, block *types.WorkObject, rewardPercentiles []float64) ([]*hexutil.Big, error) {
+	if len(rewardPercentiles) == 0 {
+		return nil, nil
+	}
+	effectiveReward, err := s.effectiveBlockReward(ctx, block)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*hexutil.Big, len(rewardPercentiles))
+	for i := range rewardPercentiles {
+		result[i] = (*hexutil.Big)(new(big.Int).Set(effectiveReward))
+	}
+	return result, nil
+}
+
+func (s *PublicQuaiAPI) effectiveBlockReward(ctx context.Context, block *types.WorkObject) (*big.Int, error) {
+	primeTerminus := s.b.GetBlockByHash(block.PrimeTerminusHash())
+	if primeTerminus == nil {
+		return nil, fmt.Errorf("cannot find prime terminus for block %s", block.Hash().Hex())
+	}
+
+	baseBlockReward := misc.CalculateQuaiReward(block.WorkObjectHeader(), block.Difficulty(), primeTerminus.ExchangeRate())
+	effectiveReward := new(big.Int).Set(baseBlockReward)
+	effectiveReward.Add(effectiveReward, new(big.Int).Mul(block.AvgTxFees(), common.Big2))
+	return effectiveReward, nil
 }
 
 func (s *PublicQuaiAPI) ClientVersion() string {
