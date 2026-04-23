@@ -520,14 +520,14 @@ func (pm *BasicPeerManager) getBestPeers(topic string) map[p2p.PeerID]struct{} {
 
 func (pm *BasicPeerManager) getResponsivePeers(topic string) map[p2p.PeerID]struct{} {
 	if db, ok := pm.peerDBs[topic]; ok {
-		return pm.getPeersHelper(db[Responsive], c_minBestPeersFromDb)
+		return pm.getPeersHelper(db[Responsive], c_minResponsivePeersFromDb)
 	}
 	return make(map[peer.ID]struct{})
 }
 
 func (pm *BasicPeerManager) getLastResortPeers(topic string) map[p2p.PeerID]struct{} {
 	if db, ok := pm.peerDBs[topic]; ok {
-		return pm.getPeersHelper(db[LastResort], c_minBestPeersFromDb)
+		return pm.getPeersHelper(db[LastResort], c_minLastResortPeersFromDb)
 	}
 	return make(map[peer.ID]struct{})
 }

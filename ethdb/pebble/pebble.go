@@ -21,9 +21,11 @@ package pebble
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -68,8 +70,9 @@ type Database struct {
 	level0Comp          atomic.Uint32 // Total number of level-zero compactions
 	nonLevel0Comp       atomic.Uint32 // Total number of non level-zero compactions
 	writeDelayStartTime time.Time     // The start time of the latest write stall
-	writeDelayCount     atomic.Int64  // Total number of write stall counts
-	writeDelayTime      atomic.Int64  // Total time spent in write stalls
+	writeStalled        atomic.Bool
+	writeDelayCount     atomic.Int64 // Total number of write stall counts
+	writeDelayTime      atomic.Int64 // Total time spent in write stalls
 	location            common.Location
 }
 
@@ -97,10 +100,13 @@ func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 
 func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayStartTime = time.Now()
+	d.writeDelayCount.Add(1)
+	d.writeStalled.Store(true)
 }
 
 func (d *Database) onWriteStallEnd() {
 	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
+	d.writeStalled.Store(false)
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
@@ -310,7 +316,41 @@ func upperBound(prefix []byte) (limit []byte) {
 
 // Stat returns a particular internal stat of the database.
 func (d *Database) Stat(property string) (string, error) {
-	return "", nil
+	normalized := strings.ToLower(strings.TrimSpace(property))
+	switch {
+	case normalized == "", normalized == "stats", normalized == "metrics",
+		normalized == "leveldb.stats", normalized == "leveldb.metrics",
+		normalized == "pebble.stats", normalized == "pebble.metrics":
+		return d.db.Metrics().String(), nil
+	case normalized == "leveldb.iostats", normalized == "pebble.iostats", normalized == "iostats":
+		metrics := d.db.Metrics()
+		var bytesRead, bytesWritten uint64
+		bytesWritten += metrics.WAL.BytesWritten
+		for _, level := range metrics.Levels {
+			bytesRead += level.BytesRead
+			bytesWritten += level.BytesCompacted + level.BytesFlushed
+		}
+		return fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f",
+			float64(bytesRead)/(1024*1024),
+			float64(bytesWritten)/(1024*1024),
+		), nil
+	case normalized == "leveldb.writedelay", normalized == "pebble.writedelay", normalized == "writedelay":
+		return fmt.Sprintf("DelayN:%d Delay:%s Paused:%t",
+			d.writeDelayCount.Load(),
+			time.Duration(d.writeDelayTime.Load()),
+			d.writeStalled.Load(),
+		), nil
+	case normalized == "leveldb.compcount", normalized == "pebble.compcount", normalized == "compcount":
+		metrics := d.db.Metrics()
+		return fmt.Sprintf("MemComp:%d Level0Comp:%d NonLevel0Comp:%d SeekComp:%d",
+			metrics.Flush.Count,
+			d.level0Comp.Load(),
+			d.nonLevel0Comp.Load(),
+			0,
+		), nil
+	default:
+		return "", errors.New("unknown property")
+	}
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,
@@ -410,15 +450,24 @@ func (d *Database) meter(refresh time.Duration) {
 // batch is a write-only batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	b    *pebble.Batch
-	db   *Database
-	size int
+	b           *pebble.Batch
+	db          *Database
+	size        int
+	setPending  bool
+	pending     map[string]*[]byte
+	pendingLock sync.RWMutex
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.b.Set(key, value, nil)
 	b.size += len(key) + len(value)
+	if b.setPending {
+		copied := common.CopyBytes(value)
+		b.pendingLock.Lock()
+		b.pending[string(key)] = &copied
+		b.pendingLock.Unlock()
+	}
 	return nil
 }
 
@@ -426,6 +475,11 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key, nil)
 	b.size += len(key)
+	if b.setPending {
+		b.pendingLock.Lock()
+		b.pending[string(key)] = nil
+		b.pendingLock.Unlock()
+	}
 	return nil
 }
 
@@ -441,6 +495,8 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
+	b.pending = nil
+	b.setPending = false
 	return b.b.Commit(pebble.Sync)
 }
 
@@ -448,6 +504,8 @@ func (b *batch) Write() error {
 func (b *batch) Reset() {
 	b.b.Reset()
 	b.size = 0
+	b.pending = nil
+	b.setPending = false
 }
 
 // Replay replays the batch contents.
@@ -475,8 +533,20 @@ func (b *batch) Logger() *log.Logger {
 	return b.db.logger
 }
 
-func (b *batch) SetPending(pending bool) {}
+func (b *batch) SetPending(pending bool) {
+	b.pending = make(map[string]*[]byte)
+	b.setPending = pending
+}
+
 func (b *batch) GetPending(key []byte) (bool, []byte) {
+	b.pendingLock.RLock()
+	defer b.pendingLock.RUnlock()
+	if val, ok := b.pending[string(key)]; ok {
+		if val == nil {
+			return true, nil
+		}
+		return false, *val
+	}
 	return false, nil
 }
 

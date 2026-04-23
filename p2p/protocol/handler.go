@@ -71,7 +71,7 @@ func ProcRequestRate(peerId peer.ID, inbound bool) error {
 			// Conservatively rate limit ourselves, to avoid tripping our peers rate limit
 			minPeriod /= 2
 		}
-		if avg_period < requestRateLimitPeriod_ms {
+		if avg_period < int64(minPeriod) {
 			return errors.New("peer exceeded request rate limit")
 		} else {
 			// since outbound requests wont be sent if the limit is exceeded, only update the outbound rate if there is no error
