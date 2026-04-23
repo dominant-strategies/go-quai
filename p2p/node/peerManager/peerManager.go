@@ -718,6 +718,10 @@ func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error)
 	return pm.streamManager.GetStream(peerID)
 }
 
+func (pm *BasicPeerManager) OpenStream(peerID p2p.PeerID) error {
+	return pm.streamManager.OpenStream(peerID)
+}
+
 func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {
 	return pm.streamManager.CloseStream(peerID)
 }
