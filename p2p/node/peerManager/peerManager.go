@@ -116,6 +116,8 @@ type PeerManager interface {
 	ProtectPeer(p2p.PeerID)
 	// Remove protection from the peer's connection
 	UnprotectPeer(p2p.PeerID)
+	// Reports whether the peer is configured as protected on this node.
+	IsProtectedPeer(p2p.PeerID) bool
 	// Bans the peer's connection from being re-established
 	BanPeer(p2p.PeerID)
 
@@ -135,6 +137,9 @@ type BasicPeerManager struct {
 
 	// Initial bootpeers passed via config
 	bootpeers []peer.AddrInfo
+
+	// Peers that should not be pruned or penalized on this node.
+	protectedPeers map[peer.ID]struct{}
 
 	// DHT instance
 	dht *kaddht.IpfsDHT
@@ -162,6 +167,11 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 	}
 
 	bootpeers, err := loadBootPeers()
+	if err != nil {
+		return nil, err
+	}
+
+	protectedPeers, err := loadProtectedPeers()
 	if err != nil {
 		return nil, err
 	}
@@ -230,6 +240,12 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		}
 	}()
 
+	protectedPeerSet := make(map[peer.ID]struct{}, len(protectedPeers))
+	for _, info := range protectedPeers {
+		protectedPeerSet[info.ID] = struct{}{}
+		mgr.Protect(info.ID, "non_penalized_peer")
+	}
+
 	return &BasicPeerManager{
 		ctx:                  ctx,
 		cancel:               cancel,
@@ -237,6 +253,7 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		BasicConnectionGater: gater,
 		genesis:              utils.MakeGenesis().ToBlock(0).Hash(),
 		bootpeers:            bootpeers,
+		protectedPeers:       protectedPeerSet,
 		peerDBs:              peerDBs,
 		logger:               logger,
 	}, nil
@@ -304,8 +321,16 @@ func loadBootPeers() ([]peer.AddrInfo, error) {
 		return nil, nil
 	}
 
-	var bootpeers []peer.AddrInfo
-	for _, p := range viper.GetStringSlice(utils.BootPeersFlag.Name) {
+	return loadConfiguredPeers(utils.BootPeersFlag.Name)
+}
+
+func loadProtectedPeers() ([]peer.AddrInfo, error) {
+	return loadConfiguredPeers(utils.NonPenalizedPeersFlag.Name)
+}
+
+func loadConfiguredPeers(flagName string) ([]peer.AddrInfo, error) {
+	var peers []peer.AddrInfo
+	for _, p := range viper.GetStringSlice(flagName) {
 		addr, err := multiaddr.NewMultiaddr(p)
 		if err != nil {
 			return nil, err
@@ -314,10 +339,10 @@ func loadBootPeers() ([]peer.AddrInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		bootpeers = append(bootpeers, *info)
+		peers = append(peers, *info)
 	}
 
-	return bootpeers, nil
+	return peers, nil
 }
 
 func queryAllPeers(peerDBs map[string][]*peerdb.PeerDB, quality PeerQuality, peerCount int) ([]peer.AddrInfo, error) {
@@ -533,7 +558,7 @@ func (pm *BasicPeerManager) getLastResortPeers(topic string) map[p2p.PeerID]stru
 }
 
 func (pm *BasicPeerManager) AdjustPeerQuality(peer p2p.PeerID, topic string, adjFn func(int) int) {
-	if peer == pm.selfID {
+	if peer == pm.selfID || pm.IsProtectedPeer(peer) {
 		return
 	}
 	pm.UpsertTag(peer, "quality", adjFn)
@@ -624,7 +649,16 @@ func (pm *BasicPeerManager) UnprotectPeer(peer p2p.PeerID) {
 }
 
 func (pm *BasicPeerManager) BanPeer(peer p2p.PeerID) {
+	if pm.IsProtectedPeer(peer) {
+		pm.logger.WithField("peer", peer).Warn("Skipping ban for protected peer")
+		return
+	}
 	pm.BlockPeer(peer)
+}
+
+func (pm *BasicPeerManager) IsProtectedPeer(peerID p2p.PeerID) bool {
+	_, ok := pm.protectedPeers[peerID]
+	return ok
 }
 
 func (pm *BasicPeerManager) Stop() error {

@@ -310,6 +310,13 @@ func (p *P2PNode) UnprotectPeer(peer p2p.PeerID) {
 }
 
 func (p *P2PNode) BanPeer(peer p2p.PeerID) {
+	if p.peerManager.IsProtectedPeer(peer) {
+		log.Global.WithFields(log.Fields{
+			"peer": peer,
+		}).Warn("Skipping ban and disconnect for protected peer")
+		return
+	}
+
 	log.Global.WithFields(log.Fields{
 		"peer": peer,
 	}).Warn("Banning peer for misbehaving")
