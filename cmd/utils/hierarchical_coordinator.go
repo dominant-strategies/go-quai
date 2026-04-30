@@ -394,7 +394,60 @@ func (hc *HierarchicalCoordinator) StartQuaiBackend() (*quai.QuaiBackend, error)
 			zoneBackend.SetDomInterface(regionBackend)
 		}
 	}
+	hc.recoverPendingHeaders(quaiBackend, int(currentRegions), int(currentZones))
 	return quaiBackend, nil
+}
+
+func (hc *HierarchicalCoordinator) recoverPendingHeaders(quaiBackend quai.ConsensusAPI, currentRegions, currentZones int) {
+	primeBackend := *quaiBackend.GetBackend(common.Location{})
+	primeHead := primeBackend.CurrentHeader()
+	if primeHead == nil {
+		log.Global.Warn("Skipping pending header recovery: prime head is nil")
+		return
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < currentRegions; i++ {
+		regionLoc := common.Location{byte(i)}
+		regionBackend := *quaiBackend.GetBackend(regionLoc)
+		regionHead := regionBackend.CurrentHeader()
+		if regionHead == nil {
+			log.Global.WithField("location", regionLoc.Name()).Warn("Skipping pending header recovery: region head is nil")
+			continue
+		}
+		for j := 0; j < currentZones; j++ {
+			zoneLoc := common.Location{byte(i), byte(j)}
+			zoneBackend := *quaiBackend.GetBackend(zoneLoc)
+			zoneHead := zoneBackend.CurrentHeader()
+			if zoneHead == nil {
+				log.Global.WithField("location", zoneLoc.Name()).Warn("Skipping pending header recovery: zone head is nil")
+				continue
+			}
+
+			if zoneHead.NumberU64(common.PRIME_CTX) >= primeHead.NumberU64(common.PRIME_CTX) &&
+				zoneHead.NumberU64(common.REGION_CTX) >= regionHead.NumberU64(common.REGION_CTX) {
+				continue
+			}
+
+			log.Global.WithFields(log.Fields{
+				"location":     zoneLoc.Name(),
+				"primeHead":    primeHead.NumberArray(),
+				"regionHead":   regionHead.NumberArray(),
+				"zoneHead":     zoneHead.NumberArray(),
+				"zonePrimeNum": zoneHead.NumberU64(common.PRIME_CTX),
+				"zoneRegion":   zoneHead.NumberU64(common.REGION_CTX),
+			}).Info("Recovering pending header from current hierarchy heads")
+
+			wg.Add(1)
+
+			if primeHead.NumberU64(common.PRIME_CTX) > regionHead.NumberU64(common.PRIME_CTX) {
+				go hc.computePendingHeaderWithConsensus(&wg, quaiBackend, primeHead.Hash(), primeHead.Hash(), primeHead.Hash(), zoneLoc)
+			} else {
+				go hc.computePendingHeaderWithConsensus(&wg, quaiBackend, regionHead.ParentHash(common.PRIME_CTX), regionHead.Hash(), regionHead.Hash(), zoneLoc)
+			}
+		}
+	}
+	wg.Wait()
 }
 
 func (hc *HierarchicalCoordinator) startNode(logPath string, quaiBackend quai.ConsensusAPI, location common.Location, genesisBlock *types.WorkObject) {
@@ -1278,6 +1331,10 @@ func (hc *HierarchicalCoordinator) IsAncestor(ancestor common.Hash, header commo
 }
 
 func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, primeNode, regionNode, zoneNode common.Hash, location common.Location) {
+	hc.computePendingHeaderWithConsensus(wg, hc.consensus, primeNode, regionNode, zoneNode, location)
+}
+
+func (hc *HierarchicalCoordinator) computePendingHeaderWithConsensus(wg *sync.WaitGroup, consensus quai.ConsensusAPI, primeNode, regionNode, zoneNode common.Hash, location common.Location) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -1289,9 +1346,25 @@ func (hc *HierarchicalCoordinator) ComputePendingHeader(wg *sync.WaitGroup, prim
 	defer wg.Done()
 	var primePendingHeader, regionPendingHeader, zonePendingHeader *types.WorkObject
 	var err error
-	primeBackend := *hc.consensus.GetBackend(common.Location{})
-	regionBackend := *hc.consensus.GetBackend(common.Location{byte(location.Region())})
-	zoneBackend := *hc.consensus.GetBackend(location)
+	if consensus == nil {
+		log.Global.WithField("location", location.Name()).Warn("Skipping pending header computation: consensus backend is nil")
+		return
+	}
+	primeBackendRef := consensus.GetBackend(common.Location{})
+	regionBackendRef := consensus.GetBackend(common.Location{byte(location.Region())})
+	zoneBackendRef := consensus.GetBackend(location)
+	if primeBackendRef == nil || regionBackendRef == nil || zoneBackendRef == nil {
+		log.Global.WithFields(log.Fields{
+			"location":  location.Name(),
+			"primeNil":  primeBackendRef == nil,
+			"regionNil": regionBackendRef == nil,
+			"zoneNil":   zoneBackendRef == nil,
+		}).Warn("Skipping pending header computation: backend missing")
+		return
+	}
+	primeBackend := *primeBackendRef
+	regionBackend := *regionBackendRef
+	zoneBackend := *zoneBackendRef
 	primeBlock := primeBackend.GetBlockByHash(primeNode)
 	if primeBlock == nil {
 		log.Global.WithField("hash", primeNode.String()).Error("prime block not found for hash")
