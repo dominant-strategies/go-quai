@@ -15,12 +15,6 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
-# Modify params/protocol_params.go before building
-RUN sed -i 's/TimeToStartTx[[:space:]]*uint64[[:space:]]*=[[:space:]]*15 \* BlocksPerDay/TimeToStartTx uint64 = 0/' params/protocol_params.go
-
-# Verify the modification (optional, remove if not needed)
-RUN grep "TimeToStartTx" params/protocol_params.go
-
 # Build the Go app using the Makefile
 RUN make go-quai
 
@@ -42,13 +36,15 @@ WORKDIR /root/
 # Copy the binary from the builder stage
 COPY --from=builder /app/build/bin/go-quai ./build/bin/go-quai
 COPY --from=builder /app/VERSION ./VERSION
+COPY --from=builder /app/params/genesis_alloc.json ./params/genesis_alloc.json
+COPY --from=builder /app/params/forfeiture_addresses.json ./params/forfeiture_addresses.json
 
 
 # Ensure the binary has execute permissions
 RUN chmod +x ./build/bin/go-quai
 
 # Expose the necessary ports
-EXPOSE 8001 8002 8003 8004 8200 8201 8202 8220 8221 8222 8240 8241 8242 9001 9002 9003 9004 9200 9201 9202 9220 9221 9222 9240 9241 9242
+EXPOSE 4002 8001 8002 8200 9001 9002 9200
 
 # Command to run the executable
 CMD ["./build/bin/go-quai", "start"]

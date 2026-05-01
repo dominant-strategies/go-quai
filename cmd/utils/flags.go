@@ -74,6 +74,7 @@ var NodeFlags = []Flag{
 	IPAddrFlag,
 	P2PPortFlag,
 	BootPeersFlag,
+	NonPenalizedPeersFlag,
 	PortMapFlag,
 	ExternalAddrFlag,
 	ForcePublicFlag,
@@ -250,6 +251,12 @@ var (
 		Name:  c_NodeFlagPrefix + "bootpeers",
 		Value: []string{},
 		Usage: "list of bootstrap peers. Syntax: <multiaddress1>,<multiaddress2>,..." + generateEnvDoc(c_NodeFlagPrefix+"bootpeers"),
+	}
+
+	NonPenalizedPeersFlag = Flag{
+		Name:  c_NodeFlagPrefix + "non-penalized-peers",
+		Value: []string{},
+		Usage: "list of peer multiaddrs to protect from pruning and local penalties/bans. Syntax: <multiaddress1>,<multiaddress2>,..." + generateEnvDoc(c_NodeFlagPrefix+"non-penalized-peers"),
 	}
 
 	PortMapFlag = Flag{
