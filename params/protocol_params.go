@@ -334,6 +334,11 @@ var (
 	ExchangeRateHoldInterval              uint64 = 5 * BlocksPerMonth / 4 // 5 months in prime block terms
 	MinDifficulty                         uint64 = 250000000              // Minimum difficulty after kawpow fork for the reward calculation
 
+	ShaEquivalentDifficultyForkBlock                     uint64 = 1461800
+	MinDifficultyForShaEquivalentDifficulty                     = big.NewInt(750000000000)
+	ExchangeRateAfterShaEquivalentDifficultyFork                = new(big.Int).Mul(big.NewInt(200), ExchangeRate)
+	ExchangeRateHoldIntervalAfterShaEquivalentDifficulty uint64 = 2 * BlocksPerMonth / 4 // 2 months in prime block terms
+
 	SingularityForkBlock uint64 = 1265025
 
 	QiWrappingChangeBlock uint64 = 1320000

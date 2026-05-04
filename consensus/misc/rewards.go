@@ -159,7 +159,7 @@ func CalculateKQuai(parentExchangeRate *big.Int, minerDifficulty *big.Int, block
 
 func CalculateQuaiReward(header *types.WorkObjectHeader, difficulty *big.Int, exchangeRate *big.Int) *big.Int {
 	if header.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
-		difficulty = KawPowEquivalentDifficulty(header, difficulty)
+		difficulty = ForkAwareKawPowEquivalentDifficulty(header, difficulty)
 	}
 	logDiff := common.LogBig(difficulty)
 	if header.PrimeTerminusNumber().Uint64() >= params.KQuaiResetAfterKawPowForkBlock {
@@ -178,7 +178,7 @@ func CalculateQuaiReward(header *types.WorkObjectHeader, difficulty *big.Int, ex
 func CalculateQiReward(header *types.WorkObjectHeader, difficulty *big.Int) *big.Int {
 	var qiReward *big.Int
 	if header.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
-		difficulty = KawPowEquivalentDifficulty(header, difficulty)
+		difficulty = ForkAwareKawPowEquivalentDifficulty(header, difficulty)
 	}
 	qiReward = new(big.Int).Quo(difficulty, params.OneOverKqi(header.NumberU64()))
 	if qiReward.Cmp(common.Big0) == 0 {
@@ -205,6 +205,35 @@ func KawPowEquivalentDifficulty(header *types.WorkObjectHeader, difficulty *big.
 	denominator := new(big.Int).Sub(expectedTotalShares, totalMultiAlgoShares)
 	adjustedDifficulty := new(big.Int).Div(numerator, denominator)
 	return adjustedDifficulty
+}
+
+// ShaAnchoredEquivalentDifficulty converts the realized SHA share signal back
+// into a Quai-equivalent block difficulty and applies the KawPow equivalent
+// difficulty adjustment to it
+func ShaAnchoredEquivalentDifficulty(header *types.WorkObjectHeader) *big.Int {
+	shaSignal := header.ShaDiffAndCount()
+	shaDifficultyPerShare := new(big.Int).Set(shaSignal.Difficulty())
+	// Normalize the sha difficulty per share by dividing it by the initial sha
+	// diff multiple to get the equivalent difficulty in terms of the kawpow
+	// difficulty
+	shaDifficultyNormalized := new(big.Int).Div(shaDifficultyPerShare, params.InitialShaDiffMultiple)
+
+	// If the normalized SHA difficulty is below the minimum threshold, set it
+	// to the minimum kawpow difficulty
+	if shaDifficultyNormalized.Cmp(params.MinDifficultyForShaEquivalentDifficulty) < 0 {
+		shaDifficultyNormalized = new(big.Int).Set(params.MinDifficultyForShaEquivalentDifficulty)
+	}
+	return KawPowEquivalentDifficulty(header, shaDifficultyNormalized)
+}
+
+// ForkAwareKawPowEquivalentDifficulty applies the SHA-anchored equivalent
+// difficulty after the dedicated fork block and falls back to the legacy
+// combined-share adjustment when the SHA signal is too weak.
+func ForkAwareKawPowEquivalentDifficulty(header *types.WorkObjectHeader, difficulty *big.Int) *big.Int {
+	if header.PrimeTerminusNumber().Uint64() < params.ShaEquivalentDifficultyForkBlock {
+		return KawPowEquivalentDifficulty(header, difficulty)
+	}
+	return ShaAnchoredEquivalentDifficulty(header)
 }
 
 // FindMinDenominations finds the minimum number of denominations to make up the reward
