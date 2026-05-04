@@ -210,12 +210,176 @@ func TestKawpowEquivalentDifficulty(t *testing.T) {
 	scryptDiff := big.NewInt(20)
 
 	for _, tc := range testCases {
-		header := types.EmptyWorkObject(common.ZONE_CTX)
-		header.WorkObjectHeader().SetShaDiffAndCount(types.NewPowShareDiffAndCount(shaDiff, tc.shaCount, tc.shaCount))
-		header.WorkObjectHeader().SetScryptDiffAndCount(types.NewPowShareDiffAndCount(scryptDiff, tc.scryptCount, tc.scryptCount))
-		header.WorkObjectHeader().SetDifficulty(tc.difficulty)
+		header := newRewardTestHeader(params.ShaEquivalentDifficultyForkBlock-1, 1, tc.difficulty, shaDiff, tc.shaCount, scryptDiff, tc.scryptCount)
 
-		result := KawPowEquivalentDifficulty(header.WorkObjectHeader(), tc.difficulty)
+		result := KawPowEquivalentDifficulty(header, tc.difficulty)
 		require.Equal(t, tc.expectedDifficulty, result, "Expected %v got %v", tc.expectedDifficulty, result)
 	}
+}
+
+func TestKawpowEquivalentDifficultyForkBoundaryAndFallback(t *testing.T) {
+	difficulty := big.NewInt(9000000000000000)
+	shaCount := new(big.Int).Set(params.TargetShaShares)
+	scryptCount := new(big.Int).Mul(big.NewInt(2), common.Big2e32)
+	shaDiff := calculateShaDiffForEquivalentDifficulty(difficulty, shaCount)
+	scryptDiff := big.NewInt(20)
+
+	preFork := newRewardTestHeader(params.ShaEquivalentDifficultyForkBlock-1, params.ShaEquivalentDifficultyForkBlock-1, difficulty, shaDiff, shaCount, scryptDiff, scryptCount)
+	postFork := newRewardTestHeader(params.ShaEquivalentDifficultyForkBlock, params.ShaEquivalentDifficultyForkBlock, difficulty, shaDiff, shaCount, scryptDiff, scryptCount)
+
+	require.Equal(t,
+		KawPowEquivalentDifficulty(preFork, difficulty),
+		ForkAwareKawPowEquivalentDifficulty(preFork, difficulty),
+		"pre-fork dispatcher should use legacy equivalent difficulty",
+	)
+	require.Equal(t,
+		ShaAnchoredEquivalentDifficulty(postFork),
+		ForkAwareKawPowEquivalentDifficulty(postFork, difficulty),
+		"post-fork dispatcher should use the SHA-anchored equivalent difficulty",
+	)
+}
+
+func TestShaAnchoredEquivalentDifficultyBootstrapRegression(t *testing.T) {
+	expectedDifficulty := big.NewInt(1234567890000000)
+	shaCount := new(big.Int).Set(params.TargetShaShares)
+	shaDiff := calculateShaDiffForEquivalentDifficulty(expectedDifficulty, shaCount)
+	header := newRewardTestHeader(params.ShaEquivalentDifficultyForkBlock, params.ShaEquivalentDifficultyForkBlock, expectedDifficulty, shaDiff, shaCount, big.NewInt(0), common.Big0)
+
+	require.Equal(t, expectedDifficulty, ShaAnchoredEquivalentDifficulty(header))
+	require.Equal(t, expectedDifficulty, ForkAwareKawPowEquivalentDifficulty(header, expectedDifficulty))
+}
+
+func TestShaAnchoredEquivalentDifficultyValues(t *testing.T) {
+	shaCount := new(big.Int).Set(params.TargetShaShares)
+	scryptCount := new(big.Int).Mul(big.NewInt(2), common.Big2e32)
+
+	testCases := []struct {
+		name           string
+		normalizedDiff *big.Int
+		shaCount       *big.Int
+		scryptCount    *big.Int
+	}{
+		{
+			name:           "target SHA shares no scrypt",
+			normalizedDiff: big.NewInt(4500000000000000),
+			shaCount:       shaCount,
+			scryptCount:    common.Big0,
+		},
+		{
+			name:           "target SHA shares with scrypt shares",
+			normalizedDiff: big.NewInt(4500000000000000),
+			shaCount:       shaCount,
+			scryptCount:    scryptCount,
+		},
+		{
+			name:           "below reward floor clamps before share adjustment",
+			normalizedDiff: big.NewInt(1),
+			shaCount:       shaCount,
+			scryptCount:    common.Big0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			shaDiff := new(big.Int).Mul(tc.normalizedDiff, params.InitialShaDiffMultiple)
+			header := newRewardTestHeader(params.ShaEquivalentDifficultyForkBlock, params.ShaEquivalentDifficultyForkBlock, tc.normalizedDiff, shaDiff, tc.shaCount, big.NewInt(0), tc.scryptCount)
+
+			expectedNormalizedDiff := new(big.Int).Set(tc.normalizedDiff)
+			minDiff := new(big.Int).Set(params.MinDifficultyForShaEquivalentDifficulty)
+			if expectedNormalizedDiff.Cmp(minDiff) < 0 {
+				expectedNormalizedDiff = minDiff
+			}
+			expected := KawPowEquivalentDifficulty(header, expectedNormalizedDiff)
+			actual := ShaAnchoredEquivalentDifficulty(header)
+
+			t.Logf("normalized SHA difficulty %v produced equivalent difficulty %v", expectedNormalizedDiff, actual)
+			require.Equal(t, expected, actual)
+		})
+	}
+}
+
+func TestForkAwareKawPowEquivalentDifficultyWeakShaDoesNotPanic(t *testing.T) {
+	difficulty := big.NewInt(9000000000000000)
+	shaDiff := calculateShaDiffForEquivalentDifficulty(difficulty, params.TargetShaShares)
+	scryptCount := new(big.Int).Mul(big.NewInt(2), common.Big2e32)
+
+	testCases := []struct {
+		name     string
+		shaCount *big.Int
+	}{
+		{
+			name:     "zero SHA shares",
+			shaCount: common.Big0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			header := newRewardTestHeader(params.ShaEquivalentDifficultyForkBlock, params.ShaEquivalentDifficultyForkBlock, difficulty, shaDiff, tc.shaCount, big.NewInt(0), scryptCount)
+
+			require.NotPanics(t, func() {
+				require.Equal(t, ShaAnchoredEquivalentDifficulty(header), ForkAwareKawPowEquivalentDifficulty(header, difficulty))
+			})
+		})
+	}
+}
+
+func TestRewardPathUsesShaAnchoredEquivalentDifficulty(t *testing.T) {
+	blockNumber := params.ShaEquivalentDifficultyForkBlock
+	headerDifficulty := big.NewInt(8000000000000000)
+	shaCount := new(big.Int).Set(params.TargetShaShares)
+	expectedEquivalent := big.NewInt(4500000000000000)
+	shaDiff := calculateShaDiffForEquivalentDifficulty(expectedEquivalent, shaCount)
+	exchangeRate := big.NewInt(221077819000000000)
+
+	block := types.EmptyWorkObject(common.ZONE_CTX)
+	header := block.WorkObjectHeader()
+	header.SetPrimeTerminusNumber(new(big.Int).SetUint64(blockNumber))
+	header.SetNumber(new(big.Int).SetUint64(blockNumber))
+	header.SetDifficulty(headerDifficulty)
+	header.SetShaDiffAndCount(types.NewPowShareDiffAndCount(shaDiff, shaCount, common.Big0))
+	header.SetScryptDiffAndCount(types.NewPowShareDiffAndCount(big.NewInt(1), common.Big0, common.Big0))
+
+	logDiff := common.LogBig(expectedEquivalent)
+	logDiff = new(big.Int).Sub(logDiff, common.LogBig(new(big.Int).SetUint64(params.KQuaiDifficultyDivisor)))
+	expectedQuaiReward := new(big.Int).Quo(new(big.Int).Mul(exchangeRate, logDiff), common.Big2e64)
+	if expectedQuaiReward.Cmp(common.Big0) == 0 {
+		expectedQuaiReward = big.NewInt(1)
+	}
+
+	expectedQiReward := new(big.Int).Quo(expectedEquivalent, params.OneOverKqi(header.NumberU64()))
+	if expectedQiReward.Cmp(common.Big0) == 0 {
+		expectedQiReward = big.NewInt(1)
+	}
+
+	require.Equal(t, expectedEquivalent, ForkAwareKawPowEquivalentDifficulty(header, headerDifficulty))
+	require.Equal(t, expectedQuaiReward, CalculateQuaiReward(header, headerDifficulty, exchangeRate))
+	require.Equal(t, expectedQiReward, CalculateQiReward(header, headerDifficulty))
+
+	qiAmt := big.NewInt(7)
+	quaiAmt := big.NewInt(13)
+	expectedQiToQuai := new(big.Int).Quo(new(big.Int).Mul(expectedQuaiReward, qiAmt), expectedQiReward)
+	expectedQuaiToQi := new(big.Int).Quo(new(big.Int).Mul(expectedQiReward, quaiAmt), expectedQuaiReward)
+
+	require.Equal(t, expectedQiToQuai, QiToQuai(block, exchangeRate, headerDifficulty, qiAmt))
+	require.Equal(t, expectedQuaiToQi, QuaiToQi(block, exchangeRate, headerDifficulty, quaiAmt))
+}
+
+func newRewardTestHeader(primeTerminus, blockNumber uint64, difficulty, shaDiff, shaCount, scryptDiff, scryptCount *big.Int) *types.WorkObjectHeader {
+	workObject := types.EmptyWorkObject(common.ZONE_CTX)
+	header := workObject.WorkObjectHeader()
+	header.SetPrimeTerminusNumber(new(big.Int).SetUint64(primeTerminus))
+	header.SetNumber(new(big.Int).SetUint64(blockNumber))
+	header.SetDifficulty(new(big.Int).Set(difficulty))
+	header.SetShaDiffAndCount(types.NewPowShareDiffAndCount(shaDiff, shaCount, common.Big0))
+	header.SetScryptDiffAndCount(types.NewPowShareDiffAndCount(scryptDiff, scryptCount, common.Big0))
+	return header
+}
+
+func calculateShaDiffForEquivalentDifficulty(equivalentDifficulty, shaCount *big.Int) *big.Int {
+	expectedTotalShares := new(big.Int).Mul(big.NewInt(int64(params.ExpectedWorksharesPerBlock+1)), common.Big2e32)
+	denominator := new(big.Int).Sub(expectedTotalShares, shaCount)
+	normalizedDifficulty := new(big.Int).Div(new(big.Int).Mul(equivalentDifficulty, denominator), expectedTotalShares)
+
+	return new(big.Int).Mul(normalizedDifficulty, params.InitialShaDiffMultiple)
 }

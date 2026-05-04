@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 )
@@ -26,6 +27,16 @@ func TestCalculateBetaFromMiningChoiceAndConversions(t *testing.T) {
 			Diff: big.NewInt(difficulty),
 		}
 		return tokenChoiceSet
+	}
+
+	expectedControllerRate := func(block *types.WorkObject, parentExchangeRate *big.Int, tokenChoiceSet types.TokenChoiceSet) *big.Int {
+		totalDiff := big.NewInt(0)
+		for _, tokenChoices := range tokenChoiceSet {
+			totalDiff.Add(totalDiff, tokenChoices.Diff)
+		}
+		bestDiff := new(big.Int).Div(totalDiff, big.NewInt(int64(params.TokenChoiceSetSize)))
+		newBeta0OverBeta1 := new(big.Int).Div(new(big.Int).Mul(bestDiff, common.Big2e64), common.LogBig(bestDiff))
+		return misc.CalculateKQuai(parentExchangeRate, block.MinerDifficulty(), block.NumberU64(common.PRIME_CTX), newBeta0OverBeta1)
 	}
 
 	initialExchangeRate := big.NewInt(500)
@@ -320,5 +331,55 @@ func TestCalculateBetaFromMiningChoiceAndConversions(t *testing.T) {
 
 		// After hold interval, normal controller logic should resume
 		fmt.Printf("Block %d (after hold interval post-KawPowForkBlock): Rate = %v (normal controller logic)\n", blockAfterHold, exchangeRate)
+	})
+
+	t.Run("Sha equivalent difficulty fork resets exchange rate", func(t *testing.T) {
+		block := createTestBlock(params.ShaEquivalentDifficultyForkBlock, difficulty)
+		tokenChoiceSet := createTokenChoiceSet(difficulty)
+
+		exchangeRate, err := CalculateBetaFromMiningChoiceAndConversions(nil, block, params.ExchangeRateResetValueAfterKawpowFork, tokenChoiceSet)
+		if err != nil {
+			t.Fatalf("Expected no error at ShaEquivalentDifficultyForkBlock, got %v", err)
+		}
+		if exchangeRate.Cmp(params.ExchangeRateAfterShaEquivalentDifficultyFork) != 0 {
+			t.Errorf("Expected exchange rate %v at ShaEquivalentDifficultyForkBlock, got %v", params.ExchangeRateAfterShaEquivalentDifficultyFork, exchangeRate)
+		}
+	})
+
+	t.Run("Sha equivalent difficulty exchange rate hold interval", func(t *testing.T) {
+		holdTestBlocks := []uint64{
+			params.ShaEquivalentDifficultyForkBlock + 1,
+			params.ShaEquivalentDifficultyForkBlock + params.ExchangeRateHoldIntervalAfterShaEquivalentDifficulty/2,
+			params.ShaEquivalentDifficultyForkBlock + params.ExchangeRateHoldIntervalAfterShaEquivalentDifficulty - 1,
+		}
+
+		for _, blockNum := range holdTestBlocks {
+			block := createTestBlock(blockNum, difficulty)
+			tokenChoiceSet := createTokenChoiceSet(difficulty)
+
+			exchangeRate, err := CalculateBetaFromMiningChoiceAndConversions(nil, block, params.ExchangeRateAfterShaEquivalentDifficultyFork, tokenChoiceSet)
+			if err != nil {
+				t.Fatalf("Expected no error during SHA-equivalent hold interval at block %d, got %v", blockNum, err)
+			}
+			if exchangeRate.Cmp(params.ExchangeRateAfterShaEquivalentDifficultyFork) != 0 {
+				t.Errorf("Expected exchange rate to be held at %v during SHA-equivalent hold interval (block %d), got %v", params.ExchangeRateAfterShaEquivalentDifficultyFork, blockNum, exchangeRate)
+			}
+		}
+	})
+
+	t.Run("Sha equivalent difficulty hold interval boundary resumes controller", func(t *testing.T) {
+		blockAfterHold := params.ShaEquivalentDifficultyForkBlock + params.ExchangeRateHoldIntervalAfterShaEquivalentDifficulty
+		block := createTestBlock(blockAfterHold, difficulty)
+		tokenChoiceSet := createTokenChoiceSet(difficulty)
+
+		exchangeRate, err := CalculateBetaFromMiningChoiceAndConversions(nil, block, params.ExchangeRateAfterShaEquivalentDifficultyFork, tokenChoiceSet)
+		if err != nil {
+			t.Fatalf("Expected no error after SHA-equivalent hold interval, got %v", err)
+		}
+
+		expectedRate := expectedControllerRate(block, params.ExchangeRateAfterShaEquivalentDifficultyFork, tokenChoiceSet)
+		if exchangeRate.Cmp(expectedRate) != 0 {
+			t.Errorf("Expected controller exchange rate %v after SHA-equivalent hold interval, got %v", expectedRate, exchangeRate)
+		}
 	})
 }

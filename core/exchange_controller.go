@@ -45,7 +45,7 @@ func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.W
 				return exchangeRate, nil
 			}
 		}
-	} else {
+	} else if currentBlock >= params.KawPowForkBlock && currentBlock < params.ShaEquivalentDifficultyForkBlock {
 		// Fixing the KQuaiReset After the kawpow fork block
 		if currentBlock == params.KQuaiResetAfterKawPowForkBlock {
 			return params.ExchangeRateResetValueAfterKawpowFork, nil
@@ -54,6 +54,15 @@ func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.W
 			exchangeRate := new(big.Int).Set(parentExchangeRate)
 			return exchangeRate, nil
 		}
+	} else {
+		if currentBlock == params.ShaEquivalentDifficultyForkBlock {
+			return params.ExchangeRateAfterShaEquivalentDifficultyFork, nil
+		} else if currentBlock > params.ShaEquivalentDifficultyForkBlock &&
+			currentBlock < params.ShaEquivalentDifficultyForkBlock+params.ExchangeRateHoldIntervalAfterShaEquivalentDifficulty {
+			exchangeRate := new(big.Int).Set(parentExchangeRate)
+			return exchangeRate, nil
+		}
+
 	}
 
 	// xbStar point of diff indicating the miners/speculators choice is done by
