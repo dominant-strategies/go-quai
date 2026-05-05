@@ -149,6 +149,13 @@ type EVM struct {
 	Batch                 ethdb.Batch
 }
 
+type evmSnapshot struct {
+	stateRevision            int
+	etxCacheLen              int
+	coinbaseDeletedHashesLen int
+	coinbasesDeleted         map[[47]byte][]byte
+}
+
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, batch ethdb.Batch) *EVM {
@@ -196,6 +203,38 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
 }
 
+func copyCoinbasesDeleted(src map[[47]byte][]byte) map[[47]byte][]byte {
+	dst := make(map[[47]byte][]byte, len(src))
+	for key, value := range src {
+		dst[key] = common.CopyBytes(value)
+	}
+	return dst
+}
+
+func (evm *EVM) snapshot() evmSnapshot {
+	snapshot := evmSnapshot{
+		stateRevision: evm.StateDB.Snapshot(),
+	}
+	evm.ETXCacheLock.RLock()
+	snapshot.etxCacheLen = len(evm.ETXCache)
+	snapshot.coinbaseDeletedHashesLen = len(evm.CoinbaseDeletedHashes)
+	snapshot.coinbasesDeleted = copyCoinbasesDeleted(evm.CoinbasesDeleted)
+	evm.ETXCacheLock.RUnlock()
+	return snapshot
+}
+
+func (evm *EVM) revertToSnapshot(snapshot evmSnapshot) {
+	evm.StateDB.RevertToSnapshot(snapshot.stateRevision)
+
+	if evm.Context.PrimeTerminusNumber >= params.ShaEquivalentDifficultyForkBlock {
+		evm.ETXCacheLock.Lock()
+		evm.ETXCache = evm.ETXCache[:snapshot.etxCacheLen]
+		evm.CoinbaseDeletedHashes = evm.CoinbaseDeletedHashes[:snapshot.coinbaseDeletedHashesLen]
+		evm.CoinbasesDeleted = copyCoinbasesDeleted(snapshot.coinbasesDeleted)
+		evm.ETXCacheLock.Unlock()
+	}
+}
+
 // Call executes the contract associated with the addr with the given input as
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
@@ -212,16 +251,21 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, 0, ErrInsufficientBalance
 	}
+	snapshot := evm.snapshot()
 	if addr.Equal(LockupContractAddresses[[2]byte(evm.chainConfig.Location)]) {
 		if evm.Context.BlockNumber.Uint64() < params.OrchardEvmReturnFixBlock {
 			ret, err := RunLockupContract(evm, caller.Address(), &gas, input)
 			return ret, gas, 0, err
 		} else {
 			ret, err = RunLockupContract(evm, caller.Address(), &gas, input)
+			if err != nil {
+				if evm.Context.PrimeTerminusNumber >= params.ShaEquivalentDifficultyForkBlock {
+					evm.revertToSnapshot(snapshot)
+				}
+			}
 			return ret, gas, 0, err
 		}
 	}
-	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile, addr := evm.precompile(addr)
 	var internalAddr common.InternalAddress
 	internalAddr, err = addr.InternalAndQuaiAddress()
@@ -231,7 +275,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		} else {
 			ret, leftOverGas, stateGas, err = evm.CreateETX(addr, caller.Address(), gas, value, input)
 			if err != nil {
-				evm.StateDB.RevertToSnapshot(snapshot)
+				evm.revertToSnapshot(snapshot)
 			}
 			return ret, leftOverGas, stateGas, err
 		}
@@ -289,7 +333,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in this also counts for code storage gas errors.
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.revertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
@@ -322,7 +366,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	var snapshot = evm.snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile, addr := evm.precompile(addr); isPrecompile {
@@ -356,7 +400,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		}
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.revertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
@@ -377,7 +421,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	var snapshot = evm.snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile, addr := evm.precompile(addr); isPrecompile {
@@ -409,7 +453,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		}
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.revertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
@@ -435,7 +479,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	var snapshot = evm.StateDB.Snapshot()
+	var snapshot = evm.snapshot()
 
 	if p, isPrecompile, addr := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
@@ -481,7 +525,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		}
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.revertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			gas = 0
 		}
@@ -540,7 +584,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Zero, 0, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state
-	snapshot := evm.StateDB.Snapshot()
+	snapshot := evm.snapshot()
 	evm.StateDB.CreateAccount(internalContractAddr)
 
 	evm.StateDB.SetNonce(internalContractAddr, 1)
@@ -598,7 +642,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in this also counts for code storage gas errors.
 	if err != nil && err != ErrCodeStoreOutOfGas {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.revertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas)
 		}
@@ -784,13 +828,18 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) ResetCoinbasesDeleted() {
+	evm.ETXCacheLock.Lock()
 	evm.CoinbasesDeleted = make(map[[47]byte][]byte)
 	evm.CoinbaseDeletedHashes = make([]*common.Hash, 0)
+	evm.ETXCacheLock.Unlock()
 }
 
 func (evm *EVM) UndoCoinbasesDeleted() {
+	evm.ETXCacheLock.Lock()
 	for key, value := range evm.CoinbasesDeleted {
 		evm.Batch.Put(key[:], value)
 	}
-	evm.ResetCoinbasesDeleted()
+	evm.CoinbasesDeleted = make(map[[47]byte][]byte)
+	evm.CoinbaseDeletedHashes = make([]*common.Hash, 0)
+	evm.ETXCacheLock.Unlock()
 }
