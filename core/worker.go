@@ -494,11 +494,17 @@ func (w *worker) asyncStateLoop() {
 
 	ticker := time.NewTicker(1 * time.Second)
 	var prevHeader *types.WorkObject = nil
+	var running int32 // atomic guard: ensures at most one goroutine runs at a time
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			if !atomic.CompareAndSwapInt32(&running, 0, 1) {
+				// Previous generation still in progress; skip this tick
+				continue
+			}
 			go func() {
+				defer atomic.StoreInt32(&running, 0)
 				defer func() {
 					if r := recover(); r != nil {
 						w.logger.WithFields(log.Fields{
@@ -507,17 +513,15 @@ func (w *worker) asyncStateLoop() {
 						}).Error("Go-Quai Panicked")
 					}
 				}()
-				// Dont run the proc if the current header hasnt changed
-				if prevHeader == nil {
-					prevHeader = w.hc.CurrentBlock()
-				} else {
-					if prevHeader.Hash() == w.hc.CurrentBlock().Hash() {
-						return
-					}
-				}
-				wo := w.hc.CurrentBlock()
 				w.hc.headermu.Lock()
 				defer w.hc.headermu.Unlock()
+				// Fetch current block inside the lock so it is always fresh
+				wo := w.hc.CurrentBlock()
+				// Dont run the proc if the current header hasnt changed
+				if prevHeader != nil && prevHeader.Hash() == wo.Hash() {
+					return
+				}
+				prevHeader = wo
 				header, err := w.GeneratePendingHeader(wo, true)
 				if err != nil {
 					w.logger.WithField("err", err).Error("Error generating pending header")

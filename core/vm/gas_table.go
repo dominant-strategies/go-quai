@@ -86,10 +86,11 @@ func memoryCopierGas(stackpos int) gasFunc {
 }
 
 var (
-	gasCallDataCopy   = memoryCopierGas(2)
-	gasCodeCopy       = memoryCopierGas(2)
-	gasMcopy          = memoryCopierGas(2)
-	gasReturnDataCopy = memoryCopierGas(2)
+	gasCallDataCopy    = memoryCopierGas(2)
+	gasCodeCopy        = memoryCopierGas(2)
+	gasExtCodeCopyBase = memoryCopierGas(3)
+	gasMcopy           = memoryCopierGas(2)
+	gasReturnDataCopy  = memoryCopierGas(2)
 )
 
 func makeGasLog(n uint64) gasFunc {
