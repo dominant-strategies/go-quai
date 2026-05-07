@@ -796,6 +796,14 @@ func (b *QuaiAPIBackend) Config() *params.ChainConfig {
 	return b.quai.core.Config()
 }
 
+func (b *QuaiAPIBackend) GenesisAllocs() []params.GenesisAccount {
+	return b.quai.config.GenesisAllocs
+}
+
+func (b *QuaiAPIBackend) ForfeitureAddresses() map[common.AddressBytes]bool {
+	return b.quai.config.ForfeitureAddresses
+}
+
 func (b *QuaiAPIBackend) GetBlockByHash(hash common.Hash) *types.WorkObject {
 	return b.quai.core.GetBlockByHash(hash)
 }

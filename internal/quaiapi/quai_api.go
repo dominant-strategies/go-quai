@@ -2577,3 +2577,102 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 
 	return fields, nil
 }
+
+func (s *PublicBlockChainQuaiAPI) RewardAnalytics(ctx context.Context) (map[string]interface{}, error) {
+	if s.b.NodeLocation().Context() != common.ZONE_CTX {
+		return nil, errors.New("rewardsAnalytics can only be called in zone chain")
+	}
+	currentHeader := s.b.CurrentHeader()
+	if currentHeader == nil {
+		return nil, errors.New("cannot get current header")
+	}
+
+	_, _, totalSupplyQuai, _, _, _, err := rawdb.ReadSupplyAnalyticsForBlock(s.b.Database(), currentHeader.Hash())
+	if err != nil {
+		return nil, err
+	}
+	genesisUnlockedQuai, err := s.genesisUnlockedQuaiThroughBlock(ctx, currentHeader)
+	if err != nil {
+		return nil, err
+	}
+	rewardSupplyQuai := new(big.Int).Sub(totalSupplyQuai, genesisUnlockedQuai)
+	if rewardSupplyQuai.Sign() < 0 {
+		rewardSupplyQuai.Set(common.Big0)
+	}
+
+	return map[string]interface{}{
+		"cumulativeQuaiMined": formatQuaiAmount(rewardSupplyQuai),
+	}, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) genesisUnlockedQuaiThroughBlock(ctx context.Context, currentHeader *types.WorkObject) (*big.Int, error) {
+	total := new(big.Int)
+	if !s.b.NodeLocation().Equal(common.Location{0, 0}) {
+		return total, nil
+	}
+
+	currentBlockNumber := currentHeader.NumberU64(common.ZONE_CTX)
+	forfeitureAddresses := s.b.ForfeitureAddresses()
+	unlockPrimeTerminusCache := make(map[uint64]uint64)
+
+	for _, account := range s.b.GenesisAllocs() {
+		if account.BalanceSchedule == nil {
+			continue
+		}
+		for unlock := account.BalanceSchedule.Oldest(); unlock != nil; unlock = unlock.Next() {
+			unlockBlock := unlock.Key
+			if unlockBlock == 0 {
+				unlockBlock = 1
+			}
+			if unlockBlock > currentBlockNumber || unlock.Value == nil {
+				continue
+			}
+			if forfeitureAddresses[account.Address.Bytes20()] {
+				primeTerminusNumber, err := s.primeTerminusNumberAtUnlockBlock(ctx, unlockBlock, currentHeader, unlockPrimeTerminusCache)
+				if err != nil {
+					return nil, err
+				}
+				if primeTerminusNumber >= params.SingularityForkBlock {
+					continue
+				}
+			}
+			total.Add(total, unlock.Value)
+		}
+	}
+	return total, nil
+}
+
+func (s *PublicBlockChainQuaiAPI) primeTerminusNumberAtUnlockBlock(ctx context.Context, blockNumber uint64, currentHeader *types.WorkObject, cache map[uint64]uint64) (uint64, error) {
+	if value, ok := cache[blockNumber]; ok {
+		return value, nil
+	}
+	header := currentHeader
+	if blockNumber != currentHeader.NumberU64(common.ZONE_CTX) {
+		rpcBlockNumber := rpc.BlockNumber(blockNumber)
+		var err error
+		header, err = s.b.HeaderByNumber(ctx, rpcBlockNumber)
+		if err != nil {
+			return 0, err
+		}
+		if header == nil {
+			return 0, fmt.Errorf("header for genesis unlock block %d not found", blockNumber)
+		}
+	}
+	primeTerminusNumber := header.PrimeTerminusNumber().Uint64()
+	cache[blockNumber] = primeTerminusNumber
+	return primeTerminusNumber, nil
+}
+
+func formatQuaiAmount(amount *big.Int) string {
+	if amount == nil {
+		return "0"
+	}
+	whole := new(big.Int).Quo(new(big.Int).Set(amount), params.BigEther)
+	fraction := new(big.Int).Mod(new(big.Int).Set(amount), params.BigEther)
+	if fraction.Sign() == 0 {
+		return whole.String()
+	}
+	fractionString := fmt.Sprintf("%018s", fraction.String())
+	fractionString = strings.TrimRight(fractionString, "0")
+	return whole.String() + "." + fractionString
+}
