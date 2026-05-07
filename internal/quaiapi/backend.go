@@ -135,6 +135,8 @@ type Backend interface {
 	Database() ethdb.Database
 	CalcBaseFee(wo *types.WorkObject) *big.Int
 	Config() *params.ChainConfig
+	GenesisAllocs() []params.GenesisAccount
+	ForfeitureAddresses() map[common.AddressBytes]bool
 	GetTerminiByHash(hash common.Hash) *types.Termini
 	GetHeaderByHash(hash common.Hash) *types.WorkObject
 	IsGenesisHash(hash common.Hash) bool
