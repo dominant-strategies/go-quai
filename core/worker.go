@@ -2935,6 +2935,10 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		env.wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock+params.KQuaiChangeHoldInterval) {
 		return fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the kawpow fork block", tx.Hash(), params.KQuaiChangeHoldInterval)
 	}
+	if conversion && (env.wo.PrimeTerminusNumber().Uint64() >= params.ShaEquivalentDifficultyForkBlock &&
+		env.wo.PrimeTerminusNumber().Uint64() < params.ShaEquivalentDifficultyForkBlock+params.KQuaiChangeHoldInterval) {
+		return fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the sha equivalent difficulty fork block", tx.Hash(), params.KQuaiChangeHoldInterval)
+	}
 	if conversion || wrapping {
 		if conversion && wrapping {
 			return fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash())

@@ -1773,6 +1773,10 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		currentHeader.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock+params.KQuaiChangeHoldInterval) {
 		return nil, fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the kawpow fork block", tx.Hash(), params.KQuaiChangeHoldInterval)
 	}
+	if conversion && (currentHeader.PrimeTerminusNumber().Uint64() >= params.ShaEquivalentDifficultyForkBlock &&
+		currentHeader.PrimeTerminusNumber().Uint64() < params.ShaEquivalentDifficultyForkBlock+params.KQuaiChangeHoldInterval) {
+		return nil, fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the sha equivalent difficulty fork block", tx.Hash(), params.KQuaiChangeHoldInterval)
+	}
 	if conversion || wrapping {
 		if conversion && wrapping {
 			return nil, fmt.Errorf("tx %032x emits both a conversion and a wrapping UTXO", tx.Hash())
@@ -2064,6 +2068,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	if conversion && (currentHeader.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock &&
 		currentHeader.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock+params.KQuaiChangeHoldInterval) {
 		return nil, nil, nil, fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the kawpow fork block", tx.Hash(), params.KQuaiChangeHoldInterval), nil
+	}
+	if conversion && (currentHeader.PrimeTerminusNumber().Uint64() >= params.ShaEquivalentDifficultyForkBlock &&
+		currentHeader.PrimeTerminusNumber().Uint64() < params.ShaEquivalentDifficultyForkBlock+params.KQuaiChangeHoldInterval) {
+		return nil, nil, nil, fmt.Errorf("tx %032x is a qi to quai conversion transaction  not allowed for kquai hold interval %d after the sha equivalent difficulty fork block", tx.Hash(), params.KQuaiChangeHoldInterval), nil
 	}
 	if conversion || wrapping {
 		if conversion && wrapping {
