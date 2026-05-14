@@ -44,7 +44,8 @@ COPY --from=builder /app/params/forfeiture_addresses.json ./params/forfeiture_ad
 RUN chmod +x ./build/bin/go-quai
 
 # Expose the necessary ports
-EXPOSE 4002 8001 8002 8200 9001 9002 9200
+EXPOSE 4002/tcp 4002/udp 8001 8002 8200 9001 9002 9200
 
 # Command to run the executable
-CMD ["./build/bin/go-quai", "start"]
+ENTRYPOINT ["./build/bin/go-quai"]
+CMD ["start"]

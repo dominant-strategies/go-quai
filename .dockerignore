@@ -1,3 +1,6 @@
 nodelogs
 .git
 .gitignore
+.codex
+build/bin
+go-quai
