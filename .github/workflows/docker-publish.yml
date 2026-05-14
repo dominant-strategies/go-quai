@@ -1,0 +1,79 @@
+name: Publish Docker image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: Docker Hub repository name
+        required: true
+        default: go-quai
+      namespace:
+        description: Docker Hub account or organization namespace.
+        required: false
+        default: quainetwork
+      tag:
+        description: Image tag to publish
+        required: true
+        default: latest
+      push_latest:
+        description: Also tag and push latest
+        required: true
+        type: boolean
+        default: true
+      platforms:
+        description: Target platforms
+        required: true
+        default: linux/amd64
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          namespace="${{ inputs.namespace }}"
+          if [[ -z "$namespace" ]]; then
+            namespace="${{ secrets.DOCKERHUB_USERNAME }}"
+          fi
+
+          image="${namespace}/${{ inputs.image_name }}"
+          tags="${image}:${{ inputs.tag }}"
+
+          if [[ "${{ inputs.push_latest }}" == "true" && "${{ inputs.tag }}" != "latest" ]]; then
+            tags="${tags},${image}:latest"
+          fi
+
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ inputs.platforms }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
