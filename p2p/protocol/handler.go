@@ -149,6 +149,13 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 	}()
 	defer stream.Close()
 
+	// Derive a per-stream context so the worker goroutine below exits when this
+	// handler returns (stream closed / peer gone), not only on node shutdown.
+	// Inbound streams are handled with the long-lived node context, so without
+	// this the worker leaks one goroutine per inbound stream that ever closed.
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	log.Global.Debugf("Received a new stream from %s", stream.Conn().RemotePeer())
 
 	// if there is a protocol mismatch, close the stream
@@ -173,7 +180,7 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 			select {
 			case message := <-msgChan:
 				handleMessage(message, stream, node)
-			case <-ctx.Done():
+			case <-streamCtx.Done():
 				return
 			}
 		}
