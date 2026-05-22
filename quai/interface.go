@@ -82,6 +82,12 @@ type NetworkingAPI interface {
 	// Specify location, data hash, and data type to request
 	Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{}
 
+	// Returns the connected peer count.
+	PeerCount() uint
+
+	// Returns connected peer counts split by inbound and outbound connections.
+	PeerCountByDirection() (uint, uint)
+
 	// Adjust a peer's quality score
 	AdjustPeerQuality(core.PeerID, string, func(int) int)
 

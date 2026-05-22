@@ -1685,13 +1685,24 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 	return nil
 }
 
-func NewPublicNetAPI(networkVersion uint64) *PublicNetAPI {
-	return &PublicNetAPI{networkVersion}
+type netBackend interface {
+	PeerCount() uint
+	PeerCountByDirection() (uint, uint)
+}
+
+func NewPublicNetAPI(networkVersion uint64, b netBackend) *PublicNetAPI {
+	return &PublicNetAPI{networkVersion: networkVersion, b: b}
 }
 
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
 	networkVersion uint64
+	b              netBackend
+}
+
+type PeerCountByDirection struct {
+	Incoming hexutil.Uint `json:"incoming"`
+	Outgoing hexutil.Uint `json:"outgoing"`
 }
 
 // Listening returns an indication if the node is listening for network connections.
@@ -1702,6 +1713,26 @@ func (s *PublicNetAPI) Listening() bool {
 // Version returns the current Quai protocol version.
 func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
+}
+
+// PeerCount returns the number of connected peers.
+func (s *PublicNetAPI) PeerCount() hexutil.Uint {
+	if s.b == nil {
+		return 0
+	}
+	return hexutil.Uint(s.b.PeerCount())
+}
+
+// PeerCountByDirection returns the number of connected peers by connection direction.
+func (s *PublicNetAPI) PeerCountByDirection() PeerCountByDirection {
+	if s.b == nil {
+		return PeerCountByDirection{}
+	}
+	incoming, outgoing := s.b.PeerCountByDirection()
+	return PeerCountByDirection{
+		Incoming: hexutil.Uint(incoming),
+		Outgoing: hexutil.Uint(outgoing),
+	}
 }
 
 // checkTxFee is an internal function used to check whether the fee of

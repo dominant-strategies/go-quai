@@ -937,6 +937,20 @@ func (b *QuaiAPIBackend) CheckWorkThreshold(header *types.WorkObjectHeader, thre
 // ///////////////////////////
 // /////// P2P ///////////////
 // ///////////////////////////
+func (b *QuaiAPIBackend) PeerCount() uint {
+	if b.quai.p2p == nil {
+		return 0
+	}
+	return b.quai.p2p.PeerCount()
+}
+
+func (b *QuaiAPIBackend) PeerCountByDirection() (uint, uint) {
+	if b.quai.p2p == nil {
+		return 0, 0
+	}
+	return b.quai.p2p.PeerCountByDirection()
+}
+
 func (b *QuaiAPIBackend) BroadcastBlock(block *types.WorkObject, location common.Location) error {
 	return b.quai.p2p.Broadcast(location, block.ConvertToBlockView())
 }
