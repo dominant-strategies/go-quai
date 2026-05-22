@@ -7,6 +7,8 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var (
@@ -28,6 +30,27 @@ func (p *P2PNode) connectionStats() int {
 	numConnected := len(peers)
 
 	return numConnected
+}
+
+// PeerCount returns the number of peers with active network connections.
+func (p *P2PNode) PeerCount() uint {
+	return uint(len(p.peerManager.GetHost().Network().Peers()))
+}
+
+// PeerCountByDirection returns active peer counts split by connection direction.
+func (p *P2PNode) PeerCountByDirection() (uint, uint) {
+	incomingPeers := make(map[peer.ID]struct{})
+	outgoingPeers := make(map[peer.ID]struct{})
+
+	for _, conn := range p.peerManager.GetHost().Network().Conns() {
+		switch conn.Stat().Direction {
+		case network.DirInbound:
+			incomingPeers[conn.RemotePeer()] = struct{}{}
+		case network.DirOutbound:
+			outgoingPeers[conn.RemotePeer()] = struct{}{}
+		}
+	}
+	return uint(len(incomingPeers)), uint(len(outgoingPeers))
 }
 
 func (p *P2PNode) statsLoop() {

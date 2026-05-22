@@ -186,6 +186,8 @@ type Backend interface {
 	Logger() *log.Logger
 
 	// P2P apis
+	PeerCount() uint
+	PeerCountByDirection() (uint, uint)
 	BroadcastBlock(block *types.WorkObject, location common.Location) error
 	BroadcastHeader(header *types.WorkObject, location common.Location) error
 	BroadcastAuxTemplate(auxTemplate *types.AuxTemplate, location common.Location) error
@@ -228,7 +230,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		{
 			Namespace: "net",
 			Version:   "1.0",
-			Service:   NewPublicNetAPI(apiBackend.ChainConfig().ChainID.Uint64()),
+			Service:   NewPublicNetAPI(apiBackend.ChainConfig().ChainID.Uint64(), apiBackend),
 			Public:    true,
 		},
 	}
