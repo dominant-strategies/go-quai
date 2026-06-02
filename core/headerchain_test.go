@@ -12,6 +12,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/stretchr/testify/require"
+	"modernc.org/mathutil"
 )
 
 func TestComputeKQuaiDiscount(t *testing.T) {
@@ -253,6 +254,147 @@ func TestCalculateShareTarget(t *testing.T) {
 	}
 }
 
+func TestCalculatePowDiffAndCountConversionStabilityForkParameters(t *testing.T) {
+	hc := NewTestHeaderChain()
+
+	testCases := []struct {
+		name                    string
+		primeTerminusNumber     uint64
+		workShareEmaBlocks      *big.Int
+		powDiffAdjustmentFactor *big.Int
+	}{
+		{
+			name:                    "before conversion stability fork uses legacy parameters",
+			primeTerminusNumber:     params.ConversionStabilityForkBlock - 1,
+			workShareEmaBlocks:      params.WorkShareEmaBlocks,
+			powDiffAdjustmentFactor: params.PowDiffAdjustmentFactor,
+		},
+		{
+			name:                    "at conversion stability fork uses new parameters",
+			primeTerminusNumber:     params.ConversionStabilityForkBlock,
+			workShareEmaBlocks:      params.NewWorkShareEmaBlocks,
+			powDiffAdjustmentFactor: params.NewPowDiffAdjustmentFactor,
+		},
+		{
+			name:                    "after conversion stability fork uses new parameters",
+			primeTerminusNumber:     params.ConversionStabilityForkBlock + 1,
+			workShareEmaBlocks:      params.NewWorkShareEmaBlocks,
+			powDiffAdjustmentFactor: params.NewPowDiffAdjustmentFactor,
+		},
+	}
+
+	algoCases := []struct {
+		name           string
+		powID          types.PowID
+		shares         *types.PowShareDiffAndCount
+		shareTarget    *big.Int
+		observedShares int
+		observedUncled int
+		diffLowerBound *big.Int
+	}{
+		{
+			name:           "sha",
+			powID:          types.SHA_BTC,
+			shares:         types.NewPowShareDiffAndCount(big.NewInt(1_000_000_000_000_000_000), sharesAsFixedPoint(8), sharesAsFixedPoint(2)),
+			shareTarget:    sharesAsFixedPoint(4),
+			observedShares: 2,
+			observedUncled: 1,
+			diffLowerBound: params.ShaDiffLowerBound,
+		},
+		{
+			name:           "scrypt",
+			powID:          types.Scrypt,
+			shares:         types.NewPowShareDiffAndCount(big.NewInt(1_000_000_000_000_000), sharesAsFixedPoint(7), sharesAsFixedPoint(3)),
+			shareTarget:    sharesAsFixedPoint(5),
+			observedShares: 3,
+			observedUncled: 1,
+			diffLowerBound: params.ScryptDiffLowerBound,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			header := types.EmptyWorkObject(common.ZONE_CTX).WorkObjectHeader()
+			header.SetPrimeTerminusNumber(new(big.Int).SetUint64(tc.primeTerminusNumber))
+
+			for _, ac := range algoCases {
+				t.Run(ac.name, func(t *testing.T) {
+					parent := conversionStabilityPowDiffParent()
+
+					newDiff, newAverageShares, newUncledShares := hc.CalculatePowDiffAndCount(parent, header, ac.powID)
+					expectedDiff, expectedAverageShares, expectedUncledShares := expectedPowDiffAndCount(
+						ac.shares,
+						ac.shareTarget,
+						ac.observedShares,
+						ac.observedUncled,
+						tc.workShareEmaBlocks,
+						tc.powDiffAdjustmentFactor,
+						ac.diffLowerBound,
+					)
+
+					require.Equal(t, expectedDiff, newDiff)
+					require.Equal(t, expectedAverageShares, newAverageShares)
+					require.Equal(t, expectedUncledShares, newUncledShares)
+				})
+			}
+		})
+	}
+}
+
+func TestCalculatePowDiffAndCountConversionForkDoesNotUseParentPrimeTerminus(t *testing.T) {
+	hc := NewTestHeaderChain()
+	parent := conversionStabilityPowDiffParent()
+	parent.WorkObjectHeader().SetPrimeTerminusNumber(new(big.Int).SetUint64(params.ConversionStabilityForkBlock - 1))
+
+	header := types.EmptyWorkObject(common.ZONE_CTX).WorkObjectHeader()
+	header.SetPrimeTerminusNumber(new(big.Int).SetUint64(params.ConversionStabilityForkBlock))
+
+	newDiff, newAverageShares, newUncledShares := hc.CalculatePowDiffAndCount(parent, header, types.SHA_BTC)
+	expectedDiff, expectedAverageShares, expectedUncledShares := expectedPowDiffAndCount(
+		parent.ShaDiffAndCount(),
+		parent.ShaShareTarget(),
+		2,
+		1,
+		params.NewWorkShareEmaBlocks,
+		params.NewPowDiffAdjustmentFactor,
+		params.ShaDiffLowerBound,
+	)
+
+	require.Equal(t, expectedDiff, newDiff)
+	require.Equal(t, expectedAverageShares, newAverageShares)
+	require.Equal(t, expectedUncledShares, newUncledShares)
+}
+
+func TestCalculatePowDiffAndCountConversionForkLowerBound(t *testing.T) {
+	hc := NewTestHeaderChain()
+	parent := conversionStabilityPowDiffParent()
+	parent.Body().SetUncles(nil)
+	parent.WorkObjectHeader().SetShaDiffAndCount(types.NewPowShareDiffAndCount(
+		new(big.Int).Add(params.ShaDiffLowerBound, big.NewInt(1)),
+		sharesAsFixedPoint(8),
+		sharesAsFixedPoint(2),
+	))
+
+	header := types.EmptyWorkObject(common.ZONE_CTX).WorkObjectHeader()
+	header.SetPrimeTerminusNumber(new(big.Int).SetUint64(params.ConversionStabilityForkBlock))
+
+	newDiff, newAverageShares, newUncledShares := hc.CalculatePowDiffAndCount(parent, header, types.SHA_BTC)
+	expectedDiff, expectedAverageShares, expectedUncledShares := expectedPowDiffAndCount(
+		parent.ShaDiffAndCount(),
+		parent.ShaShareTarget(),
+		0,
+		0,
+		params.NewWorkShareEmaBlocks,
+		params.NewPowDiffAdjustmentFactor,
+		params.ShaDiffLowerBound,
+	)
+
+	require.Equal(t, params.ShaDiffLowerBound, newDiff)
+	require.Equal(t, expectedDiff, newDiff)
+	require.Equal(t, expectedAverageShares, newAverageShares)
+	require.Equal(t, expectedUncledShares, newUncledShares)
+}
+
 func TestCalculateTimeDiscountedShareReward(t *testing.T) {
 	hc := NewTestHeaderChain()
 
@@ -404,6 +546,74 @@ func TestCalculateTimeDiscountedShareReward(t *testing.T) {
 				tc.expectedReward, result.Int64(), tc.name)
 		})
 	}
+}
+
+func conversionStabilityPowDiffParent() *types.WorkObject {
+	parent := types.EmptyWorkObject(common.ZONE_CTX)
+	parent.WorkObjectHeader().SetPrimeTerminusNumber(new(big.Int).SetUint64(params.ConversionStabilityForkBlock - 1))
+	parent.WorkObjectHeader().SetShaDiffAndCount(types.NewPowShareDiffAndCount(
+		big.NewInt(1_000_000_000_000_000_000),
+		sharesAsFixedPoint(8),
+		sharesAsFixedPoint(2),
+	))
+	parent.WorkObjectHeader().SetScryptDiffAndCount(types.NewPowShareDiffAndCount(
+		big.NewInt(1_000_000_000_000_000),
+		sharesAsFixedPoint(7),
+		sharesAsFixedPoint(3),
+	))
+	parent.WorkObjectHeader().SetShaShareTarget(sharesAsFixedPoint(4))
+	parent.WorkObjectHeader().SetScryptShareTarget(sharesAsFixedPoint(5))
+	parent.Body().SetUncles([]*types.WorkObjectHeader{
+		conversionStabilityWorkShare(types.SHA_BTC, false),
+		conversionStabilityWorkShare(types.SHA_BCH, true),
+		conversionStabilityWorkShare(types.Scrypt, false),
+		conversionStabilityWorkShare(types.Scrypt, false),
+		conversionStabilityWorkShare(types.Scrypt, true),
+		conversionStabilityWorkShare(types.Kawpow, false),
+	})
+	return parent
+}
+
+func conversionStabilityWorkShare(powID types.PowID, uncled bool) *types.WorkObjectHeader {
+	share := types.EmptyWorkObject(common.ZONE_CTX).WorkObjectHeader()
+	share.SetAuxPow(createTestAuxPow(powID, 1))
+	if uncled {
+		share.SetPrimaryCoinbase(common.Address{})
+	} else {
+		share.SetPrimaryCoinbase(common.ZeroAddress(common.Location{0, 0}))
+	}
+	return share
+}
+
+func sharesAsFixedPoint(shares int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(shares), common.Big2e32)
+}
+
+func expectedPowDiffAndCount(shares *types.PowShareDiffAndCount, shareTarget *big.Int, observedShares, observedUncled int, workShareEmaBlocks, powDiffAdjustmentFactor, diffLowerBound *big.Int) (*big.Int, *big.Int, *big.Int) {
+	numShares := sharesAsFixedPoint(int64(observedShares))
+	uncledShares := sharesAsFixedPoint(int64(observedUncled))
+
+	error := new(big.Int).Sub(numShares, shareTarget)
+	newDiff := new(big.Int).Mul(error, shares.Difficulty())
+	k, _ := mathutil.BinaryLog(new(big.Int).Set(shares.Difficulty()), common.MantBits)
+	newDiff = new(big.Int).Mul(newDiff, big.NewInt(int64(k)))
+	newDiff = new(big.Int).Div(newDiff, powDiffAdjustmentFactor)
+	newDiff = new(big.Int).Div(newDiff, common.Big2e32)
+	newDiff = new(big.Int).Add(shares.Difficulty(), newDiff)
+	if newDiff.Cmp(diffLowerBound) < 0 {
+		newDiff = new(big.Int).Set(diffLowerBound)
+	}
+
+	emaBlocksMinusOne := new(big.Int).Sub(workShareEmaBlocks, common.Big1)
+	newAverageShares := new(big.Int).Mul(shares.Count(), emaBlocksMinusOne)
+	newAverageShares = new(big.Int).Add(newAverageShares, numShares)
+	newAverageShares = new(big.Int).Div(newAverageShares, workShareEmaBlocks)
+
+	newUncledShares := new(big.Int).Mul(shares.Uncled(), emaBlocksMinusOne)
+	newUncledShares = new(big.Int).Add(newUncledShares, uncledShares)
+	newUncledShares = new(big.Int).Div(newUncledShares, workShareEmaBlocks)
+
+	return newDiff, newAverageShares, newUncledShares
 }
 
 // createTestAuxPow creates an AuxPow with the specified PowID and timestamp for testing

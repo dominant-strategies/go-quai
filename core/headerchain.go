@@ -413,6 +413,11 @@ func (hc *HeaderChain) CalculatePowDiffAndCount(parent *types.WorkObject, header
 	var numShares, uncledShares *big.Int
 	var shares *types.PowShareDiffAndCount
 
+	workShareEmaBlocks := params.WorkShareEmaBlocks
+	if header.PrimeTerminusNumber().Uint64() >= params.ConversionStabilityForkBlock {
+		workShareEmaBlocks = params.NewWorkShareEmaBlocks
+	}
+
 	switch powId {
 	case types.SHA_BTC, types.SHA_BCH:
 		shares = parent.ShaDiffAndCount()
@@ -438,6 +443,11 @@ func (hc *HeaderChain) CalculatePowDiffAndCount(parent *types.WorkObject, header
 		return big.NewInt(0), big.NewInt(0), big.NewInt(0)
 	}
 
+	powDiffAdjustmentFactor := params.PowDiffAdjustmentFactor
+	if header.PrimeTerminusNumber().Uint64() >= params.ConversionStabilityForkBlock {
+		powDiffAdjustmentFactor = params.NewPowDiffAdjustmentFactor
+	}
+
 	// Calculate the new difficulty based on the error
 	// newDiff = prevDiff + (error * prevDiff)/(2^32 * c_difficultyAdjustDivisor)
 	newDiff = new(big.Int).Mul(error, shares.Difficulty())
@@ -448,19 +458,19 @@ func (hc *HeaderChain) CalculatePowDiffAndCount(parent *types.WorkObject, header
 	// stable, so its a noop for scrypt, but for sha it scales appropriately
 	k, _ := mathutil.BinaryLog(new(big.Int).Set(shares.Difficulty()), common.MantBits)
 	newDiff = new(big.Int).Mul(newDiff, big.NewInt(int64(k)))
-	newDiff = new(big.Int).Div(newDiff, params.PowDiffAdjustmentFactor)
+	newDiff = new(big.Int).Div(newDiff, powDiffAdjustmentFactor)
 
 	newDiff = newDiff.Div(newDiff, common.Big2e32)
 	newDiff = newDiff.Add(shares.Difficulty(), newDiff)
 
 	// Calculate the new workshares
-	newAverageShares = new(big.Int).Mul(shares.Count(), new(big.Int).Sub(params.WorkShareEmaBlocks, common.Big1))
+	newAverageShares = new(big.Int).Mul(shares.Count(), new(big.Int).Sub(workShareEmaBlocks, common.Big1))
 	newAverageShares = newAverageShares.Add(newAverageShares, numShares)
-	newAverageShares = newAverageShares.Div(newAverageShares, params.WorkShareEmaBlocks)
+	newAverageShares = newAverageShares.Div(newAverageShares, workShareEmaBlocks)
 
-	newUncledShares = new(big.Int).Mul(shares.Uncled(), new(big.Int).Sub(params.WorkShareEmaBlocks, common.Big1))
+	newUncledShares = new(big.Int).Mul(shares.Uncled(), new(big.Int).Sub(workShareEmaBlocks, common.Big1))
 	newUncledShares = newUncledShares.Add(newUncledShares, uncledShares)
-	newUncledShares = newUncledShares.Div(newUncledShares, params.WorkShareEmaBlocks)
+	newUncledShares = newUncledShares.Div(newUncledShares, workShareEmaBlocks)
 
 	if header.PrimeTerminusNumber().Uint64() >= params.KQuaiResetAfterKawPowForkBlock {
 		// Ensure the new difficulty is within bounds
