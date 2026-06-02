@@ -282,7 +282,8 @@ var (
 	ShaDiffLowerBound         = big.NewInt(2e15)
 	ScryptDiffLowerBound      = big.NewInt(1e11)
 
-	PowDiffAdjustmentFactor = big.NewInt(300000)
+	PowDiffAdjustmentFactor    = big.NewInt(300000)
+	NewPowDiffAdjustmentFactor = big.NewInt(3000000)
 
 	// Target number of shares per algo times 2^32
 	TargetShaShares = big.NewInt(12884901888)
@@ -311,7 +312,8 @@ var (
 	RavencoinDiffCutoffRange = big.NewInt(1500)
 
 	// The number of blocks to use in the exponential moving average
-	WorkShareEmaBlocks = big.NewInt(1000) // About 1 day worth of blocks
+	WorkShareEmaBlocks    = big.NewInt(1000)
+	NewWorkShareEmaBlocks = big.NewInt(20000)
 
 	// MuSig2 2-of-3 public keys for AuxTemplate signing
 	// Add this to go-quai/params/protocol_params.go
@@ -337,11 +339,13 @@ var (
 	ShaEquivalentDifficultyForkBlock                     uint64 = 1461800
 	MinDifficultyForShaEquivalentDifficulty                     = big.NewInt(750000000000)
 	ExchangeRateAfterShaEquivalentDifficultyFork                = new(big.Int).Mul(big.NewInt(200), ExchangeRate)
-	ExchangeRateHoldIntervalAfterShaEquivalentDifficulty uint64 = 2 * BlocksPerMonth / 4 // 2 months in prime block terms
+	ExchangeRateHoldIntervalAfterShaEquivalentDifficulty uint64 = 4 * BlocksPerMonth / 4 // 4 months in prime block terms
 
 	SingularityForkBlock uint64 = 1265025
 
 	QiWrappingChangeBlock uint64 = 1320000
+
+	ConversionStabilityForkBlock uint64 = 1529700
 )
 
 const (
