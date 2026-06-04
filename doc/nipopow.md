@@ -150,6 +150,28 @@ Record:
 - verification result
 - failure mode for malformed requests
 
+The package includes a reusable validation harness for this stage:
+
+```go
+report, err := nipopow.ValidatePrimeProofRanges(ctx, headerChain, nipopow.ValidationOptions{
+    M: 15,
+    Ranges: []nipopow.ValidationRange{
+        {Name: "recent-short", AnchorNumber: recentAnchor, TipNumber: recentTip},
+        {Name: "older-short", AnchorNumber: olderAnchor, TipNumber: olderTip},
+        {Name: "limit-boundary", AnchorNumber: boundaryAnchor, TipNumber: boundaryTip},
+    },
+    Limits: nipopow.DefaultBuildLimits,
+})
+if err != nil {
+    return err
+}
+if report.Failed() {
+    // At least one range failed; inspect report.Results for the exact cause.
+}
+```
+
+`ValidatePrimeProofRanges` records one result per range and continues after range-level failures. Each result includes anchor/tip numbers, anchor/tip hashes, uncompressed chain length, compressed proof header count, estimated encoded proof bytes, elapsed build/verify time, and any error. The harness uses the same read-only `PrimeProofSource` path as public proof generation, so a successful run proves that persisted canonical headers and interlinks can build and verify Prime proofs without mutating storage.
+
 ### Level 3: adversarial validation
 
 Before treating the proof system as security-critical, add fuzz/property tests and adversarial cases:

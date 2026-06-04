@@ -18,6 +18,8 @@ import (
 	"github.com/dominant-strategies/go-quai/trie"
 )
 
+var _ nipopow.PrimeValidationSource = (*HeaderChain)(nil)
+
 func testPrimeNiPoPoWHeaderChain(t *testing.T) *HeaderChain {
 	t.Helper()
 
