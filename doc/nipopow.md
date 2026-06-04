@@ -203,6 +203,36 @@ Before treating the proof system as security-critical, add fuzz/property tests a
 - oversized requested ranges
 - invalid `m`
 
+The package includes an adversarial validation harness for verifier hardening:
+
+```go
+report, err := nipopow.ValidatePrimeProofAdversarialCases(validProof, []nipopow.AdversarialCase{
+    {
+        Name:          "bad-interlink-root",
+        ExpectedError: nipopow.ErrInterlinkRootMismatch,
+        Mutate: func(proof *nipopow.Proof) error {
+            proof.Headers[1].Body().SetInterlinkHashes(common.Hashes{})
+            return nil
+        },
+    },
+})
+if err != nil {
+    return err
+}
+if report.Failed() {
+    // The baseline failed or a mutated proof verified / failed for the wrong reason.
+}
+```
+
+Adversarial gate command examples:
+
+```bash
+go test ./core/nipopow -run 'Adversarial|FuzzVerifyPrimeProofRejectsUnsafeMutations' -count=1
+go test ./core/nipopow -run '^$' -fuzz FuzzVerifyPrimeProofRejectsUnsafeMutations -fuzztime=5s
+```
+
+Current coverage includes anchor mismatch, nil headers, swapped WorkObject body/header binding, bad interlink roots, disconnected prefixes, non-linear suffixes, no-op mutations that should fail the gate, invalid harness config, and seeded fuzz mutations for invalid `m`, empty headers, anchor mismatch, nil headers, body/header tampering, bad interlinks, disconnected prefixes, and non-linear suffixes.
+
 ### Level 4: mining-template readiness
 
 Mining-template use requires the later stages:
