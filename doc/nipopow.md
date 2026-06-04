@@ -172,6 +172,22 @@ if report.Failed() {
 
 `ValidatePrimeProofRanges` records one result per range and continues after range-level failures. Each result includes anchor/tip numbers, anchor/tip hashes, uncompressed chain length, compressed proof header count, estimated encoded proof bytes, elapsed build/verify time, and any error. The harness uses the same read-only `PrimeProofSource` path as public proof generation, so a successful run proves that persisted canonical headers and interlinks can build and verify Prime proofs without mutating storage.
 
+A command-line real-chain validator is available for offline or snapshot DBs:
+
+```bash
+go run ./cmd/nipopow-prime-validate \
+  --db /path/to/prime/go-quai/chaindata \
+  --m 16 \
+  --lengths 16,64,256,1024 \
+  --max-chain 1024 \
+  --max-headers 1024 \
+  --timeout 3m
+```
+
+The command opens the DB with `ReadOnly: true`, auto-attaches `<db>/ancient` when present, and emits a JSON report with head/genesis metadata, selected ranges, per-range proof metrics, and errors. Use `--ranges name=anchor:tip,name2=anchor:tip` for explicit reviewer samples and `--out report.json` to write the JSON to disk.
+
+Do not point this command directly at a running production LevelDB/freezer store if it is locked. For live nodes, use an offline copy or a same-filesystem hardlink snapshot with independent mutable metadata/lock files (`LOCK`, `ancient/FLOCK`, `CURRENT`, `LOG`, `MANIFEST-*`, `*.log`), run the validator against the snapshot, then remove the snapshot promptly so hardlinked SST files do not pin old compaction data.
+
 ### Level 3: adversarial validation
 
 Before treating the proof system as security-critical, add fuzz/property tests and adversarial cases:
