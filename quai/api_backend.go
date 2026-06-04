@@ -28,6 +28,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/bloombits"
+	"github.com/dominant-strategies/go-quai/core/nipopow"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -810,6 +811,10 @@ func (b *QuaiAPIBackend) GetBlockByHash(hash common.Hash) *types.WorkObject {
 
 func (b *QuaiAPIBackend) GetHeaderByHash(hash common.Hash) *types.WorkObject {
 	return b.quai.core.GetHeaderByHash(hash)
+}
+
+func (b *QuaiAPIBackend) GetNiPoPoWProof(ctx context.Context, anchor common.Hash, tip common.Hash, m uint64) (*nipopow.Proof, error) {
+	return b.quai.core.GetNiPoPoWProof(ctx, anchor, tip, m)
 }
 
 func (b *QuaiAPIBackend) GetHeaderByNumber(number uint64) *types.WorkObject {

@@ -35,6 +35,7 @@ import (
 	quaimath "github.com/dominant-strategies/go-quai/common/math"
 	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core"
+	"github.com/dominant-strategies/go-quai/core/nipopow"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
@@ -108,6 +109,17 @@ func (api *PublicBlockChainQuaiAPI) ChainId() (*hexutil.Big, error) {
 // NodeLocation is the access call to the location of the node.
 func (api *PublicBlockChainQuaiAPI) NodeLocation() []hexutil.Uint64 {
 	return api.b.NodeLocation().RPCMarshal()
+}
+
+// GetNiPoPoWProof returns a read-only Prime-chain NiPoPoW proof from anchor to tip.
+func (api *PublicBlockChainQuaiAPI) GetNiPoPoWProof(ctx context.Context, anchor common.Hash, tip common.Hash, m hexutil.Uint64) (*nipopow.Proof, error) {
+	if api.b.NodeCtx() != common.PRIME_CTX {
+		return nil, errors.New("getNiPoPoWProof call can only be made in prime chain")
+	}
+	if tip == (common.Hash{}) {
+		tip = api.b.CurrentHeader().Hash()
+	}
+	return api.b.GetNiPoPoWProof(ctx, anchor, tip, uint64(m))
 }
 
 // BlockNumber returns the block number of the chain head.
