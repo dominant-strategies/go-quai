@@ -90,7 +90,9 @@ type HierarchicalCoordinator struct {
 
 	bestEntropy *big.Int
 
-	oneMu                      sync.Mutex
+	oneMu sync.Mutex
+
+	generateHeaderWorkersMu    sync.Mutex
 	generateHeaderWorkersCount int
 
 	pendingHeaderBackupCh chan struct{}
@@ -182,6 +184,25 @@ func removeFromSlice(keyToRemove string, pendingHeaders *PendingHeaders) {
 			pendingHeaders.order = append(pendingHeaders.order[:i], pendingHeaders.order[i+1:]...)
 		}
 	}
+}
+
+func (hc *HierarchicalCoordinator) tryAcquireGenerateHeaderWorker() bool {
+	hc.generateHeaderWorkersMu.Lock()
+	defer hc.generateHeaderWorkersMu.Unlock()
+	if hc.generateHeaderWorkersCount >= c_maxHeaderWorkers {
+		return false
+	}
+	hc.generateHeaderWorkersCount++
+	return true
+}
+
+func (hc *HierarchicalCoordinator) releaseGenerateHeaderWorker() {
+	hc.generateHeaderWorkersMu.Lock()
+	defer hc.generateHeaderWorkersMu.Unlock()
+	if hc.generateHeaderWorkersCount == 0 {
+		return
+	}
+	hc.generateHeaderWorkersCount--
 }
 
 func (ns *NodeSet) Extendable(wo *types.WorkObject, order int) bool {
@@ -1074,8 +1095,7 @@ func (hc *HierarchicalCoordinator) BuildPendingHeaders(wo *types.WorkObject, ord
 	}
 
 	bestNode, exists := hc.pendingHeaders.collection.Peek(hc.bestEntropy.String())
-	if exists && hc.generateHeaderWorkersCount <= c_maxHeaderWorkers {
-		hc.generateHeaderWorkersCount++
+	if exists && hc.tryAcquireGenerateHeaderWorker() {
 		go hc.ComputePendingHeaders(bestNode)
 	} else {
 		log.Global.Info("Reached the maxHeaderWorkers, skipping GeneratePending")
@@ -1096,6 +1116,7 @@ func (hc *HierarchicalCoordinator) ComputePendingHeaders(nodeSet NodeSet) {
 			}).Fatal("Go-Quai Panicked")
 		}
 	}()
+	defer hc.releaseGenerateHeaderWorker()
 	numRegions, numZones := common.GetHierarchySizeForExpansionNumber(hc.currentExpansionNumber)
 	var wg sync.WaitGroup
 	primeLocation := common.Location{}.Name()
@@ -1109,7 +1130,6 @@ func (hc *HierarchicalCoordinator) ComputePendingHeaders(nodeSet NodeSet) {
 		}
 	}
 	wg.Wait()
-	hc.generateHeaderWorkersCount--
 }
 
 func circularShift(arr []Node) []Node {
