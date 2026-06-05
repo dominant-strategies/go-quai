@@ -144,7 +144,7 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	defer stream.Close()
@@ -166,7 +166,7 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 				log.Global.WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		for {
@@ -213,7 +213,7 @@ func handleMessage(data []byte, stream network.Stream, node QuaiP2PNode) {
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	quaiMsg, err := pb.DecodeQuaiMessage(data)
