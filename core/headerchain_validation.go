@@ -429,13 +429,19 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 				// calculation of workshare classification, so we need to verify
 				// that the shares are correct for the uncle
 				if uncle.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
-					_, realizedShaShares, _ := hc.CalculatePowDiffAndCount(parent, uncle, types.SHA_BTC)
+					realizedShaDifficulty, realizedShaShares, _ := hc.CalculatePowDiffAndCount(parent, uncle, types.SHA_BTC)
 					if uncle.ShaDiffAndCount().Count().Cmp(realizedShaShares) != 0 {
 						return fmt.Errorf("invalid sha share count : have %v, want %v", uncle.ShaDiffAndCount().Count(), realizedShaShares)
 					}
-					_, realizedScryptShares, _ := hc.CalculatePowDiffAndCount(parent, uncle, types.Scrypt)
+					if uncle.ShaDiffAndCount().Difficulty().Cmp(realizedShaDifficulty) != 0 {
+						return fmt.Errorf("invalid sha share difficulty : have %v, want %v", uncle.ShaDiffAndCount().Difficulty(), realizedShaDifficulty)
+					}
+					realizedScryptDifficulty, realizedScryptShares, _ := hc.CalculatePowDiffAndCount(parent, uncle, types.Scrypt)
 					if uncle.ScryptDiffAndCount().Count().Cmp(realizedScryptShares) != 0 {
 						return fmt.Errorf("invalid scrypt share count : have %v, want %v", uncle.ScryptDiffAndCount().Count(), realizedScryptShares)
+					}
+					if uncle.ScryptDiffAndCount().Difficulty().Cmp(realizedScryptDifficulty) != 0 {
+						return fmt.Errorf("invalid scrypt share difficulty : have %v, want %v", uncle.ScryptDiffAndCount().Difficulty(), realizedScryptDifficulty)
 					}
 				}
 			}
