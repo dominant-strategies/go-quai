@@ -168,7 +168,7 @@ func (g *PubsubManager) Subscribe(topicSub *Topic, location common.Location, dat
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
 					"location":   location.Name(),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		// Create a channel for messages
