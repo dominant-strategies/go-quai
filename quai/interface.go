@@ -82,6 +82,9 @@ type NetworkingAPI interface {
 	// Specify location, data hash, and data type to request
 	Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{}
 
+	// Method to request data with a caller-specified peer fanout.
+	RequestWithDegree(location common.Location, requestData interface{}, responseDataType interface{}, requestDegree int) chan interface{}
+
 	// Returns the connected peer count.
 	PeerCount() uint
 

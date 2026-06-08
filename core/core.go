@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
@@ -37,6 +38,7 @@ import (
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/internal/telemetry"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/trie"
 )
@@ -60,6 +62,10 @@ const (
 	c_remoteTxProcPeriod                = 2 // Time between remote tx pool processing
 	c_asyncWorkShareTimer               = 1 * time.Second
 	c_maxFutureEntropyMultiple          = 200
+)
+
+var (
+	syncGauges = metrics_config.NewGaugeVec("SyncGauges", "Sync and catch-up gauges")
 )
 
 type blockNumberAndRetryCounter struct {
@@ -86,6 +92,10 @@ type Core struct {
 	endpoints          []string
 
 	quit chan struct{} // core quit channel
+
+	highestSeenBlock atomic.Uint64
+	statsLastHeight  uint64
+	statsLastTime    time.Time
 
 	logger *log.Logger
 }
@@ -117,6 +127,12 @@ func NewCore(db ethdb.Database, config *Config, powConfig params.PowConfig, txCo
 
 	remoteTxQueue, _ := lru.New[common.Hash, types.Transaction](c_maxRemoteTxQueue)
 	c.remoteTxQueue = remoteTxQueue
+	if currentHeader := c.CurrentHeader(); currentHeader != nil {
+		currentHeight := currentHeader.NumberU64(c.NodeCtx())
+		c.highestSeenBlock.Store(currentHeight)
+		c.statsLastHeight = currentHeight
+	}
+	c.statsLastTime = time.Now()
 
 	go c.updateAppendQueue()
 	go c.startStatsTimer()
@@ -170,8 +186,34 @@ func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
 				}).Info("Already processing block")
 				return idx, errors.New("Already in process of appending this block")
 			}
+			nearCurrent := block.NumberU64(nodeCtx) <= c.CurrentHeader().NumberU64(nodeCtx)+2
+			if nearCurrent {
+				c.logger.WithFields(log.Fields{
+					"Number":        block.NumberArray(),
+					"Hash":          block.Hash(),
+					"ParentHash":    block.ParentHash(nodeCtx),
+					"CurrentNumber": c.CurrentHeader().NumberArray(),
+					"CurrentHash":   c.CurrentHeader().Hash(),
+				}).Debug("InsertChain append start")
+			}
+			appendStart := time.Now()
 			newPendingEtxs, err := c.sl.Append(block, common.Hash{}, false, nil)
+			appendElapsed := common.PrettyDuration(time.Since(appendStart))
 			c.processingCache.Remove(block.Hash())
+			if nearCurrent {
+				fields := log.Fields{
+					"Number":  block.NumberArray(),
+					"Hash":    block.Hash(),
+					"Elapsed": appendElapsed,
+				}
+				if err != nil {
+					fields["err"] = err
+					c.logger.WithFields(fields).Warn("InsertChain append returned error")
+				} else {
+					fields["pendingEtxs"] = len(newPendingEtxs)
+					c.logger.WithFields(fields).Debug("InsertChain append returned success")
+				}
+			}
 			if err == nil {
 				// If we have a dom, send the dom any pending ETXs which will become
 				// referencable by this block. When this block is referenced in the dom's
@@ -529,9 +571,36 @@ func (c *Core) startStatsTimer() {
 
 // printStats displays stats on syncing, latestHeight, etc.
 func (c *Core) printStats() {
+	currentHeader := c.CurrentHeader()
+	currentHeight := uint64(0)
+	if currentHeader != nil {
+		currentHeight = currentHeader.NumberU64(c.NodeCtx())
+		c.observeBlockNumber(currentHeight)
+	}
+	now := time.Now()
+	blocksPerSecond := 0.0
+	if !c.statsLastTime.IsZero() {
+		elapsed := now.Sub(c.statsLastTime).Seconds()
+		if elapsed > 0 && currentHeight >= c.statsLastHeight {
+			blocksPerSecond = float64(currentHeight-c.statsLastHeight) / elapsed
+		}
+	}
+	c.statsLastHeight = currentHeight
+	c.statsLastTime = now
+
+	appendQueueLen := c.AppendQueueLen()
+	highestSeen := c.HighestSeenBlockNumber()
+	syncGauges.WithLabelValues("local_head").Set(float64(currentHeight))
+	syncGauges.WithLabelValues("peer_observed_head").Set(float64(highestSeen))
+	syncGauges.WithLabelValues("append_queue").Set(float64(appendQueueLen))
+	syncGauges.WithLabelValues("blocks_per_sec").Set(blocksPerSecond)
+
 	c.logger.WithFields(log.Fields{
 		"loc":              c.NodeLocation().Name(),
-		"len(appendQueue)": len(c.appendQueue.Keys()),
+		"localHead":        currentHeight,
+		"peerObservedHead": highestSeen,
+		"len(appendQueue)": appendQueueLen,
+		"blocksPerSecond":  fmt.Sprintf("%.2f", blocksPerSecond),
 	}).Info("Blocks waiting to be appended")
 
 	// Print hashes & heights of all queue entries.
@@ -1009,6 +1078,7 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 	if c.sl.IsBlockHashABadHash(block.Hash()) {
 		return
 	}
+	c.observeBlockNumber(block.NumberU64(nodeCtx))
 	if c.GetHeaderByHash(block.Hash()) == nil {
 		// Only add non dom blocks to the append queue
 		_, order, err := c.CalcOrder(block)
@@ -1020,7 +1090,7 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 			parentHeader := c.GetHeaderByHash(block.ParentHash(nodeCtx))
 			if parentHeader != nil {
 				c.sl.WriteBlock(block)
-				go c.InsertChain([]*types.WorkObject{block})
+				c.insertChainAsyncFromWriteBlock(block)
 			}
 			c.addToAppendQueue(block)
 			// If a dom block comes in and we havent appended it yet
@@ -1029,12 +1099,44 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 				go c.sl.domInterface.RequestDomToAppendOrFetch(block.Hash(), block.ParentEntropy(nodeCtx), order)
 			}
 		}
+	} else {
+		canonicalBlock := c.GetBlockByNumber(block.NumberU64(nodeCtx))
+		if canonicalBlock == nil || canonicalBlock.Hash() != block.Hash() {
+			c.addToAppendQueue(block)
+			c.insertChainAsyncFromWriteBlock(block)
+		}
 	}
 
 	if c.GetHeaderOrCandidateByHash(block.Hash()) == nil {
 		c.sl.WriteBlock(block)
 	}
 
+}
+
+func (c *Core) insertChainAsyncFromWriteBlock(block *types.WorkObject) {
+	go func(block *types.WorkObject) {
+		idx, err := c.InsertChain([]*types.WorkObject{block})
+		if err != nil {
+			c.logger.WithFields(log.Fields{
+				"Hash":   block.Hash(),
+				"Number": block.NumberArray(),
+				"idx":    idx,
+				"err":    err,
+			}).Warn("async WriteBlock InsertChain failed")
+		}
+	}(block)
+}
+
+func (c *Core) observeBlockNumber(number uint64) {
+	for {
+		current := c.highestSeenBlock.Load()
+		if number <= current {
+			return
+		}
+		if c.highestSeenBlock.CompareAndSwap(current, number) {
+			return
+		}
+	}
 }
 
 func (c *Core) Append(header *types.WorkObject, manifest types.BlockManifest, domTerminus common.Hash, domOrigin bool, newInboundEtxs types.Transactions) (types.Transactions, error) {
@@ -1256,6 +1358,19 @@ func (c *Core) GetBlockByHash(hash common.Hash) *types.WorkObject {
 // GetBlockOrCandidateByHash retrieves a block from the database by hash, caching it if found.
 func (c *Core) GetBlockOrCandidateByHash(hash common.Hash) *types.WorkObject {
 	return c.sl.hc.GetBlockOrCandidateByHash(hash)
+}
+
+// GetBlocksOrCandidatesByNumber retrieves all known canonical or noncanonical blocks at a height.
+func (c *Core) GetBlocksOrCandidatesByNumber(number uint64) []*types.WorkObject {
+	return c.sl.hc.GetBlocksOrCandidatesByNumber(number)
+}
+
+func (c *Core) AppendQueueLen() int {
+	return c.appendQueue.Len()
+}
+
+func (c *Core) HighestSeenBlockNumber() uint64 {
+	return c.highestSeenBlock.Load()
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,

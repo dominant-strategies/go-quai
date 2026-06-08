@@ -73,6 +73,7 @@ type basicStreamManager struct {
 	p2pBackend  quaiprotocol.QuaiP2PNode
 
 	newStreamRequestChan chan p2p.PeerID
+	openingStreams       map[p2p.PeerID]struct{}
 
 	host host.Host
 	mu   sync.Mutex
@@ -101,6 +102,7 @@ func NewStreamManager(node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStre
 		p2pBackend:           node,
 		host:                 host,
 		newStreamRequestChan: make(chan p2p.PeerID, c_newStreamRequestChanSize),
+		openingStreams:       make(map[p2p.PeerID]struct{}),
 	}
 
 	return sm, nil
@@ -144,9 +146,10 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 		select {
 		case peerID := <-sm.newStreamRequestChan:
 			go func(peerID peer.ID) {
+				defer sm.clearOpeningStream(peerID)
 				err := sm.OpenStream(peerID)
 				if err != nil {
-					log.Global.WithFields(log.Fields{"peerId": peerID, "info": err}).Info("Success opening new stream into peer")
+					log.Global.WithFields(log.Fields{"peerId": peerID, "info": err}).Warn("Error opening new stream to peer")
 				}
 			}(peerID)
 
@@ -154,6 +157,33 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 			return
 		}
 	}
+}
+
+func (sm *basicStreamManager) requestOpenStream(peerID p2p.PeerID) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if _, ok := sm.streamCache.Get(peerID); ok {
+		return false
+	}
+	if _, ok := sm.openingStreams[peerID]; ok {
+		return false
+	}
+	sm.openingStreams[peerID] = struct{}{}
+	select {
+	case sm.newStreamRequestChan <- peerID:
+		return true
+	default:
+		delete(sm.openingStreams, peerID)
+		log.Global.Error("sm.newPeers is full with new stream creation requests")
+		return false
+	}
+}
+
+func (sm *basicStreamManager) clearOpeningStream(peerID p2p.PeerID) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	delete(sm.openingStreams, peerID)
 }
 
 func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
@@ -185,7 +215,7 @@ func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 	sm.streamCache.Add(peerID, wrappedStream)
 
 	go quaiprotocol.QuaiProtocolHandler(handlerCtx, stream, sm.p2pBackend)
-	log.Global.WithField("PeerID", peerID).Info("Had to create new stream")
+	log.Global.WithField("PeerID", peerID).Debug("Had to create new stream")
 	if streamMetrics != nil {
 		streamMetrics.WithLabelValues("NumStreams").Inc()
 	}
@@ -207,11 +237,7 @@ func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, erro
 	wrappedStream, ok := sm.streamCache.Get(peerID)
 	var err error
 	if !ok {
-		select {
-		case sm.newStreamRequestChan <- peerID:
-		default:
-			log.Global.Error("sm.newPeers is full with new stream creation requests")
-		}
+		sm.requestOpenStream(peerID)
 		return nil, ErrStreamNotFound
 	} else {
 		log.Global.WithField("PeerID", peerID).Debug("Requested stream was found in cache")

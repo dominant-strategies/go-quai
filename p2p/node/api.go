@@ -2,6 +2,7 @@ package node
 
 import (
 	"math/big"
+	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -29,6 +30,7 @@ var (
 	propagationTimes      = metrics_config.NewHistogramVec("PropagationTimes", "message propagation times by type (sec)")
 	blockPropagationHist  = propagationTimes.WithLabelValues("block propagation time (sec)")
 	headerPropagationHist = propagationTimes.WithLabelValues("header propagation time (sec)")
+	syncRequestCounters   = metrics_config.NewCounterVec("SyncRequestCounters", "Sync request result counters")
 )
 
 const requestTimeout = 10 * time.Second
@@ -166,18 +168,29 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			// Use stream peers if the node has accumulated
-			// c_streamPeerThreshold number of streams otherwise look up peers
-			// from the database and create streams with them
-			peers := p.peerManager.GetStreamPeers()
-			if len(peers) < c_streamPeerThreshold {
-				peersMap := p.peerManager.GetPeers(topic)
-				peers = make([]peer.ID, 0)
-				for peer := range peersMap {
-					peers = append(peers, peer)
+			peerSet := p.peerManager.GetPeers(topic)
+			requestDegree := topic.GetRequestDegree()
+
+			streamPeers := p.peerManager.GetStreamPeers()
+			rand.Shuffle(len(streamPeers), func(i, j int) {
+				streamPeers[i], streamPeers[j] = streamPeers[j], streamPeers[i]
+			})
+			for _, peer := range streamPeers {
+				if len(peerSet) >= requestDegree {
+					break
 				}
-			} else {
-				peers = peers[:pubsubManager.C_defaultRequestDegree]
+				peerSet[peer] = struct{}{}
+			}
+
+			peers := make([]peer.ID, 0, len(peerSet))
+			for peer := range peerSet {
+				peers = append(peers, peer)
+			}
+			rand.Shuffle(len(peers), func(i, j int) {
+				peers[i], peers[j] = peers[j], peers[i]
+			})
+			if len(peers) > requestDegree {
+				peers = peers[:requestDegree]
 			}
 			log.Global.WithFields(log.Fields{
 				"peers": peers,
@@ -237,30 +250,84 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			log.Global.WithFields(log.Fields{
 				"peerId":  peerID,
 				"message": "Request timed out, data not received",
-			}).Info("Success Missed data request")
-			// Mark this peer as not responding
-			p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
+			}).Debug("Missed data request")
+			// Mark this peer as not responding.
+			p.markPeerRequestTimeout(peerID, topic.String())
 		default:
 			// Optionally log the missed send or handle it in another way
 			log.Global.WithFields(log.Fields{
 				"peerId":  peerID,
 				"message": "Channel is full, data not sent",
-			}).Info("Success Missed data send")
+			}).Debug("Missed data send")
 		}
 	} else {
 		if err.Error() == streamManager.ErrStreamNotFound.Error() {
+			log.Global.WithFields(log.Fields{
+				"peerId": peerID,
+				"topic":  topic.String(),
+			}).Debug("Stream not ready for peer")
 			return
 		}
+		if err == errPeerRequestTimeout {
+			p.markPeerRequestTimeout(peerID, topic.String())
+		} else {
+			p.markPeerRequestError(peerID, topic.String())
+		}
+		_ = p.peerManager.CloseStream(peerID)
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
 			"topic":  topic.String(),
 			"info":   err,
-		}).Info("Success requesting the data from peer")
+		}).Warn("Error requesting data from peer")
 	}
+}
+
+func (p *P2PNode) markPeerRequestSuccess(peerID peer.ID, topic string) {
+	p.peerScoreMu.Lock()
+	delete(p.peerTimeoutStreak, peerID)
+	p.peerScoreMu.Unlock()
+
+	p.peerManager.AdjustPeerQuality(peerID, topic, p2p.QualityAdjOnResponse)
+	syncRequestCounters.WithLabelValues("success").Inc()
+}
+
+func (p *P2PNode) markPeerRequestNack(peerID peer.ID, topic string) {
+	p.peerManager.AdjustPeerQuality(peerID, topic, p2p.QualityAdjOnNack)
+	syncRequestCounters.WithLabelValues("nack").Inc()
+}
+
+func (p *P2PNode) markPeerRequestTimeout(peerID peer.ID, topic string) {
+	p.peerScoreMu.Lock()
+	if p.peerTimeoutStreak == nil {
+		p.peerTimeoutStreak = make(map[peer.ID]int)
+	}
+	streak := p.peerTimeoutStreak[peerID] + 1
+	p.peerTimeoutStreak[peerID] = streak
+	p.peerScoreMu.Unlock()
+
+	adjust := p2p.QualityAdjOnTimeout
+	if streak >= 3 {
+		adjust = p2p.QualityAdjOnRepeatedTimeout
+	}
+	p.peerManager.AdjustPeerQuality(peerID, topic, adjust)
+	syncRequestCounters.WithLabelValues("timeout").Inc()
+}
+
+func (p *P2PNode) markPeerRequestError(peerID peer.ID, topic string) {
+	p.peerManager.AdjustPeerQuality(peerID, topic, p2p.QualityAdjOnNack)
+	syncRequestCounters.WithLabelValues("error").Inc()
 }
 
 // Request a data from the network for the specified slice
 func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
+	return p.request(location, requestData, responseDataType, 0)
+}
+
+func (p *P2PNode) RequestWithDegree(location common.Location, requestData interface{}, responseDataType interface{}, requestDegree int) chan interface{} {
+	return p.request(location, requestData, responseDataType, requestDegree)
+}
+
+func (p *P2PNode) request(location common.Location, requestData interface{}, responseDataType interface{}, requestDegree int) chan interface{} {
 	topic, err := pubsubManager.NewTopic(p.pubsub.GetGenesis(), location, responseDataType)
 	if err != nil {
 		log.Global.WithFields(log.Fields{
@@ -270,6 +337,7 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 		}).Error("Error getting topic name")
 		panic(err)
 	}
+	topic = topic.WithRequestDegree(requestDegree)
 
 	resultChan := make(chan interface{}, 10)
 	// If it is a hash, first check to see if it is contained in the caches
