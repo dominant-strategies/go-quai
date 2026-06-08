@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -75,6 +76,9 @@ type P2PNode struct {
 
 	// libp2p bandwidth counter
 	bandwidthCounter *libp2pmetrics.BandwidthCounter
+
+	peerScoreMu       sync.Mutex
+	peerTimeoutStreak map[peer.ID]int
 }
 
 // buildAddrsFactory creates an AddrsFactory that replaces announced addresses
@@ -274,16 +278,17 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	p2p := &P2PNode{
-		ctx:              ctx,
-		pubsub:           ps,
-		peerManager:      peerMgr,
-		requestManager:   requestManager.NewManager(),
-		cache:            initializeCaches(common.GenerateLocations(common.MaxRegions, common.MaxZones)),
-		quitCh:           quitCh,
-		cancel:           cancel,
-		host:             host,
-		dht:              dht,
-		bandwidthCounter: bwctr,
+		ctx:               ctx,
+		pubsub:            ps,
+		peerManager:       peerMgr,
+		requestManager:    requestManager.NewManager(),
+		cache:             initializeCaches(common.GenerateLocations(common.MaxRegions, common.MaxZones)),
+		quitCh:            quitCh,
+		cancel:            cancel,
+		host:              host,
+		dht:               dht,
+		bandwidthCounter:  bwctr,
+		peerTimeoutStreak: make(map[peer.ID]int),
 	}
 
 	sm, err := streamManager.NewStreamManager(p2p, host)

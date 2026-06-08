@@ -1675,6 +1675,18 @@ func (hc *HeaderChain) GetBlockOrCandidateByHash(hash common.Hash) *types.WorkOb
 	return hc.bc.GetBlockOrCandidate(hash, *number)
 }
 
+// GetBlocksOrCandidatesByNumber retrieves all known canonical or noncanonical blocks at a height.
+func (hc *HeaderChain) GetBlocksOrCandidatesByNumber(number uint64) []*types.WorkObject {
+	hashes := rawdb.ReadAllHashes(hc.headerDb, number)
+	blocks := make([]*types.WorkObject, 0, len(hashes))
+	for _, hash := range hashes {
+		if block := hc.bc.GetBlockOrCandidate(hash, number); block != nil {
+			blocks = append(blocks, block)
+		}
+	}
+	return blocks
+}
+
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.WorkObject {

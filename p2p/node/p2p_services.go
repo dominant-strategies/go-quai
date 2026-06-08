@@ -13,13 +13,14 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
-	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 )
+
+var errPeerRequestTimeout = errors.New("peer did not respond in time")
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
 func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}) (interface{}, error) {
@@ -79,16 +80,14 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 		log.Global.WithFields(log.Fields{
 			"requestID": id,
 			"peerId":    peerID,
-		}).Info("Success Peer did not respond in time")
-		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
-		return nil, errors.New("peer did not respond in time")
+		}).Warn("Peer did not respond in time")
+		_ = p.peerManager.CloseStream(peerID)
+		return nil, errPeerRequestTimeout
 	}
 
 	if recvdType == nil {
-		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnNack)
+		p.markPeerRequestNack(peerID, topic.String())
 		return nil, nil
-	} else {
-		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnResponse)
 	}
 
 	// Check the received data type & hash matches the request
@@ -102,10 +101,12 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 			// Finally, BlockView and HeaderView have different hash functions
 			case *types.WorkObjectBlockView:
 				if reqData == recvdType.Hash() {
+					p.markPeerRequestSuccess(peerID, topic.String())
 					return recvdType, nil
 				}
 			case *types.WorkObjectHeaderView:
 				if reqData == recvdType.Hash() {
+					p.markPeerRequestSuccess(peerID, topic.String())
 					return recvdType, nil
 				}
 			default:
@@ -118,13 +119,16 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 			switch block := recvdType.(type) {
 			case *types.WorkObjectBlockView:
 				if block.Number(nodeCtx).Cmp(reqData) == 0 {
+					p.markPeerRequestSuccess(peerID, topic.String())
 					return recvdType, nil
 				}
 			case *types.WorkObjectHeaderView:
 				if block.Number(nodeCtx).Cmp(reqData) == 0 {
+					p.markPeerRequestSuccess(peerID, topic.String())
 					return recvdType, nil
 				}
 			case []*types.WorkObjectBlockView:
+				p.markPeerRequestSuccess(peerID, topic.String())
 				return recvdType, nil
 			default:
 				return nil, errors.New("invalid response")
@@ -134,6 +138,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 		return nil, errors.New("block request invalid response")
 	case common.Hash:
 		if hash, ok := recvdType.(common.Hash); ok {
+			p.markPeerRequestSuccess(peerID, topic.String())
 			return hash, nil
 		}
 	default:

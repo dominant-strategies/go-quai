@@ -71,6 +71,14 @@ func (t *Topic) GetRequestDegree() int {
 	return t.requestDegree
 }
 
+func (t *Topic) WithRequestDegree(requestDegree int) *Topic {
+	topic := *t
+	if requestDegree > 0 {
+		topic.requestDegree = requestDegree
+	}
+	return &topic
+}
+
 // gets the name of the topic for the given type of data
 func NewTopic(genesis common.Hash, location common.Location, data interface{}) (*Topic, error) {
 	var requestDegree int

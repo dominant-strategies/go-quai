@@ -52,6 +52,10 @@ const (
 	c_minResponsivePeersFromDb = 3
 	// c_minLastResortPeersFromDb is the number of peers we want to randomly read from the db
 	c_minLastResortPeersFromDb = 1
+	// c_minFreshPeersFromDHT is the number of DHT providers mixed into requests
+	// even when the local peer DB is full. This keeps catch-up from repeatedly
+	// hitting stale stream-cache peers.
+	c_minFreshPeersFromDHT = 2
 
 	// c_maxBootNodes is the maximum number of bootnodes to connect to when bootstrapping
 	c_maxBootNodes = 10
@@ -478,6 +482,7 @@ func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]
 		// There have not been any peers added to this topic
 		return make(map[peer.ID]struct{})
 	}
+	requestDegree := topic.GetRequestDegree()
 	peerList := make(map[p2p.PeerID]struct{})
 	// Add best peers into the peerList
 	bestPeers := pm.getBestPeers(topic.String())
@@ -485,15 +490,24 @@ func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]
 	// Add responsive peers into the peerList
 	responsivePeers := pm.getResponsivePeers(topic.String())
 	maps.Copy(peerList, responsivePeers)
-	// Add last resort peers into the peerList
-	lastResortPeers := pm.getLastResortPeers(topic.String())
-	maps.Copy(peerList, lastResortPeers)
+
+	freshPeerCount := c_minFreshPeersFromDHT
+	if freshPeerCount > requestDegree {
+		freshPeerCount = requestDegree
+	}
+	pm.queryDHT(topic, peerList, freshPeerCount)
+
+	if len(peerList) < requestDegree {
+		// Add last resort peers only when best/responsive/DHT peers are not enough.
+		lastResortPeers := pm.getLastResortPeers(topic.String())
+		maps.Copy(peerList, lastResortPeers)
+	}
 
 	// Randomly select request degree number of peers from the peerList
 	lenPeer := len(peerList)
 	// If we have more peers than the request degree, randomly select peers and
 	// return, otherwise ask the dht for the extra required peers
-	if lenPeer >= topic.GetRequestDegree() {
+	if lenPeer >= requestDegree {
 		peers := make([]p2p.PeerID, 0)
 		for peer, _ := range peerList {
 			peers = append(peers, peer)
@@ -503,7 +517,7 @@ func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]
 		})
 
 		randomPeers := make(map[p2p.PeerID]struct{})
-		for _, peer := range peers[:topic.GetRequestDegree()] {
+		for _, peer := range peers[:requestDegree] {
 			randomPeers[peer] = struct{}{}
 		}
 
@@ -511,7 +525,7 @@ func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]
 	}
 
 	// Query the DHT for more peers
-	return pm.queryDHT(topic, peerList, topic.GetRequestDegree()-lenPeer)
+	return pm.queryDHT(topic, peerList, requestDegree-lenPeer)
 }
 
 func (pm *BasicPeerManager) GetStreamPeers() []peer.ID {
@@ -519,19 +533,22 @@ func (pm *BasicPeerManager) GetStreamPeers() []peer.ID {
 }
 
 func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2p.PeerID]struct{}, peerCount int) map[p2p.PeerID]struct{} {
+	if pm.dht == nil || peerCount <= 0 {
+		return peerList
+	}
 	// create a Cid from the slice location
 	shardCid := pubsubManager.TopicToCid(topic)
 
 	// Internal list of peers from the dht
 	dhtPeers := make(map[p2p.PeerID]struct{})
-	log.Global.Infof("Querying DHT for slice Cid %s", shardCid)
+	log.Global.Debugf("Querying DHT for slice Cid %s", shardCid)
 	// query the DHT for peers in the slice
 	for peer := range pm.dht.FindProvidersAsync(pm.ctx, shardCid, peerCount) {
 		if peer.ID != pm.selfID {
 			dhtPeers[peer.ID] = struct{}{}
 		}
 	}
-	log.Global.Info("Found the following peers from the DHT: ", dhtPeers)
+	log.Global.Debug("Found the following peers from the DHT: ", dhtPeers)
 	maps.Copy(peerList, dhtPeers)
 	return peerList
 }
@@ -545,14 +562,14 @@ func (pm *BasicPeerManager) getBestPeers(topic string) map[p2p.PeerID]struct{} {
 
 func (pm *BasicPeerManager) getResponsivePeers(topic string) map[p2p.PeerID]struct{} {
 	if db, ok := pm.peerDBs[topic]; ok {
-		return pm.getPeersHelper(db[Responsive], c_minBestPeersFromDb)
+		return pm.getPeersHelper(db[Responsive], c_minResponsivePeersFromDb)
 	}
 	return make(map[peer.ID]struct{})
 }
 
 func (pm *BasicPeerManager) getLastResortPeers(topic string) map[p2p.PeerID]struct{} {
 	if db, ok := pm.peerDBs[topic]; ok {
-		return pm.getPeersHelper(db[LastResort], c_minBestPeersFromDb)
+		return pm.getPeersHelper(db[LastResort], c_minLastResortPeersFromDb)
 	}
 	return make(map[peer.ID]struct{})
 }

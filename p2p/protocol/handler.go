@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"runtime/debug"
@@ -60,18 +61,18 @@ func ProcRequestRate(peerId peer.ID, inbound bool) error {
 	if tracker, exists := (*rateTrackers)[peerId]; exists {
 		t_now := time.Now()
 		dt_ms := t_now.UnixMilli() - tracker.last.UnixMilli()
-		avg_period := ((100-rateFilterAlphaPct)*tracker.avg_period + (rateFilterAlphaPct*dt_ms)/100)
+		avg_period := ((100-rateFilterAlphaPct)*tracker.avg_period + rateFilterAlphaPct*dt_ms) / 100
 		if inbound {
 			// inbound rate always updates, because request has already arrived
 			tracker.avg_period = avg_period
 			tracker.last = t_now
 		}
-		minPeriod := requestRateLimitPeriod_ms
+		minPeriod := int64(requestRateLimitPeriod_ms)
 		if !inbound {
 			// Conservatively rate limit ourselves, to avoid tripping our peers rate limit
 			minPeriod /= 2
 		}
-		if avg_period < requestRateLimitPeriod_ms {
+		if avg_period < minPeriod {
 			return errors.New("peer exceeded request rate limit")
 		} else {
 			// since outbound requests wont be sent if the limit is exceeded, only update the outbound rate if there is no error
@@ -297,7 +298,14 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			requestedHash = node.GetBlockHashByNumber(number, loc)
 			if requestedHash == nil {
 				log.Global.Debugf("block hash not found for block %s and location %s", number.String(), loc.Name())
-				// TODO: handle error
+				err = handleMissingBlockRequest(id, loc, stream, node, requestedView)
+				if err != nil {
+					log.Global.WithFields(
+						logrus.Fields{
+							"peer": stream.Conn().RemotePeer(),
+							"err":  err,
+						}).Error("error handling missing block request")
+				}
 				return
 			}
 			log.Global.Tracef("Found hash %s for block %s and location: %s", requestedHash, number.String(), loc.Name())
@@ -320,7 +328,14 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			messageMetrics.WithLabelValues("blocks").Inc()
 		}
 	case *common.Hash:
-		number := query.(*big.Int)
+		number, ok := query.(*big.Int)
+		if !ok {
+			log.Global.WithFields(log.Fields{
+				"requestID": id,
+				"queryType": fmt.Sprintf("%T", query),
+			}).Error("unsupported query type for block hash request")
+			return
+		}
 		err = handleBlockNumberRequest(id, loc, number, stream, node)
 		if err != nil {
 			log.Global.WithField("err", err).Error("error handling block number request")
@@ -356,6 +371,23 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 	case dataChan <- recvdType:
 	default:
 	}
+}
+
+func handleMissingBlockRequest(id uint32, loc common.Location, stream network.Stream, node QuaiP2PNode, view types.WorkObjectView) error {
+	var requestDataType interface{}
+	switch view {
+	case types.BlockObject:
+		requestDataType = &types.WorkObjectBlockView{}
+	case types.HeaderObject:
+		requestDataType = &types.WorkObjectHeaderView{}
+	case types.BlockObjects:
+		requestDataType = []*types.WorkObjectBlockView{}
+	}
+	data, err := pb.EncodeQuaiResponse(id, loc, requestDataType, nil)
+	if err != nil {
+		return err
+	}
+	return common.WriteMessageToStream(stream, data, ProtocolVersion, node.GetBandwidthCounter())
 }
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
