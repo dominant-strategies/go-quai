@@ -395,6 +395,9 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 		if err != nil {
 			return err
 		}
+		if len(qiTx.TxIn) == 0 {
+			return errors.New("QiTx must have at least one input")
+		}
 		qiTx.TxOut = TxOuts{}
 		err = qiTx.TxOut.ProtoDecode(protoTx.GetTxOuts())
 		if err != nil {
@@ -557,6 +560,9 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var wire WireQiTx
 		err := rlp.DecodeBytes(b[1:], &wire)
 		inner := wire.copyFromWire()
+		if err == nil && len(inner.TxIn) == 0 {
+			return nil, errors.New("QiTx must have at least one input")
+		}
 		return inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
@@ -733,6 +739,10 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 			h[3] &= 0x7F
 		}
 	case QiTxType:
+		if len(tx.TxIn()) == 0 {
+			tx.hash.Store(h)
+			return h
+		}
 		// the origin of this tx is the *destination* of the utxos being spent
 		origin := tx.TxIn()[0].PreviousOutPoint.TxHash[2]
 		h[0] = origin

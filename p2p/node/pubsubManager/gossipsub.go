@@ -267,7 +267,12 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			block := &types.WorkObjectBlockView{
 				WorkObject: &types.WorkObject{},
 			}
-			err = block.ProtoDecode(protoWo, protoWo.GetWorkObject().GetWoHeader().GetLocation().Value)
+			location, ok := protoWorkObjectLocation(protoWo.GetWorkObject())
+			if !ok {
+				log.Global.Error("missing work object location")
+				return pubsub.ValidationReject
+			}
+			err = block.ProtoDecode(protoWo, location)
 			if err != nil {
 				log.Global.WithField("err", err).Error("Error proto decode wo block view")
 				return pubsub.ValidationReject
@@ -316,7 +321,12 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 			block := &types.WorkObjectHeaderView{
 				WorkObject: &types.WorkObject{},
 			}
-			err = block.ProtoDecode(protoWo, protoWo.GetWorkObject().GetWoHeader().GetLocation().Value)
+			location, ok := protoWorkObjectLocation(protoWo.GetWorkObject())
+			if !ok {
+				log.Global.Error("missing work object location")
+				return pubsub.ValidationReject
+			}
+			err = block.ProtoDecode(protoWo, location)
 			if err != nil {
 				log.Global.WithField("err", err).Error("Error proto decode wo header view")
 				return pubsub.ValidationReject
@@ -364,7 +374,12 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				WorkObject: &types.WorkObject{},
 			}
 
-			err = block.ProtoDecode(protoWo, protoWo.GetWorkObject().GetWoHeader().GetLocation().Value)
+			location, ok := protoWorkObjectLocation(protoWo.GetWorkObject())
+			if !ok {
+				log.Global.Error("missing work object location")
+				return pubsub.ValidationReject
+			}
+			err = block.ProtoDecode(protoWo, location)
 			if err != nil {
 				log.Global.WithField("err", err).Error("Error proto decode proto wo share view")
 				return pubsub.ValidationReject
@@ -529,12 +544,24 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				var workShareTarget *big.Int
 				var shareDiff, currentHeaderShareDiff, thresholdShareDiff *big.Int
 				if block.WorkObject.AuxPow().PowID() == types.Scrypt {
+					if block.WorkObject.WorkObjectHeader().ScryptDiffAndCount() == nil ||
+						block.WorkObject.WorkObjectHeader().ScryptDiffAndCount().Difficulty() == nil ||
+						block.WorkObject.WorkObjectHeader().ScryptDiffAndCount().Difficulty().Sign() == 0 {
+						backend.Logger().Warn("Work share has invalid scrypt difficulty")
+						return pubsub.ValidationReject
+					}
 					workShareTarget = new(big.Int).Div(common.Big2e256, block.WorkObject.WorkObjectHeader().ScryptDiffAndCount().Difficulty())
 					powHash = block.WorkObject.AuxPow().Header().PowHash()
 					shareDiff = block.WorkObject.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
 					currentHeaderShareDiff = currentHeader.WorkObjectHeader().ScryptDiffAndCount().Difficulty()
 					thresholdShareDiff = new(big.Int).Div(new(big.Int).Mul(currentHeaderShareDiff, params.ShareDiffRelativeThreshold), big.NewInt(100))
 				} else {
+					if block.WorkObject.WorkObjectHeader().ShaDiffAndCount() == nil ||
+						block.WorkObject.WorkObjectHeader().ShaDiffAndCount().Difficulty() == nil ||
+						block.WorkObject.WorkObjectHeader().ShaDiffAndCount().Difficulty().Sign() == 0 {
+						backend.Logger().Warn("Work share has invalid sha difficulty")
+						return pubsub.ValidationReject
+					}
 					workShareTarget = new(big.Int).Div(common.Big2e256, block.WorkObject.WorkObjectHeader().ShaDiffAndCount().Difficulty())
 					powHash = block.WorkObject.AuxPow().Header().PowHash()
 					shareDiff = block.WorkObject.WorkObjectHeader().ShaDiffAndCount().Difficulty()
@@ -658,6 +685,13 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 		}
 		return pubsub.ValidationAccept
 	}
+}
+
+func protoWorkObjectLocation(protoWo *types.ProtoWorkObject) (common.Location, bool) {
+	if protoWo == nil || protoWo.GetWoHeader() == nil || protoWo.GetWoHeader().GetLocation() == nil {
+		return nil, false
+	}
+	return protoWo.GetWoHeader().GetLocation().GetValue(), true
 }
 
 // unsubscribe from broadcasts of the given type of data

@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"runtime/debug"
@@ -320,7 +321,15 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			messageMetrics.WithLabelValues("blocks").Inc()
 		}
 	case *common.Hash:
-		number := query.(*big.Int)
+		number, ok := query.(*big.Int)
+		if !ok {
+			log.Global.WithFields(log.Fields{
+				"requestID":   id,
+				"decodedType": decodedType,
+				"queryType":   fmt.Sprintf("%T", query),
+			}).Error("unsupported query type for block number request")
+			return
+		}
 		err = handleBlockNumberRequest(id, loc, number, stream, node)
 		if err != nil {
 			log.Global.WithField("err", err).Error("error handling block number request")

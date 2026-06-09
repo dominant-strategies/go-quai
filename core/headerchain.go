@@ -1195,6 +1195,9 @@ func (hc *HeaderChain) UncleWorkShareClassification(wo *types.WorkObjectHeader) 
 				return types.Block
 			}
 		case types.SHA_BCH, types.SHA_BTC:
+			if wo.ShaDiffAndCount() == nil || wo.ShaDiffAndCount().Difficulty() == nil || wo.ShaDiffAndCount().Difficulty().Sign() == 0 {
+				return types.Invalid
+			}
 			workShareTarget := new(big.Int).Div(common.Big2e256, wo.ShaDiffAndCount().Difficulty())
 			powHash := wo.AuxPow().Header().PowHash()
 			powHashBigInt := new(big.Int).SetBytes(powHash.Bytes())
@@ -1206,6 +1209,9 @@ func (hc *HeaderChain) UncleWorkShareClassification(wo *types.WorkObjectHeader) 
 
 		case types.Scrypt:
 
+			if wo.ScryptDiffAndCount() == nil || wo.ScryptDiffAndCount().Difficulty() == nil || wo.ScryptDiffAndCount().Difficulty().Sign() == 0 {
+				return types.Invalid
+			}
 			workShareTarget := new(big.Int).Div(common.Big2e256, wo.ScryptDiffAndCount().Difficulty())
 			powHash := wo.AuxPow().Header().PowHash()
 			powHashBigInt := new(big.Int).SetBytes(powHash.Bytes())

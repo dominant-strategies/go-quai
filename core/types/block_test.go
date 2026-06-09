@@ -31,6 +31,16 @@ func TestManifestEncodeDecode(t *testing.T) {
 	require.Equal(t, manifest, decodedManifest)
 }
 
+func TestHeaderProtoDecodeRejectsShortRepeatedFields(t *testing.T) {
+	header, _ := headerTestData()
+	protoHeader, err := header.ProtoEncode()
+	require.NoError(t, err)
+	protoHeader.ManifestHash = protoHeader.ManifestHash[:1]
+
+	var decoded Header
+	require.Error(t, decoded.ProtoDecode(protoHeader, common.Location{0, 0}))
+}
+
 func headerTestData() (*Header, common.Hash) {
 	header := &Header{
 		parentHash:               []common.Hash{common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"), common.HexToHash("0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0")},

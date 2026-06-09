@@ -2743,6 +2743,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if tx.Type() != types.QiTxType {
 		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
 	}
+	if len(tx.TxIn()) == 0 {
+		return errors.New("QiTx must have at least one input")
+	}
 	if types.IsCoinBaseTx(tx) {
 		return fmt.Errorf("tx %032x is a coinbase QiTx", tx.Hash())
 	}

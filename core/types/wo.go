@@ -1285,8 +1285,17 @@ func (wos *WorkObjectShareView) ProtoDecode(data *ProtoWorkObjectShareView, loca
 }
 
 func (wo *WorkObject) ProtoDecode(data *ProtoWorkObject, location common.Location, woType WorkObjectView) error {
+	if data == nil {
+		return errors.New("missing work object")
+	}
 	switch woType {
 	case PEtxObject:
+		if data.GetWoHeader() == nil {
+			return errors.New("missing work object header")
+		}
+		if data.GetWoBody() == nil || data.GetWoBody().Header == nil {
+			return errors.New("missing work object body header")
+		}
 		wo.woHeader = new(WorkObjectHeader)
 		err := wo.woHeader.ProtoDecode(data.GetWoHeader(), location)
 		if err != nil {
@@ -1294,7 +1303,9 @@ func (wo *WorkObject) ProtoDecode(data *ProtoWorkObject, location common.Locatio
 		}
 		wo.woBody = new(WorkObjectBody)
 		bodyHeader := new(Header)
-		bodyHeader.ProtoDecode(data.GetWoBody().Header, location)
+		if err := bodyHeader.ProtoDecode(data.GetWoBody().Header, location); err != nil {
+			return err
+		}
 		wo.woBody.SetHeader(bodyHeader)
 	default:
 		wo.woHeader = new(WorkObjectHeader)
@@ -1582,7 +1593,7 @@ func (wh *WorkObjectHeader) ProtoEncode() (*ProtoWorkObjectHeader, error) {
 }
 
 func (wh *WorkObjectHeader) ProtoDecode(data *ProtoWorkObjectHeader, location common.Location) error {
-	if data.HeaderHash == nil || data.ParentHash == nil || data.Number == nil || data.Difficulty == nil || data.PrimeTerminusNumber == nil || data.TxHash == nil || data.Nonce == nil || data.Location == nil || data.Time == nil || data.PrimaryCoinbase == nil {
+	if data == nil || data.HeaderHash == nil || data.ParentHash == nil || data.Number == nil || data.Difficulty == nil || data.PrimeTerminusNumber == nil || data.TxHash == nil || data.Nonce == nil || data.Location == nil || data.MixHash == nil || data.Time == nil || data.PrimaryCoinbase == nil {
 		err := errors.New("failed to decode work object header")
 		return err
 	}
@@ -1595,7 +1606,7 @@ func (wh *WorkObjectHeader) ProtoDecode(data *ProtoWorkObjectHeader, location co
 	wh.SetNonce(uint64ToByteArr(data.GetNonce()))
 	wh.SetLock(uint8(data.GetLock()))
 	wh.SetLocation(data.GetLocation().GetValue())
-	wh.SetMixHash(common.BytesToHash(data.GetMixHash().Value))
+	wh.SetMixHash(common.BytesToHash(data.GetMixHash().GetValue()))
 	wh.SetTime(data.GetTime())
 	wh.SetPrimaryCoinbase(common.BytesToAddress(data.GetPrimaryCoinbase().GetValue(), location))
 	wh.SetData(data.GetData())

@@ -140,6 +140,18 @@ func TestPubsubManager(t *testing.T) {
 	ps.Stop()
 }
 
+func TestProtoWorkObjectLocationRejectsMissingLocation(t *testing.T) {
+	location, ok := protoWorkObjectLocation(&types.ProtoWorkObject{})
+	require.False(t, ok)
+	require.Nil(t, location)
+
+	location, ok = protoWorkObjectLocation(&types.ProtoWorkObject{
+		WoHeader: &types.ProtoWorkObjectHeader{},
+	})
+	require.False(t, ok)
+	require.Nil(t, location)
+}
+
 func TestMultipleRequests(t *testing.T) {
 	// Number of requests to test
 	n := 100
