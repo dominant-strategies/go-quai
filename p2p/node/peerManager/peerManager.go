@@ -191,7 +191,7 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 				log.Global.WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		q := query.Query{}
@@ -575,7 +575,11 @@ func (pm *BasicPeerManager) GetPeerQuality(peer p2p.PeerID) int {
 
 // Peers will be divided into three buckets (good, bad, ugly) based on their quality score
 func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID, topic string) error {
-	peerQuality := pm.GetTagInfo(peerID).Tags["quality"]
+	peerInfo := pm.GetTagInfo(peerID)
+	if peerInfo == nil {
+		return nil
+	}
+	peerQuality := peerInfo.Tags["quality"]
 	topics := pm.getPeerTopics(peerID)
 	topics[topic] = struct{}{}
 
@@ -687,7 +691,7 @@ func (pm *BasicPeerManager) Stop() error {
 					log.Global.WithFields(log.Fields{
 						"error":      r,
 						"stacktrace": string(debug.Stack()),
-					}).Fatal("Go-Quai Panicked")
+					}).Error("Go-Quai Panicked")
 				}
 			}()
 			defer wg.Done()
@@ -708,7 +712,7 @@ func (pm *BasicPeerManager) Stop() error {
 						log.Global.WithFields(log.Fields{
 							"error":      r,
 							"stacktrace": string(debug.Stack()),
-						}).Fatal("Go-Quai Panicked")
+						}).Error("Go-Quai Panicked")
 					}
 				}()
 				defer wg.Done()

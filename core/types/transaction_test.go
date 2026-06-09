@@ -100,6 +100,27 @@ func TestTransactionProtoEncodeDecode(t *testing.T) {
 	require.Equal(t, originalTxHash, decodedTxHash)
 }
 
+func TestQiTxProtoDecodeRejectsZeroInputs(t *testing.T) {
+	tx := QiTxData()
+	protoTx, err := tx.ProtoEncode()
+	require.NoError(t, err)
+	protoTx.TxIns.TxIns = nil
+
+	var decoded Transaction
+	require.Error(t, decoded.ProtoDecode(protoTx, common.Location{0, 0}))
+}
+
+func TestQiTxHashDoesNotPanicWithZeroInputs(t *testing.T) {
+	tx := NewTx(&QiTx{
+		ChainID: big.NewInt(1337),
+		TxOut:   QiTxData().TxOut(),
+	})
+
+	require.NotPanics(t, func() {
+		_ = tx.Hash()
+	})
+}
+
 func TestUTXOTransactionEncode(t *testing.T) {
 	// Create a new transaction
 	tx := QiTxData()

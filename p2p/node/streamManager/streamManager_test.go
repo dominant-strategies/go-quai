@@ -143,6 +143,9 @@ func TestWriteMessageToStream(t *testing.T) {
 		sm.streamCache.Add(peerID, wrappedStream)
 		err := sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, nil)
 		require.ErrorIs(t, err, ErrorTooManyPendingRequests, "Expected error when too many pending requests")
+		updatedStream, found := sm.streamCache.Get(peerID)
+		require.True(t, found)
+		require.Equal(t, 1, updatedStream.errCount)
 
 		// errCount is maxed out so it should close stream
 		wrappedStream.errCount = c_maxPendingRequests
@@ -194,6 +197,41 @@ func TestWriteMessageToStream(t *testing.T) {
 		err = sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, mockReporter)
 		require.NoError(t, err, "Expected no error when writing message to stream")
 	})
+}
+
+func TestOpenStreamClosesDuplicateStream(t *testing.T) {
+	ctrl, mockNode, mockHost, sm := setup(t)
+	defer ctrl.Finish()
+	defer sm.Stop()
+
+	peerID := peer.ID("duplicate-peer")
+	existingStream := mock_p2p.NewMockStream(ctrl)
+	duplicateStream := mock_p2p.NewMockStream(ctrl)
+	mockConn := mock_p2p.NewMockConn(ctrl)
+	_, cancelFunc := context.WithCancel(context.Background())
+
+	mockHost.EXPECT().ID().Return(peerID).Times(1)
+	mockHost.EXPECT().NewStream(gomock.Any(), peerID, gomock.Any()).DoAndReturn(func(context.Context, peer.ID, ...interface{}) (interface{}, error) {
+		sm.streamCache.Add(peerID, streamWrapper{
+			stream:                existingStream,
+			cancelProtocolHandler: cancelFunc,
+			semaphore:             make(chan struct{}, c_maxPendingRequests),
+		})
+		return duplicateStream, nil
+	}).Times(1)
+	duplicateStream.EXPECT().Close().Return(nil).Times(1)
+
+	mockNode.EXPECT().GetBandwidthCounter().Return(nil).AnyTimes()
+	existingStream.EXPECT().Close().Return(nil).AnyTimes()
+	existingStream.EXPECT().Conn().Return(mockConn).AnyTimes()
+	existingStream.EXPECT().Protocol().Return(protocol.ProtocolVersion).AnyTimes()
+	existingStream.EXPECT().Read(gomock.Any()).Return(0, nil).AnyTimes()
+	mockConn.EXPECT().RemotePeer().Return(peerID).AnyTimes()
+
+	require.NoError(t, sm.OpenStream(mockHost.ID()))
+	got, err := sm.GetStream(peerID)
+	require.NoError(t, err)
+	require.Equal(t, existingStream, got)
 }
 
 func TestCloseStreamClosesUnderlyingStreamOnce(t *testing.T) {

@@ -137,7 +137,7 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	for {
@@ -158,9 +158,12 @@ func (sm *basicStreamManager) listenForNewStreamRequest() {
 
 func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 	// Check if there is an existing stream
+	sm.mu.Lock()
 	if _, ok := sm.streamCache.Get(peerID); ok {
+		sm.mu.Unlock()
 		return nil
 	}
+	sm.mu.Unlock()
 
 	streamCtx, streamCancel := context.WithTimeout(sm.ctx, c_stream_timeout)
 	defer streamCancel()
@@ -182,7 +185,14 @@ func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 		semaphore:             make(chan struct{}, c_maxPendingRequests),
 		errCount:              0,
 	}
+	sm.mu.Lock()
+	if _, ok := sm.streamCache.Get(peerID); ok {
+		sm.mu.Unlock()
+		handlerCancel()
+		return stream.Close()
+	}
 	sm.streamCache.Add(peerID, wrappedStream)
+	sm.mu.Unlock()
 
 	go quaiprotocol.QuaiProtocolHandler(handlerCtx, stream, sm.p2pBackend)
 	log.Global.WithField("PeerID", peerID).Info("Had to create new stream")
@@ -262,6 +272,7 @@ func (sm *basicStreamManager) WriteMessageToStream(peerID p2p.PeerID, stream net
 			sm.CloseStream(peerID)
 			return ErrorTooManyPendingRequests
 		}
+		sm.streamCache.Add(peerID, wrappedStream)
 		return ErrorTooManyPendingRequests
 	}
 	defer func() {

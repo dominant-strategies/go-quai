@@ -2452,8 +2452,14 @@ func (sl *Slice) ReceiveWorkShare(workShare *types.WorkObjectHeader) (shareView 
 
 				var workShareTarget *big.Int
 				if workShare.AuxPow().PowID() == types.Scrypt {
+					if workShare.ScryptDiffAndCount() == nil || workShare.ScryptDiffAndCount().Difficulty() == nil || workShare.ScryptDiffAndCount().Difficulty().Sign() == 0 {
+						return nil, false, false, errors.New("workshare has invalid scrypt difficulty")
+					}
 					workShareTarget = new(big.Int).Div(common.Big2e256, workShare.ScryptDiffAndCount().Difficulty())
 				} else {
+					if workShare.ShaDiffAndCount() == nil || workShare.ShaDiffAndCount().Difficulty() == nil || workShare.ShaDiffAndCount().Difficulty().Sign() == 0 {
+						return nil, false, false, errors.New("workshare has invalid sha difficulty")
+					}
 					workShareTarget = new(big.Int).Div(common.Big2e256, workShare.ShaDiffAndCount().Difficulty())
 				}
 				powHash := workShare.AuxPow().Header().PowHash()

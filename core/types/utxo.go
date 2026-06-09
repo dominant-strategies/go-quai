@@ -76,6 +76,9 @@ func (txIns TxIns) ProtoEncode() (*ProtoTxIns, error) {
 }
 
 func (txIns *TxIns) ProtoDecode(protoTxIns *ProtoTxIns) error {
+	if protoTxIns == nil {
+		return errors.New("missing tx inputs")
+	}
 	for _, protoTxIn := range protoTxIns.TxIns {
 		decodedTxIn := &TxIn{}
 		err := decodedTxIn.ProtoDecode(protoTxIn)
@@ -182,6 +185,15 @@ func (outPoint OutPoint) ProtoEncode() (*ProtoOutPoint, error) {
 }
 
 func (outPoint *OutPoint) ProtoDecode(protoOutPoint *ProtoOutPoint) error {
+	if protoOutPoint == nil {
+		return errors.New("missing outpoint")
+	}
+	if protoOutPoint.Hash == nil {
+		return errors.New("missing outpoint hash")
+	}
+	if protoOutPoint.Index == nil {
+		return errors.New("missing outpoint index")
+	}
 	outPoint.TxHash.ProtoDecode(protoOutPoint.Hash)
 	outPoint.Index = uint16(*protoOutPoint.Index)
 	return nil
@@ -246,6 +258,18 @@ func (outPoint OutpointAndDenomination) ProtoEncode() (*ProtoOutPointAndDenomina
 }
 
 func (outPoint *OutpointAndDenomination) ProtoDecode(protoOutPoint *ProtoOutPointAndDenomination) error {
+	if protoOutPoint == nil {
+		return errors.New("missing outpoint and denomination")
+	}
+	if protoOutPoint.Hash == nil {
+		return errors.New("missing outpoint hash")
+	}
+	if protoOutPoint.Index == nil {
+		return errors.New("missing outpoint index")
+	}
+	if protoOutPoint.Denomination == nil {
+		return errors.New("missing outpoint denomination")
+	}
 	outPoint.TxHash.ProtoDecode(protoOutPoint.Hash)
 	outPoint.Index = uint16(*protoOutPoint.Index)
 	outPoint.Denomination = uint8(*protoOutPoint.Denomination)

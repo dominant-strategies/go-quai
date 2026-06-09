@@ -216,7 +216,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	var recvd interface{}

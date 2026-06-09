@@ -306,6 +306,9 @@ func (h *Header) ProtoEncode() (*ProtoHeader, error) {
 
 // ProtoDecode deserializes the ProtoHeader into the Header format
 func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location) error {
+	if protoHeader == nil {
+		return errors.New("missing header")
+	}
 	if protoHeader.ParentHash == nil {
 		return errors.New("missing required field 'ParentHash' in Header")
 	}
@@ -398,6 +401,34 @@ func (h *Header) ProtoDecode(protoHeader *ProtoHeader, location common.Location)
 	}
 	if protoHeader.RegionStateRoot == nil {
 		return errors.New("missing required field 'RegionStateRoot' in Header")
+	}
+	if len(protoHeader.GetManifestHash()) != common.HierarchyDepth {
+		return fmt.Errorf("invalid manifest_hash length: have %d, want %d", len(protoHeader.GetManifestHash()), common.HierarchyDepth)
+	}
+	if len(protoHeader.GetParentEntropy()) != common.HierarchyDepth {
+		return fmt.Errorf("invalid parent_entropy length: have %d, want %d", len(protoHeader.GetParentEntropy()), common.HierarchyDepth)
+	}
+	if len(protoHeader.GetParentDeltaEntropy()) != common.HierarchyDepth {
+		return fmt.Errorf("invalid parent_delta_entropy length: have %d, want %d", len(protoHeader.GetParentDeltaEntropy()), common.HierarchyDepth)
+	}
+	if len(protoHeader.GetParentUncledDeltaEntropy()) != common.HierarchyDepth {
+		return fmt.Errorf("invalid parent_uncled_delta_entropy length: have %d, want %d", len(protoHeader.GetParentUncledDeltaEntropy()), common.HierarchyDepth)
+	}
+	if len(protoHeader.GetNumber()) != common.HierarchyDepth-1 {
+		return fmt.Errorf("invalid number length: have %d, want %d", len(protoHeader.GetNumber()), common.HierarchyDepth-1)
+	}
+	if len(protoHeader.GetParentHash()) != common.HierarchyDepth-1 {
+		return fmt.Errorf("invalid parent_hash length: have %d, want %d", len(protoHeader.GetParentHash()), common.HierarchyDepth-1)
+	}
+	for i := 0; i < common.HierarchyDepth; i++ {
+		if protoHeader.GetManifestHash()[i] == nil {
+			return fmt.Errorf("missing manifest_hash at index %d", i)
+		}
+	}
+	for i := 0; i < common.HierarchyDepth-1; i++ {
+		if protoHeader.GetParentHash()[i] == nil {
+			return fmt.Errorf("missing parent_hash at index %d", i)
+		}
 	}
 
 	// Initialize the array fields before setting

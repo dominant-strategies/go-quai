@@ -17,6 +17,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/crypto/multiset"
+	"github.com/stretchr/testify/require"
 )
 
 type KeyAggVectors struct {
@@ -807,6 +808,24 @@ func TestTxInProtoDecode(t *testing.T) {
 					t.Errorf("Unexpected public key. Got: %s, Want: %s", gotPubKey, tt.wantPubKey)
 				}
 			}
+		})
+	}
+}
+
+func TestOutPointProtoDecodeRejectsMissingFields(t *testing.T) {
+	tests := []struct {
+		name string
+		in   *ProtoOutPoint
+	}{
+		{"nil outpoint", nil},
+		{"missing hash", &ProtoOutPoint{Index: new(uint32)}},
+		{"missing index", &ProtoOutPoint{Hash: &common.ProtoHash{Value: make([]byte, 32)}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var outPoint OutPoint
+			require.Error(t, outPoint.ProtoDecode(tt.in))
 		})
 	}
 }

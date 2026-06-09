@@ -1575,6 +1575,9 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 	if tx.Type() != types.QiTxType {
 		return nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
 	}
+	if len(tx.TxIn()) == 0 {
+		return nil, errors.New("QiTx must have at least one input")
+	}
 	if tx.ChainId().Cmp(signer.ChainID()) != 0 {
 		return nil, fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
@@ -1835,6 +1838,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	// Sanity checks
 	if tx == nil || tx.Type() != types.QiTxType {
 		return nil, nil, nil, fmt.Errorf("tx %032x is not a QiTx", tx.Hash()), nil
+	}
+	if len(tx.TxIn()) == 0 {
+		return nil, nil, nil, errors.New("QiTx must have at least one input"), nil
 	}
 	if tx.ChainId().Cmp(&chainId) != 0 {
 		return nil, nil, nil, fmt.Errorf("tx %032x has invalid chain ID", tx.Hash()), nil

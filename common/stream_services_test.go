@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/binary"
 	"fmt"
 	"testing"
 
@@ -92,6 +93,21 @@ func TestWriteMessageToStream(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReadMessageFromStreamRejectsOversizedMessage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStream := mock_p2p.NewMockStream(ctrl)
+	mockStream.EXPECT().Read(gomock.Any()).DoAndReturn(func(b []byte) (int, error) {
+		binary.BigEndian.PutUint32(b, MaxStreamMessageSize+1)
+		return 4, nil
+	}).Times(1)
+
+	got, err := ReadMessageFromStream(mockStream, "testproto", nil)
+	assert.Error(t, err)
+	assert.Nil(t, got)
 }
 
 func TestReadMessageFromStream(t *testing.T) {

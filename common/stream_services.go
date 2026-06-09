@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"time"
 
@@ -15,6 +16,9 @@ const (
 	// timeout in seconds before a read/write operation on the stream is considered failed
 	// TODO: consider making this dynamic based on the network latency
 	c_stream_write_deadline = 10 * time.Second
+
+	// MaxStreamMessageSize matches the gossipsub packet cap without importing params into common.
+	MaxStreamMessageSize = 3 << 20
 )
 
 // Reads the message from the stream and returns a byte of data.
@@ -25,6 +29,9 @@ func ReadMessageFromStream(stream network.Stream, protoversion protocol.ID, repo
 		return nil, errors.Wrap(err, "failed to read message length")
 	}
 	msgLen := binary.BigEndian.Uint32(lenBytes)
+	if msgLen > MaxStreamMessageSize {
+		return nil, fmt.Errorf("message length %d exceeds max stream message size %d", msgLen, MaxStreamMessageSize)
+	}
 
 	// Now read the message
 	data := make([]byte, msgLen)
