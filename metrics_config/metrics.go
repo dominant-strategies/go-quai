@@ -54,7 +54,7 @@ func StartProcessMetrics() {
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	// Short circuit if the metrics system is disabled

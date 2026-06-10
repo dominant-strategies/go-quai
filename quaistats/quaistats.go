@@ -495,7 +495,7 @@ func (s *Service) handleBlock(block *types.WorkObject) {
 			s.backend.Logger().WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	// Cache Block

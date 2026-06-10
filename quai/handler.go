@@ -98,7 +98,7 @@ func (h *handler) missingBlockLoop() {
 			h.logger.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	defer h.wg.Done()
@@ -117,7 +117,7 @@ func (h *handler) missingBlockLoop() {
 			// is getting fetched with the current header entropy
 			currentHeader := h.core.CurrentHeader()
 
-			if !h.core.IsGenesisHash(currentHeader.Hash()) && currentHeader != nil && currentHeader.NumberU64(common.ZONE_CTX) > params.MaxCodeSizeForkHeight {
+			if currentHeader != nil && !h.core.IsGenesisHash(currentHeader.Hash()) && currentHeader.NumberU64(common.ZONE_CTX) > params.MaxCodeSizeForkHeight {
 				currentHeaderPowHash, err := h.core.VerifySeal(currentHeader.WorkObjectHeader())
 				if err != nil {
 					continue
@@ -147,7 +147,7 @@ func (h *handler) missingBlockLoop() {
 						h.logger.WithFields(log.Fields{
 							"error":      r,
 							"stacktrace": string(debug.Stack()),
-						}).Fatal("Go-Quai Panicked")
+						}).Error("Go-Quai Panicked")
 					}
 				}()
 				if !h.core.ProcessingState() && h.nodeLocation.Context() == common.ZONE_CTX {
@@ -180,7 +180,7 @@ func (h *handler) checkNextPrimeBlock() {
 			h.logger.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	defer h.wg.Done()
@@ -198,7 +198,7 @@ func (h *handler) checkNextPrimeBlock() {
 						h.logger.WithFields(log.Fields{
 							"error":      r,
 							"stacktrace": string(debug.Stack()),
-						}).Fatal("Go-Quai Panicked")
+						}).Error("Go-Quai Panicked")
 					}
 				}()
 				defer h.wg.Done()
