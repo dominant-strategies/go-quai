@@ -1,6 +1,7 @@
 package peerdb
 
 import (
+	"errors"
 	sync "sync"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -43,6 +44,9 @@ func (pi *PeerInfo) ProtoEncode() *ProtoPeerInfo {
 }
 
 func (pi *PeerInfo) ProtoDecode(ppi *ProtoPeerInfo) error {
+	if ppi == nil {
+		return errors.New("missing peer info")
+	}
 	pi.PubKey = ppi.PubKey
 	pi.Entropy = ppi.Entropy
 	pi.Protected = ppi.Protected
@@ -62,6 +66,9 @@ func (addr *AddrInfo) ProtoEncode() *ProtoAddrInfo {
 }
 
 func (addr *AddrInfo) ProtoDecode(protoAddr *ProtoAddrInfo) error {
+	if protoAddr == nil {
+		return errors.New("missing peer address info")
+	}
 	addr.ID = peer.ID(protoAddr.ID)
 	for _, address := range protoAddr.Addrs {
 		ma, err := multiaddr.NewMultiaddr(address)

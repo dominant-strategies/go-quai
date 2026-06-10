@@ -51,3 +51,13 @@ func TestEncodeDecodeRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeQuaiRequestRejectsNil(t *testing.T) {
+	_, _, _, _, err := DecodeQuaiRequest(nil)
+	require.Error(t, err)
+}
+
+func TestDecodeQuaiResponseRejectsNil(t *testing.T) {
+	_, _, err := DecodeQuaiResponse(nil)
+	require.Error(t, err)
+}

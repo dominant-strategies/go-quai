@@ -1755,6 +1755,9 @@ func (wb *WorkObjectBody) ProtoEncode(woType WorkObjectView) (*ProtoWorkObjectBo
 }
 
 func (wb *WorkObjectBody) ProtoDecode(data *ProtoWorkObjectBody, location common.Location, woType WorkObjectView) error {
+	if data == nil {
+		return errors.New("missing work object body")
+	}
 	var err error
 	switch woType {
 	case WorkShareObject:
@@ -1826,6 +1829,9 @@ func (wb *WorkObjectBody) ProtoDecode(data *ProtoWorkObjectBody, location common
 }
 
 func (wb *WorkObjectBody) ProtoDecodeHeader(data *ProtoWorkObjectBody, location common.Location) error {
+	if data == nil {
+		return errors.New("missing work object body")
+	}
 	wb.header = &Header{}
 	return wb.header.ProtoDecode(data.GetHeader(), location)
 }

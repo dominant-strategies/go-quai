@@ -65,6 +65,9 @@ func EncodeQuaiRequest(id uint32, location common.Location, reqData interface{},
 //  4. The request data
 //  5. An error
 func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.Location, interface{}, error) {
+	if reqMsg == nil {
+		return 0, nil, common.Location{}, nil, errors.New("missing request")
+	}
 	location := &common.Location{}
 	location.ProtoDecode(reqMsg.Location)
 
@@ -171,6 +174,9 @@ func EncodeQuaiResponse(id uint32, location common.Location, respDataType interf
 //  2. The decoded type (i.e. *types.Header, *types.Block, etc)
 //  3. An error
 func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, error) {
+	if respMsg == nil {
+		return 0, nil, errors.New("missing response")
+	}
 	id := respMsg.Id
 	sourceLocation := &common.Location{}
 	sourceLocation.ProtoDecode(respMsg.Location)

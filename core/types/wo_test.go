@@ -353,6 +353,12 @@ func TestWorkObjectProtoDecodePEtxRejectsMissingBodyHeader(t *testing.T) {
 	require.Error(t, decoded.ProtoDecode(protoWo, common.Location{0, 0}, PEtxObject))
 }
 
+func TestWorkObjectBodyProtoDecodeRejectsMissingBody(t *testing.T) {
+	var decoded WorkObjectBody
+	require.Error(t, decoded.ProtoDecode(nil, common.Location{0, 0}, BlockObject))
+	require.Error(t, decoded.ProtoDecodeHeader(nil, common.Location{0, 0}))
+}
+
 func TestCopyWorkObject(t *testing.T) {
 	originalWo, expectedHash := woTestData()
 

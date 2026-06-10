@@ -830,6 +830,36 @@ func TestOutPointProtoDecodeRejectsMissingFields(t *testing.T) {
 	}
 }
 
+func TestQiUtxoProtoDecodeRejectsMissingObjects(t *testing.T) {
+	t.Run("tx input", func(t *testing.T) {
+		var txIn TxIn
+		require.Error(t, txIn.ProtoDecode(nil))
+	})
+
+	t.Run("tx outputs", func(t *testing.T) {
+		var txOuts TxOuts
+		require.Error(t, txOuts.ProtoDecode(nil))
+		require.Error(t, txOuts.ProtoDecode(&ProtoTxOuts{TxOuts: []*ProtoTxOut{nil}}))
+	})
+
+	t.Run("tx output", func(t *testing.T) {
+		var txOut TxOut
+		require.Error(t, txOut.ProtoDecode(nil))
+		require.Error(t, txOut.ProtoDecode(&ProtoTxOut{}))
+	})
+
+	t.Run("spent utxo", func(t *testing.T) {
+		var spent SpentUtxoEntry
+		require.Error(t, spent.ProtoDecode(nil))
+	})
+
+	t.Run("utxo entry", func(t *testing.T) {
+		var utxo UtxoEntry
+		require.Error(t, utxo.ProtoDecode(nil))
+		require.Error(t, utxo.ProtoDecode(&ProtoTxOut{}))
+	})
+}
+
 func TestTxInProtoEncode(t *testing.T) {
 	tests := []struct {
 		name       string

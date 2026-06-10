@@ -116,6 +116,9 @@ func (txIn TxIn) ProtoEncode() (*ProtoTxIn, error) {
 }
 
 func (txIn *TxIn) ProtoDecode(protoTxIn *ProtoTxIn) error {
+	if protoTxIn == nil {
+		return errors.New("missing tx input")
+	}
 	err := txIn.PreviousOutPoint.ProtoDecode(protoTxIn.PreviousOutPoint)
 	if err != nil {
 		return err
@@ -315,6 +318,9 @@ func (txOuts TxOuts) ProtoEncode() (*ProtoTxOuts, error) {
 }
 
 func (txOuts *TxOuts) ProtoDecode(protoTxOuts *ProtoTxOuts) error {
+	if protoTxOuts == nil {
+		return errors.New("missing tx outputs")
+	}
 	*txOuts = make(TxOuts, 0, len(protoTxOuts.TxOuts))
 	for _, protoTxOut := range protoTxOuts.TxOuts {
 		decodedTxOut := &TxOut{}
@@ -349,6 +355,9 @@ func (txOut TxOut) ProtoEncode() (*ProtoTxOut, error) {
 }
 
 func (txOut *TxOut) ProtoDecode(protoTxOut *ProtoTxOut) error {
+	if protoTxOut == nil {
+		return errors.New("missing tx output")
+	}
 	// check if protoTxOut.Denomination is above the max uint8 value
 	if protoTxOut.Denomination == nil {
 		return errors.New("protoTxOut.Denomination is nil")
@@ -418,6 +427,9 @@ func (sutxo *SpentUtxoEntry) ProtoEncode() (*ProtoSpentUTXO, error) {
 }
 
 func (sutxo *SpentUtxoEntry) ProtoDecode(protoSpentUtxoEntry *ProtoSpentUTXO) error {
+	if protoSpentUtxoEntry == nil {
+		return errors.New("missing spent utxo")
+	}
 	if err := sutxo.OutPoint.ProtoDecode(protoSpentUtxoEntry.Outpoint); err != nil {
 		return err
 	}
@@ -457,7 +469,13 @@ func (utxo *UtxoEntry) ProtoEncode() (*ProtoTxOut, error) {
 }
 
 func (utxo *UtxoEntry) ProtoDecode(protoTxOut *ProtoTxOut) error {
+	if protoTxOut == nil {
+		return errors.New("missing utxo entry")
+	}
 	// check if protoTxOut.Denomination is above the max uint8 value
+	if protoTxOut.Denomination == nil {
+		return errors.New("protoTxOut.Denomination is nil")
+	}
 	if *protoTxOut.Denomination > math.MaxUint8 {
 		return errors.New("protoTxOut.Denomination is above the max uint8 value")
 	}
