@@ -49,8 +49,14 @@ func (tcs *TokenChoiceSet) ProtoDecode(protoSet *ProtoTokenChoiceSet) error {
 	if protoSet == nil {
 		return errors.New("ProtoTokenChoiceSet is nil")
 	}
+	if len(protoSet.TokenChoiceArray) > len(tcs) {
+		return errors.New("ProtoTokenChoiceSet has too many entries")
+	}
 
 	for i, protoArray := range protoSet.TokenChoiceArray {
+		if protoArray == nil || protoArray.TokenChoices == nil {
+			return errors.New("ProtoTokenChoiceSet has nil token choices")
+		}
 		choice := TokenChoices{
 			Quai: protoArray.TokenChoices.GetQuai(),
 			Qi:   protoArray.TokenChoices.GetQi(),
@@ -100,6 +106,9 @@ func (b *Betas) ProtoEncode() (*ProtoBetas, error) {
 }
 
 func (b *Betas) ProtoDecode(betas *ProtoBetas) error {
+	if betas == nil {
+		return errors.New("ProtoBetas is nil")
+	}
 	beta0 := new(big.Float).SetInt64(0)
 	beta1 := new(big.Float).SetInt64(0)
 	err := beta0.GobDecode(betas.GetBeta0())
