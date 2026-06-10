@@ -724,7 +724,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 					sl.logger.WithFields(log.Fields{
 						"error":      r,
 						"stacktrace": string(debug.Stack()),
-					}).Fatal("Go-Quai Panicked")
+					}).Error("Go-Quai Panicked")
 				}
 			}()
 			sl.hc.chainSideFeed.Send(ChainSideEvent{Blocks: []*types.WorkObject{block}})

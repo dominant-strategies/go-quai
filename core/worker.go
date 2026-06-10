@@ -535,7 +535,7 @@ func (w *worker) asyncStateLoop() {
 						w.logger.WithFields(log.Fields{
 							"error":      r,
 							"stacktrace": string(debug.Stack()),
-						}).Fatal("Go-Quai Panicked")
+						}).Error("Go-Quai Panicked")
 					}
 				}()
 				for _, wo := range side.Blocks {

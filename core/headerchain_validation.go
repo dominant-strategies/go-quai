@@ -112,7 +112,7 @@ func (hc *HeaderChain) VerifyHeaders(headers []*types.WorkObject) (chan<- struct
 				hc.logger.WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		defer close(inputs)
