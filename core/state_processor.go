@@ -1963,6 +1963,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 				types.MaxDenomination)
 			return nil, nil, nil, errors.New(str), nil
 		}
+		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
+			return nil, nil, nil, errors.New("QiTx output has non-zero lock"), nil
+		}
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 
 		toAddr := common.BytesToAddress(txOut.Address, location)
@@ -1975,6 +1978,9 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		outputs[uint(txOut.Denomination)]++
 
 		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() && len(tx.Data()) == params.MaxQiTxDataLength { // Qi->Quai conversion
+			if conversion && !toAddr.Equal(convertAddress) { // All convert outputs must have the same To address for aggregation
+				return nil, nil, nil, fmt.Errorf("tx %032x emits multiple convert UTXOs with different To addresses", tx.Hash()), nil
+			}
 			conversion = true
 			convertAddress = toAddr
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Add to total conversion output for aggregation
