@@ -1651,6 +1651,10 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 
 }
 
+func qiWrappingSkipsLocalUTXO(header *types.WorkObject) bool {
+	return header.PrimeTerminusNumber().Uint64() >= params.QiWrappingChangeBlock
+}
+
 func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit uint64) (*big.Int, error) {
 
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx, qiScalingFactor)
@@ -1717,7 +1721,9 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 			wrapping = true
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
 			delete(addresses, toAddr.Bytes20())
-			continue
+			if qiWrappingSkipsLocalUTXO(currentHeader) {
+				continue
+			}
 		} else if toAddr.IsInQuaiLedgerScope() {
 			return nil, fmt.Errorf("tx [%v] emits UTXO with To address not in the Qi ledger scope", tx.Hash().Hex())
 		}
@@ -1997,7 +2003,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
-			if currentHeader.PrimeTerminusNumber().Uint64() >= params.QiWrappingChangeBlock {
+			if qiWrappingSkipsLocalUTXO(currentHeader) {
 				continue
 			}
 		} else if toAddr.IsInQuaiLedgerScope() {

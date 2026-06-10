@@ -2859,7 +2859,9 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 			totalConvertQitOut.Add(totalConvertQitOut, types.Denominations[txOut.Denomination]) // Uses the same path as conversion but takes priority
 			outputs[uint(txOut.Denomination)] -= 1                                              // This output no longer exists because it has been aggregated
 			delete(addresses, toAddr.Bytes20())
-			continue
+			if qiWrappingSkipsLocalUTXO(env.wo) {
+				continue
+			}
 		} else if toAddr.IsInQuaiLedgerScope() {
 			return fmt.Errorf("tx %032x emits UTXO with To address not in the Qi ledger scope", tx.Hash())
 		}
