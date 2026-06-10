@@ -240,7 +240,7 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 				h.log.WithFields(log.Fields{
 					"error":      r,
 					"stacktrace": string(debug.Stack()),
-				}).Fatal("Go-Quai Panicked")
+				}).Error("Go-Quai Panicked")
 			}
 		}()
 		ctx, cancel := context.WithCancel(h.rootCtx)
@@ -307,7 +307,7 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 			h.log.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	if msg.Error != nil {
@@ -321,7 +321,7 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 					h.log.WithFields(log.Fields{
 						"error":      r,
 						"stacktrace": string(debug.Stack()),
-					}).Fatal("Go-Quai Panicked")
+					}).Error("Go-Quai Panicked")
 				}
 			}()
 			go op.sub.run()

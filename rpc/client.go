@@ -550,7 +550,7 @@ func (c *Client) dispatch(codec ServerCodec) {
 			c.log.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	var (
@@ -652,7 +652,7 @@ func (c *Client) read(codec ServerCodec) {
 			c.log.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	for {
