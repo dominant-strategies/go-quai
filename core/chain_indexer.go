@@ -576,7 +576,7 @@ func (c *ChainIndexer) updateLoop(nodeCtx int) {
 			c.logger.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	var (

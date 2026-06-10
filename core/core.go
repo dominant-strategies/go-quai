@@ -512,7 +512,7 @@ func (c *Core) startStatsTimer() {
 			c.logger.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
-			}).Fatal("Go-Quai Panicked")
+			}).Error("Go-Quai Panicked")
 		}
 	}()
 	futureTimer := time.NewTicker(c_statsPrintPeriod * time.Second)
