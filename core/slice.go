@@ -814,7 +814,7 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 		quaiDiffAsPercentOfRavencoinInstantaneous = new(big.Int).Div(new(big.Int).Mul(header.Difficulty(), params.RavencoinDiffPercentage), subsidyChainDiff)
 	}
 
-	if header.KawpowDifficulty() != nil {
+	if header.KawpowDifficulty() != nil && header.KawpowDifficulty().Sign() > 0 {
 		quaiDiffAsPercentOfRavencoin = new(big.Int).Div(new(big.Int).Mul(header.Difficulty(), params.RavencoinDiffPercentage), header.KawpowDifficulty())
 	}
 

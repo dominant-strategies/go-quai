@@ -281,6 +281,9 @@ func CalculateKawpowShareDiff(header *types.WorkObjectHeader) *big.Int {
 	// If the quai hash rate reaches 75% of the ravencoin hash rate then we
 	// start applying a discount to the kawpow share target, linearly decreasing
 	// it until it reaches 0 at 90%
+	if header.KawpowDifficulty() == nil || header.KawpowDifficulty().Sign() <= 0 {
+		return header.Difficulty()
+	}
 	quaiDiffAsPercentOfRavencoin := new(big.Int).Div(new(big.Int).Mul(header.Difficulty(), params.RavencoinDiffPercentage), header.KawpowDifficulty())
 	if quaiDiffAsPercentOfRavencoin.Cmp(params.RavencoinDiffCutoffStart) >= 0 {
 		// At the 90% threshold, no kawpow shares are allowed

@@ -159,6 +159,20 @@ func TestCalculateKawpowShareDiff(t *testing.T) {
 	}
 }
 
+func TestCalculateKawpowShareDiffWithZeroKawpowDifficulty(t *testing.T) {
+	header := types.EmptyWorkObject(common.ZONE_CTX).WorkObjectHeader()
+	header.SetPrimeTerminusNumber(big.NewInt(int64(params.KawPowForkBlock + 1)))
+	header.SetDifficulty(big.NewInt(5000))
+	header.SetKawpowDifficulty(common.Big0)
+	header.SetShaDiffAndCount(types.NewPowShareDiffAndCount(big.NewInt(1), common.Big0, common.Big0))
+	header.SetScryptDiffAndCount(types.NewPowShareDiffAndCount(big.NewInt(1), common.Big0, common.Big0))
+	header.SetShaShareTarget(new(big.Int).Mul(big.NewInt(100), common.Big2e32))
+	header.SetScryptShareTarget(new(big.Int).Mul(big.NewInt(100), common.Big2e32))
+
+	diff := CalculateKawpowShareDiff(header)
+	require.Equal(t, header.Difficulty(), diff)
+}
+
 func TestCalculateShareTarget(t *testing.T) {
 	hc := NewTestHeaderChain()
 
