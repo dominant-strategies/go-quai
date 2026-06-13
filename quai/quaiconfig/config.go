@@ -117,6 +117,12 @@ type Config struct {
 	SnapshotCache            int
 	Preimages                bool
 
+	// RewindToBlock, if > 0, force-rewinds the zone chain head to this block
+	// number on startup, then resyncs forward. Operator recovery tool for a node
+	// stuck on a minority fork deeper than the reorg horizon. One-shot; remove
+	// the flag after recovery.
+	RewindToBlock uint64 `toml:",omitempty"`
+
 	// Mining options
 	Miner core.Config
 

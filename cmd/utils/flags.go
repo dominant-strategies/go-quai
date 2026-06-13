@@ -90,6 +90,7 @@ var NodeFlags = []Flag{
 	IdentityFlag,
 	DocRootFlag,
 	SnapshotFlag,
+	RewindToBlockFlag,
 	TxLookupLimitFlag,
 	WhitelistFlag,
 	BloomFilterSizeFlag,
@@ -349,6 +350,12 @@ var (
 		Name:  c_NodeFlagPrefix + "snapshot",
 		Value: true,
 		Usage: `Enables snapshot-database mode (default = true)` + generateEnvDoc(c_NodeFlagPrefix+"snapshot"),
+	}
+
+	RewindToBlockFlag = Flag{
+		Name:  c_NodeFlagPrefix + "rewind-to-block",
+		Value: uint64(0),
+		Usage: "Force-rewind the zone chain head to this block number on startup, then resync forward. Operator recovery for a node stuck on a minority fork deeper than the reorg horizon (0 = disabled). Remove the flag after the node has caught up." + generateEnvDoc(c_NodeFlagPrefix+"rewind-to-block"),
 	}
 
 	TxLookupLimitFlag = Flag{
@@ -1434,6 +1441,9 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	}
 	if viper.IsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = viper.GetUint64(TxLookupLimitFlag.Name)
+	}
+	if viper.IsSet(RewindToBlockFlag.Name) {
+		cfg.RewindToBlock = viper.GetUint64(RewindToBlockFlag.Name)
 	}
 	if viper.IsSet(CacheFlag.Name) || viper.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = viper.GetInt(CacheFlag.Name) * viper.GetInt(CacheTrieFlag.Name) / 100

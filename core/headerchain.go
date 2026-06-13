@@ -196,7 +196,48 @@ func NewHeaderChain(db ethdb.Database, powConfig params.PowConfig, engine []cons
 	heads := make([]*types.WorkObject, 0)
 	hc.heads = heads
 
+	// Operator recovery: optionally force-rewind the head on startup so a node
+	// stuck on a minority fork (deeper than the reorg horizon) can drop it and
+	// resync onto the canonical chain. Driven by --node.rewind-to-block. One-shot.
+	if cacheConfig != nil && cacheConfig.RewindToBlock > 0 && nodeCtx == common.ZONE_CTX {
+		if err := hc.rewindHeadTo(cacheConfig.RewindToBlock); err != nil {
+			return nil, fmt.Errorf("rewind-to-block %d failed: %w", cacheConfig.RewindToBlock, err)
+		}
+	}
+
 	return hc, nil
+}
+
+// rewindHeadTo force-rewinds the canonical zone head down to the block with the
+// given number on the current chain, bypassing the reorg-horizon guard. It is an
+// operator recovery tool (see --node.rewind-to-block): it drops a stuck minority
+// fork so the node can resync forward onto canonical. It reuses the tested reorg
+// rollback path (state/UTXO/coinbase-lockup unwind) in SetCurrentHeader.
+func (hc *HeaderChain) rewindHeadTo(target uint64) error {
+	cur := hc.CurrentHeader()
+	if cur == nil {
+		return errors.New("no current header")
+	}
+	curNum := cur.NumberU64(hc.NodeCtx())
+	if curNum <= target {
+		hc.logger.WithFields(log.Fields{"current": curNum, "target": target}).
+			Warn("rewind-to-block: head already at or below target, nothing to do")
+		return nil
+	}
+	// Walk back along the current chain to the header at `target`.
+	h := cur
+	for h != nil && h.NumberU64(hc.NodeCtx()) > target {
+		h = hc.GetHeaderByHash(h.ParentHash(hc.NodeCtx()))
+	}
+	if h == nil {
+		return fmt.Errorf("could not find block %d on the current chain", target)
+	}
+	hc.logger.WithFields(log.Fields{
+		"from": curNum,
+		"to":   target,
+		"hash": h.Hash(),
+	}).Warn("rewind-to-block: force-rewinding chain head (operator recovery)")
+	return hc.SetCurrentHeader(h, true)
 }
 
 // GetEngineForPowID returns the consensus engine for the given PowID
@@ -917,8 +958,10 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 	return nil
 }
 
-// SetCurrentHeader sets the current header based on the POEM choice
-func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
+// SetCurrentHeader sets the current header based on the POEM choice.
+// When force is true the reorg-horizon guard is bypassed; this is only used by
+// the operator-driven rewindHeadTo recovery path, never during normal consensus.
+func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject, force bool) error {
 	nodeCtx := hc.NodeCtx()
 
 	prevHeader := hc.CurrentHeader()
@@ -953,7 +996,8 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		return err
 	}
 	// If common header is more than c_zoneHorizonThreshold blocks behind, dont reorg to it
-	if prevHeader.NumberU64(common.ZONE_CTX) > params.MaxCodeSizeForkHeight && prevHeader.NumberU64(common.ZONE_CTX) > commonHeader.NumberU64(common.ZONE_CTX)+c_zoneHorizonThreshold {
+	// (skipped for operator-forced rewinds, which intentionally cross the horizon).
+	if !force && prevHeader.NumberU64(common.ZONE_CTX) > params.MaxCodeSizeForkHeight && prevHeader.NumberU64(common.ZONE_CTX) > commonHeader.NumberU64(common.ZONE_CTX)+c_zoneHorizonThreshold {
 		return errors.New("common header too old")
 	}
 	newHeader := types.CopyWorkObject(head)
