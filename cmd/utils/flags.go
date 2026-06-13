@@ -1442,9 +1442,11 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if viper.IsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = viper.GetUint64(TxLookupLimitFlag.Name)
 	}
-	if viper.IsSet(RewindToBlockFlag.Name) {
-		cfg.RewindToBlock = viper.GetUint64(RewindToBlockFlag.Name)
-	}
+	// Read unconditionally (like ExternalAddr/ForcePublic): viper.IsSet returns
+	// false for a CLI-passed node.* flag when the [node] section exists in the
+	// config file, so the IsSet guard would silently drop the value. GetUint64
+	// returns 0 (the default) when the flag is absent, which disables the rewind.
+	cfg.RewindToBlock = viper.GetUint64(RewindToBlockFlag.Name)
 	if viper.IsSet(CacheFlag.Name) || viper.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = viper.GetInt(CacheFlag.Name) * viper.GetInt(CacheTrieFlag.Name) / 100
 	}
