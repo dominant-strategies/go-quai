@@ -209,10 +209,14 @@ func NewHeaderChain(db ethdb.Database, powConfig params.PowConfig, engine []cons
 }
 
 // rewindHeadTo force-rewinds the canonical zone head down to the block with the
-// given number on the current chain, bypassing the reorg-horizon guard. It is an
-// operator recovery tool (see --node.rewind-to-block): it drops a stuck minority
-// fork so the node can resync forward onto canonical. It reuses the tested reorg
-// rollback path (state/UTXO/coinbase-lockup unwind) in SetCurrentHeader.
+// given number on the current chain, bypassing the reorg-horizon guard, and then
+// purges the orphaned blocks above the target. It is an operator recovery tool
+// (see --node.rewind-to-block): it drops a stuck minority fork so the node can
+// resync forward onto canonical. Repositioning reuses the tested reorg rollback
+// path (state/UTXO/coinbase-lockup unwind) in SetCurrentHeader; the purge then
+// removes the stored fork bodies/headers so POEM cannot re-adopt them (without it
+// the node re-selects the locally-stored fork and never follows canonical).
+// Runs at startup, before any sync/append, so there is no pending work to race.
 func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 	cur := hc.CurrentHeader()
 	if cur == nil {
@@ -224,9 +228,16 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 			Warn("rewind-to-block: head already at or below target, nothing to do")
 		return nil
 	}
-	// Walk back along the current chain to the header at `target`.
+	// Walk back along the current chain to the header at `target`, collecting the
+	// fork blocks above it for purging once the head has been repositioned.
+	type blockRef struct {
+		hash   common.Hash
+		number uint64
+	}
+	var forkBlocks []blockRef
 	h := cur
 	for h != nil && h.NumberU64(hc.NodeCtx()) > target {
+		forkBlocks = append(forkBlocks, blockRef{h.Hash(), h.NumberU64(hc.NodeCtx())})
 		h = hc.GetHeaderByHash(h.ParentHash(hc.NodeCtx()))
 	}
 	if h == nil {
@@ -237,7 +248,26 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 		"to":   target,
 		"hash": h.Hash(),
 	}).Warn("rewind-to-block: force-rewinding chain head (operator recovery)")
-	return hc.SetCurrentHeader(h, true)
+
+	// Reposition the head and unwind state to the target.
+	if err := hc.SetCurrentHeader(h, true); err != nil {
+		return err
+	}
+
+	// Purge the now-orphaned fork blocks so they cannot be re-adopted on startup.
+	batch := hc.headerDb.NewBatch()
+	for _, b := range forkBlocks {
+		rawdb.DeleteCanonicalHash(batch, b.number)
+		rawdb.DeleteWorkObject(batch, b.hash, b.number, types.BlockObject)
+	}
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	hc.logger.WithFields(log.Fields{
+		"purged":  len(forkBlocks),
+		"newHead": target,
+	}).Warn("rewind-to-block: purged orphaned fork blocks; node will resync forward onto canonical")
+	return nil
 }
 
 // GetEngineForPowID returns the consensus engine for the given PowID
