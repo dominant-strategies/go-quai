@@ -198,10 +198,24 @@ func NewHeaderChain(db ethdb.Database, powConfig params.PowConfig, engine []cons
 
 	// Operator recovery: optionally force-rewind the head on startup so a node
 	// stuck on a minority fork (deeper than the reorg horizon) can drop it and
-	// resync onto the canonical chain. Driven by --node.rewind-to-block. One-shot.
-	if cacheConfig != nil && cacheConfig.RewindToBlock > 0 && nodeCtx == common.ZONE_CTX {
-		if err := hc.rewindHeadTo(cacheConfig.RewindToBlock); err != nil {
-			return nil, fmt.Errorf("rewind-to-block %d failed: %w", cacheConfig.RewindToBlock, err)
+	// resync onto the canonical chain. A Quai fork spans the whole hierarchy, so
+	// each context is rewound to its own matching pre-fork point (the prime/region
+	// targets are the termini of the common zone block). Driven by
+	// --node.rewind-to-block / --node.rewind-region / --node.rewind-prime. One-shot.
+	if cacheConfig != nil {
+		var target uint64
+		switch nodeCtx {
+		case common.PRIME_CTX:
+			target = cacheConfig.RewindPrimeToBlock
+		case common.REGION_CTX:
+			target = cacheConfig.RewindRegionToBlock
+		case common.ZONE_CTX:
+			target = cacheConfig.RewindToBlock
+		}
+		if target > 0 {
+			if err := hc.rewindHeadTo(target); err != nil {
+				return nil, fmt.Errorf("rewind to block %d (ctx %d) failed: %w", target, nodeCtx, err)
+			}
 		}
 	}
 

@@ -250,6 +250,8 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
 			RewindToBlock:       config.RewindToBlock,
+			RewindRegionToBlock: config.RewindRegionToBlock,
+			RewindPrimeToBlock:  config.RewindPrimeToBlock,
 		}
 	)
 

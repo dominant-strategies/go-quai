@@ -91,6 +91,8 @@ var NodeFlags = []Flag{
 	DocRootFlag,
 	SnapshotFlag,
 	RewindToBlockFlag,
+	RewindRegionToBlockFlag,
+	RewindPrimeToBlockFlag,
 	TxLookupLimitFlag,
 	WhitelistFlag,
 	BloomFilterSizeFlag,
@@ -356,6 +358,18 @@ var (
 		Name:  c_NodeFlagPrefix + "rewind-to-block",
 		Value: uint64(0),
 		Usage: "Force-rewind the zone chain head to this block number on startup, then resync forward. Operator recovery for a node stuck on a minority fork deeper than the reorg horizon (0 = disabled). Remove the flag after the node has caught up." + generateEnvDoc(c_NodeFlagPrefix+"rewind-to-block"),
+	}
+
+	RewindRegionToBlockFlag = Flag{
+		Name:  c_NodeFlagPrefix + "rewind-region",
+		Value: uint64(0),
+		Usage: "Force-rewind the region chain head to this block number on startup (operator recovery; a Quai fork spans the whole hierarchy, so rewind region/prime alongside the zone). 0 = disabled. Remove after recovery." + generateEnvDoc(c_NodeFlagPrefix+"rewind-region"),
+	}
+
+	RewindPrimeToBlockFlag = Flag{
+		Name:  c_NodeFlagPrefix + "rewind-prime",
+		Value: uint64(0),
+		Usage: "Force-rewind the prime chain head to this block number on startup (operator recovery; rewind alongside the zone/region). 0 = disabled. Remove after recovery." + generateEnvDoc(c_NodeFlagPrefix+"rewind-prime"),
 	}
 
 	TxLookupLimitFlag = Flag{
@@ -1447,6 +1461,8 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	// config file, so the IsSet guard would silently drop the value. GetUint64
 	// returns 0 (the default) when the flag is absent, which disables the rewind.
 	cfg.RewindToBlock = viper.GetUint64(RewindToBlockFlag.Name)
+	cfg.RewindRegionToBlock = viper.GetUint64(RewindRegionToBlockFlag.Name)
+	cfg.RewindPrimeToBlock = viper.GetUint64(RewindPrimeToBlockFlag.Name)
 	if viper.IsSet(CacheFlag.Name) || viper.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = viper.GetInt(CacheFlag.Name) * viper.GetInt(CacheTrieFlag.Name) / 100
 	}
