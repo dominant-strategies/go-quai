@@ -196,7 +196,150 @@ func NewHeaderChain(db ethdb.Database, powConfig params.PowConfig, engine []cons
 	heads := make([]*types.WorkObject, 0)
 	hc.heads = heads
 
+	// Operator recovery: optionally force-rewind the head on startup so a node
+	// stuck on a minority fork (deeper than the reorg horizon) can drop it and
+	// resync onto the canonical chain. A Quai fork spans the whole hierarchy, so
+	// each context is rewound to its own matching pre-fork point (the prime/region
+	// targets are the termini of the common zone block). Driven by
+	// --node.rewind-to-block / --node.rewind-region / --node.rewind-prime. One-shot.
+	if cacheConfig != nil {
+		var target uint64
+		switch nodeCtx {
+		case common.PRIME_CTX:
+			target = cacheConfig.RewindPrimeToBlock
+		case common.REGION_CTX:
+			target = cacheConfig.RewindRegionToBlock
+		case common.ZONE_CTX:
+			target = cacheConfig.RewindToBlock
+		}
+		if target > 0 {
+			if err := hc.rewindHeadTo(target); err != nil {
+				return nil, fmt.Errorf("rewind to block %d (ctx %d) failed: %w", target, nodeCtx, err)
+			}
+		}
+	}
+
 	return hc, nil
+}
+
+// rewindHeadTo force-rewinds the canonical zone head down to the block with the
+// given number on the current chain, bypassing the reorg-horizon guard, and then
+// purges the orphaned blocks above the target. It is an operator recovery tool
+// (see --node.rewind-to-block): it drops a stuck minority fork so the node can
+// resync forward onto canonical. Repositioning reuses the tested reorg rollback
+// path (state/UTXO/coinbase-lockup unwind) in SetCurrentHeader; the purge then
+// removes the stored fork bodies/headers so POEM cannot re-adopt them (without it
+// the node re-selects the locally-stored fork and never follows canonical).
+// Runs at startup, before any sync/append, so there is no pending work to race.
+func (hc *HeaderChain) rewindHeadTo(target uint64) error {
+	cur := hc.CurrentHeader()
+	if cur == nil {
+		return errors.New("no current header")
+	}
+	nodeCtx := hc.NodeCtx()
+	curNum := cur.NumberU64(nodeCtx)
+
+	batch := hc.headerDb.NewBatch()
+	maybeFlush := func() error {
+		if batch.ValueSize() < ethdb.IdealBatchSize {
+			return nil
+		}
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		batch.Reset()
+		return nil
+	}
+
+	// cleanBlock purges all per-block state for a block being removed from the
+	// chain, mirroring cleanCacheAndDatabaseTillBlock. Deleting only the canonical
+	// hash and work object (as the original rewind did) leaves stale termini and
+	// pending-etx entries behind, which then fail PCRC / ETX collection
+	// (ErrSubNotSyncedToDom) on the canonical blocks that replace them during
+	// resync, permanently stalling the head. Removing all of it gives a fully
+	// self-consistent checkpoint to resync forward from. Works from hash+number so
+	// it can clean orphans whose body is no longer readable.
+	cleanBlock := func(hash common.Hash, number uint64) {
+		rawdb.DeleteWorkObject(batch, hash, number, types.BlockObject)
+		rawdb.DeleteCanonicalHash(batch, number)
+		rawdb.DeleteHeaderNumber(batch, hash)
+		rawdb.DeleteTermini(batch, hash)
+		if nodeCtx != common.ZONE_CTX {
+			rawdb.DeletePendingEtxs(batch, hash)
+			rawdb.DeletePendingEtxsRollup(batch, hash)
+		}
+		if wo := rawdb.ReadWorkObject(hc.headerDb, number, hash, types.BlockObject); wo != nil {
+			rawdb.DeleteTrieNode(batch, wo.EVMRoot())
+		}
+	}
+
+	// 1. If the head is above the target, walk the canonical chain back down to
+	//    the target, unwinding state via the tested SetCurrentHeader reorg path,
+	//    then purge each removed block's state.
+	if curNum > target {
+		var fork []*types.WorkObject
+		h := cur
+		for h != nil && h.NumberU64(nodeCtx) > target {
+			fork = append(fork, h)
+			h = hc.GetHeaderByHash(h.ParentHash(nodeCtx))
+		}
+		if h == nil {
+			return fmt.Errorf("could not find block %d on the current chain", target)
+		}
+		hc.logger.WithFields(log.Fields{"from": curNum, "to": target, "hash": h.Hash()}).
+			Warn("rewind-to-block: force-rewinding chain head (operator recovery)")
+		if err := hc.SetCurrentHeader(h, true); err != nil {
+			return err
+		}
+		for _, wo := range fork {
+			cleanBlock(wo.Hash(), wo.NumberU64(nodeCtx))
+		}
+	} else {
+		hc.logger.WithFields(log.Fields{"current": curNum, "target": target}).
+			Warn("rewind-to-block: head already at target; purging stale forward state")
+	}
+
+	// 2. Purge every block stored ABOVE the target, including non-canonical
+	//    orphans (a canonical-hash scan misses those). A prior interrupted resync
+	//    can leave a tangle of orphans and a coincident block present in one
+	//    context but not another, which blocks the head from advancing cleanly.
+	//    Clearing it all lets resync rebuild forward from a clean checkpoint.
+	above := rawdb.ReadHashesAboveNumber(hc.headerDb, target)
+	for _, hn := range above {
+		cleanBlock(hn.Hash, hn.Number)
+		if err := maybeFlush(); err != nil {
+			return err
+		}
+	}
+
+	if err := batch.Write(); err != nil {
+		return err
+	}
+
+	// 3. Drop stale in-memory caches and head/best-pending-header pointers so no
+	//    stale view of the removed state survives the rewind.
+	hc.headerCache.Purge()
+	hc.numberCache.Purge()
+	if hc.pendingEtxs != nil {
+		hc.pendingEtxs.Purge()
+	}
+	if hc.pendingEtxsRollup != nil {
+		hc.pendingEtxsRollup.Purge()
+	}
+	if hc.bc != nil {
+		hc.bc.blockCache.Purge()
+		hc.bc.bodyCache.Purge()
+		hc.bc.bodyProtoCache.Purge()
+	}
+	rawdb.DeleteAllHeadsHashes(hc.headerDb)
+	rawdb.DeleteBestPhKey(hc.headerDb)
+	rawdb.WriteHeadBlockHash(hc.headerDb, hc.CurrentHeader().Hash())
+
+	hc.logger.WithFields(log.Fields{
+		"newHead":     target,
+		"purgedAbove": len(above),
+	}).Warn("rewind-to-block: rolled back head and purged forward/stale state; node will resync forward onto canonical")
+	return nil
 }
 
 // GetEngineForPowID returns the consensus engine for the given PowID
@@ -917,8 +1060,10 @@ func (hc *HeaderChain) AppendBlock(block *types.WorkObject) error {
 	return nil
 }
 
-// SetCurrentHeader sets the current header based on the POEM choice
-func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
+// SetCurrentHeader sets the current header based on the POEM choice.
+// When force is true the reorg-horizon guard is bypassed; this is only used by
+// the operator-driven rewindHeadTo recovery path, never during normal consensus.
+func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject, force bool) error {
 	nodeCtx := hc.NodeCtx()
 
 	prevHeader := hc.CurrentHeader()
@@ -953,7 +1098,8 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.WorkObject) error {
 		return err
 	}
 	// If common header is more than c_zoneHorizonThreshold blocks behind, dont reorg to it
-	if prevHeader.NumberU64(common.ZONE_CTX) > params.MaxCodeSizeForkHeight && prevHeader.NumberU64(common.ZONE_CTX) > commonHeader.NumberU64(common.ZONE_CTX)+c_zoneHorizonThreshold {
+	// (skipped for operator-forced rewinds, which intentionally cross the horizon).
+	if !force && prevHeader.NumberU64(common.ZONE_CTX) > params.MaxCodeSizeForkHeight && prevHeader.NumberU64(common.ZONE_CTX) > commonHeader.NumberU64(common.ZONE_CTX)+c_zoneHorizonThreshold {
 		return errors.New("common header too old")
 	}
 	newHeader := types.CopyWorkObject(head)

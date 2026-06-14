@@ -1367,7 +1367,7 @@ func (sl *Slice) init() error {
 		}
 
 		// This is just done for the startup process
-		sl.hc.SetCurrentHeader(genesisHeader)
+		sl.hc.SetCurrentHeader(genesisHeader, false)
 
 		if sl.NodeLocation().Context() == common.PRIME_CTX {
 			go sl.NewGenesisPendingHeader(nil, genesisHash, genesisHash)
@@ -2006,7 +2006,7 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	start := time.Now()
 
 	// set the current header to this block
-	err := sl.hc.SetCurrentHeader(block)
+	err := sl.hc.SetCurrentHeader(block, true)
 	if err != nil {
 		sl.logger.WithFields(log.Fields{"hash": block.Hash(), "err": err}).Warn("Error setting current header")
 		sl.recomputeRequired = true

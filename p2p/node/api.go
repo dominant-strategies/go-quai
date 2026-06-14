@@ -2,6 +2,7 @@ package node
 
 import (
 	"math/big"
+	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -177,6 +178,19 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 					peers = append(peers, peer)
 				}
 			} else {
+				// Shuffle the stream peers before selecting a subset. Without
+				// this, requests are permanently pinned to the first
+				// C_defaultRequestDegree entries returned by the stream cache.
+				// If those few streams are unresponsive (e.g. a far-behind node
+				// recovering from a deep rewind), every request times out and
+				// the node never falls back to its other healthy stream peers,
+				// stalling sync indefinitely. Repeatedly calling GetStream on
+				// the same dead entries also keeps them alive in the expirable
+				// LRU, so they are never evicted. Randomising the selection
+				// breaks that deadlock and spreads requests across all streams.
+				rand.Shuffle(len(peers), func(i, j int) {
+					peers[i], peers[j] = peers[j], peers[i]
+				})
 				peers = peers[:pubsubManager.C_defaultRequestDegree]
 			}
 			log.Global.WithFields(log.Fields{

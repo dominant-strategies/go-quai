@@ -91,6 +91,9 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
+	RewindToBlock       uint64        // If >0, force-rewind the zone chain head to this block on startup (operator recovery)
+	RewindRegionToBlock uint64        // If >0, force-rewind the region chain head to this block on startup (operator recovery)
+	RewindPrimeToBlock  uint64        // If >0, force-rewind the prime chain head to this block on startup (operator recovery)
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
