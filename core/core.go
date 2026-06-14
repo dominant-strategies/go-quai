@@ -431,8 +431,14 @@ func (c *Core) RequestDomToAppendOrFetch(hash common.Hash, entropy *big.Int, ord
 
 // addToQueueIfNotAppended checks if block is appended and if its not adds the block to appendqueue
 func (c *Core) addToQueueIfNotAppended(block *types.WorkObject) {
-	// Check if the hash is in the blockchain, otherwise add it to the append queue
-	if c.GetHeaderByHash(block.Hash()) == nil {
+	// A block whose header is present in the database is not necessarily
+	// appended to the canonical chain: an interrupted sync can leave orphan
+	// blocks whose headers are stored but which were never made canonical at
+	// their height. Previously this only checked GetHeaderByHash, so such
+	// orphans were silently skipped and could never be (re)queued, permanently
+	// stalling the head behind them. Only skip a block if it is already the
+	// canonical block at its height; otherwise queue it for appending.
+	if c.GetCanonicalHash(block.NumberU64(c.NodeCtx())) != block.Hash() {
 		c.addToAppendQueue(block)
 	}
 }
