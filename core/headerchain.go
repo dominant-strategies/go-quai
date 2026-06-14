@@ -236,51 +236,102 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 	if cur == nil {
 		return errors.New("no current header")
 	}
-	curNum := cur.NumberU64(hc.NodeCtx())
-	if curNum <= target {
-		hc.logger.WithFields(log.Fields{"current": curNum, "target": target}).
-			Warn("rewind-to-block: head already at or below target, nothing to do")
-		return nil
-	}
-	// Walk back along the current chain to the header at `target`, collecting the
-	// fork blocks above it for purging once the head has been repositioned.
-	type blockRef struct {
-		hash   common.Hash
-		number uint64
-	}
-	var forkBlocks []blockRef
-	h := cur
-	for h != nil && h.NumberU64(hc.NodeCtx()) > target {
-		forkBlocks = append(forkBlocks, blockRef{h.Hash(), h.NumberU64(hc.NodeCtx())})
-		h = hc.GetHeaderByHash(h.ParentHash(hc.NodeCtx()))
-	}
-	if h == nil {
-		return fmt.Errorf("could not find block %d on the current chain", target)
-	}
-	hc.logger.WithFields(log.Fields{
-		"from": curNum,
-		"to":   target,
-		"hash": h.Hash(),
-	}).Warn("rewind-to-block: force-rewinding chain head (operator recovery)")
+	nodeCtx := hc.NodeCtx()
+	curNum := cur.NumberU64(nodeCtx)
 
-	// Reposition the head and unwind state to the target.
-	if err := hc.SetCurrentHeader(h, true); err != nil {
-		return err
-	}
-
-	// Purge the now-orphaned fork blocks so they cannot be re-adopted on startup.
 	batch := hc.headerDb.NewBatch()
-	for _, b := range forkBlocks {
-		rawdb.DeleteCanonicalHash(batch, b.number)
-		rawdb.DeleteWorkObject(batch, b.hash, b.number, types.BlockObject)
+
+	// cleanBlock purges all per-block state for a block being removed from the
+	// chain, mirroring cleanCacheAndDatabaseTillBlock. Deleting only the canonical
+	// hash and work object (as the original rewind did) leaves stale termini and
+	// pending-etx entries behind, which then fail PCRC / ETX collection
+	// (ErrSubNotSyncedToDom) on the canonical blocks that replace them during
+	// resync, permanently stalling the head. Removing all of it gives a fully
+	// self-consistent checkpoint to resync forward from.
+	cleanBlock := func(wo *types.WorkObject, number uint64) {
+		if wo == nil {
+			return
+		}
+		hash := wo.Hash()
+		rawdb.DeleteWorkObject(batch, hash, number, types.BlockObject)
+		rawdb.DeleteCanonicalHash(batch, number)
+		rawdb.DeleteHeaderNumber(batch, hash)
+		rawdb.DeleteTermini(batch, hash)
+		if nodeCtx != common.ZONE_CTX {
+			rawdb.DeletePendingEtxs(batch, hash)
+			rawdb.DeletePendingEtxsRollup(batch, hash)
+		}
+		rawdb.DeleteTrieNode(batch, wo.EVMRoot())
 	}
+
+	// 1. If the head is above the target, walk the canonical chain back down to
+	//    the target, unwinding state via the tested SetCurrentHeader reorg path,
+	//    then purge each removed block's state.
+	if curNum > target {
+		var fork []*types.WorkObject
+		h := cur
+		for h != nil && h.NumberU64(nodeCtx) > target {
+			fork = append(fork, h)
+			h = hc.GetHeaderByHash(h.ParentHash(nodeCtx))
+		}
+		if h == nil {
+			return fmt.Errorf("could not find block %d on the current chain", target)
+		}
+		hc.logger.WithFields(log.Fields{"from": curNum, "to": target, "hash": h.Hash()}).
+			Warn("rewind-to-block: force-rewinding chain head (operator recovery)")
+		if err := hc.SetCurrentHeader(h, true); err != nil {
+			return err
+		}
+		for _, wo := range fork {
+			cleanBlock(wo, wo.NumberU64(nodeCtx))
+		}
+	} else {
+		hc.logger.WithFields(log.Fields{"current": curNum, "target": target}).
+			Warn("rewind-to-block: head already at target; purging stale forward state")
+	}
+
+	// 2. Purge any canonical blocks left ABOVE the target. A prior interrupted
+	//    resync can leave inconsistent/orphaned blocks above the head (e.g. a
+	//    coincident block present in one context but not another) that block the
+	//    head from advancing cleanly. Clearing them lets resync rebuild forward.
+	purgedAbove := 0
+	for n := target + 1; ; n++ {
+		hash := rawdb.ReadCanonicalHash(hc.headerDb, n)
+		if (hash == common.Hash{}) {
+			break
+		}
+		cleanBlock(rawdb.ReadWorkObject(hc.headerDb, n, hash, types.BlockObject), n)
+		rawdb.DeleteCanonicalHash(batch, n)
+		purgedAbove++
+	}
+
 	if err := batch.Write(); err != nil {
 		return err
 	}
+
+	// 3. Drop stale in-memory caches and head/best-pending-header pointers so no
+	//    stale view of the removed state survives the rewind.
+	hc.headerCache.Purge()
+	hc.numberCache.Purge()
+	if hc.pendingEtxs != nil {
+		hc.pendingEtxs.Purge()
+	}
+	if hc.pendingEtxsRollup != nil {
+		hc.pendingEtxsRollup.Purge()
+	}
+	if hc.bc != nil {
+		hc.bc.blockCache.Purge()
+		hc.bc.bodyCache.Purge()
+		hc.bc.bodyProtoCache.Purge()
+	}
+	rawdb.DeleteAllHeadsHashes(hc.headerDb)
+	rawdb.DeleteBestPhKey(hc.headerDb)
+	rawdb.WriteHeadBlockHash(hc.headerDb, hc.CurrentHeader().Hash())
+
 	hc.logger.WithFields(log.Fields{
-		"purged":  len(forkBlocks),
-		"newHead": target,
-	}).Warn("rewind-to-block: purged orphaned fork blocks; node will resync forward onto canonical")
+		"newHead":     target,
+		"purgedAbove": purgedAbove,
+	}).Warn("rewind-to-block: rolled back head and purged forward/stale state; node will resync forward onto canonical")
 	return nil
 }
 
