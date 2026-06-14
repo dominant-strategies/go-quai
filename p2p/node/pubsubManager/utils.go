@@ -20,9 +20,9 @@ const (
 	C_headerType                        = "headers"
 	C_workObjectShareType               = "worksharev2"
 	C_auxTemplateType                   = "auxtemplate"
-	C_workObjectRequestDegree           = 3
-	C_workObjectHeaderTypeRequestDegree = 3
-	C_defaultRequestDegree              = 3
+	C_workObjectRequestDegree           = 5
+	C_workObjectHeaderTypeRequestDegree = 5
+	C_defaultRequestDegree              = 4
 )
 
 type Topic struct {

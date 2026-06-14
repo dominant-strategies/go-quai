@@ -3,6 +3,8 @@ package pubsubManager_test
 import (
 	"testing"
 
+	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 )
 
@@ -54,5 +56,33 @@ func TestTopicFromString(t *testing.T) {
 			t.Logf("actual   %s", toString)
 			t.Errorf("Encoded string does not match decoded")
 		}
+	}
+}
+
+func TestNewTopicRequestDegree(t *testing.T) {
+	genesis := common.HexToHash("0x0011223344556677889900112233445566778899001122334455667788990011")
+	location := common.Location{0, 0}
+
+	testcases := []struct {
+		name   string
+		data   interface{}
+		degree int
+	}{
+		{name: "blocks", data: &types.WorkObjectBlockView{}, degree: pubsubManager.C_workObjectRequestDegree},
+		{name: "headers", data: &types.WorkObjectHeaderView{}, degree: pubsubManager.C_workObjectHeaderTypeRequestDegree},
+		{name: "workshares", data: &types.WorkObjectShareView{}, degree: pubsubManager.C_defaultRequestDegree},
+		{name: "aux templates", data: &types.AuxTemplate{}, degree: pubsubManager.C_defaultRequestDegree},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			topic, err := pubsubManager.NewTopic(genesis, location, tc.data)
+			if err != nil {
+				t.Fatalf("NewTopic returned unexpected error: %v", err)
+			}
+			if topic.GetRequestDegree() != tc.degree {
+				t.Fatalf("GetRequestDegree returned %d, want %d", topic.GetRequestDegree(), tc.degree)
+			}
+		})
 	}
 }

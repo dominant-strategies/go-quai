@@ -22,13 +22,16 @@ const (
 	// c_missingBlockChanSize is the size of channel listening to the MissingBlockEvent
 	c_missingBlockChanSize = 60
 	// c_checkNextPrimeBlockInterval is the interval for checking the next Block in Prime
-	c_checkNextPrimeBlockInterval = 10 * time.Second
+	c_checkNextPrimeBlockInterval = 3 * time.Second
 	// c_recentBlockReqCache is the size of the cache for the recent block requests
 	c_recentBlockReqCache = 1000
 	// c_recentBlockReqTimeout is the timeout for the recent block requests cache
 	c_recentBlockReqTimeout = 1 * time.Minute
+	// c_primeBlockForwardCatchupBatches controls how many adjacent forward batches
+	// are fetched once sync finds an already appended prime block near the tip.
+	c_primeBlockForwardCatchupBatches = 4
 	// c_primeBlockSyncDepth is how far back the prime block downloading will start
-	c_primeBlockSyncDepth = 2000
+	c_primeBlockSyncDepth = 4000
 )
 
 var (
@@ -221,13 +224,13 @@ func (h *handler) checkNextPrimeBlock() {
 					}
 					// the prime block on this try already existed in the database
 					if err := h.GetNextPrimeBlock(syncHeight); err != nil {
-						// If i > 2 * protocol.C_NumPrimeBlocksToDownload that
-						// means the blocks that the node wanted has alreay been
-						// downloaded otherwise, download next 2 *
-						// protocol.C_NumPrimeBlocksToDownload
-						if i < 2*protocol.C_NumPrimeBlocksToDownload {
-							h.GetNextPrimeBlock(syncHeight.Add(syncHeight, big.NewInt(protocol.C_NumPrimeBlocksToDownload)))
-							h.GetNextPrimeBlock(syncHeight.Add(new(big.Int).Add(syncHeight, big.NewInt(protocol.C_NumPrimeBlocksToDownload)), big.NewInt(protocol.C_NumPrimeBlocksToDownload)))
+						// When overlap is found close to the tip, opportunistically
+						// fetch a few adjacent forward batches to reduce catch-up lag.
+						if i < c_primeBlockForwardCatchupBatches*protocol.C_NumPrimeBlocksToDownload {
+							for batch := 1; batch <= c_primeBlockForwardCatchupBatches; batch++ {
+								nextHeight := new(big.Int).Add(syncHeight, big.NewInt(int64(batch*protocol.C_NumPrimeBlocksToDownload)))
+								h.GetNextPrimeBlock(nextHeight)
+							}
 						}
 						break
 					}

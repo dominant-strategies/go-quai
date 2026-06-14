@@ -7,6 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 	libp2pmetrics "github.com/libp2p/go-libp2p/core/metrics"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 
@@ -17,9 +18,28 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
+	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
 )
+
+func (p *P2PNode) waitForStream(peerID peer.ID) (network.Stream, error) {
+	var (
+		stream network.Stream
+		err    error
+	)
+	for attempt := 0; attempt < c_streamOpenRetryCount; attempt++ {
+		stream, err = p.GetStream(peerID)
+		if err == nil {
+			return stream, nil
+		}
+		if err != streamManager.ErrStreamNotFound {
+			return nil, err
+		}
+		time.Sleep(c_streamOpenRetryInterval)
+	}
+	return nil, err
+}
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
 func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}) (interface{}, error) {
@@ -42,7 +62,7 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 		"peerId": peerID,
 		"topic":  topic,
 	}).Trace("Requesting the data from peer")
-	stream, err := p.GetStream(peerID)
+	stream, err := p.waitForStream(peerID)
 	if err != nil {
 		return nil, err
 	}

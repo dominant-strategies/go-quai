@@ -15,6 +15,8 @@ const (
 	// timeout in seconds before a read/write operation on the stream is considered failed
 	// TODO: consider making this dynamic based on the network latency
 	c_stream_write_deadline = 10 * time.Second
+	// Bound direct stream reads to avoid allocating attacker-controlled buffers.
+	maxStreamMessageSize = 64 << 20
 )
 
 // Reads the message from the stream and returns a byte of data.
@@ -25,6 +27,9 @@ func ReadMessageFromStream(stream network.Stream, protoversion protocol.ID, repo
 		return nil, errors.Wrap(err, "failed to read message length")
 	}
 	msgLen := binary.BigEndian.Uint32(lenBytes)
+	if msgLen > maxStreamMessageSize {
+		return nil, errors.Errorf("stream message too large: %d > %d", msgLen, maxStreamMessageSize)
+	}
 
 	// Now read the message
 	data := make([]byte, msgLen)
