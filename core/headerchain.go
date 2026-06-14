@@ -240,6 +240,16 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 	curNum := cur.NumberU64(nodeCtx)
 
 	batch := hc.headerDb.NewBatch()
+	maybeFlush := func() error {
+		if batch.ValueSize() < ethdb.IdealBatchSize {
+			return nil
+		}
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		batch.Reset()
+		return nil
+	}
 
 	// cleanBlock purges all per-block state for a block being removed from the
 	// chain, mirroring cleanCacheAndDatabaseTillBlock. Deleting only the canonical
@@ -247,12 +257,9 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 	// pending-etx entries behind, which then fail PCRC / ETX collection
 	// (ErrSubNotSyncedToDom) on the canonical blocks that replace them during
 	// resync, permanently stalling the head. Removing all of it gives a fully
-	// self-consistent checkpoint to resync forward from.
-	cleanBlock := func(wo *types.WorkObject, number uint64) {
-		if wo == nil {
-			return
-		}
-		hash := wo.Hash()
+	// self-consistent checkpoint to resync forward from. Works from hash+number so
+	// it can clean orphans whose body is no longer readable.
+	cleanBlock := func(hash common.Hash, number uint64) {
 		rawdb.DeleteWorkObject(batch, hash, number, types.BlockObject)
 		rawdb.DeleteCanonicalHash(batch, number)
 		rawdb.DeleteHeaderNumber(batch, hash)
@@ -261,7 +268,9 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 			rawdb.DeletePendingEtxs(batch, hash)
 			rawdb.DeletePendingEtxsRollup(batch, hash)
 		}
-		rawdb.DeleteTrieNode(batch, wo.EVMRoot())
+		if wo := rawdb.ReadWorkObject(hc.headerDb, number, hash, types.BlockObject); wo != nil {
+			rawdb.DeleteTrieNode(batch, wo.EVMRoot())
+		}
 	}
 
 	// 1. If the head is above the target, walk the canonical chain back down to
@@ -283,26 +292,24 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 			return err
 		}
 		for _, wo := range fork {
-			cleanBlock(wo, wo.NumberU64(nodeCtx))
+			cleanBlock(wo.Hash(), wo.NumberU64(nodeCtx))
 		}
 	} else {
 		hc.logger.WithFields(log.Fields{"current": curNum, "target": target}).
 			Warn("rewind-to-block: head already at target; purging stale forward state")
 	}
 
-	// 2. Purge any canonical blocks left ABOVE the target. A prior interrupted
-	//    resync can leave inconsistent/orphaned blocks above the head (e.g. a
-	//    coincident block present in one context but not another) that block the
-	//    head from advancing cleanly. Clearing them lets resync rebuild forward.
-	purgedAbove := 0
-	for n := target + 1; ; n++ {
-		hash := rawdb.ReadCanonicalHash(hc.headerDb, n)
-		if (hash == common.Hash{}) {
-			break
+	// 2. Purge every block stored ABOVE the target, including non-canonical
+	//    orphans (a canonical-hash scan misses those). A prior interrupted resync
+	//    can leave a tangle of orphans and a coincident block present in one
+	//    context but not another, which blocks the head from advancing cleanly.
+	//    Clearing it all lets resync rebuild forward from a clean checkpoint.
+	above := rawdb.ReadHashesAboveNumber(hc.headerDb, target)
+	for _, hn := range above {
+		cleanBlock(hn.Hash, hn.Number)
+		if err := maybeFlush(); err != nil {
+			return err
 		}
-		cleanBlock(rawdb.ReadWorkObject(hc.headerDb, n, hash, types.BlockObject), n)
-		rawdb.DeleteCanonicalHash(batch, n)
-		purgedAbove++
 	}
 
 	if err := batch.Write(); err != nil {
@@ -330,7 +337,7 @@ func (hc *HeaderChain) rewindHeadTo(target uint64) error {
 
 	hc.logger.WithFields(log.Fields{
 		"newHead":     target,
-		"purgedAbove": purgedAbove,
+		"purgedAbove": len(above),
 	}).Warn("rewind-to-block: rolled back head and purged forward/stale state; node will resync forward onto canonical")
 	return nil
 }
