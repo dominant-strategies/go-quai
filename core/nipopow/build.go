@@ -164,7 +164,10 @@ func compressPrimeChain(chain []*types.WorkObject, m int) []*types.WorkObject {
 	current := 0
 	for current < suffixStart {
 		farthest := current + 1
-		for candidate := suffixStart; candidate > current+1; candidate-- {
+		// Search the full chain (including suffix headers) for interlink jump
+		// targets. Suffix headers must remain linear in the proof regardless,
+		// but using them as jump targets can skip more prefix headers.
+		for candidate := len(chain) - 1; candidate > current; candidate-- {
 			if interlinksContain(chain[candidate].InterlinkHashes(), chain[current].Hash()) {
 				farthest = candidate
 				break
