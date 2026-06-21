@@ -172,6 +172,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		} else if in.evm.Context.BlockNumber.Cmp(new(big.Int).SetInt64(params.MaxCodeSizeForkHeight)) < 0 && NewOpCodes[op] {
 			// The new opcodes are not allowed before the fork block
 			return nil, &ErrInvalidOpCode{opcode: op}
+		} else if op == POWHASH && in.evm.Context.BlockNumber.Cmp(new(big.Int).SetInt64(params.PowHashForkHeight)) < 0 {
+			return nil, &ErrInvalidOpCode{opcode: op}
 		}
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {

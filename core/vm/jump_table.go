@@ -390,6 +390,12 @@ func newInstructionSet() JumpTable {
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
+		POWHASH: {
+			execute:     opPowhash,
+			constantGas: gasEtxStep,
+			minStack:    minStack(1, 1),
+			maxStack:    maxStack(1, 1),
+		},
 		COINBASE: {
 			execute:     opCoinbase,
 			constantGas: gasQuickStep,

@@ -77,6 +77,8 @@ type BlockContext struct {
 	Transfer TransferFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
+	// GetPowHash returns the PoW hash corresponding to block n
+	GetPowHash GetHashFunc
 	// CheckIfEtxEligible returns true if etx is eligible for the input location
 	CheckIfEtxEligible CheckIfEtxEligibleFunc
 
