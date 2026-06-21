@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 
@@ -223,12 +224,7 @@ func (n *Node) openEndpoints() error {
 
 // containsLifecycle checks if 'lfs' contains 'l'.
 func containsLifecycle(lfs []Lifecycle, l Lifecycle) bool {
-	for _, obj := range lfs {
-		if obj == l {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(lfs, l)
 }
 
 // stopServices terminates running services, RPC and p2p networking.
