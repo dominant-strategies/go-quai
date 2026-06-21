@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -75,6 +76,18 @@ type P2PNode struct {
 
 	// libp2p bandwidth counter
 	bandwidthCounter *libp2pmetrics.BandwidthCounter
+
+	// Optional static peers to dial and prefer for request/response.
+	//
+	// Motivation: in environments where peer discovery is unreliable (e.g. behind
+	// restrictive firewalls / K8s egress rules), a user can specify a known-good
+	// peer (often a publicly reachable, fully synced node) to improve bootstrap
+	// and sync reliability.
+	staticPeers []peer.AddrInfo
+
+	// If true, request/response will only target static peers (when configured).
+	// Pubsub remains enabled; this only affects direct request/response selection.
+	staticPeersOnly bool
 }
 
 // buildAddrsFactory creates an AddrsFactory that replaces announced addresses
@@ -102,6 +115,15 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 	port := viper.GetString(utils.P2PPortFlag.Name)
 	externalAddr := viper.GetString(utils.ExternalAddrFlag.Name)
 	forcePublic := viper.GetBool(utils.ForcePublicFlag.Name)
+
+	// Static peers are explicit dial targets (multiaddrs including /p2p/<peerID>).
+	// They are distinct from bootpeers (which are mainly used for DHT bootstrap
+	// and as static relays for AutoRelay).
+	staticPeers, err := parsePeerAddrInfos(viper.GetStringSlice(utils.StaticPeersFlag.Name))
+	if err != nil {
+		return nil, err
+	}
+	staticPeersOnly := viper.GetBool(utils.StaticPeersOnlyFlag.Name)
 
 	// Peer manager handles both connection management and connection gating
 	peerMgr, err := peerManager.NewManager(
@@ -284,6 +306,8 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 		host:             host,
 		dht:              dht,
 		bandwidthCounter: bwctr,
+		staticPeers:      staticPeers,
+		staticPeersOnly:  staticPeersOnly,
 	}
 
 	sm, err := streamManager.NewStreamManager(p2p, host)
@@ -352,6 +376,27 @@ func createCache(size int) *lru.Cache[common.Hash, interface{}] {
 		log.Global.Fatal("error initializing cache;", err)
 	}
 	return cache
+}
+
+func parsePeerAddrInfos(rawPeers []string) ([]peer.AddrInfo, error) {
+	infos := make([]peer.AddrInfo, 0, len(rawPeers))
+	for _, raw := range rawPeers {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		addr, err := multiaddr.NewMultiaddr(raw)
+		if err != nil {
+			return nil, err
+		}
+		// Parse multiaddrs of the form /ip4/.../tcp/.../p2p/<peerID>.
+		info, err := peer.AddrInfoFromP2pAddr(addr)
+		if err != nil {
+			return nil, err
+		}
+		infos = append(infos, *info)
+	}
+	return infos, nil
 }
 
 // Get the full multi-address to reach our node
