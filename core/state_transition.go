@@ -448,9 +448,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, fmt.Errorf("Unable to self-destruct: %v", err)
 		}
 		balance := st.evm.StateDB.GetBalance(fromInternal)
+		// Mirror opSuicide: grant the state-rent refund at most once per account.
+		// Eligibility must be evaluated before Suicide() marks the account.
+		// Pre-fork behavior (refund always added) is preserved for replay.
+		mintRefund := st.evm.Context.PrimeTerminusNumber < params.SelfDestructRefundForkBlock || !st.evm.StateDB.HasSuicided(fromInternal)
 		st.evm.StateDB.Suicide(fromInternal)
-		refund := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(st.evm.Context.QuaiStateSize)))
-		balance.Add(balance, refund)
+		if mintRefund {
+			refund := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(st.evm.Context.QuaiStateSize)))
+			balance.Add(balance, refund)
+		}
 		st.evm.StateDB.AddBalance(beneficiary, balance)
 
 		effectiveTip := st.fee()
