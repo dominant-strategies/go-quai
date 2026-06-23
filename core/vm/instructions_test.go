@@ -256,3 +256,99 @@ func TestOpTstore(t *testing.T) {
 		t.Fatal("incorrect element read from transient storage")
 	}
 }
+
+func TestOpSuicideStateRentRefundBeforeAndAfterFork(t *testing.T) {
+	tests := []struct {
+		name                string
+		primeTerminusNumber uint64
+		wantRefunds         int64
+	}{
+		{
+			name:                "before fork refunds every selfdestruct",
+			primeTerminusNumber: params.SelfDestructRefundForkBlock - 1,
+			wantRefunds:         2,
+		},
+		{
+			name:                "at fork refunds first selfdestruct only",
+			primeTerminusNumber: params.SelfDestructRefundForkBlock,
+			wantRefunds:         1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			evm, statedb, contract, beneficiary := newOpSuicideTestEnv(t, tc.primeTerminusNumber)
+
+			for i := 0; i < 2; i++ {
+				stack := newstack()
+				stack.push(new(uint256.Int).SetBytes(beneficiary.Bytes()))
+
+				pc := uint64(0)
+				if _, err := opSuicide(&pc, evm.interpreter, &ScopeContext{Memory: NewMemory(), Stack: stack, Contract: contract}); err != nil {
+					t.Fatalf("opSuicide call %d returned error: %v", i+1, err)
+				}
+			}
+
+			refund := new(big.Int).Mul(evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(evm.Context.QuaiStateSize)))
+			want := new(big.Int).Mul(refund, big.NewInt(tc.wantRefunds))
+			if have := statedb.GetBalance(beneficiary); have.Cmp(want) != 0 {
+				t.Fatalf("beneficiary balance mismatch: want %v have %v", want, have)
+			}
+		})
+	}
+}
+
+func newOpSuicideTestEnv(t *testing.T, primeTerminusNumber uint64) (*EVM, *state.StateDB, *Contract, common.InternalAddress) {
+	t.Helper()
+
+	location := common.Location{0, 0}
+	db := rawdb.NewMemoryDatabase(log.Global)
+	statedb, err := state.New(
+		common.Hash{},
+		common.Hash{},
+		new(big.Int),
+		state.NewDatabase(db),
+		state.NewDatabase(db),
+		nil,
+		location,
+		log.Global,
+	)
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+
+	contractAddr := common.HexToAddress("0x0000000000000000000000000000000000000001", location)
+	beneficiaryAddr := common.HexToAddress("0x0000000000000000000000000000000000000002", location)
+	contractInternal, err := contractAddr.InternalAndQuaiAddress()
+	if err != nil {
+		t.Fatalf("contract address: %v", err)
+	}
+	beneficiaryInternal, err := beneficiaryAddr.InternalAndQuaiAddress()
+	if err != nil {
+		t.Fatalf("beneficiary address: %v", err)
+	}
+
+	statedb.CreateAccount(contractInternal)
+	statedb.CreateAccount(beneficiaryInternal)
+	statedb.AddAddressToAccessList(contractAddr.Bytes20())
+	statedb.AddAddressToAccessList(beneficiaryAddr.Bytes20())
+
+	chainConfig := *params.TestChainConfig
+	chainConfig.Location = location
+	evm := NewEVM(
+		BlockContext{
+			BlockNumber:         new(big.Int).SetUint64(primeTerminusNumber),
+			BaseFee:             big.NewInt(3),
+			QuaiStateSize:       new(big.Int),
+			PrimeTerminusNumber: primeTerminusNumber,
+		},
+		TxContext{},
+		statedb,
+		&chainConfig,
+		Config{},
+		nil,
+	)
+	contract := NewContract(AccountRef(contractAddr), AccountRef(contractAddr), new(big.Int), 0)
+
+	return evm, statedb, contract, beneficiaryInternal
+}

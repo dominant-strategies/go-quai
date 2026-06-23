@@ -867,8 +867,15 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 	balance := interpreter.evm.StateDB.GetBalance(addr)
 	interpreter.evm.StateDB.AddBalance(beneficiaryAddr, balance)
-	refund := new(big.Int).Mul(interpreter.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(interpreter.evm.Context.QuaiStateSize)))
-	interpreter.evm.StateDB.AddBalance(beneficiaryAddr, refund)
+	// State-rent refund credited to the beneficiary on SELFDESTRUCT.
+	// At/after the fork the refund is granted at most once per account: it is
+	// skipped if the account was already self-destructed earlier in this
+	// transaction, mirroring how the balance transfer self-nullifies once Suicide
+	// has zeroed the balance. Pre-fork behavior is preserved for replay.
+	if interpreter.evm.Context.PrimeTerminusNumber < params.SelfDestructRefundForkBlock || !interpreter.evm.StateDB.HasSuicided(addr) {
+		refund := new(big.Int).Mul(interpreter.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(interpreter.evm.Context.QuaiStateSize)))
+		interpreter.evm.StateDB.AddBalance(beneficiaryAddr, refund)
+	}
 	interpreter.evm.StateDB.Suicide(addr)
 	return nil, nil
 }

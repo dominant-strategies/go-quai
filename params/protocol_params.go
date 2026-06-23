@@ -261,6 +261,8 @@ var (
 	InclusionDepthUpdatePeriod  uint64 = 100 // Number of blocks between each inclusion depth update check
 	NewShareLivenessTimeForSha  uint32 = 30
 	NoPenaltyTimeThreshold      uint32 = 3
+
+	SelfDestructRefundForkBlock uint64 = 1563900
 )
 
 var (
