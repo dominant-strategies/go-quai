@@ -14,6 +14,10 @@ import (
 )
 
 func newValueOverflowTestEnv(t *testing.T) (*EVM, *state.StateDB, *Contract, common.InternalAddress) {
+	return newValueOverflowTestEnvAt(t, params.SelfDestructRefundForkBlock)
+}
+
+func newValueOverflowTestEnvAt(t *testing.T, primeTerminusNumber uint64) (*EVM, *state.StateDB, *Contract, common.InternalAddress) {
 	t.Helper()
 
 	location := common.Location{0, 0}
@@ -52,7 +56,7 @@ func newValueOverflowTestEnv(t *testing.T) (*EVM, *state.StateDB, *Contract, com
 			CheckIfEtxEligible:  checkEtxEligible,
 			BlockNumber:         big.NewInt(1),
 			QuaiStateSize:       new(big.Int),
-			PrimeTerminusNumber: params.ControllerKickInBlock,
+			PrimeTerminusNumber: primeTerminusNumber,
 		},
 		TxContext{
 			Hash:     common.HexToHash("0x1"),
@@ -125,6 +129,64 @@ func assertRejectedWithoutSideEffects(t *testing.T, opName string, stack *Stack,
 	if len(evm.ETXCache) != 0 {
 		t.Fatalf("%s overflow should not emit ETX, have %d", opName, len(evm.ETXCache))
 	}
+}
+
+func assertAcceptedWithWrappedDebit(t *testing.T, opName string, stack *Stack, evm *EVM, statedb *state.StateDB, sender common.InternalAddress, wantBalance *big.Int) {
+	t.Helper()
+
+	if stack.len() != 1 || stack.peek().IsZero() {
+		t.Fatalf("%s should accept with non-zero status", opName)
+	}
+	if balance := statedb.GetBalance(sender); balance.Cmp(wantBalance) != 0 {
+		t.Fatalf("%s sender balance mismatch: have %v want %v", opName, balance, wantBalance)
+	}
+	if len(evm.ETXCache) != 1 {
+		t.Fatalf("%s should emit one ETX, have %d", opName, len(evm.ETXCache))
+	}
+}
+
+func TestOpConvertAllowsLegacyValueDebitOverflowBeforeFork(t *testing.T) {
+	evm, statedb, contract, sender := newValueOverflowTestEnvAt(t, params.SelfDestructRefundForkBlock-1)
+
+	_, stackValue := wrappingValueForFee(params.TxGas, 1)
+	toAddr := common.HexToAddress("0x0083e45Aa16163f2663015B6695894D918866D19", common.Location{0, 0})
+
+	stack := newstack()
+	stack.push(uint256.NewInt(params.TxGas))
+	stack.push(stackValue)
+	stack.push(new(uint256.Int).SetBytes(toAddr.Bytes()))
+	stack.push(uint256.NewInt(0))
+
+	pc := uint64(0)
+	if _, err := opConvert(&pc, evm.interpreter, &ScopeContext{Memory: NewMemory(), Stack: stack, Contract: contract}); err != nil {
+		t.Fatalf("opConvert returned error: %v", err)
+	}
+	assertAcceptedWithWrappedDebit(t, "opConvert", stack, evm, statedb, sender, new(big.Int))
+}
+
+func TestOpETXAllowsLegacyValueDebitOverflowBeforeFork(t *testing.T) {
+	evm, statedb, contract, sender := newValueOverflowTestEnvAt(t, params.SelfDestructRefundForkBlock-1)
+
+	_, stackValue := wrappingValueForFee(params.TxGas, 1)
+	toAddr := crypto.CreateAddress(common.HexToAddress("0x0100000000000000000000000000000000000000", common.Location{0, 0}), 1, nil, common.Location{0, 1})
+
+	stack := newstack()
+	stack.push(uint256.NewInt(0))
+	stack.push(uint256.NewInt(0))
+	stack.push(uint256.NewInt(0))
+	stack.push(uint256.NewInt(0))
+	stack.push(uint256.NewInt(1))
+	stack.push(uint256.NewInt(0))
+	stack.push(uint256.NewInt(params.TxGas))
+	stack.push(stackValue)
+	stack.push(new(uint256.Int).SetBytes(toAddr.Bytes()))
+	stack.push(uint256.NewInt(0))
+
+	pc := uint64(0)
+	if _, err := opETX(&pc, evm.interpreter, &ScopeContext{Memory: NewMemory(), Stack: stack, Contract: contract}); err != nil {
+		t.Fatalf("opETX returned error: %v", err)
+	}
+	assertAcceptedWithWrappedDebit(t, "opETX", stack, evm, statedb, sender, new(big.Int))
 }
 
 func TestOpConvertRejectsValueDebitOverflow(t *testing.T) {
