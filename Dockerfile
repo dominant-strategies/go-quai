@@ -1,6 +1,9 @@
 # First stage: build the Go binary
 FROM golang:1.23-alpine AS builder
 
+# Build-time argument for network (colosseum, garden, orchard, lighthouse, local)
+ARG NETWORK=colosseum
+
 # Install make and other build dependencies
 RUN apk --no-cache add make gcc musl-dev
 # Set the Current Working Directory inside the container
@@ -42,6 +45,10 @@ COPY --from=builder /app/params/forfeiture_addresses.json ./params/forfeiture_ad
 
 # Ensure the binary has execute permissions
 RUN chmod +x ./build/bin/go-quai
+
+# Configurable environment (colosseum, garden, orchard, lighthouse, local)
+ENV QUAI_ENVIRONMENT=colosseum
+ENV QUAI_LOG_LEVEL=info
 
 # Expose the necessary ports
 EXPOSE 4002/tcp 4002/udp 8001 8002 8200 9001 9002 9200

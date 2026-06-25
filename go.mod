@@ -1,8 +1,6 @@
 module github.com/dominant-strategies/go-quai
 
-go 1.23.4
-
-toolchain go1.23.6
+go 1.24
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
@@ -17,10 +15,8 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dominant-strategies/bn256 v0.0.0-20250117181620-a3c0ff77c445
-	github.com/dominant-strategies/ltcd/ltcutil v0.0.0-20251016174055-4ac338381b32
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/gcash/bchd v0.21.1
-	github.com/gcash/bchutil v0.0.0-20250513235300-39ac514d072b
 	github.com/golang/snappy v0.0.4
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/websocket v1.5.0
@@ -39,6 +35,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pelletier/go-toml/v2 v2.1.0
+	github.com/pires/go-proxyproto v0.8.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/tsdb v0.10.0
 	github.com/rs/cors v1.11.1
@@ -76,12 +73,14 @@ require (
 	github.com/decred/dcrd/crypto/blake256 v1.0.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dominant-strategies/ltcd/btcec/v2 v2.0.0-20251016174055-4ac338381b32 // indirect
+	github.com/dominant-strategies/ltcd/ltcutil v0.0.0-20251016174055-4ac338381b32 // indirect
 	github.com/dominant-strategies/ltcd/secp256k1_ltc v0.0.0-20251016174055-4ac338381b32 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/gcash/bchlog v0.0.0-20180913005452-b4f036f92fa6 // indirect
+	github.com/gcash/bchutil v0.0.0-20250513235300-39ac514d072b // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
