@@ -402,6 +402,21 @@ func (ec *Client) SendTransactionToPoolSharingClient(ctx context.Context, tx *ty
 	return ec.c.CallContext(ctx, nil, "quai_receiveTxFromPoolSharingClient", hexutil.Encode(data))
 }
 
+// SendStemTransaction relays a Qi transaction to a peer node as a Dandelion
+// stem hop: the receiver adds it to its pool without broadcasting and either
+// relays the stem onward or fluffs it.
+func (ec *Client) SendStemTransaction(ctx context.Context, tx *types.Transaction) error {
+	protoTx, err := tx.ProtoEncode()
+	if err != nil {
+		return err
+	}
+	data, err := proto.Marshal(protoTx)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "quai_receiveStemTransaction", hexutil.Encode(data))
+}
+
 func (ec *Client) GetWorkShareP2PThreshold(ctx context.Context) uint64 {
 	var threshold hexutil.Uint64
 	err := ec.c.CallContext(ctx, &threshold, "quai_getWorkShareP2PThreshold")

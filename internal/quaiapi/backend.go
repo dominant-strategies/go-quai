@@ -164,6 +164,7 @@ type Backend interface {
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
 	GetPoolGasPrice() *big.Int
 	SendTxToSharingClients(tx *types.Transaction) error
+	ReceiveStemTransaction(tx *types.Transaction) error
 	GetRollingFeeInfo() (min, max, avg *big.Int)
 	QiTxPoolStatus(txHash common.Hash) *core.QiTxPoolStatus
 	GetBlockFilter(blockHash common.Hash) []byte

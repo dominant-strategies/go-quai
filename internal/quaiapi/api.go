@@ -1612,6 +1612,30 @@ func (s *PublicTransactionPoolAPI) ReceiveTxFromPoolSharingClient(ctx context.Co
 	return nil
 }
 
+// ReceiveStemTransaction accepts a Qi transaction relayed by a Dandelion
+// stem peer. The tx joins the pool without being publicly broadcast by this
+// node; the stem either continues to one of this node's sharing clients or
+// the tx is fluffed here.
+func (s *PublicTransactionPoolAPI) ReceiveStemTransaction(ctx context.Context, input hexutil.Bytes) error {
+	if s.b.NodeCtx() != common.ZONE_CTX {
+		return errors.New("stem transactions can only be received in zone chains")
+	}
+	if !s.b.ProcessingState() {
+		return errors.New("stem transactions cannot be received in a node that is not processing state")
+	}
+	tx := new(types.Transaction)
+	protoTransaction := new(types.ProtoTransaction)
+	err := proto.Unmarshal(input, protoTransaction)
+	if err != nil {
+		return err
+	}
+	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
+	if err != nil {
+		return err
+	}
+	return s.b.ReceiveStemTransaction(tx)
+}
+
 // PublicDebugAPI is the collection of Quai APIs exposed over the public
 // debugging endpoint.
 type PublicDebugAPI struct {

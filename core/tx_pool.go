@@ -18,6 +18,8 @@ package core
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -200,6 +202,9 @@ type TxPoolConfig struct {
 	ReorgFrequency  time.Duration // Frequency of reorgs outside of new head events
 
 	SharingClientsEndpoints []string // List of end points of the nodes to share the incoming local transactions with
+
+	Dandelion       bool   // Enable Dandelion-style stem/fluff relay for locally submitted Qi transactions
+	StemProbability uint64 // Percent chance [0,100] that a stem Qi tx is relayed onward rather than fluffed
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -222,6 +227,9 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	QiTxLifetime:    30 * time.Minute,
 	Lifetime:        5 * time.Minute,
 	ReorgFrequency:  1 * time.Second,
+
+	Dandelion:       true,
+	StemProbability: 90,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -290,6 +298,13 @@ func (config *TxPoolConfig) sanitize(logger *log.Logger) TxPoolConfig {
 			"updated":  DefaultTxPoolConfig.QiTxLifetime,
 		}).Warn("Sanitizing invalid txpool Qi transaction lifetime")
 		conf.QiTxLifetime = DefaultTxPoolConfig.QiTxLifetime
+	}
+	if conf.StemProbability > 100 {
+		logger.WithFields(log.Fields{
+			"provided": conf.StemProbability,
+			"updated":  DefaultTxPoolConfig.StemProbability,
+		}).Warn("Sanitizing invalid txpool stem probability")
+		conf.StemProbability = DefaultTxPoolConfig.StemProbability
 	}
 	if conf.Lifetime < 1 {
 		logger.WithFields(log.Fields{
@@ -370,6 +385,9 @@ type TxPool struct {
 
 	poolSharingClients []*quaiclient.Client
 	poolSharingTxCh    chan *types.Transaction
+
+	stemMu  sync.Mutex               // Protects stemTxs
+	stemTxs map[common.Hash]struct{} // Qi txs currently under a Dandelion stem embargo
 }
 
 type txpoolResetRequest struct {
@@ -447,6 +465,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	pool.qiOutpoints = make(map[types.OutPoint]common.Hash)
 	pool.qiConsolidation = make(map[common.Hash]struct{})
+	pool.stemTxs = make(map[common.Hash]struct{})
 	qiPool, _ := lru.NewWithEvict[common.Hash, *types.TxWithMinerFee](int(config.QiPoolSize), pool.onQiTxDropped)
 	pool.qiPool = qiPool
 
@@ -1764,9 +1783,143 @@ func (pool *TxPool) queueTxEvent(tx *types.Transaction) {
 	}
 }
 
+// stemEmbargo bounds for Dandelion stem relays: an embargo timer fires
+// between stemEmbargoMin and stemEmbargoMin+stemEmbargoJitter after a stem
+// hop, fluffing the tx if it has not become public by then, so a stem peer
+// cannot black-hole it.
+const (
+	stemEmbargoMin    = 10 * time.Second
+	stemEmbargoJitter = 20 * time.Second
+)
+
+// randIntn returns a uniform random int in [0, n) using crypto/rand. Stem
+// routing decisions are an anonymity mechanism, so they must not be
+// predictable; on entropy failure it falls back to 0.
+func randIntn(n int) int {
+	if n <= 1 {
+		return 0
+	}
+	var buf [8]byte
+	if _, err := crand.Read(buf[:]); err != nil {
+		return 0
+	}
+	return int(binary.LittleEndian.Uint64(buf[:]) % uint64(n))
+}
+
+// randomSharingClient returns a uniformly random connected sharing client,
+// or nil if none is available.
+func (pool *TxPool) randomSharingClient() *quaiclient.Client {
+	pool.sharingClientMu.RLock()
+	defer pool.sharingClientMu.RUnlock()
+	candidates := make([]*quaiclient.Client, 0, len(pool.poolSharingClients))
+	for _, client := range pool.poolSharingClients {
+		if client != nil {
+			candidates = append(candidates, client)
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	return candidates[randIntn(len(candidates))]
+}
+
+// stemOrFluffQiTx implements Dandelion-style relay for Qi transactions. With
+// probability StemProbability the tx is forwarded to one randomly chosen
+// sharing client (the stem) and held under an embargo timer; otherwise, or
+// when no sharing client is available, it is fluffed: added to the local
+// pool and queued for public workshare broadcast. origin indicates the tx
+// was submitted to this node over RPC rather than relayed by a stem peer.
+func (pool *TxPool) stemOrFluffQiTx(tx *types.Transaction, origin bool) error {
+	client := pool.randomSharingClient()
+	if client == nil || uint64(randIntn(100)) >= pool.config.StemProbability {
+		return pool.fluffQiTx(tx)
+	}
+	pool.stemMu.Lock()
+	if _, exists := pool.stemTxs[tx.Hash()]; exists {
+		pool.stemMu.Unlock()
+		return nil // already stemming this tx
+	}
+	pool.stemTxs[tx.Hash()] = struct{}{}
+	pool.stemMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), txSharingPoolTimeout)
+	defer cancel()
+	if err := client.SendStemTransaction(ctx, tx); err != nil {
+		pool.logger.WithField("err", err).Warn("Stem relay failed, fluffing Qi tx")
+		pool.stemMu.Lock()
+		delete(pool.stemTxs, tx.Hash())
+		pool.stemMu.Unlock()
+		return pool.fluffQiTx(tx)
+	}
+	embargo := stemEmbargoMin + time.Duration(randIntn(int(stemEmbargoJitter)))
+	time.AfterFunc(embargo, func() {
+		defer func() {
+			if r := recover(); r != nil {
+				pool.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
+		pool.stemMu.Lock()
+		delete(pool.stemTxs, tx.Hash())
+		pool.stemMu.Unlock()
+		if origin && pool.Has(tx.Hash()) {
+			// The tx came back to us through public propagation, so the stem
+			// phase completed elsewhere; nothing to do.
+			return
+		}
+		if err := pool.fluffQiTx(tx); err != nil {
+			pool.logger.WithFields(log.Fields{
+				"err": err,
+				"tx":  tx.Hash().String(),
+			}).Debug("Failed to fluff Qi tx after stem embargo")
+		}
+	})
+	return nil
+}
+
+// fluffQiTx makes a Qi tx public: it enters the local pool (if not already
+// there) and is queued for this node's broadcast set, from where it
+// propagates via workshare gossip.
+func (pool *TxPool) fluffQiTx(tx *types.Transaction) error {
+	if pool.qiPool.Contains(tx.Hash()) {
+		// Already pooled, e.g. added while relaying the stem; flip it to
+		// local so it is broadcast publicly.
+		tx.SetLocal(true)
+		pool.queueTxEvent(tx)
+		return nil
+	}
+	return pool.AddLocal(tx)
+}
+
+// ReceiveStemQiTx handles a Qi tx relayed to this node by a Dandelion stem
+// peer: the tx joins the pool without being marked local (minable, but not
+// broadcast by this node yet) and the stem continues, either onward to one
+// of our own sharing clients or by fluffing here.
+func (pool *TxPool) ReceiveStemQiTx(tx *types.Transaction) error {
+	if tx.Type() != types.QiTxType {
+		return errors.New("stem relay only accepts Qi transactions")
+	}
+	if !pool.config.Dandelion {
+		return pool.AddLocal(tx)
+	}
+	errs := pool.AddRemotes([]*types.Transaction{tx})
+	if errs[0] != nil && !errors.Is(errs[0], ErrAlreadyKnown) {
+		return errs[0]
+	}
+	return pool.stemOrFluffQiTx(tx, false)
+}
+
 // SendTxToSharingClients sends the tx into the pool sharing tx ch and
 // if its full logs it
 func (pool *TxPool) SendTxToSharingClients(tx *types.Transaction) error {
+	// Dandelion stem/fluff for locally submitted Qi transactions: relay
+	// through a single randomly chosen sharing client before public
+	// broadcast, so the first hop cannot tie the tx to its origin.
+	if pool.config.Dandelion && tx.Type() == types.QiTxType {
+		return pool.stemOrFluffQiTx(tx, true)
+	}
 	// If there are no tx pool sharing clients just submit to the local pool
 	if !pool.config.SyncTxWithReturn || len(pool.config.SharingClientsEndpoints) == 0 {
 		err := pool.AddLocal(tx)

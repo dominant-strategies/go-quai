@@ -435,6 +435,10 @@ func (b *QuaiAPIBackend) QiTxPoolStatus(txHash common.Hash) *core.QiTxPoolStatus
 	return b.quai.core.QiTxPoolStatus(txHash)
 }
 
+func (b *QuaiAPIBackend) ReceiveStemTransaction(tx *types.Transaction) error {
+	return b.quai.core.ReceiveStemTransaction(tx)
+}
+
 func (b *QuaiAPIBackend) GetBlockFilter(blockHash common.Hash) []byte {
 	return b.quai.core.GetBlockFilter(blockHash)
 }
