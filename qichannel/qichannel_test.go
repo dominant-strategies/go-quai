@@ -8,6 +8,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto/adaptor"
 	"github.com/dominant-strategies/go-quai/qichannel"
 	"github.com/dominant-strategies/go-quai/qiwallet"
 )
@@ -16,6 +17,11 @@ var (
 	testLocation = common.Location{0, 0}
 	testChainID  = big.NewInt(1337)
 )
+
+func adaptorVerifySecret(t *testing.T, secret *btcec.ModNScalar, point *btcec.PublicKey) bool {
+	t.Helper()
+	return adaptor.VerifySecret(secret, point)
+}
 
 func newKey(t *testing.T) *btcec.PrivateKey {
 	t.Helper()
@@ -342,5 +348,58 @@ func TestRouteFitsChannels(t *testing.T) {
 	}
 	if err := late.FitsChannels([]*qichannel.Channel{a}); err == nil {
 		t.Fatal("expected a route past channel expiry to be rejected")
+	}
+}
+
+func TestInvoiceRoundTrip(t *testing.T) {
+	dest := newKey(t).PubKey()
+	inv, secret, err := qichannel.NewInvoice(dest, big.NewInt(12345), qichannel.LedgerQi, 9000, "coffee")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secret == nil {
+		t.Fatal("no payment secret returned")
+	}
+	encoded, err := inv.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := qichannel.DecodeInvoice(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !decoded.PaymentPoint.IsEqual(inv.PaymentPoint) || !decoded.Destination.IsEqual(inv.Destination) {
+		t.Fatal("keys did not survive the round trip")
+	}
+	if decoded.Amount.Cmp(inv.Amount) != 0 || decoded.ExpiryHeight != inv.ExpiryHeight ||
+		decoded.Ledger != inv.Ledger || decoded.Memo != inv.Memo {
+		t.Fatal("fields did not survive the round trip")
+	}
+	// The payment point must be exactly the point of the retained secret.
+	if !adaptorVerifySecret(t, secret, inv.PaymentPoint) {
+		t.Fatal("invoice point is not the point of the payment secret")
+	}
+	// Expired invoices and malformed strings must be rejected.
+	if err := inv.Validate(9000); err == nil {
+		t.Fatal("expected an expired invoice to be rejected")
+	}
+	if _, err := qichannel.DecodeInvoice("qichan:qi:nonsense"); err == nil {
+		t.Fatal("expected malformed invoice to be rejected")
+	}
+}
+
+func TestInvoiceRouteRespectsExpiry(t *testing.T) {
+	dest := newKey(t).PubKey()
+	inv, _, err := qichannel.NewInvoice(dest, big.NewInt(1000), qichannel.LedgerQi, 5000, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes := []*btcec.PublicKey{newKey(t).PubKey()}
+	fees := []*big.Int{big.NewInt(0)}
+	if _, err := inv.RouteFor(nodes, fees, 4000, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inv.RouteFor(nodes, fees, 5000, 0); err == nil {
+		t.Fatal("expected a deadline at or past invoice expiry to be rejected")
 	}
 }
