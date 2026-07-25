@@ -2203,6 +2203,24 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	return txFeeInQit, etxs, receipt, nil, stepTimings
 }
 
+// QiTxOutputDenominations counts a Qi tx's outputs per denomination the same
+// way block processing does: conversion and wrapping outputs are excluded
+// because they are aggregated into an ETX instead of minting local UTXOs.
+// The result is suitable as the outputs argument of CheckDenominations.
+func QiTxOutputDenominations(tx *types.Transaction, location common.Location) map[uint]uint64 {
+	outputs := make(map[uint]uint64)
+	for _, txOut := range tx.TxOut() {
+		outputs[uint(txOut.Denomination)]++
+		toAddr := common.BytesToAddress(txOut.Address, location)
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() &&
+			(len(tx.Data()) == params.MaxQiTxDataLength || len(tx.Data()) == common.AddressLength) {
+			// Conversion or wrapping output, aggregated into an ETX
+			outputs[uint(txOut.Denomination)]--
+		}
+	}
+	return outputs
+}
+
 // Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.
 func CheckDenominations(inputs, outputs map[uint]uint64) error {
 	carries := make(map[uint]uint64)

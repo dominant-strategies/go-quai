@@ -165,6 +165,7 @@ type Backend interface {
 	GetPoolGasPrice() *big.Int
 	SendTxToSharingClients(tx *types.Transaction) error
 	GetRollingFeeInfo() (min, max, avg *big.Int)
+	QiTxPoolStatus(txHash common.Hash) *core.QiTxPoolStatus
 
 	// Filter API
 	BloomStatus() (uint64, uint64)

@@ -1851,6 +1851,10 @@ func (c *Core) SendTxToSharingClients(tx *types.Transaction) error {
 	return c.sl.txPool.SendTxToSharingClients(tx)
 }
 
+func (c *Core) QiTxPoolStatus(txHash common.Hash) *QiTxPoolStatus {
+	return c.sl.txPool.QiTxStatus(txHash)
+}
+
 func (c *Core) GetRollingFeeInfo() (min, max, avg *big.Int) {
 	return c.Processor().GetRollingFeeInfo()
 }

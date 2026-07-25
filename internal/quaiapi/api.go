@@ -134,6 +134,21 @@ func (s *PublicTxPoolAPI) Status() map[string]hexutil.Uint {
 	}
 }
 
+// QiTxStatus returns the pool status of a Qi transaction: whether it is
+// pending, its fee in qits, and whether it is a denomination-consolidation
+// transaction that is only minable in the first Qi slot of a block.
+func (s *PublicTxPoolAPI) QiTxStatus(txHash common.Hash) map[string]interface{} {
+	status := s.b.QiTxPoolStatus(txHash)
+	result := map[string]interface{}{
+		"pending": status.Pending,
+	}
+	if status.Pending {
+		result["fee"] = (*hexutil.Big)(status.Fee)
+		result["firstSlotOnly"] = status.FirstSlotOnly
+	}
+	return result
+}
+
 // Inspect retrieves the content of the transaction pool and flattens it into an
 // easily inspectable list.
 func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {

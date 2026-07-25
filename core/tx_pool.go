@@ -331,22 +331,25 @@ type TxPool struct {
 	pendingNonces      *txNoncer // Pending state tracking virtual nonces
 	currentMaxGas      uint64    // Current gas limit for transaction caps
 
-	locals         *accountSet                                     // Set of local transaction to exempt from eviction rules
-	journal        *txJournal                                      // Journal of local transaction to back up to disk
-	qiPool         *lru.Cache[common.Hash, *types.TxWithMinerFee]  // Qi pool to store Qi transactions
-	qiTxFees       *lru.Cache[[16]byte, *big.Int]                  // Recent Qi transaction fees (hash is truncated to 16 bytes to save space)
-	pending        map[common.InternalAddress]*txList              // All currently processable transactions
-	queue          map[common.InternalAddress]*txList              // Queued but non-processable transactions
-	beats          map[common.InternalAddress]time.Time            // Last heartbeat from each known account
-	all            *txLookup                                       // All transactions to allow lookups
-	priced         *txPricedList                                   // All transactions sorted by price
-	senders        *lru.Cache[common.Hash, common.InternalAddress] // Tx hash to sender lookup cache (async populated)
-	sendersCh      chan newSender                                  // Channel for async senders cache goroutine
-	feesCh         chan newFee                                     // Channel for async Qi fees cache goroutine
-	invalidQiTxsCh chan []*common.Hash                             // Channel for async invalid Qi transactions
-	SendersMu      sync.RWMutex                                    // Mutex for priority access of senders cache
-	localTxsCount  int                                             // count of txs in last 1 min. Purely for logging purpose
-	remoteTxsCount int                                             // count of txs in last 1 min. Purely for logging purpose
+	locals          *accountSet                                     // Set of local transaction to exempt from eviction rules
+	journal         *txJournal                                      // Journal of local transaction to back up to disk
+	qiPool          *lru.Cache[common.Hash, *types.TxWithMinerFee]  // Qi pool to store Qi transactions
+	qiMu            sync.RWMutex                                    // Protects qiOutpoints and qiConsolidation
+	qiOutpoints     map[types.OutPoint]common.Hash                  // Outpoint -> hash of the pooled Qi tx spending it
+	qiConsolidation map[common.Hash]struct{}                        // Qi txs that combine denominations upward; only minable in a block's first Qi slot
+	qiTxFees        *lru.Cache[[16]byte, *big.Int]                  // Recent Qi transaction fees (hash is truncated to 16 bytes to save space)
+	pending         map[common.InternalAddress]*txList              // All currently processable transactions
+	queue           map[common.InternalAddress]*txList              // Queued but non-processable transactions
+	beats           map[common.InternalAddress]time.Time            // Last heartbeat from each known account
+	all             *txLookup                                       // All transactions to allow lookups
+	priced          *txPricedList                                   // All transactions sorted by price
+	senders         *lru.Cache[common.Hash, common.InternalAddress] // Tx hash to sender lookup cache (async populated)
+	sendersCh       chan newSender                                  // Channel for async senders cache goroutine
+	feesCh          chan newFee                                     // Channel for async Qi fees cache goroutine
+	invalidQiTxsCh  chan []*common.Hash                             // Channel for async invalid Qi transactions
+	SendersMu       sync.RWMutex                                    // Mutex for priority access of senders cache
+	localTxsCount   int                                             // count of txs in last 1 min. Purely for logging purpose
+	remoteTxsCount  int                                             // count of txs in last 1 min. Purely for logging purpose
 
 	broadcastSetCache *lru.Cache[common.Hash, types.Transactions]
 	broadcastSetMu    sync.RWMutex
@@ -442,7 +445,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		poolSharingTxCh:    make(chan *types.Transaction, 100),
 	}
 
-	qiPool, _ := lru.New[common.Hash, *types.TxWithMinerFee](int(config.QiPoolSize))
+	pool.qiOutpoints = make(map[types.OutPoint]common.Hash)
+	pool.qiConsolidation = make(map[common.Hash]struct{})
+	qiPool, _ := lru.NewWithEvict[common.Hash, *types.TxWithMinerFee](int(config.QiPoolSize), pool.onQiTxDropped)
 	pool.qiPool = qiPool
 
 	senders, _ := lru.New[common.Hash, common.InternalAddress](int(config.MaxSenders))
@@ -726,10 +731,42 @@ func (pool *TxPool) ContentFrom(addr common.InternalAddress) (types.Transactions
 	return pending, queued
 }
 
+// QiPoolPending returns the pooled Qi transactions that are minable anywhere
+// in a block. Consolidation (denomination-combining) txs are excluded; they
+// are only valid in a block's first Qi slot and are returned by
+// QiConsolidationPending instead.
 func (pool *TxPool) QiPoolPending() []*types.TxWithMinerFee {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
-	return pool.qiPool.Values()
+	values := pool.qiPool.Values()
+	pool.qiMu.RLock()
+	defer pool.qiMu.RUnlock()
+	pending := make([]*types.TxWithMinerFee, 0, len(values))
+	for _, tx := range values {
+		if _, ok := pool.qiConsolidation[tx.Tx().Hash()]; !ok {
+			pending = append(pending, tx)
+		}
+	}
+	return pending
+}
+
+// QiConsolidationPending returns the pooled Qi transactions that combine
+// smaller denominations into larger ones. They are only minable in the first
+// Qi slot of a block, which is exempt from CheckDenominations, so block
+// builders auction that slot to the highest-fee consolidation tx.
+func (pool *TxPool) QiConsolidationPending() []*types.TxWithMinerFee {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	values := pool.qiPool.Values()
+	pool.qiMu.RLock()
+	defer pool.qiMu.RUnlock()
+	pending := make([]*types.TxWithMinerFee, 0, len(pool.qiConsolidation))
+	for _, tx := range values {
+		if _, ok := pool.qiConsolidation[tx.Tx().Hash()]; ok {
+			pending = append(pending, tx)
+		}
+	}
+	return pending
 }
 
 func (pool *TxPool) GetTxsFromBroadcastSet(hash common.Hash) (types.Transactions, error) {
@@ -1308,6 +1345,17 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 			errs = append(errs, err)
 			continue
 		}
+		// Resolve outpoint conflicts explicitly: first-seen wins unless the
+		// newcomer pays at least PriceBump percent more fee than every pooled
+		// tx it conflicts with, in which case those txs are dropped.
+		if err := pool.resolveQiConflicts(tx, txFee); err != nil {
+			pool.logger.WithFields(logrus.Fields{
+				"tx":  tx.Hash().String(),
+				"err": err,
+			}).Debug("Conflicting Qi transaction")
+			errs = append(errs, err)
+			continue
+		}
 		txWithMinerFee, err := types.NewTxWithMinerFee(tx, txFee, time.Now())
 		if err != nil {
 			errs = append(errs, err)
@@ -1319,6 +1367,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 
 		txHash := txWithFee.Tx().Hash()
 		pool.qiPool.Add(txHash, txWithFee)
+		pool.registerQiTx(txWithFee.Tx(), pool.isQiConsolidationTx(txWithFee.Tx()))
 		pool.queueTxEvent(txWithFee.Tx())
 		select {
 		case pool.sendersCh <- newSender{txHash, common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
@@ -1385,12 +1434,20 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 				pool.logger.Error("feesCh is full, skipping until there is room")
 			}
 		}
+		if err := pool.resolveQiConflicts(tx, fee); err != nil {
+			pool.logger.WithFields(logrus.Fields{
+				"tx":  tx.Hash().String(),
+				"err": err,
+			}).Debug("Conflicting Qi transaction, skipping re-inject")
+			continue
+		}
 		txWithMinerFee, err := types.NewTxWithMinerFee(tx, fee, time.Now())
 		if err != nil {
 			pool.logger.Error("Error creating txWithMinerFee: " + err.Error())
 			continue
 		}
 		pool.qiPool.Add(tx.Hash(), txWithMinerFee)
+		pool.registerQiTx(tx, pool.isQiConsolidationTx(tx))
 		select {
 		case pool.sendersCh <- newSender{tx.Hash(), common.InternalAddress{}}: // There is no "sender" for Qi transactions, but the sig is good
 		default:
@@ -1402,6 +1459,113 @@ func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 		}).Debug("Added qi tx to pool")
 		qiTxGauge.Add(1)
 	}
+}
+
+// onQiTxDropped is invoked by the Qi pool LRU whenever an entry leaves the
+// pool (explicit removal, expiry or capacity eviction). It keeps the outpoint
+// index and the consolidation set in sync with the pool contents.
+// The LRU invokes this callback under its own lock, so qiPool methods must
+// never be called while holding qiMu or the lock order would invert.
+func (pool *TxPool) onQiTxDropped(hash common.Hash, tx *types.TxWithMinerFee) {
+	pool.qiMu.Lock()
+	defer pool.qiMu.Unlock()
+	for _, txIn := range tx.Tx().TxIn() {
+		if h, ok := pool.qiOutpoints[txIn.PreviousOutPoint]; ok && h == hash {
+			delete(pool.qiOutpoints, txIn.PreviousOutPoint)
+		}
+	}
+	delete(pool.qiConsolidation, hash)
+}
+
+// registerQiTx records the outpoints spent by a tx that was just added to the
+// Qi pool, and whether it is a consolidation (first-slot-only) tx.
+func (pool *TxPool) registerQiTx(tx *types.Transaction, consolidation bool) {
+	pool.qiMu.Lock()
+	defer pool.qiMu.Unlock()
+	for _, txIn := range tx.TxIn() {
+		pool.qiOutpoints[txIn.PreviousOutPoint] = tx.Hash()
+	}
+	if consolidation {
+		pool.qiConsolidation[tx.Hash()] = struct{}{}
+	} else {
+		delete(pool.qiConsolidation, tx.Hash())
+	}
+}
+
+// resolveQiConflicts enforces an explicit replacement policy for Qi txs that
+// spend an outpoint already spent by a pooled tx: the newcomer is rejected
+// unless its fee is at least PriceBump percent higher than the combined fee
+// of every pooled tx it conflicts with, in which case the conflicting txs are
+// dropped. Stale index entries pointing at txs no longer in the pool are
+// ignored.
+func (pool *TxPool) resolveQiConflicts(tx *types.Transaction, txFee *big.Int) error {
+	conflicts := make(map[common.Hash]struct{})
+	pool.qiMu.RLock()
+	for _, txIn := range tx.TxIn() {
+		if h, ok := pool.qiOutpoints[txIn.PreviousOutPoint]; ok && h != tx.Hash() {
+			conflicts[h] = struct{}{}
+		}
+	}
+	pool.qiMu.RUnlock()
+	if len(conflicts) == 0 {
+		return nil
+	}
+	oldFees := new(big.Int)
+	conflictingTxs := make([]common.Hash, 0, len(conflicts))
+	for h := range conflicts {
+		if old, ok := pool.qiPool.Peek(h); ok {
+			oldFees.Add(oldFees, old.MinerFee())
+			conflictingTxs = append(conflictingTxs, h)
+		}
+	}
+	if len(conflictingTxs) == 0 {
+		return nil
+	}
+	threshold := new(big.Int).Mul(oldFees, big.NewInt(int64(100+pool.config.PriceBump)))
+	threshold.Div(threshold, big.NewInt(100))
+	if txFee.Cmp(threshold) < 0 {
+		return fmt.Errorf("qi tx %s spends outpoints of %d pooled tx(s) and does not pay %d%% more fee to replace them", tx.Hash().String(), len(conflictingTxs), pool.config.PriceBump)
+	}
+	for _, h := range conflictingTxs {
+		pool.qiPool.Remove(h) // eviction callback cleans the outpoint index
+	}
+	qiTxGauge.Sub(float64(len(conflictingTxs)))
+	return nil
+}
+
+// isQiConsolidationTx reports whether a Qi tx combines smaller denominations
+// into larger ones. Such txs fail CheckDenominations and are only minable in
+// the first Qi slot of a block, which is exempt from that rule.
+func (pool *TxPool) isQiConsolidationTx(tx *types.Transaction) bool {
+	inputs := make(map[uint]uint64)
+	for _, txIn := range tx.TxIn() {
+		utxo := rawdb.GetUTXO(pool.db, txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		if utxo == nil {
+			return false
+		}
+		inputs[uint(utxo.Denomination)]++
+	}
+	return CheckDenominations(inputs, QiTxOutputDenominations(tx, pool.chainconfig.Location)) != nil
+}
+
+// QiTxPoolStatus describes the pool state of a Qi transaction.
+type QiTxPoolStatus struct {
+	Pending       bool     `json:"pending"`
+	FirstSlotOnly bool     `json:"firstSlotOnly"`
+	Fee           *big.Int `json:"fee"`
+}
+
+// QiTxStatus returns the pool status of a Qi transaction.
+func (pool *TxPool) QiTxStatus(hash common.Hash) *QiTxPoolStatus {
+	status := &QiTxPoolStatus{}
+	if tx, ok := pool.qiPool.Peek(hash); ok {
+		status.Pending = true
+		status.Fee = tx.MinerFee()
+		pool.qiMu.RLock()
+		_, status.FirstSlotOnly = pool.qiConsolidation[hash]
+		pool.qiMu.RUnlock()
+	}
+	return status
 }
 
 func (pool *TxPool) RemoveQiTxs(txs []*common.Hash) {
@@ -1465,6 +1629,13 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		if tx == nil {
 			continue
 		}
+		if tx.Type() == types.QiTxType {
+			// Qi txs have no sender; presence in the Qi pool means pending
+			if pool.qiPool.Contains(hash) {
+				status[i] = TxStatusPending
+			}
+			continue
+		}
 		from, err := types.Sender(pool.signer, tx) // already validated
 		if err != nil {
 			pool.logger.WithField("err", err).Error("Error calculating sender in txpool Status")
@@ -1502,7 +1673,7 @@ func (pool *TxPool) Get(hash common.Hash) *types.Transaction {
 // Has returns an indicator whether txpool has a transaction cached with the
 // given hash.
 func (pool *TxPool) Has(hash common.Hash) bool {
-	return pool.all.Get(hash) != nil
+	return pool.all.Get(hash) != nil || pool.qiPool.Contains(hash)
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent
