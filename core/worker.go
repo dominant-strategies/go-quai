@@ -1573,7 +1573,7 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 
 var qiTxErrs uint64
 
-func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkObject, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce) error {
+func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkObject, parent *types.WorkObject, txs *types.TransactionsByPriceAndNonce, consolidationTxs []*types.TxWithMinerFee) error {
 	qiTxsToRemove := make([]*common.Hash, 0)
 	gasLimit := env.wo.GasLimit()
 	if env.gasPool == nil {
@@ -1622,6 +1622,39 @@ func (w *worker) commitTransactions(env *environment, primeTerminus *types.WorkO
 		}
 	}
 	firstQiTx := true
+	// Consolidation auction: the first Qi tx in a block is exempt from the
+	// denomination-combining rule, so award that slot to the highest-fee
+	// consolidation transaction that fits.
+	for _, cTx := range consolidationTxs {
+		if env.gasPool.Gas() < params.TxGas {
+			break
+		}
+		tx := cTx.Tx()
+		if types.CalculateBlockQiTxGas(tx, env.qiGasScalingFactor, w.hc.NodeLocation()) > gasLimit {
+			hash := tx.Hash()
+			qiTxsToRemove = append(qiTxsToRemove, &hash)
+			continue
+		}
+		if err := w.processQiTx(tx, env, primeTerminus, parent, true); err != nil {
+			if strings.Contains(err.Error(), "emits too many") || strings.Contains(err.Error(), "uses too much gas") || errors.Is(err, types.ErrGasLimitReached) {
+				// The block is too full for this consolidation tx; leave it pooled
+				break
+			}
+			if strings.Contains(err.Error(), "double spends") {
+				// Conflicts with a tx already committed in this block; try the next candidate
+				continue
+			}
+			hash := tx.Hash()
+			w.logger.WithFields(log.Fields{
+				"err": err,
+				"tx":  hash.Hex(),
+			}).Debug("Error processing consolidation QiTx")
+			qiTxsToRemove = append(qiTxsToRemove, &hash)
+			continue
+		}
+		firstQiTx = false
+		break // the first-slot auction is settled
+	}
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
@@ -2498,7 +2531,7 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 	}).Info("ETXs and fill")
 	if !fill {
 		if etxs {
-			return w.commitTransactions(env, primeTerminus, block, &types.TransactionsByPriceAndNonce{})
+			return w.commitTransactions(env, primeTerminus, block, &types.TransactionsByPriceAndNonce{}, nil)
 		}
 		return nil
 	}
@@ -2532,9 +2565,30 @@ func (w *worker) fillTransactions(env *environment, primeTerminus *types.WorkObj
 		pendingQiTxsWithQuaiFee = append(pendingQiTxsWithQuaiFee, qiTx)
 	}
 
-	if len(pending) > 0 || len(pendingQiTxsWithQuaiFee) > 0 || etxs {
+	// Consolidation auction candidates: denomination-combining txs compete
+	// for the single first-Qi-tx slot, highest fee first.
+	consolidationTxs := make([]*types.TxWithMinerFee, 0)
+	for _, tx := range w.txPool.QiConsolidationPending() {
+		qiFeeInQuai := misc.QiToQuai(env.wo, exchangeRate, env.wo.Difficulty(), tx.MinerFee())
+		minerFeeInQuai := new(big.Int).Div(qiFeeInQuai, big.NewInt(int64(types.CalculateBlockQiTxGas(tx.Tx(), env.qiGasScalingFactor, w.hc.NodeLocation()))))
+		if minerFeeInQuai.Cmp(block.BaseFee()) < 0 {
+			w.logger.Debugf("consolidation qi tx has less fee than min base fee: have %s, want %s", minerFeeInQuai, block.BaseFee())
+			continue
+		}
+		qiTx, err := types.NewTxWithMinerFee(tx.Tx(), minerFeeInQuai, time.Now())
+		if err != nil {
+			w.logger.WithField("err", err).Error("Error creating new tx with miner Fee for consolidation Qi TX", tx.Tx().Hash())
+			continue
+		}
+		consolidationTxs = append(consolidationTxs, qiTx)
+	}
+	sort.SliceStable(consolidationTxs, func(i, j int) bool {
+		return consolidationTxs[i].MinerFee().Cmp(consolidationTxs[j].MinerFee()) > 0
+	})
+
+	if len(pending) > 0 || len(pendingQiTxsWithQuaiFee) > 0 || len(consolidationTxs) > 0 || etxs {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, pendingQiTxsWithQuaiFee, pending)
-		return w.commitTransactions(env, primeTerminus, block, txs)
+		return w.commitTransactions(env, primeTerminus, block, txs, consolidationTxs)
 	}
 	return nil
 }
