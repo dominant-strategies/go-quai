@@ -2856,8 +2856,11 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	if tx.ChainId().Cmp(w.chainConfig.ChainID) != 0 {
 		return fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
-	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) != common.AddressLength) {
+	if !qiTxDataLengthValid(tx, env.wo) {
 		return fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength)
+	}
+	if err := validateQiTxLockTime(tx, env.wo, location); err != nil {
+		return err
 	}
 	// Wrap Qi Transaction
 	if len(tx.Data()) == common.AddressLength && !common.BytesToAddress(tx.Data()[:], parent.Location()).IsInQuaiLedgerScope() {

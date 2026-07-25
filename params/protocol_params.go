@@ -351,14 +351,24 @@ var (
 
 	ConversionStabilityForkBlock uint64 = 1872600
 
-	// QiUserLockForkBlock is the prime terminus number at which user-settable
-	// locks on Qi transaction outputs activate. Placeholder height, must be
-	// finalized before release.
+	// QiUserLockForkBlock is the prime terminus number at which the Qi
+	// off-chain contract primitives activate: user-settable locks on
+	// transaction outputs, and transaction-level locktimes. Placeholder
+	// height, must be finalized before release.
 	QiUserLockForkBlock uint64 = 2400000
 
 	// MaxQiUserLockDuration is the maximum number of blocks beyond the current
 	// height that a user-set Qi output lock may extend.
 	MaxQiUserLockDuration uint64 = BlocksPerYear
+
+	// QiTxLockTimeDataLength is the length of a Qi transaction Data field that
+	// carries an absolute transaction-level locktime: a big-endian uint64
+	// block height before which the transaction may not be included in a
+	// block. Unlike a UTXO Lock, which delays spending an output that already
+	// exists, a locktime delays the transaction itself, which is what lets two
+	// parties pre-sign competing spends of the same output that become valid
+	// at different heights. That ordering is the basis of payment channels.
+	QiTxLockTimeDataLength = 8
 )
 
 const (
