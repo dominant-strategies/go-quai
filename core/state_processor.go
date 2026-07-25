@@ -1642,8 +1642,8 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 				types.MaxDenomination)
 			return nil, errors.New(str)
 		}
-		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
-			return nil, errors.New("QiTx output has non-zero lock")
+		if err := validateQiTxOutLock(&txOut, currentHeader, location); err != nil {
+			return nil, err
 		}
 		outputs[uint(txOut.Denomination)]++
 		if common.IsConversionOutput(txOut.Address, location) { // Qi->Quai conversion
@@ -1656,6 +1656,40 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 
 func qiWrappingSkipsLocalUTXO(header *types.WorkObject) bool {
 	return header.PrimeTerminusNumber().Uint64() >= params.QiWrappingChangeBlock
+}
+
+func qiUserLocksEnabled(header *types.WorkObject) bool {
+	return header.PrimeTerminusNumber().Uint64() >= params.QiUserLockForkBlock
+}
+
+// validateQiTxOutLock enforces the rules for user-set locks on Qi outputs.
+// Before QiUserLockForkBlock any non-zero lock is invalid. After activation a
+// locked output must be a local Qi-ledger UTXO (not a conversion, wrapping or
+// cross-chain output), must use a denomination above the trimmable range so a
+// locked output can never sit out the trimmer, and may not lock further out
+// than MaxQiUserLockDuration blocks from the current height.
+func validateQiTxOutLock(txOut *types.TxOut, currentHeader *types.WorkObject, location common.Location) error {
+	if txOut.Lock == nil || txOut.Lock.Sign() == 0 {
+		return nil
+	}
+	if !qiUserLocksEnabled(currentHeader) {
+		return errors.New("QiTx output has non-zero lock")
+	}
+	if txOut.Lock.Sign() < 0 {
+		return errors.New("QiTx output lock is negative")
+	}
+	if txOut.Denomination <= types.MaxTrimDenomination {
+		return fmt.Errorf("QiTx output lock requires denomination greater than %d, have %d", types.MaxTrimDenomination, txOut.Denomination)
+	}
+	toAddr := common.BytesToAddress(txOut.Address, location)
+	if !toAddr.Location().Equal(location) || !toAddr.IsInQiLedgerScope() {
+		return errors.New("QiTx output lock is only allowed on local Qi ledger outputs")
+	}
+	maxLock := new(big.Int).Add(currentHeader.Number(location.Context()), new(big.Int).SetUint64(params.MaxQiUserLockDuration))
+	if txOut.Lock.Cmp(maxLock) > 0 {
+		return fmt.Errorf("QiTx output lock %s exceeds maximum allowed unlock height %s", txOut.Lock.String(), maxLock.String())
+	}
+	return nil
 }
 
 func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit uint64) (*big.Int, error) {
@@ -1691,8 +1725,8 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if txOutIdx > types.MaxOutputIndex {
 			return nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
 		}
-		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
-			return nil, errors.New("QiTx output has non-zero lock")
+		if err := validateQiTxOutLock(&txOut, currentHeader, location); err != nil {
+			return nil, err
 		}
 		if txOut.Denomination > types.MaxDenomination {
 			str := fmt.Sprintf("transaction output value of %v is "+
@@ -1972,8 +2006,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 				types.MaxDenomination)
 			return nil, nil, nil, errors.New(str), nil
 		}
-		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
-			return nil, nil, nil, errors.New("QiTx output has non-zero lock"), nil
+		if err := validateQiTxOutLock(&txOut, currentHeader, location); err != nil {
+			return nil, nil, nil, err, nil
 		}
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 

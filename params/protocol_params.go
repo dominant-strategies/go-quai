@@ -350,6 +350,15 @@ var (
 	QiWrappingChangeBlock uint64 = 1570000
 
 	ConversionStabilityForkBlock uint64 = 1872600
+
+	// QiUserLockForkBlock is the prime terminus number at which user-settable
+	// locks on Qi transaction outputs activate. Placeholder height, must be
+	// finalized before release.
+	QiUserLockForkBlock uint64 = 2400000
+
+	// MaxQiUserLockDuration is the maximum number of blocks beyond the current
+	// height that a user-set Qi output lock may extend.
+	MaxQiUserLockDuration uint64 = BlocksPerYear
 )
 
 const (

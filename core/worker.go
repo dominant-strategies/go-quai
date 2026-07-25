@@ -2878,8 +2878,8 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 				types.MaxDenomination)
 			return errors.New(str)
 		}
-		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
-			return errors.New("QiTx output has non-zero lock")
+		if err := validateQiTxOutLock(&txOut, env.wo, location); err != nil {
+			return err
 		}
 		outputs[uint(txOut.Denomination)] += 1
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
