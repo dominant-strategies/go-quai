@@ -1855,6 +1855,12 @@ func (c *Core) QiTxPoolStatus(txHash common.Hash) *QiTxPoolStatus {
 	return c.sl.txPool.QiTxStatus(txHash)
 }
 
+// GetBlockFilter returns the stored compact (GCS) block filter for the given
+// block hash, or nil if no filter was built for it.
+func (c *Core) GetBlockFilter(blockHash common.Hash) []byte {
+	return rawdb.ReadBlockFilter(c.sl.sliceDb, blockHash)
+}
+
 func (c *Core) GetRollingFeeInfo() (min, max, avg *big.Int) {
 	return c.Processor().GetRollingFeeInfo()
 }

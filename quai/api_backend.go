@@ -435,6 +435,10 @@ func (b *QuaiAPIBackend) QiTxPoolStatus(txHash common.Hash) *core.QiTxPoolStatus
 	return b.quai.core.QiTxPoolStatus(txHash)
 }
 
+func (b *QuaiAPIBackend) GetBlockFilter(blockHash common.Hash) []byte {
+	return b.quai.core.GetBlockFilter(blockHash)
+}
+
 func (b *QuaiAPIBackend) GetRollingFeeInfo() (min, max, avg *big.Int) {
 	return b.quai.core.GetRollingFeeInfo()
 }

@@ -1727,6 +1727,28 @@ func DeleteCreatedUTXOKeys(db ethdb.KeyValueWriter, blockHash common.Hash) {
 	}
 }
 
+// WriteBlockFilter stores the compact (GCS) block filter for a block.
+func WriteBlockFilter(db ethdb.KeyValueWriter, blockHash common.Hash, filter []byte) error {
+	return db.Put(blockFilterKey(blockHash), filter)
+}
+
+// ReadBlockFilter retrieves the compact (GCS) block filter for a block, or
+// nil if none was stored.
+func ReadBlockFilter(db ethdb.Reader, blockHash common.Hash) []byte {
+	data, _ := db.Get(blockFilterKey(blockHash))
+	if len(data) == 0 {
+		return nil
+	}
+	return data
+}
+
+// DeleteBlockFilter removes the compact (GCS) block filter for a block.
+func DeleteBlockFilter(db ethdb.KeyValueWriter, blockHash common.Hash) {
+	if err := db.Delete(blockFilterKey(blockHash)); err != nil {
+		db.Logger().WithField("err", err).Fatal("Failed to delete block filter")
+	}
+}
+
 func WriteCreatedCoinbaseLockupKeys(db ethdb.KeyValueWriter, blockHash common.Hash, keys [][]byte) error {
 	protoKeys := &types.ProtoKeys{Keys: make([][]byte, 0, len(keys))}
 	protoKeys.Keys = append(protoKeys.Keys, keys...)

@@ -601,6 +601,27 @@ func (s *PublicBlockChainQuaiAPI) GetUTXO(ctx context.Context, txHash common.Has
 	return jsonOutpoint, nil
 }
 
+// GetBlockFilter returns the compact (GCS, BIP-158 parameters) block filter
+// for the given block hash. The filter commits to the addresses of all UTXOs
+// created and spent in the block; wallets match their addresses against it
+// locally and only fetch blocks that match, without revealing addresses to
+// the node. Returns null if no filter is available for the block (no Qi
+// activity, or the node does not index filters). The SipHash key is the
+// first 16 bytes of the block hash.
+func (s *PublicBlockChainQuaiAPI) GetBlockFilter(ctx context.Context, blockHash common.Hash) (map[string]interface{}, error) {
+	if s.b.NodeCtx() != common.ZONE_CTX {
+		return nil, errors.New("getBlockFilter call can only be made in zone chain")
+	}
+	filter := s.b.GetBlockFilter(blockHash)
+	if filter == nil {
+		return nil, nil
+	}
+	return map[string]interface{}{
+		"filter": hexutil.Bytes(filter),
+		"key":    hexutil.Bytes(blockHash.Bytes()[:16]),
+	}, nil
+}
+
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *PublicBlockChainQuaiAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
 	nodeCtx := s.b.NodeCtx()
