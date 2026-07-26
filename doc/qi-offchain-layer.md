@@ -20,8 +20,9 @@ Concretely this branch adds:
 | Adaptor signatures (single key and MuSig2) | `crypto/adaptor` | implemented, tested |
 | Transaction locktime, output locks | `core`, `params` | implemented, fork gated |
 | Channels, PTLCs, routes, invoices | `qichannel` | implemented, tested |
-| Onion routing, gossip, pathfinding | — | not implemented |
-| Quai-side contract channels | — | not implemented |
+| Onion routing | `crypto/sphinx` | implemented, tested |
+| Quai-side contract channels | `qichannel/contracts` | implemented, compiles; point derivation tested |
+| Gossip, pathfinding, node integration | — | not implemented |
 
 ## Consensus primitives
 
@@ -154,18 +155,57 @@ conversion, which changes supply and is the monetary-policy instrument the
 kQuai controller reads; the two layers are complementary rather than
 competing.
 
+## Onion routing
+
+`crypto/sphinx` implements fixed-size onion packets on the BOLT-4 design:
+per-hop ECDH shared secrets against an ephemeral key re-blinded at each hop,
+ChaCha20 layer encryption, per-hop HMAC-SHA256, and a deterministic filler so
+a peeled packet is indistinguishable from a freshly constructed one. A hop
+learns only its own instructions and its successor — not its position, the
+route length, the sender, or the recipient — and every forwarded packet is
+`PacketSize` bytes regardless of route length.
+
+Hop instructions carry a **point delta** rather than a payment hash: a hop
+derives the point for its outgoing PTLC by offsetting the point of its
+incoming one. This is what makes per-hop decorrelation work end to end, and
+it has no equivalent in a hash-based onion.
+
+## The Quai side
+
+`qichannel/contracts/QiPtlcChannel.sol` is a two-party channel on the EVM
+ledger settling PTLCs against the same payment-point space. It compiles clean
+under solc 0.8.26.
+
+The bridge between ledgers is `pointAddress(uint256 secret)`. The contract
+cannot manipulate curve points affordably, but `ecrecover(h, v, r, s)`
+recovers `r⁻¹·(s·R − h·G)`, so taking `h = 0`, `r = Gx` and
+`s = secret·Gx mod n` makes `R` the generator and collapses the expression to
+`secret·G` — a scalar multiplication for about 3000 gas. The address it
+returns is exactly `keccak256(T.x ‖ T.y)[12:]`, the commitment the payee
+publishes. `qichannel.PointAddress` and `ContractRecoveryArgs` mirror this in
+Go, and the equivalence is tested against the same secp256k1 implementation
+the precompile is backed by, including for blinded points.
+
+Because an EVM adjudicator can replace a stale state during a challenge
+window, Quai-side channels are **perpetual**: no bounded update count, no
+expiry. A route may therefore have time-bounded Qi channels on some hops and
+perpetual Quai channels on others, which is a reasonable division of labour —
+the cash ledger contributes privacy, the EVM ledger contributes durable
+routing liquidity.
+
 ## Not implemented
 
-- **Onion routing.** A Sphinx-style packet format is needed so intermediaries
-  learn only their predecessor and successor. Standard and well specified,
-  but not written here.
 - **Gossip and pathfinding.** Public routing nodes must announce channels by
   pointing at a funding outpoint (verifiable through `quai_getUTXO`), which
   trades that channel's privacy for routability. Unannounced channels remain
   fully private.
-- **Quai-side contract channels**, and the liquidity/fee economics of a
-  routing network (jamming, probing, rebalancing), which are unsolved in
-  Lightning too.
+- **The liquidity and fee economics** of a routing network (jamming, probing,
+  rebalancing), which are unsolved in Lightning too.
 - **Network integration.** Nothing here is wired into the node; the packages
   are libraries. A channel daemon holding state, watching heights and
   publishing at maturity is future work.
+- **On-chain contract execution tests.** The contract compiles and its point
+  derivation is verified in Go, but this repository has no EVM test harness
+  (`core/vm/runtime` is absent), so the channel state machine itself — close,
+  challenge, claim, refund, finalize — has not been executed. That should be
+  covered before the contract handles funds.
