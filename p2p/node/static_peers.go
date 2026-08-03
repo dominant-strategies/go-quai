@@ -6,6 +6,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 
 	"github.com/dominant-strategies/go-quai/log"
 )
@@ -24,10 +25,11 @@ func (p *P2PNode) startStaticPeerConnector() {
 
 	// A static peer is treated as "sticky":
 	// - we continuously try to keep a connection open
-	// - we protect it from connection manager pruning
 	// - we proactively open a request/response stream
+	//
+	// Protection from pruning and bans is applied by peerManager.NewManager for
+	// the same peer list, so it holds regardless of which side dialed.
 	for _, info := range p.staticPeers {
-		info := info
 		if info.ID == "" || info.ID == p.peerManager.GetSelfID() {
 			continue
 		}
@@ -36,6 +38,13 @@ func (p *P2PNode) startStaticPeerConnector() {
 }
 
 func (p *P2PNode) maintainStaticPeerConnection(info peer.AddrInfo) {
+	host := p.peerManager.GetHost()
+
+	// Keep the addresses resolvable for the lifetime of the process. Connect()
+	// only records them with a short TTL, so once it expires an on-demand
+	// OpenStream would have no address to dial with.
+	host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
+
 	// Exponential backoff: don't spam dials if the peer is down/unreachable.
 	retry := c_staticPeerRetryMin
 	for {
@@ -43,9 +52,9 @@ func (p *P2PNode) maintainStaticPeerConnection(info peer.AddrInfo) {
 			return
 		}
 
-		if p.peerManager.GetHost().Network().Connectedness(info.ID) != network.Connected {
+		if host.Network().Connectedness(info.ID) != network.Connected {
 			connectCtx, cancel := context.WithTimeout(p.ctx, c_staticPeerConnectTimeout)
-			err := p.peerManager.GetHost().Connect(connectCtx, info)
+			err := host.Connect(connectCtx, info)
 			cancel()
 			if err != nil {
 				log.Global.WithFields(log.Fields{
@@ -66,21 +75,20 @@ func (p *P2PNode) maintainStaticPeerConnection(info peer.AddrInfo) {
 			}
 
 			retry = c_staticPeerRetryMin
-			// Keep this connection around even under normal peer churn/pressure.
-			p.ProtectPeer(info.ID)
-			// Eagerly open the request/response stream; this avoids "first request
-			// loses" behavior in environments with low connectivity or high latency.
-			if err := p.peerManager.OpenStream(info.ID); err != nil {
-				log.Global.WithFields(log.Fields{
-					"peer": info.ID.String(),
-					"err":  err,
-				}).Debug("Connected to static peer but failed to open stream")
-			}
-
 			log.Global.WithFields(log.Fields{
 				"peer":  info.ID.String(),
 				"addrs": info.Addrs,
 			}).Info("Connected to static peer")
+		}
+
+		// Reached whether we dialed out or the peer dialed us: eagerly (re)open the
+		// request/response stream so the first request doesn't pay for the dial, and
+		// so an evicted stream is restored. OpenStream is a no-op if one is cached.
+		if err := p.peerManager.OpenStream(info.ID); err != nil {
+			log.Global.WithFields(log.Fields{
+				"peer": info.ID.String(),
+				"err":  err,
+			}).Debug("Connected to static peer but failed to open stream")
 		}
 
 		select {

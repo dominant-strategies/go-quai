@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -118,8 +117,9 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 
 	// Static peers are explicit dial targets (multiaddrs including /p2p/<peerID>).
 	// They are distinct from bootpeers (which are mainly used for DHT bootstrap
-	// and as static relays for AutoRelay).
-	staticPeers, err := parsePeerAddrInfos(viper.GetStringSlice(utils.StaticPeersFlag.Name))
+	// and as static relays for AutoRelay). The peer manager resolves the same
+	// list to protect them from pruning and bans, so both must use this parser.
+	staticPeers, err := peerManager.LoadStaticPeers()
 	if err != nil {
 		return nil, err
 	}
@@ -376,27 +376,6 @@ func createCache(size int) *lru.Cache[common.Hash, interface{}] {
 		log.Global.Fatal("error initializing cache;", err)
 	}
 	return cache
-}
-
-func parsePeerAddrInfos(rawPeers []string) ([]peer.AddrInfo, error) {
-	infos := make([]peer.AddrInfo, 0, len(rawPeers))
-	for _, raw := range rawPeers {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		addr, err := multiaddr.NewMultiaddr(raw)
-		if err != nil {
-			return nil, err
-		}
-		// Parse multiaddrs of the form /ip4/.../tcp/.../p2p/<peerID>.
-		info, err := peer.AddrInfoFromP2pAddr(addr)
-		if err != nil {
-			return nil, err
-		}
-		infos = append(infos, *info)
-	}
-	return infos, nil
 }
 
 // Get the full multi-address to reach our node
