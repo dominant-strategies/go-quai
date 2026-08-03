@@ -102,6 +102,7 @@ const (
 	InitialBaseFee           = 1 * Wei    // Initial base fee for blocks.
 	MaxBaseFee               = 100 * GWei // Maximum base fee for blocks.
 	InitialStateLimit        = 5000000    // Initial state fee for blocks.
+	FeeFeedbackBasisPoints   = 10000      // Denominator for the fee-feedback reward multiple.
 
 	MaxCodeSize           = 24576   // Maximum bytecode to permit for a contract (24KB)
 	NewMaxCodeSize        = 32768   // Maximum bytecode to permit for a contract after fork (32KB)
@@ -217,6 +218,12 @@ var (
 	MinBaseFeeInQits                            = big.NewInt(5)
 	OneOverBaseFeeControllerAlpha               = big.NewInt(100)
 	BaseFeeMultiplier                           = big.NewInt(50)
+	// FeeFeedbackMaxRewardMultipleBasisPoints directly limits the real-fee
+	// sample entering AvgTxFees relative to the fee-free Quai reward. A value
+	// of 40000 is a four-times-reward limit.
+	// This is a consensus parameter. It is a variable only so local economic
+	// simulations can test different values; production nodes must agree on it.
+	FeeFeedbackMaxRewardMultipleBasisPoints uint64 = 40000
 
 	ConversionLockPeriod uint64 = 100
 	CoinbaseEpochBlocks  uint64 = 100
@@ -348,7 +355,23 @@ var (
 	QiWrappingChangeBlock uint64 = 1320000
 
 	ConversionStabilityForkBlock uint64 = 1529700
+
+	ConversionLockChangeForkBlock uint64 = 1700520
+	UnwrapQiLockPeriod            uint64 = 10
+	// KQuaiFreezeForkBlock freezes the controller at its parent value until a
+	// future fork explicitly resumes or replaces it.
+	KQuaiFreezeForkBlock uint64 = ConversionLockChangeForkBlock
 )
+
+// UnwrapQiLockPeriodAt keeps the historical conversion lock before the fork
+// and applies the short unwrap-only lock afterward. Ordinary conversions keep
+// using ConversionLockPeriod.
+func UnwrapQiLockPeriodAt(primeHeight uint64) uint64 {
+	if primeHeight >= ConversionLockChangeForkBlock {
+		return UnwrapQiLockPeriod
+	}
+	return ConversionLockPeriod
+}
 
 const (
 	TokenChoiceSetSize uint64 = 4000 // This should be same as the MinerDifficultyWindow

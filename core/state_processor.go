@@ -478,7 +478,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 							totalEtxGas += params.CallValueTransferGas // In the future we may want to determine what a fair gas cost is
 							lock := big.NewInt(0)
 							if etx.EtxType() == types.UnwrapQiType {
-								lock = new(big.Int).Add(block.Number(nodeCtx), new(big.Int).SetUint64(params.ConversionLockPeriod))
+								unwrapPeriod := params.UnwrapQiLockPeriodAt(block.PrimeTerminusNumber().Uint64())
+								lock = new(big.Int).Add(block.Number(nodeCtx), new(big.Int).SetUint64(unwrapPeriod))
 							}
 							utxo := types.NewUtxoEntry(types.NewTxOut(uint8(denomination), etx.To().Bytes(), lock))
 							// the ETX hash is guaranteed to be unique
@@ -1081,24 +1082,26 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 	// prime terminus exchange rate is used
 	exchangeRate := primeTerminus.ExchangeRate()
 
-	// 50% of the fees goes to the calculation  of the averageFees generated,
-	// and this is added to the block rewards
-	halfQuaiFees := new(big.Int).Div(quaiFees, common.Big2)
-	halfQiFees := new(big.Int).Div(qiFees, common.Big2)
-
-	// convert the qi fees to quai
-	halfQiFeesInQuai := misc.QiToQuai(block, exchangeRate, block.Difficulty(), halfQiFees)
-	totalFeesForCapacitor := new(big.Int).Add(halfQuaiFees, halfQiFeesInQuai)
-
-	expectedAvgFees := p.hc.ComputeAverageTxFees(parent, totalFeesForCapacitor)
+	var currentHalfFeesInQuai *big.Int
+	if block.PrimeTerminusNumber().Uint64() < params.ConversionLockChangeForkBlock {
+		halfQuaiFees := new(big.Int).Div(quaiFees, common.Big2)
+		halfQiFees := new(big.Int).Div(qiFees, common.Big2)
+		halfQiFeesInQuai := misc.QiToQuai(block, exchangeRate, block.Difficulty(), halfQiFees)
+		currentHalfFeesInQuai = new(big.Int).Add(halfQuaiFees, halfQiFeesInQuai)
+	}
+	var feeFreeReward *big.Int
+	if block.PrimeTerminusNumber().Uint64() >= params.ConversionLockChangeForkBlock {
+		feeFreeReward = misc.CalculateQuaiReward(block.WorkObjectHeader(), block.Difficulty(), exchangeRate)
+	}
+	expectedAvgFees := p.hc.ComputeAverageTxFees(block, parent, currentHalfFeesInQuai, feeFreeReward)
 	if expectedAvgFees.Cmp(block.AvgTxFees()) != 0 {
 		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid avgTxFees used (remote: %d local: %d)", block.AvgTxFees(), expectedAvgFees)
 	}
 
 	totalQiFeesInQuai := misc.QiToQuai(block, exchangeRate, block.Difficulty(), qiFees)
-	expectedTotalFees := new(big.Int).Add(quaiFees, totalQiFeesInQuai)
-	if expectedTotalFees.Cmp(block.TotalFees()) != 0 {
-		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid totalFees used (remote: %d local: %d)", block.TotalFees(), expectedTotalFees)
+	actualTotalFees := new(big.Int).Add(quaiFees, totalQiFeesInQuai)
+	if actualTotalFees.Cmp(block.TotalFees()) != 0 {
+		return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("invalid totalFees used (remote: %d local: %d)", block.TotalFees(), actualTotalFees)
 	}
 	// The fees from transactions in the block is given, in the block itself
 	// go through the last WorkSharesInclusionDepth of blocks
@@ -1124,7 +1127,6 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 		if targetBlock.NumberU64(common.ZONE_CTX) != targetBlockNumber {
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, fmt.Errorf("target block number %d does not match the target block number %d", targetBlock.NumberU64(common.ZONE_CTX), targetBlockNumber)
 		}
-
 		totalEntropy := big.NewInt(0)
 		engine := p.hc.GetEngineForHeader(targetBlock.WorkObjectHeader())
 		powHash, err := engine.ComputePowHash(targetBlock.WorkObjectHeader())
@@ -1188,19 +1190,13 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			return nil, nil, nil, nil, 0, 0, 0, nil, nil, errors.New("total entropy of all the shares in the target level cannot be zero")
 		}
 
-		// Once the total entropy is calculated, the block reward is split
-		// between the blocks, uncles and workshares proportional to the block
-		// weight
-		blockRewardAtTargetBlock := misc.CalculateQuaiReward(targetBlock.WorkObjectHeader(), targetBlock.Difficulty(), exchangeRate)
-		// add the fee capacitor value
-		blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, targetBlock.AvgTxFees())
-		// add half the fees generated in the block
-		blockRewardAtTargetBlock = new(big.Int).Add(blockRewardAtTargetBlock, new(big.Int).Div(targetBlock.TotalFees(), common.Big2))
-
-		rewardPerShare := new(big.Int).Div(blockRewardAtTargetBlock, big.NewInt(int64(params.ExpectedWorksharesPerBlock+1)))
+		blockRewardAtTargetBlock := misc.CalculateQuaiRewardPool(targetBlock, exchangeRate, targetBlock.Difficulty())
+		quaiRewardPerShare := misc.CalculateWorkShareRewardBase(targetBlock, exchangeRate, false)
+		qiRewardPerShare := misc.CalculateWorkShareRewardBase(targetBlock, exchangeRate, true)
 
 		// Add an etx for each workshare for it to be rewarded
 		for i, share := range sharesAtTargetBlockDepth {
+			uncleCoinbase := share.PrimaryCoinbase()
 
 			var shareReward *big.Int
 			if block.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
@@ -1211,7 +1207,11 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 				}
 			} else {
 
-				shareReward = new(big.Int).Set(rewardPerShare)
+				if uncleCoinbase.IsInQiLedgerScope() && targetBlock.PrimeTerminusNumber().Uint64() >= params.ConversionLockChangeForkBlock {
+					shareReward = new(big.Int).Set(qiRewardPerShare)
+				} else {
+					shareReward = new(big.Int).Set(quaiRewardPerShare)
+				}
 
 				if share.AuxPow() != nil {
 					switch share.AuxPow().PowID() {
@@ -1264,14 +1264,15 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 			}
 
-			uncleCoinbase := share.PrimaryCoinbase()
 			var originHash common.Hash
 			if uncleCoinbase.IsInQuaiLedgerScope() {
 				originHash = common.SetBlockHashForQuai(parent.Hash(), p.hc.NodeLocation())
 			} else {
 				originHash = common.SetBlockHashForQi(parent.Hash(), p.hc.NodeLocation())
-				// convert the quai reward value into Qi
-				shareReward = new(big.Int).Set(misc.QuaiToQi(targetBlock, exchangeRate, targetBlock.Difficulty(), shareReward))
+				if targetBlock.PrimeTerminusNumber().Uint64() < params.ConversionLockChangeForkBlock {
+					// Before the fork, convert the penalized Quai share into Qi.
+					shareReward = new(big.Int).Set(misc.QuaiToQi(targetBlock, exchangeRate, targetBlock.Difficulty(), shareReward))
+				}
 			}
 			if shareReward.Cmp(common.Big0) == 0 {
 				shareReward = big.NewInt(1)

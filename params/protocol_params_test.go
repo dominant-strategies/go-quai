@@ -207,6 +207,12 @@ func TestOneOverKQi(t *testing.T) {
 	}
 }
 
+func TestUnwrapQiLockPeriodAt(t *testing.T) {
+	require.Equal(t, ConversionLockPeriod, UnwrapQiLockPeriodAt(ConversionLockChangeForkBlock-1))
+	require.Equal(t, UnwrapQiLockPeriod, UnwrapQiLockPeriodAt(ConversionLockChangeForkBlock))
+	require.Equal(t, UnwrapQiLockPeriod, UnwrapQiLockPeriodAt(ConversionLockChangeForkBlock+1))
+}
+
 type GasTestCase struct {
 	stateSize          *big.Int
 	contractSize       *big.Int

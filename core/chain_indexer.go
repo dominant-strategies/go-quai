@@ -848,7 +848,39 @@ func (c *ChainIndexer) addOutpointsToIndexer(nodeCtx int, config params.ChainCon
 	}
 
 	for _, tx := range block.Body().ExternalTransactions() {
-		if tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
+		if tx.EtxType() == types.UnwrapQiType && tx.To().IsInQiLedgerScope() {
+			txGas := tx.Gas()
+			denominations := misc.FindMinDenominations(tx.Value())
+			outputIndex := uint16(0)
+			addr20 := tx.To().Bytes20()
+			binary.BigEndian.PutUint32(addr20[16:], uint32(block.NumberU64(nodeCtx)))
+
+			for denomination := types.MaxDenomination; denomination >= 0; denomination-- {
+				if denominations[uint8(denomination)] == 0 {
+					continue
+				}
+				if denomination <= types.MaxTrimDenomination {
+					break
+				}
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						break
+					}
+					txGas -= params.CallValueTransferGas
+					unwrapPeriod := params.UnwrapQiLockPeriodAt(block.PrimeTerminusNumber().Uint64())
+					lock := new(big.Int).Add(block.Number(nodeCtx), new(big.Int).SetUint64(unwrapPeriod))
+					outpointAndDenom := &types.OutpointAndDenomination{
+						TxHash:       tx.Hash(),
+						Index:        outputIndex,
+						Denomination: uint8(denomination),
+						Lock:         lock,
+					}
+					addressOutpointsWithBlockHeight[addr20] = append(addressOutpointsWithBlockHeight[addr20], outpointAndDenom)
+					rawdb.WriteUtxoToBlockHeight(c.chainDb, outpointAndDenom.TxHash, outpointAndDenom.Index, uint32(block.NumberU64(nodeCtx)))
+					outputIndex++
+				}
+			}
+		} else if tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
 			if len(tx.Data()) == 0 {
 				c.logger.Error("ChainIndexer: Coinbase transaction has no data", "tx", tx.Hash())
 				continue
@@ -998,7 +1030,11 @@ func (c *ChainIndexer) reorgUtxoIndexer(headers []*types.WorkObject, nodeCtx int
 			}
 		}
 		for _, etx := range block.Body().ExternalTransactions() {
-			if etx.EtxType() == types.CoinbaseType && etx.To().IsInQiLedgerScope() {
+			if etx.EtxType() == types.UnwrapQiType && etx.To().IsInQiLedgerScope() {
+				addr20 := etx.To().Bytes20()
+				binary.BigEndian.PutUint32(addr20[16:], uint32(block.NumberU64(nodeCtx)))
+				addressOutpoints[addr20] = make([]*types.OutpointAndDenomination, 0)
+			} else if etx.EtxType() == types.CoinbaseType && etx.To().IsInQiLedgerScope() {
 				if len(etx.Data()) == 0 {
 					c.logger.Error("ChainIndexer: Coinbase transaction has no data", "tx", etx.Hash())
 					continue

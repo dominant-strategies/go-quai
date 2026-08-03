@@ -460,6 +460,32 @@ func GetDeltas(s *PublicBlockChainQuaiAPI, currentBlock *types.WorkObject, addre
 						"lock":         hexutil.Big(*lock),
 					})
 			}
+		} else if tx.Type() == types.ExternalTxType && tx.EtxType() == types.UnwrapQiType && tx.To().IsInQiLedgerScope() {
+			if _, ok := addressMap[common.AddressBytes(tx.To().Bytes20())]; !ok {
+				continue
+			}
+			lockup := new(big.Int).SetUint64(params.UnwrapQiLockPeriodAt(currentBlock.PrimeTerminusNumber().Uint64()))
+			lockup.Add(lockup, currentBlock.Number(nodeCtx))
+			txGas := tx.Gas()
+			denominations := misc.FindMinDenominations(tx.Value())
+			outputIndex := uint16(0)
+			// Unwraps only create denominations above the trim threshold and use
+			// all of their ETX gas for output creation, matching state processing.
+			for denomination := types.MaxDenomination; denomination > types.MaxTrimDenomination; denomination-- {
+				for j := uint64(0); j < denominations[uint8(denomination)]; j++ {
+					if txGas < params.CallValueTransferGas || outputIndex >= types.MaxOutputIndex {
+						break
+					}
+					txGas -= params.CallValueTransferGas
+					addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()] =
+						append(addressToCreatedDeletedToTxHashToOutputs[tx.To().String()]["created"][tx.Hash().String()], map[string]interface{}{
+							"index":        hexutil.Uint64(outputIndex),
+							"denomination": hexutil.Uint64(uint8(denomination)),
+							"lock":         hexutil.Big(*lockup),
+						})
+					outputIndex++
+				}
+			}
 		} else if tx.Type() == types.ExternalTxType && tx.EtxType() == types.CoinbaseType && tx.To().IsInQiLedgerScope() {
 			if len(tx.Data()) == 0 {
 				continue
@@ -930,7 +956,7 @@ func (s *PublicBlockChainQuaiAPI) BaseFee(ctx context.Context, txType bool) (*he
 		if primeTerminus == nil {
 			return nil, errors.New("prime terminus not found")
 		}
-		qiBaseFee := misc.QuaiToQi(header, primeTerminus.ExchangeRate(), header.Difficulty(), quaiBaseFee)
+		qiBaseFee := quaiToQiFeeEstimate(header, primeTerminus.ExchangeRate(), quaiBaseFee)
 		if qiBaseFee.Cmp(big.NewInt(0)) == 0 {
 			// Minimum base fee is 1 qit or smallest unit
 			return (*hexutil.Big)(types.Denominations[0]), nil
@@ -971,13 +997,24 @@ func (s *PublicBlockChainQuaiAPI) EstimateFeeForQi(ctx context.Context, args Tra
 		return nil, errors.New("cannot find prime terminus for the current block")
 	}
 	exchangeRate := primeTerminus.ExchangeRate()
-	feeInQi := misc.QuaiToQi(header, exchangeRate, header.Difficulty(), feeInQuai)
+	feeInQi := quaiToQiFeeEstimate(header, exchangeRate, feeInQuai)
 	if feeInQi.Cmp(big.NewInt(0)) == 0 {
 		// Minimum fee is 1 qit or smallest unit
 		return (*hexutil.Big)(types.Denominations[0]), nil
 	}
 	log.Global.Infof("Estimated fee: %s\n", feeInQi.String())
 	return (*hexutil.Big)(feeInQi), nil
+}
+
+// quaiToQiFeeEstimate uses the canonical conversion in both directions and
+// rounds the Qi estimate up only when integer truncation would leave it short
+// of the requested Quai fee.
+func quaiToQiFeeEstimate(block *types.WorkObject, exchangeRate, quaiFee *big.Int) *big.Int {
+	qiFee := misc.QuaiToQi(block, exchangeRate, block.Difficulty(), quaiFee)
+	if misc.QiToQuai(block, exchangeRate, block.Difficulty(), qiFee).Cmp(quaiFee) < 0 {
+		qiFee.Add(qiFee, common.Big1)
+	}
+	return qiFee
 }
 
 func (s *PublicBlockChainQuaiAPI) GetLatestUTXOSetSize(ctx context.Context) (hexutil.Uint64, error) {
@@ -2227,6 +2264,17 @@ func (s *PublicBlockChainQuaiAPI) GetSubsidyChainHeight(ctx context.Context) (ma
 	return fields, nil
 }
 
+// calculateMiningQiWorkshareReward returns the independent, hash-proportional
+// Qi reward advertised after the conversion-lock fork. Before the fork, Qi
+// workshares use the existing Quai reward slot and do not need a separate API
+// field.
+func calculateMiningQiWorkshareReward(block *types.WorkObject, exchangeRate *big.Int) *big.Int {
+	if block.PrimeTerminusNumber().Uint64() < params.ConversionLockChangeForkBlock {
+		return nil
+	}
+	return misc.CalculateWorkShareRewardBase(block, exchangeRate, true)
+}
+
 // GetMiningInfo returns the current mining difficulty per algorithm and the reward per workshare.
 // This is useful for miners to understand the current mining parameters.
 // If decimal is true, big integer values are returned as decimal strings instead of hex.
@@ -2364,6 +2412,9 @@ func (s *PublicBlockChainQuaiAPI) GetMiningInfo(ctx context.Context, decimal *bo
 	fields["baseBlockReward"] = formatBigInt(baseBlockReward)
 	fields["estimatedBlockReward"] = formatBigInt(estimatedBlockReward)
 	fields["workshareReward"] = formatBigInt(workshareReward)
+	if qiWorkshareReward := calculateMiningQiWorkshareReward(currentHeader, exchangeRate); qiWorkshareReward != nil {
+		fields["qiWorkshareReward"] = formatBigInt(qiWorkshareReward)
+	}
 
 	// Calculate average share timing for each algorithm
 	// SHA and Scrypt: Count is the EMA of shares per block in 2^32 units

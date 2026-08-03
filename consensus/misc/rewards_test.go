@@ -365,6 +365,133 @@ func TestRewardPathUsesShaAnchoredEquivalentDifficulty(t *testing.T) {
 	require.Equal(t, expectedQuaiToQi, QuaiToQi(block, exchangeRate, headerDifficulty, quaiAmt))
 }
 
+func TestPostForkWorkShareRewardBases(t *testing.T) {
+	block := newPostForkRewardTestBlock(params.ConversionLockChangeForkBlock)
+	exchangeRate := big.NewInt(221077819000000000)
+	block.Header().SetAvgTxFees(big.NewInt(101))
+	block.Header().SetTotalFees(big.NewInt(200))
+
+	divisor := big.NewInt(int64(params.ExpectedWorksharesPerBlock + 1))
+	expectedQuaiPool := new(big.Int).Add(
+		CalculateQuaiReward(block.WorkObjectHeader(), block.Difficulty(), exchangeRate),
+		big.NewInt(202),
+	)
+	expectedQuaiShare := new(big.Int).Div(expectedQuaiPool, divisor)
+	expectedQiShare := new(big.Int).Div(
+		CalculateQiReward(block.WorkObjectHeader(), block.Difficulty()),
+		divisor,
+	)
+
+	require.Equal(t, expectedQuaiPool, CalculateQuaiRewardWithFees(block, exchangeRate, block.Difficulty()))
+	require.Equal(t, expectedQuaiShare, CalculateWorkShareRewardBase(block, exchangeRate, false))
+	require.Equal(t, expectedQiShare, CalculateWorkShareRewardBase(block, exchangeRate, true))
+
+	// Qi rewards are proportional to hash and independent of the Quai fee pool.
+	block.Header().SetAvgTxFees(big.NewInt(1000000))
+	block.Header().SetTotalFees(big.NewInt(2000000))
+	require.Equal(t, expectedQiShare, CalculateWorkShareRewardBase(block, exchangeRate, true))
+	require.NotEqual(t, expectedQuaiShare, CalculateWorkShareRewardBase(block, exchangeRate, false))
+}
+
+func TestQuaiRewardPoolPreservesPreForkFees(t *testing.T) {
+	block := newPostForkRewardTestBlock(params.ConversionLockChangeForkBlock - 1)
+	exchangeRate := big.NewInt(221077819000000000)
+	block.Header().SetAvgTxFees(big.NewInt(101))
+	block.Header().SetTotalFees(big.NewInt(200))
+
+	expected := CalculateQuaiReward(block.WorkObjectHeader(), block.Difficulty(), exchangeRate)
+	expected.Add(expected, big.NewInt(201))
+	require.Equal(t, expected, CalculateQuaiRewardPool(block, exchangeRate, block.Difficulty()))
+}
+
+func TestConversionRewardAddsFeesOnlyAfterFork(t *testing.T) {
+	exchangeRate := big.NewInt(221077819000000000)
+	fees := big.NewInt(202)
+
+	testBlock := func(primeHeight uint64) *types.WorkObject {
+		block := newPostForkRewardTestBlock(primeHeight)
+		block.Header().SetAvgTxFees(big.NewInt(101))
+		block.Header().SetTotalFees(big.NewInt(200))
+		return block
+	}
+
+	preFork := testBlock(params.ConversionLockChangeForkBlock - 1)
+	preForkBase := CalculateQuaiReward(preFork.WorkObjectHeader(), preFork.Difficulty(), exchangeRate)
+	require.Equal(t, preForkBase, CalculateQuaiConversionReward(preFork, exchangeRate, preFork.Difficulty()))
+
+	postFork := testBlock(params.ConversionLockChangeForkBlock)
+	postForkBase := CalculateQuaiReward(postFork.WorkObjectHeader(), postFork.Difficulty(), exchangeRate)
+	postForkWithFees := new(big.Int).Add(new(big.Int).Set(postForkBase), fees)
+	require.Equal(t, postForkWithFees, CalculateQuaiConversionReward(postFork, exchangeRate, postFork.Difficulty()))
+
+	// The canonical helpers use the corrected conversion basis in both
+	// directions.
+	qiReward := CalculateQiReward(postFork.WorkObjectHeader(), postFork.Difficulty())
+	require.Equal(t, postForkWithFees, QiToQuai(postFork, exchangeRate, postFork.Difficulty(), qiReward))
+	require.Equal(t, qiReward, QuaiToQi(postFork, exchangeRate, postFork.Difficulty(), postForkWithFees))
+}
+
+func TestCapFeeFeedbackSignal(t *testing.T) {
+	originalCap := params.FeeFeedbackMaxRewardMultipleBasisPoints
+	params.FeeFeedbackMaxRewardMultipleBasisPoints = 40000
+	defer func() { params.FeeFeedbackMaxRewardMultipleBasisPoints = originalCap }()
+
+	feeFreeReward := big.NewInt(100)
+	expectedCap := big.NewInt(400)
+
+	require.Equal(t, expectedCap, CapFeeFeedbackSignal(feeFreeReward, big.NewInt(2_000)))
+	require.Equal(t, common.Big1, CapFeeFeedbackSignal(feeFreeReward, common.Big1))
+}
+
+func TestFeeFeedbackCapBoundsSustainedFeesAtFourTimesReward(t *testing.T) {
+	originalCap := params.FeeFeedbackMaxRewardMultipleBasisPoints
+	params.FeeFeedbackMaxRewardMultipleBasisPoints = 40000
+	defer func() { params.FeeFeedbackMaxRewardMultipleBasisPoints = originalCap }()
+
+	exchangeRate := big.NewInt(221077819000000000)
+	block := newPostForkRewardTestBlock(params.ConversionLockChangeForkBlock)
+	feeFreeReward := CalculateQuaiReward(block.WorkObjectHeader(), block.Difficulty(), exchangeRate)
+	extremeFees := new(big.Int).Mul(new(big.Int).Set(feeFreeReward), big.NewInt(20))
+	maximumPricingReward := new(big.Int).Mul(new(big.Int).Set(feeFreeReward), big.NewInt(5))
+	averageFees := new(big.Int)
+
+	for range 1000 {
+		block.Header().SetAvgTxFees(averageFees)
+		cappedFees := CapFeeFeedbackSignal(feeFreeReward, extremeFees)
+		expectedCap := new(big.Int).Mul(new(big.Int).Set(feeFreeReward), big.NewInt(4))
+
+		require.Equal(t, expectedCap, cappedFees)
+
+		// A[n+1] = (99*A[n] + cappedFees/2) / 100.
+		halfCappedFees := new(big.Int).Div(cappedFees, common.Big2)
+		averageFees = new(big.Int).Div(
+			new(big.Int).Add(new(big.Int).Mul(averageFees, big.NewInt(99)), halfCappedFees),
+			big.NewInt(100),
+		)
+	}
+
+	block.Header().SetAvgTxFees(averageFees)
+	finalPricingReward := CalculateQuaiConversionReward(block, exchangeRate, block.Difficulty())
+	require.LessOrEqual(t, finalPricingReward.Cmp(maximumPricingReward), 0)
+	distanceFromBound := new(big.Int).Sub(maximumPricingReward, finalPricingReward)
+	require.Less(t, distanceFromBound.Cmp(new(big.Int).Div(maximumPricingReward, big.NewInt(1000))), 0)
+}
+
+func newPostForkRewardTestBlock(primeHeight uint64) *types.WorkObject {
+	headerDifficulty := big.NewInt(8000000000000000)
+	shaCount := new(big.Int).Set(params.TargetShaShares)
+	shaDiff := calculateShaDiffForEquivalentDifficulty(big.NewInt(4500000000000000), shaCount)
+
+	block := types.EmptyWorkObject(common.ZONE_CTX)
+	header := block.WorkObjectHeader()
+	header.SetPrimeTerminusNumber(new(big.Int).SetUint64(primeHeight))
+	header.SetNumber(new(big.Int).SetUint64(primeHeight))
+	header.SetDifficulty(headerDifficulty)
+	header.SetShaDiffAndCount(types.NewPowShareDiffAndCount(shaDiff, shaCount, common.Big0))
+	header.SetScryptDiffAndCount(types.NewPowShareDiffAndCount(big.NewInt(1), common.Big0, common.Big0))
+	return block
+}
+
 func newRewardTestHeader(primeTerminus, blockNumber uint64, difficulty, shaDiff, shaCount, scryptDiff, scryptCount *big.Int) *types.WorkObjectHeader {
 	workObject := types.EmptyWorkObject(common.ZONE_CTX)
 	header := workObject.WorkObjectHeader()
