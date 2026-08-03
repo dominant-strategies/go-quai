@@ -1841,13 +1841,29 @@ func (hc *HeaderChain) ComputeEfficiencyScore(parent *types.WorkObject) (uint16,
 	return ewma, nil
 }
 
-// ComputeAverageTxFees computes the ema of the half of the total fees generated in quai over past 100 blocks
-func (hc *HeaderChain) ComputeAverageTxFees(parent *types.WorkObject, totalTxFeesInQuai *big.Int) *big.Int {
+// ComputeAverageTxFees computes the EMA of half the Quai-equivalent fee signal.
+// After the conversion-lock fork, TotalFees retains the parent's real fees and
+// the hard feedback cap is applied only as that sample enters the EMA. This
+// one-block lag makes AvgTxFees known before current transactions are processed.
+func (hc *HeaderChain) ComputeAverageTxFees(block, parent *types.WorkObject, currentHalfFeesInQuai, feeFreeReward *big.Int) *big.Int {
 	if rawdb.IsGenesisHash(hc.headerDb, parent.Hash()) {
 		return big.NewInt(0)
 	}
+	feeSignal := currentHalfFeesInQuai
+	if block.PrimeTerminusNumber().Uint64() >= params.ConversionLockChangeForkBlock {
+		// The pre-fork parent average already includes its own fees. Carry it
+		// across the transition once instead of counting those fees twice.
+		if parent.PrimeTerminusNumber().Uint64() < params.ConversionLockChangeForkBlock {
+			return new(big.Int).Set(parent.AvgTxFees())
+		}
+		cappedFees := misc.CapFeeFeedbackSignal(feeFreeReward, parent.TotalFees())
+		feeSignal = new(big.Int).Div(cappedFees, common.Big2)
+	}
+	if feeSignal == nil {
+		feeSignal = common.Big0
+	}
 	newAvgTxFees := new(big.Int).Mul(parent.AvgTxFees(), big.NewInt(99))
-	newAvgTxFees = new(big.Int).Add(newAvgTxFees, totalTxFeesInQuai)
+	newAvgTxFees = new(big.Int).Add(newAvgTxFees, feeSignal)
 	newAvgTxFees = new(big.Int).Div(newAvgTxFees, big.NewInt(100))
 	return newAvgTxFees
 }

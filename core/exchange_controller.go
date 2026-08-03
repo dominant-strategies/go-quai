@@ -12,6 +12,11 @@ import (
 )
 
 func CalculateBetaFromMiningChoiceAndConversions(hc *HeaderChain, block *types.WorkObject, parentExchangeRate *big.Int, newTokenChoiceSet types.TokenChoiceSet) (*big.Int, error) {
+	// Freeze KQuai at the fork. A future fork can explicitly resume or replace
+	// the controller without changing the pre-fork exchange-rate history.
+	if block.NumberU64(common.PRIME_CTX) >= params.KQuaiFreezeForkBlock {
+		return new(big.Int).Set(parentExchangeRate), nil
+	}
 
 	// Until there are tokenChoicesSetSize of miner token choices, the exchange rate is unchanged
 	if block.NumberU64(common.PRIME_CTX) < params.ControllerKickInBlock+params.TokenChoiceSetSize {
@@ -190,7 +195,7 @@ func NormalizeConversionValueToBlock(block *types.WorkObject, exchangeRate *big.
 	if chooseQi {
 		reward = misc.CalculateQiReward(block.WorkObjectHeader(), block.MinerDifficulty())
 	} else {
-		reward = misc.CalculateQuaiReward(block.WorkObjectHeader(), block.MinerDifficulty(), exchangeRate)
+		reward = misc.CalculateQuaiConversionReward(block, exchangeRate, block.MinerDifficulty())
 	}
 
 	numBlocks := int(new(big.Int).Quo(value, reward).Uint64())

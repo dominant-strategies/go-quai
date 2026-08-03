@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
-	"github.com/dominant-strategies/go-quai/consensus/misc"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/params"
 )
@@ -27,16 +26,6 @@ func TestCalculateBetaFromMiningChoiceAndConversions(t *testing.T) {
 			Diff: big.NewInt(difficulty),
 		}
 		return tokenChoiceSet
-	}
-
-	expectedControllerRate := func(block *types.WorkObject, parentExchangeRate *big.Int, tokenChoiceSet types.TokenChoiceSet) *big.Int {
-		totalDiff := big.NewInt(0)
-		for _, tokenChoices := range tokenChoiceSet {
-			totalDiff.Add(totalDiff, tokenChoices.Diff)
-		}
-		bestDiff := new(big.Int).Div(totalDiff, big.NewInt(int64(params.TokenChoiceSetSize)))
-		newBeta0OverBeta1 := new(big.Int).Div(new(big.Int).Mul(bestDiff, common.Big2e64), common.LogBig(bestDiff))
-		return misc.CalculateKQuai(parentExchangeRate, block.MinerDifficulty(), block.NumberU64(common.PRIME_CTX), newBeta0OverBeta1)
 	}
 
 	initialExchangeRate := big.NewInt(500)
@@ -367,7 +356,7 @@ func TestCalculateBetaFromMiningChoiceAndConversions(t *testing.T) {
 		}
 	})
 
-	t.Run("Sha equivalent difficulty hold interval boundary resumes controller", func(t *testing.T) {
+	t.Run("KQuai freeze supersedes the end of the SHA hold interval", func(t *testing.T) {
 		blockAfterHold := params.ShaEquivalentDifficultyForkBlock + params.ExchangeRateHoldIntervalAfterShaEquivalentDifficulty
 		block := createTestBlock(blockAfterHold, difficulty)
 		tokenChoiceSet := createTokenChoiceSet(difficulty)
@@ -377,9 +366,28 @@ func TestCalculateBetaFromMiningChoiceAndConversions(t *testing.T) {
 			t.Fatalf("Expected no error after SHA-equivalent hold interval, got %v", err)
 		}
 
-		expectedRate := expectedControllerRate(block, params.ExchangeRateAfterShaEquivalentDifficultyFork, tokenChoiceSet)
-		if exchangeRate.Cmp(expectedRate) != 0 {
-			t.Errorf("Expected controller exchange rate %v after SHA-equivalent hold interval, got %v", expectedRate, exchangeRate)
+		if exchangeRate.Cmp(params.ExchangeRateAfterShaEquivalentDifficultyFork) != 0 {
+			t.Errorf("Expected KQuai to remain frozen at %v after SHA-equivalent hold interval, got %v", params.ExchangeRateAfterShaEquivalentDifficultyFork, exchangeRate)
+		}
+	})
+
+	t.Run("KQuai remains frozen from the conversion lock fork", func(t *testing.T) {
+		parentRate := big.NewInt(987654321)
+		tokenChoiceSet := createTokenChoiceSet(difficulty)
+
+		for _, blockNumber := range []uint64{
+			params.KQuaiFreezeForkBlock,
+			params.KQuaiFreezeForkBlock + 1,
+			params.KQuaiFreezeForkBlock + params.BlocksPerMonth,
+		} {
+			block := createTestBlock(blockNumber, difficulty)
+			exchangeRate, err := CalculateBetaFromMiningChoiceAndConversions(nil, block, parentRate, tokenChoiceSet)
+			if err != nil {
+				t.Fatalf("Expected no error while KQuai is frozen, got %v", err)
+			}
+			if exchangeRate.Cmp(parentRate) != 0 {
+				t.Fatalf("Expected frozen KQuai %v at block %d, got %v", parentRate, blockNumber, exchangeRate)
+			}
 		}
 	})
 }

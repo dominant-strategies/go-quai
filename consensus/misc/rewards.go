@@ -20,16 +20,74 @@ func CalculateReward(header *types.WorkObjectHeader, difficulty *big.Int, exchan
 	return reward
 }
 
-// Calculate the amount of Quai that Qi can be converted to. Expect the current Header and the Qi amount in "qits", returns the quai amount in "its"
+// CalculateQuaiRewardWithFees returns the new Quai reward with its full lagged
+// fee signal. AvgTxFees stores the EMA of half the capped fees, so it is doubled
+// here. Fork selection belongs to the conversion and reward-pool selectors.
+func CalculateQuaiRewardWithFees(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.Int) *big.Int {
+	reward := CalculateQuaiReward(block.WorkObjectHeader(), difficulty, exchangeRate)
+	return reward.Add(reward, new(big.Int).Mul(block.AvgTxFees(), common.Big2))
+}
+
+// CalculateQuaiRewardPool selects the reward pool used for blocks and
+// workshares. Before the fork it preserves the existing immediate-half plus
+// capacitor payout. After the fork all fees are paid from the lagged signal.
+func CalculateQuaiRewardPool(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.Int) *big.Int {
+	if block.PrimeTerminusNumber().Uint64() >= params.ConversionLockChangeForkBlock {
+		return CalculateQuaiRewardWithFees(block, exchangeRate, difficulty)
+	}
+	reward := CalculateQuaiReward(block.WorkObjectHeader(), difficulty, exchangeRate)
+	reward.Add(reward, block.AvgTxFees())
+	reward.Add(reward, new(big.Int).Div(block.TotalFees(), common.Big2))
+	return reward
+}
+
+// CapFeeFeedbackSignal limits the real Quai-equivalent fees that may enter
+// AvgTxFees to the configured multiple of the fee-free Quai reward.
+func CapFeeFeedbackSignal(feeFreeReward, totalFees *big.Int) *big.Int {
+	if totalFees == nil {
+		return new(big.Int)
+	}
+	cap := new(big.Int).Mul(feeFreeReward, new(big.Int).SetUint64(params.FeeFeedbackMaxRewardMultipleBasisPoints))
+	cap.Div(cap, new(big.Int).SetUint64(params.FeeFeedbackBasisPoints))
+	if totalFees.Cmp(cap) > 0 {
+		return cap
+	}
+	return new(big.Int).Set(totalFees)
+}
+
+// CalculateQuaiConversionReward returns the Quai side of the conversion rate.
+// Existing conversion pricing is preserved before the fork. At and after the
+// fork, the rate includes the same fee pool as a Quai-denominated block reward.
+func CalculateQuaiConversionReward(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.Int) *big.Int {
+	if block.PrimeTerminusNumber().Uint64() < params.ConversionLockChangeForkBlock {
+		return CalculateQuaiReward(block.WorkObjectHeader(), difficulty, exchangeRate)
+	}
+	return CalculateQuaiRewardWithFees(block, exchangeRate, difficulty)
+}
+
+// CalculateWorkShareRewardBase returns one expected reward slot. After the
+// conversion-lock fork, Qi slots are paid directly from the hash-proportional
+// Qi reward and do not receive any part of the Quai fee pool.
+func CalculateWorkShareRewardBase(block *types.WorkObject, exchangeRate *big.Int, payInQi bool) *big.Int {
+	divisor := big.NewInt(int64(params.ExpectedWorksharesPerBlock + 1))
+	if block.PrimeTerminusNumber().Uint64() >= params.ConversionLockChangeForkBlock && payInQi {
+		return new(big.Int).Div(CalculateQiReward(block.WorkObjectHeader(), block.Difficulty()), divisor)
+	}
+	return new(big.Int).Div(CalculateQuaiRewardPool(block, exchangeRate, block.Difficulty()), divisor)
+}
+
+// QiToQuai returns the fork-aware conversion quote for Qi in qits to Quai in
+// its. At and after the conversion-lock fork, the Quai reward side includes
+// the block's fee reward pool.
 func QiToQuai(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.Int, qiAmt *big.Int) *big.Int {
-	quaiByQi := new(big.Int).Mul(CalculateQuaiReward(block.WorkObjectHeader(), difficulty, exchangeRate), qiAmt)
+	quaiByQi := new(big.Int).Mul(CalculateQuaiConversionReward(block, exchangeRate, difficulty), qiAmt)
 	return new(big.Int).Quo(quaiByQi, CalculateQiReward(block.WorkObjectHeader(), difficulty))
 }
 
-// Calculate the amount of Qi that Quai can be converted to. Expect the current Header and the Quai amount in "its", returns the Qi amount in "qits"
+// QuaiToQi returns the inverse fork-aware quote for Quai in its to Qi in qits.
 func QuaiToQi(block *types.WorkObject, exchangeRate *big.Int, difficulty *big.Int, quaiAmt *big.Int) *big.Int {
 	qiByQuai := new(big.Int).Mul(CalculateQiReward(block.WorkObjectHeader(), difficulty), quaiAmt)
-	return new(big.Int).Quo(qiByQuai, CalculateQuaiReward(block.WorkObjectHeader(), difficulty, exchangeRate))
+	return new(big.Int).Quo(qiByQuai, CalculateQuaiConversionReward(block, exchangeRate, difficulty))
 }
 
 // ComputeConversionAmountInQuai computes the amount of conversion volume in
