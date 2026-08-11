@@ -18,6 +18,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/cmd/utils"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/internal/quaiapi"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/node"
@@ -179,16 +180,37 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// wait for a SIGINT or SIGTERM signal
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	// SIGINT and SIGTERM shut the node down. SIGUSR1 requests a live
+	// coordinated Pebble snapshot without interrupting normal operation.
+	stopCh := make(chan os.Signal, 1)
+	snapshotCh := make(chan os.Signal, 1)
 
-	select {
-	case <-ch:
-		log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
-	case <-quitCh:
-		log.Global.Warn("Received 'quit' signal from child, shutting down...")
+	signal.Notify(stopCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(snapshotCh, syscall.SIGUSR1)
+
+waitLoop:
+	for {
+		select {
+		case <-snapshotCh:
+			log.Global.Warn("Received SIGUSR1, requesting live Pebble snapshot")
+			if err := rawdb.TriggerPebbleSnapshot(log.Global); err != nil {
+				log.Global.WithField("error", err).Error(
+					"Unable to start live Pebble snapshot",
+				)
+			}
+
+		case <-stopCh:
+			log.Global.Warn("Received 'stop' signal, shutting down gracefully...")
+			break waitLoop
+
+		case <-quitCh:
+			log.Global.Warn("Received 'quit' signal from child, shutting down...")
+			break waitLoop
+		}
 	}
+
+	signal.Stop(snapshotCh)
+	signal.Stop(stopCh)
 
 	cancel()
 	// If the stratum API is running, stop it first
