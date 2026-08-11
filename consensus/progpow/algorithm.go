@@ -48,6 +48,11 @@ const (
 	datasetParents     = 512     // Number of parents of each dataset element
 	cacheRounds        = 3       // Number of rounds in cache production
 	loopAccesses       = 64      // Number of accesses in hashimoto loop
+
+	// maxProgpowCacheBytes is a defense-in-depth resource bound for cache
+	// generation from untrusted headers. Valid ProgPoW headers are limited by
+	// the KAWPOW transition and currently require less than 32 MiB.
+	maxProgpowCacheBytes = 64 * 1024 * 1024
 )
 
 var (

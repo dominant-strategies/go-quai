@@ -462,6 +462,9 @@ func (progpow *Progpow) SetThreads(threads int) {
 }
 
 func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
+	if err := validateProgpowHeader(header); err != nil {
+		return common.Hash{}, err
+	}
 	// Check progpow
 	mixHash := header.PowDigest.Load()
 	powHash := header.PowHash.Load()
@@ -476,6 +479,10 @@ func (progpow *Progpow) ComputePowHash(header *types.WorkObjectHeader) (common.H
 }
 
 func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
+	if err := validateProgpowHeader(header); err != nil {
+		progpow.logger.WithError(err).Error("Invalid ProgPoW header")
+		return common.Hash{}, common.Hash{}
+	}
 	hashes, ok := progpow.hashCache.Peek(header.Hash())
 	if ok {
 		return common.Hash(hashes.mixHash), common.Hash(hashes.workHash)
@@ -504,4 +511,24 @@ func (progpow *Progpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash
 	runtime.KeepAlive(cache)
 
 	return mixHash, powHash
+}
+
+func validateProgpowHeader(header *types.WorkObjectHeader) error {
+	if header == nil || header.PrimeTerminusNumber() == nil {
+		return errors.New("missing ProgPoW prime terminus number")
+	}
+	primeTerminusNumber := header.PrimeTerminusNumber()
+	if !primeTerminusNumber.IsUint64() {
+		return fmt.Errorf("invalid ProgPoW prime terminus number %s", primeTerminusNumber)
+	}
+	blockNumber := primeTerminusNumber.Uint64()
+	maxBlockNumber := params.KawPowForkBlock + params.KawPowTransitionPeriod
+	if blockNumber > maxBlockNumber {
+		return fmt.Errorf("ProgPoW prime terminus number %d exceeds protocol maximum %d", blockNumber, maxBlockNumber)
+	}
+	cacheBytes := cacheSize(blockNumber)
+	if cacheBytes > maxProgpowCacheBytes {
+		return fmt.Errorf("ProgPoW prime terminus number %d requires cache size %d, maximum is %d", blockNumber, cacheBytes, uint64(maxProgpowCacheBytes))
+	}
+	return nil
 }

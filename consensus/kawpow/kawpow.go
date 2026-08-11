@@ -474,6 +474,9 @@ func (kawpow *Kawpow) SetThreads(threads int) {
 }
 
 func (kawpow *Kawpow) ComputePowHash(header *types.WorkObjectHeader) (common.Hash, error) {
+	if err := validateKawpowHeader(header); err != nil {
+		return common.Hash{}, err
+	}
 	mixHash, powHash := kawpow.ComputePowLight(header)
 	// For KAWPOW, get the mix hash from the Ravencoin header in AuxPow
 	auxPow := header.AuxPow()
@@ -513,6 +516,9 @@ func (kawpow *Kawpow) ComputePowHash(header *types.WorkObjectHeader) (common.Has
 // - powHash: The proof-of-work hash to compare against the target
 // - error: Any error that occurred during calculation
 func (kawpow *Kawpow) VerifyKawpowShare(headerHash common.Hash, nonce uint64, blockNumber uint64) (common.Hash, common.Hash, error) {
+	if err := validateKawpowBlockNumber(blockNumber); err != nil {
+		return common.Hash{}, common.Hash{}, err
+	}
 	// Get the cache for this block number
 	ethashCache := kawpow.cache(blockNumber)
 
@@ -541,12 +547,16 @@ func (kawpow *Kawpow) VerifyKawpowShare(headerHash common.Hash, nonce uint64, bl
 // ComputePowLight computes the kawpow hash and returns mixHash and powHash
 func (kawpow *Kawpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, powHash common.Hash) {
 	// For quai blocks to rely on pow done on the raven coin donor header
-	if header.AuxPow() == nil {
+	if header == nil || header.AuxPow() == nil {
 		kawpow.logger.Error("AuxPow is nil in ComputePowLight")
 		return common.Hash{}, common.Hash{}
 	}
 
 	ravencoinHeader := header.AuxPow().Header()
+	if ravencoinHeader == nil {
+		kawpow.logger.Error("AuxPow header is nil in ComputePowLight")
+		return common.Hash{}, common.Hash{}
+	}
 
 	// For KAWPOW, the nonce is stored directly in the Ravencoin header
 	nonce64 := ravencoinHeader.Nonce64()
@@ -556,6 +566,10 @@ func (kawpow *Kawpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, 
 	// This will be reversed to little-endian before passing to kawpowLight
 	kawpowHeaderHash := ravencoinHeader.SealHash()
 	blockNumber := uint64(ravencoinHeader.Height())
+	if err := validateKawpowBlockNumber(blockNumber); err != nil {
+		kawpow.logger.WithError(err).Error("Invalid KAWPOW donor height")
+		return common.Hash{}, common.Hash{}
+	}
 
 	// Create a unique cache key using the RVN-compatible header hash + nonce so
 	// results are cached consistently with the actual kernel input.
@@ -590,4 +604,31 @@ func (kawpow *Kawpow) ComputePowLight(header *types.WorkObjectHeader) (mixHash, 
 	kawpow.hashCache.Add(cacheKey, mixHashWorkHash{mixHash: mixHash.Bytes(), workHash: powHash.Bytes()})
 
 	return mixHash, powHash
+}
+
+func validateKawpowHeader(header *types.WorkObjectHeader) error {
+	if header == nil || header.AuxPow() == nil || header.AuxPow().Header() == nil {
+		return errors.New("missing KAWPOW auxpow header")
+	}
+	if header.AuxPow().PowID() != types.Kawpow {
+		return fmt.Errorf("invalid KAWPOW auxpow id %s", header.AuxPow().PowID())
+	}
+	if err := validateKawpowBlockNumber(uint64(header.AuxPow().Header().Height())); err != nil {
+		return err
+	}
+	if !header.AuxPow().ConvertToTemplate().VerifySignature() {
+		return errors.New("invalid KAWPOW auxpow signature")
+	}
+	return nil
+}
+
+func validateKawpowBlockNumber(blockNumber uint64) error {
+	if blockNumber > maxKawpowDonorHeight {
+		return fmt.Errorf("KAWPOW donor height %d exceeds maximum %d", blockNumber, uint64(maxKawpowDonorHeight))
+	}
+	cacheBytes := cacheSize(blockNumber)
+	if cacheBytes > maxKawpowCacheBytes {
+		return fmt.Errorf("KAWPOW donor height %d requires cache size %d, maximum is %d", blockNumber, cacheBytes, uint64(maxKawpowCacheBytes))
+	}
+	return nil
 }

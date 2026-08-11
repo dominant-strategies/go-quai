@@ -710,6 +710,9 @@ func (hc *HeaderChain) CheckPowIdValidity(wo *types.WorkObjectHeader) error {
 	if wo == nil {
 		return fmt.Errorf("wo is nil")
 	}
+	if wo.PrimeTerminusNumber() == nil || !wo.PrimeTerminusNumber().IsUint64() {
+		return fmt.Errorf("wo has invalid prime terminus number")
+	}
 	if wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
 		if wo.AuxPow() != nil {
 			return fmt.Errorf("wo auxpow powid is not nil before kawpow fork")
@@ -736,6 +739,9 @@ func (hc *HeaderChain) CheckPowIdValidity(wo *types.WorkObjectHeader) error {
 func (hc *HeaderChain) CheckPowIdValidityForWorkshare(wo *types.WorkObjectHeader) error {
 	if wo == nil {
 		return fmt.Errorf("wo is nil")
+	}
+	if wo.PrimeTerminusNumber() == nil || !wo.PrimeTerminusNumber().IsUint64() {
+		return fmt.Errorf("workshare has invalid prime terminus number")
 	}
 	if wo.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
 		if wo.AuxPow() != nil {
