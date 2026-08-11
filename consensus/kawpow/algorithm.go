@@ -34,6 +34,12 @@ const (
 	// Kawpow specific constants
 	C_epochLength  = 7500 // Blocks per epoch
 	maxCachedEpoch = 100  // Maximum cached epochs
+
+	// These bounds prevent untrusted donor heights from selecting verification
+	// caches large enough to exhaust node memory. The height limit provides
+	// ample headroom beyond current signed donor templates.
+	maxKawpowCacheBytes         = 256 * 1024 * 1024
+	maxKawpowDonorHeight uint64 = 14_000_000
 )
 
 // cacheSize returns the size of the ethash verification cache that belongs to a certain

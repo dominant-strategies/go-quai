@@ -15,6 +15,27 @@ import (
 	"modernc.org/mathutil"
 )
 
+func TestPowIDValidationRejectsOversizedPrimeTerminus(t *testing.T) {
+	hc := &HeaderChain{}
+	header := &types.WorkObjectHeader{}
+	header.SetPrimeTerminusNumber(new(big.Int).Lsh(big.NewInt(1), 80))
+
+	if err := hc.CheckPowIdValidity(header); err == nil {
+		t.Fatal("expected block PoW validation to reject oversized prime terminus number")
+	}
+	if err := hc.CheckPowIdValidityForWorkshare(header); err == nil {
+		t.Fatal("expected workshare PoW validation to reject oversized prime terminus number")
+	}
+
+	header.SetPrimeTerminusNumber(big.NewInt(0))
+	if err := hc.CheckPowIdValidity(header); err != nil {
+		t.Fatalf("expected ordinary ProgPoW block header to remain valid: %v", err)
+	}
+	if err := hc.CheckPowIdValidityForWorkshare(header); err != nil {
+		t.Fatalf("expected ordinary ProgPoW workshare to remain valid: %v", err)
+	}
+}
+
 func TestComputeKQuaiDiscount(t *testing.T) {
 
 	// First value is the current block(5004000) exchange rate

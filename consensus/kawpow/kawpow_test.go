@@ -3,6 +3,7 @@ package kawpow
 import (
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 
@@ -11,6 +12,75 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 )
+
+func TestRejectsOversizedDonorHeightBeforeCacheAllocation(t *testing.T) {
+	logger := log.NewLogger("test.log", "info", 100)
+	engine := New(params.PowConfig{PowMode: params.ModeNormal}, nil, false, logger)
+	attackHeights := []uint32{75_000_000, 750_000_000, math.MaxUint32}
+	for _, attackHeight := range attackHeights {
+		header := &types.RavencoinBlockHeader{Height: attackHeight}
+		workHeader := &types.WorkObjectHeader{}
+		workHeader.SetAuxPow(types.NewAuxPow(types.Kawpow, types.NewAuxPowHeader(header), nil, nil, nil, nil))
+		if _, err := engine.ComputePowHash(workHeader); err == nil {
+			t.Fatalf("expected donor height %d to be rejected", attackHeight)
+		}
+		mixHash, powHash := engine.ComputePowLight(workHeader)
+		if mixHash != (common.Hash{}) || powHash != (common.Hash{}) {
+			t.Fatalf("expected direct light computation to fail closed for height %d", attackHeight)
+		}
+	}
+	if _, _, err := engine.VerifyKawpowShare(common.Hash{}, 0, math.MaxUint64); err == nil {
+		t.Fatal("expected oversized pool share height to be rejected")
+	}
+	if err := validateKawpowBlockNumber(1219737); err != nil {
+		t.Fatalf("expected canonical KAWPOW height to remain valid: %v", err)
+	}
+	unsignedHeader := &types.WorkObjectHeader{}
+	unsignedHeader.SetAuxPow(types.NewAuxPow(
+		types.Kawpow,
+		types.NewAuxPowHeader(&types.RavencoinBlockHeader{Height: 1219737}),
+		nil,
+		nil,
+		nil,
+		nil,
+	))
+	if _, err := engine.ComputePowHash(unsignedHeader); err == nil {
+		t.Fatal("expected unsigned KAWPOW header to be rejected before cache allocation")
+	}
+}
+
+func TestValidateKawpowHeaderAcceptsSignedTemplate(t *testing.T) {
+	template := types.DefaultKawpowAuxTemplate()
+	coinbaseTx := types.NewAuxPowCoinbaseTx(
+		types.Kawpow,
+		template.Height(),
+		template.CoinbaseOut(),
+		common.Hash{},
+		template.SignatureTime(),
+	)
+	merkleRoot := types.CalculateMerkleRoot(types.Kawpow, coinbaseTx, template.MerkleBranch())
+	donorHeader := types.NewRavencoinBlockHeader(
+		int32(template.Version()),
+		template.PrevHash(),
+		merkleRoot,
+		0,
+		template.Bits(),
+		template.Height(),
+	)
+	workHeader := &types.WorkObjectHeader{}
+	workHeader.SetAuxPow(types.NewAuxPow(
+		types.Kawpow,
+		types.NewAuxPowHeader(donorHeader),
+		template.AuxPow2(),
+		template.Sigs(),
+		template.MerkleBranch(),
+		coinbaseTx,
+	))
+
+	if err := validateKawpowHeader(workHeader); err != nil {
+		t.Fatalf("expected signed KAWPOW template to remain valid: %v", err)
+	}
+}
 
 // TestKAWPOWImplementation tests our KAWPOW implementation with various scenarios
 func TestKAWPOWImplementation(t *testing.T) {

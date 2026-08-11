@@ -2461,6 +2461,9 @@ func (sl *Slice) SubscribeExpansionEvent(ch chan<- ExpansionEvent) event.Subscri
 // If an error is returned this means the workShare was invalid and/or did not meet the minimum p2p threshold.
 func (sl *Slice) ReceiveWorkShare(workShare *types.WorkObjectHeader) (shareView *types.WorkObjectShareView, isBlock, isWorkShare bool, err error) {
 	if workShare != nil {
+		if err := sl.hc.CheckPowIdValidityForWorkshare(workShare); err != nil {
+			return nil, false, false, err
+		}
 		// If the workshares are from sha or scrypt, we have to validate them separately
 		var isWorkShare, isSubShare bool
 		if workShare.AuxPow() != nil {

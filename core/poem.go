@@ -14,6 +14,12 @@ import (
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
+	if header == nil {
+		return big.NewInt(0), -1, errors.New("cannot calculate order for nil work object")
+	}
+	if err := hc.CheckPowIdValidity(header.WorkObjectHeader()); err != nil {
+		return big.NewInt(0), -1, err
+	}
 	// check if the order for this block has already been computed
 	intrinsicEntropy, order, exists := hc.CheckInCalcOrderCache(header.Hash())
 	if exists {
