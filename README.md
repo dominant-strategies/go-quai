@@ -2,7 +2,7 @@
 The reference implementation of the Quai protocol, written in Go.
 
 [![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
+https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f63732e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
 )](https://pkg.go.dev/github.com/dominant-strategies/go-quai/common)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dominant-strategies/go-quai)](https://goreportcard.com/report/github.com/dominant-strategies/go-quai)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/s8y8asPwNC)
@@ -25,6 +25,14 @@ To run a go-quai node, simply execute the `go-quai start` command. Be sure to sp
 For example, here is the run command for miner (0x00a3e45aa16163F2663015b6695894D918866d19) in cyprus-1 (zone-0-0) on the "garden" test network:
 ```shell
 ./build/bin/go-quai start --node.slices "[0 0]" --node.coinbases "0x00a3e45aa16163F2663015b6695894D918866d19" --node.environment "garden"
+```
+
+### Restoring a Pebble snapshot
+
+Snapshots created by the live snapshot feature contain Pebble databases. When starting a node from one of these snapshots, include:
+
+```shell
+--node.db-engine pebble
 ```
 
 For the full list of available options and their default values, consult the help menu:
