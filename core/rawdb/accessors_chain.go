@@ -1287,6 +1287,11 @@ func WriteAddressUTXOs(db ethdb.KeyValueWriter, readDb ethdb.Reader, newOutpoint
 
 // Make sure this always runs *after* WriteAddressUTXOs
 func DeleteAddressUTXOsWithBatch(batch ethdb.Batch, readDb ethdb.Reader, outpointsToRemoveMap map[[20]byte][]*types.OutPoint) error {
+	type outpointKey struct {
+		hash  common.Hash
+		index uint32
+	}
+
 	for address, outpoints := range outpointsToRemoveMap {
 		_, data := batch.GetPending(addressUtxosWithoutHeightKey(address))
 		if len(data) == 0 {
@@ -1302,22 +1307,32 @@ func DeleteAddressUTXOsWithBatch(batch ethdb.Batch, readDb ethdb.Reader, outpoin
 		if err := proto.Unmarshal(data, addressOutpointsProto); err != nil {
 			return fmt.Errorf("Failed to proto Unmarshal address outpoints: %v", err)
 		}
+
+		outpointsToRemove := make(map[outpointKey]struct{}, len(outpoints))
 		for _, outpoint := range outpoints {
-			for i := 0; i < len(addressOutpointsProto.OutPoints); i++ {
-				outpointProto := addressOutpointsProto.OutPoints[i]
-				if common.Hash(outpointProto.Hash.GetValue()) == outpoint.TxHash && outpointProto.Index != nil && *outpointProto.Index == uint32(outpoint.Index) {
-					if i == len(addressOutpointsProto.OutPoints)-1 {
-						// Remove the last element
-						addressOutpointsProto.OutPoints = addressOutpointsProto.OutPoints[:i]
-					} else {
-						// Remove from the outpoints slice
-						addressOutpointsProto.OutPoints = slices.Delete(addressOutpointsProto.OutPoints, i, i+1)
-						// Decrement i to account for the removed element
-						i--
-					}
-				}
+			if outpoint == nil {
+				continue
 			}
+			outpointsToRemove[outpointKey{hash: outpoint.TxHash, index: uint32(outpoint.Index)}] = struct{}{}
 		}
+
+		// Filter the existing outpoints in one pass. The previous nested scan was
+		// O(existing outpoints * removals), which becomes prohibitively expensive
+		// for addresses with large UTXO sets.
+		existingOutpoints := addressOutpointsProto.OutPoints
+		keptOutpoints := existingOutpoints[:0]
+		for _, outpointProto := range existingOutpoints {
+			if outpointProto == nil || outpointProto.Hash == nil || outpointProto.Index == nil {
+				return fmt.Errorf("invalid address outpoint for address %x", address)
+			}
+			key := outpointKey{hash: common.Hash(outpointProto.Hash.GetValue()), index: *outpointProto.Index}
+			if _, remove := outpointsToRemove[key]; remove {
+				continue
+			}
+			keptOutpoints = append(keptOutpoints, outpointProto)
+		}
+		clear(existingOutpoints[len(keptOutpoints):])
+		addressOutpointsProto.OutPoints = keptOutpoints
 
 		// Now, marshal addressOutpointsProto to protobuf bytes
 		data, err := proto.Marshal(addressOutpointsProto)

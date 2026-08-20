@@ -911,6 +911,59 @@ func TestAddressOutpointsStorage(t *testing.T) {
 	}
 }
 
+func TestDeleteAddressUTXOsWithBatch(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+	address := common.HexToAddressBytes("0x008aeeda4d805471df9b2a5b0f38a0c3bcba786b")
+
+	outpoints := []*types.OutpointAndDenomination{
+		{TxHash: common.Hash{1}, Index: 1, Denomination: 1, Lock: big.NewInt(0)},
+		{TxHash: common.Hash{2}, Index: 2, Denomination: 2, Lock: big.NewInt(0)},
+		{TxHash: common.Hash{3}, Index: 3, Denomination: 3, Lock: big.NewInt(0)},
+		{TxHash: common.Hash{4}, Index: 4, Denomination: 4, Lock: big.NewInt(0)},
+		{TxHash: common.Hash{5}, Index: 5, Denomination: 5, Lock: big.NewInt(0)},
+	}
+	require.NoError(t, WriteAddressUTXOs(db, db, map[[20]byte][]*types.OutpointAndDenomination{
+		address: outpoints,
+	}))
+
+	batch := db.NewBatch()
+	require.NoError(t, DeleteAddressUTXOsWithBatch(batch, db, map[[20]byte][]*types.OutPoint{
+		address: {
+			{TxHash: common.Hash{1}, Index: 1},
+			{TxHash: common.Hash{3}, Index: 3},
+			{TxHash: common.Hash{5}, Index: 5},
+			// Removing an unknown outpoint must leave the index unchanged.
+			{TxHash: common.Hash{99}, Index: 99},
+		},
+	}))
+	require.NoError(t, batch.Write())
+
+	remaining, err := ReadAddressUTXOs(db, address)
+	require.NoError(t, err)
+	require.Equal(t, []*types.OutpointAndDenomination{outpoints[1], outpoints[3]}, remaining)
+}
+
+func TestDeleteAddressUTXOsWithBatchRemovesAll(t *testing.T) {
+	db := NewMemoryDatabase(log.Global)
+	address := common.HexToAddressBytes("0x008aeeda4d805471df9b2a5b0f38a0c3bcba786b")
+	outpoint := &types.OutpointAndDenomination{
+		TxHash: common.Hash{1}, Index: 1, Denomination: 1, Lock: big.NewInt(0),
+	}
+	require.NoError(t, WriteAddressUTXOs(db, db, map[[20]byte][]*types.OutpointAndDenomination{
+		address: {outpoint},
+	}))
+
+	batch := db.NewBatch()
+	require.NoError(t, DeleteAddressUTXOsWithBatch(batch, db, map[[20]byte][]*types.OutPoint{
+		address: {{TxHash: outpoint.TxHash, Index: outpoint.Index}},
+	}))
+	require.NoError(t, batch.Write())
+
+	remaining, err := ReadAddressUTXOs(db, address)
+	require.NoError(t, err)
+	require.Empty(t, remaining)
+}
+
 func TestGenesisHashesStorage(t *testing.T) {
 	db := NewMemoryDatabase(log.Global)
 
