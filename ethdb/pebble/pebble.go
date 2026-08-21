@@ -410,15 +410,23 @@ func (d *Database) meter(refresh time.Duration) {
 // batch is a write-only batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	b    *pebble.Batch
-	db   *Database
-	size int
+	b           *pebble.Batch
+	db          *Database
+	size        int
+	setPending  bool
+	pending     map[string]*[]byte
+	pendingLock sync.RWMutex
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.b.Set(key, value, nil)
 	b.size += len(key) + len(value)
+	if b.setPending {
+		b.pendingLock.Lock()
+		b.pending[string(key)] = &value
+		b.pendingLock.Unlock()
+	}
 	return nil
 }
 
@@ -426,6 +434,11 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key, nil)
 	b.size += len(key)
+	if b.setPending {
+		b.pendingLock.Lock()
+		b.pending[string(key)] = nil
+		b.pendingLock.Unlock()
+	}
 	return nil
 }
 
@@ -441,6 +454,9 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
+
+	b.pending = nil
+	b.setPending = false
 	return b.b.Commit(pebble.Sync)
 }
 
@@ -448,6 +464,8 @@ func (b *batch) Write() error {
 func (b *batch) Reset() {
 	b.b.Reset()
 	b.size = 0
+	b.pending = nil
+	b.setPending = false
 }
 
 // Replay replays the batch contents.
@@ -475,9 +493,22 @@ func (b *batch) Logger() *log.Logger {
 	return b.db.logger
 }
 
-func (b *batch) SetPending(pending bool) {}
 func (b *batch) GetPending(key []byte) (bool, []byte) {
+	b.pendingLock.RLock()
+	defer b.pendingLock.RUnlock()
+	if val, ok := b.pending[string(key)]; ok {
+		if val == nil {
+			return true, nil
+		}
+		return false, *val
+	}
 	return false, nil
+}
+
+// SetPending must be called for the batch to keep track of pending writes outside of pebble.
+func (b *batch) SetPending(val bool) {
+	b.pending = make(map[string]*[]byte)
+	b.setPending = val
 }
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.

@@ -42,3 +42,84 @@ func TestPebbleDB(t *testing.T) {
 		})
 	})
 }
+
+func TestPebbleBatchPending(t *testing.T) {
+	inner, err := pebble.Open("", &pebble.Options{
+		FS: vfs.NewMem(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inner.Close()
+
+	db := &Database{db: inner}
+	batch := db.NewBatch()
+
+	key := []byte("pending-key")
+	value := []byte("pending-value")
+
+	// Pending tracking is opt-in.
+	if err := batch.Put(key, value); err != nil {
+		t.Fatal(err)
+	}
+	if deleted, data := batch.GetPending(key); deleted || data != nil {
+		t.Fatalf("unexpected pending value before SetPending: deleted=%t data=%q", deleted, data)
+	}
+
+	batch.Reset()
+	batch.SetPending(true)
+
+	// A pending write should be visible before the batch is committed.
+	if err := batch.Put(key, value); err != nil {
+		t.Fatal(err)
+	}
+	deleted, data := batch.GetPending(key)
+	if deleted {
+		t.Fatal("pending write reported as deleted")
+	}
+	if string(data) != string(value) {
+		t.Fatalf("pending write mismatch: have %q want %q", data, value)
+	}
+
+	// A later delete of the same key should replace the pending write.
+	if err := batch.Delete(key); err != nil {
+		t.Fatal(err)
+	}
+	deleted, data = batch.GetPending(key)
+	if !deleted || data != nil {
+		t.Fatalf("pending delete mismatch: deleted=%t data=%q", deleted, data)
+	}
+
+	// A later write should replace the pending delete.
+	replacement := []byte("replacement")
+	if err := batch.Put(key, replacement); err != nil {
+		t.Fatal(err)
+	}
+	deleted, data = batch.GetPending(key)
+	if deleted {
+		t.Fatal("replacement write reported as deleted")
+	}
+	if string(data) != string(replacement) {
+		t.Fatalf("replacement mismatch: have %q want %q", data, replacement)
+	}
+
+	// Writing the batch clears its pending overlay.
+	if err := batch.Write(); err != nil {
+		t.Fatal(err)
+	}
+	if deleted, data := batch.GetPending(key); deleted || data != nil {
+		t.Fatalf("pending state survived Write: deleted=%t data=%q", deleted, data)
+	}
+
+	// Reset must also clear pending tracking and pending values.
+	batch.Reset()
+	batch.SetPending(true)
+	if err := batch.Put(key, []byte("reset-value")); err != nil {
+		t.Fatal(err)
+	}
+	batch.Reset()
+
+	if deleted, data := batch.GetPending(key); deleted || data != nil {
+		t.Fatalf("pending state survived Reset: deleted=%t data=%q", deleted, data)
+	}
+}
