@@ -31,3 +31,27 @@ func TestMemoryDB(t *testing.T) {
 		})
 	})
 }
+
+func TestBatchPendingReadYourWrites(t *testing.T) {
+	db := New(log.Global)
+	batch := db.NewBatch()
+	batch.SetPending(true)
+
+	key := []byte("key")
+	value := []byte("value")
+	if err := batch.Put(key, value); err != nil {
+		t.Fatal(err)
+	}
+	deleted, pending := batch.GetPending(key)
+	if deleted || string(pending) != string(value) {
+		t.Fatalf("pending put not visible: deleted=%t value=%q", deleted, pending)
+	}
+
+	if err := batch.Delete(key); err != nil {
+		t.Fatal(err)
+	}
+	deleted, pending = batch.GetPending(key)
+	if !deleted || pending != nil {
+		t.Fatalf("pending delete not visible: deleted=%t value=%q", deleted, pending)
+	}
+}
