@@ -208,16 +208,23 @@ type keyvalue struct {
 // batch is a write-only memory batch that commits changes to its host
 // database when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	db     *Database
-	writes []keyvalue
-	size   int
-	logger *log.Logger
+	db         *Database
+	writes     []keyvalue
+	size       int
+	logger     *log.Logger
+	setPending bool
+	pending    map[string]*[]byte
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
+	value = common.CopyBytes(value)
+	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), value, false})
 	b.size += len(value)
+	if b.setPending {
+		pendingValue := common.CopyBytes(value)
+		b.pending[string(key)] = &pendingValue
+	}
 	return nil
 }
 
@@ -225,6 +232,9 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
 	b.size += len(key)
+	if b.setPending {
+		b.pending[string(key)] = nil
+	}
 	return nil
 }
 
@@ -248,6 +258,8 @@ func (b *batch) Write() error {
 		}
 		b.db.db[string(keyvalue.key)] = keyvalue.value
 	}
+	b.pending = nil
+	b.setPending = false
 	return nil
 }
 
@@ -255,6 +267,8 @@ func (b *batch) Write() error {
 func (b *batch) Reset() {
 	b.writes = b.writes[:0]
 	b.size = 0
+	b.pending = nil
+	b.setPending = false
 }
 
 // Replay replays the batch contents.
@@ -277,8 +291,17 @@ func (b *batch) Logger() *log.Logger {
 	return b.db.logger
 }
 
-func (b *batch) SetPending(pending bool) {}
+func (b *batch) SetPending(pending bool) {
+	b.pending = make(map[string]*[]byte)
+	b.setPending = pending
+}
 func (b *batch) GetPending(key []byte) (bool, []byte) {
+	if value, ok := b.pending[string(key)]; ok {
+		if value == nil {
+			return true, nil
+		}
+		return false, common.CopyBytes(*value)
+	}
 	return false, nil
 }
 

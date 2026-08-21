@@ -1021,6 +1021,9 @@ func (hc *HeaderChain) Finalize(batch ethdb.Batch, header *types.WorkObject, sta
 		return nil, 0, nil, fmt.Errorf("UTXO set size is less than the number of utxos to delete. This is a bug. UTXO set size: %d, UTXOs to delete: %d", utxoSetSize, len(utxosDelete))
 	}
 	utxoSetSize -= uint64(len(utxosDelete))
+	// Deduplicating transaction spends against denomination trims changes the
+	// UTXO root, so activate it at the same Prime fork as qi-unlock.
+	utxosDeleteSet := newTrimDeleteSet(header.PrimeTerminusNumber().Uint64(), utxosDelete)
 
 	trimmedUtxos := make([]*types.SpentUtxoEntry, 0)
 	start := time.Now()
@@ -1030,6 +1033,7 @@ func (hc *HeaderChain) Finalize(batch ethdb.Batch, header *types.WorkObject, sta
 		if denomination <= types.MaxTrimDenomination && header.NumberU64(nodeCtx) > depth {
 			wg.Add(1)
 			go func(denomination uint8, depth uint64) {
+				defer wg.Done()
 				defer func() {
 					if r := recover(); r != nil {
 						hc.logger.WithFields(log.Fields{
@@ -1039,8 +1043,7 @@ func (hc *HeaderChain) Finalize(batch ethdb.Batch, header *types.WorkObject, sta
 					}
 				}()
 				nextBlockToTrim := rawdb.ReadCanonicalHash(hc.Database(), header.NumberU64(nodeCtx)-depth)
-				hc.TrimBlock(batch, denomination, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, &trimmedUtxos, supplyRemovedQi, &utxoSetSize, !setRoots, &lock, hc.logger) // setRoots is false when we are processing the block
-				wg.Done()
+				hc.trimBlock(batch, denomination, header.NumberU64(nodeCtx)-depth, nextBlockToTrim, &utxosDelete, utxosDeleteSet, &trimmedUtxos, supplyRemovedQi, &utxoSetSize, !setRoots, &lock, hc.logger) // setRoots is false when we are processing the block
 			}(denomination, depth)
 		}
 	}
@@ -1071,6 +1074,22 @@ func (hc *HeaderChain) Finalize(batch ethdb.Batch, header *types.WorkObject, sta
 // TrimBlock trims all UTXOs of a given denomination that were created in a given block.
 // In the event of an attacker intentionally creating too many 9-byte keys that collide, we return the colliding keys to be trimmed in the next block.
 func (hc *HeaderChain) TrimBlock(batch ethdb.Batch, denomination uint8, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, trimmedUtxos *[]*types.SpentUtxoEntry, supplyRemovedQi *big.Int, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) {
+	utxosDeleteSet := newTrimDeleteSet(params.ConversionLockChangeForkBlock, *utxosDelete)
+	hc.trimBlock(batch, denomination, blockHeight, blockHash, utxosDelete, utxosDeleteSet, trimmedUtxos, supplyRemovedQi, utxoSetSize, deleteFromDb, lock, logger)
+}
+
+func newTrimDeleteSet(primeHeight uint64, utxosDelete []common.Hash) map[common.Hash]struct{} {
+	if primeHeight < params.ConversionLockChangeForkBlock {
+		return nil
+	}
+	utxosDeleteSet := make(map[common.Hash]struct{}, len(utxosDelete))
+	for _, hash := range utxosDelete {
+		utxosDeleteSet[hash] = struct{}{}
+	}
+	return utxosDeleteSet
+}
+
+func (hc *HeaderChain) trimBlock(batch ethdb.Batch, denomination uint8, blockHeight uint64, blockHash common.Hash, utxosDelete *[]common.Hash, utxosDeleteSet map[common.Hash]struct{}, trimmedUtxos *[]*types.SpentUtxoEntry, supplyRemovedQi *big.Int, utxoSetSize *uint64, deleteFromDb bool, lock *sync.Mutex, logger *log.Logger) {
 	utxosCreated, _ := rawdb.ReadCreatedUTXOKeys(hc.Database(), blockHash)
 	if len(utxosCreated) == 0 {
 		logger.Infof("UTXOs created in block %d: %d", blockHeight, len(utxosCreated))
@@ -1123,8 +1142,16 @@ func (hc *HeaderChain) TrimBlock(batch ethdb.Batch, denomination uint8, blockHei
 			logger.WithField("err", err).Error("Failed to parse utxo key")
 			continue
 		}
+		utxoHash := types.UTXOHash(txHash, index, utxo)
 		lock.Lock()
-		*utxosDelete = append(*utxosDelete, types.UTXOHash(txHash, index, utxo))
+		if utxosDeleteSet != nil {
+			if _, alreadyDeleted := utxosDeleteSet[utxoHash]; alreadyDeleted {
+				lock.Unlock()
+				continue
+			}
+			utxosDeleteSet[utxoHash] = struct{}{}
+		}
+		*utxosDelete = append(*utxosDelete, utxoHash)
 		if deleteFromDb {
 			batch.Delete(key)
 			*trimmedUtxos = append(*trimmedUtxos, &types.SpentUtxoEntry{OutPoint: types.OutPoint{txHash, index}, UtxoEntry: utxo})
