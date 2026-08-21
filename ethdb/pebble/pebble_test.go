@@ -19,6 +19,7 @@
 package pebble
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/cockroachdb/pebble"
@@ -41,4 +42,77 @@ func TestPebbleDB(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestBatchPendingReadYourWrites(t *testing.T) {
+	db, err := pebble.Open("", &pebble.Options{FS: vfs.NewMem()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	kvdb := &Database{db: db}
+	batch := kvdb.NewBatch()
+	batch.SetPending(true)
+
+	key := []byte("key")
+	value := []byte("value")
+	if err := batch.Put(key, value); err != nil {
+		t.Fatal(err)
+	}
+	value[0] = 'X'
+	deleted, pending := batch.GetPending(key)
+	if deleted || !bytes.Equal(pending, []byte("value")) {
+		t.Fatalf("pending put not visible: deleted=%t value=%q", deleted, pending)
+	}
+	pending[0] = 'Y'
+	_, pending = batch.GetPending(key)
+	if !bytes.Equal(pending, []byte("value")) {
+		t.Fatalf("GetPending returned mutable batch storage: %q", pending)
+	}
+
+	if err := batch.Delete(key); err != nil {
+		t.Fatal(err)
+	}
+	deleted, pending = batch.GetPending(key)
+	if !deleted || pending != nil {
+		t.Fatalf("pending delete not visible: deleted=%t value=%q", deleted, pending)
+	}
+}
+
+func TestBatchPendingClearedAfterWriteAndReset(t *testing.T) {
+	db, err := pebble.Open("", &pebble.Options{FS: vfs.NewMem()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	kvdb := &Database{db: db}
+	batch := kvdb.NewBatch()
+	key := []byte("key")
+
+	batch.SetPending(true)
+	if err := batch.Put(key, []byte("written")); err != nil {
+		t.Fatal(err)
+	}
+	if err := batch.Write(); err != nil {
+		t.Fatal(err)
+	}
+	if deleted, pending := batch.GetPending(key); deleted || pending != nil {
+		t.Fatalf("pending state survived Write: deleted=%t value=%q", deleted, pending)
+	}
+	written, err := kvdb.Get(key)
+	if err != nil || !bytes.Equal(written, []byte("written")) {
+		t.Fatalf("committed value missing: value=%q err=%v", written, err)
+	}
+
+	batch.Reset()
+	batch.SetPending(true)
+	if err := batch.Put(key, []byte("reset")); err != nil {
+		t.Fatal(err)
+	}
+	batch.Reset()
+	if deleted, pending := batch.GetPending(key); deleted || pending != nil {
+		t.Fatalf("pending state survived Reset: deleted=%t value=%q", deleted, pending)
+	}
 }

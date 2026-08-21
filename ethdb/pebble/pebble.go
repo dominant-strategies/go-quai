@@ -410,15 +410,24 @@ func (d *Database) meter(refresh time.Duration) {
 // batch is a write-only batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	b    *pebble.Batch
-	db   *Database
-	size int
+	b           *pebble.Batch
+	db          *Database
+	size        int
+	setPending  bool
+	pending     map[string]*[]byte
+	pendingLock sync.RWMutex
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.b.Set(key, value, nil)
 	b.size += len(key) + len(value)
+	b.pendingLock.Lock()
+	if b.setPending {
+		valueCopy := common.CopyBytes(value)
+		b.pending[string(key)] = &valueCopy
+	}
+	b.pendingLock.Unlock()
 	return nil
 }
 
@@ -426,6 +435,11 @@ func (b *batch) Put(key, value []byte) error {
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key, nil)
 	b.size += len(key)
+	b.pendingLock.Lock()
+	if b.setPending {
+		b.pending[string(key)] = nil
+	}
+	b.pendingLock.Unlock()
 	return nil
 }
 
@@ -441,13 +455,18 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
-	return b.b.Commit(pebble.Sync)
+	if err := b.b.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	b.clearPending()
+	return nil
 }
 
 // Reset resets the batch for reuse.
 func (b *batch) Reset() {
 	b.b.Reset()
 	b.size = 0
+	b.clearPending()
 }
 
 // Replay replays the batch contents.
@@ -475,9 +494,34 @@ func (b *batch) Logger() *log.Logger {
 	return b.db.logger
 }
 
-func (b *batch) SetPending(pending bool) {}
+func (b *batch) SetPending(pending bool) {
+	b.pendingLock.Lock()
+	defer b.pendingLock.Unlock()
+	b.setPending = pending
+	if pending {
+		b.pending = make(map[string]*[]byte)
+	} else {
+		b.pending = nil
+	}
+}
+
 func (b *batch) GetPending(key []byte) (bool, []byte) {
+	b.pendingLock.RLock()
+	defer b.pendingLock.RUnlock()
+	if value, ok := b.pending[string(key)]; ok {
+		if value == nil {
+			return true, nil
+		}
+		return false, common.CopyBytes(*value)
+	}
 	return false, nil
+}
+
+func (b *batch) clearPending() {
+	b.pendingLock.Lock()
+	b.pending = nil
+	b.setPending = false
+	b.pendingLock.Unlock()
 }
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
