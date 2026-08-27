@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -1586,8 +1587,11 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 	if tx.ChainId().Cmp(signer.ChainID()) != 0 {
 		return nil, fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}
-	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) != common.AddressLength) {
+	if !qiTxDataLengthValid(tx, currentHeader) {
 		return nil, fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength)
+	}
+	if err := validateQiTxLockTime(tx, currentHeader, location); err != nil {
+		return nil, err
 	}
 
 	// Wrap Qi Transaction
@@ -1642,8 +1646,8 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 				types.MaxDenomination)
 			return nil, errors.New(str)
 		}
-		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
-			return nil, errors.New("QiTx output has non-zero lock")
+		if err := validateQiTxOutLock(&txOut, currentHeader, location); err != nil {
+			return nil, err
 		}
 		outputs[uint(txOut.Denomination)]++
 		if common.IsConversionOutput(txOut.Address, location) { // Qi->Quai conversion
@@ -1656,6 +1660,85 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 
 func qiWrappingSkipsLocalUTXO(header *types.WorkObject) bool {
 	return header.PrimeTerminusNumber().Uint64() >= params.QiWrappingChangeBlock
+}
+
+func qiUserLocksEnabled(header *types.WorkObject) bool {
+	return header.PrimeTerminusNumber().Uint64() >= params.QiUserLockForkBlock
+}
+
+// QiTxLockTime returns the absolute transaction-level locktime carried in a
+// Qi transaction's Data field, if any. A locktime is encoded as exactly
+// QiTxLockTimeDataLength bytes, big endian.
+func QiTxLockTime(tx *types.Transaction) (uint64, bool) {
+	data := tx.Data()
+	if len(data) != params.QiTxLockTimeDataLength {
+		return 0, false
+	}
+	return binary.BigEndian.Uint64(data), true
+}
+
+// qiTxDataLengthValid reports whether a Qi transaction's Data field has one of
+// the recognized lengths: empty, an address (wrapping), a conversion payload,
+// or - once the fork activates - a transaction-level locktime.
+func qiTxDataLengthValid(tx *types.Transaction, currentHeader *types.WorkObject) bool {
+	switch len(tx.Data()) {
+	case 0, common.AddressLength, params.MaxQiTxDataLength:
+		return true
+	case params.QiTxLockTimeDataLength:
+		return qiUserLocksEnabled(currentHeader)
+	default:
+		return false
+	}
+}
+
+// validateQiTxLockTime rejects a transaction that carries an absolute
+// locktime the chain has not reached yet. Unlike a UTXO Lock, which delays
+// spending an output that already exists, this delays the transaction itself,
+// so two parties can pre-sign competing spends of one output that mature at
+// different heights - the ordering payment channels are built on.
+func validateQiTxLockTime(tx *types.Transaction, currentHeader *types.WorkObject, location common.Location) error {
+	lockTime, ok := QiTxLockTime(tx)
+	if !ok {
+		return nil
+	}
+	if !qiUserLocksEnabled(currentHeader) {
+		return fmt.Errorf("tx %032x carries a locktime before the fork activates", tx.Hash())
+	}
+	current := currentHeader.Number(location.Context())
+	if current.Cmp(new(big.Int).SetUint64(lockTime)) < 0 {
+		return fmt.Errorf("tx %032x is not valid until height %d, current height %s", tx.Hash(), lockTime, current.String())
+	}
+	return nil
+}
+
+// validateQiTxOutLock enforces the rules for user-set locks on Qi outputs.
+// Before QiUserLockForkBlock any non-zero lock is invalid. After activation a
+// locked output must be a local Qi-ledger UTXO (not a conversion, wrapping or
+// cross-chain output), must use a denomination above the trimmable range so a
+// locked output can never sit out the trimmer, and may not lock further out
+// than MaxQiUserLockDuration blocks from the current height.
+func validateQiTxOutLock(txOut *types.TxOut, currentHeader *types.WorkObject, location common.Location) error {
+	if txOut.Lock == nil || txOut.Lock.Sign() == 0 {
+		return nil
+	}
+	if !qiUserLocksEnabled(currentHeader) {
+		return errors.New("QiTx output has non-zero lock")
+	}
+	if txOut.Lock.Sign() < 0 {
+		return errors.New("QiTx output lock is negative")
+	}
+	if txOut.Denomination <= types.MaxTrimDenomination {
+		return fmt.Errorf("QiTx output lock requires denomination greater than %d, have %d", types.MaxTrimDenomination, txOut.Denomination)
+	}
+	toAddr := common.BytesToAddress(txOut.Address, location)
+	if !toAddr.Location().Equal(location) || !toAddr.IsInQiLedgerScope() {
+		return errors.New("QiTx output lock is only allowed on local Qi ledger outputs")
+	}
+	maxLock := new(big.Int).Add(currentHeader.Number(location.Context()), new(big.Int).SetUint64(params.MaxQiUserLockDuration))
+	if txOut.Lock.Cmp(maxLock) > 0 {
+		return fmt.Errorf("QiTx output lock %s exceeds maximum allowed unlock height %s", txOut.Lock.String(), maxLock.String())
+	}
+	return nil
 }
 
 func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, totalQitIn *big.Int, currentHeader *types.WorkObject, signer types.Signer, location common.Location, chainId big.Int, qiScalingFactor float64, etxRLimit, etxPLimit uint64) (*big.Int, error) {
@@ -1691,8 +1774,8 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if txOutIdx > types.MaxOutputIndex {
 			return nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
 		}
-		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
-			return nil, errors.New("QiTx output has non-zero lock")
+		if err := validateQiTxOutLock(&txOut, currentHeader, location); err != nil {
+			return nil, err
 		}
 		if txOut.Denomination > types.MaxDenomination {
 			str := fmt.Sprintf("transaction output value of %v is "+
@@ -1860,8 +1943,11 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		return nil, nil, nil, errors.New("one of the parameters is nil"), nil
 	}
 
-	if len(tx.Data()) != 0 && (len(tx.Data()) != params.MaxQiTxDataLength && len(tx.Data()) != common.AddressLength) {
+	if !qiTxDataLengthValid(tx, currentHeader) {
 		return nil, nil, nil, fmt.Errorf("tx %v emits UTXO with data %d not equal to either address length or MaxQiTxDataLength %d", tx.Hash().Hex(), len(tx.Data()), params.MaxQiTxDataLength), nil
+	}
+	if err := validateQiTxLockTime(tx, currentHeader, location); err != nil {
+		return nil, nil, nil, err, nil
 	}
 
 	// Wrap Qi Transaction
@@ -1972,8 +2058,8 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 				types.MaxDenomination)
 			return nil, nil, nil, errors.New(str), nil
 		}
-		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
-			return nil, nil, nil, errors.New("QiTx output has non-zero lock"), nil
+		if err := validateQiTxOutLock(&txOut, currentHeader, location); err != nil {
+			return nil, nil, nil, err, nil
 		}
 		totalQitOut.Add(totalQitOut, types.Denominations[txOut.Denomination])
 
@@ -2167,6 +2253,24 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 	stepTimings["Signature Check"] = elapsedTime
 	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: *usedGas - prevUsedGas, TxHash: tx.Hash()}
 	return txFeeInQit, etxs, receipt, nil, stepTimings
+}
+
+// QiTxOutputDenominations counts a Qi tx's outputs per denomination the same
+// way block processing does: conversion and wrapping outputs are excluded
+// because they are aggregated into an ETX instead of minting local UTXOs.
+// The result is suitable as the outputs argument of CheckDenominations.
+func QiTxOutputDenominations(tx *types.Transaction, location common.Location) map[uint]uint64 {
+	outputs := make(map[uint]uint64)
+	for _, txOut := range tx.TxOut() {
+		outputs[uint(txOut.Denomination)]++
+		toAddr := common.BytesToAddress(txOut.Address, location)
+		if toAddr.Location().Equal(location) && toAddr.IsInQuaiLedgerScope() &&
+			(len(tx.Data()) == params.MaxQiTxDataLength || len(tx.Data()) == common.AddressLength) {
+			// Conversion or wrapping output, aggregated into an ETX
+			outputs[uint(txOut.Denomination)]--
+		}
+	}
+	return outputs
 }
 
 // Go through all denominations largest to smallest, check if the input exists as the output, if not, convert it to the respective number of bills for the next smallest denomination, then repeat the check. Subtract the 'carry' when the outputs match the carry for that denomination.

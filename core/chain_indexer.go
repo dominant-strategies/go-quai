@@ -32,6 +32,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/crypto"
+	"github.com/dominant-strategies/go-quai/crypto/gcs"
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/event"
 	"github.com/dominant-strategies/go-quai/log"
@@ -432,6 +433,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 							continue
 						}
 						c.addOutpointsToIndexer(nodeCtx, config, block)
+						c.buildBlockFilter(nodeCtx, block)
 					}
 				}
 
@@ -442,6 +444,7 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 				time3 = time.Since(start)
 				if c.indexAddressUtxos {
 					c.addOutpointsToIndexer(nodeCtx, config, block)
+					c.buildBlockFilter(nodeCtx, block)
 				}
 				time4 = time.Since(start)
 				c.newHead(block.NumberU64(nodeCtx), false)
@@ -465,6 +468,55 @@ func (c *ChainIndexer) indexerLoop(currentHeader *types.WorkObject, qiIndexerCh 
 			}).Info("Times in indexerLoop")
 		}
 
+	}
+}
+
+// buildBlockFilter builds and stores a BIP-158-style compact filter over the
+// addresses touched by a block's UTXO set changes: addresses of created
+// UTXOs (tx outputs, coinbase rewards and ETX-minted outputs) and addresses
+// of spent UTXOs. Wallets download filters, match their own addresses
+// locally and fetch only matching blocks, so they never reveal the addresses
+// they scan for to the serving node. The SipHash key is the first 16 bytes
+// of the block hash.
+func (c *ChainIndexer) buildBlockFilter(nodeCtx int, block *types.WorkObject) {
+	if nodeCtx != common.ZONE_CTX {
+		return
+	}
+	blockHash := block.Hash()
+	items := make([][]byte, 0)
+	createdKeys, err := rawdb.ReadCreatedUTXOKeys(c.chainDb, blockHash)
+	if err == nil {
+		for _, key := range createdKeys {
+			if len(key) == rawdb.UtxoKeyWithDenominationLength {
+				key = key[:rawdb.UtxoKeyLength] // strip the denomination byte
+			}
+			txHash, index, err := rawdb.ReverseUtxoKey(key)
+			if err != nil {
+				continue
+			}
+			if utxo := rawdb.GetUTXO(c.chainDb, txHash, index); utxo != nil {
+				items = append(items, utxo.Address)
+			}
+		}
+	}
+	spent, err := rawdb.ReadSpentUTXOs(c.chainDb, blockHash)
+	if err == nil {
+		for _, spentUtxo := range spent {
+			items = append(items, spentUtxo.Address)
+		}
+	}
+	if len(items) == 0 {
+		return
+	}
+	var key [16]byte
+	copy(key[:], blockHash.Bytes()[:16])
+	filter, err := gcs.BuildFilter(key, items)
+	if err != nil {
+		c.logger.WithField("err", err).Error("ChainIndexer: Failed to build block filter")
+		return
+	}
+	if err := rawdb.WriteBlockFilter(c.chainDb, blockHash, filter); err != nil {
+		c.logger.WithField("err", err).Error("ChainIndexer: Failed to write block filter")
 	}
 }
 

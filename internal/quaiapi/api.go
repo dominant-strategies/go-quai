@@ -134,6 +134,21 @@ func (s *PublicTxPoolAPI) Status() map[string]hexutil.Uint {
 	}
 }
 
+// QiTxStatus returns the pool status of a Qi transaction: whether it is
+// pending, its fee in qits, and whether it is a denomination-consolidation
+// transaction that is only minable in the first Qi slot of a block.
+func (s *PublicTxPoolAPI) QiTxStatus(txHash common.Hash) map[string]interface{} {
+	status := s.b.QiTxPoolStatus(txHash)
+	result := map[string]interface{}{
+		"pending": status.Pending,
+	}
+	if status.Pending {
+		result["fee"] = (*hexutil.Big)(status.Fee)
+		result["firstSlotOnly"] = status.FirstSlotOnly
+	}
+	return result
+}
+
 // Inspect retrieves the content of the transaction pool and flattens it into an
 // easily inspectable list.
 func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
@@ -1595,6 +1610,30 @@ func (s *PublicTransactionPoolAPI) ReceiveTxFromPoolSharingClient(ctx context.Co
 		return err
 	}
 	return nil
+}
+
+// ReceiveStemTransaction accepts a Qi transaction relayed by a Dandelion
+// stem peer. The tx joins the pool without being publicly broadcast by this
+// node; the stem either continues to one of this node's sharing clients or
+// the tx is fluffed here.
+func (s *PublicTransactionPoolAPI) ReceiveStemTransaction(ctx context.Context, input hexutil.Bytes) error {
+	if s.b.NodeCtx() != common.ZONE_CTX {
+		return errors.New("stem transactions can only be received in zone chains")
+	}
+	if !s.b.ProcessingState() {
+		return errors.New("stem transactions cannot be received in a node that is not processing state")
+	}
+	tx := new(types.Transaction)
+	protoTransaction := new(types.ProtoTransaction)
+	err := proto.Unmarshal(input, protoTransaction)
+	if err != nil {
+		return err
+	}
+	err = tx.ProtoDecode(protoTransaction, s.b.NodeLocation())
+	if err != nil {
+		return err
+	}
+	return s.b.ReceiveStemTransaction(tx)
 }
 
 // PublicDebugAPI is the collection of Quai APIs exposed over the public

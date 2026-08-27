@@ -131,6 +131,8 @@ var TXPoolFlags = []Flag{
 	TxPoolLocalsFlag,
 	TxPoolNoLocalsFlag,
 	TxPoolSyncTxWithReturnFlag,
+	TxPoolDandelionFlag,
+	TxPoolStemProbabilityFlag,
 	TxPoolJournalFlag,
 	TxPoolRejournalFlag,
 	TxPoolPriceLimitFlag,
@@ -390,6 +392,18 @@ var (
 		Name:  c_TXPoolPrefix + "sync-tx-with-return",
 		Value: true,
 		Usage: "Shares the tx with the sharing client with syncronous return (also bypasses local pool, only use it with combination of sharing clients)" + generateEnvDoc(c_TXPoolPrefix+"sync-tx-with-return"),
+	}
+
+	TxPoolDandelionFlag = Flag{
+		Name:  c_TXPoolPrefix + "dandelion",
+		Value: true,
+		Usage: "Enable Dandelion-style stem/fluff relay for locally submitted Qi transactions (stems through sharing clients when configured)" + generateEnvDoc(c_TXPoolPrefix+"dandelion"),
+	}
+
+	TxPoolStemProbabilityFlag = Flag{
+		Name:  c_TXPoolPrefix + "stem-probability",
+		Value: 90,
+		Usage: "Percent chance [0,100] that a stem Qi transaction is relayed onward rather than fluffed" + generateEnvDoc(c_TXPoolPrefix+"stem-probability"),
 	}
 
 	TxPoolJournalFlag = Flag{
@@ -1303,6 +1317,8 @@ func setTxPool(cfg *core.TxPoolConfig, nodeLocation common.Location) {
 		cfg.NoLocals = viper.GetBool(TxPoolNoLocalsFlag.Name)
 	}
 	cfg.SyncTxWithReturn = viper.GetBool(TxPoolSyncTxWithReturnFlag.Name)
+	cfg.Dandelion = viper.GetBool(TxPoolDandelionFlag.Name)
+	cfg.StemProbability = viper.GetUint64(TxPoolStemProbabilityFlag.Name)
 	if viper.IsSet(TxPoolJournalFlag.Name) {
 		cfg.Journal = viper.GetString(TxPoolJournalFlag.Name)
 	}

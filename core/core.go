@@ -1851,6 +1851,20 @@ func (c *Core) SendTxToSharingClients(tx *types.Transaction) error {
 	return c.sl.txPool.SendTxToSharingClients(tx)
 }
 
+func (c *Core) QiTxPoolStatus(txHash common.Hash) *QiTxPoolStatus {
+	return c.sl.txPool.QiTxStatus(txHash)
+}
+
+func (c *Core) ReceiveStemTransaction(tx *types.Transaction) error {
+	return c.sl.txPool.ReceiveStemQiTx(tx)
+}
+
+// GetBlockFilter returns the stored compact (GCS) block filter for the given
+// block hash, or nil if no filter was built for it.
+func (c *Core) GetBlockFilter(blockHash common.Hash) []byte {
+	return rawdb.ReadBlockFilter(c.sl.sliceDb, blockHash)
+}
+
 func (c *Core) GetRollingFeeInfo() (min, max, avg *big.Int) {
 	return c.Processor().GetRollingFeeInfo()
 }
