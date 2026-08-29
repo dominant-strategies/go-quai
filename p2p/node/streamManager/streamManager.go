@@ -50,6 +50,12 @@ type StreamManager interface {
 	GetHost() host.Host
 	SetHost(host.Host)
 
+	// OpenStream creates and caches a new stream to the peer, if one doesn't already exist.
+	//
+	// Note: GetStream is a cache lookup (and may schedule an async open); callers
+	// that need to ensure the stream exists before writing should call OpenStream.
+	OpenStream(peer.ID) error
+
 	// GetStream returns a valid stream, either creating a new one or returning an existing one
 	GetStream(peer.ID) (network.Stream, error)
 
