@@ -273,16 +273,28 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 			parent = workObject
 		}
 
-		// Write all the blocks are the sanity check into the database and
-		// add it to the append queue
+		// Write all the blocks after the sanity check into the database and
+		// add them to the append queue.
 		for _, wo := range workObjects {
-			// If the work object is already on chain, return a error back and start the sync from that point
 			block := h.core.GetBlockByHash(wo.WorkObjectHeader().Hash())
 			if block != nil {
-				return ErrBlockAlreadyAppended
+				// The block is already in our database, but it may be an orphan
+				// that was never appended to the canonical chain (e.g. written
+				// by an interrupted sync and skipped on every subsequent run).
+				// Re-attempt to append it so the head can advance instead of
+				// silently skipping it and stalling sync. InsertChain is a no-op
+				// for blocks that are already appended (ErrKnownBlock), and the
+				// downloaded batch is a continuous chain, so appending in order
+				// walks the head forward.
+				h.core.InsertChain([]*types.WorkObject{block})
 			} else {
 				h.core.WriteBlock(wo.WorkObject)
 			}
+		}
+		// If the lowest block of this batch was already present, we have reached
+		// blocks we already have; stop walking further back down the chain.
+		if h.core.GetBlockByHash(workObjects[0].WorkObjectHeader().Hash()) != nil {
+			return ErrBlockAlreadyAppended
 		}
 	}
 	return nil

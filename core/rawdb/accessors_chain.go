@@ -74,6 +74,30 @@ func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	return hashes
 }
 
+// ReadHashesAboveNumber returns every stored block header (canonical and
+// orphaned forks alike) whose number is strictly greater than the given number.
+// It is used by the operator rewind tool to purge all forward state above a
+// recovery checkpoint, including non-canonical orphans that a canonical-hash
+// scan cannot see.
+func ReadHashesAboveNumber(db ethdb.Iteratee, number uint64) []types.HashAndNumber {
+	it := db.NewIterator(headerPrefix, encodeBlockNumber(number+1))
+	defer it.Release()
+
+	res := make([]types.HashAndNumber, 0)
+	for it.Next() {
+		key := it.Key()
+		// header keys are headerPrefix + num(8 bytes) + hash(32 bytes); skip the
+		// shorter headerHashKey (canonical pointer) entries under the same prefix.
+		if len(key) != len(headerPrefix)+8+common.HashLength {
+			continue
+		}
+		num := binary.BigEndian.Uint64(key[len(headerPrefix) : len(headerPrefix)+8])
+		hash := common.BytesToHash(key[len(headerPrefix)+8:])
+		res = append(res, types.HashAndNumber{Hash: hash, Number: num})
+	}
+	return res
+}
+
 // ReadHeaderNumber returns the header number assigned to a hash.
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
