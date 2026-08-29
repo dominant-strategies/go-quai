@@ -28,6 +28,7 @@ require (
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/jedisct1/go-minisign v0.0.0-20230811132847-661be99b8267
 	github.com/kaspanet/go-muhash v0.0.4
+	github.com/klauspost/compress v1.18.0
 	github.com/ledgerwatch/secp256k1 v1.0.0
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/libp2p/go-libp2p-pubsub v0.10.0
@@ -101,7 +102,6 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/koron/go-ssdp v0.0.4 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

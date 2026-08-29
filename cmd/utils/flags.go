@@ -91,6 +91,7 @@ var NodeFlags = []Flag{
 	IdentityFlag,
 	DocRootFlag,
 	SnapshotFlag,
+	SnapshotSyncFlag,
 	TxLookupLimitFlag,
 	WhitelistFlag,
 	BloomFilterSizeFlag,
@@ -354,6 +355,12 @@ var (
 		Name:  c_NodeFlagPrefix + "snapshot",
 		Value: true,
 		Usage: `Enables snapshot-database mode (default = true)` + generateEnvDoc(c_NodeFlagPrefix+"snapshot"),
+	}
+
+	SnapshotSyncFlag = Flag{
+		Name:  c_NodeFlagPrefix + "snapshot-sync",
+		Value: false,
+		Usage: "Download and restore an official snapshot before startup when the local zone is more than three weeks behind" + generateEnvDoc(c_NodeFlagPrefix+"snapshot-sync"),
 	}
 
 	TxLookupLimitFlag = Flag{
