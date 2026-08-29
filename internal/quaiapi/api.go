@@ -1036,12 +1036,14 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	var result *RPCTransaction
 	if tx.Type() == types.QiTxType {
 		sig := tx.GetSchnorrSignature().Serialize()
+		value := new(big.Int)
 		result = &RPCTransaction{
 			Type:          hexutil.Uint64(tx.Type()),
 			ChainID:       (*hexutil.Big)(tx.ChainId()),
 			Hash:          tx.Hash(),
 			UTXOSignature: hexutil.Bytes(sig),
 			Input:         hexutil.Bytes(tx.Data()),
+			Value:         (*hexutil.Big)(value),
 		}
 		for _, txin := range tx.TxIn() {
 			result.TxIn = append(result.TxIn, types.RPCTxIn{PreviousOutPoint: types.OutpointJSON{TxHash: txin.PreviousOutPoint.TxHash, Index: hexutil.Uint64(txin.PreviousOutPoint.Index)}, PubKey: hexutil.Bytes(txin.PubKey)})
