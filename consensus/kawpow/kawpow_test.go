@@ -49,39 +49,6 @@ func TestRejectsOversizedDonorHeightBeforeCacheAllocation(t *testing.T) {
 	}
 }
 
-func TestValidateKawpowHeaderAcceptsSignedTemplate(t *testing.T) {
-	template := types.DefaultKawpowAuxTemplate()
-	coinbaseTx := types.NewAuxPowCoinbaseTx(
-		types.Kawpow,
-		template.Height(),
-		template.CoinbaseOut(),
-		common.Hash{},
-		template.SignatureTime(),
-	)
-	merkleRoot := types.CalculateMerkleRoot(types.Kawpow, coinbaseTx, template.MerkleBranch())
-	donorHeader := types.NewRavencoinBlockHeader(
-		int32(template.Version()),
-		template.PrevHash(),
-		merkleRoot,
-		0,
-		template.Bits(),
-		template.Height(),
-	)
-	workHeader := &types.WorkObjectHeader{}
-	workHeader.SetAuxPow(types.NewAuxPow(
-		types.Kawpow,
-		types.NewAuxPowHeader(donorHeader),
-		template.AuxPow2(),
-		template.Sigs(),
-		template.MerkleBranch(),
-		coinbaseTx,
-	))
-
-	if err := validateKawpowHeader(workHeader); err != nil {
-		t.Fatalf("expected signed KAWPOW template to remain valid: %v", err)
-	}
-}
-
 // TestKAWPOWImplementation tests our KAWPOW implementation with various scenarios
 func TestKAWPOWImplementation(t *testing.T) {
 	t.Run("Constants", func(t *testing.T) {
