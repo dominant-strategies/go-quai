@@ -227,6 +227,17 @@ func (evm *EVM) revertToSnapshot(snapshot evmSnapshot) {
 	evm.StateDB.RevertToSnapshot(snapshot.stateRevision)
 
 	evm.ETXCacheLock.Lock()
+	// Lockup claims delete directly from the block batch. Restore claims made
+	// after this snapshot before discarding their undo entries.
+	if evm.Batch != nil && evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock {
+		for key, value := range evm.CoinbasesDeleted {
+			if _, existed := snapshot.coinbasesDeleted[key]; !existed {
+				if err := evm.Batch.Put(key[:], value); err != nil {
+					log.Global.WithError(err).Error("failed to restore reverted coinbase lockup")
+				}
+			}
+		}
+	}
 	evm.ETXCache = evm.ETXCache[:snapshot.etxCacheLen]
 	evm.CoinbaseDeletedHashes = evm.CoinbaseDeletedHashes[:snapshot.coinbaseDeletedHashesLen]
 	evm.CoinbasesDeleted = copyCoinbasesDeleted(snapshot.coinbasesDeleted)

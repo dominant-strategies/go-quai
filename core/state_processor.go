@@ -923,7 +923,15 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					receipts = append(receipts, receipt)
 					allLogs = append(allLogs, receipt.Logs...)
 				} else if !types.IsCoinBaseTx(tx) && !etx.ETXSender().Location().Equal(*etx.To().Location()) && etx.To().IsInQiLedgerScope() { // Regular Qi ETX
-					utxo := types.NewUtxoEntry(types.NewTxOut(uint8(etx.Value().Uint64()), etx.To().Bytes(), big.NewInt(0)))
+					denomination := uint8(etx.Value().Uint64())
+					if block.PrimeTerminusNumber().Uint64() >= params.SecurityHardeningForkBlock {
+						var err error
+						denomination, err = regularQiETXDenomination(etx.Value())
+						if err != nil {
+							return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+						}
+					}
+					utxo := types.NewUtxoEntry(types.NewTxOut(denomination, etx.To().Bytes(), big.NewInt(0)))
 					// There are no more checks to be made as the ETX is worked so add it to the set
 					if err := rawdb.CreateUTXO(batch, etx.OriginatingTxHash(), etx.ETXIndex(), utxo); err != nil {
 						return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
@@ -2652,6 +2660,13 @@ func (p *StateProcessor) Stop() {
 	}
 	close(p.quit)
 	p.logger.Info("State Processor stopped")
+}
+
+func regularQiETXDenomination(value *big.Int) (uint8, error) {
+	if value == nil || value.Sign() < 0 || !value.IsUint64() || value.Uint64() > types.MaxDenomination {
+		return 0, fmt.Errorf("invalid regular Qi ETX denomination %v", value)
+	}
+	return uint8(value.Uint64()), nil
 }
 
 func prepareApplyETX(statedb *state.StateDB, value *big.Int, nodeLocation common.Location) *big.Int {

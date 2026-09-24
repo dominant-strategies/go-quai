@@ -74,6 +74,12 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		jt := instructionSet
 		cfg.JumpTable = jt
 	}
+	if evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock && cfg.JumpTable[ETX] != nil {
+		etx := *cfg.JumpTable[ETX]
+		etx.dynamicGas = pureMemoryGascost
+		etx.memorySize = memoryETXFixed
+		cfg.JumpTable[ETX] = &etx
+	}
 
 	return &EVMInterpreter{
 		evm: evm,

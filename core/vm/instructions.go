@@ -899,6 +899,13 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		log.Global.Errorf("%x is in chain scope, but opETX was called\n", toAddr)
 		return nil, nil // following opCall protocol
 	}
+	// Cross-zone Qi transfers must use the conversion path. The receiver
+	// interprets a regular ETX value as a denomination, not an amount.
+	if interpreter.evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock && toAddr.IsInQiLedgerScope() {
+		temp.Clear()
+		stack.push(&temp)
+		return nil, nil
+	}
 	sender := scope.Contract.self.Address()
 	internalSender, err := sender.InternalAndQuaiAddress()
 	if err != nil {
@@ -974,7 +981,9 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		etxGasLimit64 = etxGasLimit.Uint64()
 	}
 
-	interpreter.evm.StateDB.SubBalance(internalSender, total.ToBig())
+	if interpreter.evm.Context.PrimeTerminusNumber < params.SecurityHardeningForkBlock {
+		interpreter.evm.StateDB.SubBalance(internalSender, total.ToBig())
+	}
 
 	// Get the arguments from the memory.
 	data := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
@@ -987,6 +996,11 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		stack.push(&temp)
 		log.Global.Errorf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil // following opCall protocol
+	}
+	if interpreter.evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock && !etxGasCoversIntrinsic(etxGasLimit64, data, accessList) {
+		temp.Clear()
+		stack.push(&temp)
+		return nil, nil
 	}
 
 	interpreter.evm.ETXCacheLock.RLock()
@@ -1006,7 +1020,14 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	// check if the etx is eligible to be sent to the to location
 	if !interpreter.evm.Context.CheckIfEtxEligible(interpreter.evm.Context.EtxEligibleSlices, *etx.To().Location()) {
 		log.Global.Error("opETX error: ETX is not eligible to be sent to ", etx.To())
+		if interpreter.evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock {
+			temp.Clear()
+			stack.push(&temp)
+		}
 		return nil, nil
+	}
+	if interpreter.evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock {
+		interpreter.evm.StateDB.SubBalance(internalSender, total.ToBig())
 	}
 	interpreter.evm.ETXCacheLock.Lock()
 	interpreter.evm.ETXCache = append(interpreter.evm.ETXCache, etx)
@@ -1016,6 +1037,34 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	stack.push(&temp)
 
 	return nil, nil
+}
+
+func etxGasCoversIntrinsic(limit uint64, data []byte, accessList types.AccessList) bool {
+	if limit < params.TxGas {
+		return false
+	}
+	remaining := limit - params.TxGas
+	for _, b := range data {
+		cost := uint64(params.TxDataZeroGas)
+		if b != 0 {
+			cost = params.TxDataNonZeroGas
+		}
+		if remaining < cost {
+			return false
+		}
+		remaining -= cost
+	}
+	for _, tuple := range accessList {
+		if remaining < params.TxAccessListAddressGas {
+			return false
+		}
+		remaining -= params.TxAccessListAddressGas
+		if uint64(len(tuple.StorageKeys)) > remaining/params.TxAccessListStorageKeyGas {
+			return false
+		}
+		remaining -= uint64(len(tuple.StorageKeys)) * params.TxAccessListStorageKeyGas
+	}
+	return true
 }
 
 // opConvert creates an external transaction that converts Quai to Qi

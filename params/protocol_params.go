@@ -272,6 +272,9 @@ var (
 	NoPenaltyTimeThreshold      uint32 = 3
 
 	SelfDestructRefundForkBlock uint64 = 1919500
+	// SecurityHardeningForkBlock must be scheduled before the consensus ETX and
+	// lockup fixes are activated. MaxUint64 keeps historical replay unchanged.
+	SecurityHardeningForkBlock uint64 = math.MaxUint64
 )
 
 var (
