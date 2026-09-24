@@ -499,7 +499,17 @@ func (c *Core) startRemoteTxQueue() {
 					c.remoteTxQueue.Remove(tx)
 				}
 			}
-			c.sl.txPool.AddRemotes(txs)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						c.logger.WithFields(log.Fields{
+							"error":      r,
+							"stacktrace": string(debug.Stack()),
+						}).Error("Failed to add remote transactions")
+					}
+				}()
+				c.sl.txPool.AddRemotes(txs)
+			}()
 		case <-c.quit:
 			return
 		}
@@ -1003,6 +1013,10 @@ func (c *Core) WriteBlock(block *types.WorkObject) {
 
 	if block.Location() == nil {
 		c.logger.Errorf("Block %d has nil location in %d context", block.NumberU64(c.sl.NodeCtx()), c.NodeCtx())
+		return
+	}
+	if _, err := block.Body().ProtoEncode(types.BlockObject); err != nil {
+		c.logger.WithField("err", err).Warn("Rejecting block with unserializable body")
 		return
 	}
 
@@ -1756,9 +1770,9 @@ func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
 
 func (c *Core) GetOutpointsByAddressAndRange(address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error) {
 	outpoints := make([]*types.OutpointAndDenomination, 0)
-	for i := start; i <= end; i++ {
+	for i := uint64(start); i <= uint64(end); i++ {
 		addr20 := address.Bytes20()
-		binary.BigEndian.PutUint32(addr20[16:], i)
+		binary.BigEndian.PutUint32(addr20[16:], uint32(i))
 		outpointsAtBlock, err := rawdb.ReadOutpointsForAddressAtBlock(c.sl.sliceDb, addr20)
 		if err != nil {
 			return nil, err

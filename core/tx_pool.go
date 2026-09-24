@@ -1172,9 +1172,11 @@ func (pool *TxPool) AddRemote(tx *types.Transaction) error {
 func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
-		errs   = make([]error, len(txs))
-		news   = make([]*types.Transaction, 0, len(txs))
-		qiNews = make([]*types.Transaction, 0, len(txs))
+		errs        = make([]error, len(txs))
+		news        = make([]*types.Transaction, 0, len(txs))
+		newsIndexes = make([]int, 0, len(txs))
+		qiNews      = make([]*types.Transaction, 0, len(txs))
+		qiIndexes   = make([]int, 0, len(txs))
 	)
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
@@ -1191,6 +1193,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 				continue
 			}
 			qiNews = append(qiNews, tx)
+			qiIndexes = append(qiIndexes, i)
 			continue
 		} else if tx.Type() == types.ExternalTxType {
 			errs[i] = errors.New("external tx is not supported in tx pool")
@@ -1226,16 +1229,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
+		newsIndexes = append(newsIndexes, i)
 	}
 	if len(qiNews) > 0 {
 		qiErrs := pool.addQiTxs(qiNews)
-		var nilSlot = 0
-		for _, err := range qiErrs {
-			for errs[nilSlot] != nil {
-				nilSlot++
-			}
-			errs[nilSlot] = err
-			nilSlot++
+		for i, err := range qiErrs {
+			errs[qiIndexes[i]] = err
 		}
 	}
 	if len(news) == 0 {
@@ -1245,13 +1244,8 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Process all the new transaction and merge any errors into the original slice
 	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 
-	var nilSlot = 0
-	for _, err := range newErrs {
-		for errs[nilSlot] != nil {
-			nilSlot++
-		}
-		errs[nilSlot] = err
-		nilSlot++
+	for i, err := range newErrs {
+		errs[newsIndexes[i]] = err
 	}
 	// Reorg the pool internals if needed and return
 	pool.requestPromoteExecutables(dirtyAddrs)
@@ -1264,7 +1258,7 @@ var feesErrs uint64
 // addQiTxs adds Qi transactions to the Qi pool.
 // The qiMu lock must NOT be held by the caller.
 func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
-	errs := make([]error, 0)
+	errs := make([]error, len(txs))
 	currentBlock := pool.chain.CurrentBlock()
 	etxRLimit := (uint64(len(currentBlock.Transactions())) * params.TxGas) / params.ETXRegionMaxFraction
 	if etxRLimit < params.ETXRLimitMin {
@@ -1276,8 +1270,9 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 	}
 	activeLocations := common.NewChainsAdded(pool.chain.CurrentBlock().ExpansionNumber())
 	transactionsWithoutErrors := make([]*types.TxWithMinerFee, 0, len(txs))
-	for _, tx := range txs {
+	for i, tx := range txs {
 		// Reject TX if it emits an output to an inactive chain
+		inactiveOutput := false
 		for _, txo := range tx.TxOut() {
 			found := false
 			for _, activeLoc := range activeLocations {
@@ -1286,8 +1281,13 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 				}
 			}
 			if !found {
-				errs = append(errs, fmt.Errorf("Qi TXO emitted to an inactive chain"))
+				inactiveOutput = true
+				break
 			}
+		}
+		if inactiveOutput {
+			errs[i] = fmt.Errorf("Qi TXO emitted to an inactive chain")
+			continue
 		}
 
 		totalQitIn, err := ValidateQiTxInputs(tx, pool.chain, pool.db, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID)
@@ -1296,7 +1296,7 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 				"tx":  tx.Hash().String(),
 				"err": err,
 			}).Debug("Invalid Qi transaction")
-			errs = append(errs, err)
+			errs[i] = err
 			continue
 		}
 		txFee, err := ValidateQiTxOutputsAndSignature(tx, pool.chain, totalQitIn, currentBlock, pool.signer, pool.chainconfig.Location, *pool.chainconfig.ChainID, pool.qiGasScalingFactor, etxRLimit, etxPLimit)
@@ -1305,12 +1305,12 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 				"tx":  tx.Hash().String(),
 				"err": err,
 			}).Debug("Invalid Qi transaction")
-			errs = append(errs, err)
+			errs[i] = err
 			continue
 		}
 		txWithMinerFee, err := types.NewTxWithMinerFee(tx, txFee, time.Now())
 		if err != nil {
-			errs = append(errs, err)
+			errs[i] = err
 			continue
 		}
 		transactionsWithoutErrors = append(transactionsWithoutErrors, txWithMinerFee)

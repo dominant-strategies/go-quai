@@ -559,11 +559,24 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	case QiTxType:
 		var wire WireQiTx
 		err := rlp.DecodeBytes(b[1:], &wire)
+		if err != nil {
+			return nil, err
+		}
+		for _, input := range wire.TxIn {
+			if _, err := decompressPubKeyIfNeeded(input.PubKey); err != nil {
+				return nil, err
+			}
+		}
+		if wire.Signature != nil {
+			if _, err := schnorr.ParseSignature(wire.Signature); err != nil {
+				return nil, err
+			}
+		}
 		inner := wire.copyFromWire()
-		if err == nil && len(inner.TxIn) == 0 {
+		if len(inner.TxIn) == 0 {
 			return nil, errors.New("QiTx must have at least one input")
 		}
-		return inner, err
+		return inner, nil
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -699,8 +712,18 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	protoTx, _ := tx.ProtoEncode()
-	data, _ := proto.Marshal(protoTx)
+	protoTx, err := tx.ProtoEncode()
+	var data []byte
+	if err != nil {
+		// An invalid locally constructed transaction must not hash as an empty
+		// protobuf, which would collide with other invalid transactions.
+		data, err = tx.MarshalBinary()
+	} else {
+		data, err = proto.Marshal(protoTx)
+	}
+	if err != nil {
+		return h
+	}
 	h = crypto.Keccak256Hash(data)
 	switch tx.Type() {
 	case QuaiTxType:

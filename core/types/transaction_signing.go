@@ -210,6 +210,17 @@ func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s SignerV1) Hash(tx *Transaction) (h common.Hash) {
+	if tx.Type() == QiTxType {
+		_, inputErr := tx.TxIn().ProtoEncode()
+		_, outputErr := tx.TxOut().ProtoEncode()
+		if inputErr != nil || outputErr != nil {
+			data, err := tx.MarshalBinary()
+			if err != nil {
+				return h
+			}
+			return crypto.Keccak256Hash(data)
+		}
+	}
 	protoTxSigningData := tx.ProtoEncodeTxSigningData()
 	data, err := proto.Marshal(protoTxSigningData)
 	if err != nil {

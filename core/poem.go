@@ -298,6 +298,9 @@ func (hc *HeaderChain) CalcRank(header *types.WorkObject) (int, error) {
 }
 
 func (hc *HeaderChain) CheckIfValidWorkShare(workShare *types.WorkObjectHeader) types.WorkShareValidity {
+	if workShare == nil || workShare.Difficulty() == nil || workShare.Difficulty().Sign() <= 0 {
+		return types.Invalid
+	}
 
 	if workShare.PrimeTerminusNumber().Uint64() < params.KawPowForkBlock {
 		thresholdDiff := params.WorkSharesThresholdDiff

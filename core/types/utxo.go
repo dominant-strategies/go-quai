@@ -144,6 +144,9 @@ func decompressPubKeyIfNeeded(pubKey []byte) ([]byte, error) {
 		}
 		return crypto.FromECDSAPub(uncompressedPubKey), nil
 	case 65: // Uncompressed public key
+		if _, err := crypto.UnmarshalPubkey(pubKey); err != nil {
+			return nil, err
+		}
 		return pubKey, nil
 	default:
 		return nil, errors.New("invalid public key length")

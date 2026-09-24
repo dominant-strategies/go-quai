@@ -80,6 +80,9 @@ func CalcWorkShareThreshold(workShare *types.WorkObjectHeader, workShareThreshol
 		// If workShareThresholdDiff = 0, you should use the difficulty directly from the header.
 		return nil, ErrInvalidThresholdDiff
 	}
+	if workShare == nil || workShare.Difficulty() == nil || workShare.Difficulty().Sign() <= 0 {
+		return nil, ErrInvalidDifficulty
+	}
 	diff := workShare.Difficulty()
 	diffTarget := new(big.Int).Div(common.Big2e256, diff)
 	workShareTarget := new(big.Int).Exp(common.Big2, big.NewInt(int64(workShareThresholdDiff)), nil)

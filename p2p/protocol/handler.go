@@ -61,27 +61,29 @@ func ProcRequestRate(peerId peer.ID, inbound bool) error {
 	if tracker, exists := (*rateTrackers)[peerId]; exists {
 		t_now := time.Now()
 		dt_ms := t_now.UnixMilli() - tracker.last.UnixMilli()
-		avg_period := ((100-rateFilterAlphaPct)*tracker.avg_period + (rateFilterAlphaPct*dt_ms)/100)
+		avg_period := ((100-rateFilterAlphaPct)*tracker.avg_period + rateFilterAlphaPct*dt_ms) / 100
 		if inbound {
 			// inbound rate always updates, because request has already arrived
 			tracker.avg_period = avg_period
 			tracker.last = t_now
+			(*rateTrackers)[peerId] = tracker
 		}
-		minPeriod := requestRateLimitPeriod_ms
+		minPeriod := int64(requestRateLimitPeriod_ms)
 		if !inbound {
 			// Conservatively rate limit ourselves, to avoid tripping our peers rate limit
 			minPeriod /= 2
 		}
-		if avg_period < requestRateLimitPeriod_ms {
+		if avg_period < minPeriod {
 			return errors.New("peer exceeded request rate limit")
 		} else {
 			// since outbound requests wont be sent if the limit is exceeded, only update the outbound rate if there is no error
 			tracker.avg_period = avg_period
 			tracker.last = t_now
+			(*rateTrackers)[peerId] = tracker
 		}
 	} else {
 		(*rateTrackers)[peerId] = rateTracker{
-			avg_period: 1000000, // initially start at very low rate
+			avg_period: requestRateLimitPeriod_ms,
 			last:       time.Now(),
 		}
 	}
@@ -160,6 +162,8 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 	}
 	// Create a channel for messages
 	msgChan := make(chan []byte, msgChanSize)
+	streamDone := make(chan struct{})
+	defer close(streamDone)
 	full := 0
 	go func() {
 		defer func() {
@@ -174,6 +178,8 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 			select {
 			case message := <-msgChan:
 				handleMessage(message, stream, node)
+			case <-streamDone:
+				return
 			case <-ctx.Done():
 				return
 			}
@@ -190,8 +196,7 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 			}
 
 			log.Global.Errorf("error reading message from stream: %s", err)
-			// TODO: handle error
-			continue
+			return
 		}
 
 		// Send to worker goroutines
