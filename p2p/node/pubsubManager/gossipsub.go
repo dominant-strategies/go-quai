@@ -237,7 +237,17 @@ func (g *PubsubManager) Subscribe(topicSub *Topic, location common.Location, dat
 }
 
 func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID, msg *pubsub.Message) pubsub.ValidationResult {
-	return func(ctx context.Context, id peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+	return func(ctx context.Context, id peer.ID, msg *pubsub.Message) (result pubsub.ValidationResult) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Global.WithFields(log.Fields{
+					"peer":       id,
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Rejected gossip message after validation panic")
+				result = pubsub.ValidationReject
+			}
+		}()
 		var data interface{}
 		topicString := msg.Topic
 		if topicString == nil {
