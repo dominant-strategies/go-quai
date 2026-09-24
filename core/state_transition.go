@@ -348,6 +348,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 	if st.gas < gas {
+		if st.msg.IsETX() && st.evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock {
+			return &ExecutionResult{
+				UsedGas:   st.initialGas,
+				UsedState: params.EtxStateUsed,
+				Err:       fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas),
+			}, nil
+		}
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	st.gas -= gas
