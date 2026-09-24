@@ -14,14 +14,18 @@ import (
 )
 
 func TestEVMSnapshotRevertsLocalSideEffects(t *testing.T) {
-	testEVMSnapshotLocalSideEffects(t, params.ShaEquivalentDifficultyForkBlock, true)
+	testEVMSnapshotLocalSideEffects(t, params.SecurityHardeningForkBlock, true, true)
 }
 
 func TestEVMSnapshotPreservesPreForkLocalSideEffects(t *testing.T) {
-	testEVMSnapshotLocalSideEffects(t, params.ShaEquivalentDifficultyForkBlock-1, false)
+	testEVMSnapshotLocalSideEffects(t, params.ShaEquivalentDifficultyForkBlock-1, false, false)
 }
 
-func testEVMSnapshotLocalSideEffects(t *testing.T, primeTerminusNumber uint64, revertsLocalSideEffects bool) {
+func TestEVMSnapshotPreservesLegacyBatchDeleteBeforeFork(t *testing.T) {
+	testEVMSnapshotLocalSideEffects(t, params.SecurityHardeningForkBlock-1, true, false)
+}
+
+func testEVMSnapshotLocalSideEffects(t *testing.T, primeTerminusNumber uint64, revertsLocalSideEffects, restoresBatch bool) {
 	t.Helper()
 
 	location := common.Location{0, 0}
@@ -51,6 +55,8 @@ func testEVMSnapshotLocalSideEffects(t *testing.T, primeTerminusNumber uint64, r
 		Config{},
 		nil,
 	)
+	lockupDB := rawdb.NewMemoryDatabase(log.Global)
+	evm.Batch = lockupDB.NewBatch()
 
 	baseKey := [47]byte{0x1}
 	baseHash := common.BytesToHash([]byte{0x1})
@@ -66,6 +72,9 @@ func testEVMSnapshotLocalSideEffects(t *testing.T, primeTerminusNumber uint64, r
 	evm.ETXCache = append(evm.ETXCache, baseETX)
 	evm.CoinbaseDeletedHashes = append(evm.CoinbaseDeletedHashes, &baseHash)
 	evm.CoinbasesDeleted[baseKey] = []byte{0xaa}
+	if err := evm.Batch.Delete(baseKey[:]); err != nil {
+		t.Fatal(err)
+	}
 
 	snapshot := evm.snapshot()
 
@@ -85,6 +94,9 @@ func testEVMSnapshotLocalSideEffects(t *testing.T, primeTerminusNumber uint64, r
 	evm.CoinbaseDeletedHashes = append(evm.CoinbaseDeletedHashes, &revertedHash)
 	evm.CoinbasesDeleted[baseKey] = []byte{0xcc}
 	evm.CoinbasesDeleted[revertedKey] = []byte{0xbb}
+	if err := evm.Batch.Delete(revertedKey[:]); err != nil {
+		t.Fatal(err)
+	}
 
 	evm.revertToSnapshot(snapshot)
 
@@ -104,28 +116,42 @@ func testEVMSnapshotLocalSideEffects(t *testing.T, primeTerminusNumber uint64, r
 		if !bytes.Equal(evm.CoinbasesDeleted[baseKey], []byte{0xcc}) {
 			t.Fatalf("unexpected pre-fork deleted map value: %x", evm.CoinbasesDeleted[baseKey])
 		}
-		return
+	} else {
+		if len(evm.ETXCache) != 1 {
+			t.Fatalf("unexpected etx cache length: want 1, have %d", len(evm.ETXCache))
+		}
+		if evm.ETXCache[0].Hash() != baseETX.Hash() {
+			t.Fatalf("unexpected etx retained after revert")
+		}
+		if len(evm.CoinbaseDeletedHashes) != 1 {
+			t.Fatalf("unexpected deleted hash length: want 1, have %d", len(evm.CoinbaseDeletedHashes))
+		}
+		if *evm.CoinbaseDeletedHashes[0] != baseHash {
+			t.Fatalf("unexpected deleted hash retained after revert")
+		}
+		if len(evm.CoinbasesDeleted) != 1 {
+			t.Fatalf("unexpected deleted map length: want 1, have %d", len(evm.CoinbasesDeleted))
+		}
+		if !bytes.Equal(evm.CoinbasesDeleted[baseKey], []byte{0xaa}) {
+			t.Fatalf("unexpected deleted map value after revert: %x", evm.CoinbasesDeleted[baseKey])
+		}
+		if _, exists := evm.CoinbasesDeleted[revertedKey]; exists {
+			t.Fatalf("reverted deleted map entry still present")
+		}
 	}
-	if len(evm.ETXCache) != 1 {
-		t.Fatalf("unexpected etx cache length: want 1, have %d", len(evm.ETXCache))
+	if err := evm.Batch.Write(); err != nil {
+		t.Fatal(err)
 	}
-	if evm.ETXCache[0].Hash() != baseETX.Hash() {
-		t.Fatalf("unexpected etx retained after revert")
+	if _, err := lockupDB.Get(baseKey[:]); err == nil {
+		t.Fatal("claim made before snapshot was restored")
 	}
-	if len(evm.CoinbaseDeletedHashes) != 1 {
-		t.Fatalf("unexpected deleted hash length: want 1, have %d", len(evm.CoinbaseDeletedHashes))
-	}
-	if *evm.CoinbaseDeletedHashes[0] != baseHash {
-		t.Fatalf("unexpected deleted hash retained after revert")
-	}
-	if len(evm.CoinbasesDeleted) != 1 {
-		t.Fatalf("unexpected deleted map length: want 1, have %d", len(evm.CoinbasesDeleted))
-	}
-	if !bytes.Equal(evm.CoinbasesDeleted[baseKey], []byte{0xaa}) {
-		t.Fatalf("unexpected deleted map value after revert: %x", evm.CoinbasesDeleted[baseKey])
-	}
-	if _, exists := evm.CoinbasesDeleted[revertedKey]; exists {
-		t.Fatalf("reverted deleted map entry still present")
+	restored, err := lockupDB.Get(revertedKey[:])
+	if restoresBatch {
+		if err != nil || !bytes.Equal(restored, []byte{0xbb}) {
+			t.Fatalf("reverted lockup not restored: value %x, error %v", restored, err)
+		}
+	} else if err == nil {
+		t.Fatal("pre-fork batch delete was changed")
 	}
 }
 
