@@ -2793,7 +2793,7 @@ func (w *worker) CurrentInfo(header *types.WorkObject) bool {
 	return header.NumberU64(w.hc.NodeCtx())+c_startingPrintLimit > w.hc.CurrentHeader().NumberU64(w.hc.NodeCtx())
 }
 
-func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTerminus *types.WorkObject, parent *types.WorkObject, firstQiTx bool) error {
+func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTerminus *types.WorkObject, parent *types.WorkObject, firstQiTx bool) (retErr error) {
 	location := w.hc.NodeLocation()
 	if tx.Type() != types.QiTxType {
 		return fmt.Errorf("tx %032x is not a QiTx", tx.Hash())
@@ -2819,7 +2819,18 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 		return fmt.Errorf("tx %v emits UTXO with data refund address not in Qi ledger scope", tx.Hash().Hex())
 	}
 
-	gasUsed := env.wo.GasUsed()
+	previousGasUsed := env.wo.GasUsed()
+	gasUsed := previousGasUsed
+	gasBeforeTx := env.gasPool.Gas()
+	utxosDeleteHashes := make([]common.Hash, 0, len(tx.TxIn()))
+	defer func() {
+		if retErr != nil {
+			env.gasPool.AddGas(gasBeforeTx - env.gasPool.Gas())
+			for _, hash := range utxosDeleteHashes {
+				delete(env.deletedUtxos, hash)
+			}
+		}
+	}()
 	intrinsicGas := types.CalculateIntrinsicQiTxGas(tx, env.qiGasScalingFactor)
 	gasUsed += intrinsicGas // the amount of block gas used in this transaction is only the txGas, regardless of ETXs emitted
 	if err := env.gasPool.SubGas(intrinsicGas); err != nil {
@@ -2828,7 +2839,6 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 
 	addresses := make(map[common.AddressBytes]struct{})
 	totalQitIn := big.NewInt(0)
-	utxosDeleteHashes := make([]common.Hash, 0, len(tx.TxIn()))
 	inputs := make(map[uint]uint64)
 	for _, txIn := range tx.TxIn() {
 		utxo := rawdb.GetUTXO(w.workerDb, txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
@@ -3052,7 +3062,7 @@ func (w *worker) processQiTx(tx *types.Transaction, env *environment, primeTermi
 	env.utxosCreate = append(env.utxosCreate, utxosCreateHashes...)
 	env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
 
-	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: gasUsed - env.wo.GasUsed(), TxHash: tx.Hash(), OutboundEtxs: env.etxs[len(env.etxs)-len(etxs):]}
+	receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: gasUsed - previousGasUsed, TxHash: tx.Hash(), OutboundEtxs: env.etxs[len(env.etxs)-len(etxs):]}
 	env.receipts = append(env.receipts, receipt)
 	// We could add signature verification here, but it's already checked in the mempool and the signature can't be changed, so duplication is largely unnecessary
 	return nil

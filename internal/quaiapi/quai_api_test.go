@@ -2,6 +2,7 @@ package quaiapi
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"testing"
 
@@ -14,6 +15,28 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 )
+
+func TestGetOutPointsByAddressAndRangeRejectsNarrowing(t *testing.T) {
+	api := NewPublicBlockChainQuaiAPI(&outpointTestBackend{})
+	address := common.HexToAddress("0x0080000000000000000000000000000000000000", common.Location{0, 0})
+	for _, tc := range []struct {
+		name       string
+		start, end uint64
+	}{
+		{"end overflow", 0, math.MaxUint32 + 1},
+		{"both overflow", math.MaxUint32 + 1, math.MaxUint32 + 1},
+		{"range too large", 0, uint64(maxOutpointsRange) + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := api.GetOutPointsByAddressAndRange(context.Background(), address, hexutil.Uint64(tc.start), hexutil.Uint64(tc.end)); err == nil {
+				t.Fatal("invalid range was accepted")
+			}
+		})
+	}
+	if _, err := api.GetOutPointsByAddressAndRange(context.Background(), address, math.MaxUint32, math.MaxUint32); err != nil {
+		t.Fatalf("valid final uint32 height was rejected: %v", err)
+	}
+}
 
 type testNetBackend struct {
 	total    uint

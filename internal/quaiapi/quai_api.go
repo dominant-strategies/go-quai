@@ -304,7 +304,10 @@ func (s *PublicBlockChainQuaiAPI) GetOutPointsByAddressAndRange(ctx context.Cont
 	if start > end {
 		return nil, fmt.Errorf("start is greater than end")
 	}
-	if uint32(end)-uint32(start) > maxOutpointsRange {
+	if uint64(end) > math.MaxUint32 {
+		return nil, fmt.Errorf("end exceeds maximum block number %d", uint64(math.MaxUint32))
+	}
+	if uint64(end)-uint64(start) > uint64(maxOutpointsRange) {
 		return nil, fmt.Errorf("range is too large, max range is %d", maxOutpointsRange)
 	}
 	if address.IsInQuaiLedgerScope() {
@@ -356,7 +359,7 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointDeltasForAddressesInRange(ctx conte
 	if blockFrom.NumberU64(nodeCtx) > blockTo.NumberU64(nodeCtx) {
 		return nil, fmt.Errorf("from block number is greater than to block number")
 	}
-	if uint32(blockTo.NumberU64(nodeCtx))-uint32(blockFrom.NumberU64(nodeCtx)) > maxOutpointsRange {
+	if blockTo.NumberU64(nodeCtx)-blockFrom.NumberU64(nodeCtx) > uint64(maxOutpointsRange) {
 		return nil, fmt.Errorf("range is too large, max range is %d", maxOutpointsRange)
 	}
 	addressMap := make(map[common.AddressBytes]struct{})

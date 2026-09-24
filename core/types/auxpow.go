@@ -737,6 +737,9 @@ func (ap *AuxPow) UnmarshalJSON(data []byte) error {
 		}
 		ap.header = NewAuxPowHeader(header)
 	case Scrypt:
+		if len(*dec.Auxpow2) != common.HashLength {
+			return errors.New("scrypt auxPow2 must be 32 bytes")
+		}
 		header := &LitecoinHeaderWrapper{}
 		if err := header.Deserialize(bytes.NewReader(*dec.Header)); err != nil {
 			return err
@@ -810,6 +813,9 @@ func (ap *AuxPow) ProtoDecode(data *ProtoAuxPow) error {
 		}
 		ap.SetHeader(NewAuxPowHeader(header))
 	case Scrypt:
+		if len(data.GetAuxpow2()) != common.HashLength {
+			return errors.New("scrypt auxPow2 must be 32 bytes")
+		}
 		header := &LitecoinHeaderWrapper{}
 		if err := header.Deserialize(bytes.NewReader(data.GetHeader())); err != nil {
 			return err

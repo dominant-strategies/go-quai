@@ -471,6 +471,9 @@ func (g *PubsubManager) ValidatorFunc() func(ctx context.Context, id p2p.PeerID,
 				case types.Scrypt:
 					// Since litecoin is merged mined with dogecoin, merkle root
 					// needs to be calculated
+					if len(block.WorkObject.AuxPow().AuxPow2()) != common.HashLength {
+						return pubsub.ValidationReject
+					}
 					dogeHash := common.Hash(block.WorkObject.AuxPow().AuxPow2())
 					if (dogeHash == common.Hash{}) {
 						backend.Logger().Error("doge hash is nil in scrypt auxpow")
