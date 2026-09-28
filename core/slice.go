@@ -1127,8 +1127,8 @@ func (sl *Slice) GetPendingHeader(powId types.PowID, coinbase common.Address, ex
 
 				auxMerkleRoot := phCopy.SealHash()
 				if powId == types.Scrypt {
-					if len(auxTemplate.AuxPow2()) == 0 {
-						return nil, errors.New("no auxpow2 available for scrypt mining")
+					if len(auxTemplate.AuxPow2()) != common.HashLength {
+						return nil, errors.New("scrypt auxPow2 must be 32 bytes")
 					}
 					dogeHash := common.Hash(auxTemplate.AuxPow2())
 					auxMerkleRoot = types.CreateAuxMerkleRoot(dogeHash, phCopy.SealHash())

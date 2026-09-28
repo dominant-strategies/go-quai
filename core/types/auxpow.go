@@ -200,6 +200,9 @@ func (at *AuxTemplate) ProtoDecode(data *ProtoAuxTemplate) error {
 	}
 
 	at.powID = PowID(data.GetChainId())
+	if at.powID == Scrypt && len(data.GetAuxPow2()) != common.HashLength {
+		return errors.New("scrypt auxPow2 must be 32 bytes")
+	}
 
 	// Copy PrevHash (32 bytes)
 	if len(data.GetPrevHash()) == 32 {
