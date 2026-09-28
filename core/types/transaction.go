@@ -437,10 +437,10 @@ func (tx *Transaction) ProtoDecode(protoTx *ProtoTransaction, location common.Lo
 	return nil
 }
 
-func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
+func (tx *Transaction) ProtoEncodeTxSigningData() (*ProtoTransaction, error) {
 	protoTxSigningData := &ProtoTransaction{}
 	if tx == nil {
-		return protoTxSigningData
+		return protoTxSigningData, nil
 	}
 	switch tx.Type() {
 	case QuaiTxType:
@@ -463,20 +463,27 @@ func (tx *Transaction) ProtoEncodeTxSigningData() *ProtoTransaction {
 		}
 		protoTxSigningData.GasPrice = tx.GasPrice().Bytes()
 	case ExternalTxType:
-		return protoTxSigningData
+		return protoTxSigningData, nil
 	case QiTxType:
 		txType := uint64(tx.Type())
 		protoTxSigningData.Type = &txType
 		protoTxSigningData.ChainId = tx.ChainId().Bytes()
-		protoTxSigningData.TxIns, _ = tx.TxIn().ProtoEncode()
-		protoTxSigningData.TxOuts, _ = tx.TxOut().ProtoEncode()
+		var err error
+		protoTxSigningData.TxIns, err = tx.TxIn().ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
+		protoTxSigningData.TxOuts, err = tx.TxOut().ProtoEncode()
+		if err != nil {
+			return nil, err
+		}
 		if tx.Data() == nil {
 			protoTxSigningData.Data = []byte{}
 		} else {
 			protoTxSigningData.Data = tx.Data()
 		}
 	}
-	return protoTxSigningData
+	return protoTxSigningData, nil
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -709,20 +716,23 @@ func (tx *Transaction) Time() time.Time {
 
 // Hash returns the transaction hash.
 func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
+	h, _ = tx.HashWithError(location...)
+	return h
+}
+
+// HashWithError returns the protobuf-derived transaction hash or an encoding error.
+// Use this when a transaction has not yet passed validation.
+func (tx *Transaction) HashWithError(location ...byte) (h common.Hash, err error) {
 	if hash := tx.hash.Load(); hash != nil {
-		return hash.(common.Hash)
+		return hash.(common.Hash), nil
 	}
 	protoTx, err := tx.ProtoEncode()
-	var data []byte
 	if err != nil {
-		// An invalid locally constructed transaction must not hash as an empty
-		// protobuf, which would collide with other invalid transactions.
-		data, err = tx.MarshalBinary()
-	} else {
-		data, err = proto.Marshal(protoTx)
+		return h, err
 	}
+	data, err := proto.Marshal(protoTx)
 	if err != nil {
-		return h
+		return h, err
 	}
 	h = crypto.Keccak256Hash(data)
 	switch tx.Type() {
@@ -736,7 +746,7 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 		} else {
 			from, err := Sender(NewSigner(tx.ChainId(), common.Location{0, 0}), tx) // location not important when performing ecrecover
 			if err != nil {
-				return h // Caller of this function will fail with wrong tx hash and will appropriately handle the error
+				return common.Hash{}, err
 			}
 			location := *from.Location()
 			origin := (uint8(location[0]) * 16) + uint8(location[1])
@@ -763,8 +773,7 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 		}
 	case QiTxType:
 		if len(tx.TxIn()) == 0 {
-			tx.hash.Store(h)
-			return h
+			return common.Hash{}, errors.New("QiTx must have at least one input")
 		}
 		// the origin of this tx is the *destination* of the utxos being spent
 		origin := tx.TxIn()[0].PreviousOutPoint.TxHash[2]
@@ -774,7 +783,7 @@ func (tx *Transaction) Hash(location ...byte) (h common.Hash) {
 		h[3] |= 0x80
 	}
 	tx.hash.Store(h)
-	return h
+	return h, nil
 }
 
 // FromChain returns the chain location this transaction originated from
