@@ -53,14 +53,28 @@ func TestQiDecoderRejectsOffCurveUncompressedKey(t *testing.T) {
 	}
 }
 
-func TestMalformedLocalQiInputsCannotCollideInHashes(t *testing.T) {
+func TestMalformedLocalQiInputsFailCanonicalHashing(t *testing.T) {
 	a, b := malformedQiKeyTx(1, 1), malformedQiKeyTx(2, 2)
-	if a.Hash() == b.Hash() {
-		t.Fatal("distinct invalid inputs collided in transaction hash")
-	}
 	signer := NewSigner(big.NewInt(9), common.Location{0, 0})
-	if signer.Hash(a) == signer.Hash(b) {
-		t.Fatal("distinct invalid inputs collided in signing hash")
+	for _, tx := range []*Transaction{a, b} {
+		if _, err := tx.HashWithError(); err == nil {
+			t.Fatal("transaction hash accepted a malformed input")
+		}
+		if _, err := signer.Hash(tx); err == nil {
+			t.Fatal("signing hash accepted a malformed input")
+		}
+	}
+	private, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := malformedQiKeyTx(1, 1)
+	valid.TxIn()[0].PubKey = crypto.FromECDSAPub(&private.PublicKey)
+	if hash, err := valid.HashWithError(); err != nil || hash != valid.Hash() {
+		t.Fatalf("valid transaction hash changed: %v", err)
+	}
+	if _, err := signer.Hash(valid); err != nil {
+		t.Fatalf("valid signing hash rejected: %v", err)
 	}
 }
 

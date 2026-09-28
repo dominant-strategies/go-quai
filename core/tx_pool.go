@@ -1271,6 +1271,10 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 	activeLocations := common.NewChainsAdded(pool.chain.CurrentBlock().ExpansionNumber())
 	transactionsWithoutErrors := make([]*types.TxWithMinerFee, 0, len(txs))
 	for i, tx := range txs {
+		if _, err := tx.HashWithError(); err != nil {
+			errs[i] = err
+			continue
+		}
 		// Reject TX if it emits an output to an inactive chain
 		inactiveOutput := false
 		for _, txo := range tx.TxOut() {
@@ -1341,6 +1345,10 @@ func (pool *TxPool) addQiTxs(txs types.Transactions) []error {
 
 func (pool *TxPool) addQiTxsWithoutValidationLocked(txs types.Transactions) {
 	for _, tx := range txs {
+		if _, err := tx.HashWithError(); err != nil {
+			pool.logger.WithError(err).Debug("Invalid Qi transaction, skipping re-inject")
+			continue
+		}
 		hash := tx.Hash()
 		if _, exists := pool.qiPool.Get(hash); exists {
 			continue

@@ -67,7 +67,10 @@ func LatestSignerForChainID(chainID *big.Int, nodeLocation common.Location) Sign
 
 // SignTx signs the transaction using the given signer and private key.
 func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := s.Hash(tx)
+	h, err := s.Hash(tx)
+	if err != nil {
+		return nil, err
+	}
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
@@ -78,7 +81,10 @@ func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, err
 // SignNewTx creates a transaction and signs it.
 func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) (*Transaction, error) {
 	tx := NewTx(txdata)
-	h := s.Hash(tx)
+	h, err := s.Hash(tx)
+	if err != nil {
+		return nil, err
+	}
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
@@ -142,7 +148,7 @@ type Signer interface {
 
 	// Hash returns 'signature hash', i.e. the transaction hash that is signed by the
 	// private key. This hash does not uniquely identify the transaction.
-	Hash(tx *Transaction) common.Hash
+	Hash(tx *Transaction) (common.Hash, error)
 
 	// Equal returns true if the given signer is the same as the receiver.
 	Equal(Signer) bool
@@ -183,7 +189,11 @@ func (s SignerV1) Sender(tx *Transaction) (common.Address, error) {
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Zero, ErrInvalidChainId
 	}
-	return recoverPlain(s.Hash(tx), R, S, V, s.nodeLocation)
+	hash, err := s.Hash(tx)
+	if err != nil {
+		return common.Zero, err
+	}
+	return recoverPlain(hash, R, S, V, s.nodeLocation)
 }
 
 func (s SignerV1) Equal(s2 Signer) bool {
@@ -209,24 +219,16 @@ func (s SignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s SignerV1) Hash(tx *Transaction) (h common.Hash) {
-	if tx.Type() == QiTxType {
-		_, inputErr := tx.TxIn().ProtoEncode()
-		_, outputErr := tx.TxOut().ProtoEncode()
-		if inputErr != nil || outputErr != nil {
-			data, err := tx.MarshalBinary()
-			if err != nil {
-				return h
-			}
-			return crypto.Keccak256Hash(data)
-		}
+func (s SignerV1) Hash(tx *Transaction) (common.Hash, error) {
+	protoTxSigningData, err := tx.ProtoEncodeTxSigningData()
+	if err != nil {
+		return common.Hash{}, err
 	}
-	protoTxSigningData := tx.ProtoEncodeTxSigningData()
 	data, err := proto.Marshal(protoTxSigningData)
 	if err != nil {
-		return crypto.Keccak256Hash([]byte{})
+		return common.Hash{}, err
 	}
-	return crypto.Keccak256Hash(data)
+	return crypto.Keccak256Hash(data), nil
 }
 
 func (s SignerV1) ChainID() *big.Int {

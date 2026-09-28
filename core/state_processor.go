@@ -1841,7 +1841,10 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		finalKey = pubKeys[0]
 	}
 
-	txDigestHash := signer.Hash(tx)
+	txDigestHash, err := signer.Hash(tx)
+	if err != nil {
+		return nil, err
+	}
 	if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
 		return nil, fmt.Errorf("invalid signature for tx %032x digest hash %032x", tx.Hash(), txDigestHash)
 	}
@@ -2164,7 +2167,10 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 			finalKey = pubKeys[0]
 		}
 
-		txDigestHash := signer.Hash(tx)
+		txDigestHash, err := signer.Hash(tx)
+		if err != nil {
+			return nil, nil, nil, err, nil
+		}
 		if !tx.GetSchnorrSignature().Verify(txDigestHash[:], finalKey) {
 			return nil, nil, nil, errors.New("invalid signature for digest hash " + txDigestHash.String()), nil
 		}
