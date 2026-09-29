@@ -12,11 +12,12 @@ import (
 var includerBonusTagPrefix = []byte("quai-includer-bonus")
 
 // appendIncluderBonusEtx appends one coinbase ETX paying targetBlock's miner a
-// flat IncluderBonusNumerator / IncluderBonusDenominator of the per-slot reward
-// for each workshare targetBlock included. It runs when targetBlock itself is
-// paid out; a block only includes shares from its own height and the three
-// below it, so every one of them has been paid by then. It appends nothing
-// before IncluderBonusForkBlock.
+// flat IncluderBonusNumerator / IncluderBonusDenominator of targetBlock's own
+// per-slot reward for each workshare targetBlock included, whatever the share's
+// height. It runs when targetBlock itself is paid out; a block only includes
+// shares from its own height and the three below it, so every one of them has
+// been paid by then. It appends nothing before IncluderBonusForkBlock, which is
+// checked against targetBlock.
 func appendIncluderBonusEtx(etxs []*types.Transaction, targetBlock *types.WorkObject,
 	quaiRewardPerShare, qiRewardPerShare *big.Int, parentHash common.Hash, location common.Location) []*types.Transaction {
 	if targetBlock.PrimeTerminusNumber().Uint64() < params.IncluderBonusForkBlock {
@@ -52,6 +53,8 @@ func appendIncluderBonusEtx(etxs []*types.Transaction, targetBlock *types.WorkOb
 	data = append(data, targetBlock.Data()...)
 	data = append(data, tag.Bytes()...)
 
+	// CoinbaseType is deliberate: this single bonus ETX adds one token-choice
+	// vote for the includer block's chosen ledger.
 	return append(etxs, types.NewTx(&types.ExternalTx{
 		To:                &coinbase,
 		Gas:               params.TxGas,
