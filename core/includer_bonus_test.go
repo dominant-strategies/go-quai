@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const bonusT = 100 // target height t
+const bonusT = 100 // height of the block being paid out
 
 var (
 	bonusLoc    = common.Location{0, 0}
@@ -47,53 +47,38 @@ func bonusBlock(number uint64, coinbase common.Address, shares ...*types.WorkObj
 	return wo
 }
 
-// runBonus turns the bonus on for the test and calls appendIncluderBonusEtxs
-// the way the payout loops do: includers are heights t+3 down to t, and the
-// target block is the last one.
-func runBonus(t *testing.T, etxs []*types.Transaction, includers []*types.WorkObject, quaiR, qiR int64) []*types.Transaction {
+// runBonus turns the bonus on for the test and calls appendIncluderBonusEtx
+// the way the payout loops do.
+func runBonus(t *testing.T, etxs []*types.Transaction, target *types.WorkObject, quaiR, qiR int64) []*types.Transaction {
 	fork := params.IncluderBonusForkBlock
 	params.IncluderBonusForkBlock = 0
 	t.Cleanup(func() { params.IncluderBonusForkBlock = fork })
-	return appendIncluderBonusEtxs(etxs, includers[len(includers)-1], includers, big.NewInt(quaiR), big.NewInt(qiR),
-		bonusParent, bonusLoc)
+	return appendIncluderBonusEtx(etxs, target, big.NewInt(quaiR), big.NewInt(qiR), bonusParent, bonusLoc)
 }
 
 func TestIncluderBonusOffBeforeFork(t *testing.T) {
-	includers := []*types.WorkObject{
-		bonusBlock(bonusT+3, quaiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT+2, quaiA),
-		bonusBlock(bonusT+1, quaiA),
-		bonusBlock(bonusT, quaiA),
-	}
+	target := bonusBlock(bonusT, quaiA, bonusShare(bonusT, quaiB))
 	// The target's prime terminus (0) is below IncluderBonusForkBlock.
-	etxs := appendIncluderBonusEtxs(nil, includers[3], includers, big.NewInt(1_000_000), big.NewInt(1_000_000),
-		bonusParent, bonusLoc)
+	etxs := appendIncluderBonusEtx(nil, target, big.NewInt(1_000_000), big.NewInt(1_000_000), bonusParent, bonusLoc)
 	require.Empty(t, etxs)
 }
 
-func TestIncluderBonusFlatAcrossHeights(t *testing.T) {
-	etxs := runBonus(t, nil, []*types.WorkObject{
-		bonusBlock(bonusT+3, quaiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT+2, quaiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT+1, quaiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT, quaiA, bonusShare(bonusT, quaiB)),
-	}, 1_000_000, 0)
+func TestIncluderBonusOneEtxForAllHeights(t *testing.T) {
+	// Shares from every height a block can include, paid as a single ETX.
+	etxs := runBonus(t, nil, bonusBlock(bonusT, quaiA,
+		bonusShare(bonusT-3, quaiB), bonusShare(bonusT-2, quaiB), bonusShare(bonusT-1, quaiB), bonusShare(bonusT, quaiB),
+	), 1_000_000, 0)
 
-	require.Len(t, etxs, 4)
-	for _, etx := range etxs { // R × 500/10000, whichever chance the share was included on
-		require.Equal(t, int64(50_000), etx.Value().Int64())
-		require.Equal(t, uint64(types.CoinbaseType), etx.EtxType())
-		require.Equal(t, params.TxGas, etx.Gas())
-	}
+	require.Len(t, etxs, 1)
+	require.Equal(t, int64(200_000), etxs[0].Value().Int64()) // 4 × R × 500/10000
+	require.Equal(t, uint64(types.CoinbaseType), etxs[0].EtxType())
+	require.Equal(t, params.TxGas, etxs[0].Gas())
 }
 
-func TestIncluderBonusAggregatesShares(t *testing.T) {
-	etxs := runBonus(t, nil, []*types.WorkObject{
-		bonusBlock(bonusT+3, quaiA),
-		bonusBlock(bonusT+2, quaiA),
-		bonusBlock(bonusT+1, quaiA, bonusShare(bonusT, quaiB), bonusShare(bonusT, qiA), bonusShare(bonusT, quaiA)),
-		bonusBlock(bonusT, quaiA),
-	}, 10_013, 0)
+func TestIncluderBonusRounding(t *testing.T) {
+	etxs := runBonus(t, nil, bonusBlock(bonusT, quaiA,
+		bonusShare(bonusT, quaiB), bonusShare(bonusT, qiA), bonusShare(bonusT-1, quaiA),
+	), 10_013, 0)
 
 	require.Len(t, etxs, 1)
 	// The per-share amount is floored before multiplying by the count:
@@ -102,74 +87,54 @@ func TestIncluderBonusAggregatesShares(t *testing.T) {
 }
 
 func TestIncluderBonusFiltering(t *testing.T) {
-	etxs := runBonus(t, nil, []*types.WorkObject{
-		// One counted share; one at another height and one non-internal are skipped.
-		bonusBlock(bonusT+3, quaiA, bonusShare(bonusT, quaiB), bonusShare(bonusT+1, quaiB), bonusShare(bonusT, extA)),
-		// No counted entries.
-		bonusBlock(bonusT+2, quaiA, bonusShare(bonusT+1, quaiB), bonusShare(bonusT, extA)),
-		bonusBlock(bonusT+1, quaiA),
-		bonusBlock(bonusT, quaiA),
-	}, 1_000_000, 0)
-
+	// Shares with a non-internal coinbase are not paid, so they earn no bonus.
+	etxs := runBonus(t, nil, bonusBlock(bonusT, quaiA,
+		bonusShare(bonusT, quaiB), bonusShare(bonusT-1, quaiB), bonusShare(bonusT, extA),
+	), 1_000_000, 0)
 	require.Len(t, etxs, 1)
-	require.True(t, etxs[0].To().Equal(quaiA))
-	require.Equal(t, int64(50_000), etxs[0].Value().Int64())
+	require.Equal(t, int64(100_000), etxs[0].Value().Int64())
 
-	// A bonus that rounds down to zero emits nothing: ⌊19×500/10000⌋ = 0.
-	require.Empty(t, runBonus(t, nil, []*types.WorkObject{
-		bonusBlock(bonusT+3, quaiA),
-		bonusBlock(bonusT+2, quaiA),
-		bonusBlock(bonusT+1, quaiA),
-		bonusBlock(bonusT, quaiA, bonusShare(bonusT, quaiB)),
-	}, 19, 19))
+	// No counted shares, or a bonus that rounds down to zero (⌊19×500/10000⌋ = 0), emits nothing.
+	require.Empty(t, runBonus(t, nil, bonusBlock(bonusT, quaiA, bonusShare(bonusT, extA)), 1_000_000, 0))
+	require.Empty(t, runBonus(t, nil, bonusBlock(bonusT, quaiA), 1_000_000, 0))
+	require.Empty(t, runBonus(t, nil, bonusBlock(bonusT, quaiA, bonusShare(bonusT, quaiB)), 19, 19))
 }
 
 func TestIncluderBonusLedger(t *testing.T) {
-	etxs := runBonus(t, nil, []*types.WorkObject{
-		bonusBlock(bonusT+3, qiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT+2, quaiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT+1, quaiA),
-		bonusBlock(bonusT, quaiA),
-	}, 1_000_000, 2_000_000)
+	qi := runBonus(t, nil, bonusBlock(bonusT, qiA, bonusShare(bonusT, quaiB)), 1_000_000, 2_000_000)
+	require.Len(t, qi, 1)
+	require.Equal(t, int64(100_000), qi[0].Value().Int64()) // Qi R × 500/10000
+	require.Equal(t, common.SetBlockHashForQi(bonusParent, bonusLoc), qi[0].OriginatingTxHash())
 
-	require.Len(t, etxs, 2)
-	require.Equal(t, int64(100_000), etxs[0].Value().Int64()) // Qi R × 500/10000
-	require.Equal(t, common.SetBlockHashForQi(bonusParent, bonusLoc), etxs[0].OriginatingTxHash())
-	require.Equal(t, int64(50_000), etxs[1].Value().Int64()) // Quai R × 500/10000
-	require.Equal(t, common.SetBlockHashForQuai(bonusParent, bonusLoc), etxs[1].OriginatingTxHash())
+	quai := runBonus(t, nil, bonusBlock(bonusT, quaiA, bonusShare(bonusT, quaiB)), 1_000_000, 2_000_000)
+	require.Len(t, quai, 1)
+	require.Equal(t, int64(50_000), quai[0].Value().Int64()) // Quai R × 500/10000
+	require.Equal(t, common.SetBlockHashForQuai(bonusParent, bonusLoc), quai[0].OriginatingTxHash())
 }
 
-func TestIncluderBonusOrderAndIndex(t *testing.T) {
+func TestIncluderBonusAppendsAfterPayouts(t *testing.T) {
 	prior := make([]*types.Transaction, 7) // share payouts already emitted by the loop
-	etxs := runBonus(t, prior, []*types.WorkObject{
-		bonusBlock(bonusT+3, quaiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT+2, quaiB), // pays nothing and leaves no index gap
-		bonusBlock(bonusT+1, qiA, bonusShare(bonusT, quaiB)),
-		bonusBlock(bonusT, quaiB, bonusShare(bonusT, quaiA)),
-	}, 1_000_000, 1_000_000)
+	etxs := runBonus(t, prior, bonusBlock(bonusT, quaiA, bonusShare(bonusT, quaiB)), 1_000_000, 0)
 
-	require.Len(t, etxs, 10)
-	for i, want := range []common.Address{quaiA, qiA, quaiB} {
-		etx := etxs[len(prior)+i]
-		require.True(t, etx.To().Equal(want))
-		require.True(t, etx.ETXSender().Equal(want))
-		require.Equal(t, uint16(len(prior)+i), etx.ETXIndex())
-	}
+	require.Len(t, etxs, 8)
+	bonus := etxs[7]
+	require.True(t, bonus.To().Equal(quaiA))
+	require.True(t, bonus.ETXSender().Equal(quaiA))
+	require.Equal(t, uint16(7), bonus.ETXIndex())
 }
 
 func TestIncluderBonusData(t *testing.T) {
-	shares := []*types.WorkObjectHeader{bonusShare(bonusT, quaiA), bonusShare(bonusT, quaiB)}
-	includer := bonusBlock(bonusT+3, quaiA, shares...)
-	includer.WorkObjectHeader().SetData(append([]byte{0x01}, quaiB.Bytes()...)) // lockup byte + lockup contract
-	target := bonusBlock(bonusT, quaiB)
-	etxs := runBonus(t, nil, []*types.WorkObject{includer, bonusBlock(bonusT+2, quaiA), bonusBlock(bonusT+1, quaiA), target}, 1_000_000, 0)
+	shares := []*types.WorkObjectHeader{bonusShare(bonusT, quaiA), bonusShare(bonusT-1, quaiB)}
+	target := bonusBlock(bonusT, quaiA, shares...)
+	target.WorkObjectHeader().SetData(append([]byte{0x01}, quaiB.Bytes()...)) // lockup byte + lockup contract
+	etxs := runBonus(t, nil, target, 1_000_000, 0)
 
 	require.Len(t, etxs, 1)
 	data := etxs[0].Data()
-	require.Len(t, data, len(includer.Data())+common.HashLength)
-	require.Equal(t, includer.Data(), data[:len(includer.Data())])
-	tag := common.BytesToHash(data[len(includer.Data()):])
-	for _, h := range []common.Hash{includer.Hash(), target.Hash(), shares[0].Hash(), shares[1].Hash()} {
+	require.Len(t, data, len(target.Data())+common.HashLength)
+	require.Equal(t, target.Data(), data[:len(target.Data())])
+	tag := common.BytesToHash(data[len(target.Data()):])
+	for _, h := range []common.Hash{target.Hash(), shares[0].Hash(), shares[1].Hash()} {
 		require.NotEqual(t, h, tag)
 	}
 }

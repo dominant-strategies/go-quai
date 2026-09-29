@@ -834,7 +834,7 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 				}
 				work.etxs = append(work.etxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(work.etxs)), Sender: uncleCoinbase, Data: append(share.Data(), share.Hash().Bytes()...)}))
 			}
-			work.etxs = appendIncluderBonusEtxs(work.etxs, targetBlock, targetBlocks,
+			work.etxs = appendIncluderBonusEtx(work.etxs, targetBlock,
 				quaiRewardPerShare, qiRewardPerShare, block.Hash(), w.hc.NodeLocation())
 		}
 
