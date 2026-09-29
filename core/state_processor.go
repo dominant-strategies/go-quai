@@ -1282,6 +1282,8 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 			}
 			emittedEtxs = append(emittedEtxs, types.NewTx(&types.ExternalTx{To: &uncleCoinbase, Gas: params.TxGas, Value: shareReward, EtxType: types.CoinbaseType, OriginatingTxHash: originHash, ETXIndex: uint16(len(emittedEtxs)), Sender: uncleCoinbase, Data: append(share.Data(), share.Hash().Bytes()...)}))
 		}
+		emittedEtxs = appendIncluderBonusEtxs(emittedEtxs, targetBlock, targetBlocks,
+			quaiRewardPerShare, qiRewardPerShare, parent.Hash(), p.hc.NodeLocation())
 	}
 
 	time4 := common.PrettyDuration(time.Since(start))

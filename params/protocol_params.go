@@ -363,6 +363,15 @@ var (
 	// KQuaiFreezeForkBlock freezes the controller at its parent value until a
 	// future fork explicitly resumes or replaces it.
 	KQuaiFreezeForkBlock uint64 = ConversionLockChangeForkBlock
+
+	// Includer bonus: a block that includes workshares is paid a flat bonus per
+	// included share, whichever inclusion chance the share was included on.
+	// IncluderBonusForkBlock must be a future prime height at or above
+	// ConversionLockChangeForkBlock: before that fork the Qi per-share base is
+	// still a Quai amount.
+	IncluderBonusForkBlock   uint64 = math.MaxUint64 // set the activation height before release
+	IncluderBonusNumerator   uint64 = 500            // 5% of the per-slot reward
+	IncluderBonusDenominator uint64 = 10000
 )
 
 // UnwrapQiLockPeriodAt keeps the historical conversion lock before the fork
