@@ -18,10 +18,10 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
-	"strings"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
@@ -235,6 +235,11 @@ func (st *StateTransition) buyGas() error {
 func (st *StateTransition) subGasETX() error {
 	maxEtxGasLimit := st.evm.Context.GasLimit / params.MinimumEtxGasDivisor
 	if st.msg.Gas() > maxEtxGasLimit {
+		// Legacy nodes panic while aggregating fees for this ETX. Reject it
+		// before the fork so upgraded nodes cannot accept that block.
+		if st.evm.Context.PrimeTerminusNumber < params.SecurityHardeningForkBlock {
+			return fmt.Errorf("%w: have %d, want %d", ErrEtxGasLimitReached, st.msg.Gas(), maxEtxGasLimit)
+		}
 		if err := st.gp.SubGas(params.TxGas); err != nil {
 			return err
 		}
@@ -320,7 +325,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 	} else if err := st.subGasETX(); err != nil {
-		if strings.Contains(err.Error(), ErrEtxGasLimitReached.Error()) {
+		if errors.Is(err, ErrEtxGasLimitReached) {
+			if st.evm.Context.PrimeTerminusNumber < params.SecurityHardeningForkBlock {
+				return nil, err
+			}
 			return &ExecutionResult{
 				UsedGas:      params.TxGas,
 				UsedState:    params.EtxStateUsed,
