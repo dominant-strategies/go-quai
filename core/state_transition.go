@@ -324,6 +324,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return &ExecutionResult{
 				UsedGas:      params.TxGas,
 				UsedState:    params.EtxStateUsed,
+				QuaiFees:     new(big.Int),
 				Err:          err,
 				ReturnData:   []byte{},
 				Etxs:         nil,
@@ -352,6 +353,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return &ExecutionResult{
 				UsedGas:   st.initialGas,
 				UsedState: params.EtxStateUsed,
+				QuaiFees:  new(big.Int),
 				Err:       fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas),
 			}, nil
 		}
