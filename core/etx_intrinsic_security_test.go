@@ -45,6 +45,12 @@ func TestUnderfundedETXBecomesFailedReceiptAfterFork(t *testing.T) {
 				if err != nil || result == nil || !errors.Is(result.Err, ErrIntrinsicGas) || result.UsedGas != params.TxGas {
 					t.Fatalf("underfunded ETX was not a failed execution: result %+v, error %v", result, err)
 				}
+				if result.QuaiFees == nil || result.QuaiFees.Sign() != 0 {
+					t.Fatalf("failed ETX fees must be zero, got %v", result.QuaiFees)
+				}
+				if got := new(big.Int).Add(big.NewInt(7), result.QuaiFees); got.Cmp(big.NewInt(7)) != 0 {
+					t.Fatalf("failed ETX changed aggregated fees: %v", got)
+				}
 				if pool.Gas() != 1_000_000-params.TxGas {
 					t.Fatalf("ETX gas pool debit: %d", pool.Gas())
 				}
@@ -52,5 +58,33 @@ func TestUnderfundedETXBecomesFailedReceiptAfterFork(t *testing.T) {
 				t.Fatalf("historical intrinsic-gas result changed: result %+v, error %v", result, err)
 			}
 		})
+	}
+}
+
+func TestOverLimitETXHasZeroFeesBeforeFork(t *testing.T) {
+	location := common.Location{0, 0}
+	db := rawdb.NewMemoryDatabase(log.Global)
+	statedb, err := state.New(common.Hash{}, common.Hash{}, new(big.Int), state.NewDatabase(db), state.NewDatabase(db), nil, location, log.Global)
+	if err != nil {
+		t.Fatal(err)
+	}
+	to := common.HexToAddress("0x0022000000000000000000000000000000000000", location)
+	msg := types.NewMessage(to, &to, 0, big.NewInt(0), 200_001, big.NewInt(0), nil, nil, true)
+	chainConfig := *params.TestChainConfig
+	chainConfig.Location = location
+	evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1), PrimeTerminusNumber: 1, GasLimit: 1_000_000}, vm.TxContext{}, statedb, &chainConfig, vm.Config{}, nil)
+	pool := new(types.GasPool).AddGas(1_000_000)
+	result, err := NewStateTransition(evm, msg, pool).TransitionDb()
+	if err != nil || result == nil || !errors.Is(result.Err, ErrEtxGasLimitReached) {
+		t.Fatalf("over-limit ETX was not a failed execution: result %+v, error %v", result, err)
+	}
+	if result.QuaiFees == nil || result.QuaiFees.Sign() != 0 {
+		t.Fatalf("failed ETX fees must be zero, got %v", result.QuaiFees)
+	}
+	if got := new(big.Int).Add(big.NewInt(7), result.QuaiFees); got.Cmp(big.NewInt(7)) != 0 {
+		t.Fatalf("failed ETX changed aggregated fees: %v", got)
+	}
+	if result.UsedGas != params.TxGas || pool.Gas() != 1_000_000-params.TxGas {
+		t.Fatalf("failed ETX gas accounting: result %d pool %d", result.UsedGas, pool.Gas())
 	}
 }
