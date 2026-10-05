@@ -749,6 +749,9 @@ func (evm *EVM) CreateETX(toAddr common.Address, fromAddr common.Address, gas ui
 	if gas < params.TxGas { // ETX must have enough gas to create a transaction
 		return []byte{}, 0, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas for ETX, required amount: %d", gas, params.TxGas)
 	}
+	if !conversion && evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock && !etxGasCoversIntrinsicForRecipient(gas, toAddr, data, evm.AccessList) {
+		return []byte{}, 0, 0, fmt.Errorf("CreateETX error: %d is not sufficient gas for ETX intrinsic cost", gas)
+	}
 
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, fromAddr, value) {

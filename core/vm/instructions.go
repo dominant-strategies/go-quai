@@ -997,7 +997,7 @@ func opETX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		log.Global.Errorf("%x opETX error: %s\n", scope.Contract.self.Address(), err.Error())
 		return nil, nil // following opCall protocol
 	}
-	if interpreter.evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock && !etxGasCoversIntrinsic(etxGasLimit64, data, accessList) {
+	if interpreter.evm.Context.PrimeTerminusNumber >= params.SecurityHardeningForkBlock && !etxGasCoversIntrinsicForRecipient(etxGasLimit64, toAddr, data, accessList) {
 		temp.Clear()
 		stack.push(&temp)
 		return nil, nil
@@ -1065,6 +1065,19 @@ func etxGasCoversIntrinsic(limit uint64, data []byte, accessList types.AccessLis
 		remaining -= uint64(len(tuple.StorageKeys)) * params.TxAccessListStorageKeyGas
 	}
 	return true
+}
+
+// etxGasCoversIntrinsicForRecipient uses the receiver's contract-creation
+// rule: an ETX to that zone's contextual zero address creates a contract.
+func etxGasCoversIntrinsicForRecipient(limit uint64, to common.Address, data []byte, accessList types.AccessList) bool {
+	if to.Equal(common.ZeroAddress(*to.Location())) {
+		creationPremium := params.TxGasContractCreation - params.TxGas
+		if limit < creationPremium {
+			return false
+		}
+		limit -= creationPremium
+	}
+	return etxGasCoversIntrinsic(limit, data, accessList)
 }
 
 // opConvert creates an external transaction that converts Quai to Qi
