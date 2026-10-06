@@ -272,7 +272,7 @@ var (
 	SelfDestructRefundForkBlock uint64 = 1563900
 	// SecurityHardeningForkBlock must be scheduled before the consensus ETX and
 	// lockup fixes are activated. MaxUint64 keeps historical replay unchanged.
-	SecurityHardeningForkBlock uint64 = math.MaxUint64
+	SecurityHardeningForkBlock uint64 = 1761680
 )
 
 var (
