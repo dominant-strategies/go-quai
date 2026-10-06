@@ -181,14 +181,15 @@ func (b *QuaiAPIBackend) PendingBlockAndReceipts() (*types.WorkObject, types.Rec
 }
 
 func (b *QuaiAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.WorkObject, error) {
+	// The miner exposes a pending block, but it does not expose a pending state.
+	// Returning an empty StateDB here lets balance and storage RPCs dereference
+	// its nil trie.
+	if number == rpc.PendingBlockNumber {
+		return nil, nil, errors.New("pending state is unavailable")
+	}
 	nodeCtx := b.quai.core.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return nil, nil, errors.New("stateAndHeaderByNumber can only be called in zone chain")
-	}
-	// Pending state is only known by the miner
-	if number == rpc.PendingBlockNumber {
-		block := b.quai.core.Pending()
-		return &state.StateDB{}, block, nil
 	}
 	// Otherwise resolve the block number and return its state
 	header, err := b.HeaderByNumber(ctx, number)

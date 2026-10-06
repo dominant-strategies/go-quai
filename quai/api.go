@@ -314,10 +314,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 
 	if number, ok := blockNrOrHash.Number(); ok {
 		if number == rpc.PendingBlockNumber {
-			// If we're dumping the pending state, we need to request
-			// both the pending block as well as the pending state from
-			// the miner and operate on those
-			stateDb = &state.StateDB{}
+			return state.IteratorDump{}, errors.New("pending state is unavailable")
 		} else {
 			var block *types.WorkObject
 			if number == rpc.LatestBlockNumber {

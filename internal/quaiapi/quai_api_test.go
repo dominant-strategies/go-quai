@@ -14,7 +14,22 @@ import (
 	"github.com/dominant-strategies/go-quai/ethdb"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
+	"github.com/dominant-strategies/go-quai/rpc"
 )
+
+type pendingBalanceBackend struct{ Backend }
+
+func (pendingBalanceBackend) NodeCtx() int          { return common.ZONE_CTX }
+func (pendingBalanceBackend) ProcessingState() bool { return true }
+
+func TestGetBalanceRejectsPendingState(t *testing.T) {
+	api := NewPublicBlockChainQuaiAPI(pendingBalanceBackend{})
+	address := common.NewMixedcaseAddress(common.HexToAddress("0x0000000000000000000000000000000000000001", common.Location{0, 0}))
+	balance, err := api.GetBalance(context.Background(), address, rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber))
+	if balance != nil || err == nil {
+		t.Fatalf("pending balance: balance=%v err=%v", balance, err)
+	}
+}
 
 func TestGetOutPointsByAddressAndRangeRejectsNarrowing(t *testing.T) {
 	api := NewPublicBlockChainQuaiAPI(&outpointTestBackend{})

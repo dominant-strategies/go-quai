@@ -128,6 +128,9 @@ func (s *PublicBlockChainQuaiAPI) GetBalance(ctx context.Context, address common
 	if !s.b.ProcessingState() {
 		return nil, errors.New("getBalance call can only be made on chain processing the state")
 	}
+	if number, ok := blockNrOrHash.Number(); ok && number == rpc.PendingBlockNumber {
+		return nil, errors.New("pending state is unavailable")
+	}
 
 	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
