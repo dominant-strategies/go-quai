@@ -1,6 +1,6 @@
 module github.com/dominant-strategies/go-quai
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
