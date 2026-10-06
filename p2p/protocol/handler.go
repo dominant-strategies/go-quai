@@ -160,6 +160,7 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 	}
 	// Create a channel for messages
 	msgChan := make(chan []byte, msgChanSize)
+	defer close(msgChan)
 	full := 0
 	go func() {
 		defer func() {
@@ -172,7 +173,10 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 		}()
 		for {
 			select {
-			case message := <-msgChan:
+			case message, ok := <-msgChan:
+				if !ok {
+					return
+				}
 				handleMessage(message, stream, node)
 			case <-ctx.Done():
 				return
@@ -190,8 +194,7 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 			}
 
 			log.Global.Errorf("error reading message from stream: %s", err)
-			// TODO: handle error
-			continue
+			return
 		}
 
 		// Send to worker goroutines
