@@ -819,6 +819,12 @@ func (w *worker) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 					}
 				}
 
+				// The target block's own reward carries its includer bonus; it is added
+				// before the Qi conversion below so both are converted together.
+				if i == 0 {
+					shareReward = new(big.Int).Add(shareReward, includerBonus(targetBlock, quaiRewardPerShare, qiRewardPerShare))
+				}
+
 				var originHash common.Hash
 				if uncleCoinbase.IsInQuaiLedgerScope() {
 					originHash = common.SetBlockHashForQuai(block.Hash(), w.hc.NodeLocation())

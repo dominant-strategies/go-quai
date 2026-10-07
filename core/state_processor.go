@@ -1275,6 +1275,12 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 
 			}
 
+			// The target block's own reward carries its includer bonus; it is added
+			// before the Qi conversion below so both are converted together.
+			if i == 0 {
+				shareReward = new(big.Int).Add(shareReward, includerBonus(targetBlock, quaiRewardPerShare, qiRewardPerShare))
+			}
+
 			var originHash common.Hash
 			if uncleCoinbase.IsInQuaiLedgerScope() {
 				originHash = common.SetBlockHashForQuai(parent.Hash(), p.hc.NodeLocation())
