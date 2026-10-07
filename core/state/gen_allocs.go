@@ -8,7 +8,7 @@ import (
 )
 
 // Will go through the balance schedule and add each one to the account's balance in state.
-func (state *StateDB) AddLockedBalances(header *types.WorkObject, genesisAccounts []params.GenesisAccount, forfeitureAddresses map[common.AddressBytes]bool, log *log.Logger) error {
+func (state *StateDB) AddLockedBalances(header *types.WorkObject, genesisAccounts []params.GenesisAccount, forfeitureAddresses, founderForfeitureAddresses map[common.AddressBytes]bool, log *log.Logger) error {
 	blockNum := header.Number(common.ZONE_CTX)
 	uintBlockNum := blockNum.Uint64()
 	// Check if this block is a monthly unlock.
@@ -22,6 +22,10 @@ func (state *StateDB) AddLockedBalances(header *types.WorkObject, genesisAccount
 			// Skip forfeiture addresses
 			if header.PrimeTerminusNumber().Uint64() >= params.SingularityForkBlock &&
 				forfeitureAddresses[account.Address.Bytes20()] {
+				continue
+			}
+			if header.PrimeTerminusNumber().Uint64() >= params.FounderForfeitureForkBlock &&
+				founderForfeitureAddresses[account.Address.Bytes20()] {
 				continue
 			}
 			accountAddr, err := account.Address.InternalAddress()

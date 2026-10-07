@@ -200,6 +200,7 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 	powConfig.NotifyFull = config.Miner.NotifyFull
 	powConfig.GenAllocs = config.GenesisAllocs
 	powConfig.ForfeitureAddresses = config.ForfeitureAddresses
+	powConfig.FounderForfeitureAddresses = config.FounderForfeitureAddresses
 
 	if config.ConsensusEngine == "blake3" {
 		quai.engine = make([]consensus.Engine, 1)
