@@ -354,7 +354,8 @@ var (
 	ExchangeRateAfterShaEquivalentDifficultyFork                = new(big.Int).Mul(big.NewInt(60), ExchangeRate)
 	ExchangeRateHoldIntervalAfterShaEquivalentDifficulty uint64 = 4 * BlocksPerMonth / 4 // 4 months in prime block terms
 
-	SingularityForkBlock uint64 = 1530500
+	SingularityForkBlock       uint64 = 1530500
+	FounderForfeitureForkBlock uint64 = ^uint64(0) // Set to the scheduled Prime block before release.
 
 	QiWrappingChangeBlock uint64 = 1570000
 

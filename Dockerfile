@@ -41,6 +41,7 @@ COPY --from=builder /app/build/bin/go-quai ./build/bin/go-quai
 COPY --from=builder /app/VERSION ./VERSION
 COPY --from=builder /app/params/genesis_alloc.json ./params/genesis_alloc.json
 COPY --from=builder /app/params/forfeiture_addresses.json ./params/forfeiture_addresses.json
+COPY --from=builder /app/params/founder_forfeiture_addresses.json ./params/founder_forfeiture_addresses.json
 
 
 # Ensure the binary has execute permissions
