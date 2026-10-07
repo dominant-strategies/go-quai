@@ -77,6 +77,7 @@ func TestAddLockedBalancesSkipsForfeitureAddressesAfterFork(t *testing.T) {
 		testUnlockBlock(params.SingularityForkBlock),
 		[]params.GenesisAccount{forfeited, retained},
 		forfeitureAddresses,
+		nil,
 		log.Global,
 	))
 
@@ -101,6 +102,7 @@ func TestAddLockedBalancesIncludesForfeitureAddressesBeforeFork(t *testing.T) {
 		testUnlockBlock(params.SingularityForkBlock-1),
 		[]params.GenesisAccount{account},
 		forfeitureAddresses,
+		nil,
 		log.Global,
 	))
 
@@ -135,6 +137,7 @@ func TestAddLockedBalancesSkipsForfeitureAddressesOnEveryMonthlyUnlockForYears(t
 			testUnlockBlockAtMonth(month, params.SingularityForkBlock+month),
 			[]params.GenesisAccount{forfeitedA, forfeitedB, retained},
 			forfeitureAddresses,
+			nil,
 			log.Global,
 		))
 
@@ -166,6 +169,7 @@ func TestAddLockedBalancesSkipsAddressFromForfeitureFile(t *testing.T) {
 			testUnlockBlockAtMonth(month, params.SingularityForkBlock+month),
 			[]params.GenesisAccount{forfeited, retained},
 			forfeitureAddresses,
+			nil,
 			log.Global,
 		))
 
@@ -173,4 +177,33 @@ func TestAddLockedBalancesSkipsAddressFromForfeitureFile(t *testing.T) {
 		require.Zero(t, state.GetBalance(forfeitedInternal).Cmp(big.NewInt(0)), "file-backed forfeiture address unlocked at month %d", month)
 		require.Zero(t, state.GetBalance(retainedInternal).Cmp(expectedRetained), "retained account mismatch at month %d", month)
 	}
+}
+
+func TestAddLockedBalancesFounderForfeitureAtFork(t *testing.T) {
+	oldAddresses, err := params.LoadForfeitureAddresses(filepath.Join("..", "..", "params", "forfeiture_addresses.json"))
+	require.NoError(t, err)
+	founderAddresses, err := params.LoadForfeitureAddresses(filepath.Join("..", "..", "params", "founder_forfeiture_addresses.json"))
+	require.NoError(t, err)
+
+	old := testMonthlyGenesisAccount("0x00001e9ddc9759d9734f85fe17311b35a27cc9d2", 3, 3)
+	founder := testMonthlyGenesisAccount("0x00002beae967fcd44e76a1270481875082f2759d", 5, 3)
+	retained := testMonthlyGenesisAccount("0x0000000000000000000000000000000000000042", 7, 3)
+	require.True(t, oldAddresses[old.Address.Bytes20()])
+	require.True(t, founderAddresses[founder.Address.Bytes20()])
+	require.False(t, oldAddresses[founder.Address.Bytes20()])
+
+	state := testStateDB(t)
+	accounts := []params.GenesisAccount{old, founder, retained}
+	require.NoError(t, state.AddLockedBalances(testUnlockBlockAtMonth(0, params.FounderForfeitureForkBlock-1), accounts, oldAddresses, founderAddresses, log.Global))
+	require.NoError(t, state.AddLockedBalances(testUnlockBlockAtMonth(1, params.FounderForfeitureForkBlock), accounts, oldAddresses, founderAddresses, log.Global))
+
+	oldInternal, err := old.Address.InternalAddress()
+	require.NoError(t, err)
+	founderInternal, err := founder.Address.InternalAddress()
+	require.NoError(t, err)
+	retainedInternal, err := retained.Address.InternalAddress()
+	require.NoError(t, err)
+	require.Zero(t, state.GetBalance(oldInternal).Sign())
+	require.Zero(t, state.GetBalance(founderInternal).Cmp(big.NewInt(5)))
+	require.Zero(t, state.GetBalance(retainedInternal).Cmp(big.NewInt(14)))
 }

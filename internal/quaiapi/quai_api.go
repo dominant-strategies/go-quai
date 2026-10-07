@@ -2611,6 +2611,7 @@ func (s *PublicBlockChainQuaiAPI) genesisUnlockedQuaiThroughBlock(ctx context.Co
 
 	currentBlockNumber := currentHeader.NumberU64(common.ZONE_CTX)
 	forfeitureAddresses := s.b.ForfeitureAddresses()
+	founderForfeitureAddresses := s.b.FounderForfeitureAddresses()
 	unlockPrimeTerminusCache := make(map[uint64]uint64)
 
 	for _, account := range s.b.GenesisAllocs() {
@@ -2625,12 +2626,13 @@ func (s *PublicBlockChainQuaiAPI) genesisUnlockedQuaiThroughBlock(ctx context.Co
 			if unlockBlock > currentBlockNumber || unlock.Value == nil {
 				continue
 			}
-			if forfeitureAddresses[account.Address.Bytes20()] {
+			if forfeitureAddresses[account.Address.Bytes20()] || founderForfeitureAddresses[account.Address.Bytes20()] {
 				primeTerminusNumber, err := s.primeTerminusNumberAtUnlockBlock(ctx, unlockBlock, currentHeader, unlockPrimeTerminusCache)
 				if err != nil {
 					return nil, err
 				}
-				if primeTerminusNumber >= params.SingularityForkBlock {
+				if (primeTerminusNumber >= params.SingularityForkBlock && forfeitureAddresses[account.Address.Bytes20()]) ||
+					(primeTerminusNumber >= params.FounderForfeitureForkBlock && founderForfeitureAddresses[account.Address.Bytes20()]) {
 					continue
 				}
 			}

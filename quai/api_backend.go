@@ -804,6 +804,10 @@ func (b *QuaiAPIBackend) ForfeitureAddresses() map[common.AddressBytes]bool {
 	return b.quai.config.ForfeitureAddresses
 }
 
+func (b *QuaiAPIBackend) FounderForfeitureAddresses() map[common.AddressBytes]bool {
+	return b.quai.config.FounderForfeitureAddresses
+}
+
 func (b *QuaiAPIBackend) GetBlockByHash(hash common.Hash) *types.WorkObject {
 	return b.quai.core.GetBlockByHash(hash)
 }

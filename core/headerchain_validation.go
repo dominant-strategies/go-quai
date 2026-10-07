@@ -985,7 +985,7 @@ func (hc *HeaderChain) Finalize(batch ethdb.Batch, header *types.WorkObject, sta
 	nodeCtx := hc.NodeLocation().Context()
 
 	if nodeLocation.Equal(common.Location{0, 0}) {
-		err := state.AddLockedBalances(header, hc.powConfig.GenAllocs, hc.powConfig.ForfeitureAddresses, hc.logger)
+		err := state.AddLockedBalances(header, hc.powConfig.GenAllocs, hc.powConfig.ForfeitureAddresses, hc.powConfig.FounderForfeitureAddresses, hc.logger)
 		if err != nil {
 			log.Global.WithFields(log.Fields{
 				"err":      err,
