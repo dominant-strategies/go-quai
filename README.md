@@ -34,6 +34,18 @@ For the full list of available options and their default values, consult the hel
 
 All configuration options may be supplied in a config file too, located in the directory specified by `--global.config-dir`. Note specified on the command-line will override options specified in the config file.
 
+### Snapshot-based startup sync
+
+Mainnet and Orchard nodes can opt into automatic snapshot restoration:
+
+```shell
+./build/bin/go-quai start --node.snapshot-sync
+```
+
+Before node services start, go-quai compares the local Cyprus-1 height with the official zone RPC. If the local database is more than three weeks behind, it downloads the official snapshot, resumes interrupted downloads, validates the staged zone database, and atomically replaces the existing data directory. Snapshot syncing trusts the official snapshot contents; syncing from genesis is required for independent verification.
+
+Download state is stored beside the configured data directory in `<data-dir>.snapshot-sync`. See [Snapshot Startup Sync](doc/snapshot-sync.md) for recovery behavior, logs, disk requirements, and snapshot-server recommendations.
+
 ### Running tests
 To run the included unit tests, run the following command:
 ```

@@ -70,6 +70,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	startupCtx, stopStartupSignals := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	if viper.GetBool(utils.SnapshotSyncFlag.Name) {
+		if err := utils.PrepareSnapshotSync(startupCtx); err != nil {
+			if startupCtx.Err() != nil {
+				log.Global.Warn("Snapshot sync interrupted; download progress was saved for the next startup")
+				stopStartupSignals()
+				return nil
+			}
+			log.Global.WithField("error", err).Error("Snapshot sync failed; continuing with the existing database")
+		}
+	}
+	stopStartupSignals()
 
 	if viper.GetBool(utils.PprofFlag.Name) {
 		EnablePprof()
