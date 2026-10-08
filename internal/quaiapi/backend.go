@@ -26,6 +26,7 @@ import (
 	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core"
 	"github.com/dominant-strategies/go-quai/core/bloombits"
+	"github.com/dominant-strategies/go-quai/core/nipopow"
 	"github.com/dominant-strategies/go-quai/core/state"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/core/vm"
@@ -139,6 +140,7 @@ type Backend interface {
 	ForfeitureAddresses() map[common.AddressBytes]bool
 	GetTerminiByHash(hash common.Hash) *types.Termini
 	GetHeaderByHash(hash common.Hash) *types.WorkObject
+	GetNiPoPoWProof(ctx context.Context, anchor common.Hash, tip common.Hash, m uint64) (*nipopow.Proof, error)
 	IsGenesisHash(hash common.Hash) bool
 	GetQuaiHeaderForDonorHash(donorHash common.Hash) *types.WorkObjectHeader
 	GetBlockForWorkShareHash(workshareHash common.Hash) *types.WorkObject
