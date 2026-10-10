@@ -1,4 +1,6 @@
 build/bin/
+build/mobile/
+**/xcuserdata/
 nodelogs/
 traces/
 /data/
@@ -11,6 +13,8 @@ traces/
 **/testdata/
 *.cov
 chain-visualizer/node_modules*
-
+mobile/ios-test/*
+mobile/build/*
+mobile/mobile/*
 # Binary executables
 /go-quai

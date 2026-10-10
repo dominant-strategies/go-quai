@@ -404,6 +404,7 @@ func (a AddressBytes) IsInQuaiLedgerScope() bool {
 }
 
 func (a AddressBytes) IsInQiLedgerScope() bool {
+	// The first bit of the second byte is set if the address is in the Qi ledger
 	return a[1] > 127
 }
 

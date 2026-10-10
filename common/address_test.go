@@ -6,6 +6,31 @@ import (
 	"testing"
 )
 
+func TestIsInQuaiLedgerScope(t *testing.T) {
+	address := HexToAddress("0x8ECc962Ba5481F7B42f2BAaBD55afAB6a27Fc197", Location{0, 0})
+	_, err := address.InternalAndQuaiAddress()
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	tests := []struct {
+		name     string
+		address  Address
+		expected bool
+	}{
+		{name: "Quai address", address: HexToAddress("0x8ECc962Ba5481F7B42f2BAaBD55afAB6a27Fc197", Location{0, 0}), expected: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.address.InternalAndQuaiAddress()
+			if err != nil {
+				t.Errorf("Expected no error, got %v", err)
+			}
+			if result.IsInQuaiLedgerScope() != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, result.IsInQuaiLedgerScope())
+			}
+		})
+	}
+}
 func TestInternalAddress(t *testing.T) {
 	// Test cases
 	tests := []struct {
