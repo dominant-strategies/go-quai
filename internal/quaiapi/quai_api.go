@@ -63,6 +63,17 @@ type PublicQuaiAPI struct {
 	b Backend
 }
 
+type PeerInfoPeer struct {
+	PeerID     string   `json:"peerID"`
+	Multiaddrs []string `json:"multiaddrs"`
+}
+
+type PeerInfoResult struct {
+	PeerCount hexutil.Uint64 `json:"peerCount"`
+	Self      []string       `json:"self,omitempty"`
+	Peers     []PeerInfoPeer `json:"peers,omitempty"`
+}
+
 // NewPublicQuaiAPI creates a new Quai protocol API.
 func NewPublicQuaiAPI(b Backend) *PublicQuaiAPI {
 	return &PublicQuaiAPI{b}
@@ -86,6 +97,16 @@ func (s *PublicQuaiAPI) ClientVersion() string {
 		gitCommit = gitCommit[:8]
 	}
 	return "go-quai/" + params.Version.Full() + "-" + gitCommit
+}
+
+// PeerInfo returns libp2p connectivity information.
+//
+// RPC: `quai_peerInfo`
+func (s *PublicQuaiAPI) PeerInfo(ctx context.Context) (*PeerInfoResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.b.PeerInfo()
 }
 
 // PublicBlockChainQuaiAPI provides an API to access the Quai blockchain.

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
@@ -176,6 +177,11 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		return nil, err
 	}
 
+	staticPeers, err := LoadStaticPeers()
+	if err != nil {
+		return nil, err
+	}
+
 	peerDBs, err := loadPeerDBs()
 	if err != nil {
 		return nil, err
@@ -240,10 +246,24 @@ func NewManager(ctx context.Context, low int, high int, datastore datastore.Data
 		}
 	}()
 
-	protectedPeerSet := make(map[peer.ID]struct{}, len(protectedPeers))
+	protectedPeerSet := make(map[peer.ID]struct{}, len(protectedPeers)+len(staticPeers))
 	for _, info := range protectedPeers {
 		protectedPeerSet[info.ID] = struct{}{}
 		mgr.Protect(info.ID, "non_penalized_peer")
+	}
+
+	// Static peers are explicit, operator-chosen dial targets, so give them the
+	// same treatment as non-penalized peers. Without this a single malformed
+	// response would ban them, and the conn gater persists blocks to the
+	// datastore, so the static peer connector would retry a gated dial forever
+	// -- across restarts. Protecting here (rather than after a successful dial)
+	// also covers static peers that connect to us inbound.
+	for _, info := range staticPeers {
+		if _, ok := protectedPeerSet[info.ID]; ok {
+			continue
+		}
+		protectedPeerSet[info.ID] = struct{}{}
+		mgr.Protect(info.ID, "static_peer")
 	}
 
 	return &BasicPeerManager{
@@ -321,28 +341,48 @@ func loadBootPeers() ([]peer.AddrInfo, error) {
 		return nil, nil
 	}
 
-	return loadConfiguredPeers(utils.BootPeersFlag.Name)
+	return LoadConfiguredPeers(utils.BootPeersFlag.Name)
 }
 
 func loadProtectedPeers() ([]peer.AddrInfo, error) {
-	return loadConfiguredPeers(utils.NonPenalizedPeersFlag.Name)
+	return LoadConfiguredPeers(utils.NonPenalizedPeersFlag.Name)
 }
 
-func loadConfiguredPeers(flagName string) ([]peer.AddrInfo, error) {
+// LoadStaticPeers returns the operator-configured static peers. It is exported so
+// the p2p node and the peer manager resolve static peers from a single parser;
+// if the two disagreed, a peer could be dialed as static without being protected.
+func LoadStaticPeers() ([]peer.AddrInfo, error) {
+	return LoadConfiguredPeers(utils.StaticPeersFlag.Name)
+}
+
+// LoadConfiguredPeers parses a peer-list flag into AddrInfos.
+//
+// Both commas and whitespace are accepted as separators. This matters because the
+// two config paths split differently before we ever see the value: the CLI binds
+// through pflag's StringSlice (comma separated) while env vars go through viper's
+// cast.ToStringSlice (whitespace separated). Splitting on both here means either
+// syntax works from either source.
+func LoadConfiguredPeers(flagName string) ([]peer.AddrInfo, error) {
 	var peers []peer.AddrInfo
-	for _, p := range viper.GetStringSlice(flagName) {
-		addr, err := multiaddr.NewMultiaddr(p)
-		if err != nil {
-			return nil, err
+	for _, entry := range viper.GetStringSlice(flagName) {
+		for _, p := range strings.FieldsFunc(entry, isPeerListSeparator) {
+			addr, err := multiaddr.NewMultiaddr(p)
+			if err != nil {
+				return nil, err
+			}
+			info, err := peer.AddrInfoFromP2pAddr(addr)
+			if err != nil {
+				return nil, err
+			}
+			peers = append(peers, *info)
 		}
-		info, err := peer.AddrInfoFromP2pAddr(addr)
-		if err != nil {
-			return nil, err
-		}
-		peers = append(peers, *info)
 	}
 
 	return peers, nil
+}
+
+func isPeerListSeparator(r rune) bool {
+	return r == ',' || unicode.IsSpace(r)
 }
 
 func queryAllPeers(peerDBs map[string][]*peerdb.PeerDB, quality PeerQuality, peerCount int) ([]peer.AddrInfo, error) {
@@ -754,6 +794,10 @@ func (pm *BasicPeerManager) SetHost(host host.Host) {
 
 func (pm *BasicPeerManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
 	return pm.streamManager.GetStream(peerID)
+}
+
+func (pm *BasicPeerManager) OpenStream(peerID p2p.PeerID) error {
+	return pm.streamManager.OpenStream(peerID)
 }
 
 func (pm *BasicPeerManager) CloseStream(peerID p2p.PeerID) error {

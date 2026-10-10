@@ -42,9 +42,22 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 		"peerId": peerID,
 		"topic":  topic,
 	}).Trace("Requesting the data from peer")
+	// Ensure a stream exists before attempting the request.
+	//
+	// This is important because GetStream is a cache lookup. Without an explicit
+	// open, the old behavior could drop a request on the floor (GetStream returns
+	// ErrStreamNotFound and stream creation happens asynchronously elsewhere).
+	if err := p.peerManager.OpenStream(peerID); err != nil {
+		return nil, err
+	}
 	stream, err := p.GetStream(peerID)
 	if err != nil {
 		return nil, err
+	}
+
+	// At this point we have a stream.
+	if stream == nil {
+		return nil, errors.New("stream is unexpectedly nil after successful OpenStream")
 	}
 
 	// Get a new request ID
