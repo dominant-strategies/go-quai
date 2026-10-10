@@ -564,6 +564,12 @@ type closeTrackingDB struct {
 	n *Node
 }
 
+// UnwrapDatabase exposes the wrapped database for internal tooling that needs
+// access to the concrete backing implementation without bypassing Close().
+func (db *closeTrackingDB) UnwrapDatabase() ethdb.Database {
+	return db.Database
+}
+
 func (db *closeTrackingDB) Close() error {
 	db.n.lock.Lock()
 	delete(db.n.databases, db)

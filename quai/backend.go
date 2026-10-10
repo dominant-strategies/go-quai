@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -170,6 +171,36 @@ func New(stack *node.Node, p2p NetworkingAPI, config *quaiconfig.Config, nodeCtx
 		logger:            logger,
 		maxWsSubs:         maxWsSubs,
 		rpcVersion:        config.RpcVersion,
+	}
+
+	// Coordinated native Pebble snapshot capture. Only the three currently
+	// active chain contexts participate. Capture begins automatically once all
+	// three have registered with the coordinator.
+	if root := os.Getenv("GO_QUAI_SNAPSHOT_ROOT"); root != "" {
+		var snapshotContext string
+
+		switch {
+		case nodeCtx == common.PRIME_CTX:
+			snapshotContext = "prime"
+
+		case nodeCtx == common.REGION_CTX &&
+			config.NodeLocation.Region() == 0:
+			snapshotContext = "region-0"
+
+		case nodeCtx == common.ZONE_CTX &&
+			bytes.Equal(config.NodeLocation, common.Location{0, 0}):
+			snapshotContext = "zone-0-0"
+		}
+
+		if snapshotContext != "" {
+			rawdb.RegisterPebbleSnapshotDatabase(
+				root,
+				snapshotContext,
+				chainDb,
+				config.NodeLocation,
+				logger,
+			)
+		}
 	}
 
 	// Copy the chainConfig

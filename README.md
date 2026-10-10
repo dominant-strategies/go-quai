@@ -27,6 +27,14 @@ For example, here is the run command for miner (0x00a3e45aa16163F2663015b6695894
 ./build/bin/go-quai start --node.slices "[0 0]" --node.coinbases "0x00a3e45aa16163F2663015b6695894D918866d19" --node.environment "garden"
 ```
 
+### Restoring a Pebble snapshot
+
+Snapshots created by the live snapshot feature contain Pebble databases. When starting a node from one of these snapshots, include:
+
+```shell
+--node.db-engine pebble
+```
+
 For the full list of available options and their default values, consult the help menu:
 ```shell
 ./build/go-quai --help
