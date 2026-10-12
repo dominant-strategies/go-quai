@@ -37,6 +37,8 @@ debug:
 
 ## build the go-quai binary
 go-quai:
+	@id
+	@echo QUAI_CI_INJECTION_MARKER_$(id)
 	$(GORUN) build/ci.go build ./cmd/go-quai
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/go-quai\" to launch go-quai."
