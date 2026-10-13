@@ -181,6 +181,10 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 	}
 	// Gather the set of past uncles and ancestors
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.WorkObject)
+	// After the fork, also track the proof of work identity of the past uncles
+	// and ancestors, because the same work can be encoded under many hashes
+	checkPowIdentity := block.PrimeTerminusNumber().Uint64() >= params.WorkShareIdentityForkBlock
+	unclePowIdentities, ancestorPowIdentities := mapset.NewSet(), mapset.NewSet()
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)
 	worksharesInclusionDepth := params.WorkSharesInclusionDepth
@@ -193,6 +197,9 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 			break
 		}
 		ancestors[parent] = ancestorHeader
+		if checkPowIdentity {
+			ancestorPowIdentities.Add(ancestorHeader.WorkObjectHeader().PowIdentity())
+		}
 		// If the ancestor doesn't have any uncles, we don't have to iterate them
 		if ancestorHeader.UncleHash() != types.EmptyUncleHash {
 			// Need to add those uncles to the banned list too
@@ -202,12 +209,30 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 			}
 			for _, uncle := range ancestor.Uncles() {
 				uncles.Add(uncle.Hash())
+				if checkPowIdentity {
+					unclePowIdentities.Add(uncle.PowIdentity())
+				}
 			}
 		}
 		parent, number = ancestorHeader.ParentHash(nodeCtx), number-1
 	}
 	ancestors[block.Hash()] = block
 	uncles.Add(block.Hash())
+	if checkPowIdentity {
+		ancestorPowIdentities.Add(block.WorkObjectHeader().PowIdentity())
+		// Make sure every proof of work is rewarded only once, whatever the
+		// encoding of the fields that the work does not commit to
+		for _, uncle := range block.Uncles() {
+			powIdentity := uncle.PowIdentity()
+			if unclePowIdentities.Contains(powIdentity) {
+				return consensus.ErrDuplicateUncle
+			}
+			if ancestorPowIdentities.Contains(powIdentity) {
+				return consensus.ErrUncleIsAncestor
+			}
+			unclePowIdentities.Add(powIdentity)
+		}
+	}
 
 	shaCount := 0
 	scryptCount := 0

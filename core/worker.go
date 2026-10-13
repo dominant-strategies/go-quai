@@ -546,10 +546,10 @@ func (w *worker) asyncStateLoop() {
 				}()
 				for _, wo := range side.Blocks {
 					// Short circuit for duplicate side blocks
-					if exists := w.kawpowShares.Contains(wo.Hash()); exists {
+					if exists := w.kawpowShares.Contains(wo.WorkObjectHeader().PowIdentity()); exists {
 						continue
 					}
-					w.kawpowShares.Add(wo.Hash(), *wo.WorkObjectHeader())
+					w.kawpowShares.Add(wo.WorkObjectHeader().PowIdentity(), *wo.WorkObjectHeader())
 				}
 			}()
 		case <-w.exitCh:
@@ -983,13 +983,23 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	for _, ancestor := range w.hc.GetBlocksFromHash(env.wo.ParentHash(common.ZONE_CTX), workshareInclusionDepth) {
 		for _, uncle := range ancestor.Uncles() {
 			env.family.Add(uncle.Hash())
+			env.family.Add(uncle.PowIdentity())
 		}
 		env.family.Add(ancestor.Hash())
+		env.family.Add(ancestor.WorkObjectHeader().PowIdentity())
 		env.ancestors.Add(ancestor.Hash())
 	}
 
 	if _, exist := env.uncles[hash]; exist {
 		return errors.New("uncle not unique")
+	}
+	// The same proof of work can be encoded under different hashes, so also
+	// compare the work itself against the uncles already in this block
+	powIdentity := uncle.PowIdentity()
+	for _, included := range env.uncles {
+		if included.PowIdentity() == powIdentity {
+			return errors.New("uncle work not unique")
+		}
 	}
 
 	_, err := w.hc.WorkShareDistance(env.wo, uncle)
@@ -1007,11 +1017,11 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 
 			switch powid {
 			case types.Progpow, types.Kawpow:
-				w.kawpowShares.Remove(uncle.Hash())
+				w.kawpowShares.Remove(powIdentity)
 			case types.SHA_BCH, types.SHA_BTC:
-				w.shaShares.Remove(uncle.Hash())
+				w.shaShares.Remove(powIdentity)
 			case types.Scrypt:
-				w.scryptShares.Remove(uncle.Hash())
+				w.scryptShares.Remove(powIdentity)
 			}
 		}
 
@@ -1028,7 +1038,7 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	if !env.ancestors.Contains(uncle.ParentHash()) {
 		return errors.New("uncle's parent unknown")
 	}
-	if env.family.Contains(hash) {
+	if env.family.Contains(hash) || env.family.Contains(powIdentity) {
 		return errors.New("uncle already included")
 	}
 	env.uncles[hash] = uncle
@@ -2660,14 +2670,14 @@ func (w *worker) PendingWorkShares() []*types.WorkObjectHeader {
 	// that they can be filtered out from the pending workshares list
 	worksharesIncluded := make(map[common.Hash]bool)
 	for _, ws := range currentHeader.Uncles() {
-		worksharesIncluded[ws.Hash()] = true
+		worksharesIncluded[ws.PowIdentity()] = true
 	}
 	if currentHeader.NumberU64(common.ZONE_CTX) > uint64(params.NewWorkSharesInclusionDepth) {
 		for _, ancestor := range w.hc.GetBlocksFromHash(currentHeader.ParentHash(common.ZONE_CTX), params.NewWorkSharesInclusionDepth) {
 			for _, uncle := range ancestor.Uncles() {
-				worksharesIncluded[uncle.Hash()] = true
+				worksharesIncluded[uncle.PowIdentity()] = true
 			}
-			worksharesIncluded[ancestor.Hash()] = true
+			worksharesIncluded[ancestor.WorkObjectHeader().PowIdentity()] = true
 		}
 	}
 
@@ -2682,7 +2692,7 @@ func (w *worker) PendingWorkShares() []*types.WorkObjectHeader {
 			if workshare.NumberU64()+uint64(params.NewWorkSharesInclusionDepth) < currentNumber {
 				continue
 			}
-			if worksharesIncluded[workshare.Hash()] {
+			if worksharesIncluded[workshare.PowIdentity()] {
 				continue
 			}
 			workshareCopy := workshare
@@ -2758,12 +2768,15 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 		return errors.New("work share received from peer is not valid")
 	}
 
+	// Key the share caches by the proof of work, so that re-encoded copies of
+	// one share cannot fill the cache and push out other shares
+	powIdentity := workShare.PowIdentity()
 	if workShare.AuxPow() == nil || workShare.AuxPow().PowID() == types.Kawpow {
-		w.kawpowShares.ContainsOrAdd(workShare.Hash(), *workShare)
+		w.kawpowShares.ContainsOrAdd(powIdentity, *workShare)
 	} else if workShare.AuxPow().PowID() == types.SHA_BTC || workShare.AuxPow().PowID() == types.SHA_BCH {
-		w.shaShares.ContainsOrAdd(workShare.Hash(), *workShare)
+		w.shaShares.ContainsOrAdd(powIdentity, *workShare)
 	} else if workShare.AuxPow().PowID() == types.Scrypt {
-		w.scryptShares.ContainsOrAdd(workShare.Hash(), *workShare)
+		w.scryptShares.ContainsOrAdd(powIdentity, *workShare)
 	}
 
 	if w.hc.NodeCtx() == common.ZONE_CTX && w.hc.config.TelemetryEnabled {

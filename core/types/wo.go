@@ -1479,6 +1479,23 @@ func (wh *WorkObjectHeader) WoCustomPowHash() (hash common.Hash) {
 	return hash
 }
 
+// PowIdentity returns a key that identifies the proof of work carried by the
+// header. After the KawPow activation, Hash() also covers AuxPow fields that
+// the donor work does not commit to (Signature, AuxPow2, PowID), so two headers
+// that carry the same work can have different hashes. The donor header commits
+// to the coinbase, and the coinbase commits to the SealHash, so the donor
+// header bytes identify the work and the Quai template together.
+func (wh *WorkObjectHeader) PowIdentity() common.Hash {
+	if !wh.KawpowActivationHappened() || wh.AuxPow() == nil || wh.AuxPow().Header() == nil {
+		return wh.Hash()
+	}
+	headerBytes := wh.AuxPow().Header().Bytes()
+	if len(headerBytes) == 0 {
+		return wh.Hash()
+	}
+	return common.Hash(blake3.Sum256(headerBytes))
+}
+
 func (wh *WorkObjectHeader) SealHash() (hash common.Hash) {
 	protoSealData := wh.SealEncode()
 	primaryCoinbase := wh.PrimaryCoinbase().Bytes()

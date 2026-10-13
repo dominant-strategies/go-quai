@@ -1700,6 +1700,11 @@ func ValidateQiTxOutputsAndSignature(tx *types.Transaction, chain ChainContext, 
 		if txOutIdx > types.MaxOutputIndex {
 			return nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex)
 		}
+		// Only accept 20 byte output addresses into the pool. Other lengths are
+		// padded or cropped differently by the address helpers
+		if len(txOut.Address) != common.AddressLength {
+			return nil, fmt.Errorf("tx [%v] output %d has address length %d, want %d", tx.Hash().Hex(), txOutIdx, len(txOut.Address), common.AddressLength)
+		}
 		if txOut.Lock != nil && txOut.Lock.Sign() != 0 {
 			return nil, errors.New("QiTx output has non-zero lock")
 		}
@@ -1975,6 +1980,11 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		// It would be impossible for a tx to have this many outputs based on block gas limit, but cap it here anyways
 		if txOutIdx > types.MaxOutputIndex {
 			return nil, nil, nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex), nil
+		}
+		// A short output address panics the [20]byte conversion in the Qi gas
+		// calculation, so a block with one could never be processed
+		if len(txOut.Address) < common.AddressLength {
+			return nil, nil, nil, fmt.Errorf("tx [%v] output %d has address length %d, want %d", tx.Hash().Hex(), txOutIdx, len(txOut.Address), common.AddressLength), nil
 		}
 
 		if txOut.Denomination > types.MaxDenomination {

@@ -135,6 +135,11 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 	if wo.WorkObjectHeader() == nil {
 		return fmt.Errorf("wo work object header is nil")
 	}
+	// The work object hash does not cover the body header, so the body header
+	// must be bound to the header hash before any of its fields are used
+	if wo.HeaderHash() != wo.Header().Hash() {
+		return ErrHeaderHashMismatch
+	}
 	if err := v.hc.CheckPowIdValidity(wo.WorkObjectHeader()); err != nil {
 		return err
 	}
@@ -268,6 +273,11 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 	}
 	if wo.WorkObjectHeader() == nil {
 		return fmt.Errorf("wo work object header is nil")
+	}
+	// The work object hash does not cover the body header, so the body header
+	// must be bound to the header hash before any of its fields are used
+	if wo.HeaderHash() != wo.Header().Hash() {
+		return ErrHeaderHashMismatch
 	}
 	if err := v.hc.CheckPowIdValidity(wo.WorkObjectHeader()); err != nil {
 		return err

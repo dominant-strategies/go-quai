@@ -47,6 +47,10 @@ var (
 	// ErrDomClientNotUp is returned when block is trying to be appended when domClient is not up.
 	ErrDomClientNotUp = errors.New("dom client is not online")
 
+	// ErrHeaderHashMismatch is returned when the body header of a work object
+	// does not match the header hash committed in its work object header.
+	ErrHeaderHashMismatch = errors.New("body header does not match the work object header hash")
+
 	// ErrBadSubManifest is returned when a block's subordinate manifest does not match the subordinate manifest hash
 	ErrBadSubManifest = errors.New("subordinate manifest is incorrect")
 
