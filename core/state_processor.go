@@ -924,12 +924,27 @@ func (p *StateProcessor) Process(block *types.WorkObject, batch ethdb.Batch) (ty
 					allLogs = append(allLogs, receipt.Logs...)
 				} else if !types.IsCoinBaseTx(tx) && !etx.ETXSender().Location().Equal(*etx.To().Location()) && etx.To().IsInQiLedgerScope() { // Regular Qi ETX
 					denomination := uint8(etx.Value().Uint64())
+					invalidDenomination := false
 					if block.PrimeTerminusNumber().Uint64() >= params.SecurityHardeningForkBlock {
 						var err error
 						denomination, err = regularQiETXDenomination(etx.Value())
 						if err != nil {
+							if block.PrimeTerminusNumber().Uint64() < params.ConsensusFixForkBlock {
+								return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
+							}
+							invalidDenomination = true
+						}
+					}
+					if invalidDenomination {
+						// Consume a legacy ETX that cannot create a valid Qi UTXO.
+						if err := gp.SubGas(params.CallValueTransferGas); err != nil {
 							return nil, nil, nil, nil, 0, 0, 0, nil, nil, err
 						}
+						receipts = append(receipts, &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusFailed, GasUsed: params.CallValueTransferGas, TxHash: tx.Hash()})
+						*usedGas += params.CallValueTransferGas
+						totalEtxGas += params.CallValueTransferGas
+						timeQuaiToQi += time.Since(startTimeEtx)
+						continue
 					}
 					utxo := types.NewUtxoEntry(types.NewTxOut(denomination, etx.To().Bytes(), big.NewInt(0)))
 					// There are no more checks to be made as the ETX is worked so add it to the set

@@ -1503,16 +1503,27 @@ func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, t
 			env.receipts = append(env.receipts, receipt)
 			return receipt.Logs, true, nil
 		} else {
+			invalidDenomination := false
+			if env.wo.PrimeTerminusNumber().Uint64() >= params.ConsensusFixForkBlock {
+				_, err := regularQiETXDenomination(tx.Value())
+				invalidDenomination = err != nil
+			}
 			// This Qi ETX should cost more gas
 			if err := env.gasPool.SubGas(params.CallValueTransferGas); err != nil {
 				return nil, false, err
 			}
-			utxoHash := types.UTXOHash(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), common.Big0)))
-			env.utxosCreate = append(env.utxosCreate, utxoHash)
+			if !invalidDenomination {
+				utxoHash := types.UTXOHash(tx.OriginatingTxHash(), tx.ETXIndex(), types.NewUtxoEntry(types.NewTxOut(uint8(tx.Value().Uint64()), tx.To().Bytes(), common.Big0)))
+				env.utxosCreate = append(env.utxosCreate, utxoHash)
+			}
 			gasUsed += params.CallValueTransferGas
 
 			env.wo.Header().SetGasUsed(gasUsed)
-			receipt := &types.Receipt{Type: tx.Type(), Status: types.ReceiptStatusSuccessful, GasUsed: params.CallValueTransferGas, TxHash: tx.Hash()}
+			status := types.ReceiptStatusSuccessful
+			if invalidDenomination {
+				status = types.ReceiptStatusFailed
+			}
+			receipt := &types.Receipt{Type: tx.Type(), Status: status, GasUsed: params.CallValueTransferGas, TxHash: tx.Hash()}
 			env.receipts = append(env.receipts, receipt)
 			env.txs = append(env.txs, tx)
 			env.gasUsedAfterTransaction = append(env.gasUsedAfterTransaction, gasUsed)
