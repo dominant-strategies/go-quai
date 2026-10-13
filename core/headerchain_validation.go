@@ -31,6 +31,74 @@ var (
 	allowedFutureBlockTimeSeconds = int64(15) // Max seconds from current time allowed for blocks, before they're considered future blocks
 )
 
+// verifyWorkObjectBinding checks the commitments without requiring a parent.
+// After KawPow activation Hash covers AuxPow, so matching HeaderHash alone
+// does not bind the body to the donor work.
+func (hc *HeaderChain) verifyWorkObjectBinding(wo *types.WorkObject) error {
+	if wo == nil || wo.WorkObjectHeader() == nil || wo.Header() == nil {
+		return errors.New("work object is missing a header or body header")
+	}
+	if err := hc.CheckPowIdValidity(wo.WorkObjectHeader()); err != nil {
+		return err
+	}
+	if wo.HeaderHash() != wo.Header().Hash() {
+		return ErrHeaderHashMismatch
+	}
+	return verifyAuxPowBinding(wo.WorkObjectHeader())
+}
+
+// verifyAuxPowBinding binds the Quai seal to the coinbase and the coinbase to
+// the donor header. Signature, timestamp and PoW checks remain separate.
+func verifyAuxPowBinding(header *types.WorkObjectHeader) error {
+	auxPow := header.AuxPow()
+	if auxPow == nil || !header.KawpowActivationHappened() {
+		return nil
+	}
+	if auxPow.Header() == nil {
+		return errors.New("auxpow donor header is nil")
+	}
+	scriptSig := types.ExtractScriptSigFromCoinbaseTx(auxPow.Transaction())
+	coinbaseSealHash, err := types.ExtractSealHashFromCoinbase(scriptSig)
+	if err != nil {
+		return fmt.Errorf("coinbase seal hash not found in the auxpow: %v", err)
+	}
+	switch auxPow.PowID() {
+	case types.Kawpow, types.SHA_BTC, types.SHA_BCH:
+		if header.SealHash() != coinbaseSealHash {
+			return fmt.Errorf("coinbase seal hash does not match header seal hash, expected %v, got %v", header.SealHash(), coinbaseSealHash)
+		}
+	case types.Scrypt:
+		if len(auxPow.AuxPow2()) != common.HashLength {
+			return errors.New("scrypt auxpow2 must be 32 bytes")
+		}
+		dogeHash := common.Hash(auxPow.AuxPow2())
+		if (dogeHash == common.Hash{}) {
+			return errors.New("auxpow2 is empty for scrypt powid")
+		}
+		auxMerkleRoot := types.CreateAuxMerkleRoot(dogeHash, header.SealHash())
+		if auxMerkleRoot != coinbaseSealHash {
+			return fmt.Errorf("coinbase seal hash does not match header aux merkle root, expected %v, got %v", auxMerkleRoot, coinbaseSealHash)
+		}
+		merkleSize, merkleNonce, err := types.ExtractMerkleSizeAndNonceFromCoinbase(scriptSig)
+		if err != nil {
+			return err
+		}
+		if merkleSize != params.MerkleSize {
+			return fmt.Errorf("invalid merkle size: have %v, want %v", merkleSize, params.MerkleSize)
+		}
+		if merkleNonce != params.MerkleNonce {
+			return fmt.Errorf("invalid merkle nonce: have %v, want %v", merkleNonce, params.MerkleNonce)
+		}
+	default:
+		return fmt.Errorf("invalid auxpow powid %v", auxPow.PowID())
+	}
+	expectedMerkleRoot := types.CalculateMerkleRoot(auxPow.PowID(), auxPow.Transaction(), auxPow.MerkleBranch())
+	if auxPow.Header().MerkleRoot() != expectedMerkleRoot {
+		return errors.New("invalid merkle root in auxpow")
+	}
+	return nil
+}
+
 // Author implements consensus.Engine, returning the header's coinbase as the
 // proof-of-work verified author of the block.
 func (hc *HeaderChain) Author(header *types.WorkObject) (common.Address, error) {
@@ -491,10 +559,8 @@ func (hc *HeaderChain) verifyHeader(header, parent *types.WorkObject, uncle bool
 	if uint64(len(header.Extra())) > params.MaximumExtraDataSize {
 		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra()), params.MaximumExtraDataSize)
 	}
-	// verify that the hash of the header in the Body matches the header hash specified in the work object header
-	expectedHeaderHash := header.Body().Header().Hash()
-	if header.HeaderHash() != expectedHeaderHash {
-		return fmt.Errorf("invalid header hash: have %v, want %v", header.HeaderHash(), expectedHeaderHash)
+	if err := hc.verifyWorkObjectBinding(header); err != nil {
+		return err
 	}
 	// Verify the header's timestamp
 	if !uncle {
@@ -651,11 +717,6 @@ func (hc *HeaderChain) verifyHeader(header, parent *types.WorkObject, uncle bool
 		}
 	}
 
-	// Validate the pow id is valid for this block
-	if err := hc.CheckPowIdValidity(header.WorkObjectHeader()); err != nil {
-		return err
-	}
-
 	if header.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock && header.AuxPow() != nil {
 		scryptSig := types.ExtractScriptSigFromCoinbaseTx(header.AuxPow().Transaction())
 
@@ -671,44 +732,6 @@ func (hc *HeaderChain) verifyHeader(header, parent *types.WorkObject, uncle bool
 		}
 		if header.Time() < uint64(signatureTime) {
 			return fmt.Errorf("quai block time %v is less than signature time %v", header.Time(), signatureTime)
-		}
-
-		coinbaseSealHash, err := types.ExtractSealHashFromCoinbase(scryptSig)
-		if err != nil {
-			return fmt.Errorf("coinbase seal hash not found in the auxpow: %v", err)
-		}
-
-		switch header.AuxPow().PowID() {
-		case types.Kawpow, types.SHA_BTC, types.SHA_BCH:
-			if header.SealHash() != coinbaseSealHash {
-				return fmt.Errorf("coinbase seal hash does not match uncle seal hash, expected %v, got %v", header.SealHash(), coinbaseSealHash)
-			}
-		case types.Scrypt:
-			// Since litecoin is merged mined with dogecoin, merkle root
-			// needs to be calculated
-			dogeHash := common.Hash(header.AuxPow().AuxPow2())
-			if (dogeHash == common.Hash{}) {
-				return fmt.Errorf("auxpow2 is empty for scrypt powid")
-			}
-			auxMerkleRoot := types.CreateAuxMerkleRoot(dogeHash, header.SealHash())
-			if auxMerkleRoot != coinbaseSealHash {
-				return fmt.Errorf("coinbase seal hash does not match uncle aux merkle root, expected %v, got %v", auxMerkleRoot, coinbaseSealHash)
-			}
-			merkleSize, merkleNonce, err := types.ExtractMerkleSizeAndNonceFromCoinbase(scryptSig)
-			if err != nil {
-				return err
-			}
-			if merkleSize != params.MerkleSize {
-				return fmt.Errorf("invalid merkle size: have %v, want %v", merkleSize, params.MerkleSize)
-			}
-			if merkleNonce != params.MerkleNonce {
-				return fmt.Errorf("invalid merkle nonce: have %v, want %v", merkleNonce, params.MerkleNonce)
-			}
-		}
-		// Verify the merkle root as well
-		expectedMerkleRoot := types.CalculateMerkleRoot(header.AuxPow().PowID(), header.AuxPow().Transaction(), header.AuxPow().MerkleBranch())
-		if header.AuxPow().Header().MerkleRoot() != expectedMerkleRoot {
-			return errors.New("invalid merkle root in auxpow")
 		}
 
 		if err := types.ValidatePrevOutPointIndexAndSequenceOfCoinbase(header.AuxPow().Transaction()); err != nil {
