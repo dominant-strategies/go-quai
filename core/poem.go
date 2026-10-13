@@ -14,30 +14,21 @@ import (
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
-	if header == nil {
-		return big.NewInt(0), -1, errors.New("cannot calculate order for nil work object")
-	}
-	if err := hc.CheckPowIdValidity(header.WorkObjectHeader()); err != nil {
+	// Validate the complete binding even on cache hits and genesis objects.
+	if err := hc.verifyWorkObjectBinding(header); err != nil {
 		return big.NewInt(0), -1, err
+	}
+	nodeCtx := hc.NodeLocation().Context()
+	if header.NumberU64(nodeCtx) == 0 {
+		if !hc.IsGenesisHash(header.Hash()) {
+			return big.NewInt(0), -1, consensus.ErrInvalidNumber
+		}
+		return big.NewInt(0), common.PRIME_CTX, nil
 	}
 	// check if the order for this block has already been computed
 	intrinsicEntropy, order, exists := hc.CheckInCalcOrderCache(header.Hash())
 	if exists {
 		return intrinsicEntropy, order, nil
-	}
-	nodeCtx := hc.NodeLocation().Context()
-	// Except for the slice [0,0] have to check if the header hash is the genesis hash
-	if header.NumberU64(nodeCtx) == 0 {
-		return big.NewInt(0), common.PRIME_CTX, nil
-	}
-	// The order is read from the body header, but the cache key does not cover
-	// the body header. Only compute and cache the order for a body header that
-	// matches the header hash, so a forged body cannot set the cached order.
-	if header.Header() == nil {
-		return big.NewInt(0), -1, errors.New("cannot calculate order without a body header")
-	}
-	if header.HeaderHash() != header.Header().Hash() {
-		return big.NewInt(0), -1, ErrHeaderHashMismatch
 	}
 	expansionNum := header.ExpansionNumber()
 

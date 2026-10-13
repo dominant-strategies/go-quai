@@ -1009,6 +1009,11 @@ func (c *Core) Stop() {
 
 // WriteBlock write the block to the bodydb database
 func (c *Core) WriteBlock(block *types.WorkObject) {
+	// Downloads may reach this path without gossip validation or CalcOrder.
+	if err := c.sl.hc.verifyWorkObjectBinding(block); err != nil {
+		c.logger.WithField("err", err).Warn("Rejecting block with invalid header binding")
+		return
+	}
 	nodeCtx := c.NodeCtx()
 
 	if block.Location() == nil {
