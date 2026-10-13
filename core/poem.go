@@ -30,6 +30,15 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 	if header.NumberU64(nodeCtx) == 0 {
 		return big.NewInt(0), common.PRIME_CTX, nil
 	}
+	// The order is read from the body header, but the cache key does not cover
+	// the body header. Only compute and cache the order for a body header that
+	// matches the header hash, so a forged body cannot set the cached order.
+	if header.Header() == nil {
+		return big.NewInt(0), -1, errors.New("cannot calculate order without a body header")
+	}
+	if header.HeaderHash() != header.Header().Hash() {
+		return big.NewInt(0), -1, ErrHeaderHashMismatch
+	}
 	expansionNum := header.ExpansionNumber()
 
 	// Verify the seal and get the powHash for the given header
