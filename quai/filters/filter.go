@@ -130,6 +130,19 @@ func newFilter(backend Backend, addresses []common.Address, topics [][]common.Ha
 	}
 }
 
+// resolveFilterRange returns the block range of a filter. A negative begin or
+// end is a block tag ("latest" or "pending") and resolves to the head.
+func resolveFilterRange(begin, end int64, head uint64) (uint64, uint64) {
+	resolvedBegin, resolvedEnd := head, head
+	if begin >= 0 {
+		resolvedBegin = uint64(begin)
+	}
+	if end >= 0 {
+		resolvedEnd = uint64(end)
+	}
+	return resolvedBegin, resolvedEnd
+}
+
 // Logs searches the blockchain for matching log entries by manually checking
 // each block within the specified range using 8 goroutines for parallel processing.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
@@ -152,16 +165,16 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 	head := header.NumberU64(common.ZONE_CTX)
 
-	if f.begin == -1 {
-		f.begin = int64(head)
+	// Resolve the "latest" and "pending" tags (negative numbers) to the head,
+	// so that the range limit below always applies
+	begin, end := resolveFilterRange(f.begin, f.end, head)
+	if begin > end {
+		return nil, nil
 	}
-	end := uint64(f.end)
-	if f.end == -1 {
-		end = head
-	}
-	if end > uint64(f.begin) && end-uint64(f.begin) > MaxFilterRange {
+	if end-begin > MaxFilterRange {
 		return nil, fmt.Errorf("filter range exceeds maximum limit of %d blocks", MaxFilterRange)
 	}
+	f.begin = int64(begin)
 
 	// Prepare to collect logs from goroutines
 	var (
@@ -171,10 +184,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		errChan  = make(chan error, 8)
 	)
 
-	totalBlocks := int64(end) - f.begin + 1
-	if totalBlocks <= 0 {
-		return nil, nil
-	}
+	totalBlocks := int64(end-begin) + 1
 
 	// Adjust the number of goroutines if total blocks are fewer than 8
 	numGoroutines := 8

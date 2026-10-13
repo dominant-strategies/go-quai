@@ -1659,6 +1659,9 @@ func (s *PublicBlockChainQuaiAPI) SetWorkShareP2PThreshold(ctx context.Context, 
 	if threshold < hexutil.Uint64(params.WorkSharesThresholdDiff) {
 		return errors.New("the subshare threshold is less than the workshare threshold")
 	}
+	if threshold > hexutil.Uint64(params.MaxWorkShareP2PThresholdDiff) {
+		return fmt.Errorf("the subshare threshold is more than the maximum of %d", params.MaxWorkShareP2PThresholdDiff)
+	}
 
 	s.b.SetWorkShareP2PThreshold(int(threshold))
 
