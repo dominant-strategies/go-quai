@@ -1416,6 +1416,26 @@ func (sl *Slice) ConstructLocalBlock(header *types.WorkObject) (*types.WorkObjec
 // constructLocalMinedBlock takes a header and construct the Block locally by getting the block
 // body from the workers pendingBlockBodyCache. This method is used when the miner sends in the
 // header.
+// minedBlockBodyFromWorkObject returns a copy of wo to use as the pending block
+// body, or nil if wo has no body that is bound to its header. The work commits
+// to HeaderHash, and the body header commits to the transactions, outbound
+// etxs and uncles, so a bound body is the body that the work was done for.
+func minedBlockBodyFromWorkObject(wo *types.WorkObject) *types.WorkObject {
+	if wo == nil || wo.Body() == nil || wo.Header() == nil || wo.WorkObjectHeader() == nil {
+		return nil
+	}
+	header := wo.Header()
+	if wo.HeaderHash() != header.Hash() {
+		return nil
+	}
+	if types.DeriveSha(wo.Transactions(), trie.NewStackTrie(nil)) != header.TxHash() ||
+		types.DeriveSha(wo.OutboundEtxs(), trie.NewStackTrie(nil)) != header.OutboundEtxHash() ||
+		types.CalcUncleHash(wo.Uncles()) != header.UncleHash() {
+		return nil
+	}
+	return types.CopyWorkObject(wo)
+}
+
 func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObject, error) {
 	nodeCtx := sl.NodeLocation().Context()
 	var pendingBlockBody *types.WorkObject
@@ -1430,6 +1450,12 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 		}
 
 		pendingBlockBody = sl.GetPendingBlockBody(powId, woHeaderCopy.SealHash())
+		if pendingBlockBody == nil {
+			// The pending body cache is bounded, so a busy stratum server can
+			// evict a body before its share is found. Use the body that came
+			// with the mined object if it is bound to the mined header.
+			pendingBlockBody = minedBlockBodyFromWorkObject(wo)
+		}
 		if pendingBlockBody == nil {
 			sl.logger.WithFields(log.Fields{"wo.Hash": wo.Hash(),
 				"wo.Header":       wo.HeaderHash(),

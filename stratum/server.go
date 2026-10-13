@@ -36,6 +36,13 @@ const (
 	seenSharesSize      = 1024  // Size of LRU cache for seen shares per session
 	jobsCacheSize       = 128   // Size of LRU cache for jobs per session
 	globalJobsCacheSize = 10240 // Size of server-wide job cache (backup for reconnecting miners)
+
+	// maxStratumMessageSize is the largest number of bytes a miner can send
+	// without completing a JSON message. Stratum messages are well under 1 KiB.
+	maxStratumMessageSize = 16 * 1024
+	// maxAuthorizationsPerSession is the number of mining.authorize requests a
+	// session can send. Each one builds a new job from the pending header.
+	maxAuthorizationsPerSession = 8
 )
 
 // StratumConfig holds configuration for the stratum server
@@ -1109,6 +1116,7 @@ type session struct {
 	dec        *json.Decoder
 	encMu      sync.Mutex // protects enc writes (broadcasts + responses can race)
 	authorized bool
+	authCount  int    // number of mining.authorize requests received
 	user       string // payout address
 	workerName string // worker name (from user.workerName format)
 	chain      string // sha256|scrypt
@@ -1212,7 +1220,8 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 	// Set a longer initial read deadline - will be extended on each message
 	// Use SetReadDeadline (not SetDeadline) to avoid overriding the 10s write deadline in sendJSON
 	_ = c.SetReadDeadline(time.Now().Add(livenessTimeout))
-	dec := json.NewDecoder(bufio.NewReader(c))
+	reader := &messageLimitReader{r: c, limit: maxStratumMessageSize}
+	dec := json.NewDecoder(bufio.NewReader(reader))
 	enc := json.NewEncoder(c)
 
 	seenShares, _ := lru.New[string, struct{}](seenSharesSize)
@@ -1269,6 +1278,8 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 			return
 		}
+		// A complete message was read, so start a new size budget
+		reader.reset()
 		// Extend read deadline on each message received
 		_ = c.SetReadDeadline(time.Now().Add(livenessTimeout))
 		switch req.Method {
@@ -1381,19 +1392,44 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				}
 			}
 		case "mining.authorize":
+			sess.authCount++
+			if sess.authCount > maxAuthorizationsPerSession {
+				s.logger.WithFields(log.Fields{"sid": sess.id, "user": sess.user}).Warn("too many mining.authorize requests, closing connection")
+				_ = sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "too many authorize requests"})
+				return
+			}
 			// Track old worker name to handle re-authorization
 			oldUser, oldWorkerName := sess.user, sess.workerName
 			wasAuthorized := sess.authorized
 
+			newUser, newWorkerName := sess.user, sess.workerName
 			if len(req.Params) >= 1 {
 				if u, ok := req.Params[0].(string); ok {
 					// Parse username format: address.workername
 					// Examples:
 					//   0x1234...          -> user=0x1234..., worker=default
 					//   0x1234...rig1      -> user=0x1234..., worker=rig1
-					sess.user, sess.workerName = parseUsername(u)
+					newUser, newWorkerName = parseUsername(u)
 				}
 			}
+			// Validate that the address is internal (belongs to this zone)
+			// before changing the session, so a rejected authorize keeps the
+			// previous payout address
+			address := common.HexToAddress(newUser, s.backend.NodeLocation())
+			if _, err := address.InternalAddress(); err != nil {
+				s.logger.WithFields(log.Fields{
+					"sid":   sess.id,
+					"user":  newUser,
+					"error": err,
+				}).Warn("miner address is not internal to this zone")
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "address is not internal to this zone"}); err != nil {
+					s.logger.WithFields(log.Fields{"error": err, "worker": newUser + "." + newWorkerName}).Error("failed to send mining.authorize rejection")
+					sess.conn.Close()
+					return
+				}
+				continue
+			}
+			sess.user, sess.workerName = newUser, newWorkerName
 
 			// If re-authorizing with different worker name, disconnect old worker first
 			if wasAuthorized && (oldUser != sess.user || oldWorkerName != sess.workerName) {
@@ -1453,21 +1489,6 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				defaultDiff, _ := getVarDiffDefaults(sess.chain)
 				sess.varDiff = defaultDiff
 				sess.varDiffShares = make([]varDiffShareRecord, 0, varDiffMaxShares)
-			}
-			// Validate that the address is internal (belongs to this zone)
-			address := common.HexToAddress(sess.user, s.backend.NodeLocation())
-			if _, err := address.InternalAddress(); err != nil {
-				s.logger.WithFields(log.Fields{
-					"sid":   sess.id,
-					"user":  sess.user,
-					"error": err,
-				}).Warn("miner address is not internal to this zone")
-				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "address is not internal to this zone"}); err != nil {
-					s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Error("failed to send mining.authorize rejection")
-					sess.conn.Close()
-					return
-				}
-				continue
 			}
 			// Algorithm is determined by which port the miner connected to (set in handleConn)
 			sess.authorized = true
@@ -1531,6 +1552,12 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// Note: Job updates are now handled by the central template polling loop
 			// started in Server.Start(), not per-session tickers
 		case "mining.submit":
+			if !sess.authorized {
+				if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: "unauthorized worker"}); err != nil {
+					s.logger.WithFields(log.Fields{"error": err, "sid": sess.id}).Debug("failed to send mining.submit unauthorized")
+				}
+				continue
+			}
 			// Kawpow uses different submit format: [worker, job_id, nonce, header_hash, mix_hash]
 			// sha256/scrypt uses: [worker, job_id, ex2, ntime, nonce, version_bits?]
 			if powIDFromChain(sess.chain) == types.Kawpow {
@@ -2859,3 +2886,30 @@ func parsePassword(password string) (*float64, time.Duration, bool, uint8, bool,
 
 	return difficulty, frequency, skipBlocks, lock, parentUpdate, nil
 }
+
+// errStratumMessageTooLarge is returned when a miner sends more than
+// maxStratumMessageSize bytes without completing a JSON message.
+var errStratumMessageTooLarge = errors.New("stratum message too large")
+
+// messageLimitReader limits the number of bytes that can be read between two
+// calls to reset. The connection reader calls reset after each complete
+// message, so one message cannot make the JSON decoder buffer without limit.
+type messageLimitReader struct {
+	r     io.Reader
+	limit int
+	n     int
+}
+
+func (l *messageLimitReader) Read(p []byte) (int, error) {
+	if l.n >= l.limit {
+		return 0, errStratumMessageTooLarge
+	}
+	if len(p) > l.limit-l.n {
+		p = p[:l.limit-l.n]
+	}
+	n, err := l.r.Read(p)
+	l.n += n
+	return n, err
+}
+
+func (l *messageLimitReader) reset() { l.n = 0 }
