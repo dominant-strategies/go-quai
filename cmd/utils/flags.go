@@ -1718,6 +1718,10 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 		if err != nil {
 			log.Global.WithField("err", err).Fatal("Unable to load forfeiture addresses")
 		}
+		cfg.FounderForfeitureAddresses, err = params.LoadForfeitureAddresses("params/founder_forfeiture_addresses.json")
+		if err != nil {
+			log.Global.WithField("err", err).Fatal("Unable to load founder forfeiture addresses")
+		}
 	}
 
 	cfg.Genesis.Config.Location = nodeLocation
