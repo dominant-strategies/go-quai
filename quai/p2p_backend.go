@@ -3,6 +3,7 @@ package quai
 import (
 	"context"
 	"math/big"
+	"sync"
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core"
@@ -21,6 +22,8 @@ var (
 	txPropagationMetrics = metrics_config.NewCounterVec("TxCount", "Transaction counter")
 	txTotalCounter       = txPropagationMetrics.WithLabelValues("total txs")
 	txCountersBySlice    = make(map[string]prometheus.Counter)
+	// txCountersBySliceMu guards txCountersBySlice. Many gossip workers update it.
+	txCountersBySliceMu sync.Mutex
 
 	workObjectMetrics = metrics_config.NewCounterVec("WorkObjectCounters", "Tracks block statistics")
 	// Block propagation metrics
@@ -150,16 +153,9 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 			backend.SendRemoteTxs(data.WorkObject.Transactions())
 
 			workShareIngressCounter.Inc()
-			sliceName := data.Location().Name()
 			txCount := float64(len(data.WorkObject.Transactions()))
 			txTotalCounter.Add(txCount)
-			if counter, exists := txCountersBySlice[sliceName]; exists {
-				counter.Add(txCount)
-			} else {
-				newCounter := txPropagationMetrics.WithLabelValues(sliceName + " txs")
-				newCounter.Add(txCount)
-				txCountersBySlice[sliceName] = newCounter
-			}
+			addSliceTxCount(data.Location().Name(), txCount)
 		}
 	case *types.AuxTemplate:
 		backend := *qbe.GetBackend(nodeLocation)
@@ -325,4 +321,17 @@ func (qbe *QuaiBackend) ProcessingState(location common.Location) bool {
 		return false
 	}
 	return backend.ProcessingState()
+}
+
+// addSliceTxCount adds txCount to the transaction counter of the slice. It is
+// safe to call from many goroutines.
+func addSliceTxCount(sliceName string, txCount float64) {
+	txCountersBySliceMu.Lock()
+	defer txCountersBySliceMu.Unlock()
+	counter, exists := txCountersBySlice[sliceName]
+	if !exists {
+		counter = txPropagationMetrics.WithLabelValues(sliceName + " txs")
+		txCountersBySlice[sliceName] = counter
+	}
+	counter.Add(txCount)
 }

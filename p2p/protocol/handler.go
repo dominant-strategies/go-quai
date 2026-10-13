@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -30,6 +31,13 @@ const (
 	rateFilterAlphaPct         = 10 // alpha (in percent) for rate tracker filter
 	requestRateLimitPeriod_ms  = 20 // 20ms avg delay between requests = 50 requests/sec
 	C_NumPrimeBlocksToDownload = 10
+
+	// maxQueuedBytesPerStream caps the bytes of messages waiting to be handled
+	// on one inbound stream. A message is up to MaxStreamMessageSize (3 MiB).
+	maxQueuedBytesPerStream = 16 << 20
+	// maxQueuedBytesTotal caps the bytes of messages waiting to be handled on
+	// all inbound streams together.
+	maxQueuedBytesTotal = 256 << 20
 )
 
 type rateTracker struct {
@@ -138,6 +146,42 @@ func isPeerVersionCompatible(theirVersion libp2pprotocol.ID, node QuaiP2PNode) b
 	return true
 }
 
+// inboundQueuedBytes counts the bytes waiting to be handled on all inbound streams.
+var inboundQueuedBytes atomic.Int64
+
+// streamQueueBudget limits the bytes of messages queued on one inbound stream
+// and on all inbound streams together.
+type streamQueueBudget struct {
+	stream      int64
+	streamLimit int64
+	total       *atomic.Int64
+	totalLimit  int64
+}
+
+func newStreamQueueBudget() *streamQueueBudget {
+	return &streamQueueBudget{streamLimit: maxQueuedBytesPerStream, total: &inboundQueuedBytes, totalLimit: maxQueuedBytesTotal}
+}
+
+// tryAcquire reserves n bytes. It returns false if the stream or the total
+// budget would be exceeded. Only the stream read loop calls tryAcquire.
+func (b *streamQueueBudget) tryAcquire(n int64) bool {
+	if atomic.LoadInt64(&b.stream)+n > b.streamLimit {
+		return false
+	}
+	if b.total.Add(n) > b.totalLimit {
+		b.total.Add(-n)
+		return false
+	}
+	atomic.AddInt64(&b.stream, n)
+	return true
+}
+
+// release returns n bytes that tryAcquire reserved.
+func (b *streamQueueBudget) release(n int64) {
+	atomic.AddInt64(&b.stream, -n)
+	b.total.Add(-n)
+}
+
 // QuaiProtocolHandler handles all the incoming requests and responds with corresponding data
 func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2PNode) {
 	defer func() {
@@ -161,6 +205,7 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 	// Create a channel for messages
 	msgChan := make(chan []byte, msgChanSize)
 	defer close(msgChan)
+	budget := newStreamQueueBudget()
 	full := 0
 	go func() {
 		defer func() {
@@ -171,16 +216,13 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 				}).Error("Go-Quai Panicked")
 			}
 		}()
-		for {
-			select {
-			case message, ok := <-msgChan:
-				if !ok {
-					return
-				}
+		// Drain the channel until it is closed, so that every queued message
+		// returns its bytes to the budget
+		for message := range msgChan {
+			if ctx.Err() == nil {
 				handleMessage(message, stream, node)
-			case <-ctx.Done():
-				return
 			}
+			budget.release(int64(len(message)))
 		}
 	}()
 
@@ -197,12 +239,22 @@ func QuaiProtocolHandler(ctx context.Context, stream network.Stream, node QuaiP2
 			return
 		}
 
+		// Drop the message if too many bytes are already waiting to be handled
+		if !budget.tryAcquire(int64(len(data))) {
+			if full%1000 == 0 {
+				log.Global.WithField("stream with peer", stream.Conn().RemotePeer()).Warnf("QuaiProtocolHandler queued bytes limit reached. Lost messages: %d", full)
+			}
+			full++
+			continue
+		}
 		// Send to worker goroutines
 		select {
 		case msgChan <- data:
 		case <-ctx.Done():
+			budget.release(int64(len(data)))
 			return
 		default:
+			budget.release(int64(len(data)))
 			if full%1000 == 0 {
 				log.Global.WithField("stream with peer", stream.Conn().RemotePeer()).Warnf("QuaiProtocolHandler message channel is full. Lost messages: %d", full)
 			}

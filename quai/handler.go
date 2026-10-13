@@ -3,6 +3,7 @@ package quai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"runtime/debug"
 	"sync"
@@ -29,6 +30,11 @@ const (
 	c_recentBlockReqTimeout = 1 * time.Minute
 	// c_primeBlockSyncDepth is how far back the prime block downloading will start
 	c_primeBlockSyncDepth = 2000
+	// c_primeSyncMaxDifficultyDrop is how many times lower than the current
+	// header difficulty a downloaded prime block difficulty can be. A peer can
+	// otherwise send prime blocks with a trivial difficulty that are cheap to
+	// mine and are written to the database before full validation.
+	c_primeSyncMaxDifficultyDrop = 16
 )
 
 var (
@@ -252,25 +258,9 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 	if blocks != nil {
 		// peer returns a slice of blocks from the requested number
 		workObjects := blocks.([]*types.WorkObjectBlockView)
-		if len(workObjects) != protocol.C_NumPrimeBlocksToDownload {
-			h.logger.Error("did not get expected number of workobjects in prime")
+		if err := validatePrimeSyncBlocks(h.core, new(big.Int).Add(number, big.NewInt(1)), workObjects); err != nil {
+			h.logger.WithField("err", err).Error("rejected downloaded prime blocks")
 			return nil
-		}
-		var parent *types.WorkObject
-		for i, wo := range workObjects {
-			if wo == nil {
-				h.logger.Error("one of the work objects is nil")
-				return nil
-			}
-			workObject := wo.WorkObject
-			// Check that all the prime blocks form a continous chain of blocks
-			if i != 0 {
-				if workObject.ParentHash(common.PRIME_CTX) != parent.Hash() {
-					h.logger.Error("downloaded non continous chain of prime blocks")
-					return nil
-				}
-			}
-			parent = workObject
 		}
 
 		// Write all the blocks are the sanity check into the database and
@@ -284,6 +274,60 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 				h.core.WriteBlock(wo.WorkObject)
 			}
 		}
+	}
+	return nil
+}
+
+// primeSyncChain is the part of the core that validatePrimeSyncBlocks uses.
+type primeSyncChain interface {
+	CurrentHeader() *types.WorkObject
+	SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject) error
+	CalcOrder(wo *types.WorkObject) (*big.Int, int, error)
+}
+
+// validatePrimeSyncBlocks checks the prime blocks that a peer returned for a
+// request by number, before they are written to the database. The checks run
+// from the cheapest to the most expensive.
+func validatePrimeSyncBlocks(chain primeSyncChain, firstNumber *big.Int, workObjects []*types.WorkObjectBlockView) error {
+	if len(workObjects) != protocol.C_NumPrimeBlocksToDownload {
+		return fmt.Errorf("got %d prime blocks, want %d", len(workObjects), protocol.C_NumPrimeBlocksToDownload)
+	}
+	currentHeader := chain.CurrentHeader()
+	if currentHeader == nil || currentHeader.Difficulty() == nil {
+		return errors.New("no current header to compare the difficulty with")
+	}
+	minDifficulty := new(big.Int).Div(currentHeader.Difficulty(), big.NewInt(c_primeSyncMaxDifficultyDrop))
+
+	var parent *types.WorkObject
+	for i, wo := range workObjects {
+		if wo == nil || wo.WorkObject == nil || wo.WorkObjectHeader() == nil || wo.Header() == nil {
+			return fmt.Errorf("prime block %d is incomplete", i)
+		}
+		workObject := wo.WorkObject
+		// The blocks must be the requested numbers, in order
+		wantNumber := new(big.Int).Add(firstNumber, big.NewInt(int64(i)))
+		if workObject.Number(common.PRIME_CTX).Cmp(wantNumber) != 0 {
+			return fmt.Errorf("prime block %d has number %v, want %v", i, workObject.Number(common.PRIME_CTX), wantNumber)
+		}
+		// Check that all the prime blocks form a continous chain of blocks
+		if parent != nil && workObject.ParentHash(common.PRIME_CTX) != parent.Hash() {
+			return errors.New("downloaded non continous chain of prime blocks")
+		}
+		if workObject.Difficulty() == nil || workObject.Difficulty().Cmp(minDifficulty) < 0 {
+			return fmt.Errorf("prime block %d difficulty %v is below the minimum %v", i, workObject.Difficulty(), minDifficulty)
+		}
+		if err := chain.SanityCheckWorkObjectBlockViewBody(workObject); err != nil {
+			return fmt.Errorf("prime block %d failed the sanity check: %w", i, err)
+		}
+		// CalcOrder verifies the seal, and the block must be a prime block
+		_, order, err := chain.CalcOrder(workObject)
+		if err != nil {
+			return fmt.Errorf("prime block %d order: %w", i, err)
+		}
+		if order != common.PRIME_CTX {
+			return fmt.Errorf("prime block %d has order %d, want prime", i, order)
+		}
+		parent = workObject
 	}
 	return nil
 }
