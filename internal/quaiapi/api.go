@@ -1208,10 +1208,22 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args Transac
 	return result, nil
 }
 
+const (
+	// accessListMaxIterations caps the number of executions used to build an
+	// access list. Each execution can only grow the list, and normal contracts
+	// converge in a few rounds. Code that reads GAS can change its access set
+	// on every round and would otherwise never converge.
+	accessListMaxIterations = 16
+	// accessListTimeout caps the total time spent building an access list.
+	accessListTimeout = 10 * time.Second
+)
+
 // AccessList creates an access list for the given transaction.
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
 func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+	ctx, cancel := context.WithTimeout(ctx, accessListTimeout)
+	defer cancel()
 	nodeLocation := b.NodeLocation()
 	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
@@ -1250,7 +1262,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if args.AccessList != nil {
 		prevTracer = vm.NewAccessListTracer(*args.AccessList, args.from(nodeLocation), to, precompiles)
 	}
-	for {
+	for i := 0; ; i++ {
+		if i >= accessListMaxIterations {
+			return nil, 0, nil, fmt.Errorf("access list did not converge after %d executions", accessListMaxIterations)
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, 0, nil, fmt.Errorf("access list creation stopped: %w", err)
+		}
 		// Retrieve the current access list to expand
 		accessList := prevTracer.AccessList(nodeLocation)
 		b.Logger().WithField("accessList", accessList).Debug("Creating access list")
@@ -1275,9 +1293,15 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
+		// Stop the EVM when the request ends or the timeout expires
+		stopCancel := context.AfterFunc(ctx, vmenv.Cancel)
 		res, err := core.ApplyMessage(vmenv, msg, new(types.GasPool).AddGas(msg.Gas()))
+		stopCancel()
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", msg, err)
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, 0, nil, fmt.Errorf("access list creation stopped: %w", err)
 		}
 		if tracer.Equal(prevTracer) {
 			return accessList, res.UsedGas, res.Err, nil

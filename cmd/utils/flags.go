@@ -1612,6 +1612,9 @@ func SetQuaiConfig(stack *node.Node, cfg *quaiconfig.Config, slicesRunning []com
 	if cfg.WorkShareP2PThreshold < params.WorkSharesThresholdDiff {
 		cfg.WorkShareP2PThreshold = params.WorkSharesThresholdDiff
 	}
+	if cfg.WorkShareP2PThreshold > params.MaxWorkShareP2PThresholdDiff {
+		cfg.WorkShareP2PThreshold = params.MaxWorkShareP2PThresholdDiff
+	}
 
 	minerPreference := viper.GetFloat64(MinerPreferenceFlag.Name)
 	if minerPreference < 0 || minerPreference > 1 {

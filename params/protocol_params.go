@@ -225,6 +225,10 @@ var (
 	// simulations can test different values; production nodes must agree on it.
 	FeeFeedbackMaxRewardMultipleBasisPoints uint64 = 40000
 
+	// MaxWorkShareP2PThresholdDiff is the largest number of bits lower than the
+	// target that the p2p layer accepts for sub shares
+	MaxWorkShareP2PThresholdDiff = 16
+
 	ConversionLockPeriod uint64 = 100
 	CoinbaseEpochBlocks  uint64 = 100
 
