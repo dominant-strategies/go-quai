@@ -14,21 +14,27 @@ import (
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
-	// Validate the complete binding even on cache hits and genesis objects.
-	if err := hc.verifyWorkObjectBinding(header); err != nil {
+	// Validate the complete binding before cache access after the shared fork.
+	if err := hc.verifyEarlyWorkObjectBinding(header); err != nil {
 		return big.NewInt(0), -1, err
 	}
+	postFork := header.PrimeTerminusNumber().Uint64() >= params.ConsensusFixForkBlock
+	// Before the fork, keep the historical order result for malformed objects,
+	// but never let one poison the cache across the fork boundary.
+	cacheable := postFork || hc.verifyWorkObjectBinding(header) == nil
 	nodeCtx := hc.NodeLocation().Context()
 	if header.NumberU64(nodeCtx) == 0 {
-		if !hc.IsGenesisHash(header.Hash()) {
+		if postFork && !hc.IsGenesisHash(header.Hash()) {
 			return big.NewInt(0), -1, consensus.ErrInvalidNumber
 		}
 		return big.NewInt(0), common.PRIME_CTX, nil
 	}
 	// check if the order for this block has already been computed
-	intrinsicEntropy, order, exists := hc.CheckInCalcOrderCache(header.Hash())
-	if exists {
-		return intrinsicEntropy, order, nil
+	if cacheable {
+		intrinsicEntropy, order, exists := hc.CheckInCalcOrderCache(header.Hash())
+		if exists {
+			return intrinsicEntropy, order, nil
+		}
 	}
 	expansionNum := header.ExpansionNumber()
 
@@ -40,7 +46,7 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 	}
 
 	// Get entropy reduction of this header
-	intrinsicEntropy = common.IntrinsicLogEntropy(powHash)
+	intrinsicEntropy := common.IntrinsicLogEntropy(powHash)
 	target := new(big.Int).Div(common.Big2e256, header.Difficulty())
 	zoneThresholdEntropy := common.IntrinsicLogEntropy(common.BytesToHash(target.Bytes()))
 
@@ -55,7 +61,9 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 
 	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
 	if intrinsicEntropy.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaEntropyPrime.Cmp(primeDeltaEntropyTarget) > 0 {
-		hc.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicEntropy)
+		if cacheable {
+			hc.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicEntropy)
+		}
 		return intrinsicEntropy, common.PRIME_CTX, nil
 	}
 
@@ -68,12 +76,16 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 
 	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
 	if intrinsicEntropy.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
-		hc.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicEntropy)
+		if cacheable {
+			hc.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicEntropy)
+		}
 		return intrinsicEntropy, common.REGION_CTX, nil
 	}
 
 	// Zone case
-	hc.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicEntropy)
+	if cacheable {
+		hc.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicEntropy)
+	}
 	return intrinsicEntropy, common.ZONE_CTX, nil
 }
 

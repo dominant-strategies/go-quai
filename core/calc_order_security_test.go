@@ -23,6 +23,11 @@ var (
 	calcOrderTestPowHash    = common.BigToHash(new(big.Int).Lsh(big.NewInt(1), 153))
 )
 
+func activateConsensusFixForkForTest(t *testing.T) {
+	t.Helper()
+	setForkForTest(t, &params.ConsensusFixForkBlock, 1)
+}
+
 // newCalcOrderTestBlock returns a zone block before the KawPow fork whose
 // work object header commits to the given body header.
 func newCalcOrderTestBlock(bodyHeader *types.Header) *types.WorkObject {
@@ -46,6 +51,7 @@ func forgedBodyHeader() *types.Header {
 // header. The work object hash does not cover the body header, so before the
 // fix the forged order was cached under the real block hash.
 func TestCalcOrderRejectsForgedBodyHeader(t *testing.T) {
+	activateConsensusFixForkForTest(t)
 	honest := newCalcOrderTestBlock(types.EmptyHeader())
 
 	hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
@@ -87,9 +93,31 @@ func TestCalcOrderRejectsForgedBodyHeader(t *testing.T) {
 	}
 }
 
+func TestCalcOrderSharedForkBoundaryDoesNotCarryPoisonedOrder(t *testing.T) {
+	setForkForTest(t, &params.ConsensusFixForkBlock, 2)
+	honest := newCalcOrderTestBlock(types.EmptyHeader())
+	forged := types.NewWorkObject(honest.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
+	forged.Body().SetHeader(forgedBodyHeader())
+	hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
+	if _, order, err := hc.CalcOrder(forged); err != nil || order != common.PRIME_CTX {
+		t.Fatalf("historical order changed: order=%d err=%v", order, err)
+	}
+	if _, _, cached := hc.CheckInCalcOrderCache(honest.Hash()); cached {
+		t.Fatal("pre-fork forged order survived in the cache")
+	}
+	setForkForTest(t, &params.ConsensusFixForkBlock, 1)
+	if _, _, err := hc.CalcOrder(forged); !errors.Is(err, ErrHeaderHashMismatch) {
+		t.Fatalf("post-fork forged body accepted: %v", err)
+	}
+	if _, order, err := hc.CalcOrder(honest); err != nil || order != common.REGION_CTX {
+		t.Fatalf("honest order changed after fork: order=%d err=%v", order, err)
+	}
+}
+
 // C2: the gossip sanity checks must reject a forged body header before the
 // block is cached, stored or relayed.
 func TestSanityCheckRejectsForgedBodyHeader(t *testing.T) {
+	activateConsensusFixForkForTest(t)
 	honest := newCalcOrderTestBlock(types.EmptyHeader())
 	forged := types.NewWorkObject(honest.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
 	forged.Body().SetHeader(forgedBodyHeader())
@@ -138,6 +166,7 @@ func forgeCalcOrderKawpowBody(honest *types.WorkObject, rewriteCoinbase bool) *t
 }
 
 func TestCalcOrderRejectsForgedAuxPowBinding(t *testing.T) {
+	activateConsensusFixForkForTest(t)
 	for _, rewriteCoinbase := range []bool{false, true} {
 		for _, warmCache := range []bool{false, true} {
 			name := fmt.Sprintf("rewrite_coinbase=%t/warm_cache=%t", rewriteCoinbase, warmCache)
@@ -176,7 +205,29 @@ func TestCalcOrderRejectsForgedAuxPowBinding(t *testing.T) {
 	}
 }
 
+func TestCalcOrderAuxPowSharedForkBoundary(t *testing.T) {
+	height := params.KawPowForkBlock + params.KawPowTransitionPeriod + 1
+	setForkForTest(t, &params.ConsensusFixForkBlock, height+1)
+	honest := newCalcOrderKawpowBlock()
+	forged := forgeCalcOrderKawpowBody(honest, false)
+	hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
+	if _, _, err := hc.CalcOrder(forged); err != nil {
+		t.Fatalf("historical early order check changed: %v", err)
+	}
+	if _, _, cached := hc.CheckInCalcOrderCache(forged.Hash()); cached {
+		t.Fatal("pre-fork forged AuxPow order survived in the cache")
+	}
+	setForkForTest(t, &params.ConsensusFixForkBlock, height)
+	if _, _, err := hc.CalcOrder(forged); err == nil || !strings.Contains(err.Error(), "seal hash") {
+		t.Fatalf("post-fork forged AuxPow binding accepted: %v", err)
+	}
+	if _, order, err := hc.CalcOrder(honest); err != nil || order != common.REGION_CTX {
+		t.Fatalf("honest order changed after fork: order=%d err=%v", order, err)
+	}
+}
+
 func TestSanityCheckRejectsForgedAuxPowBinding(t *testing.T) {
+	activateConsensusFixForkForTest(t)
 	hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
 	v := &BlockValidator{config: hc.config, hc: hc}
 	for name, check := range map[string]func(*types.WorkObject) error{
@@ -197,6 +248,7 @@ func TestSanityCheckRejectsForgedAuxPowBinding(t *testing.T) {
 }
 
 func TestWriteBlockRejectsForgedAuxPowBeforeStorage(t *testing.T) {
+	activateConsensusFixForkForTest(t)
 	for _, rewriteCoinbase := range []bool{false, true} {
 		t.Run(fmt.Sprintf("rewrite_coinbase=%t", rewriteCoinbase), func(t *testing.T) {
 			hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
@@ -224,6 +276,7 @@ func TestWriteBlockRejectsForgedAuxPowBeforeStorage(t *testing.T) {
 }
 
 func TestCalcOrderRejectsUnregisteredZeroNumber(t *testing.T) {
+	activateConsensusFixForkForTest(t)
 	block := newCalcOrderKawpowBlock()
 	block.WorkObjectHeader().SetNumber(big.NewInt(0))
 	// Even a consistent commitment must not turn an arbitrary object into genesis.
@@ -237,6 +290,7 @@ func TestCalcOrderRejectsUnregisteredZeroNumber(t *testing.T) {
 }
 
 func TestCalcOrderPreservesGenesisAndTransitionBlocks(t *testing.T) {
+	activateConsensusFixForkForTest(t)
 	t.Run("registered genesis", func(t *testing.T) {
 		block := newCalcOrderTestBlock(types.EmptyHeader())
 		block.WorkObjectHeader().SetNumber(big.NewInt(0))

@@ -47,6 +47,21 @@ func (hc *HeaderChain) verifyWorkObjectBinding(wo *types.WorkObject) error {
 	return verifyAuxPowBinding(wo.WorkObjectHeader())
 }
 
+// verifyEarlyWorkObjectBinding applies the new pre-storage binding rule only
+// after the shared fork. Full header verification retains its historical checks.
+func (hc *HeaderChain) verifyEarlyWorkObjectBinding(wo *types.WorkObject) error {
+	if wo == nil || wo.WorkObjectHeader() == nil {
+		return errors.New("work object is missing a header")
+	}
+	if wo.PrimeTerminusNumber() == nil {
+		return errors.New("work object is missing a Prime terminus number")
+	}
+	if wo.PrimeTerminusNumber().Uint64() < params.ConsensusFixForkBlock {
+		return hc.CheckPowIdValidity(wo.WorkObjectHeader())
+	}
+	return hc.verifyWorkObjectBinding(wo)
+}
+
 // verifyAuxPowBinding binds the Quai seal to the coinbase and the coinbase to
 // the donor header. Signature, timestamp and PoW checks remain separate.
 func verifyAuxPowBinding(header *types.WorkObjectHeader) error {
@@ -251,7 +266,7 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.WorkObject)
 	// After the fork, also track the proof of work identity of the past uncles
 	// and ancestors, because the same work can be encoded under many hashes
-	checkPowIdentity := block.PrimeTerminusNumber().Uint64() >= params.WorkShareIdentityForkBlock
+	checkPowIdentity := block.PrimeTerminusNumber().Uint64() >= params.ConsensusFixForkBlock
 	unclePowIdentities, ancestorPowIdentities := mapset.NewSet(), mapset.NewSet()
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)

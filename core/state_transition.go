@@ -465,16 +465,25 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, fmt.Errorf("Unable to self-destruct: %v", err)
 		}
 		balance := st.evm.StateDB.GetBalance(fromInternal)
-		// Mirror opSuicide: grant the state-rent refund at most once per account.
-		// Eligibility must be evaluated before Suicide() marks the account.
-		// Pre-fork behavior (refund always added) is preserved for replay.
-		mintRefund := st.evm.Context.PrimeTerminusNumber < params.SelfDestructRefundForkBlock || !st.evm.StateDB.HasSuicided(fromInternal)
-		st.evm.StateDB.Suicide(fromInternal)
-		if mintRefund {
-			refund := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(st.evm.Context.QuaiStateSize)))
-			balance.Add(balance, refund)
+		if st.evm.Context.PrimeTerminusNumber >= params.ConsensusFixForkBlock {
+			// Keep a zero-balance account with its spent nonce. Deleting it would
+			// reset the nonce and allow old signed transactions to run again.
+			balance = new(big.Int).Set(balance)
+			st.evm.StateDB.SetNonce(fromInternal, st.evm.StateDB.GetNonce(fromInternal)+1)
+			st.evm.StateDB.SubBalance(fromInternal, balance)
+			if beneficiary != fromInternal {
+				st.evm.StateDB.AddBalance(beneficiary, balance)
+			}
+		} else {
+			// Preserve the historical refund and deletion rule for replay.
+			mintRefund := st.evm.Context.PrimeTerminusNumber < params.SelfDestructRefundForkBlock || !st.evm.StateDB.HasSuicided(fromInternal)
+			st.evm.StateDB.Suicide(fromInternal)
+			if mintRefund {
+				refund := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(params.CallNewAccountGas(st.evm.Context.QuaiStateSize)))
+				balance.Add(balance, refund)
+			}
+			st.evm.StateDB.AddBalance(beneficiary, balance)
 		}
-		st.evm.StateDB.AddBalance(beneficiary, balance)
 
 		effectiveTip := st.fee()
 		return &ExecutionResult{

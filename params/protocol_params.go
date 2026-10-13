@@ -359,9 +359,9 @@ var (
 
 	SingularityForkBlock       uint64 = 1265025
 	FounderForfeitureForkBlock uint64 = 2448392
-	// WorkShareIdentityForkBlock is the Prime block at which uncles are de-duplicated
-	// by the proof of work they carry (PowIdentity) instead of only by Hash().
-	WorkShareIdentityForkBlock uint64 = ^uint64(0) // Set to the scheduled Prime block before release.
+	// ConsensusFixForkBlock activates the workshare identity, early work-object
+	// binding, queued Qi ETX, and EOA self-destruct rules at one Prime block.
+	ConsensusFixForkBlock uint64 = ^uint64(0) // Set to the scheduled Prime block before release.
 
 	QiWrappingChangeBlock uint64 = 1320000
 
