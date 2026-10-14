@@ -749,7 +749,7 @@ func (wh *WorkObjectHeader) IsShaOrScryptShareWithInvalidAddress() bool {
 // IsTransitionProgPowBlock checks if the block is within the transition period
 func (wh *WorkObjectHeader) IsTransitionProgPowBlock() bool {
 	return wh.primeTerminusNumber.Uint64() >= params.KawPowForkBlock &&
-		wh.primeTerminusNumber.Uint64() <= params.KawPowForkBlock+params.KawPowTransitionPeriod &&
+		wh.primeTerminusNumber.Uint64() < params.KawPowForkBlock+params.KawPowTransitionPeriod &&
 		wh.auxPow == nil
 }
 
