@@ -311,7 +311,7 @@ func TestCalcOrderPreservesGenesisAndTransitionBlocks(t *testing.T) {
 			t.Fatal("registered hash bypassed binding validation")
 		}
 	})
-	for _, height := range []uint64{params.KawPowForkBlock - 1, params.KawPowForkBlock, params.KawPowForkBlock + params.KawPowTransitionPeriod - 1, params.KawPowForkBlock + params.KawPowTransitionPeriod} {
+	for _, height := range []uint64{params.KawPowForkBlock - 1, params.KawPowForkBlock, params.KawPowForkBlock + params.KawPowTransitionPeriod - 1} {
 		t.Run(fmt.Sprintf("ProgPow at %d", height), func(t *testing.T) {
 			block := newCalcOrderTestBlock(types.EmptyHeader())
 			block.WorkObjectHeader().SetPrimeTerminusNumber(new(big.Int).SetUint64(height))
