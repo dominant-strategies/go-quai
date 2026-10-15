@@ -314,7 +314,7 @@ func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, sta
 
 	if number, ok := blockNrOrHash.Number(); ok {
 		if number == rpc.PendingBlockNumber {
-			return state.IteratorDump{}, errors.New("pending state is unavailable")
+			return state.IteratorDump{}, errors.New("pending state is not available for accountRange")
 		} else {
 			var block *types.WorkObject
 			if number == rpc.LatestBlockNumber {

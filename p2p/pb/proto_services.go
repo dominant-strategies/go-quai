@@ -154,7 +154,15 @@ func EncodeQuaiResponse(id uint32, location common.Location, respDataType interf
 		if data == nil {
 			respMsg.Response = &QuaiResponseMessage_BlockHash{}
 		} else {
-			respMsg.Response = &QuaiResponseMessage_BlockHash{BlockHash: data.(common.Hash).ProtoEncode()}
+			hash, ok := data.(*common.Hash)
+			if !ok {
+				return nil, errors.Errorf("invalid block hash response type: %T", data)
+			}
+			if hash == nil {
+				respMsg.Response = &QuaiResponseMessage_BlockHash{}
+			} else {
+				respMsg.Response = &QuaiResponseMessage_BlockHash{BlockHash: hash.ProtoEncode()}
+			}
 		}
 
 	default:

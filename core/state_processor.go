@@ -1589,6 +1589,13 @@ func ValidateQiTxInputs(tx *types.Transaction, chain ChainContext, db ethdb.Read
 	if len(tx.TxIn()) == 0 {
 		return nil, errors.New("QiTx must have at least one input")
 	}
+	seenOutpoints := make(map[types.OutPoint]struct{}, len(tx.TxIn()))
+	for _, txIn := range tx.TxIn() {
+		if _, exists := seenOutpoints[txIn.PreviousOutPoint]; exists {
+			return nil, fmt.Errorf("duplicate Qi input %s:%d", txIn.PreviousOutPoint.TxHash, txIn.PreviousOutPoint.Index)
+		}
+		seenOutpoints[txIn.PreviousOutPoint] = struct{}{}
+	}
 	if tx.ChainId().Cmp(signer.ChainID()) != 0 {
 		return nil, fmt.Errorf("tx %032x has wrong chain ID", tx.Hash())
 	}

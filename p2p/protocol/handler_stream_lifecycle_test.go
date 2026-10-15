@@ -113,7 +113,7 @@ func (node lifecycleResponseNode) GetRequestManager() requestManager.RequestMana
 
 func TestQuaiProtocolHandlerDeliversQueuedResponseBeforeExit(t *testing.T) {
 	hash := common.Hash{1}
-	message, err := pb.EncodeQuaiResponse(1, common.Location{0, 0}, &common.Hash{}, hash)
+	message, err := pb.EncodeQuaiResponse(1, common.Location{0, 0}, &common.Hash{}, &hash)
 	if err != nil {
 		t.Fatal(err)
 	}

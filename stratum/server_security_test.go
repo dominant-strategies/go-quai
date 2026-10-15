@@ -163,6 +163,30 @@ func TestStratumRejectedReauthorizeKeepsPayoutAddress(t *testing.T) {
 	}
 }
 
+func TestStratumRejectedPasswordKeepsPayoutAddress(t *testing.T) {
+	s := newStratumTestServer()
+	c := newStratumTestClient(t, s)
+	c.send(1, "mining.authorize", testInternalAddress+".rig1")
+	if resp := c.response(1); resp.Result != true {
+		t.Fatalf("valid authorize rejected: %+v", resp)
+	}
+	c.send(2, "mining.authorize", testInternalAddress+".rig2", "lock=bad")
+	if resp := c.response(2); resp.Result != false || !strings.Contains(errorText(resp), "invalid lock") {
+		t.Fatalf("invalid password accepted: %+v", resp)
+	}
+	users := registeredUsers(s)
+	if len(users) != 1 || users[0] != testInternalAddress {
+		t.Fatalf("registered payout addresses %v, want [%s]", users, testInternalAddress)
+	}
+	s.sessionsMu.RLock()
+	for sess := range s.sessionsSHA {
+		if sess.workerName != "rig1" {
+			t.Errorf("worker changed to %q after rejected password", sess.workerName)
+		}
+	}
+	s.sessionsMu.RUnlock()
+}
+
 // H8: each authorize builds a job from the pending header, so the number of
 // authorize requests per session is limited.
 func TestStratumLimitsAuthorizeRequests(t *testing.T) {
@@ -219,6 +243,19 @@ func TestMessageLimitReaderResetsPerMessage(t *testing.T) {
 	reader = &messageLimitReader{r: strings.NewReader(`{"id":1,"method":"` + strings.Repeat("a", 1000)), limit: 100}
 	var req stratumReq
 	if err := json.NewDecoder(reader).Decode(&req); !errors.Is(err, errStratumMessageTooLarge) {
+		t.Fatalf("got %v, want %v", err, errStratumMessageTooLarge)
+	}
+}
+
+func TestStratumRejectsBufferedOversizedMessage(t *testing.T) {
+	small := `{"id":1,"method":"mining.extranonce.subscribe","params":[]}` + "\n"
+	large := `{"id":2,"method":"` + strings.Repeat("a", maxStratumMessageSize) + `"}`
+	reader := &messageLimitReader{r: strings.NewReader(small + large), limit: maxStratumMessageSize}
+	dec := json.NewDecoder(bufio.NewReader(reader))
+	if _, err := decodeStratumRequest(dec, reader); err != nil {
+		t.Fatalf("small message rejected: %v", err)
+	}
+	if _, err := decodeStratumRequest(dec, reader); !errors.Is(err, errStratumMessageTooLarge) {
 		t.Fatalf("got %v, want %v", err, errStratumMessageTooLarge)
 	}
 }
