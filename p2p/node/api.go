@@ -151,6 +151,19 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
+type topicPeerSource interface {
+	GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{}
+}
+
+func requestPeersForTopic(source topicPeerSource, topic *pubsubManager.Topic) []peer.ID {
+	peersMap := source.GetPeers(topic)
+	peers := make([]peer.ID, 0, len(peersMap))
+	for peerID := range peersMap {
+		peers = append(peers, peerID)
+	}
+	return peers
+}
+
 func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}) {
 	go func() {
 		defer func() {
@@ -166,19 +179,10 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			// Use stream peers if the node has accumulated
-			// c_streamPeerThreshold number of streams otherwise look up peers
-			// from the database and create streams with them
-			peers := p.peerManager.GetStreamPeers()
-			if len(peers) < c_streamPeerThreshold {
-				peersMap := p.peerManager.GetPeers(topic)
-				peers = make([]peer.ID, 0)
-				for peer := range peersMap {
-					peers = append(peers, peer)
-				}
-			} else {
-				peers = peers[:pubsubManager.C_defaultRequestDegree]
-			}
+			// Select peers discovered and scored for this exact topic. Generic
+			// cached streams may belong to nodes serving other locations, and
+			// selecting them bypasses the quality updates recorded on timeout.
+			peers := requestPeersForTopic(p.peerManager, topic)
 			log.Global.WithFields(log.Fields{
 				"peers": peers,
 				"topic": topic,
