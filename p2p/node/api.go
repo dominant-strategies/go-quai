@@ -2,6 +2,7 @@ package node
 
 import (
 	"math/big"
+	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -151,17 +152,61 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
-type topicPeerSource interface {
+type requestPeerSource interface {
 	GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{}
+	GetStreamPeers() []peer.ID
 }
 
-func requestPeersForTopic(source topicPeerSource, topic *pubsubManager.Topic) []peer.ID {
-	peersMap := source.GetPeers(topic)
-	peers := make([]peer.ID, 0, len(peersMap))
-	for peerID := range peersMap {
-		peers = append(peers, peerID)
+func requestPeersForTopic(source requestPeerSource, topic *pubsubManager.Topic, requestDegree int, shuffle func(int, func(int, int))) []peer.ID {
+	if requestDegree <= 0 {
+		return nil
 	}
-	return peers
+
+	topicPeers := source.GetPeers(topic)
+	streamPeers := append([]peer.ID(nil), source.GetStreamPeers()...)
+	shuffle(len(streamPeers), func(i, j int) {
+		streamPeers[i], streamPeers[j] = streamPeers[j], streamPeers[i]
+	})
+
+	selected := make([]peer.ID, 0, requestDegree)
+	selectedSet := make(map[peer.ID]struct{}, requestDegree)
+	add := func(peerID peer.ID) bool {
+		if _, exists := selectedSet[peerID]; exists {
+			return false
+		}
+		selected = append(selected, peerID)
+		selectedSet[peerID] = struct{}{}
+		return len(selected) == requestDegree
+	}
+
+	// Prefer topic-qualified peers that already have a live stream.
+	for _, peerID := range streamPeers {
+		if _, ok := topicPeers[peerID]; ok && add(peerID) {
+			return selected
+		}
+	}
+	// Randomized live streams avoid repeatedly selecting the same stale peers.
+	for _, peerID := range streamPeers {
+		if add(peerID) {
+			return selected
+		}
+	}
+	// Only dial stored/DHT topic peers when live streams cannot fill the request.
+	remainingTopicPeers := make([]peer.ID, 0, len(topicPeers))
+	for peerID := range topicPeers {
+		if _, exists := selectedSet[peerID]; !exists {
+			remainingTopicPeers = append(remainingTopicPeers, peerID)
+		}
+	}
+	shuffle(len(remainingTopicPeers), func(i, j int) {
+		remainingTopicPeers[i], remainingTopicPeers[j] = remainingTopicPeers[j], remainingTopicPeers[i]
+	})
+	for _, peerID := range remainingTopicPeers {
+		if add(peerID) {
+			break
+		}
+	}
+	return selected
 }
 
 func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}) {
@@ -179,10 +224,10 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			// Select peers discovered and scored for this exact topic. Generic
-			// cached streams may belong to nodes serving other locations, and
-			// selecting them bypasses the quality updates recorded on timeout.
-			peers := requestPeersForTopic(p.peerManager, topic)
+			// Prefer topic-qualified live streams, then rotate through other live
+			// streams. Stored topic peers are dialed only when live streams cannot
+			// fill the request, avoiding stale peer records and sticky selection.
+			peers := requestPeersForTopic(p.peerManager, topic, topic.GetRequestDegree(), rand.Shuffle)
 			log.Global.WithFields(log.Fields{
 				"peers": peers,
 				"topic": topic,
