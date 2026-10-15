@@ -226,8 +226,10 @@ func (h *handler) checkNextPrimeBlock() {
 						// downloaded otherwise, download next 2 *
 						// protocol.C_NumPrimeBlocksToDownload
 						if i < 2*protocol.C_NumPrimeBlocksToDownload {
-							h.GetNextPrimeBlock(syncHeight.Add(syncHeight, big.NewInt(protocol.C_NumPrimeBlocksToDownload)))
-							h.GetNextPrimeBlock(syncHeight.Add(new(big.Int).Add(syncHeight, big.NewInt(protocol.C_NumPrimeBlocksToDownload)), big.NewInt(protocol.C_NumPrimeBlocksToDownload)))
+							nextBatch := new(big.Int).Add(syncHeight, big.NewInt(protocol.C_NumPrimeBlocksToDownload))
+							h.GetNextPrimeBlock(nextBatch)
+							secondBatch := new(big.Int).Add(syncHeight, big.NewInt(2*protocol.C_NumPrimeBlocksToDownload))
+							h.GetNextPrimeBlock(secondBatch)
 						}
 						break
 					}
@@ -276,12 +278,31 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 		// Write all the blocks are the sanity check into the database and
 		// add it to the append queue
 		for _, wo := range workObjects {
-			// If the work object is already on chain, return a error back and start the sync from that point
-			block := h.core.GetBlockByHash(wo.WorkObjectHeader().Hash())
-			if block != nil {
+			block := wo.WorkObject
+			blockHash := block.WorkObjectHeader().Hash()
+			blockNumber := block.NumberU64(common.PRIME_CTX)
+
+			// A block can have been fully appended to the graph without being
+			// selected as the canonical head. This commonly survives a restart,
+			// while the coordinator's in-memory event history does not. Treat only
+			// the canonical hash as synchronized. Replay stored non-canonical
+			// blocks so the new coordinator can reconsider them.
+			storedBlock := h.core.GetBlockByHash(blockHash)
+			if h.core.GetCanonicalHash(blockNumber) == blockHash {
 				return ErrBlockAlreadyAppended
+			} else if storedBlock != nil {
+				h.logger.WithFields(log.Fields{
+					"hash":   blockHash,
+					"number": blockNumber,
+				}).Info("Replaying stored non-canonical prime block")
+				if err := h.core.ReemitChainEventForHC(storedBlock); err != nil {
+					h.logger.WithFields(log.Fields{
+						"err":  err,
+						"hash": blockHash,
+					}).Warn("Failed to replay stored non-canonical prime block")
+				}
 			} else {
-				h.core.WriteBlock(wo.WorkObject)
+				h.core.WriteBlock(block)
 			}
 		}
 	}
