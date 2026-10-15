@@ -61,3 +61,23 @@ func TestDecodeQuaiResponseRejectsNil(t *testing.T) {
 	_, _, err := DecodeQuaiResponse(nil)
 	require.Error(t, err)
 }
+
+func TestEncodeQuaiResponseBlockHash(t *testing.T) {
+	hash := common.Hash{1, 2, 3}
+	encoded, err := EncodeQuaiResponse(7, common.Location{}, &hash, &hash)
+	require.NoError(t, err)
+	message, err := DecodeQuaiMessage(encoded)
+	require.NoError(t, err)
+	id, decoded, err := DecodeQuaiResponse(message.GetResponse())
+	require.NoError(t, err)
+	require.Equal(t, uint32(7), id)
+	require.Equal(t, hash, decoded)
+	var missing *common.Hash
+	encoded, err = EncodeQuaiResponse(8, common.Location{}, &hash, missing)
+	require.NoError(t, err)
+	message, err = DecodeQuaiMessage(encoded)
+	require.NoError(t, err)
+	_, decoded, err = DecodeQuaiResponse(message.GetResponse())
+	require.NoError(t, err)
+	require.Equal(t, common.Hash{}, decoded)
+}

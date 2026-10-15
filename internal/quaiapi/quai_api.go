@@ -394,9 +394,10 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointDeltasForAddressesInRange(ctx conte
 		if err != nil {
 			return nil, err
 		}
-		currentBlock = s.b.BlockOrCandidateByHash(currentBlock.ParentHash(nodeCtx))
+		parentHash := currentBlock.ParentHash(nodeCtx)
+		currentBlock = s.b.BlockOrCandidateByHash(parentHash)
 		if currentBlock == nil {
-			return nil, fmt.Errorf("block %s not found", currentBlock.ParentHash(nodeCtx).Hex())
+			return nil, fmt.Errorf("block %s not found", parentHash.Hex())
 		}
 	}
 	if commonBlock.Hash() != blockFrom.Hash() { // Get deltas from blockFrom to common ancestor
@@ -406,9 +407,10 @@ func (s *PublicBlockChainQuaiAPI) GetOutpointDeltasForAddressesInRange(ctx conte
 			if err != nil {
 				return nil, err
 			}
-			currentBlock = s.b.BlockOrCandidateByHash(currentBlock.ParentHash(nodeCtx))
+			parentHash := currentBlock.ParentHash(nodeCtx)
+			currentBlock = s.b.BlockOrCandidateByHash(parentHash)
 			if currentBlock == nil {
-				return nil, fmt.Errorf("block %s not found", currentBlock.ParentHash(nodeCtx).Hex())
+				return nil, fmt.Errorf("block %s not found", parentHash.Hex())
 			}
 		}
 	}

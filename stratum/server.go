@@ -810,7 +810,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 	for _, sess := range staleSessions {
 		// Dont force update if the last update happened less than 5 secs ago
 		if now.Sub(s.lastUpdateTime) < 5*time.Second && !sess.hasCustomFreq {
-			return
+			continue
 		}
 		s.jobPool.submit(sess, true)
 	}
@@ -1254,9 +1254,8 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 	}()
 
 	for {
-
-		var req stratumReq
-		if err := dec.Decode(&req); err != nil {
+		req, err := decodeStratumRequest(dec, reader)
+		if err != nil {
 			if err == io.EOF {
 				if sess.authorized {
 					s.logger.WithFields(log.Fields{
@@ -1278,8 +1277,6 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			}
 			return
 		}
-		// A complete message was read, so start a new size budget
-		reader.reset()
 		// Extend read deadline on each message received
 		_ = c.SetReadDeadline(time.Now().Add(livenessTimeout))
 		switch req.Method {
@@ -1429,56 +1426,60 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 				}
 				continue
 			}
+			// Parse password for optional difficulty, frequency, skip, and parentupdate settings
+			// Format: d=<difficulty>,frequency=<seconds>,skip=<true|false>,parentupdate=<true|false>
+			newDifficulty := sess.minerDifficulty
+			newFrequency := time.Duration(0)
+			newSkipBlocks, newLock, newParentUpdate := sess.skipBlocks, sess.lock, sess.parentUpdate
+			if len(req.Params) >= 2 {
+				if p, ok := req.Params[1].(string); ok {
+					var err error
+					newDifficulty, newFrequency, newSkipBlocks, newLock, newParentUpdate, err = parsePassword(p)
+					if err != nil {
+						s.logger.WithFields(log.Fields{
+							"sid":   sess.id,
+							"user":  newUser,
+							"error": err,
+						}).Warn("Error parsing password")
+						if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
+							s.logger.WithFields(log.Fields{"error": err, "worker": newUser + "." + newWorkerName}).Error("failed to send mining.authorize rejection")
+							sess.conn.Close()
+							return
+						}
+						continue
+					}
+				}
+			}
 			sess.user, sess.workerName = newUser, newWorkerName
-
+			sess.minerDifficulty = newDifficulty
+			sess.skipBlocks, sess.lock, sess.parentUpdate = newSkipBlocks, newLock, newParentUpdate
 			// If re-authorizing with different worker name, disconnect old worker first
 			if wasAuthorized && (oldUser != sess.user || oldWorkerName != sess.workerName) {
 				s.stats.WorkerDisconnected(oldUser, oldWorkerName, sess.chain)
 			}
-			// Parse password for optional difficulty, frequency, skip, and parentupdate settings
-			// Format: d=<difficulty>,frequency=<seconds>,skip=<true|false>,parentupdate=<true|false>
-			if len(req.Params) >= 2 {
-				if p, ok := req.Params[1].(string); ok {
-					var pwFreq time.Duration
-					var err error
-					sess.minerDifficulty, pwFreq, sess.skipBlocks, sess.lock, sess.parentUpdate, err = parsePassword(p)
-					if err != nil {
-						s.logger.WithFields(log.Fields{
-							"sid":   sess.id,
-							"user":  sess.user,
-							"error": err,
-						}).Warn("Error parsing password")
-						if err := sess.sendJSON(stratumResp{ID: req.ID, Result: false, Error: err.Error()}); err != nil {
-							s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Error("failed to send mining.authorize rejection")
-							sess.conn.Close()
-							return
-						}
-					}
-					if sess.minerDifficulty != nil && *sess.minerDifficulty < minShaDiff && sess.chain == "sha256" {
-						minShaDiff_ := minShaDiff
-						sess.minerDifficulty = &minShaDiff_
-					}
-					if sess.minerDifficulty != nil && *sess.minerDifficulty < minScryptDiff && sess.chain == "scrypt" {
-						minScryptDiff_ := minScryptDiff
-						sess.minerDifficulty = &minScryptDiff_
-					}
-					if sess.minerDifficulty != nil && sess.chain == "kawpow" {
-						diff := *sess.minerDifficulty
-						minKawpowDiff_ := varDiffMinKawpow
-						// If *sess.minerDifficulty is greater than million, interpret as number of hashes,
-						// otherwise treat is as scaled down value
-						if diff > diffHashesInterpretationThresholdD {
-							diff = *sess.minerDifficulty / 4294967296
-						}
-						if diff < varDiffMinKawpow {
-							sess.minerDifficulty = &minKawpowDiff_
-						}
-					}
-					if pwFreq > 0 {
-						sess.jobFrequency = pwFreq // Password frequency overrides username frequency
-						sess.hasCustomFreq = true  // Track that freq was explicitly set
-					}
+			if sess.minerDifficulty != nil && *sess.minerDifficulty < minShaDiff && sess.chain == "sha256" {
+				minShaDiff_ := minShaDiff
+				sess.minerDifficulty = &minShaDiff_
+			}
+			if sess.minerDifficulty != nil && *sess.minerDifficulty < minScryptDiff && sess.chain == "scrypt" {
+				minScryptDiff_ := minScryptDiff
+				sess.minerDifficulty = &minScryptDiff_
+			}
+			if sess.minerDifficulty != nil && sess.chain == "kawpow" {
+				diff := *sess.minerDifficulty
+				minKawpowDiff_ := varDiffMinKawpow
+				// If *sess.minerDifficulty is greater than million, interpret as number of hashes,
+				// otherwise treat is as scaled down value
+				if diff > diffHashesInterpretationThresholdD {
+					diff = *sess.minerDifficulty / 4294967296
 				}
+				if diff < varDiffMinKawpow {
+					sess.minerDifficulty = &minKawpowDiff_
+				}
+			}
+			if newFrequency > 0 {
+				sess.jobFrequency = newFrequency // Password frequency overrides username frequency
+				sess.hasCustomFreq = true        // Track that freq was explicitly set
 			}
 			// Initialize lastShareTime for liveness tracking (all sessions, not just vardiff)
 			sess.lastShareTime = time.Now()
@@ -1672,14 +1673,6 @@ func (s *Server) handleConn(c net.Conn, algorithm string) {
 			// Pass j directly to avoid TOCTOU race where sess.job could be replaced by concurrent sendJobAndNotify
 			refreshJob, err := s.submitAsWorkShare(sess, j, ex2hex, ntimeHex, nonceHex, versionBits)
 			if err != nil {
-				if strings.Contains(err.Error(), "below target") {
-					if err := sess.sendJSON(stratumResp{ID: req.ID, Result: true, Error: nil}); err != nil {
-						s.logger.WithFields(log.Fields{"error": err, "worker": sess.user + "." + sess.workerName}).Error("failed to send mining.submit accepted (sha256/scrypt)")
-						sess.conn.Close()
-						return
-					}
-					continue
-				}
 				sess.mu.Lock()
 				sess.invalidShares++
 				invalidCount := sess.invalidShares
@@ -2179,10 +2172,12 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 	varDiff := sess.varDiff
 	prevDiff := sess.prevSentDifficulty
 	sess.mu.Unlock()
-	pending := curJob.pending
-	if pending == nil || pending.WorkObjectHeader() == nil || pending.WorkObjectHeader().AuxPow() == nil {
+	if curJob.pending == nil || curJob.pending.WorkObjectHeader() == nil || curJob.pending.WorkObjectHeader().AuxPow() == nil {
 		return false, fmt.Errorf("no pending header for job")
 	}
+	// Global job entries can be used by another session. Keep their header
+	// immutable while this submission fills in the donor proof.
+	pending := types.NewWorkObject(types.CopyWorkObjectHeader(curJob.pending.WorkObjectHeader()), nil, nil)
 
 	// Rebuild donor header for SHA chains with updated merkle root and nTime
 	templateHeader := pending.AuxPow().Header()
@@ -2304,6 +2299,12 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			achievedStratumDiff = float64(achievedDiff.Uint64()) / diff1
 		}
 	}
+	// Count a proof only once, including shares used only for liveness.
+	shareKey := hex.EncodeToString(hashBytes)
+	if _, seen := sess.seenShares.Peek(shareKey); seen {
+		return false, fmt.Errorf("duplicate share")
+	}
+	sess.seenShares.Add(shareKey, struct{}{})
 
 	// Determine liveness target - Priority: 1) miner-specified d=X, 2) vardiff, 3) workshare only
 	var livenessTarget float64
@@ -2394,14 +2395,6 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 			return false, nil // Accept share but don't submit to node
 		}
 	}
-
-	// LRU de-dup and submit workshare
-	// Note: seenShares LRU is thread-safe, no lock needed
-	shareKey := hex.EncodeToString(hashBytes)
-	if _, seen := sess.seenShares.Peek(shareKey); seen {
-		return false, fmt.Errorf("duplicate share")
-	}
-	sess.seenShares.Add(shareKey, struct{}{})
 
 	s.logger.WithFields(log.Fields{"sid": sess.id, "powID": pending.AuxPow().PowID(), "achievedDiff": achievedStratumDiff, "workshareDiff": workshareStratumDiff}).Info("submitting workshare to node")
 
@@ -2561,6 +2554,12 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		new(big.Float).SetInt(KawpowDiff1),
 		new(big.Float).SetInt(workShareTarget),
 	).Float64()
+	// Count a proof only once, including shares used only for liveness.
+	shareKey := hex.EncodeToString(powHash.Bytes())
+	if _, seen := sess.seenShares.Peek(shareKey); seen {
+		return fmt.Errorf("duplicate share")
+	}
+	sess.seenShares.Add(shareKey, struct{}{})
 
 	// Determine liveness target - Priority: 1) miner-specified d=X, 2) vardiff, 3) workshare only
 	var livenessTarget float64
@@ -2659,14 +2658,6 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		}).Debug("share did not meet workshare target")
 		return fmt.Errorf("share did not meet target")
 	}
-
-	// LRU de-dup and submit workshare
-	// Note: seenShares LRU is thread-safe, no lock needed
-	shareKey := hex.EncodeToString(powHash.Bytes())
-	if _, seen := sess.seenShares.Peek(shareKey); seen {
-		return fmt.Errorf("duplicate share")
-	}
-	sess.seenShares.Add(shareKey, struct{}{})
 
 	// Set the nonce and mix hash on the AuxPow's Ravencoin header for submission.
 	// The kawpow validation path (ComputePowLight/ComputePowHash) reads from:
@@ -2913,3 +2904,18 @@ func (l *messageLimitReader) Read(p []byte) (int, error) {
 }
 
 func (l *messageLimitReader) reset() { l.n = 0 }
+
+func decodeStratumRequest(dec *json.Decoder, reader *messageLimitReader) (stratumReq, error) {
+	var req stratumReq
+	start := dec.InputOffset()
+	if err := dec.Decode(&req); err != nil {
+		return req, err
+	}
+	// The decoder may have read bytes from this message while decoding the
+	// previous one. Check consumed bytes as well as bytes read from the socket.
+	if dec.InputOffset()-start > maxStratumMessageSize {
+		return req, errStratumMessageTooLarge
+	}
+	reader.reset()
+	return req, nil
+}

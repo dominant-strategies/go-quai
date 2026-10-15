@@ -704,6 +704,8 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
+	ctx, cancel := context.WithTimeout(ctx, estimateGasTimeout)
+	defer cancel()
 	nodeCtx := b.NodeCtx()
 	if nodeCtx != common.ZONE_CTX {
 		return 0, errors.New("doEstimateGas can only be called in zone chain")
@@ -802,6 +804,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		acl, _, _, aclErr := AccessList(ctx, b, blockNrOrHash, args)
 		if aclErr == nil {
 			args.AccessList = &acl
+		}
+		if err := ctx.Err(); err != nil {
+			return 0, err
 		}
 	}
 
@@ -1209,6 +1214,8 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args Transac
 }
 
 const (
+	// estimateGasTimeout bounds access-list creation and the later gas search.
+	estimateGasTimeout = 30 * time.Second
 	// accessListMaxIterations caps the number of executions used to build an
 	// access list. Each execution can only grow the list, and normal contracts
 	// converge in a few rounds. Code that reads GAS can change its access set
@@ -1828,7 +1835,9 @@ func (s *PublicWorkSharesAPI) ReceiveSubWorkshare(ctx context.Context, input hex
 	}
 
 	workShare := &types.WorkObject{}
-	workShare.ProtoDecode(protoSubWorkshare, s.b.NodeLocation(), types.WorkShareTxObject)
+	if err := workShare.ProtoDecode(protoSubWorkshare, s.b.NodeLocation(), types.WorkShareTxObject); err != nil {
+		return err
+	}
 
 	// check if the workshare is valid before broadcasting as a sanity
 	workShareValidity := s.b.CheckIfValidWorkShare(workShare.WorkObjectHeader())

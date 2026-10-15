@@ -175,6 +175,8 @@ func (g *PubsubManager) Subscribe(topicSub *Topic, location common.Location, dat
 		msgChan := make(chan *pubsub.Message, msgChanSize)
 		// close the msgChan if we exit this function
 		defer close(msgChan)
+		stopping := make(chan struct{})
+		defer close(stopping)
 		full := 0
 		// maintain a number of worker threads to handle messages
 		var msgWorker func(location common.Location)
@@ -187,15 +189,19 @@ func (g *PubsubManager) Subscribe(topicSub *Topic, location common.Location, dat
 						"location":   location.Name(),
 					}).Errorf("Go-Quai Panicked")
 				}
-				go msgWorker(location) // If this worker exits, start a new one
+				select {
+				case <-stopping:
+				default:
+					go msgWorker(location) // Replace a worker only while subscribed.
+				}
 			}()
 			for msg := range msgChan { // This should exit when msgChan is closed
 				data := types.ObjectPool.Get()
 				data = nil
 				// unmarshal the received data depending on the topic's type
-				err = pb.UnmarshalAndConvert(msg.Data, location, &data, datatype)
-				if err != nil {
-					log.Global.Errorf("error unmarshalling data: %s", err)
+				decodeErr := pb.UnmarshalAndConvert(msg.Data, location, &data, datatype)
+				if decodeErr != nil {
+					log.Global.Errorf("error unmarshalling data: %s", decodeErr)
 					continue
 				}
 

@@ -248,30 +248,36 @@ func TestSanityCheckRejectsForgedAuxPowBinding(t *testing.T) {
 }
 
 func TestWriteBlockRejectsForgedAuxPowBeforeStorage(t *testing.T) {
-	activateConsensusFixForkForTest(t)
-	for _, rewriteCoinbase := range []bool{false, true} {
-		t.Run(fmt.Sprintf("rewrite_coinbase=%t", rewriteCoinbase), func(t *testing.T) {
-			hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
-			hc.numberCache, _ = lru.New[common.Hash, uint64](10)
-			c := &Core{sl: &Slice{hc: hc}, logger: log.Global}
-			c.appendQueue, _ = lru.New[common.Hash, blockNumberAndRetryCounter](10)
-			honest := newCalcOrderKawpowBlock()
-			if _, _, err := hc.CalcOrder(honest); err != nil {
-				t.Fatal(err)
-			}
-			forged := forgeCalcOrderKawpowBody(honest, rewriteCoinbase)
-			c.WriteBlock(forged)
-			if hc.bc.blockCache.Contains(forged.Hash()) || rawdb.ReadHeaderNumber(hc.headerDb, forged.Hash()) != nil {
-				t.Fatal("forged candidate was stored")
-			}
-			if c.appendQueue.Len() != 0 {
-				t.Fatal("forged candidate reached the append queue")
-			}
-			c.WriteBlock(honest)
-			if !hc.bc.blockCache.Contains(honest.Hash()) || rawdb.ReadHeaderNumber(hc.headerDb, honest.Hash()) == nil {
-				t.Fatal("honest candidate was not stored")
-			}
-		})
+	for _, afterFork := range []bool{false, true} {
+		for _, rewriteCoinbase := range []bool{false, true} {
+			t.Run(fmt.Sprintf("after_fork=%t/rewrite_coinbase=%t", afterFork, rewriteCoinbase), func(t *testing.T) {
+				if afterFork {
+					activateConsensusFixForkForTest(t)
+				} else {
+					setForkForTest(t, &params.ConsensusFixForkBlock, params.KawPowForkBlock+params.KawPowTransitionPeriod+2)
+				}
+				hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
+				hc.numberCache, _ = lru.New[common.Hash, uint64](10)
+				c := &Core{sl: &Slice{hc: hc}, logger: log.Global}
+				c.appendQueue, _ = lru.New[common.Hash, blockNumberAndRetryCounter](10)
+				honest := newCalcOrderKawpowBlock()
+				if _, _, err := hc.CalcOrder(honest); err != nil {
+					t.Fatal(err)
+				}
+				forged := forgeCalcOrderKawpowBody(honest, rewriteCoinbase)
+				c.WriteBlock(forged)
+				if hc.bc.blockCache.Contains(forged.Hash()) || rawdb.ReadHeaderNumber(hc.headerDb, forged.Hash()) != nil {
+					t.Fatal("forged candidate was stored")
+				}
+				if c.appendQueue.Len() != 0 {
+					t.Fatal("forged candidate reached the append queue")
+				}
+				c.WriteBlock(honest)
+				if !hc.bc.blockCache.Contains(honest.Hash()) || rawdb.ReadHeaderNumber(hc.headerDb, honest.Hash()) == nil {
+					t.Fatal("honest candidate was not stored")
+				}
+			})
+		}
 	}
 }
 
