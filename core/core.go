@@ -1566,6 +1566,25 @@ func (c *Core) SubscribeChainEventForHC(ch chan<- ChainEvent) event.Subscription
 	return c.sl.hc.bc.SubscribeChainEventForHC(ch)
 }
 
+// ReemitChainEventForHC makes an already-appended block visible to a freshly
+// started hierarchical coordinator. Blocks can be present in the database but
+// absent from the canonical chain when the process restarts before the
+// coordinator selects a new head. In that case the normal append path will not
+// emit another event, so the coordinator needs an explicit replay.
+func (c *Core) ReemitChainEventForHC(block *types.WorkObject) error {
+	_, order, err := c.CalcOrder(block)
+	if err != nil {
+		return err
+	}
+	c.sl.hc.bc.chainFeedForHC.Send(ChainEvent{
+		Block:   block,
+		Hash:    block.Hash(),
+		Order:   order,
+		Entropy: c.TotalLogEntropy(block),
+	})
+	return nil
+}
+
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (c *Core) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {
 	return c.sl.hc.bc.SubscribeRemovedLogsEvent(ch)

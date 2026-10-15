@@ -36,9 +36,10 @@ import (
 )
 
 const (
-	// c_defaultCacheSize is the default size for the p2p cache
-	c_defaultCacheSize    = 32
-	c_streamPeerThreshold = 25
+	// c_defaultCacheSize is the default size for the p2p cache.
+	c_defaultCacheSize = 32
+	// c_maxConcurrentPeerRequests bounds request work while slow peers time out.
+	c_maxConcurrentPeerRequests = 12
 )
 
 // P2PNode represents a libp2p node
@@ -54,6 +55,10 @@ type P2PNode struct {
 
 	// Request management interface instance
 	requestManager requestManager.RequestManager
+
+	// Limits concurrent request attempts so slow peers cannot trigger an
+	// unbounded request and peer-quality update storm.
+	requestSlots chan struct{}
 
 	// Caches for each type of data we may receive
 	cache map[string]map[reflect.Type]*lru.Cache[common.Hash, interface{}]
@@ -278,6 +283,7 @@ func NewNode(ctx context.Context, quitCh chan struct{}) (*P2PNode, error) {
 		pubsub:           ps,
 		peerManager:      peerMgr,
 		requestManager:   requestManager.NewManager(),
+		requestSlots:     make(chan struct{}, c_maxConcurrentPeerRequests),
 		cache:            initializeCaches(common.GenerateLocations(common.MaxRegions, common.MaxZones)),
 		quitCh:           quitCh,
 		cancel:           cancel,
