@@ -9,13 +9,15 @@ import (
 )
 
 type recordingRequestPeerSource struct {
-	gotTopic    *pubsubManager.Topic
-	topicPeers  map[peer.ID]struct{}
-	streamPeers []peer.ID
+	gotTopic     *pubsubManager.Topic
+	getPeersCall int
+	topicPeers   map[peer.ID]struct{}
+	streamPeers  []peer.ID
 }
 
 func (s *recordingRequestPeerSource) GetPeers(topic *pubsubManager.Topic) map[peer.ID]struct{} {
 	s.gotTopic = topic
+	s.getPeersCall++
 	return s.topicPeers
 }
 
@@ -25,33 +27,29 @@ func (s *recordingRequestPeerSource) GetStreamPeers() []peer.ID {
 
 func noShuffle(_ int, _ func(int, int)) {}
 
-func TestRequestPeersForTopicPrefersLiveTopicPeers(t *testing.T) {
+func TestRequestPeersForTopicRotatesLivePeersWithoutDatabaseQuery(t *testing.T) {
 	topic := &pubsubManager.Topic{}
 	source := &recordingRequestPeerSource{
-		topicPeers: map[peer.ID]struct{}{
-			peer.ID("live-topic-peer"):  {},
-			peer.ID("stale-topic-peer"): {},
-		},
+		topicPeers: map[peer.ID]struct{}{peer.ID("stored-peer"): {}},
 		streamPeers: []peer.ID{
-			peer.ID("live-fallback-peer"),
-			peer.ID("live-topic-peer"),
-			peer.ID("second-live-fallback-peer"),
+			peer.ID("live-a"),
+			peer.ID("live-b"),
+			peer.ID("live-c"),
 		},
 	}
+	reverse := func(n int, swap func(int, int)) {
+		for i, j := 0, n-1; i < j; i, j = i+1, j-1 {
+			swap(i, j)
+		}
+	}
 
-	got := requestPeersForTopic(source, topic, 2, noShuffle)
+	got := requestPeersForTopic(source, topic, 2, reverse)
 
-	if source.gotTopic != topic {
-		t.Fatalf("GetPeers called with wrong topic: got %p want %p", source.gotTopic, topic)
+	if source.getPeersCall != 0 {
+		t.Fatalf("GetPeers called %d times with live streams available", source.getPeersCall)
 	}
-	if len(got) != 2 {
-		t.Fatalf("got %d peers, want 2", len(got))
-	}
-	if got[0] != peer.ID("live-topic-peer") {
-		t.Fatalf("first peer = %q, want live topic peer", got[0])
-	}
-	if got[1] != peer.ID("live-fallback-peer") {
-		t.Fatalf("second peer = %q, want live fallback peer", got[1])
+	if len(got) != 2 || got[0] != peer.ID("live-c") || got[1] != peer.ID("live-b") {
+		t.Fatalf("selected peers = %q, want shuffled live peers", got)
 	}
 }
 
@@ -77,16 +75,27 @@ func TestRequestPeersForTopicDoesNotMutateStreamCache(t *testing.T) {
 	}
 }
 
-func TestRequestPeersForTopicDialsStoredPeersOnlyWhenNeeded(t *testing.T) {
+func TestRequestPeersForTopicUsesStoredPeersOnlyWithoutLiveStreams(t *testing.T) {
 	topic := &pubsubManager.Topic{}
 	source := &recordingRequestPeerSource{
-		topicPeers:  map[peer.ID]struct{}{peer.ID("stored-topic-peer"): {}},
-		streamPeers: []peer.ID{peer.ID("live-peer")},
+		topicPeers: map[peer.ID]struct{}{
+			peer.ID("stored-a"): {},
+			peer.ID("stored-b"): {},
+			peer.ID("stored-c"): {},
+		},
 	}
 
 	got := requestPeersForTopic(source, topic, 2, noShuffle)
 
-	if len(got) != 2 || got[0] != peer.ID("live-peer") || got[1] != peer.ID("stored-topic-peer") {
-		t.Fatalf("selected peers = %q, want live peer followed by stored topic peer", got)
+	if source.getPeersCall != 1 || source.gotTopic != topic {
+		t.Fatalf("GetPeers calls/topic = %d/%p, want 1/%p", source.getPeersCall, source.gotTopic, topic)
+	}
+	if len(got) != 2 {
+		t.Fatalf("selected %d peers, want 2", len(got))
+	}
+	for _, peerID := range got {
+		if _, ok := source.topicPeers[peerID]; !ok {
+			t.Fatalf("selected peer %q is not from topic fallback", peerID)
+		}
 	}
 }

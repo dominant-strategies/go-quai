@@ -162,49 +162,29 @@ func requestPeersForTopic(source requestPeerSource, topic *pubsubManager.Topic, 
 		return nil
 	}
 
-	topicPeers := source.GetPeers(topic)
 	streamPeers := append([]peer.ID(nil), source.GetStreamPeers()...)
 	shuffle(len(streamPeers), func(i, j int) {
 		streamPeers[i], streamPeers[j] = streamPeers[j], streamPeers[i]
 	})
-
-	selected := make([]peer.ID, 0, requestDegree)
-	selectedSet := make(map[peer.ID]struct{}, requestDegree)
-	add := func(peerID peer.ID) bool {
-		if _, exists := selectedSet[peerID]; exists {
-			return false
+	if len(streamPeers) > 0 {
+		if len(streamPeers) > requestDegree {
+			streamPeers = streamPeers[:requestDegree]
 		}
-		selected = append(selected, peerID)
-		selectedSet[peerID] = struct{}{}
-		return len(selected) == requestDegree
+		return streamPeers
 	}
 
-	// Prefer topic-qualified peers that already have a live stream.
-	for _, peerID := range streamPeers {
-		if _, ok := topicPeers[peerID]; ok && add(peerID) {
-			return selected
-		}
-	}
-	// Randomized live streams avoid repeatedly selecting the same stale peers.
-	for _, peerID := range streamPeers {
-		if add(peerID) {
-			return selected
-		}
-	}
-	// Only dial stored/DHT topic peers when live streams cannot fill the request.
-	remainingTopicPeers := make([]peer.ID, 0, len(topicPeers))
+	// The topic database may contain stale records and is expensive to query
+	// under load. Use it only to bootstrap when no live streams are available.
+	topicPeers := source.GetPeers(topic)
+	selected := make([]peer.ID, 0, len(topicPeers))
 	for peerID := range topicPeers {
-		if _, exists := selectedSet[peerID]; !exists {
-			remainingTopicPeers = append(remainingTopicPeers, peerID)
-		}
+		selected = append(selected, peerID)
 	}
-	shuffle(len(remainingTopicPeers), func(i, j int) {
-		remainingTopicPeers[i], remainingTopicPeers[j] = remainingTopicPeers[j], remainingTopicPeers[i]
+	shuffle(len(selected), func(i, j int) {
+		selected[i], selected[j] = selected[j], selected[i]
 	})
-	for _, peerID := range remainingTopicPeers {
-		if add(peerID) {
-			break
-		}
+	if len(selected) > requestDegree {
+		selected = selected[:requestDegree]
 	}
 	return selected
 }
@@ -224,9 +204,8 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			// Prefer topic-qualified live streams, then rotate through other live
-			// streams. Stored topic peers are dialed only when live streams cannot
-			// fill the request, avoiding stale peer records and sticky selection.
+			// Rotate through live streams. The peer database is only a bootstrap
+			// fallback when no live streams exist.
 			peers := requestPeersForTopic(p.peerManager, topic, topic.GetRequestDegree(), rand.Shuffle)
 			log.Global.WithFields(log.Fields{
 				"peers": peers,
@@ -251,6 +230,12 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 						}
 					}()
 					defer requestWg.Done()
+					select {
+					case p.requestSlots <- struct{}{}:
+						defer func() { <-p.requestSlots }()
+					case <-p.ctx.Done():
+						return
+					}
 					p.requestAndWait(peerID, topic, requestData, respDataType, resultChan)
 				}(peerID)
 			}
@@ -273,6 +258,11 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 	requestTimer := time.NewTimer(requestTimeout)
 	defer requestTimer.Stop()
 	if recvd, err = p.requestFromPeer(peerID, topic, reqData, respDataType); err == nil {
+		// A negative response from one peer must not win the race against valid
+		// data from another peer.
+		if recvd == nil {
+			return
+		}
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
 			"topic":  topic.String(),
