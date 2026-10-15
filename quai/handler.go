@@ -246,6 +246,29 @@ func (h *handler) checkNextPrimeBlock() {
 	}
 }
 
+type primeBlockStore interface {
+	GetBlockByHash(common.Hash) *types.WorkObject
+	GetCanonicalHash(uint64) common.Hash
+	ReemitChainEventForHC(*types.WorkObject) error
+	WriteBlock(*types.WorkObject)
+}
+
+// applyPrimeBlock only stops at a canonical block whose full body is stored.
+// The canonical header index alone does not establish that the block can be
+// replayed or used as the local synchronization boundary.
+func applyPrimeBlock(store primeBlockStore, block *types.WorkObject) (alreadyCanonical, replayed bool, err error) {
+	blockHash := block.WorkObjectHeader().Hash()
+	storedBlock := store.GetBlockByHash(blockHash)
+	if storedBlock != nil {
+		if store.GetCanonicalHash(block.NumberU64(common.PRIME_CTX)) == blockHash {
+			return true, false, nil
+		}
+		return false, true, store.ReemitChainEventForHC(storedBlock)
+	}
+	store.WriteBlock(block)
+	return false, false, nil
+}
+
 func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 	// If the blockHash for the asked number is not present in the
 	// appended database we ask the peer for the block with this hash
@@ -287,22 +310,21 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 			// while the coordinator's in-memory event history does not. Treat only
 			// the canonical hash as synchronized. Replay stored non-canonical
 			// blocks so the new coordinator can reconsider them.
-			storedBlock := h.core.GetBlockByHash(blockHash)
-			if h.core.GetCanonicalHash(blockNumber) == blockHash {
+			alreadyCanonical, replayed, err := applyPrimeBlock(h.core, block)
+			if alreadyCanonical {
 				return ErrBlockAlreadyAppended
-			} else if storedBlock != nil {
+			}
+			if replayed {
 				h.logger.WithFields(log.Fields{
 					"hash":   blockHash,
 					"number": blockNumber,
 				}).Info("Replaying stored non-canonical prime block")
-				if err := h.core.ReemitChainEventForHC(storedBlock); err != nil {
+				if err != nil {
 					h.logger.WithFields(log.Fields{
 						"err":  err,
 						"hash": blockHash,
 					}).Warn("Failed to replay stored non-canonical prime block")
 				}
-			} else {
-				h.core.WriteBlock(block)
 			}
 		}
 	}
