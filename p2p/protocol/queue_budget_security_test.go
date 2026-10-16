@@ -7,57 +7,83 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 )
 
-// H4: one stream must not queue more than its byte budget.
-func TestStreamQueueBudgetLimitsOneStream(t *testing.T) {
-	total := new(atomic.Int64)
-	b := &streamQueueBudget{streamLimit: 10, total: total, totalLimit: 100}
-	if !b.tryAcquire(6) {
-		t.Fatal("first message rejected")
+func TestQueueStreamMessageGlobalBudget(t *testing.T) {
+	if got := inboundQueuedBytes.Load(); got != 0 {
+		t.Fatalf("previous test retained %d bytes", got)
 	}
-	if b.tryAcquire(5) {
-		t.Fatal("stream budget exceeded")
+	defer inboundQueuedBytes.Store(0)
+	inboundQueuedBytes.Store(maxQueuedBytesTotal - 2)
+
+	first := make(chan []byte, 1)
+	second := make(chan []byte, 1)
+	firstBytes := new(atomic.Int64)
+	secondBytes := new(atomic.Int64)
+	if !queueStreamMessage(first, []byte{1, 2}, firstBytes) {
+		t.Fatal("message inside the global limit was rejected")
 	}
-	b.release(6)
-	if !b.tryAcquire(10) {
-		t.Fatal("released bytes were not returned to the stream budget")
+	if queueStreamMessage(second, []byte{1}, secondBytes) || len(second) != 0 {
+		t.Fatal("another stream exceeded the global limit")
 	}
-	b.release(10)
-	if total.Load() != 0 {
-		t.Fatalf("total budget leaked %d bytes", total.Load())
+	if got := inboundQueuedBytes.Load(); got != maxQueuedBytesTotal {
+		t.Fatalf("rejected message changed the budget: %d", got)
+	}
+	if got := secondBytes.Load(); got != 0 {
+		t.Fatalf("rejected message changed the stream budget: %d", got)
+	}
+	inboundQueuedBytes.Add(-int64(len(<-first))) // The worker finishes the first message.
+	firstBytes.Add(-2)
+	if !queueStreamMessage(second, []byte{1}, secondBytes) {
+		t.Fatal("released bytes were not reusable")
 	}
 }
 
-// H4: many streams together must not queue more than the total budget, so one
-// peer cannot open many streams to multiply the per stream limit.
-func TestStreamQueueBudgetLimitsAllStreams(t *testing.T) {
-	total := new(atomic.Int64)
-	a := &streamQueueBudget{streamLimit: 10, total: total, totalLimit: 15}
-	b := &streamQueueBudget{streamLimit: 10, total: total, totalLimit: 15}
-	if !a.tryAcquire(10) {
-		t.Fatal("first stream rejected")
+func TestQueueStreamMessagePreventsOneStreamMonopoly(t *testing.T) {
+	if got := inboundQueuedBytes.Load(); got != 0 {
+		t.Fatalf("previous test retained %d bytes", got)
 	}
-	if b.tryAcquire(10) {
-		t.Fatal("total budget exceeded")
+	defer inboundQueuedBytes.Store(0)
+
+	largeFrame := make([]byte, common.MaxStreamMessageSize)
+	first := make(chan []byte, msgChanSize)
+	second := make(chan []byte, 1)
+	firstBytes := new(atomic.Int64)
+	secondBytes := new(atomic.Int64)
+	for i := 0; i < 5; i++ {
+		if !queueStreamMessage(first, largeFrame, firstBytes) {
+			t.Fatalf("frame %d rejected before the per-stream limit", i)
+		}
 	}
-	if total.Load() != 10 {
-		t.Fatalf("rejected message changed the total budget: %d", total.Load())
+	if queueStreamMessage(first, largeFrame, firstBytes) {
+		t.Fatal("one stream exceeded the per-stream limit")
 	}
-	if !b.tryAcquire(5) {
-		t.Fatal("second stream rejected inside the total budget")
+	if !queueStreamMessage(second, largeFrame, secondBytes) {
+		t.Fatal("another stream was starved by the first stream")
 	}
-	a.release(10)
-	b.release(5)
-	if total.Load() != 0 {
-		t.Fatalf("total budget leaked %d bytes", total.Load())
+	if got := firstBytes.Load(); got != 5*common.MaxStreamMessageSize {
+		t.Fatalf("first stream retained %d bytes", got)
 	}
 }
 
-// The default budgets must still fit the largest valid stream messages.
-func TestStreamQueueBudgetDefaultsFitLargestMessage(t *testing.T) {
-	if maxQueuedBytesPerStream < 2*common.MaxStreamMessageSize {
-		t.Fatalf("per stream budget %d does not fit two %d byte messages", maxQueuedBytesPerStream, common.MaxStreamMessageSize)
+func TestQueueStreamMessageAllowsSmallBurst(t *testing.T) {
+	if got := inboundQueuedBytes.Load(); got != 0 {
+		t.Fatalf("previous test retained %d bytes", got)
 	}
-	if maxQueuedBytesTotal < maxQueuedBytesPerStream {
-		t.Fatalf("total budget %d is below the per stream budget %d", maxQueuedBytesTotal, maxQueuedBytesPerStream)
+	defer inboundQueuedBytes.Store(0)
+
+	q := make(chan []byte, msgChanSize)
+	streamBytes := new(atomic.Int64)
+	for i := 0; i < msgChanSize; i++ {
+		if !queueStreamMessage(q, []byte{1}, streamBytes) {
+			t.Fatalf("small message %d was rejected", i)
+		}
+	}
+	if queueStreamMessage(q, []byte{1}, streamBytes) {
+		t.Fatal("full channel accepted another message")
+	}
+	if got := inboundQueuedBytes.Load(); got != int64(msgChanSize) {
+		t.Fatalf("full-channel rejection leaked bytes: %d", got)
+	}
+	if got := streamBytes.Load(); got != int64(msgChanSize) {
+		t.Fatalf("full-channel rejection leaked stream bytes: %d", got)
 	}
 }
