@@ -912,49 +912,11 @@ func (c *Core) SubmitBlock(raw hexutil.Bytes, powId types.PowID) (*types.WorkObj
 		return nil, fmt.Errorf("invalid auxpow signature")
 	}
 
-	// Verify the merkle root as well
-	expectedMerkleRoot := types.CalculateMerkleRoot(workObjectCopy.AuxPow().PowID(), workObjectCopy.AuxPow().Transaction(), workObjectCopy.AuxPow().MerkleBranch())
-	if workObjectCopy.AuxPow().Header().MerkleRoot() != expectedMerkleRoot {
-		return nil, errors.New("invalid merkle root in auxpow")
+	if err := verifyAuxPowBinding(workObjectCopy.WorkObjectHeader()); err != nil {
+		return nil, err
 	}
-
-	scryptSig := types.ExtractScriptSigFromCoinbaseTx(workObjectCopy.AuxPow().Transaction())
-
-	coinbaseSealHash, err := types.ExtractSealHashFromCoinbase(scryptSig)
-	if err != nil {
-		return nil, fmt.Errorf("coinbase seal hash not found in the auxpow: %v", err)
-	}
-
 	if err := types.ValidatePrevOutPointIndexAndSequenceOfCoinbase(workObjectCopy.AuxPow().Transaction()); err != nil {
 		return nil, fmt.Errorf("invalid prev out point index and sequence in coinbase transaction: %v", err)
-	}
-
-	switch workObjectCopy.AuxPow().PowID() {
-	case types.Kawpow, types.SHA_BTC, types.SHA_BCH:
-		if workObjectCopy.SealHash() != coinbaseSealHash {
-			return nil, fmt.Errorf("coinbase seal hash does not match uncle seal hash, expected %v, got %v", workObjectCopy.SealHash(), coinbaseSealHash)
-		}
-	case types.Scrypt:
-		// Since litecoin is merged mined with dogecoin, merkle root
-		// needs to be calculated
-		dogeHash := common.Hash(workObjectCopy.AuxPow().AuxPow2())
-		if (dogeHash == common.Hash{}) {
-			return nil, fmt.Errorf("auxpow2 is empty for scrypt powid")
-		}
-		auxMerkleRoot := types.CreateAuxMerkleRoot(dogeHash, workObjectCopy.SealHash())
-		if auxMerkleRoot != coinbaseSealHash {
-			return nil, fmt.Errorf("coinbase seal hash does not match uncle aux merkle root, expected %v, got %v", auxMerkleRoot, coinbaseSealHash)
-		}
-		merkleSize, merkleNonce, err := types.ExtractMerkleSizeAndNonceFromCoinbase(scryptSig)
-		if err != nil {
-			return nil, err
-		}
-		if merkleSize != params.MerkleSize {
-			return nil, fmt.Errorf("invalid merkle size: have %v, want %v", merkleSize, params.MerkleSize)
-		}
-		if merkleNonce != params.MerkleNonce {
-			return nil, fmt.Errorf("invalid merkle nonce: have %v, want %v", merkleNonce, params.MerkleNonce)
-		}
 	}
 
 	return workObjectCopy, nil
