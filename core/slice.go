@@ -1417,11 +1417,14 @@ func (sl *Slice) ConstructLocalBlock(header *types.WorkObject) (*types.WorkObjec
 // body from the workers pendingBlockBodyCache. This method is used when the miner sends in the
 // header.
 // minedBlockBodyFromWorkObject returns a copy of wo to use as the pending block
-// body, or nil if wo has no body that is bound to its header. The work commits
-// to HeaderHash, and the body header commits to the transactions, outbound
-// etxs and uncles, so a bound body is the body that the work was done for.
+// Zone body, or nil if wo has no body that is bound to its header. The work
+// commits to HeaderHash, and the body header commits to the transactions,
+// outbound etxs and uncles, so a bound body is the body that the work was done for.
 func minedBlockBodyFromWorkObject(wo *types.WorkObject) *types.WorkObject {
 	if wo == nil || wo.Body() == nil || wo.Header() == nil || wo.WorkObjectHeader() == nil {
+		return nil
+	}
+	if len(wo.Manifest()) != 0 || len(wo.InterlinkHashes()) != 0 {
 		return nil
 	}
 	header := wo.Header()
@@ -1451,9 +1454,8 @@ func (sl *Slice) ConstructLocalMinedBlock(wo *types.WorkObject) (*types.WorkObje
 
 		pendingBlockBody = sl.GetPendingBlockBody(powId, woHeaderCopy.SealHash())
 		if pendingBlockBody == nil {
-			// The pending body cache is bounded, so a busy stratum server can
-			// evict a body before its share is found. Use the body that came
-			// with the mined object if it is bound to the mined header.
+			// Stratum may still hold the template after the worker's body cache
+			// evicts it. Use that body if it is bound to the mined header.
 			pendingBlockBody = minedBlockBodyFromWorkObject(wo)
 		}
 		if pendingBlockBody == nil {

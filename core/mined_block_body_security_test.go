@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 )
 
@@ -57,9 +58,27 @@ func TestMinedBlockBodyFromWorkObjectRejectsUnboundBody(t *testing.T) {
 		t.Fatal("transactions that do not match the tx root accepted")
 	}
 
+	extraEtx := newMinedBodyTestWorkObject()
+	extraEtx.Body().SetOutboundEtxs(types.Transactions{types.NewTx(&types.QuaiTx{ChainID: big.NewInt(1), Nonce: 1})})
+	if minedBlockBodyFromWorkObject(extraEtx) != nil {
+		t.Fatal("outbound etxs that do not match the etx root accepted")
+	}
+
 	extraUncle := newMinedBodyTestWorkObject()
 	extraUncle.Body().SetUncles([]*types.WorkObjectHeader{newTestWorkObjectHeader(1)})
 	if minedBlockBodyFromWorkObject(extraUncle) != nil {
 		t.Fatal("uncles that do not match the uncle root accepted")
+	}
+
+	regionBody := newMinedBodyTestWorkObject()
+	regionBody.Body().SetManifest(types.BlockManifest{common.Hash{1}})
+	if minedBlockBodyFromWorkObject(regionBody) != nil {
+		t.Fatal("subordinate manifest accepted in a zone body")
+	}
+
+	primeBody := newMinedBodyTestWorkObject()
+	primeBody.Body().SetInterlinkHashes(common.Hashes{common.Hash{1}})
+	if minedBlockBodyFromWorkObject(primeBody) != nil {
+		t.Fatal("interlink hashes accepted in a zone body")
 	}
 }
