@@ -227,8 +227,23 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 
 	// Don't append the block which already exists in the database.
 	if sl.hc.HasHeader(header.Hash(), header.NumberU64(nodeCtx)) && (sl.hc.GetTerminiByHash(header.Hash()) != nil) && !domOrigin {
-		sl.logger.WithField("hash", header.Hash()).Debug("Block has already been appended")
-		return nil, ErrKnownBlock
+		// Header and termini being stored does not mean the append finished: an
+		// append interrupted after PCRC/AppendHeader (e.g. a restart, or the sub
+		// failing to sync) leaves them in the database while the head never moves.
+		// Every later attempt was then rejected here as a known block and the
+		// chain stalled forever on the next block after the head. If the block
+		// extends our current head but is not canonical at its height, it was
+		// never really appended, so let it go through the append again.
+		currentHeader := sl.hc.CurrentHeader()
+		extendsHead := currentHeader != nil && header.ParentHash(nodeCtx) == currentHeader.Hash()
+		if !extendsHead || sl.hc.GetCanonicalHash(header.NumberU64(nodeCtx)) == header.Hash() {
+			sl.logger.WithField("hash", header.Hash()).Debug("Block has already been appended")
+			return nil, ErrKnownBlock
+		}
+		sl.logger.WithFields(log.Fields{
+			"hash":   header.Hash(),
+			"number": header.NumberArray(),
+		}).Warn("Block is stored but was never appended on top of the current head, re-appending")
 	}
 	time1 := common.PrettyDuration(time.Since(start))
 
