@@ -281,17 +281,17 @@ func TestWriteBlockRejectsForgedAuxPowBeforeStorage(t *testing.T) {
 	}
 }
 
-func TestCalcOrderRejectsUnregisteredZeroNumber(t *testing.T) {
+func TestCalcOrderPreservesZeroNumberPrimeOrder(t *testing.T) {
 	activateConsensusFixForkForTest(t)
 	block := newCalcOrderKawpowBlock()
 	block.WorkObjectHeader().SetNumber(big.NewInt(0))
-	// Even a consistent commitment must not turn an arbitrary object into genesis.
+	// Keep the AuxPoW commitment valid so the historical zero-number path is reached.
 	coinbase := types.NewAuxPowCoinbaseTx(types.Kawpow, 100, []byte{0x51}, block.SealHash(), 123)
 	block.AuxPow().SetTransaction(coinbase)
 	block.AuxPow().SetHeader(types.NewBlockHeader(types.Kawpow, 4, [32]byte{}, types.CalculateMerkleRoot(types.Kawpow, coinbase, nil), 123, 0x1d00ffff, 7, 100))
 	hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
-	if _, _, err := hc.CalcOrder(block); err == nil {
-		t.Fatal("unregistered zero-number object accepted as genesis")
+	if entropy, order, err := hc.CalcOrder(block); err != nil || order != common.PRIME_CTX || entropy.Sign() != 0 {
+		t.Fatalf("zero-number object lost Prime order: entropy=%v order=%d err=%v", entropy, order, err)
 	}
 }
 
