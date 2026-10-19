@@ -361,6 +361,8 @@ var (
 	FounderForfeitureForkBlock uint64 = 2448392
 	// ConsensusFixForkBlock activates the workshare identity, early work-object
 	// binding, and EOA self-destruct rules at one Prime block.
+	// ConsensusFixForkBlock activates workshare identity, zero-number order
+	// rejection, and EOA self-destruct rules at one Prime block.
 	ConsensusFixForkBlock uint64 = ^uint64(0) // Set to the scheduled Prime block before release.
 
 	QiWrappingChangeBlock uint64 = 1320000

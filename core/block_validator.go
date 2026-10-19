@@ -135,7 +135,7 @@ func (v *BlockValidator) SanityCheckWorkObjectBlockViewBody(wo *types.WorkObject
 	if wo.WorkObjectHeader() == nil {
 		return fmt.Errorf("wo work object header is nil")
 	}
-	if err := v.hc.verifyEarlyWorkObjectBinding(wo); err != nil {
+	if err := v.hc.verifyWorkObjectBinding(wo); err != nil {
 		return err
 	}
 	if wo.WorkObjectHeader().Lock() > uint8(len(params.LockupByteToBlockDepth)-1) {
@@ -269,7 +269,7 @@ func (v *BlockValidator) SanityCheckWorkObjectHeaderViewBody(wo *types.WorkObjec
 	if wo.WorkObjectHeader() == nil {
 		return fmt.Errorf("wo work object header is nil")
 	}
-	if err := v.hc.verifyEarlyWorkObjectBinding(wo); err != nil {
+	if err := v.hc.verifyWorkObjectBinding(wo); err != nil {
 		return err
 	}
 	if wo.WorkObjectHeader().Lock() > uint8(len(params.LockupByteToBlockDepth)-1) {
