@@ -93,24 +93,24 @@ func TestCalcOrderRejectsForgedBodyHeader(t *testing.T) {
 	}
 }
 
-func TestCalcOrderSharedForkBoundaryDoesNotCarryPoisonedOrder(t *testing.T) {
-	setForkForTest(t, &params.ConsensusFixForkBlock, 2)
-	honest := newCalcOrderTestBlock(types.EmptyHeader())
-	forged := types.NewWorkObject(honest.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
-	forged.Body().SetHeader(forgedBodyHeader())
-	hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
-	if _, order, err := hc.CalcOrder(forged); err != nil || order != common.PRIME_CTX {
-		t.Fatalf("historical order changed: order=%d err=%v", order, err)
-	}
-	if _, _, cached := hc.CheckInCalcOrderCache(honest.Hash()); cached {
-		t.Fatal("pre-fork forged order survived in the cache")
-	}
-	setForkForTest(t, &params.ConsensusFixForkBlock, 1)
-	if _, _, err := hc.CalcOrder(forged); !errors.Is(err, ErrHeaderHashMismatch) {
-		t.Fatalf("post-fork forged body accepted: %v", err)
-	}
-	if _, order, err := hc.CalcOrder(honest); err != nil || order != common.REGION_CTX {
-		t.Fatalf("honest order changed after fork: order=%d err=%v", order, err)
+func TestCalcOrderRejectsForgedBodyAtAllHeights(t *testing.T) {
+	for _, forkHeight := range []uint64{2, 1} {
+		t.Run(fmt.Sprintf("fork_at_%d", forkHeight), func(t *testing.T) {
+			setForkForTest(t, &params.ConsensusFixForkBlock, forkHeight)
+			honest := newCalcOrderTestBlock(types.EmptyHeader())
+			forged := types.NewWorkObject(honest.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
+			forged.Body().SetHeader(forgedBodyHeader())
+			hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
+			if _, _, err := hc.CalcOrder(forged); !errors.Is(err, ErrHeaderHashMismatch) {
+				t.Fatalf("forged body accepted: %v", err)
+			}
+			if _, _, cached := hc.CheckInCalcOrderCache(honest.Hash()); cached {
+				t.Fatal("forged order reached the cache")
+			}
+			if _, order, err := hc.CalcOrder(honest); err != nil || order != common.REGION_CTX {
+				t.Fatalf("honest order changed: order=%d err=%v", order, err)
+			}
+		})
 	}
 }
 
@@ -205,24 +205,24 @@ func TestCalcOrderRejectsForgedAuxPowBinding(t *testing.T) {
 	}
 }
 
-func TestCalcOrderAuxPowSharedForkBoundary(t *testing.T) {
+func TestCalcOrderRejectsForgedAuxPowAtAllHeights(t *testing.T) {
 	height := params.KawPowForkBlock + params.KawPowTransitionPeriod + 1
-	setForkForTest(t, &params.ConsensusFixForkBlock, height+1)
-	honest := newCalcOrderKawpowBlock()
-	forged := forgeCalcOrderKawpowBody(honest, false)
-	hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
-	if _, _, err := hc.CalcOrder(forged); err != nil {
-		t.Fatalf("historical early order check changed: %v", err)
-	}
-	if _, _, cached := hc.CheckInCalcOrderCache(forged.Hash()); cached {
-		t.Fatal("pre-fork forged AuxPow order survived in the cache")
-	}
-	setForkForTest(t, &params.ConsensusFixForkBlock, height)
-	if _, _, err := hc.CalcOrder(forged); err == nil || !strings.Contains(err.Error(), "seal hash") {
-		t.Fatalf("post-fork forged AuxPow binding accepted: %v", err)
-	}
-	if _, order, err := hc.CalcOrder(honest); err != nil || order != common.REGION_CTX {
-		t.Fatalf("honest order changed after fork: order=%d err=%v", order, err)
+	for _, forkHeight := range []uint64{height + 1, height} {
+		t.Run(fmt.Sprintf("fork_at_%d", forkHeight), func(t *testing.T) {
+			setForkForTest(t, &params.ConsensusFixForkBlock, forkHeight)
+			honest := newCalcOrderKawpowBlock()
+			forged := forgeCalcOrderKawpowBody(honest, false)
+			hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
+			if _, _, err := hc.CalcOrder(forged); err == nil || !strings.Contains(err.Error(), "seal hash") {
+				t.Fatalf("forged AuxPow binding accepted: %v", err)
+			}
+			if _, _, cached := hc.CheckInCalcOrderCache(forged.Hash()); cached {
+				t.Fatal("forged AuxPow order reached the cache")
+			}
+			if _, order, err := hc.CalcOrder(honest); err != nil || order != common.REGION_CTX {
+				t.Fatalf("honest order changed: order=%d err=%v", order, err)
+			}
+		})
 	}
 }
 
