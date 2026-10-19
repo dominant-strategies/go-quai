@@ -18,12 +18,9 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 	if err := hc.verifyWorkObjectBinding(header); err != nil {
 		return big.NewInt(0), -1, err
 	}
-	postFork := header.PrimeTerminusNumber().Uint64() >= params.ConsensusFixForkBlock
 	nodeCtx := hc.NodeLocation().Context()
+	// Preserve the historical Prime order for zero-number work objects.
 	if header.NumberU64(nodeCtx) == 0 {
-		if postFork && !hc.IsGenesisHash(header.Hash()) {
-			return big.NewInt(0), -1, consensus.ErrInvalidNumber
-		}
 		return big.NewInt(0), common.PRIME_CTX, nil
 	}
 	// check if the order for this block has already been computed
