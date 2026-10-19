@@ -546,10 +546,10 @@ func (w *worker) asyncStateLoop() {
 				}()
 				for _, wo := range side.Blocks {
 					// Short circuit for duplicate side blocks
-					if exists := w.kawpowShares.Contains(wo.WorkObjectHeader().PowIdentity()); exists {
+					if exists := w.kawpowShares.Contains(wo.Hash()); exists {
 						continue
 					}
-					w.kawpowShares.Add(wo.WorkObjectHeader().PowIdentity(), *wo.WorkObjectHeader())
+					w.kawpowShares.Add(wo.Hash(), *wo.WorkObjectHeader())
 				}
 			}()
 		case <-w.exitCh:
@@ -1017,11 +1017,11 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 
 			switch powid {
 			case types.Progpow, types.Kawpow:
-				w.kawpowShares.Remove(powIdentity)
+				w.kawpowShares.Remove(hash)
 			case types.SHA_BCH, types.SHA_BTC:
-				w.shaShares.Remove(powIdentity)
+				w.shaShares.Remove(hash)
 			case types.Scrypt:
-				w.scryptShares.Remove(powIdentity)
+				w.scryptShares.Remove(hash)
 			}
 		}
 
@@ -2665,19 +2665,17 @@ func (w *worker) PendingWorkShares() []*types.WorkObjectHeader {
 		return nil
 	}
 
-	// worksharesIncluded creates a map of workshare hashes that are included in
-	// the current block and its recent ancestors within the inclusion depth, so
-	// that they can be filtered out from the pending workshares list
-	worksharesIncluded := make(map[common.Hash]bool)
+	// Track work already included in recent blocks or selected from the caches.
+	seenWork := make(map[common.Hash]bool)
 	for _, ws := range currentHeader.Uncles() {
-		worksharesIncluded[ws.PowIdentity()] = true
+		seenWork[ws.PowIdentity()] = true
 	}
 	if currentHeader.NumberU64(common.ZONE_CTX) > uint64(params.NewWorkSharesInclusionDepth) {
 		for _, ancestor := range w.hc.GetBlocksFromHash(currentHeader.ParentHash(common.ZONE_CTX), params.NewWorkSharesInclusionDepth) {
 			for _, uncle := range ancestor.Uncles() {
-				worksharesIncluded[uncle.PowIdentity()] = true
+				seenWork[uncle.PowIdentity()] = true
 			}
-			worksharesIncluded[ancestor.WorkObjectHeader().PowIdentity()] = true
+			seenWork[ancestor.WorkObjectHeader().PowIdentity()] = true
 		}
 	}
 
@@ -2692,9 +2690,11 @@ func (w *worker) PendingWorkShares() []*types.WorkObjectHeader {
 			if workshare.NumberU64()+uint64(params.NewWorkSharesInclusionDepth) < currentNumber {
 				continue
 			}
-			if worksharesIncluded[workshare.PowIdentity()] {
+			powIdentity := workshare.PowIdentity()
+			if seenWork[powIdentity] {
 				continue
 			}
+			seenWork[powIdentity] = true
 			workshareCopy := workshare
 			pending = append(pending, &workshareCopy)
 		}
@@ -2768,15 +2768,15 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 		return errors.New("work share received from peer is not valid")
 	}
 
-	// Key the share caches by the proof of work, so that re-encoded copies of
-	// one share cannot fill the cache and push out other shares
-	powIdentity := workShare.PowIdentity()
+	// Keep the cache key as the workshare hash. Duplicate work is filtered
+	// when pending shares are selected and when uncles are committed.
+	hash := workShare.Hash()
 	if workShare.AuxPow() == nil || workShare.AuxPow().PowID() == types.Kawpow {
-		w.kawpowShares.ContainsOrAdd(powIdentity, *workShare)
+		w.kawpowShares.ContainsOrAdd(hash, *workShare)
 	} else if workShare.AuxPow().PowID() == types.SHA_BTC || workShare.AuxPow().PowID() == types.SHA_BCH {
-		w.shaShares.ContainsOrAdd(powIdentity, *workShare)
+		w.shaShares.ContainsOrAdd(hash, *workShare)
 	} else if workShare.AuxPow().PowID() == types.Scrypt {
-		w.scryptShares.ContainsOrAdd(powIdentity, *workShare)
+		w.scryptShares.ContainsOrAdd(hash, *workShare)
 	}
 
 	if w.hc.NodeCtx() == common.ZONE_CTX && w.hc.config.TelemetryEnabled {

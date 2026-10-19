@@ -188,3 +188,40 @@ func TestVerifyUnclesKeepsDistinctWork(t *testing.T) {
 		t.Fatalf("distinct work rejected as duplicate: %v", err)
 	}
 }
+
+func TestPendingWorkSharesSkipsReencodedWork(t *testing.T) {
+	primeTerminusNumber := params.KawPowForkBlock + params.KawPowTransitionPeriod + 1
+	share := newTestKawpowHeader(primeTerminusNumber)
+	reencoded := types.CopyWorkObjectHeader(share)
+	reencoded.AuxPow().SetAuxPow2(nil)
+	other := types.CopyWorkObjectHeader(share)
+	other.AuxPow().Header().SetNonce64(8)
+	if share.Hash() == reencoded.Hash() || share.PowIdentity() != reencoded.PowIdentity() || share.PowIdentity() == other.PowIdentity() {
+		t.Fatal("test setup: expected two hashes for one work and a distinct workshare")
+	}
+
+	newCache := func() *lru.Cache[common.Hash, types.WorkObjectHeader] {
+		cache, err := lru.New[common.Hash, types.WorkObjectHeader](10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cache
+	}
+	hc := newSecurityTestHeaderChain(t, common.Hash{})
+	hc.numberCache, _ = lru.New[common.Hash, uint64](10)
+	current := newTestBlockWithUncles(newTestWorkObjectHeader(primeTerminusNumber), nil)
+	hc.currentHeader.Store(current)
+	w := &worker{hc: hc, kawpowShares: newCache(), shaShares: newCache(), scryptShares: newCache()}
+	for _, header := range []*types.WorkObjectHeader{share, reencoded, other} {
+		w.kawpowShares.Add(header.Hash(), *header)
+	}
+	if pending := w.PendingWorkShares(); len(pending) != 2 {
+		t.Fatalf("got %d pending shares, want one per distinct work", len(pending))
+	}
+
+	current.Body().SetUncles([]*types.WorkObjectHeader{share})
+	pending := w.PendingWorkShares()
+	if len(pending) != 1 || pending[0].PowIdentity() != other.PowIdentity() {
+		t.Fatalf("included work was returned again: %v", pending)
+	}
+}
