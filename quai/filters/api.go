@@ -1177,7 +1177,8 @@ func parsePowID(algorithm string) (types.PowID, error) {
 }
 
 // BlockTemplateUpdates sends a notification when the block template changes.
-// Triggers: quaiHeight change, prevHash change, sealHash change (kawpow only)
+// Triggers: quaiHeight change, quaiParentHash change (reorg at the same height), prevHash change,
+// signature time change, sealHash change (kawpow only)
 // Heartbeat: sends current template every 5 seconds if no change occurred
 func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit BlockTemplateUpdatesCriteria) (*rpc.Subscription, error) {
 	if api.activeSubscriptions >= api.subscriptionLimit {
@@ -1259,8 +1260,8 @@ func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit Block
 				changed = true // Signature time changed
 			} else if powID == types.Kawpow && lastState.sealHash != newState.sealHash {
 				changed = true // Kawpow: sealHash changed (epoch change)
-			} else if powID == types.Kawpow && lastState.quaiParentHash != newState.quaiParentHash {
-				changed = true
+			} else if lastState.quaiParentHash != newState.quaiParentHash {
+				changed = true // Reorg at the same height: workshares on the old parent can't be included
 			}
 
 			if changed || forceUpdate {

@@ -1414,6 +1414,7 @@ func MarshalAuxPowTemplate(wo *types.WorkObject, powID types.PowID, extraNonce1H
 		"quairoot":                    sealHashString,
 		"quaiheight":                  wo.WorkObjectHeader().NumberU64(),
 		"quaidifficulty":              wo.WorkObjectHeader().Difficulty(),
+		"quaiparenthash":              wo.WorkObjectHeader().ParentHash().Hex(),
 	}, nil
 }
 
