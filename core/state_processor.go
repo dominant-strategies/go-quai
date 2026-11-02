@@ -1525,6 +1525,7 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
+		evm.UndoCoinbasesDeleted()
 		return nil, nil, err
 	}
 
@@ -1541,9 +1542,11 @@ func applyTransaction(msg types.Message, parent *types.WorkObject, config *param
 		}
 	}
 	if ETXRGas > *etxRLimit {
+		evm.UndoCoinbasesDeleted()
 		return nil, nil, fmt.Errorf("tx %032x emits too many cross-region ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash(), ETXRGas, *etxRLimit)
 	}
 	if ETXPGas > *etxPLimit {
+		evm.UndoCoinbasesDeleted()
 		return nil, nil, fmt.Errorf("tx %032x emits too many cross-prime ETXs for block. gas emitted: %d, gas limit: %d", tx.Hash(), ETXPGas, *etxPLimit)
 	}
 	*etxRLimit -= ETXRGas
