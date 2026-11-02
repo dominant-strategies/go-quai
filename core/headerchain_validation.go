@@ -318,31 +318,8 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 			return fmt.Errorf("uncle inclusion is not allowed before block %v", params.ControllerKickInBlock)
 		}
 
-		uncleDataLen := len(uncle.Data())
-		if uncleDataLen == 0 {
-			return fmt.Errorf("header data field is empty")
-		}
-		if uncleDataLen >= 1 {
-			lock := uncle.Data()[0]
-			if lock > uint8(len(params.LockupByteToBlockDepth)-1) {
-				return fmt.Errorf("lock byte in header data: %v is invalid", lock)
-			}
-		}
-		if uncleDataLen >= 1+common.AddressLength {
-			lockupContract := uncle.Data()[1 : 1+common.AddressLength]
-			lockupContractAddress := common.BytesToAddress(lockupContract, uncle.Location())
-			_, err := lockupContractAddress.InternalAndQuaiAddress()
-			if err != nil {
-				return fmt.Errorf("out-of-scope lockup contract in the header: %v location: %v nodeLocation: %v, err %s", lockupContractAddress, uncle.Location(), hc.powConfig.NodeLocation, err)
-			}
-		}
-		if uncleDataLen == 1+2*common.AddressLength {
-			beneficiary := uncle.Data()[1+common.AddressLength : 1+2*common.AddressLength]
-			beneficiaryAddress := common.BytesToAddress(beneficiary, uncle.Location())
-			_, err := beneficiaryAddress.InternalAddress()
-			if err != nil {
-				return fmt.Errorf("out-of-scope beneficiary in the header: %v location: %v nodeLocation: %v, err %s", beneficiaryAddress, uncle.Location(), hc.powConfig.NodeLocation, err)
-			}
+		if err := validateUncleData(uncle, hc.powConfig.NodeLocation); err != nil {
+			return err
 		}
 
 		// Make sure the uncle has a valid ancestry
@@ -547,6 +524,31 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 			if diff := new(big.Int).Sub(uncle.Number(), parentNumber); diff.Cmp(big.NewInt(1)) != 0 {
 				return consensus.ErrInvalidNumber
 			}
+		}
+	}
+	return nil
+}
+
+// validateUncleData checks the header data rules that apply to a work share
+// both before it is cached and when it is included in a block.
+func validateUncleData(uncle *types.WorkObjectHeader, nodeLocation common.Location) error {
+	data := uncle.Data()
+	if len(data) == 0 {
+		return fmt.Errorf("header data field is empty")
+	}
+	if data[0] > uint8(len(params.LockupByteToBlockDepth)-1) {
+		return fmt.Errorf("lock byte in header data: %v is invalid", data[0])
+	}
+	if len(data) >= 1+common.AddressLength {
+		lockupContractAddress := common.BytesToAddress(data[1:1+common.AddressLength], uncle.Location())
+		if _, err := lockupContractAddress.InternalAndQuaiAddress(); err != nil {
+			return fmt.Errorf("out-of-scope lockup contract in the header: %v location: %v nodeLocation: %v, err %s", lockupContractAddress, uncle.Location(), nodeLocation, err)
+		}
+	}
+	if len(data) == 1+2*common.AddressLength {
+		beneficiaryAddress := common.BytesToAddress(data[1+common.AddressLength:1+2*common.AddressLength], uncle.Location())
+		if _, err := beneficiaryAddress.InternalAddress(); err != nil {
+			return fmt.Errorf("out-of-scope beneficiary in the header: %v location: %v nodeLocation: %v, err %s", beneficiaryAddress, uncle.Location(), nodeLocation, err)
 		}
 	}
 	return nil

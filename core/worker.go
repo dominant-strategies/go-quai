@@ -1040,6 +1040,13 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	if env.family.Contains(hash) || env.family.Contains(powIdentity) {
 		return errors.New("uncle already included")
 	}
+	// Check candidate-dependent rules before including this share. Existing
+	// uncle identity and count checks above handle interactions between shares.
+	candidate := types.NewWorkObject(env.wo.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
+	candidate.Body().SetUncles([]*types.WorkObjectHeader{uncle})
+	if err := w.hc.VerifyUncles(candidate); err != nil {
+		return err
+	}
 	env.uncles[hash] = uncle
 	return nil
 }
@@ -2574,6 +2581,11 @@ func (w *worker) FinalizeAssemble(newWo *types.WorkObject, parent *types.WorkObj
 	if err != nil {
 		return nil, err
 	}
+	if nodeCtx == common.ZONE_CTX && len(wo.Uncles()) > 0 {
+		if err := w.hc.VerifyUncles(wo); err != nil {
+			return nil, fmt.Errorf("invalid uncles in sealing candidate: %w", err)
+		}
+	}
 
 	// Once the uncles list is assembled in the block
 	if nodeCtx == common.ZONE_CTX {
@@ -2744,6 +2756,12 @@ func (w *worker) AddAuxPowTemplate(auxTemplate *types.AuxTemplate) error {
 }
 
 func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
+	if workShare == nil {
+		return errors.New("work share is nil")
+	}
+	if err := validateUncleData(workShare, w.hc.NodeLocation()); err != nil {
+		return err
+	}
 	// Don't add the workshare into the list if its farther than the worksharefilterdist
 	if workShare.NumberU64()+uint64(2*params.NewWorkSharesInclusionDepth) < w.hc.CurrentHeader().NumberU64(common.ZONE_CTX) {
 		return nil
