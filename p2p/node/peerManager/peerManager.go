@@ -55,6 +55,11 @@ const (
 
 	// c_maxBootNodes is the maximum number of bootnodes to connect to when bootstrapping
 	c_maxBootNodes = 10
+	// Avoid repeating a peer database/DHT fallback for every request when all
+	// selected live streams are failing for the same topic.
+	c_topicFallbackCooldown = 10 * time.Second
+	// DHT discovery must not hold a data request open indefinitely.
+	c_dhtLookupTimeout = 5 * time.Second
 )
 
 type PeerQuality int
@@ -105,6 +110,7 @@ type PeerManager interface {
 	// GetPeers gets randomized set of peers from the database based on the
 	// request degree of the topic
 	GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{}
+	GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{}
 
 	// RefreshBootpeers returns all the current bootpeers for bootstrapping
 	RefreshBootpeers() []peer.AddrInfo
@@ -133,7 +139,9 @@ type BasicPeerManager struct {
 	streamManager streamManager.StreamManager
 
 	// Tracks peers in different quality buckets
-	peerDBs map[string][]*peerdb.PeerDB
+	peerDBs       map[string][]*peerdb.PeerDB
+	fallbackMu    sync.Mutex
+	fallbackAfter map[string]time.Time
 
 	// Initial bootpeers passed via config
 	bootpeers []peer.AddrInfo
@@ -474,9 +482,18 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 }
 
 func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	if pm.peerDBs[topic.String()] == nil {
-		// There have not been any peers added to this topic
+	return pm.GetPeersExcluding(topic, nil)
+}
+
+// GetPeersExcluding removes already-tried peers before the request-degree cap.
+func (pm *BasicPeerManager) GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{} {
+	if len(excluded) > 0 && !pm.reserveTopicFallback(topic.String()) {
 		return make(map[peer.ID]struct{})
+	}
+	if pm.peerDBs[topic.String()] == nil {
+		// A new topic may have no local records yet; discovery can still find
+		// providers after the failed live round.
+		return pm.queryDHT(topic, make(map[peer.ID]struct{}), topic.GetRequestDegree(), excluded)
 	}
 	peerList := make(map[p2p.PeerID]struct{})
 	// Add best peers into the peerList
@@ -488,6 +505,9 @@ func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]
 	// Add last resort peers into the peerList
 	lastResortPeers := pm.getLastResortPeers(topic.String())
 	maps.Copy(peerList, lastResortPeers)
+	for peer := range excluded {
+		delete(peerList, peer)
+	}
 
 	// Randomly select request degree number of peers from the peerList
 	lenPeer := len(peerList)
@@ -511,14 +531,33 @@ func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]
 	}
 
 	// Query the DHT for more peers
-	return pm.queryDHT(topic, peerList, topic.GetRequestDegree()-lenPeer)
+	return pm.queryDHT(topic, peerList, topic.GetRequestDegree()-lenPeer, excluded)
+}
+
+func (pm *BasicPeerManager) reserveTopicFallback(topic string) bool {
+	pm.fallbackMu.Lock()
+	defer pm.fallbackMu.Unlock()
+	now := time.Now()
+	if now.Before(pm.fallbackAfter[topic]) {
+		return false
+	}
+	if pm.fallbackAfter == nil {
+		pm.fallbackAfter = make(map[string]time.Time)
+	}
+	pm.fallbackAfter[topic] = now.Add(c_topicFallbackCooldown)
+	return true
 }
 
 func (pm *BasicPeerManager) GetStreamPeers() []peer.ID {
 	return pm.streamManager.GetStreamPeers()
 }
 
-func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2p.PeerID]struct{}, peerCount int) map[p2p.PeerID]struct{} {
+func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2p.PeerID]struct{}, peerCount int, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{} {
+	if pm.dht == nil {
+		return peerList
+	}
+	ctx, cancel := context.WithTimeout(pm.ctx, c_dhtLookupTimeout)
+	defer cancel()
 	// create a Cid from the slice location
 	shardCid := pubsubManager.TopicToCid(topic)
 
@@ -526,8 +565,8 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2
 	dhtPeers := make(map[p2p.PeerID]struct{})
 	log.Global.Infof("Querying DHT for slice Cid %s", shardCid)
 	// query the DHT for peers in the slice
-	for peer := range pm.dht.FindProvidersAsync(pm.ctx, shardCid, peerCount) {
-		if peer.ID != pm.selfID {
+	for peer := range pm.dht.FindProvidersAsync(ctx, shardCid, peerCount+len(excluded)) {
+		if _, tried := excluded[peer.ID]; peer.ID != pm.selfID && !tried {
 			dhtPeers[peer.ID] = struct{}{}
 		}
 	}

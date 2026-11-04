@@ -1,10 +1,13 @@
 package node
 
 import (
+	"context"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -151,6 +154,95 @@ func (p *P2PNode) Stop() error {
 	}
 }
 
+type requestPeerSource interface {
+	GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{}
+	GetStreamPeers() []peer.ID
+}
+
+func selectRequestPeers(peers []peer.ID, requestDegree int, shuffle func(int, func(int, int))) []peer.ID {
+	if requestDegree <= 0 {
+		return nil
+	}
+	selected := append([]peer.ID(nil), peers...)
+	shuffle(len(selected), func(i, j int) {
+		selected[i], selected[j] = selected[j], selected[i]
+	})
+	if len(selected) > requestDegree {
+		selected = selected[:requestDegree]
+	}
+	return selected
+}
+
+// orderLiveRequestPeers tries peers seen on the requested gossip topic first.
+// The request stream itself is shared across topics, so topic membership is a
+// preference rather than a requirement. Neither input slice is changed.
+func orderLiveRequestPeers(streamPeers, topicPeers []peer.ID, shuffle func(int, func(int, int))) []peer.ID {
+	topicSet := make(map[peer.ID]struct{}, len(topicPeers))
+	for _, peerID := range topicPeers {
+		topicSet[peerID] = struct{}{}
+	}
+	seen := make(map[peer.ID]struct{}, len(streamPeers))
+	preferred := make([]peer.ID, 0, len(streamPeers))
+	other := make([]peer.ID, 0, len(streamPeers))
+	for _, peerID := range streamPeers {
+		if _, duplicate := seen[peerID]; duplicate {
+			continue
+		}
+		seen[peerID] = struct{}{}
+		if _, onTopic := topicSet[peerID]; onTopic {
+			preferred = append(preferred, peerID)
+		} else {
+			other = append(other, peerID)
+		}
+	}
+	return append(selectRequestPeers(preferred, len(preferred), shuffle), selectRequestPeers(other, len(other), shuffle)...)
+}
+
+func topicRequestPeers(source requestPeerSource, topic *pubsubManager.Topic, attempted []peer.ID, requestDegree int, shuffle func(int, func(int, int))) []peer.ID {
+	if requestDegree <= 0 {
+		return nil
+	}
+	attemptedSet := make(map[peer.ID]struct{}, len(attempted))
+	for _, peerID := range attempted {
+		attemptedSet[peerID] = struct{}{}
+	}
+	topicPeers := source.GetPeersExcluding(topic, attemptedSet)
+	selected := make([]peer.ID, 0, len(topicPeers))
+	for peerID := range topicPeers {
+		if _, tried := attemptedSet[peerID]; !tried {
+			selected = append(selected, peerID)
+		}
+	}
+	return selectRequestPeers(selected, requestDegree, shuffle)
+}
+
+// requestPeerRounds tries up to two distinct groups of live peers before a
+// topic database lookup. The exclusion list lasts only for this request.
+func requestPeerRounds(ctx context.Context, source requestPeerSource, topic *pubsubManager.Topic, topicPeers []peer.ID, requestDegree int, shuffle func(int, func(int, int)), attempt func([]peer.ID) bool) {
+	if requestDegree <= 0 {
+		return
+	}
+	live := orderLiveRequestPeers(source.GetStreamPeers(), topicPeers, shuffle)
+	attempted := make([]peer.ID, 0, 2*requestDegree)
+	for start, round := 0, 0; start < len(live) && round < 2; start, round = start+requestDegree, round+1 {
+		end := min(start+requestDegree, len(live))
+		peers := live[start:end]
+		attempted = append(attempted, peers...)
+		if attempt(peers) || ctx.Err() != nil {
+			return
+		}
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	// The database can contain stale records and is expensive under load, so
+	// query it only on bootstrap or after the live rounds have failed.
+	stored := topicRequestPeers(source, topic, attempted, requestDegree, shuffle)
+	if len(stored) > 0 && ctx.Err() == nil {
+		attempt(stored)
+	}
+}
+
 func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}) {
 	go func() {
 		defer func() {
@@ -166,51 +258,54 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 		case <-p.ctx.Done():
 			return
 		default:
-			// Use stream peers if the node has accumulated
-			// c_streamPeerThreshold number of streams otherwise look up peers
-			// from the database and create streams with them
-			peers := p.peerManager.GetStreamPeers()
-			if len(peers) < c_streamPeerThreshold {
-				peersMap := p.peerManager.GetPeers(topic)
-				peers = make([]peer.ID, 0)
-				for peer := range peersMap {
-					peers = append(peers, peer)
-				}
-			} else {
-				peers = peers[:pubsubManager.C_defaultRequestDegree]
+			topicPeers, err := p.pubsub.PeersForTopic(topic)
+			if err != nil {
+				log.Global.WithField("topic", topic.String()).Debug("No gossip topic peers available for request")
 			}
-			log.Global.WithFields(log.Fields{
-				"peers": peers,
-				"topic": topic,
-			}).Debug("Requesting data from peers")
+			requestPeerRounds(p.ctx, p.peerManager, topic, topicPeers, topic.GetRequestDegree(), rand.Shuffle, func(peers []peer.ID) bool {
+				log.Global.WithFields(log.Fields{
+					"peers": peers,
+					"topic": topic,
+				}).Debug("Requesting data from peers")
 
-			var requestWg sync.WaitGroup
-			for _, peerID := range peers {
-				// if we have exceeded the outbound rate limit for this peer, skip them for now
-				if err := protocol.ProcRequestRate(peerID, false); err != nil {
-					log.Global.Warnf("Exceeded request rate to peer %s", peerID)
-					continue
-				}
-				requestWg.Add(1)
-				go func(peerID peer.ID) {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Global.WithFields(log.Fields{
-								"error":      r,
-								"stacktrace": string(debug.Stack()),
-							}).Error("Go-Quai Panicked")
+				var requestWg sync.WaitGroup
+				var succeeded atomic.Bool
+				for _, peerID := range peers {
+					// if we have exceeded the outbound rate limit for this peer, skip them for now
+					if err := protocol.ProcRequestRate(peerID, false); err != nil {
+						log.Global.Warnf("Exceeded request rate to peer %s", peerID)
+						continue
+					}
+					requestWg.Add(1)
+					go func(peerID peer.ID) {
+						defer func() {
+							if r := recover(); r != nil {
+								log.Global.WithFields(log.Fields{
+									"error":      r,
+									"stacktrace": string(debug.Stack()),
+								}).Error("Go-Quai Panicked")
+							}
+						}()
+						defer requestWg.Done()
+						select {
+						case p.requestSlots <- struct{}{}:
+							defer func() { <-p.requestSlots }()
+						case <-p.ctx.Done():
+							return
 						}
-					}()
-					defer requestWg.Done()
-					p.requestAndWait(peerID, topic, requestData, respDataType, resultChan)
-				}(peerID)
-			}
-			requestWg.Wait()
+						if p.requestAndWait(peerID, topic, requestData, respDataType, resultChan) {
+							succeeded.Store(true)
+						}
+					}(peerID)
+				}
+				requestWg.Wait()
+				return succeeded.Load()
+			})
 		}
 	}()
 }
 
-func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}) (sent bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Global.WithFields(log.Fields{
@@ -224,6 +319,11 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 	requestTimer := time.NewTimer(requestTimeout)
 	defer requestTimer.Stop()
 	if recvd, err = p.requestFromPeer(peerID, topic, reqData, respDataType); err == nil {
+		// A negative response from one peer must not win the race against valid
+		// data from another peer.
+		if recvd == nil {
+			return false
+		}
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
 			"topic":  topic.String(),
@@ -231,7 +331,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 
 		select {
 		case resultChan <- recvd:
-			// Data sent successfully
+			return true
 		case <-requestTimer.C:
 			// Request timed out, return
 			log.Global.WithFields(log.Fields{
@@ -249,7 +349,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 		}
 	} else {
 		if err.Error() == streamManager.ErrStreamNotFound.Error() {
-			return
+			return false
 		}
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
@@ -257,6 +357,7 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			"info":   err,
 		}).Info("Success requesting the data from peer")
 	}
+	return false
 }
 
 // Request a data from the network for the specified slice
