@@ -2584,6 +2584,11 @@ func (w *worker) FinalizeAssemble(newWo *types.WorkObject, parent *types.WorkObj
 	}
 	if nodeCtx == common.ZONE_CTX && len(wo.Uncles()) > 0 {
 		if err := w.hc.VerifyUncles(wo); err != nil {
+			rejected := w.evictRejectedUncles(wo, w.hc.VerifyUncles)
+			w.logger.WithFields(log.Fields{
+				"err":            err,
+				"rejectedUncles": rejected,
+			}).Warn("Removed uncles from share cache after candidate validation failed")
 			return nil, fmt.Errorf("invalid uncles in sealing candidate: %w", err)
 		}
 	}
@@ -2626,6 +2631,37 @@ func (w *worker) FinalizeAssemble(newWo *types.WorkObject, parent *types.WorkObj
 	}
 
 	return wo, nil
+}
+
+// evictRejectedUncles finds the first share that makes each growing uncle set
+// invalid for the final block header. The next build must not select those
+// shares again. If the incremental checks cannot identify a share, remove the
+// whole failing set to avoid repeating the same invalid template.
+func (w *worker) evictRejectedUncles(block *types.WorkObject, verify func(*types.WorkObject) error) []common.Hash {
+	accepted := make([]*types.WorkObjectHeader, 0, len(block.Uncles()))
+	rejected := make([]common.Hash, 0)
+	for _, uncle := range block.Uncles() {
+		candidate := types.NewWorkObject(block.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
+		candidate.Body().SetUncles(append(accepted, uncle))
+		if err := verify(candidate); err != nil {
+			rejected = append(rejected, uncle.Hash())
+			continue
+		}
+		accepted = append(accepted, uncle)
+	}
+	if len(rejected) == 0 {
+		for _, uncle := range block.Uncles() {
+			rejected = append(rejected, uncle.Hash())
+		}
+	}
+	w.uncleMu.Lock()
+	defer w.uncleMu.Unlock()
+	for _, hash := range rejected {
+		w.kawpowShares.Remove(hash)
+		w.shaShares.Remove(hash)
+		w.scryptShares.Remove(hash)
+	}
+	return rejected
 }
 
 // AddPendingBlockBody adds an entry in the lru cache for the given pendingBodyKey
