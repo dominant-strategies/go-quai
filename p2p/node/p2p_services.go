@@ -46,6 +46,14 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	if err != nil {
 		return nil, err
 	}
+	// A cold stream may need a full dial timeout. Reserve a request slot only
+	// after the stream is ready, so slow dials cannot block existing streams.
+	select {
+	case p.requestSlots <- struct{}{}:
+		defer func() { <-p.requestSlots }()
+	case <-p.ctx.Done():
+		return nil, p.ctx.Err()
+	}
 
 	// Get a new request ID
 	id := p.requestManager.CreateRequest()
@@ -85,7 +93,11 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	}
 
 	if recvdType == nil {
-		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnNack)
+		// A peer may be behind a by-number request near the tip. An explicit
+		// absence is not evidence that its connection is unhealthy.
+		if _, byNumber := reqData.(*big.Int); !byNumber {
+			p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnNack)
+		}
 		return nil, nil
 	} else {
 		p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnResponse)

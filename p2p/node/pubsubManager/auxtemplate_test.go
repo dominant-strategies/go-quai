@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -372,9 +373,9 @@ func TestAuxTemplateValidation(t *testing.T) {
 	location := common.Location{0, 0}
 
 	// Track validation calls
-	validationCalls := 0
+	var validationCalls atomic.Int64
 	validatorFunc := func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-		validationCalls++
+		validationCalls.Add(1)
 
 		// Could add actual AuxTemplate validation here
 		// For example, check if ChainID is valid, signatures are present, etc.
@@ -387,10 +388,10 @@ func TestAuxTemplateValidation(t *testing.T) {
 	require.NoError(t, err, "Failed to subscribe with validator")
 
 	// Set up receiver
-	receivedCount := 0
+	var receivedCount atomic.Int64
 	ps.SetReceiveHandler(func(receivedFrom peer.ID, msgId string, msgTopic string, data interface{}, loc common.Location) {
 		if _, ok := data.(*types.AuxTemplate); ok {
-			receivedCount++
+			receivedCount.Add(1)
 		}
 	})
 
@@ -403,11 +404,7 @@ func TestAuxTemplateValidation(t *testing.T) {
 
 	// Wait for messages to be processed
 	require.Eventually(t, func() bool {
-		// We need to use a mutex if validationCalls/receivedCount are accessed concurrently,
-		// but for this specific test structure, just checking the end state is often enough
-		// if the counters were atomic or mutex-protected in the handler.
-		// Assuming single-threaded access for simplicity in this snippet context:
-		return validationCalls == 5 && receivedCount == 5
+		return validationCalls.Load() == 5 && receivedCount.Load() == 5
 	}, 5*time.Second, 100*time.Millisecond, "Should receive and validate 5 AuxTemplates")
 
 	ps.Stop()

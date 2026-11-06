@@ -508,6 +508,11 @@ func (pm *BasicPeerManager) GetPeersExcluding(topic *pubsubManager.Topic, exclud
 	for peer := range excluded {
 		delete(peerList, peer)
 	}
+	for peer := range peerList {
+		if pm.DialCooldownRemaining(peer) > 0 {
+			delete(peerList, peer)
+		}
+	}
 
 	// Randomly select request degree number of peers from the peerList
 	lenPeer := len(peerList)
@@ -552,6 +557,13 @@ func (pm *BasicPeerManager) GetStreamPeers() []peer.ID {
 	return pm.streamManager.GetStreamPeers()
 }
 
+func (pm *BasicPeerManager) DialCooldownRemaining(peerID peer.ID) time.Duration {
+	if pm.streamManager == nil {
+		return 0
+	}
+	return pm.streamManager.DialCooldownRemaining(peerID)
+}
+
 func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2p.PeerID]struct{}, peerCount int, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{} {
 	if pm.dht == nil {
 		return peerList
@@ -566,7 +578,7 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2
 	log.Global.Infof("Querying DHT for slice Cid %s", shardCid)
 	// query the DHT for peers in the slice
 	for peer := range pm.dht.FindProvidersAsync(ctx, shardCid, peerCount+len(excluded)) {
-		if _, tried := excluded[peer.ID]; peer.ID != pm.selfID && !tried {
+		if _, tried := excluded[peer.ID]; peer.ID != pm.selfID && !tried && pm.DialCooldownRemaining(peer.ID) == 0 {
 			dhtPeers[peer.ID] = struct{}{}
 		}
 	}

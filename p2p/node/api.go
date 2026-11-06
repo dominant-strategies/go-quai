@@ -4,8 +4,10 @@ import (
 	"context"
 	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,12 +31,12 @@ import (
 )
 
 var (
-	propagationTimes      = metrics_config.NewHistogramVec("PropagationTimes", "message propagation times by type (sec)")
-	blockPropagationHist  = propagationTimes.WithLabelValues("block propagation time (sec)")
-	headerPropagationHist = propagationTimes.WithLabelValues("header propagation time (sec)")
+	propagationTimes         = metrics_config.NewHistogramVec("PropagationTimes", "message propagation times by type (sec)")
+	blockPropagationHist     = propagationTimes.WithLabelValues("block propagation time (sec)")
+	headerPropagationHist    = propagationTimes.WithLabelValues("header propagation time (sec)")
+	peerRequestTraceEnabled  = os.Getenv("QUAI_PEER_TRACE") == "1"
+	peerRequestTraceSequence atomic.Uint64
 )
-
-const requestTimeout = 10 * time.Second
 
 // Starts the node and all of its services
 func (p *P2PNode) Start() error {
@@ -159,6 +161,41 @@ type requestPeerSource interface {
 	GetStreamPeers() []peer.ID
 }
 
+type peerRequestTraceKey struct{}
+
+func traceRequestRound(ctx context.Context, source requestPeerSource, topic *pubsubManager.Topic, stage string, round int, peers, topicPeers []peer.ID) {
+	if !peerRequestTraceEnabled {
+		return
+	}
+	traceID, ok := ctx.Value(peerRequestTraceKey{}).(uint64)
+	if !ok {
+		return
+	}
+	qualitySource, hasQuality := source.(interface{ GetPeerQuality(peer.ID) int })
+	for _, peerID := range peers {
+		quality := 0
+		if hasQuality {
+			quality = qualitySource.GetPeerQuality(peerID)
+		}
+		onTopic := false
+		for _, topicPeer := range topicPeers {
+			if peerID == topicPeer {
+				onTopic = true
+				break
+			}
+		}
+		log.Global.WithFields(log.Fields{
+			"trace_id":     traceID,
+			"topic":        topic.String(),
+			"stage":        stage,
+			"round":        round,
+			"peer":         peerID,
+			"quality":      quality,
+			"topic_member": onTopic,
+		}).Info("Peer request trace selection")
+	}
+}
+
 func selectRequestPeers(peers []peer.ID, requestDegree int, shuffle func(int, func(int, int))) []peer.ID {
 	if requestDegree <= 0 {
 		return nil
@@ -223,11 +260,22 @@ func requestPeerRounds(ctx context.Context, source requestPeerSource, topic *pub
 		return
 	}
 	live := orderLiveRequestPeers(source.GetStreamPeers(), topicPeers, shuffle)
+	if peerRequestTraceEnabled {
+		if traceID, ok := ctx.Value(peerRequestTraceKey{}).(uint64); ok {
+			log.Global.WithFields(log.Fields{
+				"trace_id":           traceID,
+				"topic":              topic.String(),
+				"live_streams":       len(live),
+				"gossip_topic_peers": len(topicPeers),
+			}).Info("Peer request trace candidates")
+		}
+	}
 	attempted := make([]peer.ID, 0, 2*requestDegree)
 	for start, round := 0, 0; start < len(live) && round < 2; start, round = start+requestDegree, round+1 {
 		end := min(start+requestDegree, len(live))
 		peers := live[start:end]
 		attempted = append(attempted, peers...)
+		traceRequestRound(ctx, source, topic, "live", round+1, peers, topicPeers)
 		if attempt(peers) || ctx.Err() != nil {
 			return
 		}
@@ -239,6 +287,7 @@ func requestPeerRounds(ctx context.Context, source requestPeerSource, topic *pub
 	// query it only on bootstrap or after the live rounds have failed.
 	stored := topicRequestPeers(source, topic, attempted, requestDegree, shuffle)
 	if len(stored) > 0 && ctx.Err() == nil {
+		traceRequestRound(ctx, source, topic, "stored", 1, stored, topicPeers)
 		attempt(stored)
 	}
 }
@@ -254,6 +303,35 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 			}
 		}()
 		defer close(resultChan)
+		traceID := uint64(0)
+		traceCtx := p.ctx
+		started := time.Now()
+		var delivered atomic.Int64
+		if peerRequestTraceEnabled {
+			traceID = peerRequestTraceSequence.Add(1)
+			traceCtx = context.WithValue(p.ctx, peerRequestTraceKey{}, traceID)
+			target := ""
+			switch request := requestData.(type) {
+			case *big.Int:
+				target = request.String()
+			case common.Hash:
+				target = request.Hex()
+			}
+			log.Global.WithFields(log.Fields{
+				"trace_id":     traceID,
+				"topic":        topic.String(),
+				"request_type": reflect.TypeOf(requestData),
+				"target":       target,
+			}).Info("Peer request trace start")
+			defer func() {
+				log.Global.WithFields(log.Fields{
+					"trace_id":   traceID,
+					"topic":      topic.String(),
+					"delivered":  delivered.Load(),
+					"elapsed_ms": time.Since(started).Milliseconds(),
+				}).Info("Peer request trace complete")
+			}()
+		}
 		select {
 		case <-p.ctx.Done():
 			return
@@ -262,7 +340,7 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 			if err != nil {
 				log.Global.WithField("topic", topic.String()).Debug("No gossip topic peers available for request")
 			}
-			requestPeerRounds(p.ctx, p.peerManager, topic, topicPeers, topic.GetRequestDegree(), rand.Shuffle, func(peers []peer.ID) bool {
+			requestPeerRounds(traceCtx, p.peerManager, topic, topicPeers, topic.GetRequestDegree(), rand.Shuffle, func(peers []peer.ID) bool {
 				log.Global.WithFields(log.Fields{
 					"peers": peers,
 					"topic": topic,
@@ -287,14 +365,9 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 							}
 						}()
 						defer requestWg.Done()
-						select {
-						case p.requestSlots <- struct{}{}:
-							defer func() { <-p.requestSlots }()
-						case <-p.ctx.Done():
-							return
-						}
-						if p.requestAndWait(peerID, topic, requestData, respDataType, resultChan) {
+						if p.requestAndWait(peerID, topic, requestData, respDataType, resultChan, traceID) {
 							succeeded.Store(true)
+							delivered.Add(1)
 						}
 					}(peerID)
 				}
@@ -305,23 +378,34 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 	}()
 }
 
-func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}) (sent bool) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}, traceID uint64) (sent bool) {
+	started := time.Now()
+	outcome := "error"
 	defer func() {
 		if r := recover(); r != nil {
+			outcome = "panic"
 			log.Global.WithFields(log.Fields{
 				"error":      r,
 				"stacktrace": string(debug.Stack()),
 			}).Error("Go-Quai Panicked")
 		}
+		if peerRequestTraceEnabled {
+			log.Global.WithFields(log.Fields{
+				"trace_id":   traceID,
+				"topic":      topic.String(),
+				"peer":       peerID,
+				"outcome":    outcome,
+				"elapsed_ms": time.Since(started).Milliseconds(),
+			}).Info("Peer request trace outcome")
+		}
 	}()
 	var recvd interface{}
 	var err error
-	requestTimer := time.NewTimer(requestTimeout)
-	defer requestTimer.Stop()
 	if recvd, err = p.requestFromPeer(peerID, topic, reqData, respDataType); err == nil {
 		// A negative response from one peer must not win the race against valid
 		// data from another peer.
 		if recvd == nil {
+			outcome = "empty"
 			return false
 		}
 		log.Global.WithFields(log.Fields{
@@ -329,18 +413,14 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			"topic":  topic.String(),
 		}).Trace("Received data from peer")
 
+		// The dial and response wait have their own deadlines. A slow dial
+		// must not discard a valid reply when sending to the result channel.
 		select {
 		case resultChan <- recvd:
+			outcome = "delivered"
 			return true
-		case <-requestTimer.C:
-			// Request timed out, return
-			log.Global.WithFields(log.Fields{
-				"peerId":  peerID,
-				"message": "Request timed out, data not received",
-			}).Info("Success Missed data request")
-			// Mark this peer as not responding
-			p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnTimeout)
 		default:
+			outcome = "channel_full"
 			// Optionally log the missed send or handle it in another way
 			log.Global.WithFields(log.Fields{
 				"peerId":  peerID,
@@ -348,8 +428,16 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 			}).Info("Success Missed data send")
 		}
 	} else {
-		if err.Error() == streamManager.ErrStreamNotFound.Error() {
+		if errors.Is(err, streamManager.ErrStreamNotFound) {
+			outcome = "no_stream"
 			return false
+		}
+		if errors.Is(err, streamManager.ErrPeerDialCooldown) {
+			outcome = "dial_cooldown"
+			return false
+		}
+		if strings.Contains(err.Error(), "peer did not respond in time") {
+			outcome = "peer_timeout"
 		}
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
