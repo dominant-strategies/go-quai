@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -80,4 +81,26 @@ func TestEncodeQuaiResponseBlockHash(t *testing.T) {
 	_, decoded, err = DecodeQuaiResponse(message.GetResponse())
 	require.NoError(t, err)
 	require.Equal(t, common.Hash{}, decoded)
+}
+
+func TestEmptyWorkObjectResponseRoundTrip(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		view interface{}
+	}{
+		{"header", &types.WorkObjectHeaderView{}},
+		{"block", &types.WorkObjectBlockView{}},
+		{"blocks", []*types.WorkObjectBlockView{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			encoded, err := EncodeQuaiResponse(42, common.Location{0, 0}, test.view, nil)
+			require.NoError(t, err)
+			message, err := DecodeQuaiMessage(encoded)
+			require.NoError(t, err)
+			id, result, err := DecodeQuaiResponse(message.GetResponse())
+			require.Equal(t, uint32(42), id)
+			require.Nil(t, result)
+			require.ErrorIs(t, err, EmptyResponse)
+		})
+	}
 }

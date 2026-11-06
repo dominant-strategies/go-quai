@@ -314,7 +314,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			requestedView = types.BlockObjects
 		}
 
-		requestedHash := &common.Hash{}
+		var requestedHash *common.Hash
 		switch query := query.(type) {
 		case *common.Hash:
 			requestedHash = query
@@ -324,8 +324,9 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			requestedHash = node.GetBlockHashByNumber(number, loc)
 			if requestedHash == nil {
 				log.Global.Debugf("block hash not found for block %s and location %s", number.String(), loc.Name())
-				// TODO: handle error
-				return
+				// Reply with an empty response so the requester does not mistake
+				// an unavailable block for an unresponsive peer.
+				break
 			}
 			log.Global.Tracef("Found hash %s for block %s and location: %s", requestedHash, number.String(), loc.Name())
 		default:
@@ -333,7 +334,7 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			// TODO: handle error
 			return
 		}
-		err = handleBlockRequest(id, loc, *requestedHash, stream, node, requestedView)
+		err = handleBlockRequest(id, loc, requestedHash, stream, node, requestedView)
 		if err != nil {
 			log.Global.WithFields(
 				logrus.Fields{
@@ -394,9 +395,12 @@ func handleResponse(quaiResp *pb.QuaiResponseMessage, node QuaiP2PNode) {
 }
 
 // Seeks the block in the cache or database and sends it to the peer in a pb.QuaiResponseMessage
-func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode, view types.WorkObjectView) error {
+func handleBlockRequest(id uint32, loc common.Location, hash *common.Hash, stream network.Stream, node QuaiP2PNode, view types.WorkObjectView) error {
 	// check if we have the block in our cache or database
-	fullWO := node.GetWorkObject(hash, loc)
+	var fullWO *types.WorkObject
+	if hash != nil {
+		fullWO = node.GetWorkObject(*hash, loc)
+	}
 	var data []byte
 	var err error
 	var block interface{}
@@ -413,7 +417,7 @@ func handleBlockRequest(id uint32, loc common.Location, hash common.Hash, stream
 			block = fullWO.ConvertToBlockView()
 		case types.BlockObjects:
 			// This is the case in which the Prime is asking for the next c_NumPrimeBlocksToDownload blocks
-			block = node.GetWorkObjectsFrom(hash, loc, C_NumPrimeBlocksToDownload)
+			block = node.GetWorkObjectsFrom(*hash, loc, C_NumPrimeBlocksToDownload)
 		}
 	}
 	var requestDataType interface{}

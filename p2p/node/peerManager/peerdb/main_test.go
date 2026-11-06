@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 
 func setupDB(t *testing.T) (*PeerDB, func()) {
 	t.Helper()
-	viper.GetViper().Set(utils.DataDirFlag.Name, os.TempDir())
+	viper.GetViper().Set(utils.DataDirFlag.Name, t.TempDir())
 	dbDir := "testdb"
 	location := common.Location{0, 0}
 	locationName := location.Name()
@@ -38,10 +38,6 @@ func setupDB(t *testing.T) (*PeerDB, func()) {
 		err := ps.Close()
 		require.NoError(t, err)
 
-		// remove the db file
-		dbFile := viper.GetString(utils.DataDirFlag.Name) + "/" + locationName + "/" + dbDir
-		err = os.RemoveAll(dbFile)
-		require.NoError(t, err)
 	}
 }
 

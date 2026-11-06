@@ -2,7 +2,9 @@ package streamManager
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	gomock "go.uber.org/mock/gomock"
 
@@ -22,8 +24,6 @@ func setup(t *testing.T) (*gomock.Controller, *mock_protocol.MockQuaiP2PNode, *m
 
 	sm, err := NewStreamManager(mockNode, mockHost)
 	require.NoError(t, err, "Failed to create stream manager")
-	sm.Start()
-
 	return ctrl, mockNode, mockHost, sm
 }
 
@@ -94,6 +94,119 @@ func TestStreamManager(t *testing.T) {
 	})
 }
 
+func TestGetStreamOpensReachablePeerForCurrentRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	node := mock_protocol.NewMockQuaiP2PNode(ctrl)
+	host := mock_p2p.NewMockHost(ctrl)
+	manager, err := NewStreamManager(node, host)
+	require.NoError(t, err)
+	defer manager.Stop()
+
+	peerID := peer.ID("reachable-stored-peer")
+	stream := mock_p2p.NewMockStream(ctrl)
+	conn := mock_p2p.NewMockConn(ctrl)
+	host.EXPECT().NewStream(gomock.Any(), peerID, gomock.Any()).Return(stream, nil).Times(1)
+	node.EXPECT().GetBandwidthCounter().Return(nil).AnyTimes()
+	stream.EXPECT().Close().Return(nil).AnyTimes()
+	stream.EXPECT().Conn().Return(conn).AnyTimes()
+	stream.EXPECT().Protocol().Return(protocol.ProtocolVersion).AnyTimes()
+	stream.EXPECT().Read(gomock.Any()).Return(0, nil).AnyTimes()
+	conn.EXPECT().RemotePeer().Return(peerID).AnyTimes()
+
+	got, err := manager.GetStream(peerID)
+	require.NoError(t, err)
+	require.Equal(t, stream, got)
+}
+
+func TestGetStreamBacksOffFailedPeerAndAllowsRetry(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	host := mock_p2p.NewMockHost(ctrl)
+	manager, err := NewStreamManager(nil, host)
+	require.NoError(t, err)
+	defer manager.Stop()
+
+	peerID := peer.ID("unreachable-stored-peer")
+	host.EXPECT().NewStream(gomock.Any(), peerID, gomock.Any()).Return(nil, errors.New("dial failed")).Times(2)
+	_, err = manager.GetStream(peerID)
+	require.ErrorContains(t, err, "dial failed")
+	require.Positive(t, manager.DialCooldownRemaining(peerID))
+	_, err = manager.GetStream(peerID)
+	require.ErrorIs(t, err, ErrPeerDialCooldown)
+
+	// Advance the stored deadline without sleeping. A later attempt is allowed.
+	manager.mu.Lock()
+	state, _ := manager.dialFailures.Get(peerID)
+	state.retryAfter = time.Now().Add(-time.Second)
+	manager.dialFailures.Add(peerID, state)
+	manager.mu.Unlock()
+	_, err = manager.GetStream(peerID)
+	require.ErrorContains(t, err, "dial failed")
+	state, _ = manager.dialFailures.Get(peerID)
+	require.Equal(t, uint(2), state.count)
+	require.Greater(t, manager.DialCooldownRemaining(peerID), c_initialDialRetryDelay)
+}
+
+func TestDialFailureStateIsBounded(t *testing.T) {
+	manager, err := NewStreamManager(nil, nil)
+	require.NoError(t, err)
+	defer manager.Stop()
+	for i := 0; i < c_dialFailureCacheSize+10; i++ {
+		manager.recordDialFailure(peer.ID(fmt.Sprintf("failed-peer-%d", i)))
+	}
+	require.LessOrEqual(t, manager.dialFailures.Len(), c_dialFailureCacheSize)
+}
+
+func TestGetStreamAfterStopDoesNotDial(t *testing.T) {
+	manager, err := NewStreamManager(nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, manager.Stop())
+	_, err = manager.GetStream(peer.ID("stopped-peer"))
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestGetStreamWaitsForDialCapacity(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	host := mock_p2p.NewMockHost(ctrl)
+	manager, err := NewStreamManager(nil, host)
+	require.NoError(t, err)
+	defer manager.Stop()
+	for i := 0; i < cap(manager.dialSlots); i++ {
+		manager.dialSlots <- struct{}{}
+	}
+	peerID := peer.ID("peer-waiting-for-dial-slot")
+	host.EXPECT().NewStream(gomock.Any(), peerID, gomock.Any()).Return(nil, errors.New("dial failed")).Times(1)
+	done := make(chan error, 1)
+	go func() {
+		_, err := manager.GetStream(peerID)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("dial returned while all dial slots were occupied: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	<-manager.dialSlots
+	select {
+	case err := <-done:
+		require.ErrorContains(t, err, "dial failed")
+	case <-time.After(time.Second):
+		t.Fatal("dial did not start after a slot became available")
+	}
+}
+
+func TestGetStreamStopsWaitingWhenDialCapacityDeadlineExpires(t *testing.T) {
+	manager, err := NewStreamManager(nil, nil)
+	require.NoError(t, err)
+	manager.cancel()
+	manager.ctx, manager.cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer manager.Stop()
+	for i := 0; i < cap(manager.dialSlots); i++ {
+		manager.dialSlots <- struct{}{}
+	}
+	_, err = manager.GetStream(peer.ID("peer-with-expired-dial-wait"))
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
 func TestWriteMessageToStream(t *testing.T) {
 	ctrl, mockNode, mockHost, sm := setup(t)
 	defer ctrl.Finish()
@@ -159,10 +272,9 @@ func TestWriteMessageToStream(t *testing.T) {
 		err = sm.WriteMessageToStream(peerID, mockLibp2pStream, []byte("message"), protocol.ProtocolVersion, nil)
 		require.ErrorIs(t, err, ErrorTooManyPendingRequests, "Expected error when too many pending requests")
 
-		// check if stream was closed
-		entry, err = sm.GetStream(peerID)
-		require.Nil(t, entry, "Expected nil entry")
-		require.ErrorIs(t, err, ErrStreamNotFound, "Expected error when stream not found")
+		// The failed stream is evicted. A later GetStream may open a new one.
+		_, found = sm.streamCache.Get(peerID)
+		require.False(t, found, "Expected failed stream to be evicted")
 	})
 
 	t.Run("Failed to set write deadline", func(t *testing.T) {

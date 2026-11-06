@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p"
 	quaiprotocol "github.com/dominant-strategies/go-quai/p2p/protocol"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/singleflight"
 
 	expireLru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -29,8 +29,11 @@ const (
 	// The amount of redundancy for open streams
 	c_streamCacheSize = 30
 
-	// c_newStreamRequestChanSize is the size of the channel to handle new stream request
-	c_newStreamRequestChanSize = 10
+	c_initialDialRetryDelay = 10 * time.Second
+	c_maxDialRetryDelay     = 5 * time.Minute
+	c_dialFailureCacheSize  = 1024
+	c_dialFailureRetention  = 30 * time.Minute
+	c_maxConcurrentDials    = 12
 
 	// The maximum number of concurrent requests before a stream is considered failed
 	c_maxPendingRequests = 100
@@ -38,6 +41,7 @@ const (
 
 var (
 	ErrStreamNotFound           = errors.New("stream not found")
+	ErrPeerDialCooldown         = errors.New("peer stream dial is cooling down")
 	ErrStreamMismatch           = errors.New("stream mismatch")
 	ErrorTooManyPendingRequests = errors.New("too many pending requests")
 )
@@ -55,6 +59,8 @@ type StreamManager interface {
 
 	// GetStreamPeers returns the peers that the node has open streams with
 	GetStreamPeers() []peer.ID
+	// DialCooldownRemaining reports a temporary delay after a failed stream dial.
+	DialCooldownRemaining(peer.ID) time.Duration
 
 	// CloseStream goes through all the steps to properly close and remove a stream's resources
 	CloseStream(peer.ID) error
@@ -72,10 +78,18 @@ type basicStreamManager struct {
 	streamCache *expireLru.LRU[p2p.PeerID, streamWrapper]
 	p2pBackend  quaiprotocol.QuaiP2PNode
 
-	newStreamRequestChan chan p2p.PeerID
-
 	host host.Host
 	mu   sync.Mutex
+	// A failed peer is retried after a bounded delay. Concurrent requests for
+	// the same peer share one dial attempt.
+	dialGroup    singleflight.Group
+	dialFailures *expireLru.LRU[peer.ID, dialFailure]
+	dialSlots    chan struct{}
+}
+
+type dialFailure struct {
+	count      uint
+	retryAfter time.Time
 }
 
 type streamWrapper struct {
@@ -95,12 +109,15 @@ func NewStreamManager(node quaiprotocol.QuaiP2PNode, host host.Host) (*basicStre
 	ctx, cancel := context.WithCancel(context.Background())
 
 	sm := &basicStreamManager{
-		ctx:                  ctx,
-		cancel:               cancel,
-		streamCache:          lruCache,
-		p2pBackend:           node,
-		host:                 host,
-		newStreamRequestChan: make(chan p2p.PeerID, c_newStreamRequestChanSize),
+		ctx:         ctx,
+		cancel:      cancel,
+		streamCache: lruCache,
+		p2pBackend:  node,
+		host:        host,
+		dialFailures: expireLru.NewLRU[peer.ID, dialFailure](
+			c_dialFailureCacheSize, nil, c_dialFailureRetention,
+		),
+		dialSlots: make(chan struct{}, c_maxConcurrentDials),
 	}
 
 	return sm, nil
@@ -121,42 +138,17 @@ func severStream(key p2p.PeerID, wrappedStream streamWrapper) {
 	wrappedStream.cancelProtocolHandler()
 }
 
-func (sm *basicStreamManager) Start() {
-	go sm.listenForNewStreamRequest()
-}
-
 func (sm *basicStreamManager) Stop() error {
 	sm.cancel()
 	sm.streamCache.Purge()
 	return nil
 }
 
-func (sm *basicStreamManager) listenForNewStreamRequest() {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Global.WithFields(log.Fields{
-				"error":      r,
-				"stacktrace": string(debug.Stack()),
-			}).Error("Go-Quai Panicked")
-		}
-	}()
-	for {
-		select {
-		case peerID := <-sm.newStreamRequestChan:
-			go func(peerID peer.ID) {
-				err := sm.OpenStream(peerID)
-				if err != nil {
-					log.Global.WithFields(log.Fields{"peerId": peerID, "info": err}).Info("Success opening new stream into peer")
-				}
-			}(peerID)
-
-		case <-sm.ctx.Done():
-			return
-		}
-	}
+func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
+	return sm.openStream(sm.ctx, peerID)
 }
 
-func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
+func (sm *basicStreamManager) openStream(ctx context.Context, peerID p2p.PeerID) error {
 	// Check if there is an existing stream
 	sm.mu.Lock()
 	if _, ok := sm.streamCache.Get(peerID); ok {
@@ -165,12 +157,16 @@ func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 	}
 	sm.mu.Unlock()
 
-	streamCtx, streamCancel := context.WithTimeout(sm.ctx, c_stream_timeout)
+	streamCtx, streamCancel := context.WithTimeout(ctx, c_stream_timeout)
 	defer streamCancel()
 
 	// Attempt to create the new stream to the peer
 	stream, err := sm.host.NewStream(streamCtx, peerID, quaiprotocol.ProtocolVersion)
 	if err != nil {
+		if sm.ctx.Err() != nil {
+			return sm.ctx.Err()
+		}
+		sm.recordDialFailure(peerID)
 		if streamCtx.Err() == context.DeadlineExceeded {
 			return errors.New("stream creation timeout")
 		}
@@ -186,12 +182,19 @@ func (sm *basicStreamManager) OpenStream(peerID p2p.PeerID) error {
 		errCount:              0,
 	}
 	sm.mu.Lock()
+	if sm.ctx.Err() != nil {
+		sm.mu.Unlock()
+		handlerCancel()
+		stream.Close()
+		return sm.ctx.Err()
+	}
 	if _, ok := sm.streamCache.Get(peerID); ok {
 		sm.mu.Unlock()
 		handlerCancel()
 		return stream.Close()
 	}
 	sm.streamCache.Add(peerID, wrappedStream)
+	sm.dialFailures.Remove(peerID)
 	sm.mu.Unlock()
 
 	go quaiprotocol.QuaiProtocolHandler(handlerCtx, stream, sm.p2pBackend)
@@ -214,20 +217,63 @@ func (sm *basicStreamManager) CloseStream(peerID p2p.PeerID) error {
 }
 
 func (sm *basicStreamManager) GetStream(peerID p2p.PeerID) (network.Stream, error) {
-	wrappedStream, ok := sm.streamCache.Get(peerID)
-	var err error
-	if !ok {
-		select {
-		case sm.newStreamRequestChan <- peerID:
-		default:
-			log.Global.Error("sm.newPeers is full with new stream creation requests")
-		}
-		return nil, ErrStreamNotFound
-	} else {
-		log.Global.WithField("PeerID", peerID).Debug("Requested stream was found in cache")
+	if err := sm.ctx.Err(); err != nil {
+		return nil, err
 	}
+	wrappedStream, ok := sm.streamCache.Get(peerID)
+	if ok {
+		return wrappedStream.stream, nil
+	}
+	_, err, _ := sm.dialGroup.Do(string(peerID), func() (interface{}, error) {
+		if _, found := sm.streamCache.Get(peerID); found {
+			return nil, nil
+		}
+		if sm.DialCooldownRemaining(peerID) > 0 {
+			return nil, ErrPeerDialCooldown
+		}
+		dialCtx, cancel := context.WithTimeout(sm.ctx, c_stream_timeout)
+		defer cancel()
+		select {
+		case sm.dialSlots <- struct{}{}:
+			defer func() { <-sm.dialSlots }()
+		case <-dialCtx.Done():
+			return nil, dialCtx.Err()
+		}
+		if _, found := sm.streamCache.Get(peerID); found {
+			return nil, nil
+		}
+		return nil, sm.openStream(dialCtx, peerID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	wrappedStream, ok = sm.streamCache.Get(peerID)
+	if !ok {
+		return nil, ErrStreamNotFound
+	}
+	return wrappedStream.stream, nil
+}
 
-	return wrappedStream.stream, err
+func (sm *basicStreamManager) recordDialFailure(peerID peer.ID) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	previous, _ := sm.dialFailures.Get(peerID)
+	count := previous.count + 1
+	delay := c_initialDialRetryDelay
+	for i := uint(1); i < count && delay < c_maxDialRetryDelay; i++ {
+		delay = min(delay*2, c_maxDialRetryDelay)
+	}
+	sm.dialFailures.Add(peerID, dialFailure{count: count, retryAfter: time.Now().Add(delay)})
+}
+
+func (sm *basicStreamManager) DialCooldownRemaining(peerID peer.ID) time.Duration {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state, _ := sm.dialFailures.Get(peerID)
+	if remaining := time.Until(state.retryAfter); remaining > 0 {
+		return remaining
+	}
+	return 0
 }
 
 func (sm *basicStreamManager) GetStreamPeers() []peer.ID {
