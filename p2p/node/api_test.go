@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -15,16 +16,17 @@ type recordingRequestPeerSource struct {
 	gotExcluded  map[peer.ID]struct{}
 	topicPeers   map[peer.ID]struct{}
 	streamPeers  []peer.ID
+	qualities    map[peer.ID]int
 }
 
-func (s *recordingRequestPeerSource) GetPeersExcluding(topic *pubsubManager.Topic, excluded map[peer.ID]struct{}) map[peer.ID]struct{} {
+func (s *recordingRequestPeerSource) GetPeersExcluding(topic *pubsubManager.Topic, excluded map[peer.ID]struct{}) []peer.ID {
 	s.gotTopic = topic
 	s.getPeersCall++
 	s.gotExcluded = excluded
-	selected := make(map[peer.ID]struct{}, len(s.topicPeers))
+	selected := make([]peer.ID, 0, len(s.topicPeers))
 	for peerID := range s.topicPeers {
 		if _, tried := excluded[peerID]; !tried {
-			selected[peerID] = struct{}{}
+			selected = append(selected, peerID)
 		}
 	}
 	return selected
@@ -32,6 +34,10 @@ func (s *recordingRequestPeerSource) GetPeersExcluding(topic *pubsubManager.Topi
 
 func (s *recordingRequestPeerSource) GetStreamPeers() []peer.ID {
 	return s.streamPeers
+}
+
+func (s *recordingRequestPeerSource) GetPeerQuality(id peer.ID) int {
+	return s.qualities[id]
 }
 
 func noShuffle(_ int, _ func(int, int)) {}
@@ -191,6 +197,56 @@ func TestRequestPeerRoundsPrefersTopicStreamsAndRetriesOtherLiveStreams(t *testi
 		if source.streamPeers[i] != peerID {
 			t.Fatalf("stream cache changed at %d: got %q want %q", i, source.streamPeers[i], peerID)
 		}
+	}
+}
+
+func TestLiveRequestPeersShuffleWithinQualityBuckets(t *testing.T) {
+	topicBestA := peer.ID("topic-best-a")
+	topicBestB := peer.ID("topic-best-b")
+	topicResponsive := peer.ID("topic-responsive")
+	topicLast := peer.ID("topic-last")
+	otherBest := peer.ID("other-best")
+	otherResponsive := peer.ID("other-responsive")
+	source := &recordingRequestPeerSource{
+		streamPeers: []peer.ID{
+			topicLast, otherResponsive, topicBestA, topicResponsive,
+			otherBest, topicBestB, topicBestA,
+		},
+		qualities: map[peer.ID]int{
+			topicBestA: 900, topicBestB: 850, topicResponsive: 500,
+			topicLast: 0, otherBest: 1000, otherResponsive: 300,
+		},
+	}
+	reverse := func(n int, swap func(int, int)) {
+		for i, j := 0, n-1; i < j; i, j = i+1, j-1 {
+			swap(i, j)
+		}
+	}
+	original := append([]peer.ID(nil), source.streamPeers...)
+	got := orderLiveRequestPeers(source, []peer.ID{topicBestA, topicBestB, topicResponsive, topicLast}, reverse)
+	want := []peer.ID{topicBestB, topicBestA, topicResponsive, topicLast, otherBest, otherResponsive}
+	if !slices.Equal(got, want) {
+		t.Fatalf("live peers = %q, want topic peers and quality buckets in order %q", got, want)
+	}
+	if !slices.Equal(source.streamPeers, original) {
+		t.Fatal("stream cache order changed")
+	}
+}
+
+func TestLiveRequestPeersUseCurrentQualityOnEachRequest(t *testing.T) {
+	low, high := peer.ID("low"), peer.ID("high")
+	source := &recordingRequestPeerSource{
+		streamPeers: []peer.ID{low, high},
+		qualities:   map[peer.ID]int{low: 0, high: 100},
+	}
+	first := orderLiveRequestPeers(source, nil, noShuffle)
+	if first[0] != high {
+		t.Fatalf("first request chose %q, want high-quality peer %q", first[0], high)
+	}
+	source.qualities[low] = 200
+	second := orderLiveRequestPeers(source, nil, noShuffle)
+	if second[0] != low {
+		t.Fatalf("next request chose %q, want newly higher-quality peer %q", second[0], low)
 	}
 }
 

@@ -75,7 +75,7 @@ func TestGetPeersExcludingSamplesBeyondFailedLivePeers(t *testing.T) {
 	}
 	excluded := map[peer.ID]struct{}{ids[0]: {}, ids[1]: {}, ids[2]: {}}
 	selected := pm.GetPeersExcluding(topic, excluded)
-	require.Equal(t, map[peer.ID]struct{}{ids[3]: {}}, selected)
+	require.Equal(t, []peer.ID{ids[3]}, selected)
 	// Concurrent failed requests for this topic must not each rescan LevelDB
 	// and query DHT; bootstrap lookups without exclusions remain available.
 	require.Empty(t, pm.GetPeersExcluding(topic, excluded))
@@ -122,4 +122,45 @@ func TestGetPeersExcludingSkipsCoolingDialPeer(t *testing.T) {
 	require.Equal(t, map[peer.ID]struct{}{ids[1]: {}}, pm.GetPeers(topic))
 	streams.cooling = false
 	require.Equal(t, map[peer.ID]struct{}{ids[0]: {}, ids[1]: {}}, pm.GetPeers(topic))
+}
+
+func TestGetPeersExcludingPrefersQualityBuckets(t *testing.T) {
+	viper.Set(utils.DataDirFlag.Name, t.TempDir())
+	t.Cleanup(viper.Reset)
+	topic, err := pubsubManager.NewTopic(common.Hash{}, common.Location{0, 0}, &types.WorkObjectBlockView{})
+	require.NoError(t, err)
+	dbs := make([]*peerdb.PeerDB, 3)
+	ids := make([][]peer.ID, 3)
+	for bucket, name := range dbNames {
+		db, err := peerdb.NewPeerDB(name, topic.String())
+		require.NoError(t, err)
+		dbs[bucket] = db
+		t.Cleanup(func() { require.NoError(t, db.Close()) })
+		for range 2 {
+			_, publicKey, err := crypto.GenerateEd25519Key(rand.Reader)
+			require.NoError(t, err)
+			id, err := peer.IDFromPublicKey(publicKey)
+			require.NoError(t, err)
+			ids[bucket] = append(ids[bucket], id)
+			require.NoError(t, db.Put(context.Background(), datastore.NewKey(id.String()), []byte{1}))
+		}
+	}
+	pm := &BasicPeerManager{peerDBs: map[string][]*peerdb.PeerDB{topic.String(): dbs}, ctx: context.Background()}
+
+	first := pm.GetPeersExcluding(topic, nil)
+	require.Len(t, first, topic.GetRequestDegree())
+	require.ElementsMatch(t, ids[Best], first[:2])
+	require.Contains(t, ids[Responsive], first[2])
+	for _, id := range ids[LastResort] {
+		require.NotContains(t, first, id)
+	}
+
+	excluded := map[peer.ID]struct{}{ids[Best][0]: {}, ids[Best][1]: {}}
+	second := pm.GetPeersExcluding(topic, excluded)
+	require.Len(t, second, topic.GetRequestDegree())
+	require.ElementsMatch(t, ids[Responsive], second[:2])
+	require.Contains(t, ids[LastResort], second[2])
+	for _, id := range ids[Best] {
+		require.NotContains(t, second, id)
+	}
 }

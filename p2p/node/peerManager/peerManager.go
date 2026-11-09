@@ -2,7 +2,6 @@ package peerManager
 
 import (
 	"context"
-	"maps"
 	"math/rand"
 	"net"
 	"runtime/debug"
@@ -107,16 +106,16 @@ type PeerManager interface {
 	// Removes a peer from all the quality buckets
 	RemovePeer(p2p.PeerID) error
 
-	// GetPeers gets randomized set of peers from the database based on the
-	// request degree of the topic
+	// GetPeers returns peers from the database up to the topic's request degree.
 	GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{}
-	GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{}
+	GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) []p2p.PeerID
 
 	// RefreshBootpeers returns all the current bootpeers for bootstrapping
 	RefreshBootpeers() []peer.AddrInfo
 
 	// Adjust the quality score of a peer by applying the given adjustment function
 	AdjustPeerQuality(p2p.PeerID, string, func(int) int)
+	GetPeerQuality(p2p.PeerID) int
 
 	// Protects the peer's connection from being disconnected
 	ProtectPeer(p2p.PeerID)
@@ -482,61 +481,58 @@ func (pm *BasicPeerManager) getPeersHelper(peerDB *peerdb.PeerDB, numPeers int) 
 }
 
 func (pm *BasicPeerManager) GetPeers(topic *pubsubManager.Topic) map[p2p.PeerID]struct{} {
-	return pm.GetPeersExcluding(topic, nil)
+	selected := pm.GetPeersExcluding(topic, nil)
+	peers := make(map[p2p.PeerID]struct{}, len(selected))
+	for _, peer := range selected {
+		peers[peer] = struct{}{}
+	}
+	return peers
 }
 
-// GetPeersExcluding removes already-tried peers before the request-degree cap.
-func (pm *BasicPeerManager) GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{} {
+// GetPeersExcluding prefers better quality buckets and removes already-tried
+// peers before the request-degree cap.
+func (pm *BasicPeerManager) GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) []p2p.PeerID {
 	if len(excluded) > 0 && !pm.reserveTopicFallback(topic.String()) {
-		return make(map[peer.ID]struct{})
+		return nil
 	}
 	if pm.peerDBs[topic.String()] == nil {
 		// A new topic may have no local records yet; discovery can still find
 		// providers after the failed live round.
-		return pm.queryDHT(topic, make(map[peer.ID]struct{}), topic.GetRequestDegree(), excluded)
+		return pm.queryDHT(topic, nil, topic.GetRequestDegree(), excluded)
 	}
-	peerList := make(map[p2p.PeerID]struct{})
-	// Add best peers into the peerList
-	bestPeers := pm.getBestPeers(topic.String())
-	maps.Copy(peerList, bestPeers)
-	// Add responsive peers into the peerList
-	responsivePeers := pm.getResponsivePeers(topic.String())
-	maps.Copy(peerList, responsivePeers)
-	// Add last resort peers into the peerList
-	lastResortPeers := pm.getLastResortPeers(topic.String())
-	maps.Copy(peerList, lastResortPeers)
-	for peer := range excluded {
-		delete(peerList, peer)
+	wanted := topic.GetRequestDegree()
+	selected := make([]p2p.PeerID, 0, wanted)
+	if wanted <= 0 {
+		return selected
 	}
-	for peer := range peerList {
-		if pm.DialCooldownRemaining(peer) > 0 {
-			delete(peerList, peer)
-		}
-	}
-
-	// Randomly select request degree number of peers from the peerList
-	lenPeer := len(peerList)
-	// If we have more peers than the request degree, randomly select peers and
-	// return, otherwise ask the dht for the extra required peers
-	if lenPeer >= topic.GetRequestDegree() {
-		peers := make([]p2p.PeerID, 0)
-		for peer, _ := range peerList {
+	seen := make(map[p2p.PeerID]struct{}, wanted)
+	for _, bucket := range []map[p2p.PeerID]struct{}{
+		pm.getBestPeers(topic.String()),
+		pm.getResponsivePeers(topic.String()),
+		pm.getLastResortPeers(topic.String()),
+	} {
+		peers := make([]p2p.PeerID, 0, len(bucket))
+		for peer := range bucket {
+			if _, tried := excluded[peer]; tried {
+				continue
+			}
+			if _, alreadySelected := seen[peer]; alreadySelected || pm.DialCooldownRemaining(peer) > 0 {
+				continue
+			}
 			peers = append(peers, peer)
 		}
 		rand.Shuffle(len(peers), func(i, j int) {
 			peers[i], peers[j] = peers[j], peers[i]
 		})
-
-		randomPeers := make(map[p2p.PeerID]struct{})
-		for _, peer := range peers[:topic.GetRequestDegree()] {
-			randomPeers[peer] = struct{}{}
+		for _, peer := range peers {
+			selected = append(selected, peer)
+			seen[peer] = struct{}{}
+			if len(selected) == wanted {
+				return selected
+			}
 		}
-
-		return randomPeers
 	}
-
-	// Query the DHT for more peers
-	return pm.queryDHT(topic, peerList, topic.GetRequestDegree()-lenPeer, excluded)
+	return pm.queryDHT(topic, selected, wanted-len(selected), excluded)
 }
 
 func (pm *BasicPeerManager) reserveTopicFallback(topic string) bool {
@@ -564,8 +560,8 @@ func (pm *BasicPeerManager) DialCooldownRemaining(peerID peer.ID) time.Duration 
 	return pm.streamManager.DialCooldownRemaining(peerID)
 }
 
-func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2p.PeerID]struct{}, peerCount int, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{} {
-	if pm.dht == nil {
+func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList []p2p.PeerID, peerCount int, excluded map[p2p.PeerID]struct{}) []p2p.PeerID {
+	if pm.dht == nil || peerCount <= 0 {
 		return peerList
 	}
 	ctx, cancel := context.WithTimeout(pm.ctx, c_dhtLookupTimeout)
@@ -573,17 +569,28 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList map[p2
 	// create a Cid from the slice location
 	shardCid := pubsubManager.TopicToCid(topic)
 
-	// Internal list of peers from the dht
-	dhtPeers := make(map[p2p.PeerID]struct{})
+	seen := make(map[p2p.PeerID]struct{}, len(peerList))
+	for _, peer := range peerList {
+		seen[peer] = struct{}{}
+	}
+	added := 0
 	log.Global.Infof("Querying DHT for slice Cid %s", shardCid)
 	// query the DHT for peers in the slice
-	for peer := range pm.dht.FindProvidersAsync(ctx, shardCid, peerCount+len(excluded)) {
-		if _, tried := excluded[peer.ID]; peer.ID != pm.selfID && !tried && pm.DialCooldownRemaining(peer.ID) == 0 {
-			dhtPeers[peer.ID] = struct{}{}
+	for peer := range pm.dht.FindProvidersAsync(ctx, shardCid, peerCount+len(excluded)+len(peerList)) {
+		if _, tried := excluded[peer.ID]; tried || peer.ID == pm.selfID || pm.DialCooldownRemaining(peer.ID) > 0 {
+			continue
+		}
+		if _, duplicate := seen[peer.ID]; duplicate {
+			continue
+		}
+		peerList = append(peerList, peer.ID)
+		seen[peer.ID] = struct{}{}
+		added++
+		if added == peerCount {
+			break
 		}
 	}
-	log.Global.Info("Found the following peers from the DHT: ", dhtPeers)
-	maps.Copy(peerList, dhtPeers)
+	log.Global.Infof("Found %d peers from the DHT", added)
 	return peerList
 }
 
@@ -622,6 +629,18 @@ func (pm *BasicPeerManager) GetPeerQuality(peer p2p.PeerID) int {
 	} else {
 		return 0
 	}
+}
+
+// QualityBucket uses the same thresholds for live request selection and stored
+// peer categorization. maxQuality is the highest score in the candidate set.
+func QualityBucket(quality, maxQuality int) PeerQuality {
+	if quality > int(c_bestThreshold*float64(maxQuality)) {
+		return Best
+	}
+	if quality >= int(c_worstThreshold*float64(maxQuality)) {
+		return Responsive
+	}
+	return LastResort
 }
 
 // Peers will be divided into three buckets (good, bad, ugly) based on their quality score
@@ -670,20 +689,21 @@ func (pm *BasicPeerManager) recategorizePeer(peerID p2p.PeerID, topic string) er
 		}
 
 		// max score among all peers
-		if peerQuality > int(c_bestThreshold*float64(maxPeerQuality)) {
+		switch QualityBucket(peerQuality, maxPeerQuality) {
+		case Best:
 			// Best peers: high liveness and responsiveness
 			err := pm.peerDBs[topic][Best].Put(pm.ctx, key, peerInfo)
 			if err != nil {
 				return errors.Wrap(err, "error putting peer in bestPeersDB")
 			}
 
-		} else if peerQuality >= int(c_worstThreshold*float64(maxPeerQuality)) {
+		case Responsive:
 			err := pm.peerDBs[topic][Responsive].Put(pm.ctx, key, peerInfo)
 			if err != nil {
 				return errors.Wrap(err, "error putting peer in responsivePeersDB")
 			}
 
-		} else {
+		case LastResort:
 			// All other peers
 			err := pm.peerDBs[topic][LastResort].Put(pm.ctx, key, peerInfo)
 			if err != nil {
