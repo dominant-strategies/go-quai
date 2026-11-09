@@ -18,6 +18,7 @@ import (
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/metrics_config"
 	"github.com/dominant-strategies/go-quai/p2p"
+	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/pubsubManager"
 	"github.com/dominant-strategies/go-quai/p2p/node/streamManager"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
@@ -157,8 +158,9 @@ func (p *P2PNode) Stop() error {
 }
 
 type requestPeerSource interface {
-	GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) map[p2p.PeerID]struct{}
+	GetPeersExcluding(topic *pubsubManager.Topic, excluded map[p2p.PeerID]struct{}) []p2p.PeerID
 	GetStreamPeers() []peer.ID
+	GetPeerQuality(peer.ID) int
 }
 
 type peerRequestTraceKey struct{}
@@ -171,12 +173,7 @@ func traceRequestRound(ctx context.Context, source requestPeerSource, topic *pub
 	if !ok {
 		return
 	}
-	qualitySource, hasQuality := source.(interface{ GetPeerQuality(peer.ID) int })
 	for _, peerID := range peers {
-		quality := 0
-		if hasQuality {
-			quality = qualitySource.GetPeerQuality(peerID)
-		}
 		onTopic := false
 		for _, topicPeer := range topicPeers {
 			if peerID == topicPeer {
@@ -190,52 +187,56 @@ func traceRequestRound(ctx context.Context, source requestPeerSource, topic *pub
 			"stage":        stage,
 			"round":        round,
 			"peer":         peerID,
-			"quality":      quality,
+			"quality":      source.GetPeerQuality(peerID),
 			"topic_member": onTopic,
 		}).Info("Peer request trace selection")
 	}
 }
 
-func selectRequestPeers(peers []peer.ID, requestDegree int, shuffle func(int, func(int, int))) []peer.ID {
-	if requestDegree <= 0 {
-		return nil
-	}
-	selected := append([]peer.ID(nil), peers...)
-	shuffle(len(selected), func(i, j int) {
-		selected[i], selected[j] = selected[j], selected[i]
-	})
-	if len(selected) > requestDegree {
-		selected = selected[:requestDegree]
-	}
-	return selected
-}
-
-// orderLiveRequestPeers tries peers seen on the requested gossip topic first.
-// The request stream itself is shared across topics, so topic membership is a
-// preference rather than a requirement. Neither input slice is changed.
-func orderLiveRequestPeers(streamPeers, topicPeers []peer.ID, shuffle func(int, func(int, int))) []peer.ID {
+// orderLiveRequestPeers keeps topic streams ahead of other streams, and orders
+// each group by quality bucket. It shuffles only within a bucket. Neither the
+// stream cache nor the topic peer list is changed.
+func orderLiveRequestPeers(source requestPeerSource, topicPeers []peer.ID, shuffle func(int, func(int, int))) []peer.ID {
+	streamPeers := source.GetStreamPeers()
 	topicSet := make(map[peer.ID]struct{}, len(topicPeers))
 	for _, peerID := range topicPeers {
 		topicSet[peerID] = struct{}{}
 	}
 	seen := make(map[peer.ID]struct{}, len(streamPeers))
-	preferred := make([]peer.ID, 0, len(streamPeers))
-	other := make([]peer.ID, 0, len(streamPeers))
+	unique := make([]peer.ID, 0, len(streamPeers))
+	scores := make(map[peer.ID]int, len(streamPeers))
+	maxScore := 0
 	for _, peerID := range streamPeers {
 		if _, duplicate := seen[peerID]; duplicate {
 			continue
 		}
 		seen[peerID] = struct{}{}
+		unique = append(unique, peerID)
+		scores[peerID] = source.GetPeerQuality(peerID)
+		maxScore = max(maxScore, scores[peerID])
+	}
+	var groups [2][3][]peer.ID
+	for _, peerID := range unique {
+		group := 1
 		if _, onTopic := topicSet[peerID]; onTopic {
-			preferred = append(preferred, peerID)
-		} else {
-			other = append(other, peerID)
+			group = 0
+		}
+		bucket := peerManager.QualityBucket(scores[peerID], maxScore)
+		groups[group][bucket] = append(groups[group][bucket], peerID)
+	}
+	ordered := make([]peer.ID, 0, len(unique))
+	for _, group := range groups {
+		for _, bucket := range group {
+			shuffle(len(bucket), func(i, j int) {
+				bucket[i], bucket[j] = bucket[j], bucket[i]
+			})
+			ordered = append(ordered, bucket...)
 		}
 	}
-	return append(selectRequestPeers(preferred, len(preferred), shuffle), selectRequestPeers(other, len(other), shuffle)...)
+	return ordered
 }
 
-func topicRequestPeers(source requestPeerSource, topic *pubsubManager.Topic, attempted []peer.ID, requestDegree int, shuffle func(int, func(int, int))) []peer.ID {
+func topicRequestPeers(source requestPeerSource, topic *pubsubManager.Topic, attempted []peer.ID, requestDegree int) []peer.ID {
 	if requestDegree <= 0 {
 		return nil
 	}
@@ -244,13 +245,16 @@ func topicRequestPeers(source requestPeerSource, topic *pubsubManager.Topic, att
 		attemptedSet[peerID] = struct{}{}
 	}
 	topicPeers := source.GetPeersExcluding(topic, attemptedSet)
-	selected := make([]peer.ID, 0, len(topicPeers))
-	for peerID := range topicPeers {
+	selected := make([]peer.ID, 0, min(len(topicPeers), requestDegree))
+	for _, peerID := range topicPeers {
 		if _, tried := attemptedSet[peerID]; !tried {
 			selected = append(selected, peerID)
+			if len(selected) == requestDegree {
+				break
+			}
 		}
 	}
-	return selectRequestPeers(selected, requestDegree, shuffle)
+	return selected
 }
 
 // requestPeerRounds tries up to two distinct groups of live peers before a
@@ -259,7 +263,7 @@ func requestPeerRounds(ctx context.Context, source requestPeerSource, topic *pub
 	if requestDegree <= 0 {
 		return
 	}
-	live := orderLiveRequestPeers(source.GetStreamPeers(), topicPeers, shuffle)
+	live := orderLiveRequestPeers(source, topicPeers, shuffle)
 	if peerRequestTraceEnabled {
 		if traceID, ok := ctx.Value(peerRequestTraceKey{}).(uint64); ok {
 			log.Global.WithFields(log.Fields{
@@ -285,7 +289,7 @@ func requestPeerRounds(ctx context.Context, source requestPeerSource, topic *pub
 	}
 	// The database can contain stale records and is expensive under load, so
 	// query it only on bootstrap or after the live rounds have failed.
-	stored := topicRequestPeers(source, topic, attempted, requestDegree, shuffle)
+	stored := topicRequestPeers(source, topic, attempted, requestDegree)
 	if len(stored) > 0 && ctx.Err() == nil {
 		traceRequestRound(ctx, source, topic, "stored", 1, stored, topicPeers)
 		attempt(stored)

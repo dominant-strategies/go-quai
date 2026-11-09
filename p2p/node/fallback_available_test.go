@@ -30,12 +30,13 @@ type availableFallbackPeers struct {
 	replies chan interface{}
 }
 
-func (m *availableFallbackPeers) GetStreamPeers() []peer.ID { return []peer.ID{m.live} }
-func (m *availableFallbackPeers) GetPeersExcluding(_ *pubsubManager.Topic, excluded map[peer.ID]struct{}) map[peer.ID]struct{} {
+func (m *availableFallbackPeers) GetStreamPeers() []peer.ID  { return []peer.ID{m.live} }
+func (m *availableFallbackPeers) GetPeerQuality(peer.ID) int { return 0 }
+func (m *availableFallbackPeers) GetPeersExcluding(_ *pubsubManager.Topic, excluded map[peer.ID]struct{}) []peer.ID {
 	if _, tried := excluded[m.live]; !tried {
 		return nil
 	}
-	return map[peer.ID]struct{}{m.stored: {}}
+	return []peer.ID{m.stored}
 }
 func (m *availableFallbackPeers) GetStream(id peer.ID) (network.Stream, error) {
 	if id == m.live {
