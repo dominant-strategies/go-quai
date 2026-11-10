@@ -1006,23 +1006,8 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	if err != nil {
 
 		if errors.Is(err, errInvalidWorkShareDist) {
-			// If uncle is found to be invalid because of distance, remove it from
-			// the share cache
-			var powid types.PowID
-			if uncle.AuxPow() == nil {
-				powid = types.Progpow
-			} else {
-				powid = uncle.AuxPow().PowID()
-			}
-
-			switch powid {
-			case types.Progpow, types.Kawpow:
-				w.kawpowShares.Remove(powIdentity)
-			case types.SHA_BCH, types.SHA_BTC:
-				w.shaShares.Remove(powIdentity)
-			case types.Scrypt:
-				w.scryptShares.Remove(powIdentity)
-			}
+			// Distance cannot improve as this chain advances.
+			w.evictCachedWorkShare(powIdentity)
 		}
 
 		return err
@@ -1046,10 +1031,33 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 	candidate := types.NewWorkObject(env.wo.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
 	candidate.Body().SetUncles([]*types.WorkObjectHeader{uncle})
 	if err := w.hc.VerifyUncles(candidate); err != nil {
+		if shouldEvictWorkShareOnVerifyError(err) {
+			w.evictCachedWorkShare(powIdentity)
+		}
 		return err
 	}
 	env.uncles[hash] = uncle
 	return nil
+}
+
+// A candidate-dependent failure can change when the miner builds on another
+// parent. Keep those shares available; evict shares with other verification
+// failures so every template does not repeat the same expensive check.
+func shouldEvictWorkShareOnVerifyError(err error) bool {
+	return !errors.Is(err, consensus.ErrDuplicateUncle) &&
+		!errors.Is(err, consensus.ErrUncleIsAncestor) &&
+		!errors.Is(err, consensus.ErrDanglingUncle) &&
+		!errors.Is(err, consensus.ErrUnknownAncestor) &&
+		!errors.Is(err, consensus.ErrTooManyUncles) &&
+		!errors.Is(err, errWorkShareParentNotFound)
+}
+
+// The three LRU caches use PoW identity as the key. Removing from each cache
+// avoids relying on a mutable AuxPow type to select one cache.
+func (w *worker) evictCachedWorkShare(powIdentity common.Hash) {
+	w.kawpowShares.Remove(powIdentity)
+	w.shaShares.Remove(powIdentity)
+	w.scryptShares.Remove(powIdentity)
 }
 
 func (w *worker) commitTransaction(env *environment, parent *types.WorkObject, tx *types.Transaction) ([]*types.Log, bool, error) {
