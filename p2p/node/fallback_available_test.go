@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -83,7 +84,7 @@ func TestStoredPeerWithAvailableBlockAnswersCurrentFallback(t *testing.T) {
 	requestPeerRounds(context.Background(), manager, topic, nil, 1, noShuffle, func(peers []peer.ID) bool {
 		for _, id := range peers {
 			attempted = append(attempted, id)
-			if node.requestAndWait(id, topic, big.NewInt(100), &types.WorkObjectBlockView{}, result, 0) {
+			if node.requestAndWait(id, topic, big.NewInt(100), &types.WorkObjectBlockView{}, result, 0, nil) {
 				return true
 			}
 		}
@@ -96,4 +97,79 @@ func TestStoredPeerWithAvailableBlockAnswersCurrentFallback(t *testing.T) {
 	default:
 		t.Fatal("reachable stored peer did not answer the current request")
 	}
+}
+
+type validatingFallbackPeers struct {
+	peerManager.PeerManager
+	bad, good peer.ID
+	replies   chan interface{}
+	responses map[peer.ID]interface{}
+	attempted []peer.ID
+	quality   map[peer.ID]int
+}
+
+func (m *validatingFallbackPeers) GetStreamPeers() []peer.ID { return []peer.ID{m.bad} }
+func (m *validatingFallbackPeers) GetPeerQuality(id peer.ID) int {
+	return m.quality[id]
+}
+func (m *validatingFallbackPeers) GetPeersExcluding(_ *pubsubManager.Topic, excluded map[peer.ID]struct{}) []peer.ID {
+	if _, tried := excluded[m.bad]; tried {
+		return []peer.ID{m.good}
+	}
+	return nil
+}
+func (m *validatingFallbackPeers) GetStream(peer.ID) (network.Stream, error) { return nil, nil }
+func (m *validatingFallbackPeers) WriteMessageToStream(id peer.ID, _ network.Stream, _ []byte, _ libp2pprotocol.ID, _ libp2pmetrics.Reporter) error {
+	m.attempted = append(m.attempted, id)
+	m.replies <- m.responses[id]
+	return nil
+}
+func (m *validatingFallbackPeers) AdjustPeerQuality(id peer.ID, _ string, adjust func(int) int) {
+	m.quality[id] = adjust(m.quality[id])
+}
+
+func TestInvalidPeerResponseFallsBackToAnotherPeer(t *testing.T) {
+	bad, good := peer.ID("invalid-prime-batch-peer"), peer.ID("valid-prime-batch-peer")
+	badBatch := []*types.WorkObjectBlockView{}
+	validHeader := &types.WorkObjectHeader{}
+	validHeader.SetNumber(big.NewInt(100))
+	primeHeader := types.EmptyHeader()
+	primeHeader.SetNumber(big.NewInt(100), common.PRIME_CTX)
+	body := types.EmptyWorkObjectBody()
+	body.SetHeader(primeHeader)
+	goodBatch := []*types.WorkObjectBlockView{types.NewWorkObject(validHeader, body, nil).ConvertToBlockView()}
+	replies := make(chan interface{}, 1)
+	manager := &validatingFallbackPeers{
+		bad: bad, good: good, replies: replies,
+		responses: map[peer.ID]interface{}{bad: badBatch, good: goodBatch},
+		quality:   map[peer.ID]int{bad: 100, good: 100},
+	}
+	node := &P2PNode{ctx: context.Background(), peerManager: manager, requestManager: &missingResponseRequestManager{result: replies}, requestSlots: make(chan struct{}, 1)}
+	topic, err := pubsubManager.NewTopic(common.Hash{}, common.Location{0, 0}, []*types.WorkObjectBlockView{})
+	require.NoError(t, err)
+	result := make(chan interface{}, 1)
+	validate := func(response interface{}) error {
+		batch, ok := response.([]*types.WorkObjectBlockView)
+		if !ok || len(batch) != 1 || batch[0].NumberU64(common.PRIME_CTX) != 100 {
+			return errors.New("invalid prime batch")
+		}
+		return nil
+	}
+	requestPeerRounds(context.Background(), manager, topic, nil, 1, noShuffle, func(peers []peer.ID) bool {
+		for _, id := range peers {
+			if node.requestAndWait(id, topic, big.NewInt(100), []*types.WorkObjectBlockView{}, result, 0, validate) {
+				return true
+			}
+		}
+		return false
+	})
+	require.Equal(t, []peer.ID{bad, good}, manager.attempted)
+	select {
+	case got := <-result:
+		require.Equal(t, goodBatch, got)
+	default:
+		t.Fatal("valid peer's batch was not delivered")
+	}
+	require.Less(t, manager.quality[bad], 100)
+	require.Greater(t, manager.quality[good], 100)
 }

@@ -296,7 +296,7 @@ func requestPeerRounds(ctx context.Context, source requestPeerSource, topic *pub
 	}
 }
 
-func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}) {
+func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData interface{}, respDataType interface{}, resultChan chan interface{}, validate func(interface{}) error) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -369,7 +369,7 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 							}
 						}()
 						defer requestWg.Done()
-						if p.requestAndWait(peerID, topic, requestData, respDataType, resultChan, traceID) {
+						if p.requestAndWait(peerID, topic, requestData, respDataType, resultChan, traceID, validate) {
 							succeeded.Store(true)
 							delivered.Add(1)
 						}
@@ -382,7 +382,7 @@ func (p *P2PNode) requestFromPeers(topic *pubsubManager.Topic, requestData inter
 	}()
 }
 
-func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}, traceID uint64) (sent bool) {
+func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, reqData interface{}, respDataType interface{}, resultChan chan interface{}, traceID uint64, validate func(interface{}) error) (sent bool) {
 	started := time.Now()
 	outcome := "error"
 	defer func() {
@@ -411,6 +411,18 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 		if recvd == nil {
 			outcome = "empty"
 			return false
+		}
+		if validate != nil {
+			if err := validate(recvd); err != nil {
+				outcome = "invalid"
+				p.peerManager.AdjustPeerQuality(peerID, topic.String(), p2p.QualityAdjOnBadResponse)
+				log.Global.WithFields(log.Fields{
+					"peerId": peerID,
+					"topic":  topic.String(),
+					"err":    err,
+				}).Warn("Rejected invalid peer response")
+				return false
+			}
 		}
 		log.Global.WithFields(log.Fields{
 			"peerId": peerID,
@@ -454,6 +466,16 @@ func (p *P2PNode) requestAndWait(peerID peer.ID, topic *pubsubManager.Topic, req
 
 // Request a data from the network for the specified slice
 func (p *P2PNode) Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{} {
+	return p.request(location, requestData, responseDataType, nil)
+}
+
+// RequestValidated keeps trying other peer groups until one returns data that
+// passes validate. The exclusion list applies only to this request.
+func (p *P2PNode) RequestValidated(location common.Location, requestData interface{}, responseDataType interface{}, validate func(interface{}) error) chan interface{} {
+	return p.request(location, requestData, responseDataType, validate)
+}
+
+func (p *P2PNode) request(location common.Location, requestData interface{}, responseDataType interface{}, validate func(interface{}) error) chan interface{} {
 	topic, err := pubsubManager.NewTopic(p.pubsub.GetGenesis(), location, responseDataType)
 	if err != nil {
 		log.Global.WithFields(log.Fields{
@@ -468,13 +490,14 @@ func (p *P2PNode) Request(location common.Location, requestData interface{}, res
 	// If it is a hash, first check to see if it is contained in the caches
 	if hash, ok := requestData.(common.Hash); ok {
 		result, ok := p.cacheGet(hash, responseDataType, location)
-		if ok {
+		if ok && (validate == nil || validate(result) == nil) {
 			resultChan <- result
+			close(resultChan)
 			return resultChan
 		}
 	}
 
-	p.requestFromPeers(topic, requestData, responseDataType, resultChan)
+	p.requestFromPeers(topic, requestData, responseDataType, resultChan, validate)
 	// TODO: optimize with waitgroups or a doneChan to only query if no peers responded
 	// Right now this creates too many streams, so don't call this until we have a better solution
 	// p.queryDHT(location, requestData, responseDataType, resultChan)
