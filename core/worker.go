@@ -545,11 +545,12 @@ func (w *worker) asyncStateLoop() {
 					}
 				}()
 				for _, wo := range side.Blocks {
-					// Short circuit for duplicate side blocks
-					if exists := w.kawpowShares.Contains(wo.Hash()); exists {
+					// Short circuit for side blocks carrying the same work.
+					key := wo.WorkObjectHeader().PowIdentity()
+					if exists := w.kawpowShares.Contains(key); exists {
 						continue
 					}
-					w.kawpowShares.Add(wo.Hash(), *wo.WorkObjectHeader())
+					w.kawpowShares.Add(key, *wo.WorkObjectHeader())
 				}
 			}()
 		case <-w.exitCh:
@@ -1017,11 +1018,11 @@ func (w *worker) commitUncle(env *environment, uncle *types.WorkObjectHeader) er
 
 			switch powid {
 			case types.Progpow, types.Kawpow:
-				w.kawpowShares.Remove(hash)
+				w.kawpowShares.Remove(powIdentity)
 			case types.SHA_BCH, types.SHA_BTC:
-				w.shaShares.Remove(hash)
+				w.shaShares.Remove(powIdentity)
 			case types.Scrypt:
-				w.scryptShares.Remove(hash)
+				w.scryptShares.Remove(powIdentity)
 			}
 		}
 
@@ -2640,11 +2641,13 @@ func (w *worker) FinalizeAssemble(newWo *types.WorkObject, parent *types.WorkObj
 func (w *worker) evictRejectedUncles(block *types.WorkObject, verify func(*types.WorkObject) error) []common.Hash {
 	accepted := make([]*types.WorkObjectHeader, 0, len(block.Uncles()))
 	rejected := make([]common.Hash, 0)
+	rejectedWork := make([]common.Hash, 0)
 	for _, uncle := range block.Uncles() {
 		candidate := types.NewWorkObject(block.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
 		candidate.Body().SetUncles(append(accepted, uncle))
 		if err := verify(candidate); err != nil {
 			rejected = append(rejected, uncle.Hash())
+			rejectedWork = append(rejectedWork, uncle.PowIdentity())
 			continue
 		}
 		accepted = append(accepted, uncle)
@@ -2652,14 +2655,15 @@ func (w *worker) evictRejectedUncles(block *types.WorkObject, verify func(*types
 	if len(rejected) == 0 {
 		for _, uncle := range block.Uncles() {
 			rejected = append(rejected, uncle.Hash())
+			rejectedWork = append(rejectedWork, uncle.PowIdentity())
 		}
 	}
 	w.uncleMu.Lock()
 	defer w.uncleMu.Unlock()
-	for _, hash := range rejected {
-		w.kawpowShares.Remove(hash)
-		w.shaShares.Remove(hash)
-		w.scryptShares.Remove(hash)
+	for _, key := range rejectedWork {
+		w.kawpowShares.Remove(key)
+		w.shaShares.Remove(key)
+		w.scryptShares.Remove(key)
 	}
 	return rejected
 }
@@ -2822,15 +2826,21 @@ func (w *worker) AddWorkShare(workShare *types.WorkObjectHeader) error {
 		return errors.New("work share received from peer is not valid")
 	}
 
-	// Keep the cache key as the workshare hash. Duplicate work is filtered
-	// when pending shares are selected and when uncles are committed.
-	hash := workShare.Hash()
+	// AuxPow signature and encoding fields can change the header hash without
+	// changing the donor work. Keep only one cache entry per proof of work.
+	key := workShare.PowIdentity()
 	if workShare.AuxPow() == nil || workShare.AuxPow().PowID() == types.Kawpow {
-		w.kawpowShares.ContainsOrAdd(hash, *workShare)
+		if exists, _ := w.kawpowShares.ContainsOrAdd(key, *workShare); exists {
+			return nil
+		}
 	} else if workShare.AuxPow().PowID() == types.SHA_BTC || workShare.AuxPow().PowID() == types.SHA_BCH {
-		w.shaShares.ContainsOrAdd(hash, *workShare)
+		if exists, _ := w.shaShares.ContainsOrAdd(key, *workShare); exists {
+			return nil
+		}
 	} else if workShare.AuxPow().PowID() == types.Scrypt {
-		w.scryptShares.ContainsOrAdd(hash, *workShare)
+		if exists, _ := w.scryptShares.ContainsOrAdd(key, *workShare); exists {
+			return nil
+		}
 	}
 
 	if w.hc.NodeCtx() == common.ZONE_CTX && w.hc.config.TelemetryEnabled {
