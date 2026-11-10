@@ -2,16 +2,83 @@ package core
 
 import (
 	"errors"
+	"math/big"
 	"strings"
 	"testing"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/dominant-strategies/go-quai/common"
+	"github.com/dominant-strategies/go-quai/consensus"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/params"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
+
+func TestCommitUncleEvictsShareRejectedByVerifyUncles(t *testing.T) {
+	location := common.Location{0, 0}
+	// The fixed PoW hash meets the work-share target, but not the full-block
+	// target. AddWorkShare therefore accepts the share before VerifyUncles runs.
+	hc := newSecurityTestHeaderChain(t, common.Hash{1})
+	hc.powConfig = params.PowConfig{PowMode: params.ModeNormal, NodeLocation: location}
+	hc.numberCache, _ = lru.New[common.Hash, uint64](10)
+
+	makeBlock := func(number int64, parent common.Hash) *types.WorkObject {
+		header := newTestWorkObjectHeader(1)
+		header.SetNumber(big.NewInt(number))
+		header.SetParentHash(parent)
+		header.SetNonce(types.EncodeNonce(uint64(number)))
+		return newTestBlockWithUncles(header, nil)
+	}
+	block7 := makeBlock(7, common.Hash{1})
+	block8 := makeBlock(8, block7.Hash())
+	block9 := makeBlock(9, block8.Hash())
+	for _, block := range []*types.WorkObject{block7, block8, block9} {
+		hc.numberCache.Add(block.Hash(), block.NumberU64(common.ZONE_CTX))
+		hc.headerCache.Add(block.Hash(), *block)
+		hc.bc.blockCache.Add(block.Hash(), *block)
+		rawdb.WriteTermini(hc.headerDb, block.Hash(), types.EmptyTermini())
+	}
+	hc.AddGenesisHash(block7.Hash())
+	candidate := makeBlock(10, block9.Hash())
+	share := newTestWorkObjectHeader(1)
+	share.SetNumber(big.NewInt(9))
+	share.SetParentHash(block8.Hash())
+	share.SetNonce(types.EncodeNonce(99))
+	share.SetDifficulty(big.NewInt(2000))
+	key := share.PowIdentity()
+	kawpow, _ := lru.New[common.Hash, types.WorkObjectHeader](4)
+	sha, _ := lru.New[common.Hash, types.WorkObjectHeader](4)
+	scrypt, _ := lru.New[common.Hash, types.WorkObjectHeader](4)
+	hc.currentHeader.Store(block9)
+	w := &worker{hc: hc, kawpowShares: kawpow, shaShares: sha, scryptShares: scrypt, logger: log.Global}
+	if err := w.AddWorkShare(share); err != nil {
+		t.Fatalf("share admission failed: %v", err)
+	}
+	if !kawpow.Contains(key) {
+		t.Fatal("AddWorkShare did not cache the valid work share")
+	}
+	env := &environment{wo: candidate, ancestors: mapset.NewSet(), family: mapset.NewSet(), uncles: make(map[common.Hash]*types.WorkObjectHeader)}
+	err := w.commitUncle(env, share)
+	if err == nil || !strings.Contains(err.Error(), "invalid difficulty") {
+		t.Fatalf("commitUncle returned %v, want invalid difficulty error", err)
+	}
+	if kawpow.Contains(key) {
+		t.Fatal("share rejected by per-share VerifyUncles remains cached")
+	}
+}
+
+func TestCandidateDependentUncleFailureKeepsShare(t *testing.T) {
+	for _, err := range []error{consensus.ErrDuplicateUncle, consensus.ErrUncleIsAncestor, consensus.ErrDanglingUncle, consensus.ErrUnknownAncestor, consensus.ErrTooManyUncles, errWorkShareParentNotFound} {
+		if shouldEvictWorkShareOnVerifyError(err) {
+			t.Fatalf("candidate-dependent failure %v would evict a share", err)
+		}
+	}
+	if !shouldEvictWorkShareOnVerifyError(errors.New("invalid share difficulty")) {
+		t.Fatal("permanent share failure would remain cached")
+	}
+}
 
 func TestFinalizeAssembleEvictsRejectedUncle(t *testing.T) {
 	location := common.Location{0, 0}

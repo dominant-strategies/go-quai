@@ -39,8 +39,9 @@ const (
 )
 
 var (
-	errInvalidEfficiencyScore = errors.New("unable to compute efficiency score")
-	errInvalidWorkShareDist   = errors.New("workshare is at distance more than WorkSharesInclusionDepth")
+	errInvalidEfficiencyScore  = errors.New("unable to compute efficiency score")
+	errInvalidWorkShareDist    = errors.New("workshare is at distance more than WorkSharesInclusionDepth")
+	errWorkShareParentNotFound = errors.New("error finding the parent")
 )
 
 type calcOrderResponse struct {
@@ -1281,7 +1282,7 @@ func (hc *HeaderChain) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObj
 	for i := 0; i < workshareInclusionDepth; i++ {
 		parent := hc.GetBlockByHash(current.ParentHash(common.ZONE_CTX))
 		if parent == nil {
-			return big.NewInt(0), errors.New("error finding the parent")
+			return big.NewInt(0), errWorkShareParentNotFound
 		}
 		ancestors[parent.Hash()] = struct{}{}
 		current = parent
@@ -1294,7 +1295,7 @@ func (hc *HeaderChain) WorkShareDistance(wo *types.WorkObject, ws *types.WorkObj
 	for {
 		parent := hc.GetBlockByHash(parentHash)
 		if parent == nil {
-			return big.NewInt(0), errors.New("error finding the parent")
+			return big.NewInt(0), errWorkShareParentNotFound
 		}
 		if _, exists := ancestors[parent.Hash()]; exists {
 			distance += int64(wo.NumberU64(common.ZONE_CTX) - parent.NumberU64(common.ZONE_CTX) - 1)
