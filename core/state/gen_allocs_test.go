@@ -208,3 +208,95 @@ func TestAddLockedBalancesFounderForfeitureAtFork(t *testing.T) {
 	require.Zero(t, state.GetBalance(founderInternal).Cmp(big.NewInt(5)))
 	require.Zero(t, state.GetBalance(retainedInternal).Cmp(big.NewInt(21)))
 }
+
+// Run every monthly unlock in the mainnet allocation schedule through both
+// forfeiture forks. Mainnet zone headers at months 13, 14 and 21 carry Prime
+// termini 1,470,244, 1,589,198 and 2,408,223. Polaris was active before the
+// future month-22 unlock. Only these fork stages matter to AddLockedBalances;
+// exact Prime numbers within a stage do not.
+func TestAddLockedBalancesFounderForfeitureAllMonths(t *testing.T) {
+	primeTerminusAtMonth := func(month uint64) uint64 {
+		switch {
+		case month < 14:
+			return params.SingularityForkBlock - 1
+		case month < 22:
+			return params.PolarisForkBlock - 1
+		default:
+			return params.PolarisForkBlock
+		}
+	}
+	allocs, err := params.VerifyGenesisAllocs(filepath.Join("..", "..", "params", "genesis_alloc.json"), params.AllocHash)
+	require.NoError(t, err)
+	oldAddresses, err := params.LoadForfeitureAddresses(filepath.Join("..", "..", "params", "forfeiture_addresses.json"))
+	require.NoError(t, err)
+	founderAddresses, err := params.LoadForfeitureAddresses(filepath.Join("..", "..", "params", "founder_forfeiture_addresses.json"))
+	require.NoError(t, err)
+
+	expectedByAddress := make(map[common.AddressBytes]*big.Int, len(allocs))
+	founderMatched := make(map[common.AddressBytes]struct{})
+	founderWithheld := new(big.Int)
+	oldWithheld := new(big.Int)
+	blockOneUnlocked := new(big.Int)
+	maxMonth := uint64(0)
+	for _, account := range allocs {
+		key := account.Address.Bytes20()
+		if expectedByAddress[key] == nil {
+			expectedByAddress[key] = new(big.Int)
+		}
+		for unlock := account.BalanceSchedule.Oldest(); unlock != nil; unlock = unlock.Next() {
+			month := unlock.Key / params.BlocksPerMonth
+			if month > maxMonth {
+				maxMonth = month
+			}
+			primeTerminus := primeTerminusAtMonth(month)
+			if month == 0 {
+				blockOneUnlocked.Add(blockOneUnlocked, unlock.Value)
+			}
+			if oldAddresses[key] && primeTerminus >= params.SingularityForkBlock {
+				oldWithheld.Add(oldWithheld, unlock.Value)
+			} else if founderAddresses[key] && primeTerminus >= params.PolarisForkBlock {
+				founderWithheld.Add(founderWithheld, unlock.Value)
+			} else {
+				expectedByAddress[key].Add(expectedByAddress[key], unlock.Value)
+			}
+			if founderAddresses[key] {
+				founderMatched[key] = struct{}{}
+			}
+		}
+	}
+	require.Equal(t, uint64(72), maxMonth)
+	require.Len(t, founderMatched, 359)
+
+	state := testStateDB(t)
+	for month := uint64(0); month <= maxMonth; month++ {
+		require.NoError(t, state.AddLockedBalances(
+			testUnlockBlockAtMonth(month, primeTerminusAtMonth(month)),
+			allocs, oldAddresses, founderAddresses, log.Global,
+		), "month %d", month)
+	}
+
+	finalUnlocked := new(big.Int)
+	seen := make(map[common.AddressBytes]struct{}, len(expectedByAddress))
+	for _, account := range allocs {
+		key := account.Address.Bytes20()
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		internal, err := account.Address.InternalAddress()
+		require.NoError(t, err)
+		balance := state.GetBalance(internal)
+		require.Zero(t, balance.Cmp(expectedByAddress[key]), "wrong final unlock for %s", account.Address)
+		finalUnlocked.Add(finalUnlocked, balance)
+	}
+	require.Equal(t, "1096383477633997684558250502", finalUnlocked.String())
+	require.Equal(t, "236456538365850624693750162", founderWithheld.String())
+	require.Equal(t, "1667159984000000000000000036", oldWithheld.String())
+	require.Equal(t, "477922504457243240952000700", blockOneUnlocked.String())
+
+	quai := new(big.Rat).SetFrac(finalUnlocked, big.NewInt(params.Ether)).FloatString(18)
+	founderQuai := new(big.Rat).SetFrac(founderWithheld, big.NewInt(params.Ether)).FloatString(18)
+	blockOneQuai := new(big.Rat).SetFrac(blockOneUnlocked, big.NewInt(params.Ether)).FloatString(18)
+	t.Logf("full genesis schedule through forfeiture forks: months=0..%d founder_addresses=%d block_1_unlocked=%s QUAI final_unlocked=%s wei (%s QUAI) founder_withheld=%s wei (%s QUAI) old_withheld=%s wei",
+		maxMonth, len(founderMatched), blockOneQuai, finalUnlocked, quai, founderWithheld, founderQuai, oldWithheld)
+}
