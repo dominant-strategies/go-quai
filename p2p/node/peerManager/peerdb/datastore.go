@@ -117,6 +117,20 @@ func (p *PeerDB) Query(ctx context.Context, q query.Query) (query.Results, error
 	return result, nil
 }
 
+// ForEachKey visits every stored peer key. It is used when a limited Query
+// sample contains too few peers after request exclusions are applied.
+func (p *PeerDB) ForEachKey(ctx context.Context, visit func(string)) error {
+	iter := p.db.NewIterator(nil, nil)
+	defer iter.Release()
+	for iter.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		visit(string(iter.Key()))
+	}
+	return iter.Error()
+}
+
 // Put stores the object `value` named by `key`.
 //
 // The generalized Datastore interface does not impose a value type,
