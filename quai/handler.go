@@ -276,20 +276,15 @@ func applyPrimeBlock(store primeBlockStore, block *types.WorkObject) (alreadyCan
 }
 
 func (h *handler) GetNextPrimeBlock(number *big.Int) error {
-	// If the blockHash for the asked number is not present in the
-	// appended database we ask the peer for the block with this hash
-	resultCh := h.p2pBackend.Request(h.nodeLocation, new(big.Int).Add(number, big.NewInt(1)), []*types.WorkObjectBlockView{})
+	// Ask peers for the batch that starts after number.
+	firstNumber := new(big.Int).Add(number, big.NewInt(1))
+	resultCh := requestPrimeSyncBlocks(h.p2pBackend, h.core, h.nodeLocation, firstNumber)
 	blocks := <-resultCh
 	if blocks != nil {
-		// peer returns a slice of blocks from the requested number
+		// The peer returned a validated slice of blocks from the requested number.
 		workObjects := blocks.([]*types.WorkObjectBlockView)
-		if err := validatePrimeSyncBlocks(h.core, new(big.Int).Add(number, big.NewInt(1)), workObjects); err != nil {
-			h.logger.WithField("err", err).Error("rejected downloaded prime blocks")
-			return nil
-		}
 
-		// Write all the blocks are the sanity check into the database and
-		// add it to the append queue
+		// Write validated blocks to the database and append queue.
 		for _, wo := range workObjects {
 			block := wo.WorkObject
 			blockHash := block.WorkObjectHeader().Hash()
@@ -319,6 +314,16 @@ func (h *handler) GetNextPrimeBlock(number *big.Int) error {
 		}
 	}
 	return nil
+}
+
+func requestPrimeSyncBlocks(backend NetworkingAPI, chain primeSyncChain, location common.Location, firstNumber *big.Int) chan interface{} {
+	return backend.RequestValidated(location, firstNumber, []*types.WorkObjectBlockView{}, func(response interface{}) error {
+		workObjects, ok := response.([]*types.WorkObjectBlockView)
+		if !ok {
+			return fmt.Errorf("prime sync response has type %T", response)
+		}
+		return validatePrimeSyncBlocks(chain, firstNumber, workObjects)
+	})
 }
 
 // primeSyncChain is the part of the core that validatePrimeSyncBlocks uses.

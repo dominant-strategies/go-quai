@@ -81,6 +81,10 @@ type NetworkingAPI interface {
 	// Method to request data from the network
 	// Specify location, data hash, and data type to request
 	Request(location common.Location, requestData interface{}, responseDataType interface{}) chan interface{}
+	// RequestValidated accepts only peer responses that pass validate. Invalid
+	// responses lower the peer's quality and do not stop other peer rounds.
+	// validate can run concurrently for responses from different peers.
+	RequestValidated(location common.Location, requestData interface{}, responseDataType interface{}, validate func(interface{}) error) chan interface{}
 
 	// Returns the connected peer count.
 	PeerCount() uint

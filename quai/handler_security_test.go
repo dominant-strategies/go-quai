@@ -129,6 +129,52 @@ func TestValidatePrimeSyncBlocksRejectsBadBatches(t *testing.T) {
 	}
 }
 
+type primeSyncValidationBackend struct {
+	NetworkingAPI
+	responses []interface{}
+	requested *big.Int
+	rejected  int
+}
+
+func (b *primeSyncValidationBackend) RequestValidated(_ common.Location, requestData interface{}, responseDataType interface{}, validate func(interface{}) error) chan interface{} {
+	b.requested = new(big.Int).Set(requestData.(*big.Int))
+	if _, ok := responseDataType.([]*types.WorkObjectBlockView); !ok {
+		panic("prime sync requested the wrong response type")
+	}
+	result := make(chan interface{}, 1)
+	for _, response := range b.responses {
+		if validate(response) != nil {
+			b.rejected++
+			continue
+		}
+		result <- response
+		break
+	}
+	close(result)
+	return result
+}
+
+func TestPrimeSyncValidatesResponsesBeforeSelectingPeer(t *testing.T) {
+	firstNumber := big.NewInt(100)
+	chain := newPrimeSyncTestChain(big.NewInt(1_000_000))
+	good := newPrimeSyncTestBatch(100, big.NewInt(1_000_000))
+	backend := &primeSyncValidationBackend{responses: []interface{}{
+		newPrimeSyncTestBatch(500, big.NewInt(1_000_000)),
+		good,
+	}}
+	result := requestPrimeSyncBlocks(backend, chain, common.Location{0, 0}, firstNumber)
+	got, ok := <-result
+	if !ok || got.([]*types.WorkObjectBlockView)[0] != good[0] {
+		t.Fatalf("prime sync selected %v, want the valid batch", got)
+	}
+	if backend.rejected != 1 || backend.requested.Cmp(firstNumber) != 0 {
+		t.Fatalf("rejected %d bad batches for request %v, want one rejection for %v", backend.rejected, backend.requested, firstNumber)
+	}
+	if chain.calcOrderCalls != protocol.C_NumPrimeBlocksToDownload {
+		t.Fatalf("CalcOrder called %d times, want only the valid batch checked", chain.calcOrderCalls)
+	}
+}
+
 // H3: many gossip workers update the per slice counters at the same time.
 // Before the fix this was a concurrent map write, which the Go runtime turns
 // into a fatal error that recover cannot catch. Run with -race to check.
