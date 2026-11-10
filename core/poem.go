@@ -14,7 +14,8 @@ import (
 
 // CalcOrder returns the order of the block within the hierarchy of chains
 func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error) {
-	// Validate the binding before reading or writing the order cache.
+	// Validate the binding before reading or writing the order cache. A cached
+	// header hash does not prove that this object's body header is bound to it.
 	if err := hc.verifyWorkObjectBinding(header); err != nil {
 		return big.NewInt(0), -1, err
 	}
@@ -24,7 +25,8 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 		return big.NewInt(0), common.PRIME_CTX, nil
 	}
 	// check if the order for this block has already been computed
-	intrinsicEntropy, order, exists := hc.CheckInCalcOrderCache(header.Hash())
+	headerHash := header.Hash()
+	intrinsicEntropy, order, exists := hc.CheckInCalcOrderCache(headerHash)
 	if exists {
 		return intrinsicEntropy, order, nil
 	}
@@ -53,7 +55,7 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 
 	primeBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.PrimeEntropyTarget(expansionNum)))
 	if intrinsicEntropy.Cmp(primeBlockEntropyThreshold) > 0 && totalDeltaEntropyPrime.Cmp(primeDeltaEntropyTarget) > 0 {
-		hc.AddToCalcOrderCache(header.Hash(), common.PRIME_CTX, intrinsicEntropy)
+		hc.AddToCalcOrderCache(headerHash, common.PRIME_CTX, intrinsicEntropy)
 		return intrinsicEntropy, common.PRIME_CTX, nil
 	}
 
@@ -66,12 +68,12 @@ func (hc *HeaderChain) CalcOrder(header *types.WorkObject) (*big.Int, int, error
 
 	regionBlockEntropyThreshold := new(big.Int).Add(zoneThresholdEntropy, common.BitsToBigBits(params.RegionEntropyTarget(expansionNum)))
 	if intrinsicEntropy.Cmp(regionBlockEntropyThreshold) > 0 && totalDeltaSRegion.Cmp(regionDeltaSTarget) > 0 {
-		hc.AddToCalcOrderCache(header.Hash(), common.REGION_CTX, intrinsicEntropy)
+		hc.AddToCalcOrderCache(headerHash, common.REGION_CTX, intrinsicEntropy)
 		return intrinsicEntropy, common.REGION_CTX, nil
 	}
 
 	// Zone case
-	hc.AddToCalcOrderCache(header.Hash(), common.ZONE_CTX, intrinsicEntropy)
+	hc.AddToCalcOrderCache(headerHash, common.ZONE_CTX, intrinsicEntropy)
 	return intrinsicEntropy, common.ZONE_CTX, nil
 }
 
