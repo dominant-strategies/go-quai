@@ -1,11 +1,13 @@
 package core
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"math/big"
 	"strings"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/rawdb"
@@ -140,5 +142,104 @@ func TestProcessQiTxRejectsShortOutputAddress(t *testing.T) {
 		&UtxosCreatedDeleted{}, big.NewInt(0), big.NewInt(0), false)
 	if err == nil || !strings.Contains(err.Error(), "address length") {
 		t.Fatalf("got %v, want an address length error", err)
+	}
+}
+
+// A miner can put a Qi transaction directly in a block without pool admission.
+// Keep old blocks replayable, then require exactly 20 address bytes at the fork.
+func TestProcessQiTxLongOutputAddressFork(t *testing.T) {
+	key, owner := qiKeyInCyprus1(t)
+	_, recipient := qiKeyInCyprus1(t)
+	longAddress := append([]byte{0x00, 0x80}, recipient.Bytes()...)
+	if !common.BytesToAddress(longAddress, qiOutputTestLocation).Equal(recipient) {
+		t.Fatal("test setup: long address must resolve to the recipient")
+	}
+	if common.AddressBytes(longAddress) == recipient.Bytes20() {
+		t.Fatal("test setup: first 20 bytes must differ from the recipient")
+	}
+
+	for _, tc := range []struct {
+		name       string
+		primeBlock uint64
+		address    []byte
+		wantError  bool
+	}{
+		{"before fork", params.ConsensusFixForkBlock - 1, longAddress, false},
+		{"at fork", params.ConsensusFixForkBlock, longAddress, true},
+		{"valid at fork", params.ConsensusFixForkBlock, recipient.Bytes(), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase(log.Global)
+			input := types.OutPoint{TxHash: common.Hash{1}, Index: 0}
+			if err := rawdb.CreateUTXO(db, input.TxHash, input.Index, types.NewUtxoEntry(types.NewTxOut(5, owner.Bytes(), nil))); err != nil {
+				t.Fatal(err)
+			}
+			qiTx := &types.QiTx{
+				ChainID:   big.NewInt(1),
+				TxIn:      types.TxIns{{PreviousOutPoint: input, PubKey: crypto.FromECDSAPub(&key.PublicKey)}},
+				TxOut:     types.TxOuts{*types.NewTxOut(1, tc.address, big.NewInt(0))},
+				Signature: new(schnorr.Signature),
+			}
+			signer := types.NewSigner(big.NewInt(1), qiOutputTestLocation)
+			digest, err := signer.Hash(types.NewTx(qiTx))
+			if err != nil {
+				t.Fatal(err)
+			}
+			privateKey, _ := btcec.PrivKeyFromBytes(crypto.FromECDSA(key))
+			qiTx.Signature, err = schnorr.Sign(privateKey, digest[:])
+			if err != nil {
+				t.Fatal(err)
+			}
+			tx := types.NewTx(qiTx)
+			encoded, err := tx.ProtoEncode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded := new(types.Transaction)
+			if err := decoded.ProtoDecode(encoded, qiOutputTestLocation); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(decoded.TxOut()[0].Address, tc.address) {
+				t.Fatalf("block transaction changed output address length: got %d, want %d", len(decoded.TxOut()[0].Address), len(tc.address))
+			}
+			tx = decoded
+			currentHeader := newQiOutputTestHeader()
+			currentHeader.WorkObjectHeader().SetPrimeTerminusNumber(new(big.Int).SetUint64(tc.primeBlock))
+			currentHeader.Header().SetBaseFee(big.NewInt(0))
+			currentHeader.Header().SetExchangeRate(big.NewInt(1))
+			chain := qiOutputTestChain{primeTerminus: currentHeader}
+			batch := db.NewBatch()
+			batch.SetPending(true)
+			usedGas := uint64(0)
+			etxRLimit, etxPLimit := uint64(1_000_000), uint64(1_000_000)
+			changes := &UtxosCreatedDeleted{
+				AddressOutpointsToAddMap:    make(map[[20]byte][]*types.OutpointAndDenomination),
+				AddressOutpointsToRemoveMap: make(map[[20]byte][]*types.OutPoint),
+			}
+			_, _, _, err, _ = ProcessQiTx(tx, chain, true, false, currentHeader, batch, db, new(types.GasPool).AddGas(30_000_000), &usedGas,
+				signer, qiOutputTestLocation, *big.NewInt(1), 1, &etxRLimit, &etxPLimit,
+				changes, big.NewInt(0), big.NewInt(0), true)
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "address length") {
+					t.Fatalf("got %v, want an address length error", err)
+				}
+				if utxo := rawdb.GetUTXOWithBatch(db, batch, tx.Hash(), 0); utxo != nil {
+					t.Fatalf("rejected output created a UTXO: %x", utxo.Address)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("valid historical output rejected: %v", err)
+			}
+			utxo := rawdb.GetUTXOWithBatch(db, batch, tx.Hash(), 0)
+			if utxo == nil || !bytes.Equal(utxo.Address, tc.address) {
+				t.Fatalf("UTXO address: got %v, want %x", utxo, tc.address)
+			}
+			if len(tc.address) > common.AddressLength {
+				if len(changes.AddressOutpointsToAddMap[common.AddressBytes(tc.address)]) != 1 {
+					t.Fatal("oversized address was not indexed by its first 20 bytes")
+				}
+			}
+		})
 	}
 }

@@ -359,9 +359,9 @@ var (
 
 	SingularityForkBlock       uint64 = 1265025
 	FounderForfeitureForkBlock uint64 = 2448392
-	// ConsensusFixForkBlock activates workshare identity and EOA self-destruct
-	// rules at one Prime block.
-	ConsensusFixForkBlock uint64 = 2444574
+	// ConsensusFixForkBlock activates workshare identity, EOA self-destruct,
+	// and Qi output address length rules at one Prime block.
+	ConsensusFixForkBlock uint64 = 2444574 // Set to the scheduled Prime block before release.
 
 	QiWrappingChangeBlock uint64 = 1320000
 

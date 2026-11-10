@@ -1988,10 +1988,13 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		if txOutIdx > types.MaxOutputIndex {
 			return nil, nil, nil, fmt.Errorf("tx [%v] exceeds max output index of %d", tx.Hash().Hex(), types.MaxOutputIndex), nil
 		}
-		// A short output address panics the [20]byte conversion in the Qi gas
-		// calculation, so a block with one could never be processed
-		if len(txOut.Address) < common.AddressLength {
-			return nil, nil, nil, fmt.Errorf("tx [%v] output %d has address length %d, want %d", tx.Hash().Hex(), txOutIdx, len(txOut.Address), common.AddressLength), nil
+		// Short addresses panic the [20]byte Qi gas conversion. From the
+		// consensus fix fork, reject long addresses too: address helpers crop
+		// them differently and a local UTXO retains all of their bytes.
+		addressLength := len(txOut.Address)
+		if addressLength < common.AddressLength ||
+			(currentHeader.PrimeTerminusNumber().Uint64() >= params.ConsensusFixForkBlock && addressLength != common.AddressLength) {
+			return nil, nil, nil, fmt.Errorf("tx [%v] output %d has address length %d, want %d", tx.Hash().Hex(), txOutIdx, addressLength, common.AddressLength), nil
 		}
 
 		if txOut.Denomination > types.MaxDenomination {
