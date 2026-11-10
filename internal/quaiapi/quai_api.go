@@ -2637,7 +2637,7 @@ func (s *PublicBlockChainQuaiAPI) genesisUnlockedQuaiThroughBlock(ctx context.Co
 					return nil, err
 				}
 				if (primeTerminusNumber >= params.SingularityForkBlock && forfeitureAddresses[account.Address.Bytes20()]) ||
-					(primeTerminusNumber >= params.FounderForfeitureForkBlock && founderForfeitureAddresses[account.Address.Bytes20()]) {
+					(primeTerminusNumber >= params.PolarisForkBlock && founderForfeitureAddresses[account.Address.Bytes20()]) {
 					continue
 				}
 			}

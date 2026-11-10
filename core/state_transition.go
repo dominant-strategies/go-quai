@@ -465,7 +465,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, fmt.Errorf("Unable to self-destruct: %v", err)
 		}
 		balance := st.evm.StateDB.GetBalance(fromInternal)
-		if st.evm.Context.PrimeTerminusNumber >= params.ConsensusFixForkBlock {
+		if st.evm.Context.PrimeTerminusNumber >= params.PolarisForkBlock {
 			// Keep a zero-balance account with its spent nonce. Deleting it would
 			// reset the nonce and allow old signed transactions to run again.
 			balance = new(big.Int).Set(balance)

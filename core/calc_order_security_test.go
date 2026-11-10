@@ -25,7 +25,7 @@ var (
 
 func activateConsensusFixForkForTest(t *testing.T) {
 	t.Helper()
-	setForkForTest(t, &params.ConsensusFixForkBlock, 1)
+	setForkForTest(t, &params.PolarisForkBlock, 1)
 }
 
 // newCalcOrderTestBlock returns a zone block before the KawPow fork whose
@@ -96,7 +96,7 @@ func TestCalcOrderRejectsForgedBodyHeader(t *testing.T) {
 func TestCalcOrderRejectsForgedBodyAtAllHeights(t *testing.T) {
 	for _, forkHeight := range []uint64{2, 1} {
 		t.Run(fmt.Sprintf("fork_at_%d", forkHeight), func(t *testing.T) {
-			setForkForTest(t, &params.ConsensusFixForkBlock, forkHeight)
+			setForkForTest(t, &params.PolarisForkBlock, forkHeight)
 			honest := newCalcOrderTestBlock(types.EmptyHeader())
 			forged := types.NewWorkObject(honest.WorkObjectHeader(), types.EmptyWorkObjectBody(), nil)
 			forged.Body().SetHeader(forgedBodyHeader())
@@ -209,7 +209,7 @@ func TestCalcOrderRejectsForgedAuxPowAtAllHeights(t *testing.T) {
 	height := params.KawPowForkBlock + params.KawPowTransitionPeriod + 1
 	for _, forkHeight := range []uint64{height + 1, height} {
 		t.Run(fmt.Sprintf("fork_at_%d", forkHeight), func(t *testing.T) {
-			setForkForTest(t, &params.ConsensusFixForkBlock, forkHeight)
+			setForkForTest(t, &params.PolarisForkBlock, forkHeight)
 			honest := newCalcOrderKawpowBlock()
 			forged := forgeCalcOrderKawpowBody(honest, false)
 			hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
@@ -254,7 +254,7 @@ func TestWriteBlockRejectsForgedAuxPowBeforeStorage(t *testing.T) {
 				if afterFork {
 					activateConsensusFixForkForTest(t)
 				} else {
-					setForkForTest(t, &params.ConsensusFixForkBlock, params.KawPowForkBlock+params.KawPowTransitionPeriod+2)
+					setForkForTest(t, &params.PolarisForkBlock, params.KawPowForkBlock+params.KawPowTransitionPeriod+2)
 				}
 				hc := newSecurityTestHeaderChain(t, calcOrderTestPowHash)
 				hc.numberCache, _ = lru.New[common.Hash, uint64](10)

@@ -1996,7 +1996,7 @@ func ProcessQiTx(tx *types.Transaction, chain ChainContext, checkSig bool, isFir
 		// them differently and a local UTXO retains all of their bytes.
 		addressLength := len(txOut.Address)
 		if addressLength < common.AddressLength ||
-			(currentHeader.PrimeTerminusNumber().Uint64() >= params.ConsensusFixForkBlock && addressLength != common.AddressLength) {
+			(currentHeader.PrimeTerminusNumber().Uint64() >= params.PolarisForkBlock && addressLength != common.AddressLength) {
 			return nil, nil, nil, fmt.Errorf("tx [%v] output %d has address length %d, want %d", tx.Hash().Hex(), txOutIdx, addressLength, common.AddressLength), nil
 		}
 

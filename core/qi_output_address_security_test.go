@@ -164,9 +164,9 @@ func TestProcessQiTxLongOutputAddressFork(t *testing.T) {
 		address    []byte
 		wantError  bool
 	}{
-		{"before fork", params.ConsensusFixForkBlock - 1, longAddress, false},
-		{"at fork", params.ConsensusFixForkBlock, longAddress, true},
-		{"valid at fork", params.ConsensusFixForkBlock, recipient.Bytes(), false},
+		{"before fork", params.PolarisForkBlock - 1, longAddress, false},
+		{"at fork", params.PolarisForkBlock, longAddress, true},
+		{"valid at fork", params.PolarisForkBlock, recipient.Bytes(), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := rawdb.NewMemoryDatabase(log.Global)

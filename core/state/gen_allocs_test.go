@@ -194,8 +194,9 @@ func TestAddLockedBalancesFounderForfeitureAtFork(t *testing.T) {
 
 	state := testStateDB(t)
 	accounts := []params.GenesisAccount{old, founder, retained}
-	require.NoError(t, state.AddLockedBalances(testUnlockBlockAtMonth(0, params.FounderForfeitureForkBlock-1), accounts, oldAddresses, founderAddresses, log.Global))
-	require.NoError(t, state.AddLockedBalances(testUnlockBlockAtMonth(1, params.FounderForfeitureForkBlock), accounts, oldAddresses, founderAddresses, log.Global))
+	require.NoError(t, state.AddLockedBalances(testUnlockBlockAtMonth(0, params.PolarisForkBlock-1), accounts, oldAddresses, founderAddresses, log.Global))
+	require.NoError(t, state.AddLockedBalances(testUnlockBlockAtMonth(1, params.PolarisForkBlock), accounts, oldAddresses, founderAddresses, log.Global))
+	require.NoError(t, state.AddLockedBalances(testUnlockBlockAtMonth(2, params.PolarisForkBlock+1), accounts, oldAddresses, founderAddresses, log.Global))
 
 	oldInternal, err := old.Address.InternalAddress()
 	require.NoError(t, err)
@@ -205,5 +206,5 @@ func TestAddLockedBalancesFounderForfeitureAtFork(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, state.GetBalance(oldInternal).Sign())
 	require.Zero(t, state.GetBalance(founderInternal).Cmp(big.NewInt(5)))
-	require.Zero(t, state.GetBalance(retainedInternal).Cmp(big.NewInt(14)))
+	require.Zero(t, state.GetBalance(retainedInternal).Cmp(big.NewInt(21)))
 }
