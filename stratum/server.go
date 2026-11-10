@@ -2472,13 +2472,9 @@ func (s *Server) submitAsWorkShare(sess *session, curJob *job, ex2hex, ntimeHex,
 // Kawpow submit params: [worker, job_id, nonce, header_hash, mix_hash]
 // Note: headerHashHex from miner is validated against kawJob.headerHash but the job's hash is used for computation
 func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _ /* headerHashHex */, mixHashHex string) error {
-	if kawJob == nil || kawJob.pending == nil {
-		return fmt.Errorf("no kawpow job")
-	}
-
-	pending, ok := kawJob.pending.(*types.WorkObject)
-	if !ok || pending == nil {
-		return fmt.Errorf("invalid kawpow pending work")
+	pending, err := copyKawpowJobPending(kawJob)
+	if err != nil {
+		return err
 	}
 
 	// Snapshot needed session fields under one lock
@@ -2712,7 +2708,7 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		s.logger.WithField("bodyCacheKey", kawJob.bodyCacheKey.Hex()).Error("pending body not found in cache")
 		return fmt.Errorf("pending body not found in cache")
 	}
-	// Create full WorkObject: job's header (with updated nonce/mixhash) + cached body
+	// Create full WorkObject: this submission's header and the cached body.
 	fullPending := types.NewWorkObject(pending.WorkObjectHeader(), cachedBody.Body(), nil)
 
 	err = s.backend.ReceiveMinedHeader(fullPending)
@@ -2742,6 +2738,19 @@ func (s *Server) submitKawpowShare(sess *session, kawJob *kawpowJob, nonceHex, _
 		s.stats.ShareSubmittedWithDiff(sess.user, sess.workerName, "kawpow", sess.totalShares, sess.invalidShares, sess.staleShares, effectiveDiff, achievedStratumDiff, workshareStratumDiff, true, false)
 	}
 	return err
+}
+
+// copyKawpowJobPending gives each submission its own AuxPow header. The job is
+// shared by the session and global caches, so miners must not mutate it.
+func copyKawpowJobPending(kawJob *kawpowJob) (*types.WorkObject, error) {
+	if kawJob == nil || kawJob.pending == nil {
+		return nil, fmt.Errorf("no kawpow job")
+	}
+	pending, ok := kawJob.pending.(*types.WorkObject)
+	if !ok || pending == nil || pending.WorkObjectHeader() == nil {
+		return nil, fmt.Errorf("invalid kawpow pending work")
+	}
+	return types.NewWorkObject(types.CopyWorkObjectHeader(pending.WorkObjectHeader()), nil, nil), nil
 }
 
 // swapWords32x32 swaps byte order within each 4-byte word of a 32-byte array.
