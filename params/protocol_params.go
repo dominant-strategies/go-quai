@@ -357,11 +357,8 @@ var (
 	ExchangeRateAfterShaEquivalentDifficultyFork                = new(big.Int).Mul(big.NewInt(200), ExchangeRate)
 	ExchangeRateHoldIntervalAfterShaEquivalentDifficulty uint64 = 4 * BlocksPerMonth / 4 // 4 months in prime block terms
 
-	SingularityForkBlock       uint64 = 1265025
-	FounderForfeitureForkBlock uint64 = 2448392
-	// ConsensusFixForkBlock activates workshare identity, EOA self-destruct,
-	// and Qi output address length rules at one Prime block.
-	ConsensusFixForkBlock uint64 = 1850300 // Set to the scheduled Prime block before release.
+	SingularityForkBlock uint64 = 1265025
+	PolarisForkBlock     uint64 = 1850300
 
 	QiWrappingChangeBlock uint64 = 1320000
 

@@ -24,7 +24,7 @@ func (state *StateDB) AddLockedBalances(header *types.WorkObject, genesisAccount
 				forfeitureAddresses[account.Address.Bytes20()] {
 				continue
 			}
-			if header.PrimeTerminusNumber().Uint64() >= params.FounderForfeitureForkBlock &&
+			if header.PrimeTerminusNumber().Uint64() >= params.PolarisForkBlock &&
 				founderForfeitureAddresses[account.Address.Bytes20()] {
 				continue
 			}

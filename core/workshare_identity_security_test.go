@@ -136,12 +136,12 @@ func TestVerifyUnclesRejectsSameWorkUnderDifferentHashes(t *testing.T) {
 
 	// Before the fork, the hash check alone does not catch the copy. The block
 	// fails later for an unrelated reason (the test share has no real work).
-	setForkForTest(t, &params.ConsensusFixForkBlock, primeTerminusNumber+1)
+	setForkForTest(t, &params.PolarisForkBlock, primeTerminusNumber+1)
 	if err := hc.VerifyUncles(block); errors.Is(err, consensus.ErrDuplicateUncle) {
 		t.Fatalf("before the fork the copy must not be detected by hash: %v", err)
 	}
 
-	setForkForTest(t, &params.ConsensusFixForkBlock, primeTerminusNumber)
+	setForkForTest(t, &params.PolarisForkBlock, primeTerminusNumber)
 	if err := hc.VerifyUncles(block); !errors.Is(err, consensus.ErrDuplicateUncle) {
 		t.Fatalf("got %v, want %v", err, consensus.ErrDuplicateUncle)
 	}
@@ -162,12 +162,12 @@ func TestVerifyUnclesRejectsReEncodedAncestor(t *testing.T) {
 	block := newTestBlockWithUncles(blockHeader, []*types.WorkObjectHeader{reEncoded})
 	hc := newSecurityTestHeaderChain(t, common.HexToHash("0xff"))
 
-	setForkForTest(t, &params.ConsensusFixForkBlock, primeTerminusNumber+1)
+	setForkForTest(t, &params.PolarisForkBlock, primeTerminusNumber+1)
 	if err := hc.VerifyUncles(block); errors.Is(err, consensus.ErrUncleIsAncestor) {
 		t.Fatalf("before the fork the re-encoded ancestor must not be detected by hash: %v", err)
 	}
 
-	setForkForTest(t, &params.ConsensusFixForkBlock, primeTerminusNumber)
+	setForkForTest(t, &params.PolarisForkBlock, primeTerminusNumber)
 	if err := hc.VerifyUncles(block); !errors.Is(err, consensus.ErrUncleIsAncestor) {
 		t.Fatalf("got %v, want %v", err, consensus.ErrUncleIsAncestor)
 	}
@@ -182,7 +182,7 @@ func TestVerifyUnclesKeepsDistinctWork(t *testing.T) {
 
 	block := newTestBlockWithUncles(newTestWorkObjectHeader(primeTerminusNumber), []*types.WorkObjectHeader{share, other})
 	hc := newSecurityTestHeaderChain(t, common.HexToHash("0xff"))
-	setForkForTest(t, &params.ConsensusFixForkBlock, primeTerminusNumber)
+	setForkForTest(t, &params.PolarisForkBlock, primeTerminusNumber)
 	err := hc.VerifyUncles(block)
 	if errors.Is(err, consensus.ErrDuplicateUncle) || errors.Is(err, consensus.ErrUncleIsAncestor) {
 		t.Fatalf("distinct work rejected as duplicate: %v", err)

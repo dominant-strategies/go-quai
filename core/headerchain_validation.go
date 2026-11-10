@@ -251,7 +251,7 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.WorkObject)
 	// After the fork, also track the proof of work identity of the past uncles
 	// and ancestors, because the same work can be encoded under many hashes
-	checkPowIdentity := block.PrimeTerminusNumber().Uint64() >= params.ConsensusFixForkBlock
+	checkPowIdentity := block.PrimeTerminusNumber().Uint64() >= params.PolarisForkBlock
 	unclePowIdentities, ancestorPowIdentities := mapset.NewSet(), mapset.NewSet()
 
 	number, parent := block.NumberU64(nodeCtx)-1, block.ParentHash(nodeCtx)

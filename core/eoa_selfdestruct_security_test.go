@@ -45,7 +45,7 @@ func eoaSelfDestructMessage(from, beneficiary common.Address, nonce uint64) type
 
 func TestEOASelfDestructPreservesNonceAfterSharedFork(t *testing.T) {
 	height := params.SecurityHardeningForkBlock + 10
-	setForkForTest(t, &params.ConsensusFixForkBlock, height)
+	setForkForTest(t, &params.PolarisForkBlock, height)
 	evm, statedb, from, beneficiary := newEOASelfDestructTestEnv(t, height)
 	fromInternal, _ := from.InternalAndQuaiAddress()
 	beneficiaryInternal, _ := beneficiary.InternalAndQuaiAddress()
@@ -92,7 +92,7 @@ func TestEOASelfDestructPreservesNonceAfterSharedFork(t *testing.T) {
 
 func TestEOASelfDestructHistoricalRuleRemains(t *testing.T) {
 	height := params.SecurityHardeningForkBlock + 10
-	setForkForTest(t, &params.ConsensusFixForkBlock, height)
+	setForkForTest(t, &params.PolarisForkBlock, height)
 	evm, statedb, from, beneficiary := newEOASelfDestructTestEnv(t, height-1)
 	fromInternal, _ := from.InternalAndQuaiAddress()
 	beneficiaryInternal, _ := beneficiary.InternalAndQuaiAddress()
@@ -115,7 +115,7 @@ func TestEOASelfDestructHistoricalRuleRemains(t *testing.T) {
 
 func TestEOASelfDestructToSelfBurnsBalanceAfterSharedFork(t *testing.T) {
 	height := params.SecurityHardeningForkBlock + 10
-	setForkForTest(t, &params.ConsensusFixForkBlock, height)
+	setForkForTest(t, &params.PolarisForkBlock, height)
 	evm, statedb, from, _ := newEOASelfDestructTestEnv(t, height)
 	fromInternal, _ := from.InternalAndQuaiAddress()
 	if _, err := ApplyMessage(evm, eoaSelfDestructMessage(from, from, 0), new(types.GasPool).AddGas(1_000_000)); err != nil {
