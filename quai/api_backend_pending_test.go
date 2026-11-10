@@ -19,7 +19,7 @@ func TestStateAndHeaderByNumberRejectsPendingState(t *testing.T) {
 func TestAccountRangeRejectsPendingState(t *testing.T) {
 	api := new(PublicDebugAPI)
 	_, err := api.AccountRange(rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber), nil, 1, true, true, false)
-	if err == nil || !strings.Contains(err.Error(), "pending state is unavailable") {
+	if err == nil || !strings.Contains(err.Error(), "pending state is not available for accountRange") {
 		t.Fatalf("pending account range: %v", err)
 	}
 }

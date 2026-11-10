@@ -209,8 +209,8 @@ func TestAddLockedBalancesFounderForfeitureAtFork(t *testing.T) {
 	require.Zero(t, state.GetBalance(retainedInternal).Cmp(big.NewInt(21)))
 }
 
-// Run every monthly unlock in the mainnet allocation schedule through both
-// forfeiture forks. Mainnet zone headers at months 13, 14 and 21 carry Prime
+// Run every monthly unlock in the checked-in Orchard allocation schedule through
+// both forfeiture forks. Mainnet zone headers at months 13, 14 and 21 carry Prime
 // termini 1,470,244, 1,589,198 and 2,408,223. Polaris was active before the
 // future month-22 unlock. Only these fork stages matter to AddLockedBalances;
 // exact Prime numbers within a stage do not.
@@ -289,10 +289,12 @@ func TestAddLockedBalancesFounderForfeitureAllMonths(t *testing.T) {
 		require.Zero(t, balance.Cmp(expectedByAddress[key]), "wrong final unlock for %s", account.Address)
 		finalUnlocked.Add(finalUnlocked, balance)
 	}
-	require.Equal(t, "1096383477633997684558250502", finalUnlocked.String())
+	// These totals include the Orchard fixture's four seeded accounts, each with
+	// 10^30 wei at block 1. VerifyGenesisAllocs above pins the complete fixture.
+	require.Equal(t, "4001096383689133997684558250502", finalUnlocked.String())
 	require.Equal(t, "236456538365850624693750162", founderWithheld.String())
 	require.Equal(t, "1667159984000000000000000036", oldWithheld.String())
-	require.Equal(t, "477922504457243240952000700", blockOneUnlocked.String())
+	require.Equal(t, "4000477922715957243240952000700", blockOneUnlocked.String())
 
 	quai := new(big.Rat).SetFrac(finalUnlocked, big.NewInt(params.Ether)).FloatString(18)
 	founderQuai := new(big.Rat).SetFrac(founderWithheld, big.NewInt(params.Ether)).FloatString(18)
