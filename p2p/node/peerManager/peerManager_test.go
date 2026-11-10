@@ -3,6 +3,7 @@ package peerManager
 import (
 	"context"
 	"crypto/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -80,6 +81,37 @@ func TestGetPeersExcludingSamplesBeyondFailedLivePeers(t *testing.T) {
 	// and query DHT; bootstrap lookups without exclusions remain available.
 	require.Empty(t, pm.GetPeersExcluding(topic, excluded))
 	require.NotEmpty(t, pm.GetPeers(topic))
+}
+
+func TestGetPeersExcludingSearchesBeyondPeerDBSample(t *testing.T) {
+	viper.Set(utils.DataDirFlag.Name, t.TempDir())
+	t.Cleanup(viper.Reset)
+	topic, err := pubsubManager.NewTopic(common.Hash{}, common.Location{0, 0}, &types.WorkObjectBlockView{})
+	require.NoError(t, err)
+	db, err := peerdb.NewPeerDB("bestPeersDB", topic.String())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	ids := make([]peer.ID, 40)
+	for i := range ids {
+		_, publicKey, err := crypto.GenerateEd25519Key(rand.Reader)
+		require.NoError(t, err)
+		ids[i], err = peer.IDFromPublicKey(publicKey)
+		require.NoError(t, err)
+		require.NoError(t, db.Put(context.Background(), datastore.NewKey(ids[i].String()), []byte{1}))
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i].String() < ids[j].String() })
+	// PeerDB.Query samples at most the first 31 stored keys. Keep only the
+	// lexicographically last peer eligible, outside that sample.
+	excluded := make(map[peer.ID]struct{}, len(ids)-1)
+	for _, id := range ids[:len(ids)-1] {
+		excluded[id] = struct{}{}
+	}
+	pm := &BasicPeerManager{
+		peerDBs: map[string][]*peerdb.PeerDB{topic.String(): {db, db, db}},
+		ctx:     context.Background(),
+	}
+	require.Equal(t, []peer.ID{ids[len(ids)-1]}, pm.GetPeersExcluding(topic, excluded))
 }
 
 type coolingStreamManager struct {

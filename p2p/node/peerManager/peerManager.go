@@ -506,25 +506,8 @@ func (pm *BasicPeerManager) GetPeersExcluding(topic *pubsubManager.Topic, exclud
 		return selected
 	}
 	seen := make(map[p2p.PeerID]struct{}, wanted)
-	for _, bucket := range []map[p2p.PeerID]struct{}{
-		pm.getBestPeers(topic.String()),
-		pm.getResponsivePeers(topic.String()),
-		pm.getLastResortPeers(topic.String()),
-	} {
-		peers := make([]p2p.PeerID, 0, len(bucket))
-		for peer := range bucket {
-			if _, tried := excluded[peer]; tried {
-				continue
-			}
-			if _, alreadySelected := seen[peer]; alreadySelected || pm.DialCooldownRemaining(peer) > 0 {
-				continue
-			}
-			peers = append(peers, peer)
-		}
-		rand.Shuffle(len(peers), func(i, j int) {
-			peers[i], peers[j] = peers[j], peers[i]
-		})
-		for _, peer := range peers {
+	for _, quality := range []PeerQuality{Best, Responsive, LastResort} {
+		for _, peer := range pm.getEligiblePeers(pm.peerDBs[topic.String()][quality], wanted-len(selected), excluded, seen) {
 			selected = append(selected, peer)
 			seen[peer] = struct{}{}
 			if len(selected) == wanted {
@@ -533,6 +516,53 @@ func (pm *BasicPeerManager) GetPeersExcluding(topic *pubsubManager.Topic, exclud
 		}
 	}
 	return pm.queryDHT(topic, selected, wanted-len(selected), excluded)
+}
+
+func (pm *BasicPeerManager) getEligiblePeers(db *peerdb.PeerDB, wanted int, excluded, seen map[p2p.PeerID]struct{}) []p2p.PeerID {
+	if db == nil || wanted <= 0 {
+		return nil
+	}
+	eligible := func(peer p2p.PeerID) bool {
+		_, tried := excluded[peer]
+		_, selected := seen[peer]
+		return !tried && !selected && pm.DialCooldownRemaining(peer) == 0
+	}
+	peers := make([]p2p.PeerID, 0, wanted)
+	for peer := range pm.getPeersHelper(db, c_minBestPeersFromDb) {
+		if eligible(peer) {
+			peers = append(peers, peer)
+		}
+	}
+	if len(peers) >= wanted {
+		rand.Shuffle(len(peers), func(i, j int) { peers[i], peers[j] = peers[j], peers[i] })
+		return peers[:wanted]
+	}
+
+	// A limited Query can hide eligible peers. Sample the full bucket only
+	// when the quick sample cannot fill this request.
+	sampled := make([]p2p.PeerID, 0, wanted)
+	eligibleCount := 0
+	err := db.ForEachKey(pm.ctx, func(key string) {
+		peer, err := peer.Decode(strings.TrimPrefix(key, "/"))
+		if err != nil {
+			pm.logger.WithField("err", err).Debug("Error decoding peer from database")
+			return
+		}
+		if !eligible(peer) {
+			return
+		}
+		eligibleCount++
+		if len(sampled) < wanted {
+			sampled = append(sampled, peer)
+		} else if index := rand.Intn(eligibleCount); index < wanted {
+			sampled[index] = peer
+		}
+	})
+	if err != nil {
+		pm.logger.WithField("err", err).Error("Error scanning peers from database")
+		return peers
+	}
+	return sampled
 }
 
 func (pm *BasicPeerManager) reserveTopicFallback(topic string) bool {
@@ -597,20 +627,6 @@ func (pm *BasicPeerManager) queryDHT(topic *pubsubManager.Topic, peerList []p2p.
 func (pm *BasicPeerManager) getBestPeers(topic string) map[p2p.PeerID]struct{} {
 	if db, ok := pm.peerDBs[topic]; ok {
 		return pm.getPeersHelper(db[Best], c_minBestPeersFromDb)
-	}
-	return make(map[peer.ID]struct{})
-}
-
-func (pm *BasicPeerManager) getResponsivePeers(topic string) map[p2p.PeerID]struct{} {
-	if db, ok := pm.peerDBs[topic]; ok {
-		return pm.getPeersHelper(db[Responsive], c_minBestPeersFromDb)
-	}
-	return make(map[peer.ID]struct{})
-}
-
-func (pm *BasicPeerManager) getLastResortPeers(topic string) map[p2p.PeerID]struct{} {
-	if db, ok := pm.peerDBs[topic]; ok {
-		return pm.getPeersHelper(db[LastResort], c_minBestPeersFromDb)
 	}
 	return make(map[peer.ID]struct{})
 }
