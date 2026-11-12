@@ -2,8 +2,10 @@ package types
 
 import (
 	"math/big"
+	"strconv"
 	"testing"
 
+	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -79,6 +81,37 @@ func TestPowIdentityIgnoresAuxPow2Encoding(t *testing.T) {
 		require.Equal(t, withEmpty.AuxPow().ConvertToTemplate().Hash(), withNil.AuxPow().ConvertToTemplate().Hash(), "%v: the signed template must be the same", powID)
 		require.NotEqual(t, withEmpty.Hash(), withNil.Hash(), "%v: nil and empty AuxPow2 must hash differently", powID)
 		require.Equal(t, withEmpty.PowIdentity(), withNil.PowIdentity(), "%v", powID)
+	}
+}
+
+func TestNewWorkObjectBodyCommitsCopiedUncles(t *testing.T) {
+	for _, powID := range []PowID{SHA_BTC, Kawpow} {
+		for _, omitted := range []bool{true, false} {
+			t.Run(powID.String()+"/omitted="+strconv.FormatBool(omitted), func(t *testing.T) {
+				var uncle *WorkObjectHeader
+				if powID == Kawpow {
+					wo, _ := woTestDataWithAuxPow()
+					uncle = wo.WorkObjectHeader()
+				} else {
+					uncle = shaShareTestHeader()
+				}
+				if omitted {
+					uncle.AuxPow().SetAuxPow2(nil)
+				} else {
+					uncle.AuxPow().SetAuxPow2([]byte{})
+				}
+				uncle = protoRoundTripWorkObjectHeader(t, uncle)
+				if omitted {
+					require.Nil(t, uncle.AuxPow().AuxPow2(), "protobuf decode must preserve the omitted field")
+				}
+				body, err := NewWorkObjectBody(EmptyHeader(), nil, nil, []*WorkObjectHeader{uncle}, nil, nil, nil, common.ZONE_CTX)
+				require.NoError(t, err)
+				if omitted {
+					require.NotEqual(t, uncle.Hash(), body.Uncles()[0].Hash(), "the copy must change the omitted-field encoding")
+				}
+				require.Equal(t, CalcUncleHash(body.Uncles()), body.Header().UncleHash())
+			})
+		}
 	}
 }
 

@@ -1094,11 +1094,11 @@ func NewWorkObjectBody(header *Header, txs []*Transaction, etxs []*Transaction, 
 	if len(uncles) == 0 {
 		b.Header().SetUncleHash(EmptyUncleHash)
 	} else {
-		b.Header().SetUncleHash(CalcUncleHash(uncles))
 		b.uncles = make([]*WorkObjectHeader, len(uncles))
 		for i := range uncles {
 			b.uncles[i] = CopyWorkObjectHeader(uncles[i])
 		}
+		b.Header().SetUncleHash(CalcUncleHash(b.uncles))
 	}
 
 	if len(etxs) == 0 {
