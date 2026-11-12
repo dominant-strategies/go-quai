@@ -1174,7 +1174,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 }
 
 // AsMessageWithSender returns the transaction as a core.Message.
-func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *common.InternalAddress) (Message, error) {
+func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, _ *common.InternalAddress) (Message, error) {
 	msg := Message{
 		gasLimit:   tx.Gas(),
 		gasPrice:   new(big.Int).Set(tx.GasPrice()),
@@ -1193,11 +1193,9 @@ func (tx *Transaction) AsMessageWithSender(s Signer, baseFee *big.Int, sender *c
 		msg.etxsender, err = Sender(s, tx)
 		msg.isETX = true
 	} else {
-		if sender != nil {
-			msg.from = common.NewAddressFromData(sender)
-		} else {
-			msg.from, err = Sender(s, tx)
-		}
+		// Block validity must not depend on the node's pool sender cache.
+		// Sender checks the signature and chain ID against the block signer.
+		msg.from, err = Sender(s, tx)
 		msg.nonce = tx.Nonce()
 	}
 	return msg, err

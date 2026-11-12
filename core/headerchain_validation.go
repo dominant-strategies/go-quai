@@ -326,6 +326,38 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 		if ancestors[hash] != nil {
 			return consensus.ErrUncleIsAncestor
 		}
+		// Workshare classification uses these fields to set its PoW target.
+		// Bind them to the uncle's parent before classifying the share.
+		if nodeCtx == common.ZONE_CTX && block.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
+			uncleParent := ancestors[uncle.ParentHash()]
+			if uncleParent == nil {
+				return consensus.ErrDanglingUncle
+			}
+			var expectedPrimeTerminusNumber *big.Int
+			_, parentOrder, _ := hc.CalcOrder(uncleParent)
+			if parentOrder == common.PRIME_CTX || hc.IsGenesisHash(uncleParent.Hash()) {
+				expectedPrimeTerminusNumber = uncleParent.Number(common.PRIME_CTX)
+			} else {
+				expectedPrimeTerminusNumber = uncleParent.PrimeTerminusNumber()
+			}
+			if uncle.PrimeTerminusNumber() == nil || uncle.PrimeTerminusNumber().Cmp(expectedPrimeTerminusNumber) != 0 {
+				return fmt.Errorf("invalid primeTerminusNumber: have %v, want %v", uncle.PrimeTerminusNumber(), expectedPrimeTerminusNumber)
+			}
+			if uncle.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
+				uncleBlock := types.NewWorkObject(uncle, types.EmptyWorkObjectBody(), nil)
+				expectedShareTarget := hc.CalculateShareTarget(uncleParent, uncleBlock)
+				if uncle.ShaShareTarget() == nil || uncle.ShaShareTarget().Cmp(expectedShareTarget) != 0 {
+					return fmt.Errorf("invalid sha share target: have %v, want %v", uncle.ShaShareTarget(), expectedShareTarget)
+				}
+				if uncle.ScryptShareTarget() == nil || uncle.ScryptShareTarget().Cmp(expectedShareTarget) != 0 {
+					return fmt.Errorf("invalid scrypt share target: have %v, want %v", uncle.ScryptShareTarget(), expectedShareTarget)
+				}
+				expectedKawpowDifficulty := hc.CalculateKawpowDifficulty(uncleParent, uncleBlock)
+				if uncle.KawpowDifficulty() == nil || uncle.KawpowDifficulty().Cmp(expectedKawpowDifficulty) != 0 {
+					return fmt.Errorf("invalid kawpow difficulty: have %v, want %v", uncle.KawpowDifficulty(), expectedKawpowDifficulty)
+				}
+			}
+		}
 		// Siblings are not allowed to be included in the workshares list if its an
 		// uncle but can be if its a workshare
 		var workShare bool
@@ -441,25 +473,6 @@ func (hc *HeaderChain) VerifyUncles(block *types.WorkObject) error {
 			}
 
 			if block.PrimeTerminusNumber().Uint64() >= params.KawPowForkBlock {
-
-				// Since the prime terminus number is used for the
-				// calculatepowdiff and count, we need to verify that the prime
-				// terminus number is correct for the uncle
-				var expectedPrimeTerminusNumber *big.Int
-				_, parentOrder, _ := hc.CalcOrder(parent)
-				if parentOrder == common.PRIME_CTX {
-					expectedPrimeTerminusNumber = parent.Number(common.PRIME_CTX)
-				} else {
-					if hc.IsGenesisHash(parent.Hash()) {
-						expectedPrimeTerminusNumber = parent.Number(common.PRIME_CTX)
-					} else {
-						expectedPrimeTerminusNumber = parent.PrimeTerminusNumber()
-					}
-				}
-				if uncle.PrimeTerminusNumber().Cmp(expectedPrimeTerminusNumber) != 0 {
-					return fmt.Errorf("invalid primeTerminusNumber: have %v, want %v", uncle.PrimeTerminusNumber(), expectedPrimeTerminusNumber)
-				}
-
 				// Sha and Scrypt shares realized number is used in the
 				// calculation of workshare classification, so we need to verify
 				// that the shares are correct for the uncle

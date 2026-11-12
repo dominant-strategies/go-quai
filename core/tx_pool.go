@@ -821,29 +821,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	if tx.GasPrice().BitLen() > 256 {
 		return ErrFeeCapVeryHigh
 	}
-	var internal common.InternalAddress
-	addToCache := true
-	if sender := tx.From(pool.chainconfig.Location); sender != nil { // Check tx cache first
-		var err error
-		internal, err = sender.InternalAndQuaiAddress()
-		if err != nil {
-			return err
-		}
-	} else if sender, found := pool.PeekSender(tx.Hash()); found {
-		internal = sender
-		addToCache = false
-	} else {
-		// Make sure the transaction is signed properly.
-		from, err := types.Sender(pool.signer, tx)
-		if err != nil {
-			pool.logger.WithField("err", err).Error("Error calculating the Sender in validateTx")
-			return ErrInvalidSender
-		}
-		internal, err = from.InternalAndQuaiAddress()
-		if err != nil {
-			return err
-		}
+	// The transaction's own sender cache may have been populated with its
+	// untrusted chain ID. Recover with the pool's signer before using or
+	// publishing a sender in the hash-keyed pool cache.
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		pool.logger.WithField("err", err).Error("Error calculating the Sender in validateTx")
+		return ErrInvalidSender
 	}
+	internal, err := from.InternalAndQuaiAddress()
+	if err != nil {
+		return err
+	}
+	_, found := pool.PeekSender(tx.Hash())
+	addToCache := !found
 	currentBlock := pool.chain.CurrentBlock()
 	minBaseFee := currentBlock.BaseFee()
 	if minBaseFee.Cmp(tx.GasPrice()) > 0 {
