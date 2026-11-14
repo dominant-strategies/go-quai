@@ -19,6 +19,7 @@ import (
 	"github.com/dominant-strategies/go-quai/node"
 	"github.com/dominant-strategies/go-quai/params"
 	"github.com/dominant-strategies/go-quai/quai"
+	"github.com/dominant-strategies/go-quai/quai/filters"
 	"github.com/dominant-strategies/go-quai/quai/quaiconfig"
 	"github.com/dominant-strategies/go-quai/quaistats"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -135,6 +136,7 @@ func makeFullNode(p2p quai.NetworkingAPI, nodeLocation common.Location, slicesRu
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
 func RegisterQuaiService(stack *node.Node, p2p quai.NetworkingAPI, cfg quaiconfig.Config, nodeCtx int, currentExpansionNumber uint8, startingExpansionNumber uint64, genesisBlock *types.WorkObject, logger *log.Logger) (quaiapi.Backend, error) {
+	filters.SetAuxShareTemplateInterval(viper.GetDuration(AuxShareTemplateIntervalFlag.Name))
 	backend, err := quai.New(stack, p2p, &cfg, nodeCtx, currentExpansionNumber, startingExpansionNumber, genesisBlock, logger, viper.GetInt(WSMaxSubsFlag.Name))
 	if err != nil {
 		Fatalf("Failed to register the Quai service: %v", err)

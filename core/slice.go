@@ -104,6 +104,12 @@ type Slice struct {
 
 	appendTimeCache *lru.Cache[common.Hash, time.Duration]
 
+	// headArrivalCache records when Append first started on a block, and
+	// lastBestPhParent the parent of the last published pending header. Together
+	// they measure new head -> first mining template latency.
+	headArrivalCache *lru.Cache[common.Hash, time.Time]
+	lastBestPhParent atomic.Pointer[common.Hash]
+
 	recomputeRequired bool
 }
 
@@ -146,6 +152,8 @@ func NewSlice(db ethdb.Database, config *Config, powConfig params.PowConfig, txC
 
 	appendTimeCache, _ := lru.New[common.Hash, time.Duration](c_appendTimeCacheSize)
 	sl.appendTimeCache = appendTimeCache
+	headArrivalCache, _ := lru.New[common.Hash, time.Time](c_appendTimeCacheSize)
+	sl.headArrivalCache = headArrivalCache
 
 	sl.subInterface = make([]CoreBackend, common.MaxWidth)
 
@@ -189,6 +197,17 @@ func (sl *Slice) Append(header *types.WorkObject, domTerminus common.Hash, domOr
 
 	if sl.hc.IsGenesisHash(header.Hash()) {
 		return nil, nil
+	}
+	if nodeCtx == common.ZONE_CTX {
+		if seen, _ := sl.headArrivalCache.ContainsOrAdd(header.Hash(), start); !seen {
+			// Absolute arrival time, so arrival of the same block can be compared
+			// across NTP-synced nodes to measure real propagation delay.
+			sl.logger.WithFields(log.Fields{
+				"number": header.NumberU64(common.ZONE_CTX),
+				"hash":   header.Hash(),
+				"t_us":   start.UnixMicro(),
+			}).Info("Block arrival")
+		}
 	}
 
 	if header.NumberU64(common.ZONE_CTX) > sl.hc.CurrentHeader().NumberU64(common.ZONE_CTX)+c_zoneHorizonThreshold {
@@ -1193,6 +1212,20 @@ func (sl *Slice) SetBestPh(pendingHeader *types.WorkObject) {
 	sl.WriteBestPh(pendingHeader)
 	sl.logger.WithFields(log.Fields{"Number": pendingHeader.NumberArray(), "ParentHash": pendingHeader.ParentHashArray()}).Info("Best PH pick")
 	sl.miner.worker.pendingHeaderFeed.Send(pendingHeader)
+
+	if sl.NodeCtx() == common.ZONE_CTX {
+		parent := pendingHeader.ParentHash(common.ZONE_CTX)
+		if last := sl.lastBestPhParent.Swap(&parent); last == nil || *last != parent {
+			if arrived, ok := sl.headArrivalCache.Peek(parent); ok {
+				sl.logger.WithFields(log.Fields{
+					"number":     pendingHeader.NumberU64(common.ZONE_CTX),
+					"parent":     parent,
+					"latency_ms": float64(time.Since(arrived).Microseconds()) / 1000,
+					"t_us":       time.Now().UnixMicro(),
+				}).Info("New head template")
+			}
+		}
+	}
 }
 
 // GetManifest gathers the manifest of ancestor block hashes since the last
@@ -2020,7 +2053,9 @@ func (sl *Slice) verifyParentExchangeRateAndFlowAmount(header *types.WorkObject)
 }
 
 func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*types.WorkObject, error) {
+	lockStart := time.Now()
 	sl.hc.headermu.Lock()
+	lockWait := time.Since(lockStart)
 
 	sl.logger.WithFields(log.Fields{
 		"number": block.NumberArray(),
@@ -2060,6 +2095,15 @@ func (sl *Slice) GeneratePendingHeader(block *types.WorkObject, fill bool) (*typ
 	pendingHeaderCreationTime := time.Since(phStart)
 
 	sl.hc.headermu.Unlock()
+	if sl.NodeCtx() == common.ZONE_CTX {
+		sl.logger.WithFields(log.Fields{
+			"number":       block.NumberU64(common.ZONE_CTX),
+			"fill":         fill,
+			"lockwait_ms":  float64(lockWait.Microseconds()) / 1000,
+			"stateproc_ms": float64(stateProcessTime.Microseconds()) / 1000,
+			"phcreate_ms":  float64(pendingHeaderCreationTime.Microseconds()) / 1000,
+		}).Info("Generated pending header")
+	}
 	if sl.NodeCtx() == common.ZONE_CTX {
 		// Set the block processing times before sending the block in chain head
 		// feed

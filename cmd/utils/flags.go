@@ -161,6 +161,7 @@ var RPCFlags = []Flag{
 	WSEnabledFlag,
 	WSListenAddrFlag,
 	WSMaxSubsFlag,
+	AuxShareTemplateIntervalFlag,
 	WSApiFlag,
 	WSAllowedOriginsFlag,
 	WSPathPrefixFlag,
@@ -766,6 +767,12 @@ var (
 		Name:  c_RPCFlagPrefix + "ws-addr",
 		Value: node.DefaultWSHost,
 		Usage: "WS-RPC server listening interface" + generateEnvDoc(c_RPCFlagPrefix+"ws-addr"),
+	}
+
+	AuxShareTemplateIntervalFlag = Flag{
+		Name:  c_RPCFlagPrefix + "aux-share-template-interval",
+		Value: time.Duration(0),
+		Usage: "Minimum time between SHA/scrypt blockTemplateUpdates notifications that only change the Quai parent, e.g. 10s (0 = notify on every Quai block). SHA/scrypt shares stay includable for 4 Quai blocks" + generateEnvDoc(c_RPCFlagPrefix+"aux-share-template-interval"),
 	}
 
 	WSMaxSubsFlag = Flag{

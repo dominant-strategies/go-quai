@@ -62,6 +62,13 @@ const (
 	c_maxFutureEntropyMultiple          = 200
 )
 
+const (
+	c_fastRetryBase      = 5 * time.Millisecond // First fast retry delay for a block whose data is still in flight
+	c_fastRetryMax       = 5                    // Fast retries per block (5, 10, 20, 40, 80ms) before relying on the AppendQueue
+	c_fastRetryCacheSize = 1000                 // Number of block hashes tracked for fast retries
+	c_fastRetryTipWindow = 2                    // Only fast retry blocks within this many blocks of the current head
+)
+
 type blockNumberAndRetryCounter struct {
 	number  uint64
 	entropy *big.Int
@@ -75,6 +82,10 @@ type Core struct {
 	appendQueue     *lru.Cache[common.Hash, blockNumberAndRetryCounter]
 	processingCache *expireLru.LRU[common.Hash, interface{}]
 	remoteTxQueue   *lru.Cache[common.Hash, types.Transaction]
+
+	// fastRetries counts fast retries per block hash for appends that failed
+	// only because a body, pending ETXs or the sub chain were not there yet.
+	fastRetries *lru.Cache[common.Hash, int]
 
 	writeBlockLock sync.RWMutex
 
@@ -114,6 +125,9 @@ func NewCore(db ethdb.Database, config *Config, powConfig params.PowConfig, txCo
 
 	processingCache := expireLru.NewLRU[common.Hash, interface{}](c_processingCache, nil, time.Second*60)
 	c.processingCache = processingCache
+
+	fastRetries, _ := lru.New[common.Hash, int](c_fastRetryCacheSize)
+	c.fastRetries = fastRetries
 
 	remoteTxQueue, _ := lru.New[common.Hash, types.Transaction](c_maxRemoteTxQueue)
 	c.remoteTxQueue = remoteTxQueue
@@ -212,6 +226,11 @@ func (c *Core) InsertChain(blocks types.WorkObjects) (int, error) {
 						"Hash":   block.Hash(),
 						"err":    err,
 					}).Debug("Cannot append yet.")
+				}
+				if err.Error() == ErrBodyNotFound.Error() ||
+					err.Error() == ErrSubNotSyncedToDom.Error() ||
+					err.Error() == ErrPendingEtxNotFound.Error() {
+					c.scheduleFastRetry(block)
 				}
 				if err.Error() == ErrSubNotSyncedToDom.Error() ||
 					err.Error() == ErrPendingEtxNotFound.Error() {
@@ -453,6 +472,39 @@ func (c *Core) addToAppendQueue(block *types.WorkObject) error {
 // removeFromAppendQueue removes a block from the append queue
 func (c *Core) removeFromAppendQueue(block *types.WorkObject) {
 	c.appendQueue.Remove(block.Hash())
+}
+
+// scheduleFastRetry re-attempts an append shortly after it failed because
+// data for the block was still arriving, typically the zone body of a
+// dom-coincident block that was gossiped on the region/prime topic a moment
+// before the zone topic. Without it the block waits for the next AppendQueue
+// tick (up to c_appendQueueRetryPeriod), which delays the next mining template.
+// Only blocks at the tip are retried, so syncing nodes are unaffected.
+func (c *Core) scheduleFastRetry(block *types.WorkObject) {
+	nodeCtx := c.NodeCtx()
+	if block.NumberU64(nodeCtx) > c.sl.hc.CurrentHeader().NumberU64(nodeCtx)+c_fastRetryTipWindow {
+		return
+	}
+	hash := block.Hash()
+	n, _ := c.fastRetries.Get(hash)
+	if n >= c_fastRetryMax {
+		return
+	}
+	c.fastRetries.Add(hash, n+1)
+	time.AfterFunc(c_fastRetryBase<<n, func() {
+		defer func() {
+			if r := recover(); r != nil {
+				c.logger.WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+		}()
+		if !c.appendQueue.Contains(hash) {
+			return // appended or dropped in the meantime
+		}
+		c.InsertChain(types.WorkObjects{block})
+	})
 }
 
 // updateAppendQueue is a time to procAppendQueue

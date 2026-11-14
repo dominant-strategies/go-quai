@@ -25,6 +25,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	quai "github.com/dominant-strategies/go-quai"
@@ -1176,6 +1177,17 @@ func parsePowID(algorithm string) (types.PowID, error) {
 	}
 }
 
+// auxShareTemplateInterval is the minimum time between SHA/scrypt template
+// notifications caused only by a new Quai parent. SHA and scrypt solutions are
+// workshares, never blocks, and stay includable for NewWorkSharesInclusionDepth
+// Quai blocks, so re-sending their template on every ~5s Quai block forces ASIC
+// job switches (and rental-market penalties) without any benefit. Zero keeps the
+// original behaviour: notify on every Quai block.
+var auxShareTemplateInterval atomic.Int64
+
+// SetAuxShareTemplateInterval sets the SHA/scrypt Quai-parent notification pacing.
+func SetAuxShareTemplateInterval(d time.Duration) { auxShareTemplateInterval.Store(int64(d)) }
+
 // BlockTemplateUpdates sends a notification when the block template changes.
 // Triggers: quaiHeight change, prevHash change, sealHash change (kawpow only)
 // Heartbeat: sends current template every 5 seconds if no change occurred
@@ -1209,7 +1221,16 @@ func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit Block
 		api.activeSubscriptions += 1
 
 		var lastState *templateState
-		heartbeatTicker := time.NewTicker(5 * time.Second)
+		var lastSent time.Time
+		heartbeat := 5 * time.Second
+		pace := time.Duration(auxShareTemplateInterval.Load())
+		if powID == types.Kawpow {
+			pace = 0
+		}
+		if pace > heartbeat {
+			heartbeat = pace
+		}
+		heartbeatTicker := time.NewTicker(heartbeat)
 		defer heartbeatTicker.Stop()
 
 		pendingHeaders := make(chan *types.WorkObject, c_pendingHeaderChSize)
@@ -1254,7 +1275,9 @@ func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit Block
 			} else if lastState.parentHash != newState.parentHash {
 				changed = true // New block
 			} else if lastState.quaiHeight != newState.quaiHeight {
-				changed = true // QuaiHeight changed
+				// QuaiHeight changed. For paced SHA/scrypt subscriptions only
+				// re-send once the pacing interval has passed.
+				changed = pace == 0 || time.Since(lastSent) >= pace
 			} else if lastState.signatureTime != newState.signatureTime {
 				changed = true // Signature time changed
 			} else if powID == types.Kawpow && lastState.sealHash != newState.sealHash {
@@ -1271,7 +1294,8 @@ func (api *PublicFilterAPI) BlockTemplateUpdates(ctx context.Context, crit Block
 				}
 				notifier.Notify(rpcSub.ID, template)
 				lastState = newState
-				heartbeatTicker.Reset(5 * time.Second)
+				lastSent = time.Now()
+				heartbeatTicker.Reset(heartbeat)
 			}
 		}
 
