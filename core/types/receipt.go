@@ -38,6 +38,7 @@ import (
 var (
 	receiptStatusFailedRLP     = []byte{}
 	receiptStatusSuccessfulRLP = []byte{0x01}
+	receiptStatusLockedRLP     = []byte{0x02}
 )
 
 // This error is returned when a typed receipt is decoded, but the string is empty.
@@ -183,6 +184,8 @@ func (r *Receipt) setStatus(postStateOrStatus []byte) error {
 		r.Status = ReceiptStatusSuccessful
 	case bytes.Equal(postStateOrStatus, receiptStatusFailedRLP):
 		r.Status = ReceiptStatusFailed
+	case bytes.Equal(postStateOrStatus, receiptStatusLockedRLP):
+		r.Status = ReceiptStatusLocked
 	case len(postStateOrStatus) == len(common.Hash{}):
 		r.PostState = postStateOrStatus
 	default:
@@ -195,6 +198,8 @@ func (r *Receipt) statusEncoding() []byte {
 	if len(r.PostState) == 0 {
 		if r.Status == ReceiptStatusFailed {
 			return receiptStatusFailedRLP
+		} else if r.Status == ReceiptStatusLocked {
+			return receiptStatusLockedRLP
 		}
 		return receiptStatusSuccessfulRLP
 	}
