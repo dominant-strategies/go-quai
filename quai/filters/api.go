@@ -69,6 +69,7 @@ type PublicFilterAPI struct {
 	timeout             time.Duration
 	subscriptionLimit   int
 	activeSubscriptions int
+	txConfirmMgr        *TxConfirmationManager
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
@@ -82,6 +83,7 @@ func NewPublicFilterAPI(backend Backend, timeout time.Duration, subscriptionLimi
 		subscriptionLimit:   subscriptionLimit,
 		activeSubscriptions: 0,
 	}
+	api.txConfirmMgr = NewTxConfirmationManager(backend, api.events)
 	go api.timeoutLoop(timeout)
 
 	return api
@@ -693,6 +695,55 @@ func (api *PublicFilterAPI) Accesses(ctx context.Context, addr common.Address) (
 			case <-notifier.Closed():
 				return
 			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+// TxConfirmation creates a subscription that fires once when the given
+// transaction hash is included in a block. If the transaction is already
+// confirmed the notification is sent immediately. Otherwise the watcher
+// is registered with the shared TxConfirmationManager which holds a
+// single ChainHeadEvent subscription and does O(1) map lookups per
+// block transaction — cost is O(block_txs) per block regardless of
+// the number of active subscriptions.
+func (api *PublicFilterAPI) TxConfirmation(ctx context.Context, txHash common.Hash) (*rpc.Subscription, error) {
+	if api.activeSubscriptions >= api.subscriptionLimit {
+		return &rpc.Subscription{}, errors.New("too many subscribers")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				api.backend.Logger().WithFields(log.Fields{
+					"error":      r,
+					"stacktrace": string(debug.Stack()),
+				}).Error("Go-Quai Panicked")
+			}
+			api.activeSubscriptions -= 1
+		}()
+		api.activeSubscriptions += 1
+
+		alreadyConfirmed := api.txConfirmMgr.Watch(txHash, notifier, rpcSub.ID)
+		if alreadyConfirmed {
+			return
+		}
+
+		// Wait for confirmation (delivered by the manager), client
+		// unsubscribe, or connection close.
+		select {
+		case <-rpcSub.Err():
+			api.txConfirmMgr.Unwatch(txHash, rpcSub.ID)
+		case <-notifier.Closed():
+			api.txConfirmMgr.Unwatch(txHash, rpcSub.ID)
 		}
 	}()
 
