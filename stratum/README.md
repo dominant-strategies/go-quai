@@ -70,10 +70,15 @@ The password field accepts optional parameters:
 | `d=<difficulty>` | Set custom share difficulty |
 | `frequency=<seconds>` | Set job update frequency |
 
-Combine multiple parameters with `.` separator:
+Combine multiple parameters with `,` or `_` separator:
 - `d=1000` - Submit shares at difficulty 1000
-- `d=500.frequency=2` - Difficulty 500, jobs every 2 seconds
-- `x` or empty - Use default workshare difficulty
+- `d=1000,frequency=2` - Difficulty 1000, jobs every 2 seconds
+- `x` or empty - Use automatic difficulty when VarDiff is enabled
+
+For SHA-256, automatic difficulty starts at 230,000 or the lower workshare
+difficulty. It drops after a no-share timeout and can reach 1,000. A 600 GH/s
+miner needs a difficulty near 4,200 for the 30-second share target. A fixed
+`d=4000` is an option when fast initial share feedback is needed.
 
 **Note:** Custom difficulty only affects share submission rate for liveness tracking. Only shares meeting the network workshare difficulty are submitted to the node for rewards.
 
