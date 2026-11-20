@@ -497,8 +497,21 @@ func (w *worker) StorePendingBlockBody() {
 	rawdb.WritePbBodyKeys(w.workerDb, pendingBlockBodyKeys)
 }
 
-// asyncStateLoop updates the state root for a block and returns the state udpate in a channel
+// asyncStateLoop refreshes the pending header and listens for side blocks.
 func (w *worker) asyncStateLoop() {
+	defer w.wg.Done()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	w.runAsyncStateLoop(ticker.C, func() (*types.WorkObject, error) {
+		block := w.hc.CurrentBlock()
+		if block == nil {
+			return nil, errors.New("current block not found")
+		}
+		return w.GeneratePendingHeader(block, true)
+	})
+}
+
+func (w *worker) runAsyncStateLoop(ticks <-chan time.Time, generate func() (*types.WorkObject, error)) {
 	defer func() {
 		if r := recover(); r != nil {
 			w.logger.WithFields(log.Fields{
@@ -507,32 +520,21 @@ func (w *worker) asyncStateLoop() {
 			}).Error("Go-Quai Panicked")
 		}
 	}()
-	defer w.wg.Done() // decrement the wait group after the close of the loop
 
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	refreshSlot := make(chan struct{}, 1)
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticks:
+			select {
+			case refreshSlot <- struct{}{}:
+			default:
+				continue
+			}
+			w.wg.Add(1)
 			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						w.logger.WithFields(log.Fields{
-							"error":      r,
-							"stacktrace": string(debug.Stack()),
-						}).Error("Go-Quai Panicked")
-					}
-				}()
-				wo := w.hc.CurrentBlock()
-				w.hc.headermu.Lock()
-				defer w.hc.headermu.Unlock()
-				header, err := w.GeneratePendingHeader(wo, true)
-				if err != nil {
-					w.logger.WithField("err", err).Error("Error generating pending header")
-					return
-				}
-				// Send the updated pendingHeader in the asyncPhFeed
-				w.asyncPhFeed.Send(header)
+				defer w.wg.Done()
+				defer func() { <-refreshSlot }()
+				w.refreshPendingHeader(generate)
 			}()
 		case side := <-w.chainSideCh:
 			go func() {
@@ -559,6 +561,29 @@ func (w *worker) asyncStateLoop() {
 			return
 		}
 	}
+}
+
+func (w *worker) refreshPendingHeader(generate func() (*types.WorkObject, error)) {
+	defer func() {
+		if r := recover(); r != nil {
+			w.logger.WithFields(log.Fields{
+				"error":      r,
+				"stacktrace": string(debug.Stack()),
+			}).Error("Go-Quai Panicked")
+		}
+	}()
+
+	header, err := func() (*types.WorkObject, error) {
+		w.hc.headermu.Lock()
+		defer w.hc.headermu.Unlock()
+		return generate()
+	}()
+	if err != nil {
+		w.logger.WithField("err", err).Error("Error generating pending header")
+		return
+	}
+	// Feed.Send can wait for the receiver, which also needs headermu.
+	w.asyncPhFeed.Send(header)
 }
 
 // GeneratePendingBlock generates pending block given a commited block.

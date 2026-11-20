@@ -688,7 +688,7 @@ func (s *Server) forceBroadcastLoop(algorithm string) {
 // jobFrequency. Each miner can configure their own frequency via username format:
 // address.workername.frequency=X (1-10 seconds, supports decimals, default 5s)
 // Also handles vardiff timeout: decreases difficulty if no share within 60 seconds.
-// Also handles liveness timeout: closes connections with no share within 5 minutes.
+// Also handles liveness timeout: closes connections with no share within 10 minutes.
 func (s *Server) forceBroadcastStale(algorithm string) {
 	// Copy session pointers under sessionsMu, then release before per-session locking
 	// to avoid blocking registerSession/unregisterSession during the scan
@@ -711,6 +711,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 	// Now iterate without holding sessionsMu
 	staleSessions := make([]*session, 0)
 	varDiffTimeoutSessions := make([]*session, 0)
+	difficultyChangedSessions := make(map[*session]struct{})
 	livenessTimeoutSessions := make([]*session, 0)
 	now := time.Now()
 
@@ -770,9 +771,17 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 		// Only decrease if still past the timeout (double-check after lock)
 		if now.Sub(sess.lastShareTime) >= timeoutThreshold {
 			oldDiff := sess.varDiff
-			if sess.varDiffTotalShares < 10 {
-				sess.varDiff *= varDiffAdjustDown
+			// The workshare cap may have sent a much lower difficulty than
+			// varDiff. Start from the difficulty the miner actually received.
+			baseDiff := sess.varDiff
+			if sess.lastSentDifficulty > 0 && sess.lastSentDifficulty < baseDiff {
+				baseDiff = sess.lastSentDifficulty
 			}
+			adjustDown := varDiffAdjustDown
+			if sess.chain == "sha256" {
+				adjustDown = varDiffAdjustDownSHA
+			}
+			sess.varDiff = baseDiff * adjustDown
 			// Enforce algorithm-specific minimum
 			_, minDiff := getVarDiffDefaults(sess.chain)
 			if sess.varDiff < minDiff {
@@ -783,6 +792,7 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 			sess.lastShareTime = now
 			sess.varDiffTimeoutReset = true
 			if sess.varDiff != oldDiff {
+				difficultyChangedSessions[sess] = struct{}{}
 				s.logger.WithFields(log.Fields{
 					"sid":         sess.id,
 					"user":        sess.user,
@@ -796,6 +806,11 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 		}
 		sess.mu.Unlock()
 	}
+	// Send the new target with a job now. A template update may otherwise
+	// suppress the periodic broadcast and leave the miner on its old target.
+	for sess := range difficultyChangedSessions {
+		s.jobPool.submit(sess, true)
+	}
 
 	if len(staleSessions) == 0 {
 		return
@@ -808,6 +823,9 @@ func (s *Server) forceBroadcastStale(algorithm string) {
 
 	// Broadcast with clean=true to stale sessions via worker pool
 	for _, sess := range staleSessions {
+		if _, sent := difficultyChangedSessions[sess]; sent {
+			continue
+		}
 		// Dont force update if the last update happened less than 5 secs ago
 		if now.Sub(s.lastUpdateTime) < 5*time.Second && !sess.hasCustomFreq {
 			continue
@@ -908,7 +926,7 @@ func (s *Server) acceptLoop(ln net.Listener, algorithm string) {
 		// Enable TCP keepalive to detect dead connections faster than OS default (2hrs)
 		if tcpConn, ok := conn.(*net.TCPConn); ok {
 			_ = tcpConn.SetKeepAlive(true)
-			_ = tcpConn.SetKeepAlivePeriod(10 * time.Minute) // Probe every 5 min after idle
+			_ = tcpConn.SetKeepAlivePeriod(10 * time.Minute) // Probe after 10 min of idle
 		}
 		s.trackConn(conn, true)
 		s.wg.Add(1)
@@ -958,10 +976,10 @@ const (
 	diffHashesInterpretationThresholdD = 1000000
 
 	// SHA256 vardiff (diff1 = 2^32 hashes)
-	// default=230,000 (one petahash), min=2300 (ten terahash)
+	// default=230,000 (one petahash), min=1,000 (low-hashrate ASICs)
 	varDiffDefaultSHA = 230000.0 // Starting difficulty
-	varDiffMinSHA     = 10000.0  // Minimum difficulty
-	minShaDiff        = 10000.0  // Minimum difficulty
+	varDiffMinSHA     = 1000.0   // Minimum difficulty
+	minShaDiff        = 1000.0   // Minimum difficulty
 
 	// Scrypt vardiff (diff1 = 2^16 hashes)
 	varDiffDefaultScrypt = 500000.0 // Starting difficulty
@@ -972,7 +990,8 @@ const (
 	varDiffTargetTime             = 30 * time.Second  // Target time between shares (30 seconds per share)
 	varDiffInitialTimeout         = 60 * time.Second  // Decrease diff if no share within this time (before established)
 	varDiffEstablishedTimeout     = 100 * time.Second // Decrease diff if no share within this time (after 30+ shares)
-	varDiffAdjustDown             = 0.5               // Multiply difficulty by this when shares come too slow
+	varDiffAdjustDown             = 0.5               // Timeout factor for Scrypt and Kawpow
+	varDiffAdjustDownSHA          = 0.25              // Faster SHA recovery for low-hashrate ASICs
 	varDiffMaxShares              = 60                // Maximum shares to keep in buffer for hashrate calculation
 	varDiffAdjustEvery            = 30                // Trigger adjustment after this many new shares
 	varDiffEstablishedSharesCount = 30                // After this many shares, miner is "established" (use longer timeout)
@@ -1834,6 +1853,9 @@ func (s *Server) sendJobAndNotify(sess *session, clean bool) error {
 		if minerDiff > workshareStratumDiff {
 			minerDiff = workshareStratumDiff
 		}
+		// Share validation and hashrate accounting must use the target sent
+		// to the miner, including when the workshare cap is lower.
+		sess.varDiff = minerDiff
 		diffSource = "vardiff"
 	} else {
 		diffSource = "workshare"
@@ -1952,6 +1974,7 @@ func (s *Server) sendKawpowJob(sess *session, clean bool) error {
 		if workshareStratumDiff > 0 && usedDiff > workshareStratumDiff {
 			usedDiff = workshareStratumDiff
 		}
+		sess.varDiff = usedDiff
 		diffSource = "vardiff"
 	}
 

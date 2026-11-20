@@ -896,9 +896,12 @@ func (sl *Slice) asyncPendingHeaderLoop() {
 		case asyncPh := <-sl.asyncPhCh:
 			sl.hc.headermu.Lock()
 			bestPh := sl.ReadBestPh()
-			if asyncPh != nil && bestPh != nil && bestPh.ParentHash(common.ZONE_CTX) == asyncPh.ParentHash(common.ZONE_CTX) {
-				combinedPendingHeader := sl.combinePendingHeader(asyncPh, bestPh, common.ZONE_CTX, true)
-				sl.SetBestPh(combinedPendingHeader)
+			if asyncPh != nil && bestPh != nil {
+				parent := asyncPh.ParentHash(common.ZONE_CTX)
+				if parent == sl.hc.CurrentHeader().Hash() && parent == bestPh.ParentHash(common.ZONE_CTX) {
+					combinedPendingHeader := sl.combinePendingHeader(asyncPh, bestPh, common.ZONE_CTX, true)
+					sl.SetBestPh(combinedPendingHeader)
+				}
 			}
 			sl.hc.headermu.Unlock()
 		case <-sl.asyncPhSub.Err():
