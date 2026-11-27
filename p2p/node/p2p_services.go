@@ -12,6 +12,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/crypto"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p"
 	"github.com/dominant-strategies/go-quai/p2p/node/peerManager"
@@ -19,6 +20,7 @@ import (
 	"github.com/dominant-strategies/go-quai/p2p/node/requestManager"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
 	"github.com/dominant-strategies/go-quai/p2p/protocol"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 // Opens a stream to the given peer and request some data for the given hash at the given location
@@ -147,6 +149,48 @@ func (p *P2PNode) requestFromPeer(peerID peer.ID, topic *pubsubManager.Topic, re
 	case common.Hash:
 		if hash, ok := recvdType.(common.Hash); ok {
 			return hash, nil
+		}
+	case *trie.TrieNodeResponse:
+		reqHash, ok := reqData.(common.Hash)
+		if !ok {
+			return nil, errors.New("trie node request invalid query type")
+		}
+		if nodeResp, ok := recvdType.(*trie.TrieNodeResponse); ok && len(nodeResp.NodeData) > 0 {
+			if crypto.Keccak256Hash(nodeResp.NodeData) == reqHash {
+				return nodeResp, nil
+			}
+		}
+	case *trie.TrieNodesResponse:
+		reqHashes, ok := reqData.([]common.Hash)
+		if !ok {
+			return nil, errors.New("trie nodes request invalid query type")
+		}
+		if nodesResp, ok := recvdType.(*trie.TrieNodesResponse); ok && len(nodesResp.Nodes) > 0 && len(nodesResp.Nodes) <= len(reqHashes) {
+			requested := make(map[common.Hash]struct{}, len(reqHashes))
+			for _, h := range reqHashes {
+				requested[h] = struct{}{}
+			}
+			seen := make(map[common.Hash]struct{}, len(nodesResp.Nodes))
+			valid := true
+			for _, blob := range nodesResp.Nodes {
+				if len(blob) == 0 {
+					valid = false
+					break
+				}
+				gotHash := crypto.Keccak256Hash(blob)
+				if _, ok := requested[gotHash]; !ok {
+					valid = false
+					break
+				}
+				if _, dup := seen[gotHash]; dup {
+					valid = false
+					break
+				}
+				seen[gotHash] = struct{}{}
+			}
+			if valid {
+				return nodesResp, nil
+			}
 		}
 	default:
 		log.Global.Warn("peer returned unexpected type")

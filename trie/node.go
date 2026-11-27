@@ -224,10 +224,22 @@ func (err *decodeError) Error() string {
 	return fmt.Sprintf("%v (decode path: %s)", err.what, strings.Join(err.stack, "<-"))
 }
 
+const (
+	// MaxTrieNodeBatchSize is the maximum number of trie node hashes allowed in a single P2P batch request.
+	MaxTrieNodeBatchSize = 256
+	// MaxTrieNodeResponseBytes is the soft byte cap for a batched trie node P2P response.
+	MaxTrieNodeResponseBytes = 2 * 1024 * 1024
+)
+
 // Used to send a trie node request to a peer
 type TrieNodeRequest struct{}
 
 // Used to get a trie node response from a peer
 type TrieNodeResponse struct {
 	NodeData []byte
+}
+
+// Used to get a batched trie nodes response from a peer
+type TrieNodesResponse struct {
+	Nodes [][]byte
 }

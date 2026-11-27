@@ -91,13 +91,25 @@ func (qbe *QuaiBackend) SetZoneApiBackend(zoneBackend *quaiapi.Backend, location
 }
 
 func (qbe *QuaiBackend) GetBackend(location common.Location) *quaiapi.Backend {
+	if qbe == nil {
+		return nil
+	}
 	switch location.Context() {
 	case common.PRIME_CTX:
 		return qbe.primeApiBackend
 	case common.REGION_CTX:
-		return qbe.regionApiBackends[location.Region()]
+		region := location.Region()
+		if region < 0 || region >= len(qbe.regionApiBackends) {
+			return nil
+		}
+		return qbe.regionApiBackends[region]
 	case common.ZONE_CTX:
-		return qbe.zoneApiBackends[location.Region()][location.Zone()]
+		region := location.Region()
+		zone := location.Zone()
+		if region < 0 || region >= len(qbe.zoneApiBackends) || zone < 0 || zone >= len(qbe.zoneApiBackends[region]) {
+			return nil
+		}
+		return qbe.zoneApiBackends[region][zone]
 	}
 	return nil
 }
@@ -186,10 +198,68 @@ func (qbe *QuaiBackend) OnNewBroadcast(sourcePeer p2p.PeerID, Id string, topic s
 	return true
 }
 
-// GetTrieNode returns the TrieNodeResponse for a given hash
+// GetTrieNode returns the TrieNodeResponse for a given hash.
 func (qbe *QuaiBackend) GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse {
-	// Example/mock implementation
-	panic("todo")
+	if qbe == nil || location.Context() != common.ZONE_CTX {
+		return nil
+	}
+	backendPtr := qbe.GetBackend(location)
+	if backendPtr == nil || *backendPtr == nil {
+		return nil
+	}
+	backend := *backendPtr
+	if !backend.ProcessingState() {
+		return nil
+	}
+	data, err := backend.TrieNode(hash)
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+	return &trie.TrieNodeResponse{NodeData: data}
+}
+
+// GetTrieNodes returns a bounded batch of trie node / contract code blobs for the given hashes.
+func (qbe *QuaiBackend) GetTrieNodes(hashes []common.Hash, location common.Location) *trie.TrieNodesResponse {
+	if qbe == nil || location.Context() != common.ZONE_CTX || len(hashes) == 0 {
+		return nil
+	}
+	backendPtr := qbe.GetBackend(location)
+	if backendPtr == nil || *backendPtr == nil {
+		return nil
+	}
+	backend := *backendPtr
+	if !backend.ProcessingState() {
+		return nil
+	}
+	limit := len(hashes)
+	if limit > trie.MaxTrieNodeBatchSize {
+		limit = trie.MaxTrieNodeBatchSize
+	}
+	nodes := make([][]byte, 0, limit)
+	seen := make(map[common.Hash]struct{}, limit)
+	totalBytes := 0
+	for _, hash := range hashes[:limit] {
+		if _, dup := seen[hash]; dup {
+			continue
+		}
+		seen[hash] = struct{}{}
+		data, err := backend.TrieNode(hash)
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		if len(nodes) > 0 && totalBytes+len(data) > trie.MaxTrieNodeResponseBytes {
+			break
+		}
+		nodes = append(nodes, data)
+		totalBytes += len(data)
+		if totalBytes >= trie.MaxTrieNodeResponseBytes {
+			break
+		}
+	}
+	if len(nodes) == 0 {
+		return nil
+	}
+	return &trie.TrieNodesResponse{Nodes: nodes}
 }
 
 // Returns the current block height for the given location

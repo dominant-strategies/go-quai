@@ -7,6 +7,7 @@ import (
 
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
+	"github.com/dominant-strategies/go-quai/trie"
 	"github.com/ipfs/go-cid"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -44,7 +45,7 @@ func (t *Topic) buildTopicString() string {
 	switch t.data.(type) {
 	case *types.WorkObjectHeaderView:
 		return strings.Join([]string{baseTopic, C_headerType}, "/")
-	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView:
+	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView, *trie.TrieNodeResponse, *trie.TrieNodesResponse:
 		return strings.Join([]string{baseTopic, C_workObjectType}, "/")
 	case *types.WorkObjectShareView:
 		return strings.Join([]string{baseTopic, C_workObjectShareType}, "/")
@@ -79,7 +80,7 @@ func NewTopic(genesis common.Hash, location common.Location, data interface{}) (
 		requestDegree = C_defaultRequestDegree
 	case *types.WorkObjectHeaderView:
 		requestDegree = C_workObjectHeaderTypeRequestDegree
-	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView:
+	case *types.WorkObjectBlockView, []*types.WorkObjectBlockView, *trie.TrieNodeResponse, *trie.TrieNodesResponse:
 		requestDegree = C_workObjectRequestDegree
 	case *types.AuxTemplate:
 		requestDegree = C_defaultRequestDegree

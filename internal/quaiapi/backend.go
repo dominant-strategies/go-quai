@@ -66,6 +66,7 @@ type Backend interface {
 	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.WorkObject, error)
 	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.WorkObject, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.WorkObject, error)
+	TrieNode(hash common.Hash) ([]byte, error)
 	AddressOutpoints(ctx context.Context, address common.Address) ([]*types.OutpointAndDenomination, error)
 	GetOutpointsByAddressAndRange(ctx context.Context, address common.Address, start, end uint32) ([]*types.OutpointAndDenomination, error)
 	UTXOsByAddress(ctx context.Context, address common.Address) ([]*types.UtxoEntry, error)

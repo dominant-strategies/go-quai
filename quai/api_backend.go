@@ -656,6 +656,10 @@ func (b *QuaiAPIBackend) ProcessingState() bool {
 	return b.quai.core.ProcessingState()
 }
 
+func (b *QuaiAPIBackend) TrieNode(hash common.Hash) ([]byte, error) {
+	return b.quai.core.TrieNode(hash)
+}
+
 func (b *QuaiAPIBackend) NewGenesisPendingHeader(pendingHeader *types.WorkObject, domTerminus common.Hash, genesisHash common.Hash) error {
 	return b.quai.core.NewGenesisPendigHeader(pendingHeader, domTerminus, genesisHash)
 }

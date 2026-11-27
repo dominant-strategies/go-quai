@@ -9,6 +9,7 @@ import (
 	"github.com/dominant-strategies/go-quai/common"
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 var EmptyResponse = errors.New("received empty reponse from peer")
@@ -34,6 +35,18 @@ func EncodeQuaiRequest(id uint32, location common.Location, reqData interface{},
 		reqMsg.Data = &QuaiRequestMessage_Hash{Hash: d.ProtoEncode()}
 	case *big.Int:
 		reqMsg.Data = &QuaiRequestMessage_Number{Number: d.Bytes()}
+	case []common.Hash:
+		if len(d) == 0 {
+			return nil, errors.New("empty hash list in request")
+		}
+		if len(d) > trie.MaxTrieNodeBatchSize {
+			return nil, errors.Errorf("hash list size %d exceeds maximum %d", len(d), trie.MaxTrieNodeBatchSize)
+		}
+		protoHashes := make([]*common.ProtoHash, len(d))
+		for i, hash := range d {
+			protoHashes[i] = hash.ProtoEncode()
+		}
+		reqMsg.Data = &QuaiRequestMessage_Hashes{Hashes: &ProtoHashList{Hashes: protoHashes}}
 	default:
 		return nil, errors.Errorf("unsupported request input data field type: %T", reqData)
 	}
@@ -47,6 +60,10 @@ func EncodeQuaiRequest(id uint32, location common.Location, reqData interface{},
 		reqMsg.Request = &QuaiRequestMessage_WorkObjectHeader{}
 	case common.Hash:
 		reqMsg.Request = &QuaiRequestMessage_BlockHash{}
+	case *trie.TrieNodeResponse:
+		reqMsg.Request = &QuaiRequestMessage_TrieNode{}
+	case *trie.TrieNodesResponse:
+		reqMsg.Request = &QuaiRequestMessage_TrieNodes{}
 	default:
 		return nil, errors.Errorf("unsupported request data type: %T", respDataType)
 	}
@@ -80,6 +97,21 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 		reqData = hash
 	case *QuaiRequestMessage_Number:
 		reqData = new(big.Int).SetBytes(d.Number)
+	case *QuaiRequestMessage_Hashes:
+		if d.Hashes == nil || len(d.Hashes.Hashes) == 0 {
+			return reqMsg.Id, nil, common.Location{}, nil, errors.New("empty hash list in request")
+		}
+		if len(d.Hashes.Hashes) > trie.MaxTrieNodeBatchSize {
+			return reqMsg.Id, nil, common.Location{}, nil, errors.Errorf("hash list size %d exceeds maximum %d", len(d.Hashes.Hashes), trie.MaxTrieNodeBatchSize)
+		}
+		hashes := make([]common.Hash, len(d.Hashes.Hashes))
+		for i, protoHash := range d.Hashes.Hashes {
+			if protoHash == nil || len(protoHash.Value) != common.HashLength {
+				return reqMsg.Id, nil, common.Location{}, nil, errors.New("invalid hash length in request")
+			}
+			hashes[i].ProtoDecode(protoHash)
+		}
+		reqData = hashes
 	}
 
 	// Decode the request type
@@ -93,6 +125,10 @@ func DecodeQuaiRequest(reqMsg *QuaiRequestMessage) (uint32, interface{}, common.
 		reqType = &types.WorkObjectHeaderView{}
 	case *QuaiRequestMessage_BlockHash:
 		reqType = &common.Hash{}
+	case *QuaiRequestMessage_TrieNode:
+		reqType = &trie.TrieNodeResponse{}
+	case *QuaiRequestMessage_TrieNodes:
+		reqType = &trie.TrieNodesResponse{}
 	default:
 		return reqMsg.Id, nil, common.Location{}, common.Hash{}, errors.Errorf("unsupported request type: %T", reqMsg.Request)
 	}
@@ -162,6 +198,38 @@ func EncodeQuaiResponse(id uint32, location common.Location, respDataType interf
 				respMsg.Response = &QuaiResponseMessage_BlockHash{}
 			} else {
 				respMsg.Response = &QuaiResponseMessage_BlockHash{BlockHash: hash.ProtoEncode()}
+			}
+		}
+	case *trie.TrieNodeResponse:
+		if data == nil {
+			respMsg.Response = &QuaiResponseMessage_TrieNode{TrieNode: &ProtoTrieNode{}}
+		} else {
+			nodeResp, ok := data.(*trie.TrieNodeResponse)
+			if !ok {
+				return nil, errors.Errorf("invalid trie node response type: %T", data)
+			}
+			if nodeResp == nil || len(nodeResp.NodeData) == 0 {
+				respMsg.Response = &QuaiResponseMessage_TrieNode{TrieNode: &ProtoTrieNode{}}
+			} else {
+				respMsg.Response = &QuaiResponseMessage_TrieNode{
+					TrieNode: &ProtoTrieNode{NodeData: nodeResp.NodeData},
+				}
+			}
+		}
+	case *trie.TrieNodesResponse:
+		if data == nil {
+			respMsg.Response = &QuaiResponseMessage_TrieNodes{TrieNodes: &ProtoTrieNodes{}}
+		} else {
+			nodesResp, ok := data.(*trie.TrieNodesResponse)
+			if !ok {
+				return nil, errors.Errorf("invalid trie nodes response type: %T", data)
+			}
+			if nodesResp == nil || len(nodesResp.Nodes) == 0 {
+				respMsg.Response = &QuaiResponseMessage_TrieNodes{TrieNodes: &ProtoTrieNodes{}}
+			} else {
+				respMsg.Response = &QuaiResponseMessage_TrieNodes{
+					TrieNodes: &ProtoTrieNodes{Nodes: nodesResp.Nodes},
+				}
 			}
 		}
 
@@ -259,6 +327,21 @@ func DecodeQuaiResponse(respMsg *QuaiResponseMessage) (uint32, interface{}, erro
 		hash := common.Hash{}
 		hash.ProtoDecode(blockHash)
 		return id, hash, nil
+	case *QuaiResponseMessage_TrieNode:
+		protoNode := respMsg.GetTrieNode()
+		if protoNode == nil || len(protoNode.NodeData) == 0 {
+			return id, nil, EmptyResponse
+		}
+		return id, &trie.TrieNodeResponse{NodeData: protoNode.NodeData}, nil
+	case *QuaiResponseMessage_TrieNodes:
+		protoNodes := respMsg.GetTrieNodes()
+		if protoNodes == nil || len(protoNodes.Nodes) == 0 {
+			return id, nil, EmptyResponse
+		}
+		if len(protoNodes.Nodes) > trie.MaxTrieNodeBatchSize {
+			return id, nil, errors.Errorf("trie nodes response count %d exceeds maximum %d", len(protoNodes.Nodes), trie.MaxTrieNodeBatchSize)
+		}
+		return id, &trie.TrieNodesResponse{Nodes: protoNodes.Nodes}, nil
 	default:
 		return id, nil, errors.Errorf("unsupported response type: %T", respMsg.Response)
 	}
