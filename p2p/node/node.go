@@ -365,17 +365,27 @@ func (p *P2PNode) p2pAddress() (multiaddr.Multiaddr, error) {
 
 // Helper to access the corresponding data cache
 func (p *P2PNode) pickCache(datatype interface{}, location common.Location) *lru.Cache[common.Hash, interface{}] {
-	return p.cache[location.Name()][reflect.TypeOf(datatype)]
+	locCache := p.cache[location.Name()]
+	if locCache == nil {
+		return nil
+	}
+	return locCache[reflect.TypeOf(datatype)]
 }
 
 // Add a datagram into the corresponding cache
 func (p *P2PNode) cacheAdd(hash common.Hash, data interface{}, location common.Location) {
 	cache := p.pickCache(data, location)
+	if cache == nil {
+		return
+	}
 	cache.Add(hash, data)
 }
 
 // Get a datagram from the corresponding cache
 func (p *P2PNode) cacheGet(hash common.Hash, datatype interface{}, location common.Location) (interface{}, bool) {
 	cache := p.pickCache(datatype, location)
+	if cache == nil {
+		return nil, false
+	}
 	return cache.Get(hash)
 }

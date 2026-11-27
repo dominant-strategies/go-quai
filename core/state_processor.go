@@ -2405,12 +2405,38 @@ func (p *StateProcessor) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxL
 // ContractCode retrieves a blob of data associated with a contract hash
 // either from ephemeral in-memory cache, or from persistent storage.
 func (p *StateProcessor) ContractCode(hash common.Hash) ([]byte, error) {
+	if p == nil || p.stateCache == nil {
+		return nil, errors.New("state cache unavailable")
+	}
 	return p.stateCache.ContractCode(common.Hash{}, hash)
 }
 
-// either from ephemeral in-memory cache, or from persistent storage.
+// TrieNode retrieves a blob of data associated with a trie node (EVM state or
+// ETX set) or contract bytecode either from ephemeral in-memory cache, or from
+// persistent storage.
 func (p *StateProcessor) TrieNode(hash common.Hash) ([]byte, error) {
-	return p.stateCache.TrieDB().Node(hash)
+	if p == nil {
+		return nil, errors.New("state processor unavailable")
+	}
+	if p.stateCache != nil {
+		if blob, err := p.stateCache.TrieDB().Node(hash); err == nil && len(blob) > 0 {
+			return common.CopyBytes(blob), nil
+		}
+	}
+	if p.etxCache != nil {
+		if blob, err := p.etxCache.TrieDB().Node(hash); err == nil && len(blob) > 0 {
+			return common.CopyBytes(blob), nil
+		}
+	}
+	if p.stateCache != nil {
+		if code, err := p.ContractCodeWithPrefix(hash); err == nil && len(code) > 0 {
+			return common.CopyBytes(code), nil
+		}
+		if code, err := p.ContractCode(hash); err == nil && len(code) > 0 {
+			return common.CopyBytes(code), nil
+		}
+	}
+	return nil, errors.New("trie node not found")
 }
 
 // ContractCodeWithPrefix retrieves a blob of data associated with a contract
@@ -2419,10 +2445,17 @@ func (p *StateProcessor) TrieNode(hash common.Hash) ([]byte, error) {
 // If the code doesn't exist in the in-memory cache, check the storage with
 // new code scheme.
 func (p *StateProcessor) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
+	if p == nil || p.stateCache == nil {
+		return nil, errors.New("state cache unavailable")
+	}
 	type codeReader interface {
 		ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error)
 	}
-	return p.stateCache.(codeReader).ContractCodeWithPrefix(common.Hash{}, hash)
+	reader, ok := p.stateCache.(codeReader)
+	if !ok {
+		return nil, errors.New("state cache does not support prefixed contract code lookup")
+	}
+	return reader.ContractCodeWithPrefix(common.Hash{}, hash)
 }
 
 // StateAtBlock retrieves the state database associated with a certain block.

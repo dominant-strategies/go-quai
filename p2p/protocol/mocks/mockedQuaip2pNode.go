@@ -16,6 +16,7 @@ import (
 	common "github.com/dominant-strategies/go-quai/common"
 	types "github.com/dominant-strategies/go-quai/core/types"
 	requestManager "github.com/dominant-strategies/go-quai/p2p/node/requestManager"
+	trie "github.com/dominant-strategies/go-quai/trie"
 	metrics "github.com/libp2p/go-libp2p/core/metrics"
 	network "github.com/libp2p/go-libp2p/core/network"
 	peer "github.com/libp2p/go-libp2p/core/peer"
@@ -150,4 +151,32 @@ func (m *MockQuaiP2PNode) GetWorkObjectsFrom(hash common.Hash, location common.L
 func (mr *MockQuaiP2PNodeMockRecorder) GetWorkObjectsFrom(hash, location, count any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkObjectsFrom", reflect.TypeOf((*MockQuaiP2PNode)(nil).GetWorkObjectsFrom), hash, location, count)
+}
+
+// GetTrieNode mocks base method.
+func (m *MockQuaiP2PNode) GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTrieNode", hash, location)
+	ret0, _ := ret[0].(*trie.TrieNodeResponse)
+	return ret0
+}
+
+// GetTrieNode indicates an expected call of GetTrieNode.
+func (mr *MockQuaiP2PNodeMockRecorder) GetTrieNode(hash, location any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrieNode", reflect.TypeOf((*MockQuaiP2PNode)(nil).GetTrieNode), hash, location)
+}
+
+// GetTrieNodes mocks base method.
+func (m *MockQuaiP2PNode) GetTrieNodes(hashes []common.Hash, location common.Location) *trie.TrieNodesResponse {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTrieNodes", hashes, location)
+	ret0, _ := ret[0].(*trie.TrieNodesResponse)
+	return ret0
+}
+
+// GetTrieNodes indicates an expected call of GetTrieNodes.
+func (mr *MockQuaiP2PNodeMockRecorder) GetTrieNodes(hashes, location any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrieNodes", reflect.TypeOf((*MockQuaiP2PNode)(nil).GetTrieNodes), hashes, location)
 }

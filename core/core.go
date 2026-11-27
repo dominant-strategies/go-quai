@@ -1751,6 +1751,9 @@ func (c *Core) StateAtTransaction(block *types.WorkObject, txIndex int, reexec u
 }
 
 func (c *Core) TrieNode(hash common.Hash) ([]byte, error) {
+	if c == nil || c.sl == nil || c.sl.hc == nil || c.sl.hc.bc == nil || c.sl.hc.bc.processor == nil {
+		return nil, errors.New("trie node lookup unavailable")
+	}
 	return c.sl.hc.bc.processor.TrieNode(hash)
 }
 

@@ -14,6 +14,15 @@ message GossipTransaction { block.ProtoTransaction transaction = 1; }
 // New message for broadcasting AuxTemplate
 message GossipAuxTemplate { block.ProtoAuxTemplate aux_template = 1; }
 
+// Hash list for batched P2P lookups (e.g. GetTrieNodes)
+message ProtoHashList { repeated common.ProtoHash hashes = 1; }
+
+// Single trie node or contract code blob
+message ProtoTrieNode { bytes node_data = 1; }
+
+// Batched trie node or contract code blobs
+message ProtoTrieNodes { repeated bytes nodes = 1; }
+
 // QuaiRequestMessage is the main 'envelope' for QuaiProtocol request messages
 message QuaiRequestMessage {
     uint32 id = 1;
@@ -21,6 +30,7 @@ message QuaiRequestMessage {
     oneof data {
         common.ProtoHash hash = 3;
         bytes number = 4;
+        ProtoHashList hashes = 10;
     }
     oneof request {
         block.ProtoWorkObjectBlockView work_object_block = 5;
@@ -28,6 +38,8 @@ message QuaiRequestMessage {
         block.ProtoWorkObjectHeaderView work_object_header = 7;
         common.ProtoHash block_hash = 8;
         block.ProtoAuxTemplate aux_template = 9;
+        ProtoTrieNode trie_node = 11;
+        ProtoTrieNodes trie_nodes = 12;
     }
 }
 
@@ -41,6 +53,8 @@ message QuaiResponseMessage {
         block.ProtoWorkObjectBlocksView work_object_blocks_view = 5;
         common.ProtoHash block_hash = 6;
         block.ProtoAuxTemplate aux_template = 7;
+        ProtoTrieNode trie_node = 8;
+        ProtoTrieNodes trie_nodes = 9;
     }
 }
 

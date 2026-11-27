@@ -34,6 +34,9 @@ type ConsensusAPI interface {
 	// and return the data in the trie node.
 	GetTrieNode(hash common.Hash, location common.Location) *trie.TrieNodeResponse
 
+	// Asks the consensus backend to lookup a batch of trie nodes by hash and location.
+	GetTrieNodes(hashes []common.Hash, location common.Location) *trie.TrieNodesResponse
+
 	// GetBackend gets the backend for the given location
 	GetBackend(nodeLocation common.Location) *quaiapi.Backend
 

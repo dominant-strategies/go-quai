@@ -22,6 +22,7 @@ import (
 	"github.com/dominant-strategies/go-quai/core/types"
 	"github.com/dominant-strategies/go-quai/log"
 	"github.com/dominant-strategies/go-quai/p2p/pb"
+	"github.com/dominant-strategies/go-quai/trie"
 )
 
 const (
@@ -298,6 +299,14 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 			"number":      query,
 			"peer":        stream.Conn().RemotePeer(),
 		}).Debug("Received request by number to handle")
+	case []common.Hash:
+		log.Global.WithFields(log.Fields{
+			"requestID":   id,
+			"decodedType": decodedType,
+			"location":    loc,
+			"hashCount":   len(query.([]common.Hash)),
+			"peer":        stream.Conn().RemotePeer(),
+		}).Debug("Received request by hash list to handle")
 	default:
 		log.Global.Errorf("unsupported request input data field type: %T", query)
 	}
@@ -361,6 +370,48 @@ func handleRequest(quaiMsg *pb.QuaiRequestMessage, stream network.Stream, node Q
 		if err != nil {
 			log.Global.WithField("err", err).Error("error handling block number request")
 			return
+		}
+	case *trie.TrieNodeResponse:
+		hash, ok := query.(*common.Hash)
+		if !ok || hash == nil {
+			log.Global.WithFields(log.Fields{
+				"requestID":   id,
+				"decodedType": decodedType,
+				"queryType":   fmt.Sprintf("%T", query),
+			}).Error("unsupported query type for trie node request")
+			return
+		}
+		err = handleTrieNodeRequest(id, loc, *hash, stream, node)
+		if err != nil {
+			log.Global.WithFields(logrus.Fields{
+				"peer": stream.Conn().RemotePeer(),
+				"err":  err,
+			}).Error("error handling trie node request")
+			return
+		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("trie_nodes").Inc()
+		}
+	case *trie.TrieNodesResponse:
+		hashes, ok := query.([]common.Hash)
+		if !ok || len(hashes) == 0 {
+			log.Global.WithFields(log.Fields{
+				"requestID":   id,
+				"decodedType": decodedType,
+				"queryType":   fmt.Sprintf("%T", query),
+			}).Error("unsupported query type for trie nodes request")
+			return
+		}
+		err = handleTrieNodesRequest(id, loc, hashes, stream, node)
+		if err != nil {
+			log.Global.WithFields(logrus.Fields{
+				"peer": stream.Conn().RemotePeer(),
+				"err":  err,
+			}).Error("error handling trie nodes request")
+			return
+		}
+		if messageMetrics != nil {
+			messageMetrics.WithLabelValues("trie_nodes").Inc()
 		}
 	default:
 		log.Global.WithField("request type", decodedType).Error("unsupported request data type")
@@ -459,4 +510,24 @@ func handleBlockNumberRequest(id uint32, loc common.Location, number *big.Int, s
 	}
 	log.Global.Tracef("Sent block hash %s to peer %s", blockHash, stream.Conn().RemotePeer())
 	return nil
+}
+
+// Seeks a trie node or contract code blob in the backend and sends it in a pb.QuaiResponseMessage.
+func handleTrieNodeRequest(id uint32, loc common.Location, hash common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	resp := node.GetTrieNode(hash, loc)
+	data, err := pb.EncodeQuaiResponse(id, loc, &trie.TrieNodeResponse{}, resp)
+	if err != nil {
+		return err
+	}
+	return common.WriteMessageToStream(stream, data, ProtocolVersion, node.GetBandwidthCounter())
+}
+
+// Seeks a batch of trie nodes or contract code blobs in the backend and sends them in a pb.QuaiResponseMessage.
+func handleTrieNodesRequest(id uint32, loc common.Location, hashes []common.Hash, stream network.Stream, node QuaiP2PNode) error {
+	resp := node.GetTrieNodes(hashes, loc)
+	data, err := pb.EncodeQuaiResponse(id, loc, &trie.TrieNodesResponse{}, resp)
+	if err != nil {
+		return err
+	}
+	return common.WriteMessageToStream(stream, data, ProtocolVersion, node.GetBandwidthCounter())
 }
